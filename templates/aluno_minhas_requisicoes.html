@@ -1,0 +1,425 @@
+{% from 'components/pagination.html' import paginate %}
+{% extends "base_aluno.html" %}
+{% block title %}{{ user_message("Requisições") }}{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Colunas da lista do Aluno, iguais no header e nas linhas */
+    .imp-areq {
+      /* Rebalanceia o grid para acomodar os labels longos das colunas de horas. */
+      --col-id:       0.10fr;
+      --col-sol:      0.85fr;
+      --col-proc:     0.85fr;
+      --col-tipo:     2fr;
+      --col-grupo:    0.54fr;
+      --col-atv:      4.05fr;
+      --col-horas:    0.62fr;
+      --col-defer:    0.56fr;
+      --col-status:   0.70fr; /* +0.1fr */
+      --imp-cols:
+        minmax(30px, 30px)
+        minmax(112px, var(--col-sol))
+        minmax(112px, var(--col-proc))
+        minmax(170px, var(--col-tipo))
+        minmax(92px,  var(--col-grupo))
+        minmax(272px, var(--col-atv))
+        minmax(104px, var(--col-horas))
+        minmax(94px,  var(--col-defer))
+        minmax(76px,  var(--col-status)); /* min +4px */
+    }
+    /* Evita "inflar" visualmente a primeira coluna com padding */
+    .imp-areq .impresso-card .cell:first-child,
+    .imp-areq .impresso-card.header .cell:first-child{ padding: 0 2px; }
+    /* Paridade explícita (segurança) */
+  .imp-areq .impresso-card.header,
+  .imp-areq .impresso-card{ grid-template-columns: var(--imp-cols) !important; width:100%; }
+  /* Wrapper também full-width para permitir expansão, mantendo gap padrão da lista */
+  .imp-areq .impressoes-cards{ width:100% !important; }
+    /* Evitar shift ao selecionar (mantém 1px) */
+    .imp-areq .impresso-card.selected{ border-width:1px; box-shadow: inset 0 0 0 1px var(--btn-primary); }
+    /* Helpers */
+    .cell.left{ justify-content:flex-start; }
+    .cell.center{ justify-content:center; }
+    .cell.right{ justify-content:flex-end; }
+
+      /* Ajuste fino específico do chip de Status para alinhar ícone e texto como nos botões */
+      #grp-filtro .input-chip.input-chip-status{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding-inline: 10px;
+      }
+
+      #grp-filtro .input-chip.input-chip-status .lucide{
+        position: relative;
+        top: 0;
+        margin-right: 0;
+      }
+
+      #grp-filtro .input-chip.input-chip-status .btn-label{
+        position: relative;
+        top: 0;
+      }
+
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+    #impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+    /* Active chips (filtro/ordenação) e coluna ordenada */
+    .input-chip.active, #grp-ordenar #sort-field.active{ background:#e0f2fe !important; color:#0369a1 !important; }
+  /* Destaque de coluna ordenada removido (sem barra colorida) */
+  .imp-areq .impresso-card.header .cell.sorted{ background:#f1f5f9; font-weight:500; }
+    /* Popovers: raio padrão nos botões */
+    @media screen {
+      #filter-menu .menu-actions .btn,
+      #sort-menu .menu-actions .btn{ border-radius: var(--radius); }
+      /* Mesma distância vertical e alinhamento dos botões em Filtro e Classificar */
+      #filter-menu .menu-actions,
+      #sort-menu .menu-actions{
+        margin-top: 8px;
+        display:flex;
+        justify-content:flex-end;
+        gap:8px;
+      }
+      /* Forçar cor azul igual botão Nova (usa --add-blue) */
+      #filter-menu .menu-actions .btn.primary,
+      #sort-menu .menu-actions .btn.primary{
+        background: var(--add-blue);
+        border-color: var(--add-blue);
+        color:#fff;
+      }
+      #filter-menu .menu-actions .btn.primary:hover,
+      #sort-menu .menu-actions .btn.primary:hover{
+        background: var(--add-blue-hover);
+        border-color: var(--add-blue-hover);
+      }
+      /* Botão "Nova" (aluno) volta a seguir o padrão global de botões adicionar */
+    }
+  </style>
+{% endblock %}
+{% block content %}
+<h1 class="main-title">{{ user_message("Requisições") }}</h1>
+
+<!-- Filtros simples -->
+<div class="toolbar" id="impressoes-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="{{ user_message('Buscar por atividade ou status…') }}" aria-label="{{ user_message('Buscar') }}" value="{{ request.args.get('q','') }}">
+    </div>
+    <!-- Organizar (port adaptado do admin, menos campos) -->
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn {% if request.args.get('sort') %}active{% endif %}" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="{{ user_message('Selecionar campo') }}">
+        <span id="sort-label">{{ user_message("Organizar por") }}</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="{{ user_message('Alternar direção de organização') }}" title="{{ user_message('Alternar direção') }}">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip input-chip-status" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span class="btn-label">{{ user_message("Filtrar") }}</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+  </div>
+  <div class="actions">
+  <div class="toolbar-actions-shell">
+    <button class="btn" type="button" id="btn-aluno-req-actions" aria-haspopup="menu" aria-expanded="false">
+      <i class="lucide" data-lucide="rows-3"></i>
+      <span class="btn-label">{{ user_message("Ações") }}</span>
+      <i class="lucide" data-lucide="chevron-down"></i>
+    </button>
+    <div id="aluno-req-actions-menu" class="popover toolbar-actions-menu" hidden>
+      <div class="menu-title">{{ user_message("Ações da seleção") }}</div>
+      <div class="menu-list">
+        <button class="menu-item" type="button" id="aluno-req-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
+        <button class="menu-item danger" type="button" id="aluno-req-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
+      </div>
+      <div class="menu-hint" id="aluno-req-actions-hint">{{ user_message("Selecione uma ou mais linhas para habilitar as ações.") }}</div>
+    </div>
+  </div>
+  <a class="btn btn-nova-alinhado" href="{{ route_url('aluno_nova_requisicao', 'aluno.aluno_nova_requisicao') }}">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+    <span class="btn-label">{{ user_message("Nova") }}</span>
+  </a>
+  </div>
+  
+</div>
+{{ paginate('aluno_minhas_requisicoes') }}
+
+<!-- Popover de Filtrar -->
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">{{ user_message("Filtrar por") }}</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> {{ user_message("Limpar") }}</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> {{ user_message("Aplicar") }}</button>
+  </div>
+  
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+<script id="aluno-req-message-templates" type="application/json">{{ {
+  'organizeBy': user_message('Organizar por'),
+  'deleteMessageSingle': user_message('Remover a requisição selecionada? Esta ação não pode ser desfeita.'),
+  'deleteMessageMultiple': user_message('Remover as {value_1} requisições selecionadas? Esta ação não pode ser desfeita.'),
+  'selectedRequestActions': user_message('Ações da requisição selecionada'),
+  'viewRequest': user_message('Ver requisição'),
+  'editRequest': user_message('Editar requisição')
+}|tojson }}</script>
+<!-- Popover de Organizar (campos que existem na lista) -->
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">{{ user_message("Organizar por") }}</div>
+  <div class="menu-list" id="sort-fields-list">
+    {% for fld,label in [
+      ('data_evento', user_message('Solicitado em')),
+      ('processado_em', user_message('Processado em')),
+      ('tipo_atividade', user_message('Tipo')),
+      ('grupo', user_message('Grupo')),
+      ('atividade_nome', user_message('Atividade')),
+      ('horas_solicitadas', user_message('Solicitadas (h)')),
+      ('horas_deferidas', user_message('Deferidas (h)')),
+      ('status', user_message('Status'))
+    ] %}
+      <div class="menu-item {% if request.args.get('sort') == fld %}selected{% endif %}" data-field="{{ fld }}">{{ label }}</div>
+    {% endfor %}
+  </div>
+  <div class="menu-actions">
+    <button class="btn" id="sort-clear" type="button"><i class="lucide" data-lucide="eraser"></i> {{ user_message("Limpar") }}</button>
+    <button class="btn primary" id="sort-apply" type="button"><i class="lucide" data-lucide="check"></i> {{ user_message("Aplicar") }}</button>
+  </div>
+</div>
+
+<!-- Lista de Requisições do Aluno no padrão admin (cards + header sticky) -->
+<div class="impressoes-cards-scroll imp-areq">
+  <div id="minhas-requisicoes-list" class="impressoes-cards" role="list">
+    <!-- Header (mesmas colunas das linhas) -->
+    <div class="impresso-card header" role="presentation">
+      <div class="cell center">#</div>
+  <div class="cell center">{{ user_message("Solicitado em") }}</div>
+      <div class="cell center {% if request.args.get('sort') == 'processado_em' %}sorted{% endif %}">{{ user_message("Processado em") }}</div>
+      <div class="cell left">{{ user_message("Tipo") }}</div>
+      <div class="cell center">{{ user_message("Grupo") }}</div>
+      <div class="cell left">{{ user_message("Atividade") }}</div>
+      <div class="cell center {% if request.args.get('sort') == 'horas_solicitadas' %}sorted{% endif %}">{{ user_message("Solicitadas (h)") }}</div>
+      <div class="cell center {% if request.args.get('sort') == 'horas_deferidas' %}sorted{% endif %}">{{ user_message("Deferidas (h)") }}</div>
+      <div class="cell center {% if request.args.get('sort') == 'status' %}sorted{% endif %}">{{ user_message("Status") }}</div>
+    </div>
+
+    {% if requisicoes and requisicoes|length %}
+      {% for r in requisicoes %}
+        {% set _de = r.data_evento %}
+        {% if _de %}
+          {% if _de.strftime is not undefined %}
+            {% set _de_iso = _de.strftime('%Y-%m-%d') %}
+            {% set _de_pt  = _de.strftime('%d/%m/%Y') %}
+          {% else %}
+            {% set _de_s = ("" ~ _de)|string %}
+            {% set _de_iso = _de_s.split(' ')[0] %}
+            {% set _d0 = _de_iso %}
+            {% if '-' in _d0 and _d0|length >= 10 %}
+              {% set _p = _d0.split('-') %}
+              {% set _de_pt = (_p[2] if _p|length>2 else _p[-1]) ~ '/' ~ (_p[1] if _p|length>1 else '') ~ '/' ~ _p[0] %}
+            {% else %}
+              {% set _de_pt = _d0 %}
+            {% endif %}
+          {% endif %}
+        {% else %}
+          {% set _de_iso = '' %}
+          {% set _de_pt = '—' %}
+        {% endif %}
+
+        {# Data de processamento #}
+        {% set _dp = r.data_processamento %}
+        {% if _dp %}
+          {% if _dp.strftime is not undefined %}
+            {% set _dp_pt  = _dp.strftime('%d/%m/%Y') %}
+          {% else %}
+            {% set _dp_s = ("" ~ _dp)|string %}
+            {% set _dp_d0 = _dp_s.split(' ')[0] %}
+            {% if '-' in _dp_d0 and _dp_d0|length >= 10 %}
+              {% set _q = _dp_d0.split('-') %}
+              {% set _dp_pt = (_q[2] if _q|length>2 else _q[-1]) ~ '/' ~ (_q[1] if _q|length>1 else '') ~ '/' ~ _q[0] %}
+            {% else %}
+              {% set _dp_pt = _dp_d0 %}
+            {% endif %}
+          {% endif %}
+        {% else %}
+          {% set _dp_pt = '—' %}
+        {% endif %}
+
+        <div class="impresso-card" role="listitem" tabindex="0"
+             data-req-id="{{ r.id }}"
+             data-status="{{ (r.status or '')|e }}"
+             data-can-edit="{{ '1' if r.can_edit else '0' }}"
+             data-can-delete="{{ '1' if r.can_delete else '0' }}"
+             data-delete-url="{{ (route_url('aluno_requisicao_detalhe', 'aluno.aluno_requisicao_detalhe', req_id=r.id) ~ '?delete=1') if r.can_delete else '' }}"
+             data-nome-evento="{{ (r.nome_evento or '')|e }}"
+             data-horas-solicitadas="{{ r.horas_solicitadas or '' }}"
+             data-data-evento="{{ _de_iso }}">
+          <!-- # sequencial relativo ao aluno -->
+          <div class="cell center">{{ (page - 1) * per_page + loop.index }}</div>
+          <!-- Solicitado em -->
+          <div class="cell center">{{ _de_pt }}</div>
+          <!-- Processado em -->
+          <div class="cell center">{{ _dp_pt }}</div>
+          <!-- Tipo -->
+          <div class="cell left ellipsis">{{ r.tipo_atividade }}</div>
+          <!-- Grupo -->
+          {% set graw = (r.grupo or '') %}
+          {% set gnum = (graw.split(' - ')[0]|trim) if ' - ' in graw else graw|trim %}
+          <div class="cell center ellipsis">{{ gnum or '—' }}</div>
+          <!-- Atividade (sem link) -->
+          <div class="cell left ellipsis">{{ r.atividade_nome }}</div>
+          <!-- Horas solicitadas -->
+          <div class="cell center">{{ r.horas_solicitadas }}</div>
+          <!-- Horas deferidas (0 se nulas) -->
+          <div class="cell center">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div>
+          <!-- Status (badges) -->
+          <div class="cell center">
+            {% set st = (r.status or '')|lower %}
+            {% if st in ['pendente','aguardando','pending'] %}
+              <span class="badge status-badge status-pill warning status-caution">{{ user_message("Pendente") }}</span>
+            {% elif st in ['deferido','deferida','aprovado','aprovada','approved'] %}
+              <span class="badge status-badge status-pill success status-positive">{{ user_message("Deferida") }}</span>
+            {% elif st in ['indeferido','indeferida','rejeitada','rejeitado'] %}
+              <span class="badge status-badge status-pill danger status-negative">{{ user_message("Indeferida") }}</span>
+            {% elif st in ['devolvida','devolvido'] %}
+              <span class="badge status-badge status-pill warning status-info">{{ user_message("Devolvida") }}</span>
+            {% elif st in ['encerrada','encerrado','closed'] %}
+              <span class="badge status-badge status-pill danger status-negative">{{ user_message("Encerrada") }}</span>
+            {% else %}
+              <span class="badge status-badge status-pill status-neutral">{{ r.status or '-' }}</span>
+            {% endif %}
+          </div>
+        </div>
+          <!-- Barra flutuante de ações (Ver / Editar / Excluir) -->
+          <!-- Reuso do padrão admin: será criada dinamicamente via JS quando o mouse passar sobre uma linha -->
+          <!-- Contrato: id = pedido-actions-float; botões com data-action -->
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">{{ user_message("Nenhuma requisição encontrada.") }}</div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+(function(){
+  const alunoReqMessageTemplates = JSON.parse(document.getElementById('aluno-req-message-templates')?.textContent || '{}');
+  const toolbarQuery = window.createToolbarQueryHelpers();
+  window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#minhas-requisicoes-list' });
+  document.addEventListener('DOMContentLoaded', ()=>{ if(window.lucide) lucide.createIcons(); });
+  const rowSelectionApi = window.initToolbarRowSelection?.({
+    toolbarSelector: '#impressoes-toolbar',
+    rowsRootSelector: '#minhas-requisicoes-list',
+    enableSelectAllButton: false,
+    enableBulkDelete: false
+  });
+
+  window.initToolbarSelectionActionsMenu?.({
+    buttonSelector: '#btn-aluno-req-actions',
+    menuSelector: '#aluno-req-actions-menu',
+    selectAllSelector: '#aluno-req-action-select-all',
+    deleteSelector: '#aluno-req-action-delete',
+    hintSelector: '#aluno-req-actions-hint',
+    rowSelectionApi,
+    deleteMessageSingle: alunoReqMessageTemplates.deleteMessageSingle,
+    deleteMessageMultiple: (count) => window.appFormatMessage(alunoReqMessageTemplates.deleteMessageMultiple, { value_1: count })
+  });
+
+  window.initToolbarFilterMenu?.({ ...toolbarQuery });
+
+  // === Floating actions bar (similar ao admin) ===
+  const listScroll = document.querySelector('.impressoes-cards-scroll.imp-areq');
+  if(listScroll){
+    let bar = document.getElementById('pedido-actions-float');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      bar.setAttribute('role','toolbar');
+      bar.setAttribute('aria-label', alunoReqMessageTemplates.selectedRequestActions);
+      bar.innerHTML = `
+        <button type="button" class="act-btn" data-action="view" aria-label="${alunoReqMessageTemplates.viewRequest}" title="{{ user_message('Ver') }}"><i data-lucide="eye"></i></button>
+        <button type="button" class="act-btn" data-action="edit" aria-label="${alunoReqMessageTemplates.editRequest}" title="{{ user_message('Editar') }}"><i data-lucide="edit"></i></button>`;
+      document.body.appendChild(bar);
+      window.lucide?.createIcons?.();
+    }
+    let currentCard=null, currentId=null, hideTimer=null;
+    function positionBar(card){
+      if(!bar||!card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height/2) - (bar.offsetHeight/2));
+      bar.style.top = top + 'px';
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = getComputedStyle(track); const pr = parseFloat(cs.paddingRight||'0')||0;
+      const contentRight = tr.right - pr;
+      bar.style.left = Math.round(contentRight - bar.offsetWidth) + 'px';
+      bar.style.right = 'auto';
+    }
+    function show(){ bar.classList.add('is-visible'); }
+    function hide(){ bar.classList.remove('is-visible'); currentCard=null; currentId=null; }
+    function scheduleHide(){ clearTimeout(hideTimer); hideTimer=setTimeout(()=>hide(),160); }
+    function cancelHide(){ clearTimeout(hideTimer); }
+    listScroll.addEventListener('mouseover', e=>{
+      const card = e.target.closest('.impresso-card');
+      if(!card || card.classList.contains('header')) return;
+      currentCard = card; currentId = card.getAttribute('data-req-id');
+      // Status para condicionar botões
+      const canEdit = card.getAttribute('data-can-edit') === '1';
+      bar.querySelector('[data-action="edit"]').style.display = canEdit ? 'flex':'none';
+      positionBar(card); show();
+    });
+    listScroll.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', ()=>{ if(currentCard && bar.classList.contains('is-visible')) positionBar(currentCard); });
+    window.addEventListener('resize', ()=>{ if(currentCard && bar.classList.contains('is-visible')) positionBar(currentCard); });
+    bar.addEventListener('click', e=>{
+      const btn = e.target.closest('button.act-btn'); if(!btn || !currentId) return;
+      const action = btn.getAttribute('data-action');
+      if(action==='view'){
+        window.navigateWithReturnTo("{{ route_url('aluno_requisicao_detalhe', 'aluno.aluno_requisicao_detalhe', req_id=0) }}".replace('/0','/'+currentId), { view: 1 });
+      } else if(action==='edit'){
+        window.navigateWithReturnTo("{{ route_url('aluno_requisicao_detalhe', 'aluno.aluno_requisicao_detalhe', req_id=0) }}".replace('/0','/'+currentId), { edit: 1 });
+      }
+    });
+  }
+  window.initToolbarSortMenu?.({
+    ...toolbarQuery,
+    buttonSelector: '#sort-field',
+    toggleSelector: '#sort-toggle',
+    labelSelector: '#sort-label',
+    dirValueSelector: '#sort-dir',
+    groupSelector: '#grp-ordenar',
+    sortParam: 'sort',
+    defaultField: 'data_evento',
+    defaultDirection: 'desc',
+    defaultLabel: alunoReqMessageTemplates.organizeBy,
+    mode: 'apply',
+    applyButtonSelector: '#sort-apply',
+    clearButtonSelector: '#sort-clear',
+    outsideCloseEvent: 'mousedown'
+  });
+})();
+</script>
+{% endblock %}

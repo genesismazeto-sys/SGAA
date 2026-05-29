@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}Configurações{% endblock %}
+
+{% block extra_head %}
+  <style>
+    /* ─── Settings page ────────────────────────────────────────── */
+    .cfg-page { display:grid; gap:16px; max-width:780px; margin:0 auto; }
+    .cfg-page-header { display:grid; gap:4px; }
+    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; }
+
+    /* Card shell — flat surface, no shadow, no gradient */
+    .cfg-card {
+      background:var(--surface);
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      overflow:hidden;
+    }
+
+    /* ── Card header: section label + status chips ── */
+    .cfg-card-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:7px 16px;
+    }
+    .cfg-section-label {
+      font-size:13px;
+      font-weight:500;
+      color:var(--text-secondary);
+    }
+    .cfg-chips { display:flex; align-items:center; gap:6px; }
+    /* inactive chip */
+    .cfg-chip {
+      display:inline-flex;
+      align-items:center;
+      height:24px;
+      padding:0 8px;
+      border-radius:var(--radius);
+      background:var(--bg);
+      border:0.5px solid var(--border);
+      color:var(--text-secondary);
+      font-size:12px;
+      font-weight:400;
+      white-space:nowrap;
+    }
+    /* active chip — info bg, no border */
+    .cfg-chip.is-active {
+      background:#eff6ff;
+      border-color:transparent;
+      color:var(--accent-blue);
+      font-weight:500;
+    }
+
+    /* ── Card body ── */
+    .cfg-card-body {
+      padding:16px;
+      border-top:1px solid var(--border-strong);
+      display:grid;
+      gap:14px;
+    }
+    /* 2-column field grid */
+    .cfg-fields {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+    .cfg-field { display:grid; gap:3px; align-content:start; }
+    .cfg-field label {
+      font-size:13px;
+      font-weight:500;
+      color:var(--text-primary);
+    }
+    .cfg-field .field-desc {
+      margin:0 0 6px;
+      font-size:12px;
+      color:var(--text-tertiary);
+      line-height:1.4;
+    }
+    .cfg-field input,
+    .cfg-field select {
+      height:36px;
+      padding:0 10px;
+      border:0.5px solid var(--border);
+      border-radius:var(--radius);
+      background:var(--field-bg);
+      color:var(--text-primary);
+      font-size:13px;
+      font-family:var(--font-sans);
+      width:100%;
+      transition:border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .cfg-field input:hover,
+    .cfg-field select:hover {
+      background:var(--field-hover-bg);
+      border-color:var(--field-hover-border);
+      box-shadow:none;
+    }
+    .cfg-field input:focus,
+    .cfg-field select:focus {
+      outline:none;
+      background:var(--field-focus-bg);
+      border-color:var(--field-focus-border);
+      box-shadow:0 0 0 1px var(--field-focus-ring);
+    }
+    .cfg-field input[type="number"] { text-align:right; }
+    #response_goal_days { text-align:left; width:40%; }
+    #response_metrics_reset_at { width:40%; }
+    #return_response_days { text-align:left; }
+    #horas_padrao_academica,
+    #horas_padrao_extensao { text-align:left; width:40%; }
+
+    /* ── Card footer ── */
+    .cfg-card-footer {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:11px 16px;
+      border-top:1px solid var(--border-strong);
+    }
+    .cfg-footer-left {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .cfg-footer-left form { margin:0; }
+    .cfg-footer-note {
+      margin:0;
+      font-size:12px;
+      color:var(--text-tertiary);
+      line-height:1.4;
+    }
+
+    /* ── Input + toggle na mesma linha ── */
+    .cfg-field-bottom-row {
+      display:flex;
+      align-items:center;
+      gap:16px;
+    }
+    .cfg-toggle-field {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-left:auto;
+    }
+    .cfg-toggle-field > span {
+      font-size:12.5px;
+      font-weight:600;
+      color:var(--text-primary);
+      white-space:nowrap;
+    }
+    /* toggle switch */
+    .toggle-switch { position:relative; display:inline-flex; align-items:center; width:42px; height:22px; flex-shrink:0; }
+    .toggle-switch input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+    .toggle-switch-slider { position:relative; display:block; width:42px; height:22px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
+    .toggle-switch-slider::before { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
+    .toggle-switch input:checked + .toggle-switch-slider { background:#0f5b99; }
+    .toggle-switch input:checked + .toggle-switch-slider::before { transform:translateX(20px); }
+    .toggle-switch input:focus-visible + .toggle-switch-slider { outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
+
+    @media (max-width:640px) {
+      .cfg-fields { grid-template-columns:1fr; }
+      .cfg-card-footer { flex-direction:column; align-items:flex-start; }
+      .cfg-card-head { flex-wrap:wrap; }
+      .cfg-field-bottom-row { flex-wrap:wrap; }
+      .cfg-toggle-field > span { white-space:normal; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<section class="cfg-page">
+  <header class="cfg-page-header">
+    <h1 class="main-title">Configurações</h1>
+    <p class="cfg-page-note">Ajustes gerais do sistema organizados em seções compactas e campos de configuração.</p>
+  </header>
+
+  <div class="cfg-card">
+
+    <!-- Card header -->
+    <div class="cfg-card-head">
+      <span class="cfg-section-label">Tempo padrão por tipo</span>
+      <div class="cfg-chips">
+        <span class="cfg-chip is-active">AAC: {{ horas_settings.horas_padrao_academica }}h</span>
+        <span class="cfg-chip is-active">AEU: {{ horas_settings.horas_padrao_extensao }}h</span>
+      </div>
+    </div>
+
+    <!-- Card body -->
+    <div class="cfg-card-body">
+      <form method="post" action="{{ url_for('admin_configuracoes_horas_padrao_salvar') }}" id="horas-padrao-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="cfg-fields">
+          <div class="cfg-field">
+            <label for="horas_padrao_academica">Acadêmica Complementar (AAC)</label>
+            <p class="field-desc">Total de horas sugerido quando o campo não for preenchido.</p>
+            <input id="horas_padrao_academica" name="horas_padrao_academica" type="number" min="0" step="1"
+                   value="{{ horas_settings.horas_padrao_academica }}" required>
+          </div>
+
+          <div class="cfg-field">
+            <label for="horas_padrao_extensao">Extensão Universitária (AEU)</label>
+            <p class="field-desc">Total de horas sugerido quando o campo não for preenchido.</p>
+            <input id="horas_padrao_extensao" name="horas_padrao_extensao" type="number" min="0" step="1"
+                   value="{{ horas_settings.horas_padrao_extensao }}" required>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Card footer -->
+    <div class="cfg-card-footer">
+      <div class="cfg-footer-left">
+        <p class="cfg-footer-note">Padrão: 160h. Afeta só o valor sugerido.</p>
+      </div>
+      <button type="submit" form="horas-padrao-form" class="btn primary">
+        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+      </button>
+    </div>
+
+  </div>
+
+  <div class="cfg-card">
+
+    <!-- Card header -->
+    <div class="cfg-card-head">
+      <span class="cfg-section-label">Prazo de adequação</span>
+      <div class="cfg-chips">
+        <span class="cfg-chip is-active">{{ response_settings.return_response_days }} dias</span>
+        <span class="cfg-chip">Solicitações devolvidas</span>
+      </div>
+    </div>
+
+    <!-- Card body -->
+    <div class="cfg-card-body">
+      <form method="post" action="{{ url_for('admin_configuracoes_prazo_adequacao_salvar') }}" id="return-response-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="cfg-field">
+          <label for="return_response_days">Prazo em dias</label>
+          <p class="field-desc">Número de dias que o aluno tem para adequar a solicitação devolvida.</p>
+          <div class="cfg-field-bottom-row">
+            <input id="return_response_days" name="return_response_days" type="number" min="0" step="1"
+                   value="{{ response_settings.return_response_days }}" required style="width:120px;">
+            <div class="cfg-toggle-field">
+              <span>Mudar para <strong>"Indeferida"</strong> após o prazo</span>
+              <label class="toggle-switch" aria-label="Indeferir automaticamente após o prazo">
+                <input type="checkbox" name="auto_indefer_devolvida" value="1"
+                       {% if response_settings.auto_indefer_devolvida %}checked{% endif %}>
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Card footer -->
+    <div class="cfg-card-footer">
+      <div class="cfg-footer-left">
+        <p class="cfg-footer-note">Padrão: 7 dias. Use 0 para desativar. O status é atualizado ao abrir o painel ou a lista de requisições.</p>
+      </div>
+      <button type="submit" form="return-response-form" class="btn primary">
+        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+      </button>
+    </div>
+
+  </div>
+
+  <div class="cfg-card">
+
+    <!-- Card header -->
+    <div class="cfg-card-head">
+      <span class="cfg-section-label">Tempo de processamento padrão</span>
+      <div class="cfg-chips">
+        <span class="cfg-chip is-active">{{ response_settings.response_goal_days }} dias</span>
+        <span class="cfg-chip">
+          {%- if response_settings.response_metrics_reset_at_fmt -%}
+            Desde {{ response_settings.response_metrics_reset_at_fmt }}
+          {%- else -%}
+            Histórico completo
+          {%- endif -%}
+        </span>
+      </div>
+    </div>
+
+    <!-- Card body -->
+    <div class="cfg-card-body">
+      <form method="post" action="{{ url_for('admin_configuracoes_tempo_resposta_salvar') }}" id="response-settings-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="cfg-fields">
+          <div class="cfg-field">
+            <label for="response_goal_days">Meta de resposta</label>
+            <p class="field-desc">Limite em dias para destacar KPIs e requisições atrasadas.</p>
+            <input id="response_goal_days" name="response_goal_days" type="number" min="0" step="1"
+                   value="{{ response_settings.response_goal_days }}" required>
+          </div>
+
+          <div class="cfg-field">
+            <label for="response_metrics_reset_at">Início da apuração</label>
+            <p class="field-desc">Deixe vazio para considerar todo o histórico.</p>
+            <input id="response_metrics_reset_at" name="response_metrics_reset_at" type="date"
+                   value="{{ response_settings.response_metrics_reset_at or '' }}">
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Card footer -->
+    <div class="cfg-card-footer">
+      <div class="cfg-footer-left">
+        <form method="post" action="{{ url_for('admin_configuracoes_tempo_resposta_resetar') }}"
+              onsubmit="return confirm('Resetar a apuração do tempo de resposta para hoje?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn">
+            <i class="lucide" data-lucide="rotate-ccw"></i>Resetar contagem
+          </button>
+        </form>
+        <p class="cfg-footer-note">Reinicia a apuração para hoje, sem alterar o histórico das requisições.</p>
+      </div>
+      <button type="submit" form="response-settings-form" class="btn primary">
+        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+      </button>
+    </div>
+
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,1104 @@
+{% from 'components/pagination.html' import paginate %}
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Acesso{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #acesso-toolbar .input-chip{ background:transparent; border-right:none; }
+    #acesso-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-acesso{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-acesso .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-acesso{ padding:0; }
+    #grp-ordenar-acesso{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar-acesso > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-acesso{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar-acesso #sort-acesso-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+    .access-summary-grid{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:14px; margin-bottom:18px; }
+    .access-summary-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); padding:14px 16px; box-shadow:var(--shadow-sm); }
+    .access-summary-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .access-summary-top .icon-wrap{ width:32px; height:32px; border-radius:var(--radius); display:grid; place-items:center; background:#EFF6FF; color:#1d4ed8; }
+    .access-count-chip{ display:inline-flex; align-items:center; justify-content:center; height:22px; padding:0 8px; border-radius:var(--radius); border:1px solid var(--border-strong); background:var(--bg); color:var(--text-secondary); font-size:11px; font-weight:500; white-space:nowrap; }
+    .access-summary-card .profile-name{ display:block; font-size:13px; font-weight:600; color:var(--text-primary); }
+    .access-summary-card small{ display:block; margin-top:6px; color:var(--text-tertiary); line-height:1.45; font-size:12px; }
+    .access-defaults-panel{ border:0.5px solid rgba(0,0,0,0.08); border-radius:var(--radius); overflow:hidden; margin-bottom:18px; }
+    .access-defaults-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:7px 16px; background:var(--bg-underpanel); }
+    .access-defaults-head h2{ margin:0; font-size:13px; font-weight:500; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
+    .access-defaults-head h2 i{ color:var(--text-secondary); }
+    .access-defaults-body{ padding:16px; border-top:0.5px solid rgba(0,0,0,0.08); background:var(--bg-underpanel); }
+    .access-defaults-footer{ display:flex; justify-content:flex-end; padding:11px 16px; border-top:0.5px solid rgba(0,0,0,0.08); background:var(--bg-underpanel); }
+    .access-defaults-grid{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:12px; }
+    .access-default-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:12px; display:grid; gap:10px; align-content:space-between; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-default-card .head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .access-default-card .head strong{ font-size:13px; color:var(--text-primary); }
+    .access-default-card .head i{ color:var(--accent-blue); }
+    .access-default-card small{ color:var(--text-tertiary); line-height:1.4; font-size:12px; }
+    .access-default-card input{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font-family:monospace; font-size:13px; color:var(--text-primary); background:var(--bg); }
+    .access-note{ display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; }
+    .access-note .lucide{ width:14px; height:14px; color:var(--accent-blue); }
+    .access-toolbar-actions{ display:flex; align-items:center; gap:var(--btn-gap); }
+    .access-actions-shell .btn[disabled]{ opacity:.55; cursor:not-allowed; }
+    .access-actions-menu .menu-item.danger{ color:#b91c1c; }
+    .access-actions-menu .menu-item.warn{ color:#92400e; }
+    .access-student-tag{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#64748b; }
+    .access-student-tag .lucide{ width:14px; height:14px; }
+    .access-modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.52); backdrop-filter:blur(2px); display:grid; place-items:center; z-index:40; }
+    .access-modal-overlay[hidden]{ display:none !important; }
+    .access-modal-card{ width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px); overflow:hidden; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,.995), rgba(248,250,252,.975)); box-shadow:0 24px 60px rgba(15,23,42,.22); display:flex; flex-direction:column; }
+    .access-modal-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:18px 22px 14px; border-bottom:1px solid rgba(226,232,240,.9); }
+    .access-modal-header h3{ margin:0; display:flex; align-items:center; gap:8px; font-size:17px; letter-spacing:-.01em; }
+    .access-modal-header p{ margin:6px 0 0; color:#64748b; font-size:12.5px; line-height:1.45; max-width:62ch; }
+    .access-modal-header > .btn{ min-width:32px; width:32px; height:32px; padding:0; }
+    .access-modal-header > .btn .lucide{ margin:0; }
+    .access-modal-body{ padding:14px 22px 0; overflow-y:auto; background:linear-gradient(180deg, rgba(255,255,255,.6), rgba(248,250,252,.45)); }
+    .access-modal-footer{ display:flex; justify-content:flex-end; gap:8px; padding:14px 22px 18px; border-top:1px solid rgba(226,232,240,.9); background:rgba(255,255,255,.96); }
+    .access-form-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px 14px; align-items:start; }
+    .access-form-field{ display:grid; gap:8px; align-content:start; }
+    .access-form-field.full{ grid-column:1 / -1; }
+    .access-form-field label{ font-size:12.5px; font-weight:700; color:#334155; letter-spacing:.01em; }
+    .access-form-field input,
+    .access-form-field select{ width:100%; border:1px solid var(--field-border); border-radius:var(--radius); padding:0 12px; font:inherit; color:#0f172a; background:var(--field-bg); transition:border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+    .access-form-field input{ height:36px; }
+    .access-form-field select{ height:34px; }
+    .access-form-field input:hover,
+    .access-form-field select:hover,
+    .access-scope-card select:hover{ outline:0; background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
+    .access-form-field input:focus,
+    .access-form-field select:focus,
+    .access-scope-card select:focus{ outline:0; background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
+    .access-form-field small{ color:#64748b; line-height:1.4; font-size:12px; }
+    .access-student-panel{ margin-top:14px; padding:15px 16px; border:1px dashed rgba(148,163,184,.45); border-radius:var(--radius); background:rgba(248,250,252,.94); }
+    .access-student-panel[hidden]{ display:none !important; }
+    .access-student-head{ display:flex; align-items:center; gap:8px; margin-bottom:12px; color:#0f172a; font-weight:700; }
+    .access-policy-panel{ margin-top:14px; padding:16px; border:0.5px solid rgba(0,0,0,0.08); border-radius:var(--radius); background:var(--bg-underpanel-modal); }
+    .access-policy-panel[hidden]{ display:none !important; }
+    .access-policy-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; }
+    .access-policy-head h4{ margin:0; font-size:15px; color:#0f172a; }
+    .access-policy-head p{ margin:6px 0 0; color:#64748b; font-size:12px; line-height:1.5; }
+    .access-policy-summary{ min-width:118px; border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:10px 12px; text-align:right; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-policy-summary strong{ display:block; color:#0f172a; font-size:22px; line-height:1; }
+    .access-policy-summary span{ display:block; margin-top:4px; color:#64748b; font-size:12px; }
+    .access-policy-groups{ display:grid; gap:14px; }
+    .access-policy-group{ display:grid; gap:10px; }
+    .access-policy-group-title{ display:flex; align-items:center; gap:8px; color:#0f172a; font-size:13px; font-weight:700; }
+    .access-policy-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+    .access-scope-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:12px; display:grid; gap:10px; transition:border-color .18s ease, box-shadow .18s ease; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-scope-card[data-state='custom']{ border-color:rgba(14,116,144,.5); box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(14,116,144,.1); }
+    .access-scope-card .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .access-scope-card strong{ color:#0f172a; font-size:13px; }
+    .access-scope-card small{ color:#64748b; font-size:12px; line-height:1.45; }
+    .access-scope-pill{ display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:18px; padding:0 10px; border-radius:999px; font-size:11px; font-weight:700; }
+    .access-scope-pill.none{ background:#e2e8f0; color:#475569; }
+    .access-scope-pill.view{ background:#dbeafe; color:#1e40af; }
+    .access-scope-pill.edit{ background:#dcfce7; color:#166534; }
+    .access-scope-pill.full{ background:#fef9c3; color:#854d0e; }
+    .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:#fff; }
+    .access-row-muted{ color:#64748b; font-size:13px; }
+    .access-level-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:114px; padding:6px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; }
+    .access-level-badge.admin_total{ background:#dbeafe; color:#1d4ed8; }
+    .access-level-badge.admin{ background:#dbeafe; color:#1d4ed8; }
+    .access-level-badge.consultivo{ background:#e0f2fe; color:#0369a1; }
+    .access-level-badge.usuario{ background:#ecfccb; color:#3f6212; }
+    .access-level-badge.usuario_teste{ background:#fef3c7; color:#92400e; }
+    .access-base-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:72px; padding:6px 10px; border-radius:999px; background:#f1f5f9; color:#475569; font-size:12px; font-weight:700; }
+    .access-empty{ padding:18px; text-align:center; color:#64748b; }
+    .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }
+    .access-actions-float .act-btn.danger{ background:#fee2e2; color:#b91c1c; }
+    .access-actions-float .act-btn[disabled]{ opacity:.45; cursor:not-allowed; }
+    .imp-acesso{ --imp-cols:
+      minmax(180px, 1.35fr)
+      minmax(220px, 1.55fr)
+      minmax(180px, 1.15fr)
+      minmax(160px, 1.05fr)
+      minmax(160px, 1fr);
+    }
+    .impressoes-cards-scroll.imp-acesso{ width:100%; }
+    .imp-acesso .impressoes-cards,
+    .imp-acesso .impresso-card{ width:100% !important; max-width:100% !important; }
+    .imp-acesso .impresso-card .cell:nth-child(1),
+    .imp-acesso .impresso-card .cell:nth-child(2),
+    .imp-acesso .impresso-card .cell:nth-child(3),
+    .imp-acesso .impresso-card .cell:nth-child(4),
+    .imp-acesso .impresso-card .cell:nth-child(5){ justify-content:flex-start; text-align:left; }
+    @media (max-width: 1080px){
+      .access-summary-grid,
+      .access-defaults-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      .access-policy-grid{ grid-template-columns:1fr; }
+    }
+    @media (max-width: 720px){
+      .access-summary-grid,
+      .access-defaults-grid,
+      .access-form-grid{ grid-template-columns:1fr; }
+      .access-panel-head{ flex-direction:column; }
+      .access-modal-card{ width:min(100vw - 20px, 860px); border-radius:8px; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Acesso</h1>
+
+<div class="access-summary-grid">
+  <section class="access-summary-card">
+    <div class="access-summary-top">
+      <div class="icon-wrap"><i class="lucide" data-lucide="crown"></i></div>
+      <span class="access-count-chip">{{ summary.admin_total }} usuário(s)</span>
+    </div>
+    <span class="profile-name">Admin</span>
+    <small>Controle total por padrão, incluindo o módulo Acesso e sobrescritas por usuário.</small>
+  </section>
+  <section class="access-summary-card">
+    <div class="access-summary-top">
+      <div class="icon-wrap"><i class="lucide" data-lucide="shield-check"></i></div>
+      <span class="access-count-chip">{{ summary.administrativo }} usuário(s)</span>
+    </div>
+    <span class="profile-name">Coordenador</span>
+    <small>Perfil com poder de edição na gestão, sem acesso ao módulo Acesso por padrão.</small>
+  </section>
+  <section class="access-summary-card">
+    <div class="access-summary-top">
+      <div class="icon-wrap"><i class="lucide" data-lucide="scan-eye"></i></div>
+      <span class="access-count-chip">{{ summary.consultivo }} usuário(s)</span>
+    </div>
+    <span class="profile-name">Consultor</span>
+    <small>Secretaria, consulta operacional e acompanhamento sem perfil acadêmico de aluno.</small>
+  </section>
+  <section class="access-summary-card">
+    <div class="access-summary-top">
+      <div class="icon-wrap"><i class="lucide" data-lucide="user-round"></i></div>
+      <span class="access-count-chip">{{ summary.usuario }} usuário(s)</span>
+    </div>
+    <span class="profile-name">Usuário</span>
+    <small>Perfil padrão do aluno com matrícula, turma e fluxo acadêmico regular.</small>
+  </section>
+  <section class="access-summary-card">
+    <div class="access-summary-top">
+      <div class="icon-wrap"><i class="lucide" data-lucide="flask-conical"></i></div>
+      <span class="access-count-chip">{{ summary.usuario_teste }} usuário(s)</span>
+    </div>
+    <span class="profile-name">Usuário teste</span>
+    <small>Mesmo domínio do aluno, útil para homologação e cenários de validação.</small>
+  </section>
+</div>
+
+<section class="access-defaults-panel">
+  <div class="access-defaults-head">
+    <h2><i class="lucide" data-lucide="key-round"></i> {{ user_message("Senhas padrão") }}</h2>
+    <div class="access-note"><i class="lucide" data-lucide="sparkles"></i><span>{{ user_message("Fluxo usual: criar acesso, definir nível e redefinir quando necessário.") }}</span></div>
+  </div>
+  <form method="post" action="{{ url_for('admin_acesso_salvar_senhas_default') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="access-defaults-body">
+      <div class="access-defaults-grid">
+        <div class="access-default-card">
+          <div class="head"><strong>Admin</strong><i class="lucide" data-lucide="crown"></i></div>
+          <small>Acesso total para gestão e segurança.</small>
+          <div class="pw-wrapper">
+            <input type="password" name="default_admin_total" value="{{ access_defaults.admin_total }}" autocomplete="off" required>
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+              <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="access-default-card">
+          <div class="head"><strong>Coordenador</strong><i class="lucide" data-lucide="shield-check"></i></div>
+          <small>Perfil com edição da área de gestão.</small>
+          <div class="pw-wrapper">
+            <input type="password" name="default_administrativo" value="{{ access_defaults.administrativo }}" autocomplete="off" required>
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+              <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="access-default-card">
+          <div class="head"><strong>Consultor</strong><i class="lucide" data-lucide="scan-eye"></i></div>
+          <small>Para secretaria e leitura operacional.</small>
+          <div class="pw-wrapper">
+            <input type="password" name="default_consultivo" value="{{ access_defaults.consultivo }}" autocomplete="off" required>
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+              <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="access-default-card">
+          <div class="head"><strong>Usuário</strong><i class="lucide" data-lucide="user-round"></i></div>
+          <small>Senha padrão do aluno regular.</small>
+          <div class="pw-wrapper">
+            <input type="password" name="default_usuario" value="{{ access_defaults.usuario }}" autocomplete="off" required>
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+              <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="access-default-card">
+          <div class="head"><strong>Usuário teste</strong><i class="lucide" data-lucide="flask-conical"></i></div>
+          <small>Aluno de testes e homologação.</small>
+          <div class="pw-wrapper">
+            <input type="password" name="default_usuario_teste" value="{{ access_defaults.usuario_teste }}" autocomplete="off" required>
+            <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+              <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+              <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="access-defaults-footer">
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar senhas padrão") }}</span></button>
+    </div>
+  </form>
+</section>
+
+<div class="toolbar" id="acesso-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-acesso">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-acesso" type="search" placeholder="Buscar por nome, e-mail ou matrícula..." aria-label="Buscar" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar-acesso">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-acesso" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-acesso-label">Organizar</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-acesso-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-acesso-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="access-toolbar-actions">
+      <div class="toolbar-actions-shell access-actions-shell">
+        <button class="btn" type="button" id="btn-acesso-actions" aria-haspopup="menu" aria-expanded="false">
+          <i class="lucide" data-lucide="rows-3"></i>
+          <span class="btn-label">Ações</span>
+          <i class="lucide" data-lucide="chevron-down"></i>
+        </button>
+        <div id="access-actions-menu" class="popover toolbar-actions-menu access-actions-menu" hidden>
+          <div class="menu-title">{{ user_message("Ações da seleção") }}</div>
+          <div class="menu-list">
+            <button class="menu-item" type="button" id="access-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
+            <button class="menu-item danger" type="button" id="access-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
+            <button class="menu-item warn" type="button" id="access-action-reset"><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Redefinir") }}</span></button>
+            <button class="menu-item" type="button" id="access-action-new-password"><i class="lucide" data-lucide="lock-keyhole"></i><span>{{ user_message("Nova") }}</span></button>
+          </div>
+          <div class="menu-hint" id="access-actions-hint">{{ user_message("Selecione uma ou mais linhas para habilitar as ações.") }}</div>
+        </div>
+      </div>
+      <button class="btn btn-nova-alinhado" type="button" id="btn-acesso-adicionar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+        <span class="btn-label">{{ user_message("Novo acesso") }}</span>
+      </button>
+    </div>
+  </div>
+</div>
+{{ paginate('admin_acesso') }}
+
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="nome">Nome</div>
+    <div class="menu-item" data-field="email">E-mail</div>
+    <div class="menu-item" data-field="nivel">Nível</div>
+    <div class="menu-item" data-field="perfil">Perfil base</div>
+    <div class="menu-item" data-field="matricula">Matrícula</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+<script id="access-defaults-data" type="application/json">{{ access_defaults|tojson }}</script>
+<script id="access-profile-defaults-data" type="application/json">{{ access_profile_defaults|tojson }}</script>
+<script id="access-users-data" type="application/json">{{ users_payload|tojson }}</script>
+<script id="access-message-templates" type="application/json">{{ {
+  'actionsHintIdle': user_message('Selecione uma ou mais linhas para habilitar as ações.'),
+  'actionsHintCount': user_message('{value_1} acesso(s) selecionado(s).'),
+  'selectAll': user_message('Selecionar tudo'),
+  'clearSelection': user_message('Desselecionar'),
+  'passwordModalSingle': user_message('A nova senha será aplicada ao acesso selecionado.'),
+  'passwordModalMultiple': user_message('A nova senha será aplicada aos {value_1} acessos selecionados.'),
+  'defaultCurrentWithValue': user_message('Senha padrão atual: {value_1}'),
+  'defaultCurrentMissing': user_message('Senha padrão atual não configurada.'),
+  'passwordHelpEdit': user_message('Se ficar em branco, a senha atual será mantida. A redefinição rápida aplica a senha padrão de {value_1}.'),
+  'passwordHelpCreate': user_message('Se ficar em branco, o sistema aplica a senha padrão de {value_1}.'),
+  'resetConfirm': user_message('Redefinir a senha padrão de {value_1}?')
+}|tojson }}</script>
+
+<div class="impressoes-cards-scroll imp-acesso" id="acesso-scroll-container">
+  <div id="acesso-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'Nome', 'class':'left'},
+      {'text':'E-mail', 'class':'left'},
+      {'text':'Matrícula / Turma', 'class':'left'},
+      {'text':'Nível', 'class':'left'},
+      {'text':'Perfil base', 'class':'left'},
+    ]) }}
+
+    {% if users and users|length %}
+      {% for user in users %}
+        {% set student_info = user.matricula if user.matricula else '-' %}
+        {% if user.turma_label %}
+          {% set student_info = student_info ~ ' • ' ~ user.turma_label %}
+        {% endif %}
+        {{ cl.row([
+          {'content': user.nome ~ (' (você)' if user.is_current_user else ''), 'class':'left ellipsis', 'strong': true},
+          {'content': user.email or '-', 'class':'left ellipsis'},
+          {'content': student_info, 'class':'left ellipsis'},
+          {'content': user.nivel_label, 'class':'left ellipsis'},
+          {'content': user.tipo_label, 'class':'left ellipsis'},
+        ], {
+          'data-user-id': user.id,
+          'data-user-nome': user.nome,
+          'data-user-email': user.email,
+          'data-user-level': user.nivel_acesso,
+          'data-user-type': user.tipo,
+          'data-user-matricula': user.matricula,
+          'data-user-turma-id': user.turma_id,
+          'data-user-turma-label': user.turma_label,
+          'data-user-status': user.aluno_status,
+          'data-user-has-aluno': 1 if user.has_aluno else 0,
+          'data-user-is-self': 1 if user.is_current_user else 0,
+          'data-reset-url': url_for('admin_acesso_resetar_senha', usuario_id=user.id),
+          'data-delete-url': '' if user.is_current_user else url_for('admin_acesso_deletar', usuario_id=user.id),
+          'data-level-label': user.nivel_label,
+        }) }}
+      {% endfor %}
+    {% else %}
+      <div class="access-empty">Nenhum acesso encontrado.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="access-modal" class="access-modal-overlay" hidden>
+  <div class="access-modal-card" role="dialog" aria-modal="true" aria-labelledby="access-modal-title">
+    <div class="access-modal-header">
+      <div>
+        <h3 id="access-modal-title"><i class="lucide" data-lucide="shield-plus"></i> {{ user_message("Novo acesso") }}</h3>
+        <p id="access-modal-subtitle">{{ user_message("Crie usuários, ajuste o nível de acesso e aplique a senha padrão do perfil.") }}</p>
+      </div>
+      <button class="btn" type="button" id="access-modal-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+
+    <div class="access-modal-body">
+      <form id="access-form" method="post" action="{{ url_for('admin_acesso_salvar') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="usuario_id" id="access-user-id">
+
+        <div class="access-form-grid">
+          <div class="access-form-field">
+            <label for="access-nome">Nome</label>
+            <input id="access-nome" type="text" name="nome" required>
+          </div>
+
+          <div class="access-form-field">
+            <label for="access-email">E-mail</label>
+            <input id="access-email" type="email" name="email" required>
+          </div>
+
+          <div class="access-form-field">
+            <label for="access-level">Nível de acesso</label>
+            <select id="access-level" name="nivel_acesso">
+              {% for level in access_level_choices %}
+                <option value="{{ level.value }}">{{ level.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="access-form-field">
+            <label for="access-password">Senha</label>
+            <div class="pw-wrapper">
+              <input id="access-password" type="password" name="senha" autocomplete="new-password">
+              <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+                <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+                <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+              </button>
+            </div>
+            <small id="access-password-help">{{ user_message("Se ficar em branco na criação, o sistema aplica a senha padrão do nível selecionado.") }}</small>
+          </div>
+
+          <div class="access-form-field full">
+            <label class="access-row-muted">Padrão do nível</label>
+            <div class="access-note access-default-note"><i class="lucide" data-lucide="badge-help"></i><span id="access-default-current">{{ user_message("Senha padrão atual: {value_1}").replace('{value_1}', access_defaults.administrativo) }}</span></div>
+          </div>
+        </div>
+
+        <section id="access-policy-panel" class="access-policy-panel" hidden>
+          <div class="access-policy-head">
+            <div>
+              <h4>Permissões por módulo</h4>
+              <p>O nível define o padrão. Use override apenas onde este acesso precisar fugir do perfil base.</p>
+            </div>
+            <div class="access-policy-summary" id="access-policy-summary">
+              <strong id="access-policy-summary-count">0</strong>
+              <span>overrides ativos</span>
+            </div>
+          </div>
+
+          <div class="access-policy-groups">
+            {% for group in access_resource_groups %}
+              <section class="access-policy-group">
+                <div class="access-policy-group-title"><i class="lucide" data-lucide="blocks"></i><span>{{ group.label }}</span></div>
+                <div class="access-policy-grid">
+                  {% for item in group['items'] %}
+                    <div class="access-scope-card" data-resource-card="{{ item.resource }}" data-state="inherit">
+                      <div class="head">
+                        <div>
+                          <strong>{{ item.label }}</strong>
+                        </div>
+                        <span class="access-scope-pill none" data-resource-effective-pill="{{ item.resource }}">Nenhum</span>
+                      </div>
+                      <select name="scope_{{ item.resource }}" data-resource-select="{{ item.resource }}">
+                        {% for option in access_scope_options %}
+                          <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section id="access-student-panel" class="access-student-panel" hidden>
+          <div class="access-student-head"><i class="lucide" data-lucide="graduation-cap"></i><span>Dados acadêmicos do perfil de aluno</span></div>
+          <div class="access-form-grid">
+            <div class="access-form-field">
+              <label for="access-matricula">Matrícula</label>
+              <input id="access-matricula" type="text" name="matricula">
+            </div>
+
+            <div class="access-form-field">
+              <label for="access-status">Status</label>
+              <select id="access-status" name="status">
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </select>
+            </div>
+
+            <div class="access-form-field full">
+              <label for="access-turma">Turma</label>
+              <select id="access-turma" name="turma_id">
+                <option value="">Sem turma vinculada</option>
+                {% for turma in turmas %}
+                  <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </section>
+      </form>
+    </div>
+
+    <div class="access-modal-footer">
+      <button class="btn" type="button" id="access-modal-cancel">Cancelar</button>
+      <button class="btn primary" type="submit" form="access-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar acesso</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="access-password-modal" class="access-modal-overlay" hidden>
+  <div class="access-modal-card" role="dialog" aria-modal="true" aria-labelledby="access-password-modal-title">
+    <div class="access-modal-header">
+      <div>
+        <h3 id="access-password-modal-title"><i class="lucide" data-lucide="lock-keyhole"></i> Nova senha</h3>
+        <p id="access-password-modal-subtitle">Defina uma nova senha para os acessos selecionados.</p>
+      </div>
+      <button class="btn" type="button" id="access-password-modal-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+
+    <div class="access-modal-body">
+      <form id="access-password-form" method="post" action="{{ url_for('admin_acesso_definir_senha') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="access-form-grid">
+          <div class="access-form-field full">
+            <label for="access-password-new-value">Nova senha</label>
+            <div class="pw-wrapper">
+              <input id="access-password-new-value" type="password" name="nova_senha" autocomplete="new-password" required>
+              <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+                <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+                <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+              </button>
+            </div>
+            <small id="access-password-selection-count">A senha será aplicada aos acessos selecionados.</small>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="access-modal-footer">
+      <button class="btn" type="button" id="access-password-modal-cancel">Cancelar</button>
+      <button class="btn primary" type="submit" form="access-password-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar senha</span></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const accessDefaults = JSON.parse(document.getElementById('access-defaults-data')?.textContent || '{}');
+    const accessProfileDefaults = JSON.parse(document.getElementById('access-profile-defaults-data')?.textContent || '{}');
+    const accessUsers = JSON.parse(document.getElementById('access-users-data')?.textContent || '{}');
+    const accessMessageTemplates = JSON.parse(document.getElementById('access-message-templates')?.textContent || '{}');
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-acesso', rowsRootSelector: '#acesso-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-acesso',
+      toggleSelector: '#sort-acesso-toggle',
+      labelSelector: '#sort-acesso-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-acesso-dir',
+      defaultLabel: 'Organizar'
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery,
+      aliasesToClear: []
+    });
+
+    const modal = document.getElementById('access-modal');
+    const form = document.getElementById('access-form');
+    const modalTitle = document.getElementById('access-modal-title');
+    const modalSubtitle = document.getElementById('access-modal-subtitle');
+    const userIdInput = document.getElementById('access-user-id');
+    const nameInput = document.getElementById('access-nome');
+    const emailInput = document.getElementById('access-email');
+    const levelInput = document.getElementById('access-level');
+    const passwordInput = document.getElementById('access-password');
+    const passwordHelp = document.getElementById('access-password-help');
+    const defaultCurrent = document.getElementById('access-default-current');
+    const policyPanel = document.getElementById('access-policy-panel');
+    const policySummaryCount = document.getElementById('access-policy-summary-count');
+    const studentPanel = document.getElementById('access-student-panel');
+    const matriculaInput = document.getElementById('access-matricula');
+    const turmaInput = document.getElementById('access-turma');
+    const statusInput = document.getElementById('access-status');
+    const resourceSelects = Array.from(document.querySelectorAll('[data-resource-select]'));
+    const actionsButton = document.getElementById('btn-acesso-actions');
+    const actionsMenu = document.getElementById('access-actions-menu');
+    const actionsHint = document.getElementById('access-actions-hint');
+    const actionSelectAllButton = document.getElementById('access-action-select-all');
+    const actionDeleteButton = document.getElementById('access-action-delete');
+    const actionResetButton = document.getElementById('access-action-reset');
+    const actionNewPasswordButton = document.getElementById('access-action-new-password');
+    const passwordModal = document.getElementById('access-password-modal');
+    const passwordForm = document.getElementById('access-password-form');
+    const passwordModalClose = document.getElementById('access-password-modal-close');
+    const passwordModalCancel = document.getElementById('access-password-modal-cancel');
+    const passwordInputNewValue = document.getElementById('access-password-new-value');
+    const passwordSelectionCount = document.getElementById('access-password-selection-count');
+    let selectedRows = [];
+    let rowSelectionApi = null;
+
+    const isStudentLevel = (level) => level === 'usuario' || level === 'usuario_teste';
+    const levelLabels = {
+      admin_total: 'Admin',
+      consultivo: 'Consultor',
+      administrativo: 'Coordenador',
+      usuario: 'Usuário',
+      usuario_teste: 'Usuário teste'
+    };
+    const scopeLabels = {
+      none: 'Nenhum',
+      view: 'Leitura',
+      edit: 'Edição',
+      full: 'Total'
+    };
+
+    function getUserPayload(userId){
+      return accessUsers[String(userId)] || null;
+    }
+
+    function getSelectedRows(){
+      return selectedRows;
+    }
+
+    function getSelectedRowsWithDelete(){
+      return getSelectedRows().filter((row) => !!row.getAttribute('data-delete-url'));
+    }
+
+    function getSelectedRowsForPassword(){
+      return getSelectedRows().filter((row) => !!row.getAttribute('data-user-id'));
+    }
+
+    function closeActionsMenu(){
+      if (!actionsButton || !actionsMenu) return;
+      actionsMenu.hidden = true;
+      actionsButton.setAttribute('aria-expanded', 'false');
+    }
+
+    function syncActionsMenu(){
+      if (!actionsButton || !actionsMenu) return;
+      const selectedRows = getSelectedRows();
+      const selectedCount = selectedRows.length;
+      const selectedDeletable = getSelectedRowsWithDelete().length;
+      const hasSelection = selectedCount > 0;
+
+      actionDeleteButton.disabled = !selectedDeletable || selectedDeletable !== selectedCount;
+      actionResetButton.disabled = !hasSelection;
+      actionNewPasswordButton.disabled = !hasSelection;
+      if (actionSelectAllButton){
+        const label = actionSelectAllButton.querySelector('span');
+        const shouldClear = rowSelectionApi?.isAllSelected?.() || false;
+        if (label) label.textContent = shouldClear ? accessMessageTemplates.clearSelection : accessMessageTemplates.selectAll;
+      }
+      if (actionsHint){
+        actionsHint.textContent = hasSelection
+          ? window.appFormatMessage(accessMessageTemplates.actionsHintCount, { value_1: selectedCount })
+          : accessMessageTemplates.actionsHintIdle;
+      }
+    }
+
+    function getCsrfTokenValue(){
+      return window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+
+    function buildPostHeaders(baseHeaders){
+      const headers = new Headers(baseHeaders || {});
+      const csrfToken = getCsrfTokenValue();
+      if (csrfToken && !headers.has('X-CSRFToken')){
+        headers.set('X-CSRFToken', csrfToken);
+      }
+      return headers;
+    }
+
+    async function postDeleteUrls(rows){
+      const deleteUrls = rows.map((row) => row.getAttribute('data-delete-url')).filter(Boolean);
+      for (const url of deleteUrls){
+        const response = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: buildPostHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+        });
+        if (!response.ok){
+          throw new Error('delete-failed');
+        }
+      }
+    }
+
+    function openPasswordModal(){
+      const selectedRows = getSelectedRowsForPassword();
+      if (!selectedRows.length) return;
+      passwordForm?.reset();
+      if (passwordSelectionCount){
+        passwordSelectionCount.textContent = selectedRows.length === 1
+          ? accessMessageTemplates.passwordModalSingle
+          : window.appFormatMessage(accessMessageTemplates.passwordModalMultiple, { value_1: selectedRows.length });
+      }
+      passwordModal.hidden = false;
+      window.lucide?.createIcons?.();
+      setTimeout(() => passwordInputNewValue?.focus(), 30);
+    }
+
+    function closePasswordModal(){
+      if (passwordModal) passwordModal.hidden = true;
+    }
+
+    async function postResetUrls(rows){
+      const resetUrls = rows.map((row) => row.getAttribute('data-reset-url')).filter(Boolean);
+      for (const url of resetUrls){
+        const response = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: buildPostHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
+        });
+        if (!response.ok){
+          throw new Error('reset-failed');
+        }
+      }
+    }
+
+    function syncDefaultHint(mode){
+      const level = levelInput.value || 'administrativo';
+      const label = levelLabels[level] || 'Coordenador';
+      const currentDefault = accessDefaults[level] || '';
+      defaultCurrent.textContent = currentDefault
+        ? window.appFormatMessage(accessMessageTemplates.defaultCurrentWithValue, { value_1: currentDefault })
+        : accessMessageTemplates.defaultCurrentMissing;
+      passwordHelp.textContent = mode === 'edit'
+        ? window.appFormatMessage(accessMessageTemplates.passwordHelpEdit, { value_1: label })
+        : window.appFormatMessage(accessMessageTemplates.passwordHelpCreate, { value_1: label });
+    }
+
+    function syncPolicyFields(){
+      const level = levelInput.value || 'administrativo';
+      const student = isStudentLevel(level);
+      const defaults = accessProfileDefaults[level] || {};
+      let overrideCount = 0;
+
+      if (policyPanel) policyPanel.hidden = student;
+      resourceSelects.forEach((select) => {
+        const resource = select.getAttribute('data-resource-select') || '';
+        const defaultScope = defaults[resource] || 'none';
+        const overrideScope = student ? 'inherit' : (select.value || 'inherit');
+        const effectiveScope = overrideScope === 'inherit' ? defaultScope : overrideScope;
+        const defaultLabel = document.querySelector(`[data-resource-default-label="${resource}"]`);
+        const effectivePill = document.querySelector(`[data-resource-effective-pill="${resource}"]`);
+        const card = document.querySelector(`[data-resource-card="${resource}"]`);
+
+        if (student) select.value = 'inherit';
+        select.disabled = student;
+        if (defaultLabel) defaultLabel.textContent = scopeLabels[defaultScope] || 'Nenhum';
+        if (effectivePill){
+          effectivePill.textContent = scopeLabels[effectiveScope] || 'Nenhum';
+          effectivePill.className = `access-scope-pill ${effectiveScope}`;
+        }
+        if (card) card.setAttribute('data-state', overrideScope === 'inherit' ? 'inherit' : 'custom');
+        if (overrideScope !== 'inherit') overrideCount += 1;
+      });
+
+      if (policySummaryCount) policySummaryCount.textContent = String(overrideCount);
+    }
+
+    function syncStudentFields(){
+      const student = isStudentLevel(levelInput.value);
+      studentPanel.hidden = !student;
+      matriculaInput.required = student;
+      if (!student){
+        matriculaInput.value = '';
+        turmaInput.value = '';
+        statusInput.value = 'Ativo';
+      }
+      syncPolicyFields();
+    }
+
+    function openModal(mode, data){
+      const rowUser = data || {};
+      const user = rowUser.id ? { ...(getUserPayload(rowUser.id) || {}), ...rowUser } : rowUser;
+      form.reset();
+      userIdInput.value = user.id || '';
+      nameInput.value = user.nome || '';
+      emailInput.value = user.email || '';
+      levelInput.value = user.level || 'administrativo';
+      passwordInput.value = '';
+      matriculaInput.value = user.matricula || '';
+      turmaInput.value = user.turmaId || '';
+      statusInput.value = user.status || 'Ativo';
+      resourceSelects.forEach((select) => {
+        const resource = select.getAttribute('data-resource-select') || '';
+        const overrides = user.accessOverrides || {};
+        select.value = overrides[resource] || 'inherit';
+      });
+      syncStudentFields();
+      syncDefaultHint(mode);
+      modalTitle.innerHTML = mode === 'edit'
+        ? '<i class="lucide" data-lucide="shield-ellipsis"></i> Editar acesso'
+        : '<i class="lucide" data-lucide="shield-plus"></i> Novo acesso';
+      modalSubtitle.textContent = mode === 'edit'
+        ? 'Ajuste o nível, mantenha a senha atual ou redefina para o padrão mais adiante.'
+        : 'Cadastre um acesso novo seguindo o domínio correto do perfil.';
+      modal.hidden = false;
+      window.lucide?.createIcons?.();
+      setTimeout(() => nameInput.focus(), 30);
+    }
+
+    function closeModal(){
+      modal.hidden = true;
+    }
+
+    levelInput?.addEventListener('change', () => {
+      syncStudentFields();
+      syncDefaultHint(userIdInput.value ? 'edit' : 'create');
+    });
+    resourceSelects.forEach((select) => select.addEventListener('change', syncPolicyFields));
+
+    document.getElementById('btn-acesso-adicionar')?.addEventListener('click', () => openModal('create', { level: 'administrativo', accessOverrides: {} }));
+    document.getElementById('access-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('access-modal-cancel')?.addEventListener('click', closeModal);
+    passwordModalClose?.addEventListener('click', closePasswordModal);
+    passwordModalCancel?.addEventListener('click', closePasswordModal);
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+    passwordModal?.addEventListener('click', (e) => {
+      if (e.target === passwordModal) closePasswordModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal && !modal.hidden) closeModal();
+      if (e.key === 'Escape' && passwordModal && !passwordModal.hidden) closePasswordModal();
+    });
+
+    rowSelectionApi = window.initToolbarRowSelection?.({
+      toolbarSelector: '#acesso-toolbar',
+      rowsRootSelector: '#acesso-list',
+      enableSelectAllButton: false,
+      enableBulkDelete: false,
+      onSelectionChange: (state) => {
+        selectedRows = state.selectedRows || [];
+        syncActionsMenu();
+      }
+    });
+
+    actionsButton?.addEventListener('click', () => {
+      syncActionsMenu();
+      if (actionsMenu.hidden){
+        const rect = actionsButton.getBoundingClientRect();
+        const menuWidth = Math.max(actionsMenu.offsetWidth || 190, 190);
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+        actionsMenu.style.position = 'fixed';
+        actionsMenu.style.top = `${Math.round(rect.bottom + 6)}px`;
+        actionsMenu.style.left = `${Math.round(left)}px`;
+        actionsMenu.hidden = false;
+        actionsButton.setAttribute('aria-expanded', 'true');
+      } else {
+        closeActionsMenu();
+      }
+    });
+
+    actionsMenu?.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!actionsMenu || actionsMenu.hidden) return;
+      if (!event.target.closest('#access-actions-menu') && !event.target.closest('#btn-acesso-actions')){
+        closeActionsMenu();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && actionsMenu && !actionsMenu.hidden){
+        closeActionsMenu();
+      }
+    });
+
+    actionSelectAllButton?.addEventListener('click', () => {
+      rowSelectionApi?.toggleAllRows?.();
+      syncActionsMenu();
+    });
+
+    actionDeleteButton?.addEventListener('click', async () => {
+      if (actionDeleteButton.disabled) return;
+      const deletableRows = getSelectedRowsWithDelete();
+      const label = deletableRows.length === 1 ? 'o acesso selecionado' : `os ${deletableRows.length} acessos selecionados`;
+      if (!window.confirm(`Excluir ${label}?`)) return;
+      closeActionsMenu();
+      actionDeleteButton.disabled = true;
+      actionResetButton.disabled = true;
+      actionNewPasswordButton.disabled = true;
+      actionsButton.disabled = true;
+      try{
+        await postDeleteUrls(deletableRows);
+        window.location.reload();
+      }catch(_error){
+        window.alert('Não foi possível concluir a exclusão em lote.');
+        syncActionsMenu();
+        actionsButton.disabled = false;
+      }
+    });
+
+    actionResetButton?.addEventListener('click', async () => {
+      const selectedRows = getSelectedRowsForPassword();
+      if (!selectedRows.length) return;
+      const label = selectedRows.length === 1 ? 'o acesso selecionado' : `os ${selectedRows.length} acessos selecionados`;
+      if (!window.confirm(`Redefinir a senha padrão de ${label}?`)) return;
+      closeActionsMenu();
+      actionResetButton.disabled = true;
+      actionNewPasswordButton.disabled = true;
+      actionDeleteButton.disabled = true;
+      actionsButton.disabled = true;
+      try{
+        await postResetUrls(selectedRows);
+        window.location.reload();
+      }catch(_error){
+        window.alert('Não foi possível concluir a redefinição em lote.');
+        syncActionsMenu();
+        actionsButton.disabled = false;
+      }
+    });
+
+    actionNewPasswordButton?.addEventListener('click', () => {
+      if (actionNewPasswordButton.disabled) return;
+      closeActionsMenu();
+      openPasswordModal();
+    });
+
+    passwordForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const selectedRows = getSelectedRowsForPassword();
+      const novaSenha = (passwordInputNewValue?.value || '').trim();
+      if (!selectedRows.length || !novaSenha) return;
+
+      const body = new URLSearchParams();
+      selectedRows.forEach((row) => body.append('usuario_ids', row.getAttribute('data-user-id') || ''));
+      body.set('nova_senha', novaSenha);
+      const csrfToken = getCsrfTokenValue();
+      if (csrfToken){
+        body.set('csrf_token', csrfToken);
+      }
+
+      const submitButton = passwordForm.querySelector('button[type="submit"], .btn.primary');
+      if (submitButton) submitButton.disabled = true;
+      try{
+        const response = await fetch('{{ url_for("admin_acesso_definir_senha") }}', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: buildPostHeaders({
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+          }),
+          body: body.toString()
+        });
+        if (!response.ok){
+          throw new Error('password-update-failed');
+        }
+        window.location.reload();
+      }catch(_error){
+        window.alert('Não foi possível salvar a nova senha.');
+        if (submitButton) submitButton.disabled = false;
+      }
+    });
+
+    let bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float access-actions-float';
+      document.body.appendChild(bar);
+    }
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Ações do acesso selecionado');
+    bar.innerHTML = `
+      <button type="button" class="act-btn" data-action="edit" aria-label="Editar acesso" title="Editar"><i data-lucide="pencil-line"></i></button>
+      <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Redefinir senha') }}" title="{{ user_message('Redefinir senha padrão') }}"><i data-lucide="key-round"></i></button>
+      <button type="button" class="act-btn danger" data-action="delete" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2"></i></button>
+    `;
+    window.lucide?.createIcons?.();
+
+    const scrollWrap = document.getElementById('acesso-scroll-container');
+    let hideTimer = null;
+    let currentCard = null;
+    let currentData = null;
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height / 2) - (bar.offsetHeight / 2));
+      bar.style.top = `${top}px`;
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = `${left}px`;
+      bar.style.right = 'auto';
+    }
+
+    function showBar(card, data){
+      currentCard = card;
+      currentData = data;
+      positionFor(card);
+      bar.classList.add('is-visible');
+      const deleteBtn = bar.querySelector('[data-action="delete"]');
+      if (deleteBtn) deleteBtn.disabled = data.isSelf;
+    }
+
+    function hideBar(){
+      bar.classList.remove('is-visible');
+      currentCard = null;
+      currentData = null;
+    }
+
+    function scheduleHide(){
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideBar, 180);
+    }
+
+    function cancelHide(){
+      clearTimeout(hideTimer);
+    }
+
+    scrollWrap?.addEventListener('mouseover', (e) => {
+      const card = e.target.closest('.impresso-card');
+      if (!card || card.classList.contains('header')) return;
+      showBar(card, {
+        id: card.getAttribute('data-user-id') || '',
+        nome: card.getAttribute('data-user-nome') || '',
+        email: card.getAttribute('data-user-email') || '',
+        level: card.getAttribute('data-user-level') || 'administrativo',
+        matricula: card.getAttribute('data-user-matricula') || '',
+        turmaId: card.getAttribute('data-user-turma-id') || '',
+        status: card.getAttribute('data-user-status') || 'Ativo',
+        isSelf: card.getAttribute('data-user-is-self') === '1',
+        resetUrl: card.getAttribute('data-reset-url') || '',
+        deleteUrl: card.getAttribute('data-delete-url') || '',
+        accessOverrides: getUserPayload(card.getAttribute('data-user-id') || '')?.accessOverrides || {}
+      });
+    });
+    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.act-btn');
+      if (!btn || !currentData) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'edit'){
+        openModal('edit', currentData);
+        return;
+      }
+      if (action === 'reset'){
+        if (!currentData.resetUrl) return;
+        if (!confirm(window.appFormatMessage(accessMessageTemplates.resetConfirm, { value_1: currentData.nome }))) return;
+        const formEl = document.createElement('form');
+        formEl.method = 'POST';
+        formEl.action = currentData.resetUrl;
+        window.ensureFormCsrfToken?.(formEl);
+        document.body.appendChild(formEl);
+        formEl.submit();
+        return;
+      }
+      if (action === 'delete'){
+        if (!currentData.deleteUrl || currentData.isSelf) return;
+        if (!confirm(`Excluir o acesso de ${currentData.nome}?`)) return;
+        const formEl = document.createElement('form');
+        formEl.method = 'POST';
+        formEl.action = currentData.deleteUrl;
+        window.ensureFormCsrfToken?.(formEl);
+        document.body.appendChild(formEl);
+        formEl.submit();
+      }
+    });
+
+    syncActionsMenu();
+    syncPolicyFields();
+  })();
+</script>
+{% endblock %}

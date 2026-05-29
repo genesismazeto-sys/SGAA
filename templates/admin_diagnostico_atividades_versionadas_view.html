@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Diagnóstico - Atividades Versionadas{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .diag-wrap{ display:grid; gap:16px; }
+    .diag-card{
+      background:#fff;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);
+      padding:16px;
+    }
+    .diag-head{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:12px;
+    }
+    .diag-head h1{
+      margin:0;
+      font-size:1.05rem;
+    }
+    .diag-badges{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .diag-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+      background:#eff6ff;
+      color:#1e40af;
+    }
+    .diag-badge.warn{
+      background:#ecfeff;
+      color:#155e75;
+    }
+    .diag-controls{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:10px;
+      align-items:end;
+    }
+    .diag-field{
+      display:grid;
+      gap:4px;
+    }
+    .diag-field label{
+      font-size:12px;
+      color:#334155;
+      font-weight:600;
+    }
+    .diag-field input,
+    .diag-field select{
+      width:100%;
+      min-height:34px;
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:6px 10px;
+      font-size:13px;
+    }
+    .diag-actions{
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+    }
+    .diag-note{
+      margin:0;
+      color:#475569;
+      font-size:12.5px;
+      line-height:1.45;
+    }
+    .diag-meta{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+      gap:8px;
+      font-size:13px;
+      color:#334155;
+      margin-top:8px;
+    }
+    .diag-meta strong{ color:#0f172a; }
+    .diag-normas{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-top:8px;
+    }
+    .diag-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:12px;
+      border:1px solid #dbeafe;
+      background:#f8fafc;
+      color:#1e3a8a;
+    }
+    .diag-section{
+      margin-top:10px;
+      display:grid;
+      gap:8px;
+    }
+    .diag-section h2{
+      margin:0;
+      font-size:0.98rem;
+    }
+    .diag-table-wrap{
+      overflow:auto;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+    }
+    .diag-table{
+      width:100%;
+      border-collapse:collapse;
+      min-width:1180px;
+      font-size:12.5px;
+    }
+    .diag-table th,
+    .diag-table td{
+      padding:8px 10px;
+      border-bottom:1px solid #e2e8f0;
+      vertical-align:top;
+      text-align:left;
+      line-height:1.35;
+    }
+    .diag-table th{
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      color:#475569;
+      white-space:nowrap;
+      background:#f8fafc;
+    }
+    .diag-pill{
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      padding:3px 8px;
+      font-size:11px;
+      font-weight:600;
+      background:#ecfeff;
+      color:#155e75;
+    }
+    .diag-pill.no{
+      background:#f1f5f9;
+      color:#475569;
+    }
+    .diag-empty{
+      margin:0;
+      color:#64748b;
+      font-size:13px;
+    }
+    .diag-alert{
+      margin:0;
+      padding:10px 12px;
+      border-radius:var(--radius);
+      border:1px solid #fecaca;
+      background:#fef2f2;
+      color:#991b1b;
+      font-size:13px;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  {% macro format_structured_hours(value) -%}
+    {%- if value is none -%}
+      -
+    {%- else -%}
+      {%- set numeric = value|float -%}
+      {%- if (numeric % 1) == 0 -%}
+        {{ numeric|int }}h
+      {%- else -%}
+        {{ ('%.2f'|format(numeric)).rstrip('0').rstrip('.') }}h
+      {%- endif -%}
+    {%- endif -%}
+  {%- endmacro %}
+
+  <div class="diag-wrap">
+    <section class="diag-card">
+      <div class="diag-head">
+        <h1>Diagnóstico Administrativo - Atividades Versionadas</h1>
+        <div class="diag-badges">
+          <span class="diag-badge">Admin-only</span>
+          <span class="diag-badge warn">Leitura paralela (não operacional)</span>
+        </div>
+      </div>
+
+      <p class="diag-note">
+        Visualização de conferência antes de qualquer cutover. Sem checklist obrigatório e sem bloqueio documental nesta tela.
+      </p>
+      <p class="diag-note">
+        Os campos estruturados de carga/limite ainda estão em conferência. Nesta tela diagnóstica, as observações textuais são a referência editorial; não há uso operacional automático.
+      </p>
+
+      <form id="diag-form" method="get" class="diag-controls">
+        <div class="diag-field">
+          <label for="turma_codigo">Turma (código)</label>
+          <input id="turma_codigo" name="turma_codigo" value="{{ request.args.get('turma_codigo','') }}" placeholder="Ex.: PPA-T10">
+        </div>
+        <div class="diag-field">
+          <label for="turma_id">Turma (ID)</label>
+          <input id="turma_id" name="turma_id" type="number" min="1" value="{{ request.args.get('turma_id','') }}">
+        </div>
+        <div class="diag-field">
+          <label for="matriz_id">Matriz (ID)</label>
+          <input id="matriz_id" name="matriz_id" type="number" min="1" value="{{ request.args.get('matriz_id','') }}">
+        </div>
+        <div class="diag-field">
+          <label for="turma_id_select">Turma (lista rápida)</label>
+          <select id="turma_id_select" onchange="if(this.value){ window.location='{{ url_for('admin_diagnostico_atividades_versionadas_view') }}?turma_id='+this.value; }">
+            <option value="">Selecione</option>
+            {% for turma in turmas_disponiveis %}
+              <option value="{{ turma.id }}">{{ turma.codigo or turma.nome }}{% if turma.periodo_label %} ({{ turma.periodo_label }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+      <div class="diag-actions">
+        <button class="btn primary" type="submit" form="diag-form" formmethod="get" formaction="{{ url_for('admin_diagnostico_atividades_versionadas_view') }}">Carregar visualização</button>
+        <a class="btn" href="{{ url_for('admin_diagnostico_atividades_versionadas', turma_id=request.args.get('turma_id'), turma_codigo=request.args.get('turma_codigo'), matriz_id=request.args.get('matriz_id')) }}" target="_blank" rel="noopener">Abrir JSON diagnóstico</a>
+      </div>
+    </section>
+
+    {% if message %}
+      <p class="{{ 'diag-alert' if payload is none and consulta.modo != 'indice' else 'diag-note' }}">{{ message }}</p>
+    {% endif %}
+
+    {% if payload %}
+      <section class="diag-card" id="diagnostico-versionado" data-total-geral="{{ payload.totais.geral }}" data-total-aac="{{ payload.totais.por_eixo.get('AAC', 0) }}" data-total-aeu="{{ payload.totais.por_eixo.get('AEU', 0) }}">
+        <div class="diag-meta">
+          <div><strong>Consulta:</strong> {{ consulta.modo }}</div>
+          <div><strong>Turma:</strong> {{ payload.turma.codigo if payload.turma else '-' }}</div>
+          <div><strong>Matriz:</strong> {{ payload.matriz.label }}</div>
+          <div><strong>Total geral:</strong> {{ payload.totais.geral }}</div>
+          <div><strong>AAC:</strong> {{ payload.totais.por_eixo.get('AAC', 0) }}</div>
+          <div><strong>AEU:</strong> {{ payload.totais.por_eixo.get('AEU', 0) }}</div>
+        </div>
+        <div class="diag-normas">
+          {% for norma in payload.normas %}
+            <span class="diag-chip">{{ norma.codigo }} ({{ norma.eixo }})</span>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% for eixo in ['AAC', 'AEU'] %}
+        {% set itens = payload.por_eixo.get(eixo, []) %}
+        <section class="diag-card diag-section">
+          <h2>{{ eixo }} - {{ itens|length }} atividade(s)</h2>
+          {% if not itens %}
+            <p class="diag-empty">Sem atividades para este eixo na consulta atual.</p>
+          {% else %}
+            <div class="diag-table-wrap">
+              <table class="diag-table">
+                <thead>
+                  <tr>
+                    <th>Atividade</th>
+                    <th>Norma</th>
+                    <th>Grupo</th>
+                    <th>CH/evento estruturada</th>
+                    <th>Limite semestre estruturado</th>
+                    <th>Limite total estruturado</th>
+                    <th>Legado</th>
+                    <th>Observação aluno</th>
+                    <th>Observação admin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in itens %}
+                    <tr>
+                      <td>{{ item.nome_exibivel }}</td>
+                      <td>{{ item.norma }}</td>
+                      <td>{{ item.grupo or '-' }}</td>
+                      <td>{{ format_structured_hours(item.ch_por_evento) }}</td>
+                      <td>{{ format_structured_hours(item.limite_semestre) }}</td>
+                      <td>{{ format_structured_hours(item.limite_total) }}</td>
+                      <td>
+                        {% if item.tem_correspondente_legado %}
+                          <span class="diag-pill">Sim{% if item.atividade_id_legacy %} (ID {{ item.atividade_id_legacy }}){% endif %}</span>
+                        {% else %}
+                          <span class="diag-pill no">Não</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ item.observacao_aluno or '-' }}</td>
+                      <td>{{ item.observacao_admin or '-' }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% endif %}
+  </div>
+{% endblock %}

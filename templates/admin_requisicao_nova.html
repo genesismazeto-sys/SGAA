@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Nova Requisição (Admin){% endblock %}
+{% block content %}
+<h1 class="main-title">Nova Requisição</h1>
+<p>Esta é uma tela placeholder para criar requisições manualmente pelo admin. Posso implementar o formulário completo na próxima etapa (selecionar aluno, atividade, datas, horas, upload de comprovante, etc.).</p>
+<div class="toolbar">
+  <a class="btn" href="{{ url_for('admin_requisicoes') }}"><i class="lucide" data-lucide="arrow-left"></i> Voltar</a>
+</div>
+<div class="activity-card" style="padding: 12px;">
+  <p>Planejado:</p>
+  <ul>
+    <li>Selecionar Aluno</li>
+    <li>Selecionar Atividade</li>
+    <li>Data do Evento, Horas Solicitadas</li>
+    <li>Upload do Comprovante (opcional)</li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,400 @@
+{% from 'components/pagination.html' import paginate %}
+{% from 'components/icons.html' import school_icon %}
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Turmas (Admin){% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+    #impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+    .modal-overlay{ position: fixed; inset: 0; background: rgba(2,6,23,.45); display: grid; place-items: center; z-index: 40; }
+    .modal-overlay[hidden]{ display: none !important; }
+    .modal-card{ background: var(--surface); color: var(--text-primary); border:0; border-radius: var(--radius); width: min(900px, calc(100vw - 32px)); max-height: min(80vh, 780px); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(2,6,23,.25); }
+    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:0; }
+    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size: 16px; margin:0; }
+    .modal-body{ padding: 10px 12px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+    .modal-footer{ display:flex; justify-content: center; gap:8px; padding: 10px 12px; border-top:0; }
+    #importar-turmas-modal{ padding:16px; overflow-y:auto; }
+    .modal-card.import-modal-card{ width:min(820px, 100%); max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); }
+    .modal-card.import-modal-card .modal-body{ padding:16px 18px 8px; flex:1 1 auto; min-height:0; }
+    .import-modal-form,
+    .import-modal-grid,
+    .import-modal-grid .field-card,
+    .import-help-panel,
+    .import-help-block{ min-width:0; max-width:100%; box-sizing:border-box; }
+    .import-modal-form{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+    .import-modal-grid,
+    .import-form-grid{ display:grid; gap:12px; }
+    .import-field-label{ position:static; transform:none; width:auto; text-align:left; margin:0 0 4px 0; display:block; font-size:var(--font-size-small); color:var(--text-secondary); font-weight:600; }
+    .import-modal-form .field-card{ min-height: var(--btn-h); height: var(--btn-h); border-radius: var(--radius); }
+    .import-modal-form .field-card .field-chip{ height:100%; display:grid; place-items:center; }
+    .import-modal-form .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns:40px 1fr auto; align-items:center; column-gap:var(--list-col-gap, 6px); }
+    .import-modal-form .field-card.file-card .file-input{ display:none; }
+    .import-modal-form .field-card.file-card .file-name{ display:flex; align-items:center; min-height:var(--btn-h); padding-right:0; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .import-modal-form .field-card.file-card.has-file .file-name{ color:var(--text-primary); }
+    .import-modal-form .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background:var(--surface-2, #f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; cursor:pointer; color:#000; }
+    .import-modal-form .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
+    .import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }
+    .import-help-panel{ display:grid; gap:12px; padding:16px; border:1px solid var(--border-strong); border-radius:var(--radius); background:linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%); box-shadow:var(--shadow-sm); }
+    .import-help-head h3{ margin:0; font-size:15px; font-weight:600; color:var(--text-primary); }
+    .import-help-head p{ margin:4px 0 0; font-size:13px; color:var(--text-secondary); }
+    .import-help-block{ display:grid; gap:6px; }
+    .import-help-label{ font-size:12px; font-weight:600; color:var(--text-secondary); }
+    .import-help-code{ margin:0; padding:12px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:#fff; color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+    .import-help-note{ padding:12px 14px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:#fff; color:var(--text-secondary); font-size:13px; line-height:1.5; }
+    .modal-card.import-modal-card .modal-footer{ flex-wrap:wrap; }
+    @media (max-width: 768px){
+      #importar-turmas-modal{ padding:10px; }
+      .modal-card.import-modal-card{ width:min(820px, 100%); max-height:calc(100vh - 20px); max-height:calc(100dvh - 20px); }
+      .modal-card.import-modal-card .modal-body{ padding:14px 14px 8px; }
+    }
+  </style>
+{% endblock %}
+{% block content %}
+
+<h1 class="main-title">Turmas</h1>
+
+<!-- Toolbar (Buscar, Organizar, Filtrar) -->
+<div class="toolbar" id="impressoes-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="Buscar por código, curso ou status…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-label">Organizar por</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="btn-importar-csv-turmas" type="button">
+      <i class="lucide" data-lucide="file-up"></i> Importar
+    </button>
+    <div class="toolbar-actions-shell">
+      <button class="btn" type="button" id="btn-turmas-actions" aria-haspopup="menu" aria-expanded="false">
+        <i class="lucide" data-lucide="rows-3"></i>
+        <span class="btn-label">Ações</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <div id="turmas-actions-menu" class="popover toolbar-actions-menu" hidden>
+        <div class="menu-title">Ações da seleção</div>
+        <div class="menu-list">
+          <button class="menu-item" type="button" id="turmas-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>Selecionar tudo</span></button>
+          <button class="menu-item danger" type="button" id="turmas-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>Excluir</span></button>
+        </div>
+        <div class="menu-hint" id="turmas-actions-hint">Selecione uma ou mais linhas para habilitar as ações.</div>
+      </div>
+    </div>
+    <a class="btn btn-nova-alinhado" href="{{ url_for('admin_adicionar_turma') }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+      <span class="btn-label">Adicionar</span>
+    </a>
+  </div>
+</div>
+
+<div id="importar-turmas-modal" class="modal-overlay" hidden>
+  <div class="modal-card import-modal-card" role="dialog" aria-modal="true" aria-labelledby="importar-turmas-modal-title">
+    <div class="modal-header">
+      <h3 id="importar-turmas-modal-title"><i class="lucide" data-lucide="file-up"></i> Importar Alunos (CSV)</h3>
+      <button class="btn" id="importar-turmas-close" type="button" aria-label="Fechar">
+        <i class="lucide" data-lucide="x"></i>
+      </button>
+    </div>
+    <form action="{{ url_for('admin_turmas_importar') }}" method="post" enctype="multipart/form-data" class="import-modal-form" autocomplete="off">
+      <div class="modal-body">
+        <div class="import-modal-grid">
+          {% include 'partials/admin_importar_turma_form.html' %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn primary"><i class="lucide" data-lucide="import"></i> Importar</button>
+        <button type="button" class="btn" id="importar-turmas-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{ paginate('admin_turmas') }}
+
+<!-- Popover de Organizar -->
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="codigo">Código</div>
+    <div class="menu-item" data-field="curso_nome">Curso</div>
+    <div class="menu-item" data-field="matriz_nome">Matriz</div>
+    <div class="menu-item" data-field="numero">Nº Turma</div>
+    <div class="menu-item" data-field="status">Status</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+<!-- Popover de Filtrar -->
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+
+<!-- Lista no formato Impressões -->
+<!-- Layout/alinhamento de .imp-turmas migrado para list-cards.css -->
+
+<div class="impressoes-cards-scroll imp-turmas" id="turmas-scroll-container">
+  <div id="turmas-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'Código','class':'left'},
+      {'text':'Curso','class':'left'},
+      {'text':'Matriz','class':'left'},
+      {'text':'Nº Turma','class':'center'},
+      {'text':'Início','class':'center'},
+      {'text':'Fim','class':'center'},
+      {'text':'Alunos','class':'center'},
+      {'text':'Status','class':'center'}
+    ]) }}
+
+    {% if turmas and turmas|length %}
+      {% for t in turmas %}
+        {% set is_active = (t.status == 'Ativa') %}
+        {% set matriz_label = t.matriz_nome or '—' %}
+        {% if t.matriz_versao %}
+          {% set matriz_label = matriz_label ~ ' • ' ~ t.matriz_versao %}
+        {% endif %}
+        {{ cl.row([
+          {'class':'left ellipsis','content': (t.codigo or 'N/A')},
+          {'class':'left ellipsis','content': (t.curso_nome or '—') },
+          {'class':'left ellipsis','content': matriz_label },
+          {'class':'center','content': (t.numero or '—') },
+          {'class':'center','content': ((t.semestre_inicio ~ 'S-' ~ t.ano_inicio) if (t.semestre_inicio and t.ano_inicio) else '—') },
+          {'class':'center','content': ((t.semestre_fim ~ 'S-' ~ t.ano_fim) if (t.semestre_fim and t.ano_fim) else '—') },
+          {'class':'center','content': (t.qtd_alunos or 0) },
+          {'class':'center','content': ( 'Ativa' if is_active else 'Inativa' ), 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' ) }
+        ], attrs={'data-turma-id': t.id, 'data-delete-url': url_for('admin_deletar_turma', turma_id=t.id)}) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma turma cadastrada.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+  {% block extra_scripts %}
+  <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+  <script>
+    (function(){
+      const lucideInit = () => { if (window.lucide && lucide.createIcons) window.lucide.createIcons(); };
+      lucideInit();
+
+      const importBtn = document.getElementById('btn-importar-csv-turmas');
+      const importModal = document.getElementById('importar-turmas-modal');
+      const importCloseBtn = document.getElementById('importar-turmas-close');
+      const importCancelBtn = document.getElementById('importar-turmas-cancel');
+
+      function bindFileCardScope(root){
+        root?.querySelectorAll('[data-file-card]').forEach(card => {
+          if (card.dataset.boundFileCard === '1') return;
+          card.dataset.boundFileCard = '1';
+          const input = card.querySelector('input[type="file"]');
+          const nameEl = card.querySelector('[data-file-name]');
+          const chipRight = card.querySelector('.chip-right');
+          function openPicker(){ if (input) input.click(); }
+          function updateName(){
+            const f = input && input.files && input.files[0];
+            if (f){
+              nameEl.textContent = f.name;
+              nameEl.setAttribute('title', f.name);
+              card.classList.add('has-file');
+            } else {
+              nameEl.textContent = 'Nenhum arquivo selecionado';
+              nameEl.removeAttribute('title');
+              card.classList.remove('has-file');
+            }
+          }
+          card.addEventListener('click', (e) => { if (e.target && e.target.tagName !== 'INPUT') openPicker(); });
+          chipRight?.addEventListener('click', (e) => { e.stopPropagation(); openPicker(); });
+          input?.addEventListener('change', updateName);
+          updateName();
+        });
+      }
+
+      function openImportModal(ev){
+        if (ev) ev.stopPropagation();
+        if (!importModal) return;
+        importModal.hidden = false;
+        document.body.classList.add('modal-open');
+        bindFileCardScope(importModal);
+        lucideInit();
+      }
+
+      function closeImportModal(){
+        if (!importModal) return;
+        importModal.hidden = true;
+        document.body.classList.remove('modal-open');
+      }
+
+      if (importBtn) importBtn.addEventListener('click', openImportModal);
+      if (importCloseBtn) importCloseBtn.addEventListener('click', (e) => { e.stopPropagation(); closeImportModal(); });
+      if (importCancelBtn) importCancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeImportModal(); });
+      if (importModal) importModal.addEventListener('click', (e) => { if (e.target === importModal) closeImportModal(); });
+
+      const toolbarQuery = window.createToolbarQueryHelpers();
+      window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#turmas-list' });
+      window.initToolbarSortMenu?.({
+        ...toolbarQuery,
+        buttonSelector: '#sort-field',
+        toggleSelector: '#sort-toggle',
+        labelSelector: '#sort-label',
+        dirLabelSelector: '#dir-label',
+        dirValueSelector: '#sort-dir',
+        defaultLabel: 'Organizar por'
+      });
+      window.initToolbarFilterMenu?.({
+        ...toolbarQuery,
+        aliasesToClear: ['filtro']
+      });
+
+      const rowSelectionApi = window.initToolbarRowSelection?.({
+        toolbarSelector: '#impressoes-toolbar',
+        rowsRootSelector: '#turmas-list',
+        enableSelectAllButton: false,
+        enableBulkDelete: false
+      });
+
+      window.initToolbarSelectionActionsMenu?.({
+        buttonSelector: '#btn-turmas-actions',
+        menuSelector: '#turmas-actions-menu',
+        selectAllSelector: '#turmas-action-select-all',
+        deleteSelector: '#turmas-action-delete',
+        hintSelector: '#turmas-actions-hint',
+        rowSelectionApi,
+        deleteMessageSingle: 'Tem certeza que deseja excluir a turma selecionada?',
+        deleteMessageMultiple: (count) => `Tem certeza que deseja excluir as ${count} turmas selecionadas?`
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape'){
+          if (importModal && !importModal.hidden) closeImportModal();
+        }
+      });
+
+      const shouldOpenImport = "{{ request.args.get('import_csv', '') }}" === '1';
+      if (shouldOpenImport) openImportModal();
+    })();
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', ()=>{
+      // Cria a barra se não existir
+      let bar = document.getElementById('pedido-actions-float');
+      if (!bar){
+        bar = document.createElement('div');
+        bar.id = 'pedido-actions-float';
+        bar.className = 'pedido-actions-float';
+        bar.setAttribute('role','toolbar');
+        bar.setAttribute('aria-label','Ações da turma selecionada');
+        bar.innerHTML = `
+          <button type=\"button\" class=\"act-btn\" data-action=\"alunos\" aria-label=\"Alunos da turma\" title=\"Alunos\">{{ school_icon() }}</button>
+          <button type=\"button\" class=\"act-btn\" data-action=\"edit\" aria-label=\"Editar turma\" title=\"Editar\"><i data-lucide=\"edit\"></i></button>
+        `;
+        document.body.appendChild(bar);
+        window.lucide?.createIcons?.();
+      }
+
+      const scrollWrap = document.querySelector('#turmas-scroll-container');
+      const listContainer = document.querySelector('#turmas-list');
+      let hideTimer = null;
+      let currentTid = null;
+
+      function positionFor(card){
+        if (!bar || !card) return;
+        const r = card.getBoundingClientRect();
+        // vertical (fixed): centraliza na linha, compensando metade da altura da barra
+        const top = Math.round(r.top + (r.height/2) - (bar.offsetHeight/2));
+        bar.style.top = top + 'px';
+        // horizontal: encostar na BORDA DIREITA do conteúdo central (.app-track), respeitando padding-right
+        const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+        const tr = track.getBoundingClientRect();
+        const cs = window.getComputedStyle(track);
+        const pr = parseFloat(cs.paddingRight || '0') || 0;
+        const contentRight = tr.right - pr;
+        const left = Math.round(contentRight - bar.offsetWidth);
+        bar.style.left = left + 'px';
+        bar.style.right = 'auto';
+      }
+
+  function show(){ bar.classList.add('is-visible'); }
+  function hide(){ bar.classList.remove('is-visible'); currentTid = null; currentCard = null; }
+
+      function scheduleHide(){
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(()=>{ hide(); }, 180);
+      }
+      function cancelHide(){ clearTimeout(hideTimer); }
+
+      let currentCard = null;
+
+      scrollWrap?.addEventListener('mouseover', (e)=>{
+        const card = e.target.closest('.impresso-card');
+        if (!card || card.classList.contains('header')) return;
+        const tid = card.getAttribute('data-turma-id');
+        currentTid = tid;
+        currentCard = card;
+        positionFor(currentCard);
+        show();
+      });
+      scrollWrap?.addEventListener('mouseleave', scheduleHide);
+      bar.addEventListener('mouseenter', cancelHide);
+      bar.addEventListener('mouseleave', scheduleHide);
+      window.addEventListener('scroll', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+      window.addEventListener('resize', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+      // Ações
+      bar.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button.act-btn');
+        if (!btn || !currentTid) return;
+        const action = btn.getAttribute('data-action');
+        if (action === 'alunos'){
+          // Leva para os alunos da turma (detalhe da turma)
+          window.navigateWithReturnTo("{{ url_for('admin_detalhes_turma', turma_id=0) }}".replace('/0', '/'+currentTid));
+        } else if (action === 'edit'){
+          window.navigateWithReturnTo("{{ url_for('admin_editar_turma', turma_id=0) }}".replace('/0', '/'+currentTid));
+        }
+      });
+    });
+  </script>
+  {% endblock %}

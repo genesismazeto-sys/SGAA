@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Demo – Form Pack{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/clientes-form-pack.css') }}">
+{% endblock %}
+{% block content %}
+<h1 class="main-title">Demo do estilo clientes_form</h1>
+<div class="content-block">
+  <form>
+    <div class="form-cards">
+      <div class="form-row">
+        <label class="field-label" for="razao_social">Razão social*</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="building-2"></i></div>
+          <input class="control" id="razao_social" type="text" placeholder="ACME Indústria Ltda." required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="field-label" for="cnpj">CNPJ*</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+          <input class="control" id="cnpj" type="text" placeholder="00.000.000/0000-00">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="field-label">Localização</label>
+        <div class="field-card split-3-equal">
+          <div class="field-chip"><i class="lucide" data-lucide="building"></i></div>
+          <input class="control" id="cidade" type="text" placeholder="Cidade">
+          <div class="field-chip"><i class="lucide" data-lucide="flag"></i></div>
+          <input class="control" id="estado" type="text" maxlength="2" placeholder="UF">
+          <div class="field-chip"><i class="lucide" data-lucide="globe"></i></div>
+          <input class="control" id="pais" type="text" placeholder="Brasil">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="field-label" for="observacoes">Observações</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
+          <textarea class="control auto-grow" id="observacoes" rows="1" placeholder="Notas gerais..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <a class="btn" href="#"><i class="lucide" data-lucide="chevron-left"></i> Voltar</a>
+        <button class="btn primary" type="button"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
+      </div>
+    </div>
+  </form>
+</div>
+<script>document.addEventListener('DOMContentLoaded',()=>{ if (window.lucide) lucide.createIcons(); });</script>
+{% endblock %}

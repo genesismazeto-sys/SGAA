@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ curso_title }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.55);
+      max-width: calc(100vw - 64px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    .form-actions{ justify-content:center; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">{{ curso_title }}</h1>
+
+<form method="POST">
+  <div class="form-cards-narrow">
+    <div class="form-row">
+      <label class="row-label">Nome</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+        <input class="control" type="text" name="nome" value="{{ curso.nome if curso else '' }}" {% if readonly %}readonly tabindex="-1"{% else %}required{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Código</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="barcode"></i></div>
+        <input class="control" type="text" name="codigo" value="{{ curso.codigo if curso else '' }}" maxlength="20" placeholder="APENAS LETRAS (A–Z)" {% if readonly %}readonly tabindex="-1"{% else %}required{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Duração (períodos)</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="clock-3"></i></div>
+        <input class="control" type="number" name="duracao_periodos" min="1" value="{{ curso.duracao_periodos if curso else '' }}" {% if readonly %}readonly tabindex="-1"{% else %}required{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Status</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" name="status" {% if readonly %}disabled{% endif %}>
+          <option value="ativo" {{ 'selected' if not curso or curso.status=='ativo' else '' }}>Ativo</option>
+          <option value="inativo" {{ 'selected' if curso and curso.status=='inativo' else '' }}>Inativo</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
+      {% if submit_label %}
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}

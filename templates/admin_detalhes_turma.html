@@ -1,0 +1,543 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Detalhes da Turma{% endblock %}
+
+{% macro hours_br(value) -%}
+  {%- set amount = (value or 0)|float -%}
+  {%- if amount == (amount|int) -%}
+    {{ amount|int }}
+  {%- else -%}
+    {{ ('%.1f'|format(amount)).replace('.', ',') }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro percent_br(value) -%}
+  {%- set amount = (value or 0)|float -%}
+  {%- if amount == (amount|int) -%}
+    {{ amount|int }}%
+  {%- else -%}
+    {{ ('%.1f'|format(amount)).replace('.', ',') }}%
+  {%- endif -%}
+{%- endmacro %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #turma-detalhes-toolbar .input-chip{ background:transparent; border-right:none; }
+    #turma-detalhes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+
+    .turma-topbar{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:18px;
+    }
+    .turma-topbar .main-title{ margin:0; }
+    .turma-topbar-spacer{
+      flex:1 1 auto;
+      min-width:0;
+    }
+    .turma-header-strip{
+      display:block;
+      margin-bottom:18px;
+    }
+    .turma-meta-cards{
+      display:grid;
+      grid-template-columns:minmax(0,2fr) minmax(0,1.75fr) minmax(40px,.42fr) minmax(0,1.35fr) minmax(58px,.55fr) minmax(72px,.62fr) minmax(84px,.8fr) minmax(84px,.8fr) minmax(68px,.62fr);
+      align-items:start;
+      column-gap:16px;
+      row-gap:0;
+      width:100%;
+      min-width:0;
+    }
+    .turma-meta-block{
+      display:flex;
+      flex-direction:column;
+      gap:5px;
+      min-width:0;
+    }
+    .turma-meta-label{
+      padding:0 2px;
+      font-size:11px;
+      color:var(--text-secondary);
+      line-height:1;
+      white-space:nowrap;
+    }
+    .turma-meta-card{
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      min-width:0;
+      min-height:0;
+      padding:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
+      box-shadow:none;
+      overflow:visible;
+    }
+    .turma-meta-card .meta-value{
+      display:block;
+      min-width:0;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-size:clamp(13px, 1vw, 17px);
+      color:var(--text-primary);
+      font-weight:600;
+      line-height:1.1;
+      white-space:nowrap;
+    }
+    .turma-meta-card .badge{ width:max-content; }
+    .turma-select-shell{
+      position:relative;
+      min-width:140px;
+      width:clamp(140px, 15vw, 220px);
+      max-width:220px;
+    }
+    .turma-select-shell select{
+      appearance:none;
+      width:100%;
+      height:calc(var(--btn-h) - 2px);
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+      color:var(--text-primary);
+      padding:0 34px 0 10px;
+      font:inherit;
+      font-size:13px;
+      outline:0;
+      box-shadow:var(--shadow-sm);
+      cursor:pointer;
+    }
+    .turma-select-shell .lucide{
+      position:absolute;
+      right:10px;
+      top:50%;
+      width:14px;
+      height:14px;
+      transform:translateY(-50%);
+      color:var(--text-secondary);
+      pointer-events:none;
+    }
+    @media (max-width: 1360px){
+      .turma-meta-cards{
+        grid-template-columns:minmax(0,1.8fr) minmax(0,1.45fr) minmax(36px,.36fr) minmax(0,1.1fr) minmax(52px,.5fr) minmax(66px,.56fr) minmax(76px,.7fr) minmax(76px,.7fr) minmax(60px,.56fr);
+        column-gap:12px;
+      }
+      .turma-meta-card .meta-value{ font-size:clamp(12px, .92vw, 15px); }
+      .turma-meta-label{ font-size:10px; }
+    }
+    .toolbar.turma-toolbar{ margin-top:0; }
+    .imp-turma-detalhe{
+      --imp-cols:
+        72px
+        minmax(220px, 1.55fr)
+        minmax(290px, 1.8fr)
+        minmax(150px, 1fr)
+        120px
+        120px
+        120px;
+    }
+    .imp-turma-detalhe .impressoes-cards,
+    .imp-turma-detalhe .impresso-card{
+      width:100%;
+    }
+    .imp-turma-detalhe .impresso-card .cell:nth-child(1),
+    .imp-turma-detalhe .impresso-card .cell:nth-child(4),
+    .imp-turma-detalhe .impresso-card .cell:nth-child(5),
+    .imp-turma-detalhe .impresso-card .cell:nth-child(6),
+    .imp-turma-detalhe .impresso-card .cell:nth-child(7){ justify-content:center; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="turma-topbar">
+  <h1 class="main-title">Turma</h1>
+
+  <div class="turma-select-shell" title="Escolher outra turma cadastrada">
+    <select id="turma-global-select" aria-label="Escolher outra turma cadastrada">
+      {% for turma_option in all_turmas %}
+        <option value="{{ url_for('admin_detalhes_turma', turma_id=turma_option.id) }}" {% if turma_option.id == turma.id %}selected{% endif %}>
+          {{ turma_option.codigo or ('Turma ' ~ (turma_option.numero or '—')) }}
+        </option>
+      {% endfor %}
+    </select>
+    <i class="lucide" data-lucide="chevron-down" aria-hidden="true"></i>
+  </div>
+
+  <div class="turma-topbar-spacer" aria-hidden="true"></div>
+
+  <a class="btn" href="{{ url_for('admin_turmas') }}">
+    <i class="lucide" data-lucide="arrow-left"></i>
+    <span class="btn-label">Voltar</span>
+  </a>
+</div>
+
+<div class="turma-header-strip">
+  <div class="turma-meta-cards">
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Curso</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ turma.curso_nome or '—' }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Matriz</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ matriz_label }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Turma</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ turma.numero or '—' }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Período</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ periodo_label }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Turno</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ turma.turno or '—' }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Status</span>
+      <div class="turma-meta-card">
+        <span class="badge status-badge status-pill {{ 'success status-positive' if turma.status == 'Ativa' else 'danger status-neutral' }}">{{ turma.status or '—' }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Pendências AAC</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ pendencias_aac or 0 }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Pendências AE</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ pendencias_ae or 0 }}</span>
+      </div>
+    </div>
+
+    <div class="turma-meta-block">
+      <span class="turma-meta-label">Finalizados</span>
+      <div class="turma-meta-card">
+        <span class="meta-value">{{ percent_br(finalizados_pct) }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar turma-toolbar" id="turma-detalhes-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="Buscar por nome, e-mail ou matrícula…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-label">Organizar por</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc') == 'desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="actions">
+    {% if auth_can('alunos', 'view') %}
+    <div class="toolbar-actions-shell">
+      <button class="btn" type="button" id="btn-turma-alunos-actions" aria-haspopup="menu" aria-expanded="false">
+        <i class="lucide" data-lucide="rows-3"></i>
+        <span class="btn-label">Ações</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <div id="turma-alunos-actions-menu" class="popover toolbar-actions-menu" hidden>
+        <div class="menu-title">Ações da seleção</div>
+        <div class="menu-list">
+          <button class="menu-item" type="button" id="turma-alunos-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>Selecionar tudo</span></button>
+          <button class="menu-item danger" type="button" id="turma-alunos-action-delete" {% if not auth_can('alunos', 'full') %}disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>Excluir</span></button>
+        </div>
+        <div class="menu-hint" id="turma-alunos-actions-hint">Selecione uma ou mais linhas para habilitar as ações.</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if auth_can('alunos', 'edit') %}
+    <a class="btn btn-nova-alinhado" href="{{ url_for('admin_adicionar_aluno', turma_id=turma.id, return_to=request.path) }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+      <span class="btn-label">Adicionar</span>
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="usuario_id">Nº</div>
+    <div class="menu-item" data-field="nome">Nome</div>
+    <div class="menu-item" data-field="email">E-mail</div>
+    <div class="menu-item" data-field="matricula">Matrícula</div>
+    <div class="menu-item" data-field="total_aac">Total AAC</div>
+    <div class="menu-item" data-field="total_ae">Total AE</div>
+    <div class="menu-item" data-field="status">Status</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+
+<div class="impressoes-cards-scroll imp-turma-detalhe" id="turma-detalhes-scroll-container">
+  <div id="turma-detalhes-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'nº','class':'center'},
+      {'text':'Nome','class':'left'},
+      {'text':'E-mail','class':'left'},
+      {'text':'Matrícula','class':'center'},
+      {'text':'Total AAC','class':'center'},
+      {'text':'Total AE','class':'center'},
+      {'text':'Status','class':'center'}
+    ]) }}
+
+    {% if alunos and alunos|length %}
+      {% for aluno in alunos %}
+        {% set is_active = ((aluno.status or '') == 'Ativo') %}
+        {{ cl.row([
+          {'content': loop.index|string, 'class':'center'},
+          {'content': aluno.nome or '—', 'class':'left ellipsis', 'strong': true},
+          {'content': aluno.email or '—', 'class':'left ellipsis'},
+          {'content': aluno.matricula or '—', 'class':'center ellipsis'},
+          {'content': hours_br(aluno.total_aac), 'class':'center'},
+          {'content': hours_br(aluno.total_ae), 'class':'center'},
+          {'content': ('Ativo' if is_active else 'Inativo'), 'class':'center', 'badge': true, 'badge_type': ('success' if is_active else 'danger'), 'status_badge': true, 'status_tone': ('positive' if is_active else 'neutral')}
+        ], attrs={
+          'data-usuario-id': aluno.usuario_id,
+          'data-aluno-nome': aluno.nome or '',
+          'data-delete-url': (url_for('admin_deletar_aluno', usuario_id=aluno.usuario_id, return_to=request.path) if auth_can('alunos', 'full') else '')
+        }) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum aluno vinculado a esta turma.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    const { qs } = toolbarQuery;
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#turma-detalhes-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-field',
+      toggleSelector: '#sort-toggle',
+      labelSelector: '#sort-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-dir',
+      defaultLabel: 'Organizar por'
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery,
+      aliasesToClear: ['filtro']
+    });
+
+    const rowSelectionApi = window.initToolbarRowSelection?.({
+      toolbarSelector: '#turma-detalhes-toolbar',
+      rowsRootSelector: '#turma-detalhes-list',
+      addButtonSelector: '#btn-turma-alunos-actions',
+      enableSelectAllButton: false,
+      enableBulkDelete: false
+    });
+
+    window.initToolbarSelectionActionsMenu?.({
+      buttonSelector: '#btn-turma-alunos-actions',
+      menuSelector: '#turma-alunos-actions-menu',
+      selectAllSelector: '#turma-alunos-action-select-all',
+      deleteSelector: '#turma-alunos-action-delete',
+      hintSelector: '#turma-alunos-actions-hint',
+      rowSelectionApi,
+      deleteMessageSingle: 'Tem certeza que deseja excluir o aluno selecionado?',
+      deleteMessageMultiple: (count) => `Tem certeza que deseja excluir os ${count} alunos selecionados?`
+    });
+
+    const preserveAndNavigate = (targetUrl) => {
+      if (!targetUrl) return;
+      const nextUrl = new URL(targetUrl, window.location.origin);
+      const current = qs();
+      current.delete('page');
+      current.forEach((value, key) => nextUrl.searchParams.set(key, value));
+      window.location.href = `${nextUrl.pathname}${nextUrl.search}`;
+    };
+
+    document.getElementById('turma-global-select')?.addEventListener('change', (event) => {
+      preserveAndNavigate(event.target.value);
+    });
+    document.getElementById('turma-curso-select')?.addEventListener('change', (event) => {
+      preserveAndNavigate(event.target.value);
+    });
+
+    let bar = null;
+    {% if auth_can('alunos', 'view') %}
+    bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Ações do aluno selecionado');
+    bar.innerHTML = `
+      <button type="button" class="act-btn" data-action="view" aria-label="Ver aluno" title="Ver"><i data-lucide="eye"></i></button>
+      {% if auth_can('alunos', 'edit') %}<button type="button" class="act-btn" data-action="edit" aria-label="Editar aluno" title="Editar"><i data-lucide="edit"></i></button>{% endif %}
+      {% if auth_can('alunos', 'full') %}<button type="button" class="act-btn danger" data-action="delete" aria-label="Excluir aluno" title="Excluir"><i data-lucide="trash-2"></i></button>{% endif %}
+    `;
+    window.lucide?.createIcons?.();
+    {% endif %}
+
+    const turmaDetalhesScrollWrap = document.getElementById('turma-detalhes-scroll-container');
+    let hideTimer = null;
+    let currentCard = null;
+    let currentUid = '';
+    let currentAlunoNome = '';
+    let currentDeleteUrl = '';
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height / 2) - (bar.offsetHeight / 2));
+      bar.style.top = `${top}px`;
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = `${left}px`;
+      bar.style.right = 'auto';
+    }
+
+    function showBar(card){
+      if (!bar || !card) return;
+      currentCard = card;
+      currentUid = card.getAttribute('data-usuario-id') || '';
+      currentAlunoNome = card.getAttribute('data-aluno-nome') || 'este aluno';
+      currentDeleteUrl = card.getAttribute('data-delete-url') || '';
+      if (!currentUid && !currentDeleteUrl) return;
+      positionFor(card);
+      bar.classList.add('is-visible');
+    }
+
+    function hideBar(){
+      if (!bar) return;
+      bar.classList.remove('is-visible');
+      currentCard = null;
+      currentUid = '';
+      currentAlunoNome = '';
+      currentDeleteUrl = '';
+    }
+
+    function scheduleHide(){
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideBar, 180);
+    }
+
+    function cancelHide(){
+      clearTimeout(hideTimer);
+    }
+
+    turmaDetalhesScrollWrap?.addEventListener('mouseover', (event) => {
+      const card = event.target.closest('.impresso-card[data-usuario-id]');
+      if (!card || card.classList.contains('header')) return;
+      showBar(card);
+    });
+    turmaDetalhesScrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar?.addEventListener('mouseenter', cancelHide);
+    bar?.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', () => { if (bar?.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', () => { if (bar?.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+    bar?.addEventListener('click', (event) => {
+      const btn = event.target.closest('button.act-btn');
+      if (!btn || !currentUid) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'view'){
+        const base = "{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid);
+        window.navigateWithReturnTo(base, { view: 1 });
+      } else if (action === 'edit'){
+        window.navigateWithReturnTo("{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid));
+      } else if (action === 'delete'){
+        if (!currentDeleteUrl) return;
+        if (!confirm(`Excluir ${currentAlunoNome}?`)) return;
+        const formEl = document.createElement('form');
+        formEl.method = 'POST';
+        formEl.action = currentDeleteUrl;
+        document.body.appendChild(formEl);
+        formEl.submit();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (sortFieldBtn && sortMenu && !sortMenu.hidden && !e.target.closest('#sort-menu') && !e.target.closest('#sort-field')) closePopover(sortFieldBtn, sortMenu);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sortFieldBtn && sortMenu && !sortMenu.hidden) closePopover(sortFieldBtn, sortMenu);
+    });
+
+    if (window.lucide) lucide.createIcons();
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends base_template|default("base_aluno.html") %}
+{% from 'components/icons.html' import school_icon %}
+{% block title %}{{ user_message("Meus dados") }}{% endblock %}
+{% block extra_head %}
+  <style>
+    .form-actions{ justify-content:center; }
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.55);
+      max-width: calc(100vw - 64px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    /* Campos somente leitura (matrícula / turma) */
+    .field-card .control.is-readonly[readonly]{
+      background: var(--surface);
+      color: var(--text-secondary);
+      cursor: default;
+      pointer-events: none;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+<h1 class="main-title">{{ user_message("Meus dados") }}</h1>
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-cards-narrow">
+
+    <!-- Foto de Perfil -->
+    <div class="form-row" aria-hidden="false">
+      <div>
+        <div id="avatar-wrap">
+          <div id="avatar-box" aria-label="{{ user_message('Foto de perfil') }}">
+            {% if profile.foto_perfil %}
+            <img id="avatar-img" src="{{ url_for('uploaded_file', filename=profile.foto_perfil) }}" alt="{{ user_message('Foto de perfil') }}" style="display:block;" />
+            <div id="avatar-placeholder" style="display:none;"><i class="lucide" data-lucide="user"></i></div>
+            <div id="avatar-actions" class="has-foto" aria-hidden="false">
+            {% else %}
+            <img id="avatar-img" alt="{{ user_message('Foto de perfil') }}" style="display:none;" />
+            <div id="avatar-placeholder"><i class="lucide" data-lucide="user"></i></div>
+            <div id="avatar-actions" class="no-foto" aria-hidden="false">
+            {% endif %}
+              <button class="icon-btn primary" type="button" id="btn-avatar-adicionar" title="{{ user_message('Adicionar foto') }}"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
+              <button class="icon-btn" type="button" id="btn-avatar-editar" title="{{ user_message('Alterar foto') }}"><i class="lucide" data-lucide="camera"></i></button>
+              <button class="icon-btn danger" type="button" id="btn-avatar-remover" title="{{ user_message('Remover foto') }}"><i class="lucide" data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+          <input type="file" id="avatar-file" name="foto_perfil" accept="image/*" hidden>
+          <input type="hidden" id="avatar-remove-flag" name="remove_foto" value="0">
+        </div>
+      </div>
+    </div>
+
+    <!-- Nome -->
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Nome") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="user"></i></div>
+        <input class="control" type="text" name="nome" value="{{ profile.nome }}" required />
+      </div>
+    </div>
+
+    <!-- E-mail -->
+    <div class="form-row">
+      <label class="row-label">{{ user_message("E-mail") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="mail"></i></div>
+        <input class="control" type="email" name="email" value="{{ profile.email }}" required />
+      </div>
+    </div>
+
+    {% if show_student_fields %}
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Matrícula") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+        <input class="control is-readonly" type="text" name="matricula" value="{{ profile.matricula }}" required readonly aria-readonly="true" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Turma") }}</label>
+      <div class="field-card">
+        <div class="field-chip">{{ school_icon() }}</div>
+        <input class="control is-readonly" type="text" name="turma" value="{{ profile.turma }}" readonly aria-readonly="true" />
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Senha (opcional) -->
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Senha (opcional)") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="lock"></i></div>
+        <div class="pw-wrapper">
+          <input class="control" type="password" name="senha" placeholder="{{ user_message('Deixe em branco para manter') }}" />
+          <button type="button" class="pw-toggle" aria-label="{{ user_message('Mostrar senha') }}" aria-pressed="false">
+            <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+            <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ cancel_url }}">{{ user_message("Cancelar") }}</a>
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
+    </div>
+  </div>
+</form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) lucide.createIcons();
+
+    const fileInput = document.getElementById('avatar-file');
+    const imgEl = document.getElementById('avatar-img');
+    const placeholder = document.getElementById('avatar-placeholder');
+    const actions = document.getElementById('avatar-actions');
+    const removeFlag = document.getElementById('avatar-remove-flag');
+
+    const btnAdd = document.getElementById('btn-avatar-adicionar');
+    const btnEdit = document.getElementById('btn-avatar-editar');
+    const btnRemove = document.getElementById('btn-avatar-remover');
+
+    const toHasFoto = () => {
+      actions.classList.remove('no-foto');
+      actions.classList.add('has-foto');
+      placeholder.style.display = 'none';
+      imgEl.style.display = 'block';
+      removeFlag.value = '0';
+    };
+    const toNoFoto = () => {
+      actions.classList.remove('has-foto');
+      actions.classList.add('no-foto');
+      imgEl.src = '';
+      imgEl.style.display = 'none';
+      placeholder.style.display = 'grid';
+    };
+
+    const openPicker = () => fileInput?.click();
+
+    btnAdd?.addEventListener('click', openPicker);
+    btnEdit?.addEventListener('click', openPicker);
+    btnRemove?.addEventListener('click', () => {
+      if (fileInput) fileInput.value = '';
+      removeFlag.value = '1';
+      toNoFoto();
+    });
+
+    fileInput?.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        imgEl.src = ev.target.result;
+        toHasFoto();
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+</script>
+{% endblock %}

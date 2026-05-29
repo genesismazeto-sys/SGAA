@@ -1,0 +1,31 @@
+{#
+  Render a standard table with columns and rows.
+  Inputs:
+    - cols: list of { key, label }
+    - rows: iterable of dict/objects
+#}
+<table class="table{% if table_class %} {{ table_class }}{% endif %}" style="width:100%;">
+  <thead>
+    <tr>
+      {% for c in cols %}
+        <th>{{ c.label }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% if rows and rows|length %}
+      {% for r in rows %}
+        <tr>
+          {% for c in cols %}
+            {% set val = r[c.key] if r is mapping else attribute(r, c.key) %}
+            <td{% if c.class %} class="{{ c.class }}"{% endif %}>{{ val }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="{{ cols|length }}">Nenhum item encontrado.</td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>

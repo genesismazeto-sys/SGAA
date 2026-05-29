@@ -1,0 +1,50 @@
+<!-- templates/admin_editar_curso.html -->
+{% extends "base.html" %}
+{% block title %}Editar Curso{% endblock %}
+{% block content %}
+<h1 class="main-title">Editar Curso</h1>
+
+<form method="POST">
+  <div class="form-cards">
+    <div class="form-row">
+      <label class="row-label">Nome</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+        <input class="control" type="text" name="nome" value="{{ curso.nome }}" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Código</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="barcode"></i></div>
+        <input class="control" type="text" name="codigo" value="{{ curso.codigo }}" maxlength="20" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Duração (períodos)</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="clock-3"></i></div>
+        <input class="control" type="number" name="duracao_periodos" min="1" value="{{ curso.duracao_periodos }}" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Status</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" name="status">
+          <option value="ativo" {{ 'selected' if curso.status=='ativo' else '' }}>Ativo</option>
+          <option value="inativo" {{ 'selected' if curso.status=='inativo' else '' }}>Inativo</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('admin_cursos') }}">Cancelar</a>
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

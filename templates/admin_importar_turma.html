@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Importar Alunos (CSV){% endblock %}
+
+{% block content %}
+<h1 class="main-title">Importar Alunos (CSV)</h1>
+
+<form action="{{ url_for('admin_turmas_importar') }}"
+      method="post"
+      enctype="multipart/form-data"
+      class="form-cards"
+      autocomplete="off">
+  <div class="page-m30">
+    <div class="form-cards-narrow">
+      <!-- Turma destino -->
+      <label class="field-label" for="turma_id">Turma destino *</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+        <select id="turma_id" name="turma_id" class="control" required>
+          <option value="">— Selecione —</option>
+          {% for t in turmas %}
+            <option value="{{ t.id }}">{{ t.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Arquivo CSV -->
+      <label class="field-label" for="csv_arquivo">Arquivo CSV *</label>
+      <div class="field-card file-card" data-file-card>
+        <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
+        <input class="file-input" id="csv_arquivo" name="csv_arquivo" type="file" accept=".csv" required>
+        <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+        <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="paperclip"></i><span>Anexar</span></div>
+      </div>
+
+      <!-- Delimitador (opcional) -->
+      <label class="field-label" for="delimiter">Delimitador</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="split-square-horizontal"></i></div>
+        <select id="delimiter" name="delimiter" class="control">
+          <option value="," selected>Vírgula (,)</option>
+          <option value=";">Ponto e vírgula (;)</option>
+          <option value="|">Pipe (|)</option>
+          <option value="\t">Tab (\t)</option>
+        </select>
+      </div>
+
+      <!-- Primeira linha é cabeçalho -->
+      <label class="field-label" for="has_header">Cabeçalho</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="list"></i></div>
+        <select id="has_header" name="has_header" class="control">
+          <option value="1" selected>Primeira linha é cabeçalho</option>
+          <option value="0">Sem cabeçalho</option>
+        </select>
+      </div>
+
+      <!-- Comportamento de conflito -->
+      <label class="field-label" for="on_conflict">Conflitos (e-mail/matrícula já existentes)</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="git-merge"></i></div>
+        <select id="on_conflict" name="on_conflict" class="control">
+          <option value="skip" selected>Pular registro existente</option>
+          <option value="update">Atualizar dados existentes</option>
+        </select>
+      </div>
+
+      <!-- Ajuda (fora de cards, seguindo padrão) -->
+      <div class="flash">
+        Formato esperado das colunas: <strong>nome, email, matricula, status</strong>.
+        O <em>status</em> aceita “Ativo” ou “Inativo”. Demais campos serão ignorados.
+      </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="form-actions center">
+      <button type="submit" class="btn primary">
+        <i class="lucide" data-lucide="import"></i> Importar
+      </button>
+      <a href="{{ url_for('admin_turmas') }}" class="btn">Cancelar</a>
+    </div>
+  </div>
+</form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    try { if (window.lucide) lucide.createIcons(); } catch(_e) {}
+    // Bind for single file-card (CSV anexar)
+    document.querySelectorAll('[data-file-card]').forEach(card=>{
+      const input = card.querySelector('input[type="file"]');
+      const nameEl = card.querySelector('[data-file-name]');
+      const chipRight = card.querySelector('.chip-right');
+      function openPicker(){ if (input) input.click(); }
+      function updateName(){
+        const f = input && input.files && input.files[0];
+        if (f){
+          nameEl.textContent = f.name;
+          nameEl.setAttribute('title', f.name);
+          card.classList.add('has-file');
+        } else {
+          nameEl.textContent = 'Nenhum arquivo selecionado';
+          nameEl.removeAttribute('title');
+          card.classList.remove('has-file');
+        }
+      }
+      card.addEventListener('click', (e)=>{ const tag = e.target && e.target.tagName; if (tag !== 'INPUT') openPicker(); });
+      if (chipRight) chipRight.addEventListener('click', (e)=>{ e.stopPropagation(); openPicker(); });
+      if (input){ input.addEventListener('change', updateName); updateName(); }
+    });
+  });
+</script>
+{% endblock %}
+
+{% block extra_head %}{% endblock %}

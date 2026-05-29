@@ -1,0 +1,408 @@
+{% from 'components/icons.html' import school_icon %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <title>{% block title %}Sistema{% endblock %}</title>
+    {% set static_asset_version = '20260516-tooltip-dark-v1' %}
+
+    <!-- Fontes + CSS global -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-style.css', v=static_asset_version) }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/ej_favicon.svg') }}">
+
+    {% block extra_head %}{% endblock %}
+    <!-- Ícones -->
+    <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="{{ url_for('static', filename='js/ui-tooltips.js', v=static_asset_version) }}" defer></script>
+    <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
+    <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>
+    <style>
+      .toast{ position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: #111827; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.25); z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+      .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+      .toast.error{ background: #991b1b; }
+      .toast.success{ background: #065f46; }
+    </style>
+  </head>
+
+  <body data-auth-current-resource="{{ auth_current_resource or '' }}" data-auth-can-edit="{{ 1 if auth_current_can_edit else 0 }}" data-auth-can-full="{{ 1 if auth_current_can_full else 0 }}">
+    <!-- Skip link para acessibilidade -->
+    <a href="#conteudo" class="sr-only-focusable">{{ user_message("Ir para o conteúdo") }}</a>
+
+    <div class="app-layout">
+      <header class="app-header" role="banner">
+        <a class="logo" href="{{ url_for('admin_dashboard') }}">
+          <img src="{{ url_for('static', filename='images/ej_logo.svg') }}" alt="Logo" />
+          <span>SGAA - Sistema de Gerenciamento de Atividades Acadêmicas</span>
+        </a>
+
+        {% set _admin_name = session.get('user_name') or session.get('perfil','Usuário') %}
+        {% set _admin_foto = session.get('foto_perfil') %}
+        <a class="user-profile user-profile-link" href="{{ url_for('admin_meus_dados') }}" title="{{ user_message('Meus dados') }}">
+          <span>{{ _admin_name }}</span>
+          {% if _admin_foto %}
+            <img src="{{ url_for('uploaded_file', filename=_admin_foto) }}" alt="Foto de {{ _admin_name }}" class="user-avatar" />
+          {% else %}
+            <i class="lucide" data-lucide="user-circle-2" aria-hidden="true"></i>
+          {% endif %}
+        </a>
+      </header>
+
+      <aside class="app-sidebar" role="complementary">
+        <!-- Navegação principal -->
+        <nav class="sidebar-group" aria-label="Navegação principal">
+          <!-- Início -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('admin_dashboard') else '' }}"
+            href="{{ url_for('admin_dashboard') }}"
+            {% if request.endpoint and request.endpoint.endswith('admin_dashboard') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="home" aria-hidden="true"></i>
+            <span>{{ user_message("Início") }}</span>
+          </a>
+
+          <!-- Requisições -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('admin_requisicoes') else '' }}"
+            href="{{ url_for('admin_requisicoes') }}"
+            {% if request.endpoint and request.endpoint.endswith('admin_requisicoes') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="file-check-2" aria-hidden="true"></i>
+            <span>{{ user_message("Requisições") }}</span>
+          </a>
+
+          <!-- Atividades -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('admin_atividades') else '' }}"
+            href="{{ url_for('admin_atividades') }}"
+            {% if request.endpoint and request.endpoint.endswith('admin_atividades') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="clipboard-list" aria-hidden="true"></i>
+            <span>{{ user_message("Atividades") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint in ['admin_matrizes', 'admin_adicionar_matriz', 'admin_editar_matriz'] else '' }}"
+            href="{{ url_for('admin_matrizes') }}"
+            {% if request.endpoint and request.endpoint in ['admin_matrizes', 'admin_adicionar_matriz', 'admin_editar_matriz'] %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="layout-panel-top" aria-hidden="true"></i>
+            <span>{{ user_message("Matrizes de atividades") }}</span>
+          </a>
+
+          <!-- Alunos -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('admin_alunos') else '' }}"
+            href="{{ url_for('admin_alunos') }}"
+            {% if request.endpoint and request.endpoint.endswith('admin_alunos') %}aria-current="page"{% endif %}
+          >
+            {{ school_icon() }}
+            <span>{{ user_message("Alunos") }}</span>
+          </a>
+
+          <!-- Turmas -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('admin_turmas') else '' }}"
+            href="{{ url_for('admin_turmas') }}"
+            {% if request.endpoint and request.endpoint.endswith('admin_turmas') %}aria-current="page"{% endif %}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide icon icon-tabler icons-tabler-outline icon-tabler-users-group" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M10 13a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" /><path d="M8 21v-1a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v1" /><path d="M15 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" /><path d="M17 10h2a2 2 0 0 1 2 2v1" /><path d="M5 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" /><path d="M3 13v-1a2 2 0 0 1 2 -2h2" /></svg>
+            <span>{{ user_message("Turmas") }}</span>
+          </a>
+
+          <!-- Cursos (NOVO) -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint in ['admin_cursos', 'admin_adicionar_curso', 'admin_editar_curso', 'admin_visualizar_curso', 'admin_detalhes_curso'] else '' }}"
+            href="{{ url_for('admin_cursos') }}"
+            {% if request.endpoint and request.endpoint in ['admin_cursos', 'admin_adicionar_curso', 'admin_editar_curso', 'admin_visualizar_curso', 'admin_detalhes_curso'] %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="book-open" aria-hidden="true"></i>
+            <span>{{ user_message("Cursos") }}</span>
+          </a>
+
+          <!-- Arquivos (Admin) -->
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint in ['admin_arquivos', 'admin_editar_arquivo'] else '' }}"
+            href="{{ url_for('admin_arquivos') }}"
+            {% if request.endpoint and request.endpoint in ['admin_arquivos', 'admin_editar_arquivo'] %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="folder-open" aria-hidden="true"></i>
+            <span>{{ user_message("Arquivos") }}</span>
+          </a>
+
+        </nav>
+
+        <div class="sidebar-separator" aria-hidden="true"></div>
+
+        <nav class="sidebar-group" aria-label="Navegação secundária">
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_alertas' else '' }}"
+            href="{{ url_for('admin_alertas') }}"
+            {% if request.endpoint and request.endpoint == 'admin_alertas' %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="bell-ring" aria-hidden="true"></i>
+            <span>{{ user_message("Alertas") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_reportes' else '' }}"
+            href="{{ url_for('admin_reportes') }}"
+            {% if request.endpoint and request.endpoint == 'admin_reportes' %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="bug" aria-hidden="true"></i>
+            <span>{{ user_message("Reportes") }}</span>
+          </a>
+
+          {% if auth_can('banco_dados', 'view') %}
+            <a
+              class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_banco_dados' else '' }}"
+              href="{{ url_for('admin_banco_dados') }}"
+              {% if request.endpoint and request.endpoint == 'admin_banco_dados' %}aria-current="page"{% endif %}
+            >
+              <i class="lucide" data-lucide="cloud-backup" aria-hidden="true"></i>
+              <span>{{ user_message("Backup de dados") }}</span>
+            </a>
+          {% endif %}
+
+          {% if auth_can('acesso', 'view') %}
+            <a
+              class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_acesso' else '' }}"
+              href="{{ url_for('admin_acesso') }}"
+              {% if request.endpoint and request.endpoint == 'admin_acesso' %}aria-current="page"{% endif %}
+            >
+              <i class="lucide" data-lucide="shield-check" aria-hidden="true"></i>
+              <span>{{ user_message("Acesso") }}</span>
+            </a>
+          {% endif %}
+
+          {% if auth_can('configuracoes', 'view') %}
+            <a
+              class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_configuracoes' else '' }}"
+              href="{{ url_for('admin_configuracoes') }}"
+              {% if request.endpoint and request.endpoint == 'admin_configuracoes' %}aria-current="page"{% endif %}
+            >
+              <i class="lucide" data-lucide="settings-2" aria-hidden="true"></i>
+              <span>{{ user_message("Configurações") }}</span>
+            </a>
+          {% endif %}
+
+          {% if auth_can('mensagens', 'view') %}
+            <a
+              class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.startswith('admin_mensagens') else '' }}"
+              href="{{ url_for('admin_mensagens') }}"
+              {% if request.endpoint and request.endpoint.startswith('admin_mensagens') %}aria-current="page"{% endif %}
+            >
+              <i class="lucide" data-lucide="messages-square" aria-hidden="true"></i>
+              <span>{{ user_message("Mensagens de sistema") }}</span>
+            </a>
+          {% endif %}
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint == 'admin_meus_dados' else '' }}"
+            href="{{ url_for('admin_meus_dados') }}"
+            {% if request.endpoint and request.endpoint == 'admin_meus_dados' %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="user" aria-hidden="true"></i>
+            <span>{{ user_message("Meus dados") }}</span>
+          </a>
+
+          <!-- Sair -->
+          <a class="sidebar-link" href="{{ route_url('logout') }}">
+            <i class="lucide" data-lucide="log-out" aria-hidden="true"></i>
+            <span>{{ user_message("Sair") }}</span>
+          </a>
+        </nav>
+      </aside>
+
+      <main id="conteudo" class="app-main" role="main">
+        <div class="app-track">
+          {% include 'components/flash_messages.html' %}
+
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    <script id="app-frontend-messages" type="application/json">{{ app_frontend_messages|tojson }}</script>
+    <script>
+      window.__appFrontendMessages = JSON.parse(document.getElementById('app-frontend-messages')?.textContent || '{}');
+      window.__appMessageMatcherCache = null;
+      window.appFormatMessage = function(template, values){
+        const text = String(template || '').trim();
+        if (!text) return '';
+        return text.replace(/\{(value_\d+)\}/g, (_match, name) => {
+          if (!values || !Object.prototype.hasOwnProperty.call(values, name)) {
+            return `{${name}}`;
+          }
+          const value = values[name];
+          return value === undefined || value === null ? '' : String(value);
+        });
+      };
+      window.appMessageText = function(defaultTemplate, values){
+        const templateKey = String(defaultTemplate || '').trim();
+        if (!templateKey) return '';
+        const currentTemplate = Object.prototype.hasOwnProperty.call(window.__appFrontendMessages || {}, templateKey)
+          ? window.__appFrontendMessages[templateKey]
+          : templateKey;
+        return window.appFormatMessage(currentTemplate, values);
+      };
+      window.appResolveRuntimeMessage = function(rawMessage){
+        const runtimeText = String(rawMessage || '').trim();
+        if (!runtimeText) return '';
+        if (Object.prototype.hasOwnProperty.call(window.__appFrontendMessages || {}, runtimeText)) {
+          return window.__appFrontendMessages[runtimeText];
+        }
+        if (!window.__appMessageMatcherCache) {
+          window.__appMessageMatcherCache = Object.entries(window.__appFrontendMessages || {})
+            .filter(([template]) => template.includes('{value_'))
+            .sort((left, right) => right[0].length - left[0].length)
+            .map(([template, currentTemplate]) => {
+              const placeholderNames = [];
+              const escapedTemplate = template
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\\\{(value_\d+)\\\}/g, (_match, name) => {
+                  placeholderNames.push(name);
+                  return '(.+?)';
+                });
+              return {
+                currentTemplate,
+                placeholderNames,
+                pattern: new RegExp(`^${escapedTemplate}$`, 's'),
+              };
+            });
+        }
+        for (const matcher of window.__appMessageMatcherCache) {
+          const result = matcher.pattern.exec(runtimeText);
+          if (!result) continue;
+          const values = {};
+          matcher.placeholderNames.forEach((name, index) => {
+            values[name] = result[index + 1];
+          });
+          return window.appFormatMessage(matcher.currentTemplate, values);
+        }
+        return runtimeText;
+      };
+      window.patchNativeMessages = function(){
+        if (!window.__nativeAlert) {
+          window.__nativeAlert = window.alert.bind(window);
+          window.alert = function(message){
+            return window.__nativeAlert(window.appResolveRuntimeMessage(message));
+          };
+        }
+        if (!window.__nativeConfirm) {
+          window.__nativeConfirm = window.confirm.bind(window);
+          window.confirm = function(message){
+            return window.__nativeConfirm(window.appResolveRuntimeMessage(message));
+          };
+        }
+      };
+      window.patchNativeMessages();
+      window.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+      window.currentPathWithSearch = function(){
+        return `${window.location.pathname}${window.location.search}`;
+      };
+      window.buildUrlWithParams = function(targetUrl, params){
+        const nextUrl = new URL(targetUrl, window.location.origin);
+        Object.entries(params || {}).forEach(([key, value]) => {
+          if (value === undefined || value === null || value === '') return;
+          nextUrl.searchParams.set(key, String(value));
+        });
+        return `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash || ''}`;
+      };
+      window.buildUrlWithReturnTo = function(targetUrl, extraParams){
+        return window.buildUrlWithParams(targetUrl, {
+          ...(extraParams || {}),
+          return_to: window.currentPathWithSearch(),
+        });
+      };
+      window.getCsrfToken = function(){
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      };
+      window.ensureFormCsrfToken = function(form){
+        if (!form) return null;
+        const method = (form.getAttribute('method') || form.method || 'GET').toUpperCase();
+        if (method !== 'POST') return null;
+        let tokenInput = form.querySelector('input[name="csrf_token"]');
+        if (!tokenInput) {
+          tokenInput = document.createElement('input');
+          tokenInput.type = 'hidden';
+          tokenInput.name = 'csrf_token';
+          form.appendChild(tokenInput);
+        }
+        if (!tokenInput.value) {
+          const token = window.getCsrfToken();
+          if (token) tokenInput.value = token;
+        }
+        return tokenInput;
+      };
+      window.navigateWithReturnTo = function(targetUrl, extraParams){
+        window.location.href = window.buildUrlWithReturnTo(targetUrl, extraParams);
+      };
+      window.setFormActionWithReturnTo = function(form, targetUrl){
+        if (!form) return '';
+        const baseUrl = targetUrl || form.getAttribute('action') || window.location.href;
+        const nextAction = window.buildUrlWithReturnTo(baseUrl);
+        form.setAttribute('action', nextAction);
+        window.ensureFormCsrfToken(form);
+        return nextAction;
+      };
+      window.showToast = function(msg, type){
+        try{
+          const el = document.getElementById('toast');
+          if (!el) return;
+          const text = window.appResolveRuntimeMessage(msg);
+          if (!text) {
+            el.classList.remove('show');
+            el.hidden = true;
+            return;
+          }
+          el.textContent = text;
+          el.classList.remove('error','success');
+          if (type) el.classList.add(type);
+          el.hidden = false;
+          // force reflow
+          void el.offsetWidth;
+          el.classList.add('show');
+          clearTimeout(window.__toastTimer);
+          window.__toastTimer = setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>{ el.hidden = true; }, 200); }, 1800);
+        }catch(_){ }
+      };
+
+      window.applyAdminReadOnlyUi = function(){
+        if (document.body?.dataset?.authCanEdit === '1') return;
+
+        document.querySelectorAll('.btn-nova-alinhado').forEach((element) => {
+          element.hidden = true;
+        });
+
+        document.querySelectorAll('.toolbar-actions-menu .menu-item').forEach((element) => {
+          const label = (element.textContent || '').trim().toLowerCase();
+          const isReadOnlyAction = label.includes('ver') || label.includes('selecionar tudo');
+          if (isReadOnlyAction) return;
+          element.hidden = true;
+          element.setAttribute('aria-hidden', 'true');
+        });
+
+        document.querySelectorAll('.pedido-actions-float .act-btn, .access-actions-float .act-btn').forEach((element) => {
+          const action = (element.getAttribute('data-action') || '').trim().toLowerCase();
+          if (action === 'view') return;
+          element.hidden = true;
+          element.disabled = true;
+        });
+      };
+
+      window.addEventListener('DOMContentLoaded', () => {
+        window.applyAdminReadOnlyUi?.();
+      });
+
+    </script>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

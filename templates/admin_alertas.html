@@ -1,0 +1,789 @@
+{% from 'components/pagination.html' import paginate %}
+{% extends "base.html" %}
+{% block title %}Alertas{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #alertas-toolbar .input-chip{ background:transparent; border-right:none; }
+    #alertas-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+    .imp-alertas{ --imp-cols:minmax(0, 8fr) minmax(72px, 1fr) minmax(72px, 1fr); }
+    .imp-alertas .impressoes-cards,
+    .imp-alertas .impresso-card{ width:100% !important; max-width:100% !important; }
+    .imp-alertas .impresso-card .cell:nth-child(1),
+    .imp-alertas .impresso-card.header .cell:nth-child(1){ justify-content:flex-start; text-align:left; }
+    .imp-alertas .impresso-card .cell:nth-child(2),
+    .imp-alertas .impresso-card .cell:nth-child(3),
+    .imp-alertas .impresso-card.header .cell:nth-child(2),
+    .imp-alertas .impresso-card.header .cell:nth-child(3){ justify-content:center; text-align:center; }
+    .imp-alertas .impresso-card{ cursor:pointer; }
+    .alerta-cell-message{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .alerta-color-swatch{
+      width:18px;
+      height:18px;
+      display:inline-block;
+      border-radius:4px;
+      border:1px solid var(--border-strong);
+      box-shadow:var(--shadow-sm);
+      cursor:pointer;
+    }
+    .alerta-color-swatch.border-only{ background:#fff; }
+    .modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
+    .modal-overlay[hidden]{ display:none !important; }
+    .modal-card{ background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius); width:min(980px, calc(100vw - 32px)); max-height:min(88vh, 760px); display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25); }
+    .modal-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; }
+    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
+    #admin-alerta-modal .modal-header #admin-alerta-modal-close{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #admin-alerta-modal .modal-header #admin-alerta-modal-close .lucide{
+      margin:0 4px;
+      top:0;
+    }
+    .modal-body{ padding:12px 16px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; }
+    .modal-footer{ display:flex; justify-content:center; gap:8px; padding:10px 12px; }
+    .alerta-form-layout{ width:min(920px, 100%); margin:0 auto; display:grid; row-gap:12px; }
+    .alerta-form-row{ display:grid; grid-template-columns:92px minmax(0, 1fr); align-items:center; column-gap:12px; }
+    .alerta-form-row.top{ grid-template-columns:92px minmax(0, 1fr) auto; }
+    .alerta-side-toggle{ display:flex; align-items:center; gap:10px; padding-left:12px; white-space:nowrap; }
+    .alerta-row-label{ font-size:13px; font-weight:600; color:var(--text-primary); white-space:nowrap; }
+    .modal-card .field-card{ min-height:var(--btn-h); border-radius:var(--radius); }
+    .modal-card .field-card .field-chip{ height:100%; display:grid; place-items:center; }
+    .modal-card textarea.control.auto-grow{ min-height:var(--btn-h); height:var(--btn-h); resize:none; line-height:1.35; padding-top:6px; padding-bottom:6px; overflow:hidden; }
+    .swatch-line{ display:flex; gap:6px; flex-wrap:nowrap; width:100%; }
+    .alerta-color-panel{ display:grid; gap:10px; }
+    .alerta-color-inputs-row{ display:flex; gap:10px; }
+    .alerta-color-inputs-row .alerta-color-row{ flex:1 1 0; min-width:0; }
+    .alerta-palette-row{ display:flex; gap:6px; }
+    .palette-swatch{
+      flex:1 1 0; min-width:0; height:28px;
+      border-radius:var(--radius); border-width:1.5px; border-style:solid;
+      cursor:pointer; padding:0;
+      transition:transform .12s ease, box-shadow .12s ease;
+      box-shadow:var(--shadow-sm);
+    }
+    .palette-swatch:hover{ transform:translateY(-2px); box-shadow:var(--shadow-md); }
+    .palette-swatch.is-selected{ outline:3px solid #0f5b99; outline-offset:2px; }
+    .palette-swatch[hidden]{ display:none; }
+    .native-color-picker{
+      position:absolute; width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none;
+    }
+    .alerta-color-row{ display:flex; align-items:center; gap:10px; }
+    .alerta-color-sublabel{ font-size:12px; font-weight:600; color:var(--text-secondary); min-width:36px; text-align:right; white-space:nowrap; }
+    .alerta-color-input-group{
+      flex:1; display:flex; align-items:center;
+      border:1px solid var(--border-strong); border-radius:var(--radius);
+      background:var(--bg); overflow:hidden; height:calc(var(--btn-h) - 4px);
+    }
+    .alerta-color-dot{ width:20px; height:20px; border-radius:4px; border:1px solid rgba(0,0,0,.12); margin:0 8px; flex:0 0 auto; }
+    .alerta-color-hex{
+      flex:1; border:0; outline:0; background:transparent; font:inherit;
+      font-size:12.5px; color:var(--text-primary); padding:0 4px;
+      font-family:ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .alerta-pick-btn{
+      width:32px; min-width:32px; height:100%;
+      border:0; border-left:1px solid var(--border-strong);
+      background:var(--surface); cursor:pointer;
+      display:grid; place-items:center; color:var(--text-secondary);
+      transition:background .12s, color .12s;
+    }
+    .alerta-pick-btn:hover{ background:var(--bg); color:var(--text-primary); }
+    .alerta-pick-btn .lucide{ width:14px; height:14px; margin:0; }
+    .modal-card.is-readonly .alerta-pick-btn{ pointer-events:none; opacity:.5; }
+    .visibility-switch-state{ min-width:0; color:var(--text-primary); font-size:var(--font-size-small); font-weight:600; text-align:left; white-space:nowrap; }
+    .toggle-switch{ position:relative; display:inline-flex; align-items:center; width:46px; height:24px; }
+    .toggle-switch input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .toggle-switch-slider{ position:relative; display:block; width:46px; height:24px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
+    .toggle-switch-slider::before{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
+    .toggle-switch input:checked + .toggle-switch-slider{ background:#0f5b99; }
+    .toggle-switch input:checked + .toggle-switch-slider::before{ transform:translateX(22px); }
+    .toggle-switch input:focus-visible + .toggle-switch-slider{ outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
+    .alerta-preview{
+      min-height:calc(var(--btn-h) * 0.8);
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:0 12px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);
+      overflow:hidden;
+    }
+    .alerta-preview .lucide{ width:14px; height:14px; flex:0 0 auto; }
+    .alerta-preview span{ display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; }
+    #admin-alerta-save[hidden],
+    .modal-card.is-readonly #admin-alerta-save{ display:none !important; }
+    .modal-card.is-readonly .control,
+    .modal-card.is-readonly textarea.control{ background:#f8fafc; color:var(--text-secondary); }
+    .modal-card.is-readonly .swatch-option{ cursor:default; }
+    @media (max-width: 860px){
+      .modal-card{ width:min(100vw - 16px, 980px); }
+      .alerta-form-row,
+      .alerta-form-row.top{ grid-template-columns:1fr; row-gap:8px; }
+      .alerta-side-toggle{ padding-left:0; justify-content:flex-start; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+{% set can_alertas_edit = auth_can('alertas', 'edit') %}
+{% set can_alertas_full = auth_can('alertas', 'full') %}
+<h1 class="main-title">Alertas</h1>
+
+<div class="toolbar" id="alertas-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="Buscar por mensagem…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-label">Organizar por</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="toolbar-actions-shell">
+      <button class="btn" type="button" id="btn-alertas-actions" aria-haspopup="menu" aria-expanded="false">
+        <i class="lucide" data-lucide="rows-3"></i>
+        <span class="btn-label">Ações</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <div id="alertas-actions-menu" class="popover toolbar-actions-menu" hidden>
+        <div class="menu-title">Ações da seleção</div>
+        <div class="menu-list">
+          <button class="menu-item" type="button" id="alertas-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>Selecionar tudo</span></button>
+          <button class="menu-item danger" type="button" id="alertas-action-delete" {% if not can_alertas_full %}hidden disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>Excluir</span></button>
+        </div>
+        <div class="menu-hint" id="alertas-actions-hint">Selecione uma ou mais linhas para habilitar as ações.</div>
+      </div>
+    </div>
+    {% if can_alertas_edit %}
+      <button class="btn btn-nova-alinhado" type="button" id="btn-alerta-adicionar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+        <span class="btn-label">Adicionar</span>
+      </button>
+    {% endif %}
+  </div>
+</div>
+{{ paginate('admin_alertas') }}
+
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="titulo">Nome do alerta</div>
+    <div class="menu-item" data-field="bg_color">Cor de fundo</div>
+    <div class="menu-item" data-field="status">Status</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+
+<div class="impressoes-cards-scroll imp-alertas" id="alertas-scroll-container">
+  <div id="alertas-list" class="impressoes-cards" role="list">
+    <div class="impresso-card header" role="presentation">
+      <div class="cell left">Nome do alerta</div>
+      <div class="cell center">Cor</div>
+      <div class="cell center">Status</div>
+    </div>
+
+    {% if alertas and alertas|length %}
+      {% for alerta in alertas %}
+      <div class="impresso-card" role="listitem" tabindex="0"
+        data-alerta-id="{{ alerta.id }}"
+        data-alerta-titulo="{{ alerta.titulo }}"
+        data-alerta-mensagem="{{ alerta.mensagem }}"
+        data-alerta-bg="{{ alerta.bg_color }}"
+        data-alerta-border="{{ alerta.border_color }}"
+        data-alerta-visivel="{{ '1' if alerta.visivel else '0' }}"
+        data-delete-url="{{ url_for('admin_deletar_alerta', alerta_id=alerta.id) if can_alertas_full else '' }}">
+        <div class="cell left alerta-cell-message">{{ alerta.titulo }}</div>
+        <div class="cell center"><span class="alerta-color-swatch" style="background: {{ alerta.bg_color }}; border-color: {{ alerta.border_color }};" title="{{ 'Duplo clique para editar esta cor.' if can_alertas_edit else 'Visualização da cor do alerta.' }}"></span></div>
+        <div class="cell center">
+          <span class="badge status-badge status-pill {{ 'success status-positive' if alerta.visivel else 'danger status-neutral' }}">{{ 'Ativo' if alerta.visivel else 'Inativo' }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum alerta cadastrado.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="admin-alerta-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="admin-alerta-modal-title">
+    <div class="modal-header">
+      <h3 id="admin-alerta-modal-title"><i class="lucide" data-lucide="bell-ring"></i> <span id="admin-alerta-modal-title-text">Novo Alerta</span></h3>
+      <button class="btn" id="admin-alerta-modal-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="admin-alerta-form" method="post" action="{{ url_for('admin_salvar_alerta') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="alerta_id" id="admin-alerta-id" value="">
+        <div class="alerta-form-layout">
+          <div class="alerta-form-row top">
+            <label class="alerta-row-label" for="admin-alerta-titulo">Titulo</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+              <input class="control" id="admin-alerta-titulo" name="titulo" type="text" placeholder="Digite o titulo do alerta" required>
+            </div>
+            <div class="alerta-side-toggle">
+              <span class="visibility-switch-state" id="admin-alerta-visivel-text">Ativo</span>
+              <label class="toggle-switch" aria-label="Alternar visibilidade do alerta">
+                <input id="admin-alerta-visivel-switch" type="checkbox" checked>
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+              </label>
+              <input type="hidden" name="visivel" id="admin-alerta-visivel" value="1">
+            </div>
+          </div>
+
+          <div class="alerta-form-row">
+            <label class="alerta-row-label" for="admin-alerta-mensagem">Mensagem</label>
+            <div class="field-card" style="align-items:stretch;">
+              <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
+              <textarea class="control auto-grow" id="admin-alerta-mensagem" name="mensagem" rows="1" placeholder="Digite a mensagem do alerta" required></textarea>
+            </div>
+          </div>
+
+          <div class="alerta-form-row">
+            <span class="alerta-row-label">Cores</span>
+            <div class="alerta-color-panel">
+              <div class="alerta-palette-row" id="alerta-bg-grid">
+                {% for option in alerta_color_options %}
+                <button class="palette-swatch{% if loop.first %} is-selected{% endif %}" type="button" data-preset-color="{{ option.bg }}" data-color="{{ option.bg }}" data-border-color="{{ option.border }}" style="background:{{ option.bg }};border-color:{{ option.border }};" aria-label="Selecionar paleta {{ loop.index }}" title="Clique para selecionar"></button>
+                {% endfor %}
+                <button class="palette-swatch" type="button" id="alerta-custom-swatch" data-color="" data-border-color="" hidden aria-label="Cor personalizada" title="Cor personalizada"></button>
+              </div>
+              <div class="alerta-color-inputs-row">
+                <div class="alerta-color-row">
+                  <span class="alerta-color-sublabel">Fundo</span>
+                  <div class="alerta-color-input-group">
+                    <span class="alerta-color-dot" id="bg-preview-dot"></span>
+                    <input class="alerta-color-hex" id="admin-alerta-bg-hex" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="7" placeholder="#rrggbb" aria-label="Hex da cor de fundo">
+                    <button class="alerta-pick-btn" id="open-bg-picker" type="button" aria-label="Selecionar cor de fundo"><i class="lucide" data-lucide="pipette"></i></button>
+                    <input id="admin-alerta-color-picker" class="native-color-picker" type="color" aria-label="Seletor nativo de cor de fundo">
+                  </div>
+                </div>
+                <div class="alerta-color-row">
+                  <span class="alerta-color-sublabel">Borda</span>
+                  <div class="alerta-color-input-group">
+                    <span class="alerta-color-dot" id="border-preview-dot"></span>
+                    <input class="alerta-color-hex" id="admin-alerta-border-hex" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="7" placeholder="#rrggbb" aria-label="Hex da cor de borda">
+                    <button class="alerta-pick-btn" id="open-border-picker" type="button" aria-label="Selecionar cor de borda"><i class="lucide" data-lucide="pipette"></i></button>
+                    <input id="admin-alerta-border-picker" class="native-color-picker" type="color" aria-label="Seletor nativo de cor de borda">
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" name="bg_color" id="admin-alerta-bg" value="{{ alerta_color_options[0].bg }}">
+              <input type="hidden" name="border_color" id="admin-alerta-border-hidden" value="{{ alerta_color_options[0].border }}">
+            </div>
+          </div>
+
+          <div class="alerta-form-row">
+            <span class="alerta-row-label">Visualizacao</span>
+            <div class="alerta-preview" id="alerta-preview" data-default-border-color="{{ alerta_color_options[0].border }}" style="background: {{ alerta_color_options[0].bg }}; border-color: {{ alerta_color_options[0].border }};">
+              <i class="lucide" data-lucide="bell-ring" aria-hidden="true"></i>
+              <span id="alerta-preview-text">Digite o titulo do alerta</span>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="admin-alerta-cancelar" type="button">Cancelar</button>
+      {% if can_alertas_edit %}
+        <button class="btn primary" type="submit" form="admin-alerta-form" id="admin-alerta-save"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#alertas-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-field',
+      toggleSelector: '#sort-toggle',
+      labelSelector: '#sort-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-dir',
+      defaultLabel: 'Organizar por'
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery,
+      aliasesToClear: ['filtro']
+    });
+
+    const rowSelectionApi = window.initToolbarRowSelection?.({
+      toolbarSelector: '#alertas-toolbar',
+      rowsRootSelector: '#alertas-list',
+      enableSelectAllButton: false,
+      enableBulkDelete: false
+    });
+
+    window.initToolbarSelectionActionsMenu?.({
+      buttonSelector: '#btn-alertas-actions',
+      menuSelector: '#alertas-actions-menu',
+      selectAllSelector: '#alertas-action-select-all',
+      deleteSelector: '#alertas-action-delete',
+      hintSelector: '#alertas-actions-hint',
+      rowSelectionApi,
+      deleteMessageSingle: 'Tem certeza que deseja excluir o alerta selecionado?',
+      deleteMessageMultiple: (count) => `Tem certeza que deseja excluir os ${count} alertas selecionados?`
+    });
+  })();
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{
+    if (window.lucide) lucide.createIcons();
+
+    const canAlertasEdit = {{ 'true' if auth_can('alertas', 'edit') else 'false' }};
+    const canAlertasFull = {{ 'true' if auth_can('alertas', 'full') else 'false' }};
+
+    const modal = document.getElementById('admin-alerta-modal');
+    const modalCard = modal?.querySelector('.modal-card');
+    const addBtn = document.getElementById('btn-alerta-adicionar');
+    const closeBtn = document.getElementById('admin-alerta-modal-close');
+    const cancelBtn = document.getElementById('admin-alerta-cancelar');
+    const saveBtn = document.getElementById('admin-alerta-save');
+    const form = document.getElementById('admin-alerta-form');
+    const titleText = document.getElementById('admin-alerta-modal-title-text');
+    const hiddenId = document.getElementById('admin-alerta-id');
+    const tituloInput = document.getElementById('admin-alerta-titulo');
+    const mensagemInput = document.getElementById('admin-alerta-mensagem');
+    const visivelHidden = document.getElementById('admin-alerta-visivel');
+    const visivelSwitch = document.getElementById('admin-alerta-visivel-switch');
+    const visivelText = document.getElementById('admin-alerta-visivel-text');
+    const bgHidden = document.getElementById('admin-alerta-bg');
+    const borderHidden = document.getElementById('admin-alerta-border-hidden');
+    const bgHexInput = document.getElementById('admin-alerta-bg-hex');
+    const borderHexInput = document.getElementById('admin-alerta-border-hex');
+    const colorPickerInput = document.getElementById('admin-alerta-color-picker');
+    const borderPickerInput = document.getElementById('admin-alerta-border-picker');
+    const openBgPickerBtn = document.getElementById('open-bg-picker');
+    const openBorderPickerBtn = document.getElementById('open-border-picker');
+    const bgPreviewDot = document.getElementById('bg-preview-dot');
+    const borderPreviewDot = document.getElementById('border-preview-dot');
+    const preview = document.getElementById('alerta-preview');
+    const previewText = document.getElementById('alerta-preview-text');
+    const customSwatch = document.getElementById('alerta-custom-swatch');
+    const swatchButtons = Array.from(document.querySelectorAll('#alerta-bg-grid .palette-swatch'));
+    const presetSwatchButtons = swatchButtons.filter((button) => button.dataset.presetColor);
+    let modalMode = 'edit';
+
+    function normalizeHexColor(value, fallback = bgHidden?.defaultValue || bgHidden?.value || '#e3eefd'){
+      const candidate = String(value || '').trim().toLowerCase();
+      if (/^#[0-9a-f]{3}$/.test(candidate)){
+        return `#${candidate.slice(1).split('').map((char) => char + char).join('')}`;
+      }
+      if (/^#[0-9a-f]{6}$/.test(candidate)){
+        return candidate;
+      }
+      return String(fallback || '#e3eefd').trim().toLowerCase();
+    }
+
+    function deriveBorderColor(color){
+      const normalized = normalizeHexColor(color);
+      const red = Number.parseInt(normalized.slice(1, 3), 16);
+      const green = Number.parseInt(normalized.slice(3, 5), 16);
+      const blue = Number.parseInt(normalized.slice(5, 7), 16);
+      const luminance = ((0.299 * red) + (0.587 * green) + (0.114 * blue)) / 255;
+      const target = luminance > 0.72 ? 0 : 255;
+      const weight = luminance > 0.72 ? 0.18 : 0.26;
+      const mix = (channel) => Math.max(0, Math.min(255, Math.round((channel * (1 - weight)) + (target * weight))));
+      return `#${[mix(red), mix(green), mix(blue)].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+    }
+
+    function syncCustomSwatch(color){
+      if (!customSwatch) return null;
+      const normalized = normalizeHexColor(color);
+      const borderColor = deriveBorderColor(normalized);
+      customSwatch.hidden = false;
+      customSwatch.dataset.color = normalized;
+      customSwatch.dataset.borderColor = borderColor;
+      customSwatch.style.background = normalized;
+      customSwatch.style.borderColor = borderColor;
+      customSwatch.setAttribute('aria-label', `Cor personalizada ${normalized}`);
+      return customSwatch;
+    }
+
+    function hideCustomSwatch(){
+      if (!customSwatch) return;
+      customSwatch.hidden = true;
+      customSwatch.classList.remove('is-selected');
+      customSwatch.dataset.color = '';
+      customSwatch.dataset.borderColor = '';
+    }
+
+    function autoGrowTextarea(){
+      if (!mensagemInput) return;
+      mensagemInput.style.height = 'auto';
+      const nextHeight = Math.max(mensagemInput.scrollHeight, 32);
+      mensagemInput.style.height = `${nextHeight}px`;
+    }
+
+    function setVisibility(value){
+      const normalized = value === '0' ? '0' : '1';
+      const isVisible = normalized === '1';
+      visivelHidden.value = normalized;
+      visivelSwitch.checked = isVisible;
+      visivelText.textContent = isVisible ? 'Ativo' : 'Inativo';
+    }
+
+    function applyBgColor(color){
+      const normalized = normalizeHexColor(color);
+      bgHidden.value = normalized;
+      if (bgHexInput) bgHexInput.value = normalized;
+      if (colorPickerInput) colorPickerInput.value = normalized;
+      if (bgPreviewDot) bgPreviewDot.style.background = normalized;
+      updatePreview();
+    }
+
+    function applyBorderColor(color){
+      const normalized = normalizeHexColor(color);
+      borderHidden.value = normalized;
+      if (borderHexInput) borderHexInput.value = normalized;
+      if (borderPickerInput) borderPickerInput.value = normalized;
+      if (borderPreviewDot) borderPreviewDot.style.background = normalized;
+      updatePreview();
+    }
+
+    function setColorSelection(bgColor, borderColorOverride){
+      const normalized = normalizeHexColor(bgColor);
+      let selectedButton = presetSwatchButtons.find((button) => normalizeHexColor(button.dataset.color) === normalized) || null;
+      let borderColor;
+      if (selectedButton) {
+        hideCustomSwatch();
+        borderColor = borderColorOverride || selectedButton.dataset.borderColor || deriveBorderColor(normalized);
+      } else {
+        selectedButton = syncCustomSwatch(normalized);
+        borderColor = borderColorOverride || deriveBorderColor(normalized);
+      }
+      swatchButtons.forEach((button) => {
+        button.classList.toggle('is-selected', button === selectedButton);
+      });
+      applyBgColor(normalized);
+      applyBorderColor(borderColor);
+    }
+
+    function openNativeColorPicker(kind, initialColor){
+      if (modalMode === 'view') return;
+      if (kind === 'border') {
+        if (!borderPickerInput) return;
+        borderPickerInput.value = normalizeHexColor(initialColor || borderHidden.value);
+        if (typeof borderPickerInput.showPicker === 'function') { borderPickerInput.showPicker(); return; }
+        borderPickerInput.click();
+      } else {
+        if (!colorPickerInput) return;
+        colorPickerInput.value = normalizeHexColor(initialColor || bgHidden.value);
+        if (typeof colorPickerInput.showPicker === 'function') { colorPickerInput.showPicker(); return; }
+        colorPickerInput.click();
+      }
+    }
+
+    function setModalMode(mode){
+      modalMode = mode === 'view' ? 'view' : 'edit';
+      const isReadonly = modalMode === 'view';
+      modalCard?.classList.toggle('is-readonly', isReadonly);
+      tituloInput.readOnly = isReadonly;
+      mensagemInput.readOnly = isReadonly;
+      if (bgHexInput) bgHexInput.readOnly = isReadonly;
+      if (borderHexInput) borderHexInput.readOnly = isReadonly;
+      if (openBgPickerBtn) openBgPickerBtn.disabled = isReadonly;
+      if (openBorderPickerBtn) openBorderPickerBtn.disabled = isReadonly;
+      visivelSwitch.disabled = isReadonly;
+      swatchButtons.forEach((button) => { button.disabled = isReadonly; });
+      if (saveBtn){ saveBtn.hidden = isReadonly; saveBtn.disabled = isReadonly; }
+      if (cancelBtn) cancelBtn.textContent = isReadonly ? 'Voltar' : 'Cancelar';
+    }
+
+    function fillFormFromRow(row, mode){
+      hiddenId.value = row.dataset.alertaId || '';
+      tituloInput.value = row.dataset.alertaTitulo || '';
+      mensagemInput.value = row.dataset.alertaMensagem || '';
+      titleText.textContent = mode === 'view' ? 'Visualizar Alerta' : 'Editar Alerta';
+      setVisibility(row.dataset.alertaVisivel || '1');
+      const bg = row.dataset.alertaBg || bgHidden.defaultValue || bgHidden.value;
+      const border = row.dataset.alertaBorder || deriveBorderColor(bg);
+      setColorSelection(bg, border);
+      setModalMode(mode);
+      updatePreview();
+      autoGrowTextarea();
+      openModal();
+    }
+
+    function updatePreview(){
+      const titulo = (tituloInput.value || '').trim();
+      const message = (mensagemInput.value || '').trim();
+      const previewParts = [];
+      if (titulo) previewParts.push(titulo);
+      if (message) previewParts.push(message);
+      previewText.textContent = previewParts.join(' - ') || 'Digite o titulo do alerta';
+      preview.style.background = bgHidden.value;
+      preview.style.borderColor = borderHidden.value;
+    }
+
+    function resetForm(){
+      hiddenId.value = '';
+      tituloInput.value = '';
+      mensagemInput.value = '';
+      titleText.textContent = 'Novo Alerta';
+      setModalMode('edit');
+      setVisibility('1');
+      const firstBg = bgHidden.defaultValue || bgHidden.value;
+      const firstBorder = borderHidden.defaultValue || borderHidden.value;
+      setColorSelection(firstBg, firstBorder);
+      updatePreview();
+      autoGrowTextarea();
+    }
+
+    function openModal(){
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      window.requestAnimationFrame(() => tituloInput.focus());
+    }
+
+    function closeModal(){
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    }
+
+    addBtn?.addEventListener('click', () => {
+      resetForm();
+      openModal();
+    });
+
+    swatchButtons.forEach((button) => {
+      button.addEventListener('click', () => setColorSelection(button.dataset.color, button.dataset.borderColor));
+    });
+
+    openBgPickerBtn?.addEventListener('click', () => openNativeColorPicker('bg', bgHidden.value));
+    openBorderPickerBtn?.addEventListener('click', () => openNativeColorPicker('border', borderHidden.value));
+
+    colorPickerInput?.addEventListener('input', () => applyBgColor(colorPickerInput.value));
+    colorPickerInput?.addEventListener('change', () => applyBgColor(colorPickerInput.value));
+    borderPickerInput?.addEventListener('input', () => applyBorderColor(borderPickerInput.value));
+    borderPickerInput?.addEventListener('change', () => applyBorderColor(borderPickerInput.value));
+
+    bgHexInput?.addEventListener('change', () => {
+      const value = String(bgHexInput.value || '').trim();
+      if (/^#[0-9a-f]{3}$/i.test(value) || /^#[0-9a-f]{6}$/i.test(value)) { applyBgColor(value); return; }
+      bgHexInput.value = bgHidden.value;
+    });
+    bgHexInput?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      bgHexInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    borderHexInput?.addEventListener('change', () => {
+      const value = String(borderHexInput.value || '').trim();
+      if (/^#[0-9a-f]{3}$/i.test(value) || /^#[0-9a-f]{6}$/i.test(value)) { applyBorderColor(value); return; }
+      borderHexInput.value = borderHidden.value;
+    });
+    borderHexInput?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      borderHexInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    document.querySelectorAll('#alertas-list .alerta-color-swatch').forEach((swatch) => {
+      swatch.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const row = swatch.closest('.impresso-card');
+        if (!row || row.classList.contains('header')) return;
+        fillFormFromRow(row, canAlertasEdit ? 'edit' : 'view');
+        if (canAlertasEdit) {
+          window.requestAnimationFrame(() => openNativeColorPicker('bg', row.dataset.alertaBg || bgHidden.value));
+        }
+      });
+    });
+
+    let bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+
+    bar.setAttribute('role','toolbar');
+    bar.setAttribute('aria-label','Acoes do alerta selecionado');
+    bar.innerHTML = `
+      ${canAlertasEdit ? '<button type="button" class="act-btn" data-action="toggle" aria-label="Alternar alerta" title="Alternar"><i data-lucide="power"></i></button>' : ''}
+      <button type="button" class="act-btn" data-action="view" aria-label="Ver alerta" title="Ver"><i data-lucide="eye"></i></button>
+      ${canAlertasEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar alerta" title="Editar"><i data-lucide="edit"></i></button>' : ''}
+      ${canAlertasFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir alerta" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
+    `;
+    window.lucide?.createIcons?.();
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    function appendCsrfToForm(form){
+      if (!csrfToken) return;
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = csrfToken;
+      form.appendChild(inp);
+    }
+
+    const scrollWrap = document.querySelector('#alertas-scroll-container');
+    let hideTimer = null;
+    let currentAlertaId = null;
+    let currentCard = null;
+
+    function updateToggleButton(card){
+      const toggleBtn = bar.querySelector('[data-action="toggle"]');
+      if (!toggleBtn || !card) return;
+      const isActive = (card.getAttribute('data-alerta-visivel') || '0') === '1';
+      toggleBtn.setAttribute('title', isActive ? 'Desativar' : 'Ativar');
+      toggleBtn.setAttribute('aria-label', isActive ? 'Desativar alerta' : 'Ativar alerta');
+      toggleBtn.innerHTML = `<i data-lucide="${isActive ? 'power-off' : 'power'}"></i>`;
+      window.lucide?.createIcons?.();
+    }
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height / 2) - (bar.offsetHeight / 2));
+      bar.style.top = top + 'px';
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = left + 'px';
+      bar.style.right = 'auto';
+    }
+
+    function show(){ bar.classList.add('is-visible'); }
+    function hide(){ bar.classList.remove('is-visible'); currentAlertaId = null; currentCard = null; }
+    function scheduleHide(){ clearTimeout(hideTimer); hideTimer = setTimeout(() => { hide(); }, 180); }
+    function cancelHide(){ clearTimeout(hideTimer); }
+
+    scrollWrap?.addEventListener('mouseover', (e) => {
+      const card = e.target.closest('.impresso-card');
+      if (!card || card.classList.contains('header')) return;
+      currentAlertaId = card.getAttribute('data-alerta-id');
+      currentCard = card;
+      updateToggleButton(currentCard);
+      positionFor(currentCard);
+      show();
+    });
+    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.act-btn');
+      if (!btn || !currentAlertaId || !currentCard) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'toggle'){
+        if (!canAlertasEdit) return;
+        const isActive = (currentCard.getAttribute('data-alerta-visivel') || '0') === '1';
+        if (!confirm(isActive ? 'Tem certeza que deseja desativar este alerta?' : 'Tem certeza que deseja ativar este alerta?')) return;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('admin_alternar_alerta', alerta_id=0) }}".replace('/0/', '/' + currentAlertaId + '/');
+        appendCsrfToForm(form);
+        document.body.appendChild(form);
+        form.submit();
+      } else if (action === 'view'){
+        fillFormFromRow(currentCard, 'view');
+      } else if (action === 'edit'){
+        if (!canAlertasEdit) return;
+        fillFormFromRow(currentCard, 'edit');
+      } else if (action === 'delete'){
+        if (!canAlertasFull) return;
+        if (!confirm('Tem certeza que deseja excluir este alerta?')) return;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('admin_deletar_alerta', alerta_id=0) }}".replace('/0/', '/' + currentAlertaId + '/');
+        appendCsrfToForm(form);
+        document.body.appendChild(form);
+        form.submit();
+      }
+    });
+
+    document.querySelectorAll('#alertas-list .impresso-card').forEach((row) => {
+      if (row.classList.contains('header')) return;
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' '){
+          event.preventDefault();
+          fillFormFromRow(row, 'view');
+        }
+      });
+    });
+
+    tituloInput?.addEventListener('input', updatePreview);
+    mensagemInput?.addEventListener('input', updatePreview);
+    mensagemInput?.addEventListener('input', autoGrowTextarea);
+    visivelSwitch?.addEventListener('change', () => setVisibility(visivelSwitch.checked ? '1' : '0'));
+    form?.addEventListener('submit', (event) => {
+      if (modalMode === 'view'){
+        event.preventDefault();
+      }
+    });
+
+    closeBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && modal && !modal.hidden) closeModal();
+    });
+
+    resetForm();
+  });
+</script>
+{% endblock %}

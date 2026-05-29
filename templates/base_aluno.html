@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+  <title>{% block title %}Sistema de Gerenciamento de Atividades Acadêmicas (SGAA){% endblock %}</title>
+    {% set static_asset_version = '20260516-tooltip-dark-v1' %}
+
+    <!-- Fontes + CSS global -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-style.css', v=static_asset_version) }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/ej_favicon.svg') }}">
+    <style>
+      /* Reversivel: antes 0 */
+      .app-track.aluno-page-track{ margin-top:-12px; }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+    <!-- Ícones -->
+    <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="{{ url_for('static', filename='js/ui-tooltips.js', v=static_asset_version) }}" defer></script>
+    <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
+    <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>
+  </head>
+
+  <body>
+    <a href="#conteudo" class="sr-only-focusable">{{ user_message("Ir para o conteúdo") }}</a>
+
+    <div class="app-layout">
+      <header class="app-header" role="banner">
+        <a class="logo" href="/aluno/dashboard">
+          <img src="{{ url_for('static', filename='images/ej_logo.svg') }}" alt="Logo" />
+          <span>SGAA - Sistema de Gerenciamento de Atividades Acadêmicas</span>
+        </a>
+
+        <a class="user-profile user-profile-link" href="/aluno/meus_dados" title="{{ user_message('Meus dados') }}">
+          {% set _nome_aluno = session.get('user_name') or 'Aluno' %}
+          {% set _foto_aluno = session.get('foto_perfil') %}
+
+          <span>{{ _nome_aluno }}</span>
+          {% if _foto_aluno %}
+            <img src="{{ url_for('uploaded_file', filename=_foto_aluno) }}" alt="Foto de {{ _nome_aluno }}" class="user-avatar" />
+          {% else %}
+            <i class="lucide" data-lucide="user-circle-2" aria-hidden="true"></i>
+          {% endif %}
+        </a>
+      </header>
+
+      <aside class="app-sidebar" role="complementary">
+        <nav class="sidebar-group" aria-label="Menu do aluno">
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_dashboard') else '' }}"
+            href="/aluno/dashboard"
+            {% if request.endpoint and request.endpoint.endswith('aluno_dashboard') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="home" aria-hidden="true"></i>
+            <span>{{ user_message("Painel") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_progresso') else '' }}"
+            href="/aluno/progresso"
+            {% if request.endpoint and request.endpoint.endswith('aluno_progresso') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="chart-column" aria-hidden="true"></i>
+            <span>{{ user_message("Progresso") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_minhas_requisicoes') else '' }}"
+            href="/aluno/requisicoes"
+            {% if request.endpoint and request.endpoint.endswith('aluno_minhas_requisicoes') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="inbox" aria-hidden="true"></i>
+            <span>{{ user_message("Requisições") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_arquivos') else '' }}"
+            href="/aluno/arquivos"
+            {% if request.endpoint and request.endpoint.endswith('aluno_arquivos') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="folder-open" aria-hidden="true"></i>
+            <span>{{ user_message("Arquivos") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_reportar') else '' }}"
+            href="/aluno/reportar"
+            {% if request.endpoint and request.endpoint.endswith('aluno_reportar') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="bug" aria-hidden="true"></i>
+            <span>{{ user_message("Reportar") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_meus_dados') else '' }}"
+            href="/aluno/meus_dados"
+            {% if request.endpoint and request.endpoint.endswith('aluno_meus_dados') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="user" aria-hidden="true"></i>
+            <span>{{ user_message("Meus dados") }}</span>
+          </a>
+        </nav>
+
+        <nav class="sidebar-group" aria-label="Ações">
+          <a class="sidebar-link" href="{{ route_url('logout') }}">
+            <i class="lucide" data-lucide="log-out" aria-hidden="true"></i>
+            <span>{{ user_message("Sair") }}</span>
+          </a>
+        </nav>
+      </aside>
+
+      <main id="conteudo" class="app-main" role="main">
+        <div class="app-track aluno-page-track">
+          {% include 'components/flash_messages.html' %}
+
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+
+    <script id="app-frontend-messages" type="application/json">{{ app_frontend_messages|tojson }}</script>
+    <script>
+      window.__appFrontendMessages = JSON.parse(document.getElementById('app-frontend-messages')?.textContent || '{}');
+      window.__appMessageMatcherCache = null;
+      window.appFormatMessage = function(template, values){
+        const text = String(template || '').trim();
+        if (!text) return '';
+        return text.replace(/\{(value_\d+)\}/g, (_match, name) => {
+          if (!values || !Object.prototype.hasOwnProperty.call(values, name)) {
+            return `{${name}}`;
+          }
+          const value = values[name];
+          return value === undefined || value === null ? '' : String(value);
+        });
+      };
+      window.appMessageText = function(defaultTemplate, values){
+        const templateKey = String(defaultTemplate || '').trim();
+        if (!templateKey) return '';
+        const currentTemplate = Object.prototype.hasOwnProperty.call(window.__appFrontendMessages || {}, templateKey)
+          ? window.__appFrontendMessages[templateKey]
+          : templateKey;
+        return window.appFormatMessage(currentTemplate, values);
+      };
+      window.appResolveRuntimeMessage = function(rawMessage){
+        const runtimeText = String(rawMessage || '').trim();
+        if (!runtimeText) return '';
+        if (Object.prototype.hasOwnProperty.call(window.__appFrontendMessages || {}, runtimeText)) {
+          return window.__appFrontendMessages[runtimeText];
+        }
+        if (!window.__appMessageMatcherCache) {
+          window.__appMessageMatcherCache = Object.entries(window.__appFrontendMessages || {})
+            .filter(([template]) => template.includes('{value_'))
+            .sort((left, right) => right[0].length - left[0].length)
+            .map(([template, currentTemplate]) => {
+              const placeholderNames = [];
+              const escapedTemplate = template
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\\\{(value_\d+)\\\}/g, (_match, name) => {
+                  placeholderNames.push(name);
+                  return '(.+?)';
+                });
+              return {
+                currentTemplate,
+                placeholderNames,
+                pattern: new RegExp(`^${escapedTemplate}$`, 's'),
+              };
+            });
+        }
+        for (const matcher of window.__appMessageMatcherCache) {
+          const result = matcher.pattern.exec(runtimeText);
+          if (!result) continue;
+          const values = {};
+          matcher.placeholderNames.forEach((name, index) => {
+            values[name] = result[index + 1];
+          });
+          return window.appFormatMessage(matcher.currentTemplate, values);
+        }
+        return runtimeText;
+      };
+      window.patchNativeMessages = function(){
+        if (!window.__nativeAlert) {
+          window.__nativeAlert = window.alert.bind(window);
+          window.alert = function(message){
+            return window.__nativeAlert(window.appResolveRuntimeMessage(message));
+          };
+        }
+        if (!window.__nativeConfirm) {
+          window.__nativeConfirm = window.confirm.bind(window);
+          window.confirm = function(message){
+            return window.__nativeConfirm(window.appResolveRuntimeMessage(message));
+          };
+        }
+      };
+      window.patchNativeMessages();
+      window.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+      window.currentPathWithSearch = function(){
+        return `${window.location.pathname}${window.location.search}`;
+      };
+      window.buildUrlWithParams = function(targetUrl, params){
+        const nextUrl = new URL(targetUrl, window.location.origin);
+        Object.entries(params || {}).forEach(([key, value]) => {
+          if (value === undefined || value === null || value === '') return;
+          nextUrl.searchParams.set(key, String(value));
+        });
+        return `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash || ''}`;
+      };
+      window.buildUrlWithReturnTo = function(targetUrl, extraParams){
+        return window.buildUrlWithParams(targetUrl, {
+          ...(extraParams || {}),
+          return_to: window.currentPathWithSearch(),
+        });
+      };
+      window.getCsrfToken = function(){
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      };
+      window.ensureFormCsrfToken = function(form){
+        if (!form) return null;
+        const method = (form.getAttribute('method') || form.method || 'GET').toUpperCase();
+        if (method !== 'POST') return null;
+        let tokenInput = form.querySelector('input[name="csrf_token"]');
+        if (!tokenInput) {
+          tokenInput = document.createElement('input');
+          tokenInput.type = 'hidden';
+          tokenInput.name = 'csrf_token';
+          form.appendChild(tokenInput);
+        }
+        if (!tokenInput.value) {
+          const token = window.getCsrfToken();
+          if (token) tokenInput.value = token;
+        }
+        return tokenInput;
+      };
+      window.navigateWithReturnTo = function(targetUrl, extraParams){
+        window.location.href = window.buildUrlWithReturnTo(targetUrl, extraParams);
+      };
+      window.setFormActionWithReturnTo = function(form, targetUrl){
+        if (!form) return '';
+        const baseUrl = targetUrl || form.getAttribute('action') || window.location.href;
+        const nextAction = window.buildUrlWithReturnTo(baseUrl);
+        form.setAttribute('action', nextAction);
+        window.ensureFormCsrfToken(form);
+        return nextAction;
+      };
+    </script>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+  </html>

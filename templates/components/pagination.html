@@ -1,0 +1,26 @@
+{% macro paginate(endpoint) -%}
+  {% if total_pages and total_pages > 1 %}
+  {% set args = request.args.to_dict() %}
+  <nav class="pagination" style="display:flex; gap:.75rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
+    {# Anterior #}
+    {% if page > 1 %}
+      {% set prev = args.copy() %}
+      {% set _ = prev.update({'page': page-1, 'per_page': per_page}) %}
+      <a href="{{ url_for(endpoint, **prev) }}" rel="prev">« Anterior</a>
+    {% else %}
+      <span style="opacity:.5;">« Anterior</span>
+    {% endif %}
+
+    <span>Página {{ page }} de {{ total_pages }} • Total {{ total }}</span>
+
+    {# Próxima #}
+    {% if page < total_pages %}
+      {% set nxt = args.copy() %}
+      {% set _ = nxt.update({'page': page+1, 'per_page': per_page}) %}
+      <a href="{{ url_for(endpoint, **nxt) }}" rel="next">Próxima »</a>
+    {% else %}
+      <span style="opacity:.5;">Próxima »</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+{%- endmacro %}

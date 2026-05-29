@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from 'components/icons.html' import school_icon %}
+{% block title %}Turmas (Admin){% endblock %}
+
+{% block content %}
+<h1 class="main-title">Turmas</h1>
+
+<div class="toolbar">
+  </div>
+
+<div class="list-header turmas-v2">
+  <div>Código da Turma</div>
+  <div>Curso</div>
+  <div class="ta-center">Nº da Turma</div>
+  <div class="ta-center">Alunos</div>
+  <div class="ta-center">Status</div>
+  <div></div> </div>
+
+<div class="list-rows">
+  {% if turmas %}
+    {% for t in turmas %}
+      <div class="list-row turmas-v2">
+        <div class="list-card turmas-v2">
+          <div class="card-values turmas-v2">
+            <div class="ellipsis"><strong>{{ t.codigo or 'N/A' }}</strong></div>
+            <div class="ellipsis">{{ t.curso_nome or '—' }}</div>
+            <div class="ta-center">{{ t.numero or '—' }}</div>
+            <div class="ta-center">{{ t.qtd_alunos or 0 }}</div>
+            <div class="ta-center">
+              {% if t.status == 'Ativa' %}
+                <span class="badge success">Ativa</span>
+              {% else %}
+                <span class="badge danger">Inativa</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="list-actions turmas-v2">
+          <a class="btn" href="{{ url_for('admin_detalhes_turma', turma_id=t.id) }}">
+            {{ school_icon() }} Alunos
+          </a>
+          <a class="btn" href="{{ url_for('admin_editar_turma', turma_id=t.id) }}">
+            <i class="lucide" data-lucide="edit-3"></i> Editar
+          </a>
+          <form method="post" action="{{ url_for('admin_deletar_turma', turma_id=t.id) }}"
+                onsubmit="return confirm('Deletar esta turma?');">
+            <button class="btn danger" type="submit">
+              <i class="lucide" data-lucide="trash-2"></i> Excluir
+            </button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="list-card turmas-v2" style="padding: 1rem; justify-content: center;">
+      <span>Nenhuma turma cadastrada.</span>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

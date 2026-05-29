@@ -1,0 +1,40 @@
+﻿# environment / secrets
+.env
+.env.*
+!.env.example
+
+# databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# logs
+logs/
+*.log
+app.log
+
+# user data / uploads / documents
+uploads/
+documentos_alunos/
+
+# backups / generated artifacts
+backups/
+*.bak
+*.tmp
+*.zip
+*.7z
+*.rar
+
+# caches / virtualenv
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

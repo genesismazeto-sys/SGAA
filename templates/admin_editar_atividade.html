@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{% block title %}{{ 'Ver Atividade' if readonly else 'Editar Atividade' }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .form-actions{ justify-content:center; }
+    .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
+    .form-fieldset[disabled]{ opacity:1; }
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.70);
+      max-width: calc(100vw - 32px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{
+      right: calc(100% + var(--form-gap));
+      width: var(--form-label-w);
+    }
+    .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap: var(--list-col-gap, 2px); }
+    .field-card.split-2.compact-left{ grid-template-columns:40px 90px 40px 1fr; }
+    .field-card.split-2 .control + .field-chip{ border-left:1px solid var(--border-strong); }
+    .is-off-chunk{ opacity:.55; pointer-events:none; }
+  </style>
+{% endblock %}
+
+{% block content %}
+{% set current_tipo = request.form.get('tipo_atividade', atividade.tipo_atividade) %}
+{% set grp_val = request.form.get('grupo', atividade.grupo or '') %}
+{% set grp_num = (grp_val.split(' - ', 1)[0] if ' - ' in grp_val else (grp_val if grp_val.isdigit() else '')) %}
+{% set grp_desc = (grp_val.split(' - ', 1)[1] if ' - ' in grp_val else ('' if grp_val.isdigit() else grp_val)) %}
+{% set nome_val = request.form.get('nome', atividade.nome or '') %}
+{% set descricao_val = request.form.get('descricao', atividade.descricao or '') %}
+{% if request.method == 'POST' %}
+  {% set tem_lim = request.form.get('tem_limitacao', '0') %}
+  {% set limit_mode = request.form.get('tipo_limitacao', '') if tem_lim in ['1', 'true', 'on', 'yes'] else '' %}
+  {% set limit_value = request.form.get('limite_horas_total', '') if limit_mode == 'total' else (request.form.get('limite_horas_semestral', '') if limit_mode == 'semestral' else '') %}
+{% else %}
+  {% set tem_lim = '1' if atividade.tem_limitacao else '0' %}
+  {% set limit_mode = atividade.tipo_limitacao if atividade.tem_limitacao else '' %}
+  {% set limit_value = atividade.limite_horas_total if limit_mode == 'total' else (atividade.limite_horas_semestral if limit_mode == 'semestral' else '') %}
+{% endif %}
+
+<h1 class="main-title">{{ 'Ver Atividade' if readonly else 'Editar Atividade' }}</h1>
+
+<form method="post" data-template-version="editar-atividade-20251012-03">
+  <div class="form-cards-narrow">
+    <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      <div class="form-row">
+        <label class="row-label">Tipo</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+          <select class="control" name="tipo_atividade" id="tipo_atividade_sel" required>
+            {% for opt in ['Acadêmica Complementar', 'Extensão Universitária'] %}
+              <option value="{{ opt }}" {% if current_tipo == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="row-label">Grupo (nº/descrição)</label>
+        <div class="field-card split-2 compact-left" id="grupo_card">
+          <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+          <select class="control" id="grupo_num" aria-label="Número do grupo" data-selected="{{ grp_num }}" required>
+            <option value=""></option>
+            {% if grp_num %}
+              <option value="{{ grp_num }}" selected>{{ grp_num }}</option>
+            {% endif %}
+          </select>
+
+          <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+          <input class="control" id="grupo_desc" type="text" placeholder="Descrição do grupo" value="{{ grp_desc }}" required>
+          <input type="hidden" name="grupo" id="grupo_hidden" value="{{ grp_val }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="row-label">Nome</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+          <input class="control" type="text" name="nome" required value="{{ nome_val }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="row-label">Descrição</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
+          <textarea class="control auto-grow" name="descricao" rows="1" placeholder="Descrição opcional" style="height: var(--btn-h);">{{ descricao_val }}</textarea>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="row-label">Limitação / Tempo limite</label>
+        <div class="field-card split-2" id="limitacao_card">
+          <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+          <select class="control" id="tipo_limit_card">
+            <option value="" {% if not limit_mode %}selected{% endif %}>Nenhuma</option>
+            <option value="semestral" {% if limit_mode == 'semestral' %}selected{% endif %}>Semestral</option>
+            <option value="total" {% if limit_mode == 'total' %}selected{% endif %}>Total</option>
+          </select>
+
+          <div class="field-chip" id="chip_limite"><i class="lucide" data-lucide="timer"></i></div>
+          <input class="control" type="number" id="valor_limite_card" inputmode="numeric" min="0" placeholder="Horas" value="{{ limit_value or '' }}">
+        </div>
+      </div>
+
+      <input type="hidden" name="tem_limitacao" id="tem_limitacao_hidden" value="{{ tem_lim }}">
+      <input type="hidden" name="tipo_limitacao" id="tipo_limitacao_hidden" value="{{ limit_mode }}">
+      <input type="hidden" name="limite_horas_total" id="limite_total_hidden" value="{{ request.form.get('limite_horas_total', atividade.limite_horas_total or '') }}">
+      <input type="hidden" name="limite_horas_semestral" id="limite_semestral_hidden" value="{{ request.form.get('limite_horas_semestral', atividade.limite_horas_semestral or '') }}">
+    </fieldset>
+
+    <div class="form-actions">
+      {% if readonly %}
+        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_atividades') }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></a>
+      {% else %}
+        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_atividades') }}">Cancelar</a>
+        <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
+<script id="grupos-por-tipo-json" type="application/json">{{ (grupos_por_tipo or {}) | tojson | safe }}</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const isReadonly = {{ 'true' if readonly else 'false' }};
+    const gptEl = document.getElementById('grupos-por-tipo-json');
+    let gruposPorTipo = {};
+    try { gruposPorTipo = gptEl ? JSON.parse(gptEl.textContent || '{}') : {}; } catch(_e){ gruposPorTipo = {}; }
+
+    const tipoSel = document.getElementById('tipo_atividade_sel');
+    const numSel = document.getElementById('grupo_num');
+    const desc = document.getElementById('grupo_desc');
+    const hid = document.getElementById('grupo_hidden');
+    const grupoCard = document.getElementById('grupo_card');
+
+    const limitType = document.getElementById('tipo_limit_card');
+    const limitValue = document.getElementById('valor_limite_card');
+    const limitChip = document.getElementById('chip_limite');
+    const hiddenTem = document.getElementById('tem_limitacao_hidden');
+    const hiddenTipo = document.getElementById('tipo_limitacao_hidden');
+    const hiddenTotal = document.getElementById('limite_total_hidden');
+    const hiddenSem = document.getElementById('limite_semestral_hidden');
+
+    function isExtensao(){
+      return (tipoSel?.value || '').trim() === 'Extensão Universitária';
+    }
+
+    function syncGrupo(){
+      if (isExtensao()){
+        hid.value = 'NA';
+        return;
+      }
+      const numero = String((numSel?.value || '').trim());
+      const descricao = String((desc?.value || '').trim());
+      hid.value = numero && descricao ? `${numero} - ${descricao}` : (numero || descricao);
+    }
+
+    function populateNumeros(){
+      const tipoAtual = (tipoSel?.value || '').trim();
+      const map = gruposPorTipo[tipoAtual] || {};
+      const selected = (numSel?.getAttribute('data-selected') || '').trim();
+      if (!numSel) return;
+      numSel.innerHTML = '<option value=""></option>';
+      const numeros = Object.keys(map).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+      const fallback = numeros.length ? [] : Array.from({length: 50}, (_, i) => String(i + 1));
+      const list = numeros.length ? numeros : fallback;
+      list.forEach(numero => {
+        const option = document.createElement('option');
+        option.value = numero;
+        option.textContent = numero;
+        if (map[numero] !== undefined) option.setAttribute('data-desc', map[numero] || '');
+        if (selected && selected === String(numero)) option.selected = true;
+        numSel.appendChild(option);
+      });
+      if (selected && !numSel.querySelector(`option[value="${selected}"]`)){
+        const option = document.createElement('option');
+        option.value = selected;
+        option.textContent = selected;
+        numSel.insertBefore(option, numSel.options[1] || null);
+        numSel.value = selected;
+      }
+      if (!numSel.value && numSel.options.length > 1) numSel.selectedIndex = 1;
+    }
+
+    function loadDescFromSelected(){
+      const option = numSel?.selectedOptions?.[0];
+      desc.value = option ? (option.getAttribute('data-desc') || '') : '';
+    }
+
+    function syncGrupoState(){
+      if (!numSel || !desc) return;
+      if (isExtensao()){
+        numSel.dataset.lastAcademicValue = (numSel.value || '').trim();
+        desc.dataset.lastAcademicValue = (desc.value || '').trim();
+        numSel.innerHTML = '<option value="NA" selected>NA</option>';
+        numSel.value = 'NA';
+        numSel.disabled = true;
+        desc.value = 'NA';
+        desc.disabled = true;
+        desc.placeholder = 'NA';
+        grupoCard?.classList.add('is-off-chunk');
+        syncGrupo();
+        return;
+      }
+
+      numSel.disabled = false;
+      desc.disabled = false;
+      desc.placeholder = 'Descrição do grupo';
+      grupoCard?.classList.remove('is-off-chunk');
+      const selected = (numSel.dataset.lastAcademicValue || numSel.getAttribute('data-selected') || '').trim();
+      if (selected) numSel.setAttribute('data-selected', selected);
+      populateNumeros();
+      if ((desc.dataset.lastAcademicValue || '').trim()){
+        desc.value = desc.dataset.lastAcademicValue.trim();
+      } else {
+        loadDescFromSelected();
+      }
+      syncGrupo();
+    }
+
+    function syncLimitacao(){
+      const mode = (limitType?.value || '').toLowerCase();
+      const value = (limitValue?.value || '').trim();
+      hiddenTem.value = mode ? '1' : '0';
+      hiddenTipo.value = mode;
+      hiddenTotal.value = '';
+      hiddenSem.value = '';
+      if (!mode){
+        limitValue.value = '';
+        limitValue.disabled = true;
+        limitChip?.classList.add('is-off-chunk');
+        limitValue.classList.add('is-off-chunk');
+      } else {
+        limitValue.disabled = false;
+        limitChip?.classList.remove('is-off-chunk');
+        limitValue.classList.remove('is-off-chunk');
+        if (mode === 'total') hiddenTotal.value = value;
+        if (mode === 'semestral') hiddenSem.value = value;
+      }
+    }
+
+    const autoGrow = (el) => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    };
+
+    syncGrupoState();
+    syncLimitacao();
+
+    if (!isReadonly){
+      tipoSel?.addEventListener('change', ()=>{
+        syncGrupoState();
+      });
+      numSel?.addEventListener('change', ()=>{
+        loadDescFromSelected();
+        syncGrupo();
+      });
+      desc?.addEventListener('input', syncGrupo);
+      limitType?.addEventListener('change', syncLimitacao);
+      limitValue?.addEventListener('input', syncLimitacao);
+      document.querySelector('form[method="post"]')?.addEventListener('submit', ()=>{
+        syncGrupo();
+        syncLimitacao();
+      });
+    }
+
+    document.querySelectorAll('textarea.auto-grow').forEach(el => {
+      el.style.height = 'var(--btn-h)';
+      autoGrow(el);
+      el.addEventListener('input', ()=> autoGrow(el));
+    });
+  });
+</script>
+{% endblock %}

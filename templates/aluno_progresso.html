@@ -1,0 +1,179 @@
+{% extends "base_aluno.html" %}
+{% block title %}Progresso do aluno{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cfg-card {
+    background:var(--surface);
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .cfg-card-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:7px 16px;
+    background:var(--bg-underpanel) !important;
+  }
+  .cfg-section-label {
+    font-size:13px;
+    font-weight:500;
+    color:var(--text-secondary);
+  }
+  .cfg-chips {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .cfg-chip {
+    display:inline-flex;
+    align-items:center;
+    height:24px;
+    padding:0 8px;
+    border-radius:var(--radius);
+    background:var(--bg);
+    border:0.5px solid var(--border);
+    color:var(--text-secondary);
+    font-size:12px;
+    font-weight:400;
+    white-space:nowrap;
+  }
+  .cfg-chip.is-active {
+    background:#eff6ff;
+    border-color:transparent;
+    color:var(--accent-blue);
+    font-weight:500;
+  }
+  .cfg-chip.progresso-type-count {
+    min-height:24px;
+    padding:0 8px;
+    border-radius:var(--radius);
+    font-size:12px;
+  }
+  .cfg-chip.progresso-type-count.is-active {
+    background:#eff6ff;
+    border-color:transparent;
+    color:var(--accent-blue);
+    font-weight:500;
+  }
+  .cfg-card-body {
+    padding:16px;
+    border-top:1px solid var(--border-strong);
+    background:var(--bg-underpanel) !important;
+  }
+  .cfg-card-footer {
+    padding:11px 16px;
+    border-top:1px solid var(--border-strong);
+    background:var(--bg-underpanel) !important;
+  }
+  .cfg-footer-note {
+    margin:0;
+    font-size:12px;
+    color:var(--text-tertiary);
+    line-height:1.4;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="progresso-header">
+  <div>
+    <h1 class="main-title progresso-title">Progresso do aluno</h1>
+    <p class="progresso-subtitle">Acompanhe por atividade o catalogo disponivel, as horas validadas por semestre ate o periodo atual e o total acumulado.</p>
+  </div>
+  <div class="progresso-summary">
+    <div class="progresso-summary-card">
+      <span class="progresso-summary-value">{{ atividades|length }}</span>
+      <span class="progresso-summary-label">Atividades visiveis</span>
+    </div>
+    <div class="progresso-summary-card">
+      <span class="progresso-summary-value">{{ semestres|length }}</span>
+      <span class="progresso-summary-label">Semestres com horas</span>
+    </div>
+  </div>
+</div>
+
+<section class="cfg-card progresso-block">
+  <div class="cfg-card-head">
+    <span class="cfg-section-label">Catalogo + uso + controle</span>
+    <div class="cfg-chips" aria-label="Resumo por tipo de atividade">
+      <span class="cfg-chip is-active progresso-type-count">AAC: {{ aac_atividades_count }} atividade{% if aac_atividades_count != 1 %}s{% endif %}</span>
+      <span class="cfg-chip is-active progresso-type-count">AEU: {{ aeu_atividades_count }} atividade{% if aeu_atividades_count != 1 %}s{% endif %}</span>
+    </div>
+  </div>
+  <div class="cfg-card-body">
+  <section class="progresso-type-section">
+    <div class="progresso-type-header">
+      <div>
+        {% if mostrar_menu_tipos %}
+        <form method="get" class="progresso-type-menu">
+          <label class="sr-only-focusable progresso-type-menu-label" for="progresso-tipo">Filtrar tipo de atividade</label>
+          <select id="progresso-tipo" name="tipo" class="progresso-type-title progresso-type-select" onchange="this.form.submit()">
+            {% for opcao in tipo_progresso_opcoes %}
+            <option value="{{ opcao.value }}" {% if opcao.tipo == tipo_progresso_atual %}selected{% endif %}>{{ opcao.label }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% else %}
+        <h2 class="progresso-type-title">{{ tipo_progresso_titulo }}</h2>
+        {% endif %}
+        <p class="progresso-type-text">{{ tipo_progresso_descricao }}</p>
+      </div>
+
+    </div>
+    <div class="progresso-table-shell">
+      <table class="table-progresso">
+        <thead>
+          <tr>
+            <th>Atividade</th>
+            <th>Grupo</th>
+            <th>Limite</th>
+            {% for semestre in semestres %}
+            <th>{{ semestre }}</th>
+            {% endfor %}
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for atividade in atividades_exibidas %}
+          <tr>
+            <td>{{ atividade.nome }}</td>
+            <td>
+              {% if atividade.grupo != '-' %}
+              {% set grupo_display = atividade.grupo %}
+              {% if grupo_display and grupo_display[:1]|upper == 'G' and grupo_display[1:].isdigit() %}
+              {% set grupo_display = grupo_display[1:] %}
+              {% endif %}
+              <span class="badge-grupo">{{ grupo_display }}</span>
+              {% else %}
+              <span class="progresso-zero">-</span>
+              {% endif %}
+            </td>
+            <td>{{ atividade.limite }}</td>
+            {% for semestre in semestres %}
+            {% set horas = atividade.semestres.get(semestre, 0) %}
+            <td class="{{ 'progresso-zero' if horas == 0 else '' }} {{ 'progresso-limitado' if atividade.semestres_limitados.get(semestre) else '' }}">{{ atividade.semestres_fmt.get(semestre, '0h') }}</td>
+            {% endfor %}
+            <td class="{{ 'progresso-limitado' if atividade.total_limitado else '' }}">{{ atividade.total_fmt }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="{{ 4 + (semestres|length) }}" class="table-empty">Nenhuma atividade disponivel nesta secao.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  </div>
+  <div class="cfg-card-footer">
+    <p class="cfg-footer-note">Os totais por tipo consideram o catalogo visivel para sua matriz e turma atuais.</p>
+  </div>
+</section>
+{% endblock %}
+
+

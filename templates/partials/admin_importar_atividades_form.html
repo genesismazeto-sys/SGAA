@@ -1,0 +1,40 @@
+<div class="import-form-grid">
+  <label class="field-label import-field-label" for="csv_arquivo">Arquivo CSV *</label>
+  <div class="field-card file-card" data-file-card>
+    <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
+    <input class="file-input" id="csv_arquivo" name="csv_arquivo" type="file" accept=".csv" required>
+    <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+    <div class="field-chip chip-right" title="Selecionar arquivo"><i class="lucide" data-lucide="paperclip"></i><span>Anexar</span></div>
+  </div>
+
+  <label class="field-label import-field-label" for="mode">Modo de importação</label>
+  <div class="field-card">
+    <div class="field-chip"><i class="lucide" data-lucide="git-merge"></i></div>
+    <select id="mode" name="mode" class="control">
+      <option value="create_only" {% if mode != 'upsert' %}selected{% endif %}>Criar apenas novas</option>
+      <option value="upsert" {% if mode == 'upsert' %}selected{% endif %}>Criar ou atualizar existentes</option>
+    </select>
+  </div>
+
+  <section class="import-help-panel" aria-labelledby="import-help-title">
+    <div class="import-help-head">
+      <h3 id="import-help-title">Formato esperado do CSV</h3>
+      <p>Use o cabeçalho abaixo no arquivo de importação.</p>
+    </div>
+
+    <div class="import-help-block">
+      <div class="import-help-label">1. Cabeçalho canônico</div>
+      <pre class="import-help-code">nome;tipo_atividade;grupo_numero;grupo_descricao;tem_limitacao;tipo_limitacao;limite_horas_total;limite_horas_semestral</pre>
+    </div>
+
+    <div class="import-help-block">
+      <div class="import-help-label">2. Exemplo de linha</div>
+      <pre class="import-help-code">Palestras;Acadêmica Complementar;1;Atividades fora da Universidade;sim;semestral;;10</pre>
+    </div>
+
+    <div class="import-help-block">
+      <div class="import-help-label">3. Compatibilidade</div>
+      <pre class="import-help-code">Se o CSV antigo ainda vier com a coluna documentos, ela será ignorada na importação.</pre>
+    </div>
+  </section>
+</div>

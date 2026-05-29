@@ -1,0 +1,686 @@
+{% extends "base.html" %}
+{% block title %}{{ matriz_title }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .matriz-page-head{
+      margin: 0 0 0;
+    }
+    .matriz-tabs{
+      width: 100%;
+      max-width: none;
+      margin: 18px 0 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 18px;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .matriz-tab{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 0 10px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      margin-bottom: -1px;
+    }
+    .matriz-tab.active{
+      color: var(--text-primary);
+      font-weight: 600;
+      border-bottom-color: var(--brand);
+    }
+    .matriz-tab.disabled{
+      color: var(--text-secondary);
+      opacity: .55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .matriz-tab-count{
+      color: inherit;
+      font-size: 12px;
+    }
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.70);
+      max-width: calc(100vw - 32px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    .form-actions{ justify-content:center; }
+    .field-card textarea.control{
+      min-height: var(--btn-h);
+      height: var(--btn-h);
+      padding-top: 7px;
+      padding-bottom: 7px;
+      resize: vertical;
+      overflow-y: hidden;
+      line-height: 1.25;
+    }
+    .matriz-tab-panel{
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      box-sizing: border-box;
+    }
+    .matriz-tab-help{
+      margin: 0 0 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .matriz-transfer-form{ display:grid; gap:16px; }
+    .matriz-transfer-layout{
+      --matriz-transfer-panel-height: clamp(540px, 66vh, 620px);
+      display:grid;
+      grid-template-columns: minmax(0, 1fr) minmax(56px, 72px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .matriz-transfer-card{
+      display:grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap:12px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+      padding: 14px;
+      min-height: var(--matriz-transfer-panel-height);
+      height: var(--matriz-transfer-panel-height);
+    }
+    .matriz-transfer-title{
+      margin:0;
+      font-size:14px;
+      font-weight:600;
+      color: var(--text-primary);
+    }
+    .matriz-transfer-filters{
+      display:grid;
+      gap:10px;
+      align-content:start;
+      min-height: 88px;
+    }
+    .matriz-transfer-filters .input-group{
+      display:flex;
+      align-items:center;
+      width:100%;
+      height: var(--btn-h);
+      border:1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow:hidden;
+      transition:border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .matriz-transfer-filters .input-group:hover{
+      border-color:var(--field-hover-border);
+      background:var(--field-hover-bg);
+      box-shadow:none;
+    }
+    .matriz-transfer-filters .input-group:focus-within{
+      border-color: var(--field-focus-border);
+      background: var(--field-focus-bg);
+      box-shadow:0 0 0 1px var(--field-focus-ring);
+    }
+    .matriz-transfer-filters .input-chip{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex: 0 0 auto;
+      align-self:stretch;
+      padding:0 10px 0 12px;
+      color: var(--text-secondary);
+      background: transparent;
+      border-right: 0;
+    }
+    .matriz-transfer-filters .input-chip .lucide{
+      width: 18px;
+      height: 18px;
+      stroke-width: 1.9;
+    }
+    .matriz-transfer-filters .input-group input{
+      flex:1 1 auto;
+      width:100%;
+      min-width:0;
+      height:100%;
+      border:0;
+      outline:0;
+      background: transparent;
+      padding: 0 12px 0 4px;
+      font: inherit;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .matriz-transfer-filters .input-group input::placeholder{
+      color: var(--text-secondary);
+      opacity: 1;
+    }
+    .matriz-transfer-filters-passive{
+      visibility:hidden;
+      pointer-events:none;
+    }
+    .matriz-transfer-group .control{ width:100%; }
+    .matriz-transfer-content{
+      min-height: 0;
+      overflow: hidden;
+      display:flex;
+      flex-direction:column;
+    }
+    .matriz-transfer-list{
+      min-height: 0;
+      height: 100%;
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding-right: 2px;
+    }
+    .matriz-transfer-list[hidden]{ display:none; }
+    .matriz-transfer-item{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg);
+      padding: 10px 12px;
+    }
+    .matriz-transfer-item input[type="checkbox"]{
+      margin-top: 2px;
+      accent-color: var(--brand);
+    }
+    .matriz-transfer-item-main{ min-width:0; }
+    .matriz-transfer-item-title{
+      display:block;
+      font-size:13px;
+      font-weight:600;
+      color: var(--text-primary);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .matriz-transfer-item-meta{
+      display:block;
+      margin-top:3px;
+      font-size:12px;
+      color: var(--text-secondary);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .matriz-transfer-empty{
+      display:flex;
+      flex: 1;
+      align-items:center;
+      justify-content:center;
+      min-height: 0;
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius);
+      color: var(--text-secondary);
+      font-size:13px;
+      text-align:center;
+      padding: 18px;
+      background: #fbfdff;
+    }
+    .matriz-transfer-empty[hidden]{ display:none; }
+    .matriz-transfer-controls{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-height: var(--matriz-transfer-panel-height);
+      align-self: stretch;
+    }
+    .matriz-transfer-btn{
+      width: 42px;
+      height: 40px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid var(--border-strong);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text-primary);
+      font: inherit;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow: var(--shadow-sm);
+    }
+    .matriz-transfer-btn:hover{ border-color: var(--brand); }
+    .matriz-transfer-btn:disabled{ opacity:.45; cursor:not-allowed; }
+    .matriz-empty-card{
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+      padding: 24px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+    .matriz-empty-card h2{
+      margin: 0 0 6px;
+      font-size: 16px;
+      color: var(--text-primary);
+    }
+    .matriz-empty-card p{
+      margin: 0;
+      font-size: 13px;
+    }
+    .matriz-transfer-form.is-readonly .matriz-transfer-item input[type="checkbox"]{
+      pointer-events: none;
+      opacity: .55;
+    }
+    .matriz-transfer-form.is-readonly .matriz-transfer-btn{
+      visibility: hidden;
+      pointer-events: none;
+    }
+    @media (max-width: 1040px){
+      .matriz-transfer-layout{
+        --matriz-transfer-panel-height: auto;
+        grid-template-columns: 1fr;
+      }
+      .matriz-transfer-controls{
+        flex-direction:row;
+        flex-wrap:wrap;
+        min-height: auto;
+      }
+      .matriz-transfer-card{
+        min-height: 360px;
+        height: auto;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="matriz-page-head">
+  <h1 class="main-title">{{ matriz_title }}</h1>
+</div>
+
+<div class="matriz-tabs" role="tablist" aria-label="Seções da matriz">
+  <a
+    class="matriz-tab {{ 'active' if active_tab == 'dados' else '' }}"
+    href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab='dados') if matriz_id else url_for('admin_adicionar_matriz') }}"
+    role="tab"
+    aria-selected="{{ 'true' if active_tab == 'dados' else 'false' }}"
+  >
+    <span>Dados da Matriz</span>
+  </a>
+  {% if activity_tabs_enabled %}
+    <a
+      class="matriz-tab {{ 'active' if active_tab == 'aac' else '' }}"
+      href="{{ manage_academicas_url }}"
+      role="tab"
+      aria-selected="{{ 'true' if active_tab == 'aac' else 'false' }}"
+    >
+      <span>Lista de AAC</span>
+      <span class="matriz-tab-count">({{ academicas_count }})</span>
+    </a>
+    <a
+      class="matriz-tab {{ 'active' if active_tab == 'aea' else '' }}"
+      href="{{ manage_extensao_url }}"
+      role="tab"
+      aria-selected="{{ 'true' if active_tab == 'aea' else 'false' }}"
+    >
+      <span>Lista de AEU</span>
+      <span class="matriz-tab-count">({{ extensao_count }})</span>
+    </a>
+  {% else %}
+    <span
+      class="matriz-tab disabled"
+      role="tab"
+      aria-selected="false"
+      aria-disabled="true"
+      title="Salve a matriz para gerenciar as atividades"
+    >
+      <span>Lista de AAC</span>
+      <span class="matriz-tab-count">({{ academicas_count }})</span>
+    </span>
+    <span
+      class="matriz-tab disabled"
+      role="tab"
+      aria-selected="false"
+      aria-disabled="true"
+      title="Salve a matriz para gerenciar as atividades"
+    >
+      <span>Lista de AEU</span>
+      <span class="matriz-tab-count">({{ extensao_count }})</span>
+    </span>
+  {% endif %}
+</div>
+
+{% if active_tab == 'dados' %}
+<form method="POST">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-cards-narrow">
+    <input type="hidden" name="active_tab" value="dados">
+    <div class="form-row">
+      <label class="row-label">Curso</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+        <select class="control" name="curso_id" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <option value="">Selecione um curso</option>
+          {% for curso in cursos %}
+            <option value="{{ curso.id }}" {{ 'selected' if (matriz.curso_id|string) == (curso.id|string) else '' }}>
+              {{ curso.nome }} ({{ curso.codigo }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Nome da matriz</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="layout-template"></i></div>
+        <input class="control" type="text" name="nome" value="{{ matriz.nome if matriz else '' }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Versão</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="git-branch"></i></div>
+        <input class="control" type="text" name="versao" value="{{ matriz.versao if matriz else '' }}" placeholder="Ex.: 2026.1" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Status</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" name="status" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <option value="rascunho" {{ 'selected' if not matriz or matriz.status == 'rascunho' else '' }}>Rascunho</option>
+          <option value="vigente" {{ 'selected' if matriz and matriz.status == 'vigente' else '' }}>Vigente</option>
+          <option value="encerrada" {{ 'selected' if matriz and matriz.status == 'encerrada' else '' }}>Encerrada</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Início de vigência</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="calendar-days"></i></div>
+        <input class="control" type="date" name="data_inicio_vigencia" value="{{ matriz.data_inicio_vigencia if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Fim de vigência</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="calendar-range"></i></div>
+        <input class="control" type="date" name="data_fim_vigencia" value="{{ matriz.data_fim_vigencia if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Horas AAC obrigatórias</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+        <input class="control" type="number" name="horas_aac_obrigatorias" min="0" value="{{ matriz.horas_aac_obrigatorias if matriz else 160 }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Horas AEU obrigatórias</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="book-open-check"></i></div>
+        <input class="control" type="number" name="horas_extensao_obrigatorias" min="0" value="{{ matriz.horas_extensao_obrigatorias if matriz else 80 }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Descrição</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
+        <textarea class="control" name="descricao" rows="1" placeholder="Descrição opcional" data-auto-grow {% if readonly %}readonly aria-readonly="true"{% endif %}>{{ matriz.descricao if matriz else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
+      {% if not readonly %}
+        <button class="btn primary" type="submit" {% if not cursos %}disabled{% endif %}><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% else %}
+<section class="matriz-tab-panel" aria-labelledby="matriz-transfer-heading">
+  <p class="matriz-tab-help">{{ transfer_meta.help_text }}</p>
+
+  <form method="POST" class="matriz-transfer-form{% if readonly %} is-readonly{% endif %}" data-transfer-root data-readonly="{{ '1' if readonly else '0' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="active_tab" value="{{ active_tab }}">
+    <div class="matriz-transfer-layout">
+      <section class="matriz-transfer-card" aria-labelledby="transfer-available-heading">
+        <h2 class="matriz-transfer-title" id="transfer-available-heading">{{ transfer_meta.available_title }} (<span data-count-available>{{ transfer_available|length }}</span>)</h2>
+        <div class="matriz-transfer-filters">
+          <div class="input-group">
+            <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+            <input type="search" class="transfer-search-input" data-role="available-search" placeholder="Buscar atividade" aria-label="Buscar atividade disponível">
+          </div>
+          <div class="field-card matriz-transfer-group">
+            <div class="field-chip"><i class="lucide" data-lucide="filter"></i></div>
+            <select class="control" data-role="available-group-filter" aria-label="Filtrar por grupo">
+              <option value="">Grupo</option>
+              {% for group_label in transfer_groups %}
+                <option value="{{ group_label }}">{{ group_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="matriz-transfer-content">
+          <div class="matriz-transfer-list" data-role="available-list" {% if not transfer_available %}hidden{% endif %}>
+            {% for item in transfer_available %}
+              <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
+                <input type="checkbox" data-side="available" {% if readonly %}disabled{% endif %}>
+                <span class="matriz-transfer-item-main">
+                  <span class="matriz-transfer-item-title">{{ item.nome }}</span>
+                  <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="matriz-transfer-empty" data-empty="available" {% if transfer_available %}hidden{% endif %}>{{ transfer_meta.empty_available }}</div>
+        </div>
+      </section>
+
+      <div class="matriz-transfer-controls" aria-label="Mover atividades entre as listas">
+        <button class="matriz-transfer-btn" type="button" data-move=">" aria-label="Adicionar selecionadas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 6l6 6l-6 6" /></svg></button>
+        <button class="matriz-transfer-btn" type="button" data-move=">>" aria-label="Adicionar todas visíveis" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M7 7l5 5l-5 5" /><path d="M13 7l5 5l-5 5" /></svg></button>
+        <button class="matriz-transfer-btn" type="button" data-move="<" aria-label="Remover selecionadas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M15 6l-6 6l6 6" /></svg></button>
+        <button class="matriz-transfer-btn" type="button" data-move="<<" aria-label="Remover todas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M11 7l-5 5l5 5" /><path d="M17 7l-5 5l5 5" /></svg></button>
+      </div>
+
+      <section class="matriz-transfer-card" aria-labelledby="transfer-selected-heading">
+        <h2 class="matriz-transfer-title" id="transfer-selected-heading">{{ transfer_meta.selected_title }} (<span data-count-selected>{{ transfer_selected|length }}</span>)</h2>
+        <div class="matriz-transfer-filters">
+          <div class="input-group">
+            <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+            <input type="search" class="transfer-search-input" data-role="selected-search" placeholder="Buscar atividade" aria-label="Buscar atividade vinculada">
+          </div>
+          <div class="field-card matriz-transfer-group">
+            <div class="field-chip"><i class="lucide" data-lucide="filter"></i></div>
+            <select class="control" data-role="selected-group-filter" aria-label="Filtrar atividades vinculadas por grupo">
+              <option value="">Grupo</option>
+              {% for group_label in transfer_groups %}
+                <option value="{{ group_label }}">{{ group_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="matriz-transfer-content">
+          <div class="matriz-transfer-list" data-role="selected-list" {% if not transfer_selected %}hidden{% endif %}>
+            {% for item in transfer_selected %}
+              <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
+                <input type="checkbox" data-side="selected" {% if readonly %}disabled{% endif %}>
+                <span class="matriz-transfer-item-main">
+                  <span class="matriz-transfer-item-title">{{ item.nome }}</span>
+                  <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="matriz-transfer-empty" data-empty="selected" {% if transfer_selected %}hidden{% endif %}>{{ transfer_meta.empty_selected }}</div>
+        </div>
+      </section>
+    </div>
+
+    <div data-role="selected-hidden-inputs">
+      {% for item in transfer_selected %}
+        <input type="hidden" name="selected_activity_ids" value="{{ item.id }}">
+      {% endfor %}
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if readonly else 'Cancelar' }}</a>
+      {% if not readonly %}
+        <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function(){
+    const textareas = document.querySelectorAll('textarea[data-auto-grow]');
+    if (!textareas.length) return;
+
+    const resizeTextarea = (textarea) => {
+      textarea.style.height = 'var(--btn-h)';
+      textarea.style.height = `${Math.max(textarea.scrollHeight, textarea.offsetHeight)}px`;
+    };
+
+    textareas.forEach((textarea) => {
+      resizeTextarea(textarea);
+      textarea.addEventListener('input', () => resizeTextarea(textarea));
+    });
+  })();
+</script>
+{% if active_tab in ['aac', 'aea'] %}
+<script>
+  (function(){
+    const root = document.querySelector('[data-transfer-root]');
+    if (!root) return;
+    const isReadonly = root.dataset.readonly === '1';
+
+    const availableList = root.querySelector('[data-role="available-list"]');
+    const selectedList = root.querySelector('[data-role="selected-list"]');
+    const searchInput = root.querySelector('[data-role="available-search"]');
+    const selectedSearchInput = root.querySelector('[data-role="selected-search"]');
+    const groupFilter = root.querySelector('[data-role="available-group-filter"]');
+    const selectedGroupFilter = root.querySelector('[data-role="selected-group-filter"]');
+    const countAvailable = root.querySelector('[data-count-available]');
+    const countSelected = root.querySelector('[data-count-selected]');
+    const hiddenInputs = root.querySelector('[data-role="selected-hidden-inputs"]');
+
+    function listItems(list){
+      return Array.from(list.querySelectorAll('.matriz-transfer-item'));
+    }
+
+    function updateEmptyState(role){
+      const list = root.querySelector(`[data-role="${role}-list"]`);
+      const emptyEl = root.querySelector(`[data-empty="${role}"]`);
+      if (!list) return;
+      const hasItems = listItems(list).length > 0;
+      list.hidden = !hasItems;
+      if (emptyEl) emptyEl.hidden = hasItems;
+    }
+
+    function refreshCounts(){
+      if (countAvailable) countAvailable.textContent = String(listItems(availableList).length);
+      if (countSelected) countSelected.textContent = String(listItems(selectedList).length);
+      updateEmptyState('available');
+      updateEmptyState('selected');
+    }
+
+    function syncHiddenInputs(){
+      hiddenInputs.innerHTML = '';
+      listItems(selectedList).forEach((item) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_activity_ids';
+        input.value = item.dataset.activityId || '';
+        hiddenInputs.appendChild(input);
+      });
+    }
+
+    function applyAvailableFilters(){
+      const text = (searchInput?.value || '').trim().toLowerCase();
+      const group = (groupFilter?.value || '').trim();
+      listItems(availableList).forEach((item) => {
+        const matchesText = !text || (item.dataset.search || '').includes(text);
+        const matchesGroup = !group || (item.dataset.group || '') === group;
+        item.style.display = (matchesText && matchesGroup) ? '' : 'none';
+      });
+      refreshCounts();
+    }
+
+    function applySelectedFilters(){
+      const text = (selectedSearchInput?.value || '').trim().toLowerCase();
+      const group = (selectedGroupFilter?.value || '').trim();
+      listItems(selectedList).forEach((item) => {
+        const matchesText = !text || (item.dataset.search || '').includes(text);
+        const matchesGroup = !group || (item.dataset.group || '') === group;
+        item.style.display = (matchesText && matchesGroup) ? '' : 'none';
+      });
+      refreshCounts();
+    }
+
+    function moveItems(sourceList, targetList, mode){
+      const sourceItems = listItems(sourceList);
+      const candidates = sourceItems.filter((item) => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (mode === 'all') return item.style.display !== 'none';
+        return checkbox?.checked;
+      });
+      if (!candidates.length) return;
+      candidates.forEach((item) => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+        targetList.appendChild(item);
+      });
+      syncHiddenInputs();
+      applyAvailableFilters();
+      applySelectedFilters();
+      refreshCounts();
+    }
+
+    searchInput?.addEventListener('input', applyAvailableFilters);
+    selectedSearchInput?.addEventListener('input', applySelectedFilters);
+    groupFilter?.addEventListener('change', applyAvailableFilters);
+    selectedGroupFilter?.addEventListener('change', applySelectedFilters);
+
+    if (!isReadonly){
+      root.querySelectorAll('[data-move]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const action = button.getAttribute('data-move');
+          if (action === '>') moveItems(availableList, selectedList, 'checked');
+          if (action === '>>') moveItems(availableList, selectedList, 'all');
+          if (action === '<') moveItems(selectedList, availableList, 'checked');
+          if (action === '<<') moveItems(selectedList, availableList, 'all');
+        });
+      });
+    }
+
+    syncHiddenInputs();
+    applyAvailableFilters();
+    applySelectedFilters();
+    refreshCounts();
+  })();
+</script>
+{% endif %}
+{% endblock %}

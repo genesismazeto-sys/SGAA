@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Processar Requisição #{{ requisicao.id }}{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Processar Requisição #{{ requisicao.id }}</h1>
+
+<div class="content-block" style="max-width:720px;">
+  <div class="help" style="margin-bottom:8px;">
+    Atividade: <strong>{{ requisicao.atividade_nome }}</strong> &bull;
+    Aluno: <strong>{{ requisicao.aluno_nome or '-' }}</strong> &bull;
+    Status atual: <strong>{{ requisicao.status }}</strong>
+  </div>
+
+  {% if requisicao.tem_limitacao %}
+  <div class="flash" style="border-left-color:#ef4444; margin-bottom:12px;">
+    <strong>Atenção:</strong> Esta atividade tem limitação
+    ({{ requisicao.tipo_limitacao }}{% if requisicao.tipo_limitacao == 'total' %},
+    limite = {{ requisicao.limite_horas_total }}h{% elif requisicao.tipo_limitacao == 'semestral' %},
+    limite = {{ requisicao.limite_horas_semestral }}h/semestre{% endif %}).
+  </div>
+  {% endif %}
+
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="status" id="status-hidden" required />
+
+    <!-- Botões de seleção de ação (process-action-buttons) -->
+    <div class="process-action-buttons" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <button type="button" class="btn" data-process-status="Deferida" onclick="selectStatus(this)">Deferir</button>
+      <button type="button" class="btn" data-process-status="Deferida Parcialmente" onclick="selectStatus(this)">Deferir Parcialmente</button>
+      <button type="button" class="btn" data-process-status="Indeferida" onclick="selectStatus(this)">Indeferir</button>
+    </div>
+
+    <label id="horas-label" style="display:none;">
+      <div class="help">Horas Deferidas (obrigatório se "Deferida Parcialmente")</div>
+      <input class="input" type="number" step="0.01" min="0" name="horas_deferidas" id="horas-deferidas" />
+    </label>
+
+    <label>
+      <div class="help">Observação</div>
+      <textarea class="input" name="observacao" rows="3" placeholder="Comentário opcional...">{{ requisicao.observacao or '' }}</textarea>
+    </label>
+
+    <!-- Botões de confirmação (process-form-actions) -->
+    <div class="process-form-actions" style="display:flex; gap:8px; margin-top:8px;">
+      <button class="btn primary" type="submit">Salvar</button>
+      <a class="btn" href="{{ url_for('admin_requisicoes') }}">Voltar</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  function selectStatus(btn) {
+    const status = btn.getAttribute('data-process-status') || '';
+    document.getElementById('status-hidden').value = status;
+    document.querySelectorAll('.process-action-buttons .btn').forEach(b => b.classList.remove('primary'));
+    btn.classList.add('primary');
+    const parcial = status === 'Deferida Parcialmente';
+    const horasLabel = document.getElementById('horas-label');
+    const horasInput = document.getElementById('horas-deferidas');
+    if (horasLabel) horasLabel.style.display = parcial ? '' : 'none';
+    if (horasInput) {
+      horasInput.disabled = !parcial;
+      horasInput.required = parcial;
+      if (!parcial) horasInput.value = '';
+    }
+  }
+</script>
+{% endblock %}
+

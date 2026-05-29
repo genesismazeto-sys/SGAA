@@ -1,0 +1,100 @@
+<!-- templates/admin_editar_aluno.html -->
+{% extends "base.html" %}
+{% from 'components/icons.html' import school_icon %}
+{% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{% block title %}{{ user_message('Ver Aluno') if readonly else user_message('Editar Aluno') }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.55);
+      max-width: calc(100vw - 64px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    .form-actions{ justify-content:center; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">{{ user_message('Ver Aluno') if readonly else user_message('Editar Aluno') }}</h1>
+
+<form method="POST">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-cards-narrow">
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Nome") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="user"></i></div>
+        <input class="control" type="text" name="nome" value="{{ aluno.nome }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("E-mail") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="mail"></i></div>
+        <input class="control" type="email" name="email" value="{{ aluno.email }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Nova Senha (opcional)") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="lock"></i></div>
+        <div class="pw-wrapper">
+          <input class="control" type="password" name="senha" placeholder="{{ user_message('Deixe em branco para manter') }}" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <button type="button" class="pw-toggle" aria-label="{{ user_message('Mostrar senha') }}" aria-pressed="false">
+            <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+            <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Matrícula") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="id-card"></i></div>
+        <input class="control" type="text" name="matricula" value="{{ aluno.matricula }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Turma") }}</label>
+      <div class="field-card">
+        <div class="field-chip">{{ school_icon() }}</div>
+        <select class="control" name="turma_id" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <option value="">—</option>
+          {% for t in turmas %}
+            <option value="{{ t.id }}" {{ 'selected' if t.id == aluno.turma_id else '' }}>{{ t.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Status") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" name="status" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <option {{ 'selected' if aluno.status=='Ativo' else '' }}>{{ user_message("Ativo") }}</option>
+          <option {{ 'selected' if aluno.status=='Inativo' else '' }}>{{ user_message("Inativo") }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      {% if readonly %}
+        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_alunos') }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">{{ user_message("Voltar") }}</span></a>
+      {% else %}
+        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_alunos') }}">{{ user_message("Cancelar") }}</a>
+        <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}

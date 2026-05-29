@@ -1,0 +1,55 @@
+<div class="import-form-grid">
+  <label class="field-label import-field-label" for="turma_id">Turma destino *</label>
+  <div class="field-card">
+    <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+    <select id="turma_id" name="turma_id" class="control" required>
+      <option value="">- Selecione -</option>
+      {% for t in import_turmas %}
+        <option value="{{ t.id }}">{{ t.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <label class="field-label import-field-label" for="csv_arquivo">Arquivo CSV *</label>
+  <div class="field-card file-card" data-file-card>
+    <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
+    <input class="file-input" id="csv_arquivo" name="csv_arquivo" type="file" accept=".csv" required>
+    <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+    <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="paperclip"></i><span>Anexar</span></div>
+  </div>
+
+  <label class="field-label import-field-label" for="has_header">Cabeçalho</label>
+  <div class="field-card">
+    <div class="field-chip"><i class="lucide" data-lucide="list"></i></div>
+    <select id="has_header" name="has_header" class="control">
+      <option value="1" selected>Primeira linha é cabeçalho</option>
+      <option value="0">Sem cabeçalho</option>
+    </select>
+  </div>
+
+  <label class="field-label import-field-label" for="on_conflict">Conflitos</label>
+  <div class="field-card">
+    <div class="field-chip"><i class="lucide" data-lucide="git-merge"></i></div>
+    <select id="on_conflict" name="on_conflict" class="control">
+      <option value="skip" selected>Pular registro existente</option>
+      <option value="update">Atualizar dados existentes</option>
+    </select>
+  </div>
+
+  <section class="import-help-panel" aria-labelledby="import-help-title-turmas">
+    <div class="import-help-head">
+      <h3 id="import-help-title-turmas">Formato esperado do CSV</h3>
+      <p>Use ponto e vírgula (;) e inclua pelo menos uma das colunas de identificação abaixo para localizar o aluno.</p>
+    </div>
+
+    <div class="import-help-block">
+      <div class="import-help-label">1. Colunas aceitas</div>
+      <pre class="import-help-code">nome;email;matricula;status</pre>
+    </div>
+
+    <div class="import-help-block">
+      <div class="import-help-label">2. Regra de vinculação</div>
+      <div class="import-help-note">A importação procura o aluno por matrícula e, se não encontrar, tenta por e-mail. Os demais campos extras são ignorados.</div>
+    </div>
+  </section>
+</div>

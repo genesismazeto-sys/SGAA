@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+{% block title %}Matrizes de atividades{% endblock %}
+{% import 'components/card_list.html' as cl %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #matrizes-toolbar .input-chip{ background:transparent; border-right:none; }
+    #matrizes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-matrizes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-matrizes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-matrizes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Matrizes de atividades</h1>
+
+<div class="toolbar" id="matrizes-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-matrizes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-matrizes" type="search" placeholder="Buscar por nome, curso ou versão..." aria-label="Buscar matrizes" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-label">Organizar por</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc') == 'desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+
+  </div>
+
+  <div class="actions">
+    {% if auth_can('matrizes', 'view') %}
+      <div class="toolbar-actions-shell">
+        <button class="btn" type="button" id="btn-matrizes-actions" aria-haspopup="menu" aria-expanded="false">
+          <i class="lucide" data-lucide="rows-3"></i>
+          <span class="btn-label">Ações</span>
+          <i class="lucide" data-lucide="chevron-down"></i>
+        </button>
+        <div id="matrizes-actions-menu" class="popover toolbar-actions-menu" hidden>
+          <div class="menu-title">Ações da seleção</div>
+          <div class="menu-list">
+            <button class="menu-item" type="button" id="matrizes-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>Selecionar tudo</span></button>
+            <button class="menu-item" type="button" id="matrizes-action-view"><i class="lucide" data-lucide="eye"></i><span>Visualizar</span></button>
+            {% if auth_can('matrizes', 'full') %}
+              <button class="menu-item danger" type="button" id="matrizes-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>Excluir</span></button>
+            {% endif %}
+          </div>
+          <div class="menu-hint" id="matrizes-actions-hint">Selecione uma linha para visualizar ou mais linhas para ações em lote.</div>
+        </div>
+      </div>
+    {% endif %}
+    {% if auth_can('matrizes', 'edit') %}
+      <a class="btn btn-nova-alinhado" href="{{ url_for('admin_adicionar_matriz') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+        <span class="btn-label">Adicionar</span>
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="nome">Nome</div>
+    <div class="menu-item" data-field="curso">Curso</div>
+    <div class="menu-item" data-field="versao">Versão</div>
+    <div class="menu-item" data-field="vigencia">Vigência</div>
+    <div class="menu-item" data-field="status">Status</div>
+    <div class="menu-item" data-field="horas_aac_obrigatorias">AAC</div>
+    <div class="menu-item" data-field="horas_extensao_obrigatorias">Extensão</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc') == 'desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+
+<div class="impressoes-cards-scroll imp-matrizes" id="matrizes-scroll-container">
+  <div id="matrizes-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'Nome','class':'left'},
+      {'text':'Curso','class':'left'},
+      {'text':'Versão','class':'center'},
+      {'text':'Vigência','class':'center'},
+      {'text':'AAC','class':'center'},
+      {'text':'Extensão','class':'center'},
+      {'text':'Status','class':'center'},
+    ]) }}
+
+    {% if matrizes and matrizes|length %}
+      {% for matriz in matrizes %}
+        {% set status_lc = (matriz.status or '')|lower %}
+        {{ cl.row([
+          {'content': matriz.nome or '-', 'class':'left ellipsis'},
+          {'content': matriz.curso or '-', 'class':'left ellipsis'},
+          {'content': matriz.versao or '-', 'class':'center'},
+          {'content': matriz.vigencia or '-', 'class':'center'},
+          {'content': ((matriz.horas_aac_obrigatorias or 0) ~ ' h'), 'class':'center'},
+          {'content': ((matriz.horas_extensao_obrigatorias or 0) ~ ' h'), 'class':'center'},
+          {
+            'content': matriz.status or '-',
+            'class':'center',
+            'badge': true,
+            'badge_type': matriz.status_badge_type,
+            'status_badge': true,
+            'status_tone': (
+              'positive' if status_lc in ['ativa','ativo','deferida','deferido','concluida','concluido'] else
+              'neutral' if status_lc in ['inativa','inativo','rascunho'] else
+              'caution' if status_lc in ['pendente','em análise','em analise','deferida parcialmente','deferido parcialmente','parcialmente deferida','parcialmente deferido'] else
+              'negative' if status_lc in ['indeferida','indeferido','cancelada','cancelado','encerrada','encerrado'] else
+              'info' if status_lc in ['devolvida','devolvido'] else
+              'neutral'
+            )
+          },
+        ], {'data-matriz-id': matriz.id, 'data-view-url': matriz.view_url, 'data-edit-url': matriz.edit_url, 'data-delete-url': matriz.delete_url, 'data-aac-url': matriz.manage_academicas_url, 'data-aea-url': matriz.manage_extensao_url}) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma matriz cadastrada.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-matrizes', rowsRootSelector: '#matrizes-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-field',
+      toggleSelector: '#sort-toggle',
+      labelSelector: '#sort-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-dir',
+      defaultLabel: 'Organizar por'
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery,
+      aliasesToClear: ['filtro']
+    });
+  })();
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const listContainer = document.getElementById('matrizes-list');
+    const actionsButton = document.getElementById('btn-matrizes-actions');
+    const actionsMenu = document.getElementById('matrizes-actions-menu');
+    const selectAllBtn = document.getElementById('matrizes-action-select-all');
+    const selectAllLabel = selectAllBtn?.querySelector('span');
+    const viewBtn = document.getElementById('matrizes-action-view');
+    const bulkDeleteBtn = document.getElementById('matrizes-action-delete');
+    const actionsHint = document.getElementById('matrizes-actions-hint');
+    const selectedIds = new Set();
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    function appendCsrfToken(form){
+      if (!csrfToken) return;
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'csrf_token';
+      input.value = csrfToken;
+      form.appendChild(input);
+    }
+
+    const getRows = () => Array.from(listContainer?.querySelectorAll('.impresso-card[role="listitem"][data-matriz-id]:not(.toolbar-live-search-hidden)') || []);
+
+    function updateSelectionUI(){
+      const rows = getRows();
+      rows.forEach((row) => {
+        const rowId = row.getAttribute('data-matriz-id');
+        row.classList.toggle('selected', selectedIds.has(rowId));
+      });
+
+      const rowCount = rows.length;
+      const selectedCount = selectedIds.size;
+      const shouldClear = rowCount > 0 && selectedCount === rowCount;
+      if (selectAllBtn){
+        selectAllBtn.disabled = rowCount === 0;
+        selectAllBtn.setAttribute('aria-label', shouldClear ? 'Desselecionar tudo' : 'Selecionar tudo');
+        selectAllBtn.setAttribute('title', shouldClear ? 'Desselecionar tudo' : 'Selecionar tudo');
+      }
+      if (selectAllLabel){
+        selectAllLabel.textContent = shouldClear ? 'Desselecionar' : 'Selecionar tudo';
+      }
+      if (viewBtn){
+        viewBtn.disabled = selectedCount !== 1;
+      }
+      if (bulkDeleteBtn){
+        bulkDeleteBtn.disabled = selectedCount === 0;
+      }
+      if (actionsHint){
+        actionsHint.textContent = selectedCount === 1
+          ? '1 matriz selecionada.'
+          : (selectedCount
+            ? `${selectedCount} matriz(es) selecionada(s).`
+            : 'Selecione uma linha para visualizar ou mais linhas para ações em lote.');
+      }
+    }
+
+    function closeActionsMenu(){
+      if (!actionsButton || !actionsMenu) return;
+      actionsMenu.hidden = true;
+      actionsButton.setAttribute('aria-expanded', 'false');
+    }
+
+    function openActionsMenu(){
+      if (!actionsButton || !actionsMenu) return;
+      const rect = actionsButton.getBoundingClientRect();
+      const menuWidth = Math.max(actionsMenu.offsetWidth || 190, 190);
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+      actionsMenu.style.position = 'fixed';
+      actionsMenu.style.top = `${Math.round(rect.bottom + 6)}px`;
+      actionsMenu.style.left = `${Math.round(left)}px`;
+      actionsMenu.hidden = false;
+      actionsButton.setAttribute('aria-expanded', 'true');
+    }
+
+    function toggleRowSelection(row){
+      if (!row) return;
+      const rowId = row.getAttribute('data-matriz-id');
+      if (!rowId) return;
+      if (selectedIds.has(rowId)) selectedIds.delete(rowId);
+      else selectedIds.add(rowId);
+      updateSelectionUI();
+    }
+
+    listContainer?.addEventListener('click', (event) => {
+      const row = event.target.closest('.impresso-card[role="listitem"][data-matriz-id]');
+      if (!row) return;
+      if (event.target.closest('a, button, input, select, textarea, label')) return;
+      toggleRowSelection(row);
+    });
+
+    listContainer?.addEventListener('keydown', (event) => {
+      const row = event.target.closest('.impresso-card[role="listitem"][data-matriz-id]');
+      if (!row) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggleRowSelection(row);
+    });
+
+    selectAllBtn?.addEventListener('click', () => {
+      const rows = getRows();
+      if (!rows.length) return;
+      const shouldClear = selectedIds.size === rows.length;
+      selectedIds.clear();
+      if (!shouldClear){
+        rows.forEach((row) => {
+          const rowId = row.getAttribute('data-matriz-id');
+          if (rowId) selectedIds.add(rowId);
+        });
+      }
+      updateSelectionUI();
+    });
+
+    actionsButton?.addEventListener('click', () => {
+      updateSelectionUI();
+      if (actionsMenu.hidden) openActionsMenu();
+      else closeActionsMenu();
+    });
+
+    actionsMenu?.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (actionsMenu?.hidden) return;
+      if (!event.target.closest('#matrizes-actions-menu') && !event.target.closest('#btn-matrizes-actions')) closeActionsMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && actionsMenu && !actionsMenu.hidden) closeActionsMenu();
+    });
+
+    selectAllBtn?.addEventListener('click', () => {
+      const rows = getRows();
+      if (!rows.length) return;
+      const shouldClear = selectedIds.size === rows.length;
+      selectedIds.clear();
+      if (!shouldClear){
+        rows.forEach((row) => {
+          const rowId = row.getAttribute('data-matriz-id');
+          if (rowId) selectedIds.add(rowId);
+        });
+      }
+      updateSelectionUI();
+    });
+
+    bulkDeleteBtn?.addEventListener('click', () => {
+      if (!selectedIds.size) return;
+      const count = selectedIds.size;
+      const message = count === 1
+        ? 'Tem certeza que deseja excluir a matriz selecionada?'
+        : `Tem certeza que deseja excluir as ${count} matrizes selecionadas?`;
+      if (!confirm(message)) return;
+      closeActionsMenu();
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = "{{ url_for('admin_excluir_matrizes') }}";
+      appendCsrfToken(form);
+      selectedIds.forEach((matrizId) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'matriz_ids';
+        input.value = matrizId;
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    });
+
+    viewBtn?.addEventListener('click', () => {
+      if (selectedIds.size !== 1) return;
+      const selectedId = Array.from(selectedIds)[0];
+      const row = getRows().find((item) => item.getAttribute('data-matriz-id') === selectedId);
+      const viewUrl = row?.getAttribute('data-view-url') || '';
+      if (!viewUrl) return;
+      closeActionsMenu();
+      window.location.href = viewUrl;
+    });
+
+    updateSelectionUI();
+
+    let bar = null;
+    {% if auth_can('matrizes', 'view') %}
+    bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Ações da matriz selecionada');
+    bar.innerHTML = `
+      <button type="button" class="act-btn" data-action="view" aria-label="Visualizar matriz" title="Visualizar"><i data-lucide="eye"></i></button>
+      {% if auth_can('matrizes', 'edit') %}<button type="button" class="act-btn" data-action="aac" aria-label="Gerenciar Lista de AAC" title="Gerenciar Lista de AAC"><i data-lucide="graduation-cap"></i></button>{% endif %}
+      {% if auth_can('matrizes', 'edit') %}<button type="button" class="act-btn" data-action="aea" aria-label="Gerenciar Lista de AEA" title="Gerenciar Lista de AEA"><i data-lucide="book-open-check"></i></button>{% endif %}
+      {% if auth_can('matrizes', 'edit') %}<button type="button" class="act-btn" data-action="edit" aria-label="Editar matriz" title="Editar"><i data-lucide="edit"></i></button>{% endif %}
+      {% if auth_can('matrizes', 'full') %}<button type="button" class="act-btn" data-action="delete" aria-label="Excluir matriz" title="Excluir"><i data-lucide="trash-2"></i></button>{% endif %}
+    `;
+    window.lucide?.createIcons?.();
+    {% endif %}
+
+    const scrollWrap = document.getElementById('matrizes-scroll-container');
+    let hideTimer = null;
+    let currentCard = null;
+    let currentViewUrl = '';
+    let currentEditUrl = '';
+    let currentDeleteUrl = '';
+    let currentAacUrl = '';
+    let currentAeaUrl = '';
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height / 2) - (bar.offsetHeight / 2));
+      bar.style.top = `${top}px`;
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = `${left}px`;
+      bar.style.right = 'auto';
+    }
+
+    function showBar(card){
+      currentCard = card;
+      currentViewUrl = card.getAttribute('data-view-url') || '';
+      currentEditUrl = card.getAttribute('data-edit-url') || '';
+      currentDeleteUrl = card.getAttribute('data-delete-url') || '';
+      currentAacUrl = card.getAttribute('data-aac-url') || '';
+      currentAeaUrl = card.getAttribute('data-aea-url') || '';
+      if (!bar || (!currentViewUrl && !currentEditUrl && !currentDeleteUrl && !currentAacUrl && !currentAeaUrl)) return;
+      positionFor(card);
+      bar.classList.add('is-visible');
+    }
+
+    function hideBar(){
+      if (!bar) return;
+      bar.classList.remove('is-visible');
+      currentCard = null;
+      currentViewUrl = '';
+      currentEditUrl = '';
+      currentDeleteUrl = '';
+      currentAacUrl = '';
+      currentAeaUrl = '';
+    }
+
+    function scheduleHide(){
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideBar, 180);
+    }
+
+    function cancelHide(){
+      clearTimeout(hideTimer);
+    }
+
+    scrollWrap?.addEventListener('mouseover', (e) => {
+      const card = e.target.closest('.impresso-card');
+      if (!card || card.classList.contains('header')) return;
+      showBar(card);
+    });
+    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar?.addEventListener('mouseenter', cancelHide);
+    bar?.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', () => { if (bar && bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', () => { if (bar && bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+    bar?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.act-btn');
+      if (!btn) return;
+      if (btn.getAttribute('data-action') === 'view' && currentViewUrl){
+        window.location.href = currentViewUrl;
+        return;
+      }
+      if (btn.getAttribute('data-action') === 'aac' && currentAacUrl){
+        window.location.href = currentAacUrl;
+        return;
+      }
+      if (btn.getAttribute('data-action') === 'aea' && currentAeaUrl){
+        window.location.href = currentAeaUrl;
+        return;
+      }
+      if (btn.getAttribute('data-action') === 'edit' && currentEditUrl){
+        window.location.href = currentEditUrl;
+        return;
+      }
+      if (btn.getAttribute('data-action') === 'delete' && currentDeleteUrl){
+        if (!confirm('Tem certeza que deseja excluir esta matriz?')) return;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = currentDeleteUrl;
+        appendCsrfToken(form);
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+    });
+  });
+</script>
+{% endblock %}

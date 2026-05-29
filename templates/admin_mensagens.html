@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+{% block title %}Mensagens{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .messages-page { display:grid; gap:16px; }
+    .messages-header { display:grid; gap:10px; }
+    .messages-header-body {
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) auto;
+      gap:16px;
+      align-items:stretch;
+    }
+    .messages-header-copy { display:grid; gap:6px; }
+    .messages-note {
+      margin:0;
+      color:var(--text-secondary);
+      font-size:13px;
+      line-height:1.5;
+      max-width:860px;
+    }
+    .messages-stats {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(112px, 126px));
+      gap:8px;
+      align-self:stretch;
+    }
+    .messages-stat {
+      min-width:0;
+      padding:12px 14px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      box-shadow:var(--shadow-sm);
+      color:var(--text-primary);
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:4px;
+      text-align:left;
+    }
+    .messages-stat-value {
+      font-size:24px;
+      font-weight:700;
+      line-height:1;
+      letter-spacing:-0.02em;
+    }
+    .messages-stat-label {
+      font-size:11.5px;
+      line-height:1.2;
+      color:var(--text-secondary);
+    }
+    .messages-result-count {
+      display:inline-flex;
+      align-items:center;
+      height:20px;
+      padding:0 10px;
+      border-radius:8px;
+      background:var(--bg);
+      color:var(--text-tertiary);
+      font-size:12px;
+      font-weight:500;
+      white-space:nowrap;
+      letter-spacing:0.01em;
+    }
+    .messages-list { display:grid; gap:10px; }
+    .message-card {
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+      overflow:hidden;
+    }
+    .message-card-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:7px 16px;
+    }
+    .message-title {
+      flex:1;
+      min-width:0;
+      margin:0;
+      color:var(--text-secondary);
+      font-size:13.5px;
+      font-weight:650;
+      line-height:1.35;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .message-default-block {
+      display:grid;
+      gap:4px;
+    }
+    .message-default-label {
+      margin:0;
+      color:var(--text-tertiary);
+      font-size:11.5px;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:0.03em;
+    }
+    .message-default {
+      margin:0;
+      color:var(--text-secondary);
+      font-size:13px;
+      font-weight:500;
+      line-height:1.5;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .message-card-body {
+      padding:12px 16px;
+      border-top:1px solid var(--border-strong);
+      display:grid;
+      gap:12px;
+    }
+    .message-status {
+      flex-shrink:0;
+      display:inline-flex;
+      align-items:center;
+      gap:5px;
+      height:24px;
+      padding:0 8px;
+      border-radius:var(--radius);
+      font-size:12px;
+      font-weight:500;
+      white-space:nowrap;
+    }
+    .message-status.is-default {
+      background:#eff6ff;
+      border-color:transparent;
+      color:var(--accent-blue);
+      font-weight:500;
+    }
+    .message-status.is-custom {
+      background:#ecfdf3;
+      color:#047857;
+    }
+    .message-meta {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+    .message-badge {
+      display:inline-flex;
+      align-items:center;
+      min-height:22px;
+      padding:0 10px;
+      border-radius:4px;
+      background:var(--bg);
+      border:1px solid var(--border);
+      color:var(--text-secondary);
+      font-size:12px;
+      font-weight:500;
+      text-transform:capitalize;
+    }
+    .message-editor {
+      display:grid;
+      gap:8px;
+    }
+    .message-editor label {
+      font-size:13px;
+      font-weight:600;
+      color:var(--text-primary);
+    }
+    .message-editor textarea {
+      display:block;
+      width:100%;
+      min-height:36px;
+      resize:none;
+      overflow:hidden;
+      padding:7px 10px;
+      border:0.5px solid var(--border);
+      border-radius:var(--radius);
+      background:var(--field-bg);
+      color:var(--text-primary);
+      font:inherit;
+      font-size:13px;
+      line-height:1.5;
+      transition:border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .message-editor textarea:hover {
+      background:var(--field-hover-bg);
+      border-color:var(--field-hover-border);
+      box-shadow:none;
+    }
+    .message-editor textarea:focus {
+      outline:none;
+      background:var(--field-focus-bg);
+      border-color:var(--field-focus-border);
+      box-shadow:0 0 0 1px var(--field-focus-ring);
+    }
+    .message-help {
+      margin:0;
+      color:var(--text-tertiary);
+      font-size:12px;
+      line-height:1.45;
+    }
+    .message-actions {
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .message-sources {
+      display:grid;
+      gap:6px;
+      margin:0;
+      padding:0;
+      list-style:none;
+      color:var(--text-secondary);
+      font-size:12px;
+    }
+    .message-sources code {
+      font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size:12px;
+      padding:1px 4px;
+      border-radius:4px;
+      background:rgba(15, 23, 42, 0.06);
+    }
+    .message-empty {
+      padding:28px;
+      border:1px dashed var(--border-strong);
+      border-radius:var(--radius-lg);
+      background:var(--surface);
+      color:var(--text-secondary);
+      text-align:center;
+      font-size:14px;
+    }
+
+    /* ---- Search pill ---- */
+    #messages-toolbar {
+      margin-top:0;
+      margin-bottom:0;
+    }
+    .msg-search-pill {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      width:100%;
+      height:42px;
+      padding:0 14px 0 16px;
+      border:1px solid var(--border-strong);
+      border-radius:4px;
+      background:var(--surface);
+      box-shadow:var(--shadow-sm);
+      transition:border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .msg-search-pill:hover {
+      border-color:var(--field-hover-border);
+      background:var(--field-hover-bg);
+      box-shadow:none;
+    }
+    .msg-search-pill:focus-within {
+      border-color:var(--field-focus-border);
+      background:var(--field-focus-bg);
+      box-shadow:0 0 0 1px var(--field-focus-ring);
+    }
+    .msg-search-pill .msg-search-icon {
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      color:var(--text-tertiary);
+    }
+    .msg-search-pill .msg-search-icon .lucide {
+      width:16px;
+      height:16px;
+    }
+    .msg-search-pill input[type="search"] {
+      flex:1;
+      min-width:0;
+      height:100%;
+      border:0;
+      outline:0;
+      background:transparent;
+      font:inherit;
+      background:var(--field-bg);
+      color:var(--text-primary);
+    }
+    .msg-search-pill input[type="search"]::placeholder {
+      color:var(--text-tertiary);
+      transition:border-color .16s ease, background .16s ease, box-shadow .16s ease;
+      font-weight:400;
+    }
+
+    @media (max-width: 900px) {
+      .messages-header-body {
+        grid-template-columns:1fr;
+      }
+      .messages-stats {
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .message-card-head,
+      .message-actions {
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .messages-stats {
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<section class="messages-page">
+  <header class="messages-header">
+    <h1 class="main-title">Mensagens</h1>
+    <div class="messages-header-body">
+      <div class="messages-header-copy">
+        <p class="messages-note">
+          Catálogo central das mensagens enviadas ao usuário. Os textos abaixo são extraídos automaticamente do backend e do frontend ativos. Overrides são globais por template de mensagem, então o mesmo texto padrão muda em todos os pontos onde ele é usado.
+        </p>
+        <p class="messages-note">
+          Mensagens dinâmicas usam placeholders como <strong>{value_1}</strong> e <strong>{value_2}</strong>. Preserve esses tokens quando quiser manter nomes, contagens ou detalhes variáveis.
+        </p>
+      </div>
+      <div class="messages-stats" aria-label="Resumo de mensagens">
+        <div class="messages-stat">
+          <span class="messages-stat-value">{{ total_messages }}</span>
+          <span class="messages-stat-label">Mapeadas</span>
+        </div>
+        <div class="messages-stat">
+          <span class="messages-stat-value">{{ overridden_messages }}</span>
+          <span class="messages-stat-label">Personalizadas</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar" id="messages-toolbar">
+    <div class="msg-search-pill">
+      <span class="msg-search-icon" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="messages-filter" type="search" placeholder="Buscar por área, fluxo, situação, texto ou origem…" aria-label="Buscar" autocomplete="off" spellcheck="false">
+      <span id="messages-visible-count" class="messages-result-count">{{ total_messages }}</span>
+    </div>
+  </div>
+
+  <div id="messages-list" class="messages-list">
+    {% for message in messages %}
+      {% set search_chunks = [message.display_title, message.display_area, message.display_flow, message.display_state, message.default_text, message.current_text] %}
+      {% for kind in message.kinds %}
+        {% set _ = search_chunks.append(kind) %}
+      {% endfor %}
+      {% for placeholder in message.placeholders %}
+        {% set _ = search_chunks.append(placeholder) %}
+      {% endfor %}
+      {% for usage in message.usages %}
+        {% set _ = search_chunks.append(usage.source_path ~ ':' ~ usage.source_line) %}
+      {% endfor %}
+      <article class="message-card" data-search-index="{{ search_chunks|join(' ')|lower }}">
+        <div class="message-card-head">
+          <p class="message-title">{{ message.display_title }}</p>
+          <span class="message-status {{ 'is-custom' if message.is_overridden else 'is-default' }}">
+            {{ 'Personalizada' if message.is_overridden else 'Padrão' }}
+          </span>
+        </div>
+
+        <div class="message-card-body">
+          {% if message.is_overridden %}
+          <div class="message-default-block">
+            <p class="message-default-label">Texto padrão</p>
+            <p class="message-default">{{ message.default_text }}</p>
+          </div>
+          {% endif %}
+
+          <div class="message-meta">
+          <span class="message-badge">{{ message.display_area }}</span>
+          <span class="message-badge">{{ message.display_flow }}</span>
+          <span class="message-badge">{{ message.display_state }}</span>
+          {% for kind in message.kinds %}
+            <span class="message-badge">{{ kind }}</span>
+          {% endfor %}
+          <span class="message-badge">{{ message.usage_count }} uso(s)</span>
+          {% for placeholder in message.placeholders %}
+            <span class="message-badge">{{ placeholder }}</span>
+          {% endfor %}
+        </div>
+
+        <form method="post" action="{{ url_for('admin_mensagens_salvar') }}" class="message-editor">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="message_key" value="{{ message.key }}" />
+          <label for="msg-{{ message.key }}">Texto atual</label>
+          <textarea id="msg-{{ message.key }}" name="message_text" rows="1">{{ message.current_text }}</textarea>
+          <p class="message-help">
+            Origens técnicas:
+            {% for usage in message.usages %}
+              <code>{{ usage.source_path }}:{{ usage.source_line }}</code>{% if not loop.last %} {% endif %}
+            {% endfor %}
+          </p>
+          <div class="message-actions">
+            <button
+              type="submit"
+              class="btn"
+              formaction="{{ url_for('admin_mensagens_resetar', message_key=message.key) }}"
+              {% if not message.is_overridden %}disabled{% endif %}
+            >
+              <i class="lucide" data-lucide="rotate-ccw"></i>Resetar
+            </button>
+            <button type="submit" class="btn primary">
+              <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
+            </button>
+          </div>
+        </form>
+        </div><!-- /.message-card-body -->
+      </article>
+    {% endfor %}
+  </div>
+
+  <div id="messages-empty" class="message-empty" hidden>
+    Nenhuma mensagem corresponde ao filtro atual.
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    (() => {
+      const input = document.getElementById('messages-filter');
+      const cards = Array.from(document.querySelectorAll('.message-card'));
+      const count = document.getElementById('messages-visible-count');
+      const empty = document.getElementById('messages-empty');
+
+      const sync = () => {
+        const term = String(input?.value || '').trim().toLowerCase();
+        let visible = 0;
+        cards.forEach((card) => {
+          const searchIndex = String(card.getAttribute('data-search-index') || '').toLowerCase();
+          const show = !term || searchIndex.includes(term);
+          card.hidden = !show;
+          if (show) visible += 1;
+        });
+        if (count) {
+          count.textContent = `${visible}`;
+        }
+        if (empty) {
+          empty.hidden = visible !== 0;
+        }
+      };
+
+      input?.addEventListener('input', sync);
+      sync();
+    })();
+
+    // Auto-grow textareas
+    (() => {
+      function grow(ta) {
+        ta.style.height = '';
+        ta.style.height = ta.scrollHeight + 'px';
+      }
+      document.querySelectorAll('.message-editor textarea').forEach(ta => {
+        ta.addEventListener('input', () => grow(ta));
+        grow(ta);
+      });
+    })();
+  </script>
+{% endblock %}

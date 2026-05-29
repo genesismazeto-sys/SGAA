@@ -1,0 +1,959 @@
+{% extends "base.html" %}
+{% block title %}Atividades (Admin){% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    .cell.left{ justify-content:flex-start; }
+    .cell.center{ justify-content:center; }
+
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{
+      padding:0; flex-shrink:0; color:var(--text-tertiary);
+    }
+    /* list-cards.css injects background:#f1f5f9 and border-right on .input-chip — override for this toolbar */
+    #impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+    /* Toolbar icons: uniform 16×16, same tertiary gray across all filter items */
+    #impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-ordenar #sort-field{
+      background:var(--surface);
+      border:0;
+      height:calc(var(--btn-h) - 2px);
+      box-shadow:none; outline:0;
+      gap:6px;
+      flex:1;
+      justify-content:space-between;
+      padding-right:0;
+    }
+    #grp-ordenar #sort-toggle{
+      background:var(--surface);
+      border:0;
+      height:calc(var(--btn-h) - 2px);
+      box-shadow:none; outline:0;
+      color:var(--text-tertiary);
+      padding:0 10px;
+    }
+    .impresso-card-no-left{ padding-left: 0 !important; }
+    .impresso-card-header-no-left{ padding-left: 0 !important; }
+
+    /* Search: internal layout matches Mensagens page (gap-based, no chip boxes) */
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #busca-impressoes::-webkit-search-cancel-button,
+    #busca-impressoes::-webkit-search-decoration{ display:none; }
+    .busca-clear{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:100%; flex-shrink:0; border:none; background:transparent; cursor:pointer; color:var(--text-tertiary); padding:0; }
+    .busca-clear:hover{ background:rgba(0,0,0,0.06); color:var(--text-primary); }
+    .busca-clear .lucide{ width:14px; height:14px; }
+
+    #filter-btn{ justify-content:center; }
+    /* Filter button active state */
+    #filter-btn.is-active{ background:#E6F1FB !important; border:0.5px solid #B5D4F4 !important; color:#0C447C !important; font-weight:500; }
+    #filter-btn.is-active i.lucide{ color:#0C447C; }
+
+    /* Filter count badge */
+    .filter-count-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:14px; padding:1px 6px; margin-left:6px; border-radius:9999px; background:#185FA5; color:#fff; font-size:9px; font-weight:600; line-height:1; }
+
+    .modal-overlay{ position: fixed; inset: 0; background: rgba(2,6,23,.45); display: grid; place-items: center; z-index: 40; }
+    .modal-overlay[hidden]{ display: none !important; }
+    .modal-card{ background: var(--surface); color: var(--text-primary); border:0; border-radius: var(--radius); width: min(900px, calc(100vw - 32px)); max-height: min(80vh, 780px); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(2,6,23,.25); }
+    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:0; }
+    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size: 16px; margin:0; }
+    .modal-body{ padding: 10px 12px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+    .modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap: var(--btn-gap); }
+    /* ── Grupos modal: estilos de layout/UX escopados ── */
+    #grupos-modal .modal-header{ padding:18px 24px 6px; align-items:flex-start; }
+    #grupos-modal .modal-header h3{ flex-direction:column; align-items:flex-start; gap:0; font-size:16px; font-weight:500; }
+    #grupos-modal .grupos-title-row{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; }
+    #grupos-modal .grupos-title-row .lucide{ width:20px; height:20px; }
+    #grupos-modal .grupos-subtitle{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:#71717a; }
+    #grupos-modal #grupos-close{ width:30px; height:30px; min-width:30px; padding:0; border:0; background:transparent; box-shadow:none; color:#71717a; display:inline-grid; place-items:center; }
+    #grupos-modal #grupos-close:hover{ background:#f4f4f5; }
+    #grupos-modal #grupos-close .lucide{ margin:0; top:0; width:16px; height:16px; color:inherit; }
+    #grupos-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
+    #grupos-modal .grupos-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+    #grupos-modal .grupos-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
+    .modal-footer{ display:flex; justify-content:center; gap:8px; padding:10px 12px; border-top:1px solid var(--border); }
+    #grupos-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
+    .section-title{ font-weight: 600; color: var(--text-secondary); }
+    .badge{ display:inline-flex; align-items:center; justify-content:center; height:18px; min-width:18px; padding:0 6px; font-size:11px; border:1px solid var(--border-strong); border-radius:999px; background:var(--surface); color:var(--text-secondary); }
+    .ellipsis{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #grupos-modal .modal-body.presets-body-split{ display:grid; grid-template-columns:200px 1fr; gap:0; padding:18px 24px; flex:1; min-height:0; }
+    .presets-col-left{ display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+    .presets-col-header{ display:flex; align-items:center; justify-content:space-between; padding:0 0 8px; flex-shrink:0; }
+    .presets-itens-label{ font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; display:block; }
+    #grupos-modal .presets-col-left{ padding-right:10px; }
+    #grupos-modal .presets-col-left .menu-list{ padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+    .presets-col-right{ display:flex; flex-direction:column; gap:0; padding:0 0 0 20px; border-left:1px solid #e4e4e7; min-width:0; overflow-y:auto; }
+    #grupos-modal .presets-col-right .grupos-field-block{ margin-bottom:14px; }
+    #grupos-modal .presets-col-right .grupos-field-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+    #grupos-modal .actions-mini{ display:flex; align-items:center; gap:4px; background:#f4f4f5; border-radius:6px; padding:2px; }
+    #grupos-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
+    #grupos-modal .actions-mini #grp-add{ background:#fff; border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
+    #grupos-modal .actions-mini #grp-del{ color:#a1a1aa; }
+    #grupos-modal .actions-mini #grp-del:hover{ color:#b91c1c; background:#fff; border:0.5px solid #e4e4e7 !important; }
+    #grupos-modal .actions-mini #grp-del.is-active .lucide{ color:#b91c1c; }
+    #grupos-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
+    #grupos-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
+    #grupos-modal .menu-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
+    #grupos-modal .menu-item:hover{ background:#f8fafc; border-color:#e4e4e7; }
+    #grupos-modal .menu-item.is-selected{ background:#eff6ff; border-color:#bfdbfe; }
+    #grupos-modal .menu-item.is-selected .menu-item-num{ font-weight:500; color:#1e3a8a; }
+    #grupos-modal .menu-item.is-selected .badge{ background:#fff; border-color:#bfdbfe; color:#1e40af; }
+    #grupos-modal .presets-col-right input.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:#fff; font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; height:var(--btn-h); width:100%; }
+    #grupos-modal .presets-col-right input.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
+    #grupos-modal .presets-col-right input.control:focus{ background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
+  /* split field layout inside modal */
+  .modal-card .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap: 2px; align-items: center; }
+  .modal-card .field-card.split-2.compact-left{ grid-template-columns:40px 120px 40px 1fr; }
+  .modal-card .field-card{ min-height: var(--btn-h); height: var(--btn-h); border-radius: var(--radius); }
+  .modal-card .field-card .field-chip{ height: 100%; display:grid; place-items:center; }
+  .modal-card .field-card .control + .field-chip{ border-left:1px solid var(--border-strong); }
+  #importar-atividades-modal{ padding:16px; overflow-y:auto; }
+  .modal-card.import-modal-card{ width:min(820px, 100%); max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); }
+  .modal-card.import-modal-card .modal-body{ padding:16px 18px 8px; flex:1 1 auto; min-height:0; }
+  .import-modal-form,
+  .import-modal-grid,
+  .import-modal-grid .field-card,
+  .import-help-panel,
+  .import-help-block{ min-width:0; max-width:100%; box-sizing:border-box; }
+  .import-modal-form{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+  .import-modal-grid{ display:grid; gap:12px; }
+  .import-form-grid{ display:grid; gap:12px; }
+  .import-field-label{ position:static; transform:none; width:auto; text-align:left; margin:0 0 4px 0; display:block; font-size:var(--font-size-small); color:var(--text-secondary); font-weight:600; }
+  .import-modal-form .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns:40px 1fr auto; align-items:center; column-gap:var(--list-col-gap, 6px); }
+  .import-modal-form .field-card.file-card .file-input{ display:none; }
+  .import-modal-form .field-card.file-card .file-name{ display:flex; align-items:center; min-height:var(--btn-h); padding-right:0; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .import-modal-form .field-card.file-card.has-file .file-name{ color:var(--text-primary); }
+  .import-modal-form .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background:var(--surface-2, #f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; cursor:pointer; color:#000; }
+  .import-modal-form .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
+  .import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }
+  .import-help-panel{ display:grid; gap:12px; padding:16px; border:1px solid var(--border-strong); border-radius:var(--radius); background:linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%); box-shadow:var(--shadow-sm); }
+  .import-help-head h3{ margin:0; font-size:15px; font-weight:600; color:var(--text-primary); }
+  .import-help-head p{ margin:4px 0 0; font-size:13px; color:var(--text-secondary); }
+  .import-help-block{ display:grid; gap:6px; }
+  .import-help-label{ font-size:12px; font-weight:600; color:var(--text-secondary); }
+  .import-help-code{ margin:0; padding:12px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:#fff; color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+  .modal-card.import-modal-card .modal-footer{ flex-wrap:wrap; }
+  @media (max-width: 768px){
+    #importar-atividades-modal{ padding:10px; }
+    .modal-card.import-modal-card{ width:min(820px, 100%); max-height:calc(100vh - 20px); max-height:calc(100dvh - 20px); }
+    .modal-card.import-modal-card .modal-body{ padding:14px 14px 8px; }
+  }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Atividades</h1>
+
+<!-- Toolbar (Buscar, Organizar, Filtrar) -->
+<div class="toolbar" id="impressoes-toolbar">
+  <div class="filters">
+
+    <!-- Buscar -->
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="Buscar por atividade, grupo ou tipo…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+      <button id="busca-clear" class="busca-clear" type="button" aria-label="Limpar busca" hidden><i class="lucide" data-lucide="x"></i></button>
+    </div>
+
+    <!-- Organizar -->
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-label">Organizar por</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <!-- Filtrar -->
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="filter-count-badge" style="display:none;">0</span>
+      </button>
+    </div>
+
+  </div>
+
+  <div class="actions">
+    {% if auth_can('atividades', 'full') %}
+      <button class="btn" id="btn-grupos" type="button">
+        <i class="lucide" data-lucide="layers"></i> Grupos
+      </button>
+      <button class="btn" id="btn-importar-csv-atividades" type="button">
+        <i class="lucide" data-lucide="file-up"></i> Importar
+      </button>
+      <div class="toolbar-actions-shell">
+        <button class="btn" id="btn-atividades-actions" type="button" aria-haspopup="menu" aria-expanded="false">
+          <i class="lucide" data-lucide="rows-3"></i>
+          <span class="btn-label">Ações</span>
+          <i class="lucide" data-lucide="chevron-down"></i>
+        </button>
+        <div id="atividades-actions-menu" class="popover toolbar-actions-menu" hidden>
+          <div class="menu-title">Ações da seleção</div>
+          <div class="menu-list">
+            <button class="menu-item" type="button" id="atividades-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>Selecionar tudo</span></button>
+            <button class="menu-item danger" type="button" id="atividades-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>Excluir</span></button>
+          </div>
+          <div class="menu-hint" id="atividades-actions-hint">Selecione uma ou mais linhas para habilitar as ações.</div>
+        </div>
+      </div>
+    {% endif %}
+    {% if auth_can('atividades', 'edit') %}
+      <a class="btn btn-nova-alinhado" href="{{ url_for('admin_adicionar_atividade') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+        <span class="btn-label">Adicionar</span>
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Popover de Organizar -->
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="nome">Nome</div>
+    <div class="menu-item" data-field="grupo">Grupo</div>
+    <div class="menu-item" data-field="tipo_atividade">Tipo</div>
+    <div class="menu-item" data-field="limitacao">Limitações</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+<!-- Modal: Grupos e Itens -->
+<div id="grupos-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="grupos-modal-title">
+    <div class="modal-header">
+      <h3 id="grupos-modal-title">
+        <span class="grupos-title-row"><i class="lucide" data-lucide="layers"></i> Grupos</span>
+        <span class="grupos-subtitle">Gerencie tipos e itens</span>
+      </h3>
+      <button class="btn" id="grupos-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-filter">
+      <script id="grupos-por-tipo-modal" type="application/json">{{ (grupos_por_tipo or {}) | tojson | safe }}</script>
+      <label class="grupos-tipo-label" for="filtro-tipo">Tipo</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+        <select id="filtro-tipo" class="control" aria-label="Tipo de atividade">
+          <option value="Acadêmica Complementar">Acadêmica Complementar</option>
+          <option value="Extensão Universitária">Extensão Universitária</option>
+        </select>
+      </div>
+    </div>
+    <hr class="grupos-divider">
+    <div class="modal-body presets-body-split">
+      <div class="presets-col-left">
+        <div class="presets-col-header">
+          <span class="presets-itens-label" id="grupos-itens-count">Itens</span>
+          <div class="actions-mini">
+            <button type="button" class="btn icon-btn" id="grp-add" title="Adicionar" aria-label="Adicionar"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
+            <button type="button" class="btn icon-btn" id="grp-del" title="Excluir" aria-label="Excluir"><i class="lucide" data-lucide="trash-2"></i></button>
+          </div>
+        </div>
+        <div class="menu-list" id="grupos-list"></div>
+      </div>
+      <div class="presets-col-right">
+        <div class="grupos-field-block">
+          <label class="grupos-field-label" for="grupo-num-display">Grupo</label>
+          <input type="text" id="grupo-num-display" class="control" placeholder="Número do grupo" readonly>
+        </div>
+        <div class="grupos-field-block">
+          <label class="grupos-field-label" for="grupo-desc-input">Descrição</label>
+          <input type="text" id="grupo-desc-input" class="control" placeholder="Descrição do grupo" autocomplete="off">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="grupos-ok" type="button">Fechar</button>
+      <button class="btn btn-primary" id="grupos-save" type="button" title="Salvar alterações"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="importar-atividades-modal" class="modal-overlay" hidden>
+  <div class="modal-card import-modal-card" role="dialog" aria-modal="true" aria-labelledby="importar-atividades-modal-title">
+    <div class="modal-header">
+      <h3 id="importar-atividades-modal-title"><i class="lucide" data-lucide="file-up"></i> Importar Atividades (CSV)</h3>
+      <button class="btn" id="importar-atividades-close" type="button" aria-label="Fechar">
+        <i class="lucide" data-lucide="x"></i>
+      </button>
+    </div>
+    <form action="{{ url_for('admin_atividades_importar_preview') }}" method="post" enctype="multipart/form-data" class="import-modal-form" autocomplete="off">
+      <div class="modal-body">
+        <div class="import-modal-grid">
+          {% set mode = 'create_only' %}
+          {% include 'partials/admin_importar_atividades_form.html' %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn primary"><i class="lucide" data-lucide="scan-search"></i> Validar e gerar preview</button>
+        <button type="button" class="btn" id="importar-atividades-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Popover de Filtrar -->
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+
+<!-- Lista no formato Impressões (header sticky, sem ações por linha) -->
+<div class="impressoes-cards-scroll imp-atividades" id="atividades-scroll-container">
+  <div id="atividades-list" class="impressoes-cards" role="list">
+
+    <!-- Header -->
+  <div class="impresso-card header" role="presentation">
+      <div class="cell left">Tipo</div>
+      <div class="cell left">Nome</div>
+      <div class="cell center">Grupo</div>
+  <div class="cell center">Limitações</div>
+    </div>
+
+    {% if atividades and atividades|length %}
+      {% for a in atividades %}
+  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) }}">
+          <div class="cell left ellipsis">{{ a.tipo_atividade }}</div>
+          <div class="cell left ellipsis">{{ a.nome }}</div>
+          <div class="cell center ellipsis" title="{{ a.grupo }}">
+            {% set _g = a.grupo or '' %}
+            {% set _num = _g.split(' - ')[0]|trim %}
+            {% if _num and _num != '(Sem grupo)' %}{{ _num }}{% else %}-{% endif %}
+          </div>
+          <div class="cell center">
+            {% if a.tem_limitacao %}
+              {% if a.tipo_limitacao == 'semestral' %}
+                {{ a.limite_horas_semestral or 0 }} horas (semestral)
+              {% elif a.tipo_limitacao == 'total' %}
+                {{ a.limite_horas_total or 0 }} horas (total)
+              {% else %}
+                NA
+              {% endif %}
+            {% else %}
+              NA
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma atividade encontrada.</div>
+    {% endif %}
+
+  </div>
+</div>
+  <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+  <script>
+    (function(){
+      const toolbarQuery = window.createToolbarQueryHelpers();
+      document.addEventListener('DOMContentLoaded', () => { if (window.lucide && lucide.createIcons) lucide.createIcons(); });
+
+      window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#atividades-list' });
+      const rowSelectionApi = window.initToolbarRowSelection?.({
+        toolbarSelector: '#impressoes-toolbar',
+        rowsRootSelector: '#atividades-list',
+        enableSelectAllButton: false,
+        enableBulkDelete: false
+      });
+
+      window.initToolbarSelectionActionsMenu?.({
+        buttonSelector: '#btn-atividades-actions',
+        menuSelector: '#atividades-actions-menu',
+        selectAllSelector: '#atividades-action-select-all',
+        deleteSelector: '#atividades-action-delete',
+        hintSelector: '#atividades-actions-hint',
+        rowSelectionApi,
+        deleteMessageSingle: 'Tem certeza que deseja excluir a atividade selecionada?',
+        deleteMessageMultiple: (count) => `Tem certeza que deseja excluir as ${count} atividades selecionadas?`
+      });
+
+      window.initToolbarSortMenu?.({
+        ...toolbarQuery,
+        buttonSelector: '#sort-field',
+        toggleSelector: '#sort-toggle',
+        labelSelector: '#sort-label',
+        dirLabelSelector: '#dir-label',
+        dirValueSelector: '#sort-dir',
+        defaultLabel: 'Organizar por',
+        formatLabel: (fieldText, hasField) => hasField
+          ? `<span style="color:var(--text-secondary);font-weight:400">Organizar por:&nbsp;</span><span style="color:var(--text-primary);font-weight:500">${fieldText}</span>`
+          : 'Organizar por',
+      });
+      window.initToolbarFilterMenu?.({
+        ...toolbarQuery,
+        aliasesToClear: ['filtro']
+      });
+
+      // Search: clear button + ⌘K / Ctrl+K shortcut
+      const searchInput = document.getElementById('busca-impressoes');
+      const clearBtn   = document.getElementById('busca-clear');
+      const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+
+      function syncSearchState() {
+        const has = !!(searchInput?.value);
+        if (clearBtn) clearBtn.hidden = !has;
+      }
+      searchInput?.addEventListener('input', syncSearchState);
+      syncSearchState();
+
+      clearBtn?.addEventListener('click', () => {
+        if (!searchInput) return;
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        searchInput.focus();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          searchInput?.focus();
+          searchInput?.select();
+        }
+      });
+    })();
+  </script>
+  <script>
+    // Modal simples de grupos: agrupa itens por texto do campo Grupo
+    document.addEventListener('DOMContentLoaded', () => {
+      const lucideInit = () => { if (window.lucide && lucide.createIcons) lucide.createIcons(); };
+      lucideInit();
+
+      const importBtn = document.getElementById('btn-importar-csv-atividades');
+      const importModal = document.getElementById('importar-atividades-modal');
+      const importCloseBtn = document.getElementById('importar-atividades-close');
+      const importCancelBtn = document.getElementById('importar-atividades-cancel');
+
+      function bindFileCardScope(root){
+        root?.querySelectorAll('[data-file-card]').forEach(card => {
+          if (card.dataset.boundFileCard === '1') return;
+          card.dataset.boundFileCard = '1';
+          const input = card.querySelector('input[type="file"]');
+          const nameEl = card.querySelector('[data-file-name]');
+          const chipRight = card.querySelector('.chip-right');
+          function openPicker(){ if (input) input.click(); }
+          function updateName(){
+            const f = input && input.files && input.files[0];
+            if (f){
+              nameEl.textContent = f.name;
+              nameEl.setAttribute('title', f.name);
+              card.classList.add('has-file');
+            } else {
+              nameEl.textContent = 'Nenhum arquivo selecionado';
+              nameEl.removeAttribute('title');
+              card.classList.remove('has-file');
+            }
+          }
+          card.addEventListener('click', (e) => { if (e.target && e.target.tagName !== 'INPUT') openPicker(); });
+          chipRight?.addEventListener('click', (e) => { e.stopPropagation(); openPicker(); });
+          input?.addEventListener('change', updateName);
+          updateName();
+        });
+      }
+
+      function openImportModal(ev){
+        if (ev) ev.stopPropagation();
+        if (!importModal) return;
+        importModal.hidden = false;
+        document.body.classList.add('modal-open');
+        bindFileCardScope(importModal);
+        lucideInit();
+      }
+
+      function closeImportModal(){
+        if (!importModal) return;
+        importModal.hidden = true;
+        document.body.classList.remove('modal-open');
+      }
+
+      if (importBtn) importBtn.addEventListener('click', openImportModal);
+      if (importCloseBtn) importCloseBtn.addEventListener('click', (e) => { e.stopPropagation(); closeImportModal(); });
+      if (importCancelBtn) importCancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeImportModal(); });
+      if (importModal) importModal.addEventListener('click', (e) => { if (e.target === importModal) closeImportModal(); });
+
+      const shouldOpenImport = {{ 'true' if request.args.get('import_csv') == '1' else 'false' }};
+      if (shouldOpenImport) openImportModal();
+
+  const btn = document.getElementById('btn-grupos');
+  const modal = document.getElementById('grupos-modal');
+  const closeBtn = document.getElementById('grupos-close');
+  const okBtn = document.getElementById('grupos-ok');
+  const saveBtn = document.getElementById('grupos-save');
+  const gruposList = document.getElementById('grupos-list');
+  const descBox = null; // substituído por campos estáticos #grupo-num-display / #grupo-desc-input
+      const scrollList = document.getElementById('atividades-list');
+      const tipoSelect = document.getElementById('filtro-tipo');
+  let gruposPorTipoData = {};
+  try {
+    const el = document.getElementById('grupos-por-tipo-modal');
+    gruposPorTipoData = el ? JSON.parse(el.textContent || '{}') : {};
+  } catch (_e) {
+    gruposPorTipoData = {};
+  }
+  // In-memory state for this modal session
+  const labelOverrides = new Map();   // originalKey -> newLabel
+  const extraGroups = new Set();      // labels not present in original map
+
+      function parseGroupLabel(label){
+        const raw = (label || '').trim();
+        const match = /^\s*(\d+)\s*(?:-\s*(.*))?$/.exec(raw);
+        if (!match) return { number: '', description: '', raw };
+        return { number: match[1], description: (match[2] || '').trim(), raw };
+      }
+
+      function canonicalGroupLabel(tipo, label){
+        const info = parseGroupLabel(label);
+        const rawLabel = (info.raw || '').trim().toUpperCase();
+        if (tipo === 'Extensão Universitária' && (!rawLabel || rawLabel === 'NA' || rawLabel === '-' || rawLabel === '(SEM GRUPO)')){
+          return '';
+        }
+        if (!info.number) return info.raw || '(Sem grupo)';
+        const mappedDesc = (((gruposPorTipoData || {})[tipo] || {})[info.number]);
+        const desc = mappedDesc !== undefined ? String(mappedDesc || '').trim() : info.description;
+        return desc ? `${info.number} - ${desc}` : info.number;
+      }
+
+      function collectTipos(){
+        const set = new Set();
+        const items = scrollList ? scrollList.querySelectorAll('.impresso-card[role="listitem"]') : [];
+        items.forEach(card => {
+          const cells = card.querySelectorAll('.cell');
+          if (cells.length >= 1){ set.add((cells[0].textContent||'').trim()); }
+        });
+        return Array.from(set);
+      }
+
+      function buildMap(tipoFilter){
+        const map = new Map();
+        if (!scrollList) return map;
+        const items = scrollList.querySelectorAll('.impresso-card[role="listitem"]');
+        items.forEach(card => {
+          const cells = card.querySelectorAll('.cell');
+          if (cells.length < 3) return;
+          const id = (card.getAttribute('data-atividade-id')||'').trim();
+          const tipo = (cells[0].textContent||'').trim();
+          const nome = (cells[1].textContent||'').trim();
+          const grpCell = cells[2];
+          const grpRaw = (grpCell.textContent||'').trim();
+          const grpTitle = (grpCell.getAttribute('title')||'').trim();
+          // Prefer the full label from title ("n - descricao"); fallback to visible raw or '(Sem grupo)'
+          const grupo = canonicalGroupLabel(tipo, grpTitle || grpRaw || '(Sem grupo)');
+          if (tipoFilter && tipo !== tipoFilter) return;
+          if (!grupo) return;
+          if (!map.has(grupo)) map.set(grupo, []);
+          map.get(grupo).push({ id, nome, tipo });
+        });
+        return map;
+      }
+
+      function getTipoForKey(originalKey){
+        if (!scrollList) return '';
+        const items = scrollList.querySelectorAll('.impresso-card[role="listitem"]');
+        for (const card of items){
+          const cells = card.querySelectorAll('.cell');
+          if (cells.length < 3) continue;
+          const tipo = (cells[0].textContent||'').trim();
+          const grpCell = cells[2];
+          const grpRaw = (grpCell.textContent||'').trim();
+          const grpTitle = (grpCell.getAttribute('title')||'').trim();
+          if (grpTitle === originalKey || grpRaw === originalKey) return tipo;
+          // fallback: compare by number prefix
+          const mA = /^\s*(\d+)/.exec(grpTitle || grpRaw);
+          const mB = /^\s*(\d+)/.exec(originalKey);
+          if (mA && mB && mA[1] === mB[1]) return tipo;
+        }
+        return '';
+      }
+
+      function updateMainList(tipo, numero, newLabel){
+        if (!scrollList || !tipo || !numero) return;
+        const items = scrollList.querySelectorAll('.impresso-card[role="listitem"]');
+        items.forEach(card => {
+          const cells = card.querySelectorAll('.cell');
+          if (cells.length < 3) return;
+          const tipoCell = (cells[0].textContent||'').trim();
+          if (tipoCell !== tipo) return;
+          const grpCell = cells[2];
+          const grpText = ((grpCell.getAttribute('title') || grpCell.textContent)||'').trim();
+          const m = /^\s*(\d+)/.exec(grpText);
+          if (m && m[1] === String(numero)){
+            grpCell.textContent = String(numero);
+            grpCell.setAttribute('title', newLabel);
+          }
+        });
+      }
+
+      const getDisplayLabel = (k) => labelOverrides.get(k) || k;
+
+      function getEntries(originalMap){
+        const entries = [];
+        originalMap.forEach((arr, originalKey)=>{
+          entries.push({ originalKey, displayKey: getDisplayLabel(originalKey), count: arr.length, isExtra:false });
+        });
+        // include extras (count 0)
+        extraGroups.forEach(lbl => {
+          entries.push({ originalKey: `__extra__:${lbl}`, displayKey: lbl, count: 0, isExtra: true });
+        });
+        return entries;
+      }
+
+      function sortEntries(entries){
+        // tenta ordenar por número inicial ("n - descricao"), cai para alfabético
+        const parseNum = (k)=>{ const m = k.match(/^\s*(\d+)/); return m? parseInt(m[1],10): NaN; };
+        return entries.sort((a,b)=>{
+          const na = parseNum(a.displayKey); const nb = parseNum(b.displayKey);
+          const aNum = Number.isFinite(na); const bNum = Number.isFinite(nb);
+          if (aNum && bNum) return na - nb;
+          if (aNum && !bNum) return -1;
+          if (!aNum && bNum) return 1;
+          return a.displayKey.localeCompare(b.displayKey, 'pt-BR');
+        });
+      }
+
+      function render(originalMap, selectedOriginal){
+        // entries from original + extras
+        let entries = getEntries(originalMap);
+        // Also include zero-count groups defined in grupos_por_tipo for current tipo (persisted),
+        // so they show up after page reload even if no atividade uses them yet.
+        const currentTipo = tipoSelect ? (tipoSelect.value||'') : '';
+        const definedForTipo = (gruposPorTipoData && currentTipo && gruposPorTipoData[currentTipo]) ? gruposPorTipoData[currentTipo] : null;
+        if (definedForTipo){
+          const existingNums = new Set();
+          entries.forEach(e=>{ const m = /^\s*(\d+)/.exec(e.displayKey||e.originalKey||''); if (m) existingNums.add(m[1]); });
+          for (const [num, desc] of Object.entries(definedForTipo)){
+            if (!existingNums.has(String(num))){
+              const lbl = desc ? `${num} - ${desc}` : String(num);
+              entries.push({ originalKey: lbl, displayKey: lbl, count: 0, isExtra: true });
+            }
+          }
+        }
+        const countEl = document.getElementById('grupos-itens-count');
+        if (!entries.length){
+          gruposList.innerHTML = '<div style="padding:8px; color:#6b7280;">Nenhum grupo encontrado.</div>';
+          if (countEl) countEl.textContent = 'Itens';
+          const _n = document.getElementById('grupo-num-display');
+          const _d = document.getElementById('grupo-desc-input');
+          if (_n){ _n.value=''; _n.disabled=true; }
+          if (_d){ _d.value=''; _d.disabled=true; }
+          updateGrpDelState();
+          return;
+        }
+        entries = sortEntries(entries);
+        if (countEl) countEl.textContent = `Itens · ${entries.length}`;
+        gruposList.innerHTML = '';
+        // find selected
+        let selected = entries[0];
+        if (selectedOriginal){
+          selected = entries.find(e => e.originalKey === selectedOriginal) || entries.find(e => e.displayKey === selectedOriginal) || selected;
+        }
+        // render left list
+        entries.forEach(e => {
+          const div = document.createElement('div');
+          div.className = 'menu-item';
+          div.dataset.original = e.originalKey;
+          div.dataset.label = e.displayKey;
+          const mNum = /^\s*(\d+)/.exec(e.displayKey);
+          const leftText = mNum ? mNum[1] : e.displayKey; // show only number if present
+          div.innerHTML = `<span class="ellipsis menu-item-num" title="${e.displayKey}">${leftText}</span><span class="badge">${e.count}</span>`;
+          if (e.originalKey === selected.originalKey) div.classList.add('is-selected');
+          div.addEventListener('click', ()=>{ render(originalMap, e.originalKey); });
+          gruposList.appendChild(div);
+        });
+        // render right pane for selected
+        const label = selected.displayKey;
+        {
+          const m = /^\s*(\d+)\s*-\s*(.*)$/.exec(label);
+          let num = m ? m[1] : ((/^\s*(\d+)/.exec(selected.originalKey||'')||[])[1]);
+          let dsc = m ? m[2] : (label === '(Sem grupo)' || /^\s*\d+\s*$/.test(label) ? '' : label);
+          if (!m){
+            const m2 = /^\s*(\d+)\s*-\s*(.*)$/.exec(selected.originalKey||'');
+            if (m2) dsc = m2[2];
+          }
+          const tipoForSel = getTipoForKey(selected.originalKey);
+          if (tipoForSel && num){
+            const mapped = (((gruposPorTipoData||{})[tipoForSel]||{})[num]);
+            if (mapped !== undefined) dsc = mapped;
+          }
+          const numInput = document.getElementById('grupo-num-display');
+          const descInput = document.getElementById('grupo-desc-input');
+          if (numInput){ numInput.value = num || label; numInput.disabled = false; }
+          if (descInput){ descInput.value = dsc || ''; descInput.disabled = false; }
+        }
+        gruposList.dataset.selectedOriginal = selected.originalKey;
+        updateGrpDelState();
+      }
+
+      function updateGrpDelState(){
+        const orig = gruposList.dataset.selectedOriginal;
+        const d = document.getElementById('grp-del');
+        if (d) d.classList.toggle('is-active', !!orig);
+      }
+
+      function openModal(ev){
+        if (ev) ev.stopPropagation();
+        // preencher tipos disponíveis
+        if (tipoSelect){
+          const current = tipoSelect.value;
+          // fixa as duas opções conhecidas
+          tipoSelect.innerHTML = '<option value="Acadêmica Complementar">Acadêmica Complementar</option>'+
+                                 '<option value="Extensão Universitária">Extensão Universitária</option>';
+          // preserva se ainda válido; senão, usa a primeira
+          const allowed = [ 'Acadêmica Complementar', 'Extensão Universitária' ];
+          tipoSelect.value = allowed.includes(current) ? current : allowed[0];
+        }
+        const map = buildMap(tipoSelect ? tipoSelect.value : 'Acadêmica Complementar');
+  render(map);
+        modal.hidden = false;
+        document.body.classList.add('modal-open');
+        lucideInit();
+      }
+      function closeModal(){
+        modal.hidden = true;
+        document.body.classList.remove('modal-open');
+      }
+
+      if (btn) btn.addEventListener('click', openModal);
+      if (tipoSelect){
+        tipoSelect.addEventListener('change', ()=>{
+          const map = buildMap(tipoSelect.value);
+          render(map);
+        });
+      }
+      // Save action: updates only the UI label; does not persist to backend
+  if (saveBtn) saveBtn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+    // loading state
+    const prevHTML = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="lucide" data-lucide="loader-2"></i> Salvando…';
+    window.lucide?.createIcons?.();
+        const orig = gruposList.dataset.selectedOriginal;
+        if (!orig) return;
+        const input = document.getElementById('grupo-desc-input');
+        const newDesc = input ? (input.value||'').trim() : '';
+        // Helper to construct a label keeping numeric prefix when present
+        const buildLabel = (baseLabel, desc) => {
+          const m = /^\s*(\d+)\s*(?:-\s*(.*))?$/.exec(baseLabel);
+          if (m){ const n = m[1]; return desc ? `${n} - ${desc}` : n; }
+          if (baseLabel === '(Sem grupo)') return desc || baseLabel;
+          return desc || baseLabel;
+        };
+        if (orig.startsWith('__extra__:')){
+          const oldLbl = orig.slice('__extra__:'.length);
+          const newLbl = buildLabel(oldLbl, newDesc);
+          // Derive tipo and numero for persistence
+          let tipo = tipoSelect ? (tipoSelect.value||'') : '';
+          const mNum = /^\s*(\d+)/.exec(newLbl);
+          const numero = mNum ? mNum[1] : null;
+          if (tipo && numero){
+            try{
+              const res = await fetch('{{ url_for("admin_grupos_renomear") }}',{
+                method:'POST', headers:{ 'Content-Type':'application/json' },
+                body: JSON.stringify({ tipo_atividade: tipo, numero, descricao: newDesc })
+              });
+              const data = await res.json().catch(()=>({}));
+              if (data && data.ok){
+                window.location.reload();
+                return;
+              }
+              throw new Error('save_failed');
+            }catch(_e){
+              // Fallback: update client-side only
+              if (extraGroups.has(oldLbl)) extraGroups.delete(oldLbl);
+              extraGroups.add(newLbl);
+              gruposList.dataset.selectedOriginal = `__extra__:${newLbl}`;
+              window.showToast && window.showToast('Falha ao salvar (offline). Mantido localmente.', 'error');
+            }
+          } else {
+            // Missing tipo or numero: keep client-side only
+            if (extraGroups.has(oldLbl)) extraGroups.delete(oldLbl);
+            extraGroups.add(newLbl);
+            gruposList.dataset.selectedOriginal = `__extra__:${newLbl}`;
+            window.showToast && window.showToast('Informe tipo/número válidos', 'error');
+          }
+          const map = buildMap(tipoSelect ? tipoSelect.value : '');
+          render(map, gruposList.dataset.selectedOriginal);
+          saveBtn.disabled = false; saveBtn.innerHTML = prevHTML; window.lucide?.createIcons?.();
+          return;
+        }
+        // original key: set override
+  const newLbl = buildLabel(getDisplayLabel(orig), newDesc);
+        labelOverrides.set(orig, newLbl);
+        // Persist to backend by tipo + numero
+        let tipo = tipoSelect ? (tipoSelect.value||'') : '';
+        const numMatch = /^\s*(\d+)/.exec(orig);
+        const numero = numMatch ? numMatch[1] : null;
+        if (!tipo) tipo = getTipoForKey(orig);
+        if (tipo && numero){
+          try{
+            const res = await fetch('{{ url_for("admin_grupos_renomear") }}',{
+              method:'POST', headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ tipo_atividade: tipo, numero, descricao: newDesc })
+            });
+            const data = await res.json().catch(()=>({}));
+            if (data && data.ok){
+              window.location.reload();
+              return;
+            }
+            throw new Error('save_failed');
+          }catch(_e){ /* noop */ }
+        }
+        const map = buildMap(tipoSelect ? tipoSelect.value : '');
+        render(map, orig);
+        saveBtn.disabled = false; saveBtn.innerHTML = prevHTML; window.lucide?.createIcons?.();
+      });
+
+      // Add: create new extra group with next available number
+      const addBtn = document.getElementById('grp-add');
+      if (addBtn) addBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const map = buildMap(tipoSelect ? tipoSelect.value : '');
+        // compute next number from current displayed labels and extras
+        const parseNum = (lbl)=>{ const m = /^\s*(\d+)/.exec(lbl); return m? parseInt(m[1],10): NaN; };
+        let max = 0;
+        map.forEach((_, k)=>{ const n = parseNum(getDisplayLabel(k)); if (Number.isFinite(n)) max = Math.max(max, n); });
+        extraGroups.forEach(lbl=>{ const n = parseNum(lbl); if (Number.isFinite(n)) max = Math.max(max, n); });
+        const next = max + 1;
+        const newLbl = `${next} - `; // empty desc for user to fill
+        extraGroups.add(newLbl);
+        render(map, `__extra__:${newLbl}`);
+      });
+
+      // Delete: remove extra groups, or clear override for originals
+      const delBtn = document.getElementById('grp-del');
+      if (delBtn) delBtn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const orig = gruposList.dataset.selectedOriginal;
+        if (!orig) return;
+        const map = buildMap(tipoSelect ? tipoSelect.value : '');
+        if (orig.startsWith('__extra__:')){
+          const lbl = orig.slice('__extra__:'.length);
+          if (extraGroups.has(lbl)) extraGroups.delete(lbl);
+          render(map);
+          return;
+        }
+        const tipo = tipoSelect ? (tipoSelect.value||'') : getTipoForKey(orig);
+        const numMatch = /^\s*(\d+)/.exec(orig);
+        const numero = numMatch ? numMatch[1] : null;
+        if (!tipo || !numero) return;
+        try{
+          const res = await fetch('{{ url_for("admin_grupos_excluir") }}', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ tipo_atividade: tipo, numero })
+          });
+          const data = await res.json().catch(()=>({}));
+          if (res.ok && data && data.ok){
+            window.location.reload();
+            return;
+          }
+          if (data && data.error === 'grupo_em_uso'){
+            window.showToast && window.showToast('Não é possível excluir um grupo que já possui atividades.', 'error');
+            return;
+          }
+          window.showToast && window.showToast('Não foi possível excluir o grupo.', 'error');
+        }catch(_e){
+          window.showToast && window.showToast('Não foi possível excluir o grupo.', 'error');
+        }
+      });
+  if (closeBtn) closeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); closeModal(); });
+  if (okBtn) okBtn.addEventListener('click', (e)=>{ e.stopPropagation(); closeModal(); });
+  if (modal) modal.addEventListener('click', (e)=>{ if (e.target === modal) { e.stopPropagation(); closeModal(); } });
+      document.addEventListener('keydown', (e)=>{
+        if (e.key !== 'Escape') return;
+        if (importModal && !importModal.hidden) closeImportModal();
+        if (!modal.hidden) closeModal();
+      });
+    });
+  </script>
+  <script>
+    // Barra flutuante de ações na lista de Atividades (Ver, Editar, Excluir)
+    document.addEventListener('DOMContentLoaded', ()=>{
+      let bar = document.getElementById('pedido-actions-float');
+      if (!bar){
+        bar = document.createElement('div');
+        bar.id = 'pedido-actions-float';
+        bar.className = 'pedido-actions-float';
+        document.body.appendChild(bar);
+      }
+      bar.setAttribute('role','toolbar');
+      bar.setAttribute('aria-label','Ações da atividade selecionada');
+      bar.innerHTML = `
+        <button type="button" class="act-btn" data-action="view" aria-label="Ver atividade" title="Ver"><i data-lucide="eye"></i></button>
+        {% if auth_can('atividades', 'edit') %}<button type="button" class="act-btn" data-action="edit" aria-label="Editar atividade" title="Editar"><i data-lucide="edit"></i></button>{% endif %}
+      `;
+      window.lucide?.createIcons?.();
+
+      const scrollWrap = document.querySelector('#atividades-scroll-container');
+      const listContainer = document.querySelector('#atividades-list');
+      let hideTimer = null;
+      let currentId = null;
+      let currentName = null;
+      let currentCard = null;
+
+      function positionFor(card){
+        if (!bar || !card) return;
+        const r = card.getBoundingClientRect();
+        const top = Math.round(r.top + (r.height/2) - (bar.offsetHeight/2));
+        bar.style.top = top + 'px';
+        const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+        const tr = track.getBoundingClientRect();
+        const cs = window.getComputedStyle(track);
+        const pr = parseFloat(cs.paddingRight || '0') || 0;
+        const contentRight = tr.right - pr;
+        const left = Math.round(contentRight - bar.offsetWidth);
+        bar.style.left = left + 'px';
+        bar.style.right = 'auto';
+      }
+      function show(){ bar.classList.add('is-visible'); }
+      function hide(){ bar.classList.remove('is-visible'); currentId = null; currentName = null; currentCard = null; }
+      function scheduleHide(){ clearTimeout(hideTimer); hideTimer = setTimeout(()=>{ hide(); }, 180); }
+      function cancelHide(){ clearTimeout(hideTimer); }
+
+      scrollWrap?.addEventListener('mouseover', (e)=>{
+        const card = e.target.closest('.impresso-card');
+        if (!card || card.classList.contains('header')) return;
+        currentId = card.getAttribute('data-atividade-id');
+        currentName = card.getAttribute('data-atividade-nome') || '';
+        currentCard = card;
+        positionFor(currentCard);
+        show();
+      });
+      scrollWrap?.addEventListener('mouseleave', scheduleHide);
+      bar.addEventListener('mouseenter', cancelHide);
+      bar.addEventListener('mouseleave', scheduleHide);
+      window.addEventListener('scroll', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+      window.addEventListener('resize', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+      bar.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button.act-btn');
+        if (!btn || !currentId) return;
+        const action = btn.getAttribute('data-action');
+        if (action === 'view'){
+          const base = "{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId);
+          window.navigateWithReturnTo(base, { view: 1 });
+        } else if (action === 'edit'){
+          window.navigateWithReturnTo("{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId));
+        }
+      });
+    });
+  </script>
+{% endblock %}

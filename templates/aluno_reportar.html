@@ -1,0 +1,435 @@
+{% extends base_template|default("base_aluno.html") %}
+{% block title %}Reportar{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    /* â”€â”€â”€ Reportes page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .rpt-page { display:grid; gap:40px; }
+
+    /* â”€â”€ cfg-card (Relatar problema) â”€â”€ */
+    .cfg-card {
+      background:var(--surface);
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      overflow:hidden;
+    }
+    .cfg-card-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:7px 16px;
+      background:var(--bg-underpanel) !important;
+    }
+    .cfg-section-label {
+      font-size:13px;
+      font-weight:500;
+      color:var(--text-secondary);
+    }
+    .cfg-chips { display:flex; align-items:center; gap:6px; }
+    .cfg-chip {
+      display:inline-flex;
+      align-items:center;
+      height:24px;
+      padding:0 8px;
+      border-radius:var(--radius);
+      background:var(--bg);
+      border:0.5px solid var(--border);
+      color:var(--text-secondary);
+      font-size:12px;
+      font-weight:400;
+      white-space:nowrap;
+    }
+    .cfg-card-body {
+      padding:16px;
+      border-top:1px solid var(--border-strong);
+      display:grid;
+      gap:14px;
+      background:var(--bg-underpanel) !important;
+    }
+    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; }
+    .cfg-card-footer {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:11px 16px;
+      border-top:1px solid var(--border-strong);
+      background:var(--bg-underpanel) !important;
+    }
+    .cfg-footer-left { display:flex; align-items:center; gap:10px; min-width:0; }
+    .cfg-footer-note { margin:0; font-size:12px; color:var(--text-tertiary); line-height:1.4; }
+
+    /* â”€â”€ Relatar problema: label esquerda + field-card esticado â”€â”€ */
+    .rpt-form { display:grid; gap:14px; }
+    .rpt-form-row {
+      display:grid;
+      grid-template-columns:150px 1fr;
+      gap:var(--form-gap, 12px);
+      align-items:center;
+    }
+    .rpt-form-row.file-row { align-items:start; }
+    .rpt-form-row.align-top { align-items:start; }
+    .rpt-form-label {
+      font-size:13px;
+      font-weight:500;
+      text-align:right;
+      color:var(--text-primary);
+    }
+    .rpt-form-row.file-row .rpt-form-label {
+      align-self:start;
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      min-height:var(--btn-h);
+    }
+    .rpt-form-row.align-top .rpt-form-label { padding-top:9px; }
+    .report-form .field-card textarea.control {
+      min-height:var(--btn-h);
+      height:var(--btn-h);
+      resize:none;
+      overflow:hidden;
+      line-height:1.25;
+      padding-top:8px;
+      padding-bottom:8px;
+    }
+    .report-form .field-card select.control { appearance:none; }
+    .report-form .file-name.control { min-height:var(--btn-h); }
+    .report-form-hint { color:var(--text-secondary); font-size:12px; line-height:1.5; }
+
+    /* Meus reportes: lista standalone (padrao matrizes/requisicoes) */
+    .rpt-list-section { display:grid; gap:0; }
+    .rpt-list-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .rpt-list-title {
+      font-size:13px;
+      font-weight:500;
+      color:var(--text-secondary);
+    }
+
+    .imp-rpt-aluno {
+      --imp-cols:
+        44px
+        minmax(100px, 0.9fr)
+        minmax(100px, 0.9fr)
+        minmax(200px, 4fr)
+        minmax(110px, 1fr);
+    }
+    .imp-rpt-aluno .impressoes-cards,
+    .imp-rpt-aluno .impresso-card { width:100% !important; max-width:100% !important; }
+    .imp-rpt-aluno .impresso-card .cell:nth-child(4),
+    .imp-rpt-aluno .impresso-card.header .cell:nth-child(4) { justify-content:flex-start; text-align:left; }
+    .imp-rpt-aluno .impresso-card .cell:not(:nth-child(4)),
+    .imp-rpt-aluno .impresso-card.header .cell:not(:nth-child(4)) { justify-content:center; text-align:center; }
+    .imp-rpt-aluno .impresso-card:not(.header) { cursor:pointer; }
+
+    /* â”€â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .modal-overlay { position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
+    .modal-overlay[hidden] { display:none !important; }
+    .modal-card {
+      background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius);
+      width:min(620px, calc(100vw - 32px)); max-height:min(88vh, 760px);
+      display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25);
+    }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
+    .modal-header h3 { display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
+    .modal-body { padding:14px 16px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; display:grid; row-gap:12px; }
+    .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:10px 14px; border-top:1px solid var(--border-strong); }
+    .reporte-modal-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin:0; }
+    .reporte-modal-meta dt { font-weight:600; color:var(--text-primary); }
+    .reporte-modal-meta dd { margin:0; color:var(--text-secondary); }
+    .reporte-modal-section-label { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); margin:0 0 4px; }
+    .reporte-modal-desc {
+      font-size:13px; color:var(--text-primary); white-space:pre-wrap; line-height:1.55;
+      padding:10px 12px; background:#f8fafc; border:1px solid var(--border-strong); border-radius:var(--radius);
+    }
+    .reporte-modal-shot { max-width:100%; border-radius:var(--radius); border:1px solid var(--border-strong); display:block; }
+
+    @media (max-width:720px) {
+      .cfg-card-footer { flex-direction:column; align-items:flex-start; }
+      .cfg-card-head { flex-wrap:wrap; }
+      .rpt-form-row { grid-template-columns:110px 1fr; }
+    }
+    @media (max-width:480px) {
+      .rpt-form-row { grid-template-columns:1fr; }
+      .rpt-form-label { text-align:left; }
+      .rpt-form-row.file-row .rpt-form-label {
+        min-height:0;
+        justify-content:flex-start;
+      }
+      .rpt-form-row.align-top .rpt-form-label { padding-top:0; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Reportar</h1>
+
+<div class="rpt-page">
+
+  <!-- â”€â”€ Relatar problema (cfg-card) â”€â”€ -->
+  <div class="cfg-card">
+
+    <div class="cfg-card-head">
+      <span class="cfg-section-label">Relatar problema</span>
+      <div class="cfg-chips">
+        <span class="cfg-chip">{{ reportes|length }} enviado{% if reportes|length != 1 %}s{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="cfg-card-body">
+      <p class="cfg-page-note">Use este espaco para avisar erros, comportamentos estranhos ou dificuldades na plataforma. Se ajudar, anexe uma captura de tela do problema.</p>
+
+      <form class="report-form rpt-form" id="report-form" method="post" enctype="multipart/form-data" action="{{ url_for('aluno.aluno_reportar') }}">
+
+        <div class="rpt-form-row">
+          <label class="rpt-form-label">Categoria</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+            <select class="control" name="categoria" required>
+              {% for categoria in categoria_options %}
+                <option value="{{ categoria }}" {% if form_data.categoria == categoria %}selected{% endif %}>{{ categoria }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="rpt-form-row">
+          <label class="rpt-form-label">Titulo</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+            <input class="control" type="text" name="titulo" maxlength="120" placeholder="Resumo curto do problema" value="{{ form_data.titulo }}" required>
+          </div>
+        </div>
+
+        <div class="rpt-form-row file-row">
+          <label class="rpt-form-label">Captura de tela</label>
+          <div>
+            <div class="field-card file-card" data-upload-card>
+              <div class="field-chip"><i class="lucide" data-lucide="image"></i></div>
+              <input class="file-input" id="captura_tela" type="file" name="captura_tela" accept=".png,.jpg,.jpeg,.webp,image/*">
+              <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+              <div class="field-chip chip-right" title="Anexar captura"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+            </div>
+            <div class="report-form-hint" style="margin-top:8px;">Opcional. Formatos aceitos: PNG, JPG, JPEG ou WEBP.</div>
+          </div>
+        </div>
+
+        <div class="rpt-form-row">
+          <label class="rpt-form-label">Descricao</label>
+          <div class="field-card" style="align-items:stretch;">
+            <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
+            <textarea class="control auto-grow" name="descricao" placeholder="Explique o que aconteceu, o que voce esperava e, se possivel, como reproduzir." required>{{ form_data.descricao }}</textarea>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <div class="cfg-card-footer">
+      <div class="cfg-footer-left">
+        <a class="btn" href="{{ url_for('aluno.aluno_dashboard') }}">Voltar</a>
+      </div>
+      <button class="btn primary" type="submit" form="report-form">
+        <i class="lucide" data-lucide="send"></i><span class="btn-label">Enviar reporte</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Meus reportes (lista standalone, igual matrizes/requisicoes) -->
+  <div class="rpt-list-section">
+
+    <div class="rpt-list-header">
+      <span class="rpt-list-title">Meus reportes</span>
+    </div>
+
+    <script id="meus-reportes-data" type="application/json">{{ reportes | tojson | safe }}</script>
+
+    <div class="impressoes-cards-scroll imp-rpt-aluno">
+      <div id="meus-reportes-list" class="impressoes-cards" role="list">
+
+        <div class="impresso-card header" role="presentation">
+          <div class="cell center">#</div>
+          <div class="cell center">Data</div>
+          <div class="cell center">Categoria</div>
+          <div class="cell left">Titulo</div>
+          <div class="cell center">Status</div>
+        </div>
+
+        {% if reportes %}
+          {% for reporte in reportes %}
+            {% set status_lc = (reporte.status or '')|lower %}
+            <div class="impresso-card" role="listitem" tabindex="0" data-reporte-idx="{{ loop.index0 }}">
+              <div class="cell center">{{ loop.index }}</div>
+              <div class="cell center">{{ reporte.criado_em_fmt or '-' }}</div>
+              <div class="cell center">{{ reporte.categoria or '-' }}</div>
+              <div class="cell left ellipsis">{{ reporte.titulo or '-' }}</div>
+              <div class="cell center">
+                <span class="badge status-badge status-pill {{
+                  'status-positive' if status_lc in ['resolvido','resolvida','concluido','concluida'] else
+                  'status-caution' if status_lc in ['em analise','pendente'] else
+                  'status-negative' if status_lc in ['indeferido','indeferida','cancelado','cancelada','encerrado','encerrada'] else
+                  'status-info' if status_lc in ['devolvido','devolvida'] else
+                  'status-neutral'
+                }}">{{ reporte.status }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div style="padding:1.25rem; text-align:center; color:var(--text-secondary);">Nenhum reporte enviado ainda.</div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+{# Modal de detalhe do reporte #}
+<div id="meu-reporte-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mrm-title">
+    <div class="modal-header">
+      <h3 id="mrm-title">
+        <i class="lucide" data-lucide="bug"></i>
+        <span id="mrm-title-text">Reporte</span>
+      </h3>
+      <button class="btn" id="mrm-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <dl class="reporte-modal-meta">
+        <dt>Categoria</dt>     <dd id="mrm-categoria">-</dd>
+        <dt>Status</dt>        <dd id="mrm-status">-</dd>
+        <dt>Enviado em</dt>    <dd id="mrm-criado">-</dd>
+        <dt>Atualizado em</dt> <dd id="mrm-atualizado">-</dd>
+      </dl>
+      <div>
+        <p class="reporte-modal-section-label">Descricao</p>
+        <div class="reporte-modal-desc" id="mrm-descricao"></div>
+      </div>
+      <div id="mrm-shot-wrap" hidden>
+        <p class="reporte-modal-section-label">Captura de tela</p>
+        <a id="mrm-shot-link" href="#" target="_blank" rel="noopener">
+          <img id="mrm-shot-img" class="reporte-modal-shot" src="" alt="Captura do reporte">
+        </a>
+        <small style="display:block; margin-top:4px; color:var(--text-secondary);">Clique para abrir em tamanho maior.</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="mrm-fechar" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    (function(){
+      document.querySelectorAll('[data-upload-card]').forEach(card => {
+        if (card.dataset.boundUploadCard === '1') return;
+        card.dataset.boundUploadCard = '1';
+        const input  = card.querySelector('input[type="file"]');
+        const nameEl = card.querySelector('[data-file-name]');
+        const chip   = card.querySelector('.chip-right');
+        const openPicker = () => { if (input) input.click(); };
+        const syncName = () => {
+          const file = input && input.files && input.files[0];
+          if (file) {
+            nameEl.textContent = file.name;
+            nameEl.title = file.name;
+            card.classList.add('has-file');
+            return;
+          }
+          nameEl.textContent = 'Nenhum arquivo selecionado';
+          nameEl.removeAttribute('title');
+          card.classList.remove('has-file');
+        };
+        card.addEventListener('click', e => { if (e.target && e.target.tagName === 'INPUT') return; openPicker(); });
+        chip && chip.addEventListener('click', e => { e.stopPropagation(); openPicker(); });
+        input && input.addEventListener('change', syncName);
+        syncName();
+      });
+
+      const autoGrow = (el) => {
+        el.style.height = 'auto';
+        const minHeight = parseFloat(getComputedStyle(el).minHeight) || 0;
+        el.style.height = `${Math.max(el.scrollHeight, minHeight)}px`;
+      };
+
+      document.querySelectorAll('.report-form textarea.auto-grow').forEach(el => {
+        autoGrow(el);
+        el.addEventListener('input', () => autoGrow(el));
+      });
+    })();
+  </script>
+  <script>
+  (function(){
+    const reportes  = JSON.parse(document.getElementById('meus-reportes-data').textContent || '[]');
+    const modal     = document.getElementById('meu-reporte-modal');
+    const closeBtn  = document.getElementById('mrm-close');
+    const fecharBtn = document.getElementById('mrm-fechar');
+
+    const mrmTitleText  = document.getElementById('mrm-title-text');
+    const mrmCategoria  = document.getElementById('mrm-categoria');
+    const mrmStatus     = document.getElementById('mrm-status');
+    const mrmCriado     = document.getElementById('mrm-criado');
+    const mrmAtualizado = document.getElementById('mrm-atualizado');
+    const mrmDescricao  = document.getElementById('mrm-descricao');
+    const mrmShotWrap   = document.getElementById('mrm-shot-wrap');
+    const mrmShotLink   = document.getElementById('mrm-shot-link');
+    const mrmShotImg    = document.getElementById('mrm-shot-img');
+
+    const shotUrlTpl = "{{ url_for('uploaded_file', filename='__X__') }}";
+
+    function openModal(r){
+      mrmTitleText.textContent  = r.titulo            || 'Reporte';
+      mrmCategoria.textContent  = r.categoria         || '-';
+      mrmStatus.textContent     = r.status            || '-';
+      mrmCriado.textContent     = r.criado_em_fmt     || '-';
+      mrmAtualizado.textContent = r.atualizado_em_fmt || '-';
+      mrmDescricao.textContent  = r.descricao         || '';
+
+      if (r.screenshot_filename){
+        const url = shotUrlTpl.replace('__X__', encodeURIComponent(r.screenshot_filename));
+        mrmShotLink.href   = url;
+        mrmShotImg.src     = url;
+        mrmShotWrap.hidden = false;
+      } else {
+        mrmShotWrap.hidden = true;
+      }
+
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+      if (window.lucide) lucide.createIcons();
+      closeBtn.focus();
+    }
+
+    function closeModal(){
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    }
+
+    closeBtn?.addEventListener('click', closeModal);
+    fecharBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+    document.querySelectorAll('#meus-reportes-list .impresso-card:not(.header)').forEach(row => {
+      const idx  = parseInt(row.dataset.reporteIdx, 10);
+      const open = () => { if (reportes[idx]) openModal(reportes[idx]); };
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); }
+      });
+    });
+  })();
+  </script>
+{% endblock %}
+

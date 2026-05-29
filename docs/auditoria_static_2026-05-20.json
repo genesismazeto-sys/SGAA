@@ -1,0 +1,460 @@
+{
+  "date": "2026-05-20",
+  "summary": {
+    "total_static_files": 35,
+    "used_definitive_existing": 11,
+    "used_only_in_inactive_templates_existing": 0,
+    "unreferenced_static_files": 24,
+    "missing_referenced_paths": 1,
+    "active_templates_detected": 54
+  },
+  "used_definitive_existing": [
+    "css/components/actions-float.css",
+    "css/components/list-cards.css",
+    "css/modern-style.css",
+    "images/ej_favicon.svg",
+    "images/ej_logo.svg",
+    "images/ej_logo_dark.jpg",
+    "js/csrf-shim.js",
+    "js/password-toggle.js",
+    "js/table-ellipsis.js",
+    "js/toolbar-filters.js",
+    "js/ui-tooltips.js"
+  ],
+  "used_only_in_inactive_templates_existing": [],
+  "unreferenced_static_files": [
+    "css-copy/css/admin-style.css",
+    "css-copy/css/modern-style - Copia.css",
+    "css-copy/css/modern-style.css",
+    "css/Backup/admin-style.css",
+    "css/Backup/clientes-form-pack.css",
+    "css/Backup/dead/admin-style.css",
+    "css/Backup/dead/buttons.css",
+    "css/Backup/dead/card.css",
+    "css/Backup/dead/clientes-form-pack.css",
+    "css/Backup/dead/compat.css",
+    "css/Backup/dead/modern-style-CS.css",
+    "css/Backup/dead/table.css",
+    "css/Backup/dead/tokens.css",
+    "css/Backup/impressao-style.css",
+    "css/Backup/impressao-style.css.bak",
+    "css/Backup/modern-style - Copia (2).css",
+    "css/Backup/modern-style-CS.css",
+    "css/Backup/modern-style.css",
+    "css/Backup/modern-style.css.bak",
+    "images/ej_logo_blue.png",
+    "images/ej_logo_dark.png",
+    "images/logo.jpg",
+    "images/logoblueantigo.png",
+    "js/Backup/documentos_pills.js"
+  ],
+  "unreferenced_backup_like": [
+    "css-copy/css/admin-style.css",
+    "css-copy/css/modern-style - Copia.css",
+    "css-copy/css/modern-style.css",
+    "css/Backup/admin-style.css",
+    "css/Backup/clientes-form-pack.css",
+    "css/Backup/dead/admin-style.css",
+    "css/Backup/dead/buttons.css",
+    "css/Backup/dead/card.css",
+    "css/Backup/dead/clientes-form-pack.css",
+    "css/Backup/dead/compat.css",
+    "css/Backup/dead/modern-style-CS.css",
+    "css/Backup/dead/table.css",
+    "css/Backup/dead/tokens.css",
+    "css/Backup/impressao-style.css",
+    "css/Backup/impressao-style.css.bak",
+    "css/Backup/modern-style - Copia (2).css",
+    "css/Backup/modern-style-CS.css",
+    "css/Backup/modern-style.css",
+    "css/Backup/modern-style.css.bak",
+    "js/Backup/documentos_pills.js"
+  ],
+  "missing_referenced_paths": [
+    "css/clientes-form-pack.css"
+  ],
+  "evidence_definitive": {
+    "css/clientes-form-pack.css": [
+      {
+        "source": "templates/demo_clientes_form_pack.html",
+        "line": 4,
+        "kind": "url_for-literal"
+      }
+    ],
+    "css/components/actions-float.css": [
+      {
+        "source": "templates/admin_acesso.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alertas.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alunos.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_arquivos.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_atividades.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_cursos.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_detalhes_turma.html",
+        "line": 25,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_matrizes.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_reportes.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_requisicoes.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_turmas.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_arquivos.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_minhas_requisicoes.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      }
+    ],
+    "css/components/list-cards.css": [
+      {
+        "source": "templates/admin_acesso.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alertas.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alunos.html",
+        "line": 6,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_arquivos.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_atividades.html",
+        "line": 5,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_cursos.html",
+        "line": 5,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_detalhes_turma.html",
+        "line": 24,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_matrizes.html",
+        "line": 5,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_reportes.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_requisicoes.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_turmas.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_arquivos.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_minhas_requisicoes.html",
+        "line": 5,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_reportar.html",
+        "line": 5,
+        "kind": "url_for-literal"
+      }
+    ],
+    "css/modern-style.css": [
+      {
+        "source": "templates/400.html",
+        "line": 10,
+        "kind": "static-path"
+      },
+      {
+        "source": "templates/500.html",
+        "line": 7,
+        "kind": "static-path"
+      },
+      {
+        "source": "templates/base.html",
+        "line": 15,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 14,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/login.html",
+        "line": 7,
+        "kind": "url_for-literal"
+      }
+    ],
+    "images/ej_favicon.svg": [
+      {
+        "source": "templates/base.html",
+        "line": 16,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 15,
+        "kind": "url_for-literal"
+      }
+    ],
+    "images/ej_logo.svg": [
+      {
+        "source": "templates/base.html",
+        "line": 40,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 36,
+        "kind": "url_for-literal"
+      }
+    ],
+    "images/ej_logo_dark.jpg": [
+      {
+        "source": "templates/login.html",
+        "line": 13,
+        "kind": "url_for-literal"
+      }
+    ],
+    "js/csrf-shim.js": [
+      {
+        "source": "templates/base.html",
+        "line": 20,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 23,
+        "kind": "url_for-literal"
+      }
+    ],
+    "js/password-toggle.js": [
+      {
+        "source": "templates/base.html",
+        "line": 24,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 27,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/login.html",
+        "line": 8,
+        "kind": "url_for-literal"
+      }
+    ],
+    "js/table-ellipsis.js": [
+      {
+        "source": "templates/base.html",
+        "line": 23,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 26,
+        "kind": "url_for-literal"
+      }
+    ],
+    "js/toolbar-filters.js": [
+      {
+        "source": "templates/admin_acesso.html",
+        "line": 567,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alertas.html",
+        "line": 346,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_alunos.html",
+        "line": 150,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_arquivos.html",
+        "line": 226,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_atividades.html",
+        "line": 364,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_cursos.html",
+        "line": 145,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_detalhes_turma.html",
+        "line": 377,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_matrizes.html",
+        "line": 160,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_reportes.html",
+        "line": 292,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_requisicoes.html",
+        "line": 694,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/admin_turmas.html",
+        "line": 218,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_arquivos.html",
+        "line": 120,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/aluno_minhas_requisicoes.html",
+        "line": 323,
+        "kind": "url_for-literal"
+      }
+    ],
+    "js/ui-tooltips.js": [
+      {
+        "source": "templates/base.html",
+        "line": 22,
+        "kind": "url_for-literal"
+      },
+      {
+        "source": "templates/base_aluno.html",
+        "line": 25,
+        "kind": "url_for-literal"
+      }
+    ]
+  },
+  "evidence_inactive": {},
+  "dynamic_static_call_sites": [],
+  "active_templates": [
+    "400.html",
+    "404.html",
+    "500.html",
+    "admin_acesso.html",
+    "admin_adicionar_aluno.html",
+    "admin_adicionar_atividade.html",
+    "admin_adicionar_curso.html",
+    "admin_adicionar_turma.html",
+    "admin_alertas.html",
+    "admin_alunos.html",
+    "admin_arquivos.html",
+    "admin_atividades.html",
+    "admin_atividades_academicas.html",
+    "admin_atividades_extensao.html",
+    "admin_atividades_table_partial.html",
+    "admin_banco_dados.html",
+    "admin_configuracoes.html",
+    "admin_cursos.html",
+    "admin_dashboard.html",
+    "admin_detalhes_curso.html",
+    "admin_detalhes_requisicao.html",
+    "admin_detalhes_turma.html",
+    "admin_editar_aluno.html",
+    "admin_editar_atividade.html",
+    "admin_editar_curso.html",
+    "admin_editar_turma.html",
+    "admin_importar_atividades.html",
+    "admin_importar_requisicoes.html",
+    "admin_matriz_form.html",
+    "admin_matrizes.html",
+    "admin_mensagens.html",
+    "admin_processar_requisicao.html",
+    "admin_reportes.html",
+    "admin_requisicoes.html",
+    "admin_turmas.html",
+    "aluno_arquivos.html",
+    "aluno_dashboard.html",
+    "aluno_meus_dados.html",
+    "aluno_minhas_requisicoes.html",
+    "aluno_nova_requisicao.html",
+    "aluno_progresso.html",
+    "aluno_reportar.html",
+    "aluno_requisicao_detalhe.html",
+    "base.html",
+    "base_aluno.html",
+    "components/card_list.html",
+    "components/flash_messages.html",
+    "components/icons.html",
+    "components/list_table.html",
+    "components/pagination.html",
+    "demo_clientes_form_pack.html",
+    "login.html",
+    "partials/admin_importar_atividades_form.html",
+    "partials/admin_importar_turma_form.html"
+  ]
+}

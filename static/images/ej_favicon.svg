@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 894 894" role="img" aria-labelledby="title desc">
+  <title id="title">EJ favicon</title>
+  <desc id="desc">Square favicon version of the EJ logo, centered on a transparent background without added stroke.</desc>
+  <g transform="translate(0 276)">
+    <path fill="#005891" d="M3 3H424V75H154V133H412V203H154V243C154 258 164 267 179 267H427V340H60C26 340 3 317 3 284V3Z"/>
+    <path fill="#005891" d="M723 3H891V284C891 317 867 340 833 340H461V267H699C715 267 723 258 723 243V3Z"/>
+  </g>
+</svg>

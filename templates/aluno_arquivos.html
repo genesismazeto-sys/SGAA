@@ -1,0 +1,213 @@
+{% from 'components/pagination.html' import paginate %}
+{% import 'components/card_list.html' as cl %}
+{% extends "base_aluno.html" %}
+{% block title %}Arquivos{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <style>
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #aluno-arquivos-toolbar .input-chip{ background:transparent; border-right:none; }
+    #aluno-arquivos-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-aluno-arquivos{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-aluno-arquivos .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-aluno-arquivos{ padding:0; }
+    #grp-ordenar-aluno-arquivos{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar-aluno-arquivos > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-aluno-arquivos{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar-aluno-arquivos #sort-aluno-arquivos-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Arquivos</h1>
+
+<div class="toolbar" id="aluno-arquivos-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-aluno-arquivos">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-aluno-arquivos" type="search" placeholder="Buscar por nome do arquivo…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <div class="input-group" id="grp-ordenar-aluno-arquivos">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+      <button class="btn" id="sort-aluno-arquivos" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+        <span id="sort-aluno-arquivos-label" class="btn-label">Organizar</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <button class="input-chip" id="sort-aluno-arquivos-toggle" type="button" aria-label="Alternar direção de organização" title="Alternar direção">
+        <span id="sort-aluno-arquivos-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    {% if filter_schema %}
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>Filtrar</span>
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+    {% endif %}
+  </div>
+  <div class="actions"></div>
+</div>
+{{ paginate('aluno_arquivos') }}
+
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">Organizar por</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="titulo">Titulo</div>
+    <div class="menu-item" data-field="descricao">Descricao</div>
+    <div class="menu-item" data-field="data_upload">Data de upload</div>
+    <div class="menu-item" data-field="tipo">Tipo</div>
+  </div>
+  <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">Fechar</button>
+  </div>
+</div>
+
+{% if filter_schema %}
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">Filtrar por</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+{% endif %}
+
+<div class="impressoes-cards-scroll imp-arquivos" id="aluno-arquivos-scroll-container">
+  <div id="aluno-arquivos-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'Título', 'class':'left'},
+      {'text':'Tipo de arquivo', 'class':'center'},
+      {'text':'Descrição', 'class':'left'},
+      {'text':'Data de upload', 'class':'center'}
+    ]) }}
+
+    {% if arquivos and arquivos|length %}
+      {% for arquivo in arquivos %}
+        {% set source_name = (arquivo.original_filename or arquivo.filename or '') %}
+        {% set file_ext = source_name.rsplit('.', 1)[1]|upper if source_name and '.' in source_name else '-' %}
+        {{ cl.row([
+          {'content': arquivo.titulo or '-', 'class':'left ellipsis', 'strong': true},
+          {'content': file_ext, 'class':'center'},
+          {'content': arquivo.descricao or '-', 'class':'left ellipsis'},
+          {'content': arquivo.data_upload or '-', 'class':'center'}
+        ], {
+          'data-arquivo-view-url': route_url('aluno_visualizar_arquivo', 'aluno.aluno_visualizar_arquivo', arquivo_id=arquivo.id),
+          'data-arquivo-download-url': route_url('aluno_baixar_arquivo', 'aluno.aluno_baixar_arquivo', arquivo_id=arquivo.id),
+          'data-arquivo-titulo': arquivo.titulo or ''
+        }) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum arquivo disponível.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-aluno-arquivos', rowsRootSelector: '#aluno-arquivos-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-aluno-arquivos',
+      toggleSelector: '#sort-aluno-arquivos-toggle',
+      labelSelector: '#sort-aluno-arquivos-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-aluno-arquivos-dir',
+      defaultLabel: 'Organizar'
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery,
+      aliasesToClear: ['filtro']
+    });
+  })();
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{
+    if (window.lucide) lucide.createIcons();
+
+    let bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+
+    bar.setAttribute('role','toolbar');
+    bar.setAttribute('aria-label','Ações do arquivo selecionado');
+    bar.innerHTML = `
+      <button type="button" class="act-btn" data-action="view" aria-label="Ver arquivo" title="Ver"><i data-lucide="eye"></i></button>
+      <button type="button" class="act-btn" data-action="download" aria-label="Baixar arquivo" title="Baixar"><i data-lucide="download"></i></button>
+    `;
+    window.lucide?.createIcons?.();
+
+    const scrollWrap = document.querySelector('#aluno-arquivos-scroll-container');
+    let hideTimer = null;
+    let currentCard = null;
+    let currentViewUrl = null;
+    let currentDownloadUrl = null;
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height/2) - (bar.offsetHeight/2));
+      bar.style.top = top + 'px';
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = left + 'px';
+      bar.style.right = 'auto';
+    }
+
+    function show(){ bar.classList.add('is-visible'); }
+    function hide(){ bar.classList.remove('is-visible'); currentCard = null; currentViewUrl = null; currentDownloadUrl = null; }
+    function scheduleHide(){ clearTimeout(hideTimer); hideTimer = setTimeout(()=>{ hide(); }, 180); }
+    function cancelHide(){ clearTimeout(hideTimer); }
+
+    scrollWrap?.addEventListener('mouseover', (e)=>{
+      const card = e.target.closest('.impresso-card');
+      if (!card || card.classList.contains('header')) return;
+      currentCard = card;
+      currentViewUrl = card.getAttribute('data-arquivo-view-url');
+      currentDownloadUrl = card.getAttribute('data-arquivo-download-url');
+      positionFor(currentCard);
+      show();
+    });
+    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+    bar.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button.act-btn');
+      if (!btn) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'view' && currentViewUrl){
+        window.location.href = currentViewUrl;
+      } else if (action === 'download' && currentDownloadUrl){
+        window.location.href = currentDownloadUrl;
+      }
+    });
+  });
+</script>
+{% endblock %}

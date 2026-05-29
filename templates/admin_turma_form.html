@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Nova Turma' if modo=='novo' else 'Editar Turma' }}{% endblock %}
+
+{% block content %}
+<h1 class="main-title">{{ 'Nova Turma' if modo=='novo' else 'Editar Turma' }}</h1>
+
+<form method="post" action="{{ action_url or '' }}" class="grid-2" id="turmaForm">
+  <div class="field">
+    <label for="nome">Nome da Turma</label>
+    <input id="nome" name="nome" type="text" value="{{ turma.nome if turma else '' }}" required>
+  </div>
+
+  <div class="field">
+    <label for="curso">Curso</label>
+    <input id="curso" name="curso" type="text" value="{{ turma.curso if turma else '' }}">
+  </div>
+
+  <div class="field">
+    <label for="periodo">Período (ex: 2025/1)</label>
+    <input id="periodo" name="periodo" type="text" value="{{ turma.periodo if turma else '' }}" placeholder="AAAA/S">
+  </div>
+
+  <div class="field" style="display:flex;align-items:center;gap:8px; margin-top:6px;">
+    <input id="ativa" name="ativa" type="checkbox" {% if (turma and turma.ativa) or modo=='novo' %}checked{% endif %}>
+    <label for="ativa">Turma ativa</label>
+  </div>
+
+  <div style="grid-column:1 / -1; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+    <div class="field">
+      <label for="qtd">Gerar linhas para cadastro em massa</label>
+      <input id="qtd" name="qtd" type="number" min="1" max="200" step="1" value="10" style="max-width:120px;">
+    </div>
+    <button class="btn" type="button" id="btnGerar">
+      <i class="lucide" data-lucide="list-plus"></i> Gerar lista
+    </button>
+
+    <div class="field" style="margin-left:auto;">
+      <label for="csv">Ou importar de CSV (nome,email)</label>
+      <input id="csv" name="csv" type="file" accept=".csv">
+    </div>
+    <button class="btn" type="button" id="btnLerCSV">
+      <i class="lucide" data-lucide="file-up"></i> Ler CSV
+    </button>
+  </div>
+
+  <!-- Tabela dinâmica de alunos (nome/email) -->
+  <div style="grid-column:1 / -1;">
+    <div class="content-block">
+      <div class="content-block-header">Alunos da Turma (cadastro em massa)</div>
+      <div class="content-block-body" style="display:block;">
+        <div style="overflow:auto;">
+          <table class="table" id="tblAlunos">
+            <thead>
+              <tr>
+                <th style="width:48px;">#</th>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th style="width:80px;">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {# se estiver editando e houver alunos já vinculados, o backend pode renderizar linhas aqui #}
+              {% if alunos and alunos|length %}
+                {% for i,al in enumerate(alunos, start=1) %}
+                <tr>
+                  <td class="num">{{ i }}</td>
+                  <td><input class="input" name="alunos_nome" value="{{ al.nome }}"></td>
+                  <td><input class="input" name="alunos_email" value="{{ al.email }}"></td>
+                  <td><button class="btn danger" type="button" onclick="this.closest('tr').remove()">Remover</button></td>
+                </tr>
+                {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+          <button class="btn" type="button" id="btnAddLinha" title="Adicionar linha"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg> Adicionar linha</button>
+          <!-- Botão icon-only: Importar CSV (nome,email) -->
+          <input id="miniCsv" type="file" accept=".csv" hidden>
+          <button class="btn" type="button" id="btnMiniCsv" title="Importar CSV (nome,email)" aria-label="Importar CSV">
+            <i class="lucide" data-lucide="file-up"></i>
+          </button>
+          <button class="btn" type="button" id="btnLimpar"><i class="lucide" data-lucide="trash"></i> Limpar lista</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="grid-column:1 / -1;">
+    <button class="btn primary" type="submit">
+      <i class="lucide btn-icon-save" data-lucide="check"></i> Salvar
+    </button>
+    <a class="btn" href="{{ '/admin/turmas' }}">
+      Cancelar
+    </a>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide && lucide.createIcons) lucide.createIcons();
+
+  const tbl = document.querySelector('#tblAlunos tbody');
+  const btnGerar = document.getElementById('btnGerar');
+  const btnAdd = document.getElementById('btnAddLinha');
+  const btnLimpar = document.getElementById('btnLimpar');
+  const inputQtd = document.getElementById('qtd');
+  const inputCSV = document.getElementById('csv');
+  const btnLerCSV = document.getElementById('btnLerCSV');
+
+  function addLinha(nome = '', email = '') {
+    const idx = tbl.children.length + 1;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="num">${idx}</td>
+      <td><input class="input" name="alunos_nome" value="${nome}"></td>
+      <td><input class="input" name="alunos_email" value="${email}"></td>
+      <td><button class="btn danger" type="button">Remover</button></td>
+    `;
+    tr.querySelector('button').addEventListener('click', () => tr.remove());
+    tbl.appendChild(tr);
+  }
+
+  btnGerar?.addEventListener('click', () => {
+    const n = Math.max(1, Math.min(200, parseInt(inputQtd.value || '0', 10)));
+    for (let i = 0; i < n; i++) addLinha();
+  });
+
+  btnAdd?.addEventListener('click', () => addLinha());
+
+  btnLimpar?.addEventListener('click', () => {
+    tbl.innerHTML = '';
+  });
+
+  function parseCSVFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const txt = String(reader.result || '');
+      const lines = txt.split(/\r?\n/).filter(x => x.trim().length);
+      if (!lines.length) { alert('Arquivo CSV vazio.'); return; }
+      const first = (lines[0] || '').toLowerCase();
+      const start = (first.includes('nome') && first.includes('email')) ? 1 : 0;
+      for (let i = start; i < lines.length; i++) {
+        const [nome, email] = lines[i].split(/,|;|\t/).map(s => (s || '').trim());
+        if (nome || email) addLinha(nome, email);
+      }
+      alert('Linhas adicionadas a partir do CSV. Revise antes de salvar.');
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  btnLerCSV?.addEventListener('click', () => {
+    const f = inputCSV.files?.[0];
+    if (!f) { alert('Selecione um arquivo CSV primeiro.'); return; }
+    parseCSVFile(f);
+  });
+
+  // Botão icon-only ao lado do +
+  const miniCsv = document.getElementById('miniCsv');
+  const btnMini = document.getElementById('btnMiniCsv');
+  btnMini?.addEventListener('click', () => miniCsv?.click());
+  miniCsv?.addEventListener('change', () => {
+    const f = miniCsv.files?.[0];
+    if (f) parseCSVFile(f);
+  });
+});
+</script>
+{% endblock %}

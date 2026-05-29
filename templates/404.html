@@ -1,0 +1,12 @@
+<!-- templates/404.html -->
+{% extends "base.html" %}
+{% block title %}Página não encontrada{% endblock %}
+{% block content %}
+<h1 class="main-title">Página não encontrada (404)</h1>
+<div class="card">
+  <p>A URL acessada não existe. Verifique o endereço ou volte para a área inicial.</p>
+  <div class="form-actions" style="margin-top:8px;">
+    <a class="btn" href="{{ url_for('admin_dashboard') }}"><i class="lucide" data-lucide="home"></i> Ir para o início</a>
+  </div>
+</div>
+{% endblock %}

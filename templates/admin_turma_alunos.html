@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Alunos da Turma{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Turma: {{ turma.nome }} — Alunos</h1>
+
+<div class="toolbar">
+  <div class="filters"></div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <a class="btn btn-nova-alinhado" href="{{ '/admin/turmas/' ~ turma.id ~ '/adicionar_aluno' }}"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg><span class="btn-label">Adicionar</span></a>
+    <!-- Importar CSV: botão idêntico ao adicionar, com upload e post automático -->
+    <form id="form-importar-turma" method="post" action="{{ url_for('admin_turmas_importar') }}" enctype="multipart/form-data" style="display:inline;">
+      <input type="hidden" name="turma_id" value="{{ turma.id }}">
+      <label for="csv2" class="btn">
+  <i class="lucide" data-lucide="file-up"></i> Importar CSV (matrícula,nome,email)
+        <input id="csv2" name="csv_arquivo" type="file" accept=".csv" style="display:none">
+      </label>
+    </form>
+  </div>
+</div>
+
+<div class="cards-header">
+  <div>nº</div>
+  <div>Nome</div>
+  <div>E-mail</div>
+  <div>—</div>
+  <div class="ta-center">—</div>
+  <div class="text-center">Ações</div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+      const file = document.getElementById('csv2');
+      const form = document.getElementById('form-importar-turma');
+      file?.addEventListener('change', () => { if (file.files && file.files.length) form?.submit(); });
+    });
+  </script>
+</div>
+
+<div class="activity-list">
+  {% for a in alunos %}
+    <div class="activity-row">
+      <div class="activity-card">
+        <div class="activity-values">
+          <div class="num">{{ a.id }}</div>
+          <div class="ellipsis">{{ a.nome }}</div>
+          <div class="ellipsis">{{ a.email or '—' }}</div>
+          <div class="ellipsis">—</div>
+          <div class="ta-center">—</div>
+        </div>
+      </div>
+      <div class="row-actions">
+        <a class="btn" href="{{ '/admin/turmas/' ~ turma.id ~ '/alunos/editar/' ~ a.id }}"><i class="lucide" data-lucide="edit-3"></i> Editar</a>
+        <form method="post" action="{{ '/admin/turmas/' ~ turma.id ~ '/alunos/deletar/' ~ a.id }}" onsubmit="return confirm('Remover aluno da turma?');">
+          <button class="btn danger" type="submit"><i class="lucide" data-lucide="trash-2"></i> Remover</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <div class="empty-card">
+      <span>Nenhum aluno na turma.</span>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

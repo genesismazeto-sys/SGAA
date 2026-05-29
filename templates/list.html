@@ -1,0 +1,58 @@
+{% macro atividade_card(a) %}
+{# Ordem das colunas:
+   nº | Tipo | Nome | Grupo | Horas solicitadas | Limitações | [Ações]
+   O card ocupa as 6 primeiras; as ações ficam fora (coluna 7). #}
+
+{# Horas solicitadas (só número) #}
+{% set horas = 0 %}
+{% if a.tem_limitacao %}
+  {% if a.tipo_limitacao == 'semestral' %}
+    {% set horas = a.limite_horas_semestral or 0 %}
+  {% elif a.tipo_limitacao in ['total','anual'] %}
+    {% set horas = a.limite_horas_total or 0 %}
+  {% else %}
+    {% set horas = a.limite_horas or 0 %}
+  {% endif %}
+{% else %}
+  {% set horas = a.limite_horas or 0 %}
+{% endif %}
+
+{# Texto da coluna Limitações #}
+{% if a.tem_limitacao %}
+  {% if a.tipo_limitacao == 'semestral' %}
+    {% set limite_txt = 'Semestral' %}
+  {% elif a.tipo_limitacao in ['total','anual'] %}
+    {% set limite_txt = 'Anual' %}
+  {% else %}
+    {% set limite_txt = 'NA' %}
+  {% endif %}
+{% else %}
+  {% set limite_txt = 'NA' %}
+{% endif %}
+
+<div class="activity-line">
+  <!-- Card (colunas 1..6) -->
+  <div class="activity-card">
+    <div class="col numero">{{ a.id }}</div>
+    <div class="col tipo">{{ a.tipo_atividade }}</div>
+    <div class="col nome ellipsis" title="{{ a.nome }}">{{ a.nome }}</div>
+    <div class="col grupo">{{ a.grupo }}</div>
+    <div class="col horas">{{ horas }}</div>
+    <div class="col limitacoes">{{ limite_txt }}</div>
+  </div>
+
+  <!-- Ações (fora do card, col. 7) -->
+  <div class="row-actions">
+    <a class="btn sm" href="{{ url_for('admin_editar_atividade', atividade_id=a.id) }}">
+      <i class="lucide" data-lucide="edit-3"></i> Editar
+    </a>
+    <form method="post"
+          action="{{ url_for('admin_deletar_atividade', atividade_id=a.id) }}"
+          onsubmit="return confirm('Deletar esta atividade?');">
+      <button class="btn sm danger" type="submit">
+        <i class="lucide" data-lucide="trash-2"></i> Excluir
+      </button>
+    </form>
+  </div>
+</div>
+{% endmacro %}

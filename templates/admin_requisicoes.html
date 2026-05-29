@@ -1,0 +1,1839 @@
+{% from 'components/pagination.html' import paginate %}
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Requisições{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    /* Botão Adicionar: somente contorno e texto azuis (scoped) */
+    .btn.outline-primary{
+      background:var(--surface);
+      color:var(--btn-primary);
+      border-color:var(--btn-primary);
+    }
+    .btn.outline-primary:hover{
+      background:rgba(0,150,160,.06);
+      color:var(--btn-primary-strong);
+      border-color:var(--btn-primary-strong);
+    }
+
+    /* Toolbar: override list-cards.css chips (scoped) */
+    #impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+    #impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-impressoes{ padding:0; }
+    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+    #grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+    #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+    #filter-btn{ justify-content:center; }
+
+    /* Base compact badge (counts, codes, etc.) */
+    .badge{
+      display:inline-flex; align-items:center; justify-content:center;
+      height: 18px; min-width: 18px; padding: 0 6px; box-sizing: border-box;
+      font-size: 11px; line-height: 1; white-space: nowrap; vertical-align: middle;
+      border: 1px solid var(--border-strong); border-radius: 999px;
+      background: var(--surface); color: var(--text-secondary);
+    }
+
+  /* (layout column + alignment rules migrated to list-cards.css under .imp-req) */
+  </style>
+{% endblock %}
+
+{% block content %}
+{% set can_requisicoes_edit = auth_can('requisicoes', 'edit') %}
+{% set can_requisicoes_full = auth_can('requisicoes', 'full') %}
+<h1 class="main-title">{{ user_message("Requisições") }}</h1>
+
+<!-- Toolbar (Buscar, Organizar, Filtrar) -->
+<div class="toolbar" id="impressoes-toolbar">
+  <div class="filters">
+
+    <!-- Buscar -->
+    <div class="input-group" id="grp-busca-impressoes">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-impressoes" type="search" placeholder="{{ user_message('Buscar por aluno, turma ou atividade…') }}" aria-label="{{ user_message('Buscar') }}" value="{{ request.args.get('q','') }}">
+    </div>
+
+    <!-- Organizar -->
+    <div class="input-group" id="grp-ordenar">
+      <div class="input-chip" aria-hidden="true">
+        <i class="lucide" data-lucide="arrow-up-down"></i>
+      </div>
+
+      <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="{{ user_message('Selecionar campo') }}">
+        <span id="sort-label">{{ user_message("Organizar por") }}</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+
+      <button class="input-chip" id="sort-toggle" type="button" aria-label="{{ user_message('Alternar direção de organização') }}" title="{{ user_message('Alternar direção') }}">
+        <span id="sort-dir">{{ '↓' if request.args.get('dir','asc')=='desc' else '↑' }}</span>
+      </button>
+    </div>
+
+    <!-- Filtrar -->
+    <div class="input-group" id="grp-filtro">
+      <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="border:none; box-shadow:none;">
+        <i class="lucide" data-lucide="filter"></i>
+        <span>{{ user_message("Filtrar") }}</span>
+        {# TODO: Mostrar badge com quantidade de filtros ativos futuramente #}
+        <span id="filter-badge" class="badge" style="margin-left:6px; display:none;">0</span>
+      </button>
+    </div>
+
+  </div>
+
+  <div class="actions">
+    <!-- Pré-ajustes/Pré-definições -->
+    <button class="btn" id="req-presets-btn" type="button" title="{{ user_message('Pré-ajustes (pré-definições)') }}">
+      <i class="lucide" data-lucide="sliders-horizontal"></i> {{ user_message("Pré-definições") }}
+    </button>
+    <div class="toolbar-actions-shell">
+      <button class="btn" id="btn-req-actions" type="button" aria-haspopup="menu" aria-expanded="false">
+        <i class="lucide" data-lucide="rows-3"></i>
+        <span class="btn-label">{{ user_message("Ações") }}</span>
+        <i class="lucide" data-lucide="chevron-down"></i>
+      </button>
+      <div id="req-actions-menu" class="popover toolbar-actions-menu" hidden>
+        <div class="menu-title">{{ user_message("Ações da requisição") }}</div>
+        <div class="menu-list">
+          <button class="menu-item" type="button" id="req-action-view" disabled><i class="lucide" data-lucide="eye"></i><span>{{ user_message("Ver") }}</span></button>
+          <button class="menu-item" type="button" id="req-action-edit" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="pencil"></i><span>{{ user_message("Editar") }}</span></button>
+          <button class="menu-item" type="button" id="req-action-process" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="circle-check-big"></i><span>{{ user_message("Processar") }}</span></button>
+          <button class="menu-item danger" type="button" id="req-action-delete" disabled {% if not can_requisicoes_full %}hidden{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
+        </div>
+        <div class="menu-hint" id="req-actions-hint">{{ user_message("Selecione uma linha para habilitar as ações.") }}</div>
+      </div>
+    </div>
+    {% if can_requisicoes_edit %}
+      <a class="btn btn-nova-alinhado" href="{{ url_for('admin_nova_requisicao') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+        <span class="btn-label">{{ user_message("Adicionar") }}</span>
+      </a>
+    {% endif %}
+  </div>
+</div>
+{{ paginate('admin_requisicoes') }}
+
+<!-- Popover de Organizar -->
+<div id="sort-menu" class="popover sort-popover" hidden>
+  <div class="menu-title">{{ user_message("Organizar por") }}</div>
+  <div class="menu-list" id="sort-fields-list">
+    <div class="menu-item" data-field="data_solicitacao">{{ user_message("Solicitação") }}</div>
+    <div class="menu-item" data-field="data_processamento">{{ user_message("Processamento") }}</div>
+    <div class="menu-item" data-field="aluno_nome">{{ user_message("Aluno") }}</div>
+    <div class="menu-item" data-field="turma_codigo">{{ user_message("Turma") }}</div>
+    <div class="menu-item" data-field="tipo_atividade">{{ user_message("Tipo") }}</div>
+    <div class="menu-item" data-field="grupo">{{ user_message("Grupo") }}</div>
+    <div class="menu-item" data-field="atividade_nome">{{ user_message("Atividade") }}</div>
+    <div class="menu-item" data-field="status">{{ user_message("Status") }}</div>
+  </div>
+  <div class="menu-meta">{{ user_message("Direção") }}: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
+  <div class="menu-actions">
+    <button class="btn" type="button" id="sort-close">{{ user_message("Fechar") }}</button>
+  </div>
+  
+</div>
+
+<!-- Modal: Pré-ajustes (Requisições) -->
+<div id="req-presets-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-presets-title">
+    <div class="modal-header">
+      <h3 id="req-presets-title">
+        <span class="presets-title-row"><i class="lucide" data-lucide="sliders-horizontal"></i> {{ user_message("Pré-ajustes") }}</span>
+        <span class="presets-subtitle">{{ user_message("Justificativas e e-mails de resposta") }}</span>
+      </h3>
+      <button class="btn" id="req-presets-close" type="button" aria-label="{{ user_message('Fechar') }}"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-filter" id="req-presets-filter">
+      <label class="presets-tipo-label" for="req-presets-select">{{ user_message("Tipo") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="settings"></i></div>
+        <select class="control" id="req-presets-select" aria-label="{{ user_message('Escolher tipo de pré-ajuste') }}">
+          <option value="respostas">{{ user_message("Justificativas pré-definidas") }}</option>
+          <option value="emails">{{ user_message("E-mails de resposta") }}</option>
+        </select>
+      </div>
+    </div>
+    <hr class="presets-divider">
+    <div class="modal-body presets-body-split">
+      <div class="presets-col-left">
+        <div class="presets-col-header">
+          <span class="presets-itens-label" id="presets-itens-count">{{ user_message("Itens") }}</span>
+          <div class="actions-mini">
+            <button type="button" class="btn icon-btn" id="preset-add" title="{{ user_message('Adicionar') }}" aria-label="{{ user_message('Adicionar') }}"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
+            <button type="button" class="btn icon-btn" id="preset-del" title="{{ user_message('Excluir') }}" aria-label="{{ user_message('Excluir') }}"><i class="lucide" data-lucide="trash-2"></i></button>
+          </div>
+        </div>
+        <div class="menu-list" id="presets-list"></div>
+      </div>
+      <div class="presets-col-right">
+        <div class="presets-field-block">
+          <label class="presets-field-label" for="preset-title-input">{{ user_message("Título") }}</label>
+          <input type="text" id="preset-title-input" class="control" placeholder="{{ user_message('Título do modelo') }}" autocomplete="off">
+        </div>
+        <div class="presets-field-block">
+          <label class="presets-field-label" for="preset-textarea">{{ user_message("Conteúdo") }}</label>
+          <textarea id="preset-textarea" class="control" style="min-height:120px;resize:vertical" rows="3" placeholder="{{ user_message('Digite o conteúdo do modelo') }}"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="req-presets-ok" type="button">{{ user_message("Fechar") }}</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Estilos do modal de Pré-ajustes (escopo local) */
+#req-presets-modal .modal-card{ width:min(900px, calc(100vw - 32px)); }
+/* Header */
+#req-presets-modal .modal-header{ padding:18px 24px 6px; align-items:flex-start; }
+#req-presets-modal .modal-header h3{ flex-direction:column; align-items:flex-start; gap:0; font-size:16px; font-weight:500; }
+#req-presets-modal .presets-title-row{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; }
+#req-presets-modal .presets-title-row .lucide{ width:20px; height:20px; }
+#req-presets-modal .presets-subtitle{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:#71717a; }
+#req-presets-modal #req-presets-close{ width:30px; height:30px; min-width:30px; padding:0; border:0; background:transparent; box-shadow:none; color:#71717a; display:inline-grid; place-items:center; }
+#req-presets-modal #req-presets-close:hover{ background:#f4f4f5; }
+#req-presets-modal #req-presets-close .lucide{ margin:0; top:0; width:16px; height:16px; color:inherit; }
+/* Filter */
+.modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap:2px; }
+#req-presets-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
+#req-presets-modal .presets-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+#req-presets-modal .presets-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
+/* Footer */
+#req-presets-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
+/* Toolbar */
+#req-presets-modal .actions-mini{ display:flex; align-items:center; gap:4px; background:#f4f4f5; border-radius:6px; padding:2px; }
+#req-presets-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
+#req-presets-modal .actions-mini #preset-add{ background:#fff; border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
+#req-presets-modal .actions-mini #preset-del{ color:#a1a1aa; }
+#req-presets-modal .actions-mini #preset-del:hover{ color:#b91c1c; background:#fff; border:0.5px solid #e4e4e7 !important; }
+#req-presets-modal .actions-mini #preset-del.is-active .lucide{ color:#b91c1c; }
+#req-presets-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
+/* List */
+#req-presets-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
+#req-presets-modal .menu-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; font-weight:500; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
+#req-presets-modal .menu-item:hover{ background:#f8fafc; border-color:#e4e4e7; }
+#req-presets-modal .menu-item.is-selected{ background:#eff6ff; border-color:#bfdbfe; }
+/* Split body */
+#req-presets-modal .modal-body.presets-body-split{ display:grid; grid-template-columns:200px 1fr; gap:0; padding:18px 24px; flex:1; min-height:0; }
+.presets-col-left{ display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+.presets-col-header{ display:flex; align-items:center; justify-content:space-between; padding:0 0 8px; flex-shrink:0; }
+.presets-itens-label{ font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; display:block; }
+#req-presets-modal .presets-col-left{ padding-right:10px; }
+#req-presets-modal .presets-col-left .menu-list{ padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+.presets-col-right{ display:flex; flex-direction:column; gap:0; padding:0 0 0 20px; border-left:1px solid #e4e4e7; min-width:0; overflow-y:auto; }
+#req-presets-modal .presets-col-right .presets-field-block{ margin-bottom:14px; }
+#req-presets-modal .presets-col-right .presets-field-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+#req-presets-modal .presets-col-right input.control,
+#req-presets-modal .presets-col-right textarea.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:#fff; font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; width:100%; }
+#req-presets-modal .presets-col-right input.control:hover,
+#req-presets-modal .presets-col-right textarea.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
+#req-presets-modal .presets-col-right input.control:focus,
+#req-presets-modal .presets-col-right textarea.control:focus{ background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
+/* campo simples no editor direito */
+.preset-field{ display:flex; flex-direction:column; gap:4px; }
+.preset-field .section-title{ margin:0; }
+.card-box{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); padding:10px; display:flex; flex-direction:column; gap:10px; }
+.card-header{ display:flex; align-items:center; gap:8px; font-weight:600; }
+.card-header .lucide{ width:16px; height:16px; }
+.card-body{ min-height:120px; }
+</style>
+
+<script>
+// Modal Pré-ajustes: lógica de seleção, edição e salvamento persistente
+document.addEventListener('DOMContentLoaded', ()=>{
+  const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
+  const csrfToken = window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  function withCsrfHeaders(extraHeaders = {}) {
+    const headers = { ...extraHeaders };
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+    return headers;
+  }
+  let presetsData = { respostas: [], emails: [] };
+  let currentTipo = 'respostas';
+  let selectedId = null;
+  const reqMessageTemplates = JSON.parse(document.getElementById('req-message-templates')?.textContent || '{}');
+
+  const btn = document.getElementById('req-presets-btn');
+  const overlay = document.getElementById('req-presets-modal');
+  const btnClose = document.getElementById('req-presets-close');
+  const btnOk = document.getElementById('req-presets-ok');
+  const saveBtn = document.createElement('button');
+  const SAVE_ICON_SVG = '<i class="lucide btn-icon-save" data-lucide="check"></i>';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.id = 'presets-save';
+  saveBtn.type = 'button';
+  saveBtn.innerHTML = `${SAVE_ICON_SVG} ${reqMessageTemplates.save}`;
+  const filter = document.getElementById('req-presets-filter');
+  const listBox = document.getElementById('presets-list');
+  const select = document.getElementById('req-presets-select');
+  const addBtn = document.getElementById('preset-add');
+  const delBtn = document.getElementById('preset-del');
+  const updatePresetsSaveState = ()=>{
+    if (saveBtn) saveBtn.disabled = !canRequisicoesEdit || !selectedId;
+    if (delBtn) {
+      delBtn.classList.toggle('is-active', !!selectedId && canRequisicoesEdit);
+      delBtn.disabled = !canRequisicoesEdit;
+    }
+  };
+
+  function getSelectedPreset() {
+    const arr = presetsData[currentTipo] || [];
+    return arr.find(x => x.id === selectedId) || null;
+  }
+
+  function syncSelectedPresetDraft() {
+    if (!canRequisicoesEdit) return;
+    const item = getSelectedPreset();
+    if (!item) return;
+    const titleInput = document.getElementById('preset-title-input');
+    if (titleInput) item.titulo = titleInput.value;
+    const ta = document.getElementById('preset-textarea');
+    if (ta) item.texto = ta.value;
+    // também atualiza o label na lista esquerda
+    if (titleInput) {
+      const listInput = listBox.querySelector(`input[data-id="${item.id}"]`);
+      if (listInput) listInput.value = item.titulo;
+    }
+  }
+
+  // Insere o botão Salvar no footer, se não existir
+  const footer = overlay?.querySelector('.modal-footer');
+  if (footer && !document.getElementById('presets-save')) {
+    footer.appendChild(saveBtn);
+    window.lucide?.createIcons?.();
+  }
+
+  if (!canRequisicoesEdit) {
+    if (addBtn) addBtn.hidden = true;
+    if (delBtn) delBtn.hidden = true;
+    if (saveBtn) {
+      saveBtn.hidden = true;
+      saveBtn.disabled = true;
+    }
+  }
+
+  async function fetchPresets() {
+    try {
+      const resp = await fetch('/admin/api/presets');
+      if (!resp.ok) throw new Error('Erro ao carregar presets');
+      presetsData = await resp.json();
+      console.log('[PRESETS] Dados carregados do backend:', presetsData);
+    } catch (e) {
+      presetsData = { respostas: [], emails: [] };
+      console.error('[PRESETS] Erro ao carregar presets:', e);
+    }
+  }
+
+  async function savePresets() {
+    try {
+      console.log('[PRESETS] Salvando dados:', presetsData);
+      const resp = await fetch('/admin/api/presets', {
+        method: 'POST',
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(presetsData)
+      });
+      const result = await resp.json();
+      console.log('[PRESETS] Resposta do backend ao salvar:', result);
+      if (!resp.ok || !result?.ok) {
+        throw new Error(result?.detail || result?.error || 'Erro ao salvar presets');
+      }
+      return result;
+    } catch (e) {
+      console.error('[PRESETS] Erro ao salvar presets:', e);
+      throw e;
+    }
+  }
+
+  function renderList() {
+    const arr = presetsData[currentTipo] || [];
+    const countEl = document.getElementById('presets-itens-count');
+    if (countEl) {
+      countEl.textContent = arr.length
+        ? window.appFormatMessage(reqMessageTemplates.itemsCount, { value_1: arr.length })
+        : reqMessageTemplates.itemsLabel;
+    }
+    listBox.innerHTML = '';
+    arr.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'menu-item' + (item.id === selectedId ? ' is-selected' : '');
+  div.innerHTML = `<input type='text' class='control' style='border:none;background:transparent;width:100%;font-weight:500;outline:none;' value="${item.titulo.replace(/"/g,'&quot;')}" title="${item.titulo.replace(/"/g,'&quot;')}" data-id="${item.id}" autocomplete="off" />`;
+      div.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'INPUT') {
+          syncSelectedPresetDraft();
+          selectedId = item.id;
+          renderList();
+          renderContent();
+        }
+      });
+      // Editar título inline
+      const titleInput = div.querySelector('input');
+      titleInput.addEventListener('input', function(){
+        if (!canRequisicoesEdit) return;
+        item.titulo = this.value;
+        this.title = this.value;
+      });
+      // Somente habilita edição do título se o item estiver selecionado
+      if (!canRequisicoesEdit || item.id !== selectedId){
+        titleInput.readOnly = true;
+        titleInput.tabIndex = -1;
+        titleInput.style.pointerEvents = 'none';
+        titleInput.style.cursor = 'default';
+      } else {
+        titleInput.readOnly = false;
+        titleInput.tabIndex = 0;
+        titleInput.style.pointerEvents = 'auto';
+        titleInput.style.cursor = 'text';
+      }
+      listBox.appendChild(div);
+    });
+    if (!arr.length) {
+      listBox.innerHTML = `<div style="padding:8px; color:#6b7280;">${reqMessageTemplates.emptyPresetList}</div>`;
+      renderContent();
+      updatePresetsSaveState();
+      return;
+    }
+    // Não auto-seleciona; exige clique do usuário
+    updatePresetsSaveState();
+  }
+
+  function renderContent() {
+    const titleInput = document.getElementById('preset-title-input');
+    const ta = document.getElementById('preset-textarea');
+    const arr = presetsData[currentTipo] || [];
+    const item = arr.find(x => x.id === selectedId);
+    if (!item) {
+      if (titleInput) { titleInput.value = ''; titleInput.disabled = true; }
+      if (ta) { ta.value = ''; ta.disabled = true; }
+      updatePresetsSaveState();
+      return;
+    }
+    if (titleInput) {
+      titleInput.disabled = !canRequisicoesEdit;
+      titleInput.value = item.titulo;
+      titleInput.oninput = function() {
+        if (!canRequisicoesEdit) return;
+        item.titulo = this.value;
+        const listInput = listBox.querySelector(`input[data-id="${item.id}"]`);
+        if (listInput) listInput.value = this.value;
+      };
+    }
+    if (ta) {
+      ta.disabled = !canRequisicoesEdit;
+      ta.value = item.texto || '';
+      ta.oninput = function() {
+        if (!canRequisicoesEdit) return;
+        item.texto = ta.value;
+      };
+    }
+    updatePresetsSaveState();
+  }
+
+  async function open() {
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+    await fetchPresets();
+    // Garante que os campos existem
+    if (!presetsData.respostas) presetsData.respostas = [];
+    if (!presetsData.emails) presetsData.emails = [];
+    // Resetar seleção ao abrir
+    selectedId = null;
+    // Se não houver nenhum modelo, adiciona um modelo inicial
+    if ((presetsData[currentTipo] || []).length === 0) {
+      let novoTitulo = currentTipo === 'respostas' ? reqMessageTemplates.newJustification : reqMessageTemplates.newResponse;
+      presetsData[currentTipo].push({ id: 1, titulo: novoTitulo, texto: '' });
+    }
+    window.lucide?.createIcons?.();
+    renderList();
+    renderContent();
+    updatePresetsSaveState();
+  }
+  function close(){ syncSelectedPresetDraft(); overlay.hidden = true; document.body.style.overflow=''; }
+  btn?.addEventListener('click', open);
+  btnClose?.addEventListener('click', close);
+  btnOk?.addEventListener('click', close);
+  overlay?.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
+  document.addEventListener('keydown', (e)=>{ if(!overlay.hidden && e.key==='Escape') close(); });
+
+  select?.addEventListener('change', ()=> {
+    syncSelectedPresetDraft();
+    currentTipo = select.value;
+    selectedId = null;
+    renderList();
+    renderContent();
+    updatePresetsSaveState();
+  });
+
+  addBtn?.addEventListener('click', () => {
+    if (!canRequisicoesEdit) return;
+    syncSelectedPresetDraft();
+    const arr = presetsData[currentTipo];
+    const novoId = arr.length ? Math.max(...arr.map(x=>x.id))+1 : 1;
+    let novoTitulo = reqMessageTemplates.newModel;
+    if(currentTipo === 'respostas') novoTitulo = reqMessageTemplates.newJustification;
+    if(currentTipo === 'emails') novoTitulo = reqMessageTemplates.newResponse;
+    arr.push({ id: novoId, titulo: novoTitulo, texto: "" });
+    selectedId = novoId;
+    renderList();
+    renderContent();
+    updatePresetsSaveState();
+  });
+
+  delBtn?.addEventListener('click', () => {
+    if (!canRequisicoesEdit) return;
+    syncSelectedPresetDraft();
+    let arr = presetsData[currentTipo];
+    if (!selectedId) return;
+    arr = arr.filter(x => x.id !== selectedId);
+    presetsData[currentTipo] = arr;
+    selectedId = null;
+    renderList();
+    renderContent();
+    updatePresetsSaveState();
+  });
+
+  saveBtn?.addEventListener('click', async () => {
+    if (!canRequisicoesEdit) return;
+    syncSelectedPresetDraft();
+    // Sincroniza todos os inputs de título antes de salvar
+    document.querySelectorAll('#presets-list input[type="text"]').forEach(input => {
+      const id = parseInt(input.getAttribute('data-id'));
+      const arr = presetsData[currentTipo] || [];
+      const obj = arr.find(x => x.id === id);
+      if (obj) obj.titulo = input.value;
+    });
+    const arr = presetsData[currentTipo];
+    const item = arr.find(x => x.id === selectedId);
+    if (!item) return;
+    // Salva texto do textarea
+    const ta = document.getElementById('preset-textarea');
+    if (ta) item.texto = ta.value;
+    try {
+      await savePresets();
+      window.showToast && window.showToast(reqMessageTemplates.presetSaved, 'success');
+      renderList();
+      renderContent();
+    } catch (e) {
+      window.showToast && window.showToast(
+        window.appFormatMessage(reqMessageTemplates.presetSaveError, { value_1: e.message || reqMessageTemplates.unknownError }),
+        'error'
+      );
+    }
+  });
+});
+</script>
+
+<!-- Popover de Filtrar -->
+<div id="filter-menu" class="popover filter-popover" hidden>
+  <div class="menu-title">{{ user_message("Filtrar por") }}</div>
+  <div class="filter-pills"></div>
+  <div class="filter-values"></div>
+  <div class="menu-actions">
+    <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> {{ user_message("Limpar tudo") }}</button>
+    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> {{ user_message("Aplicar") }}</button>
+  </div>
+</div>
+<script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
+<script id="req-message-templates" type="application/json">{{ {
+  'save': user_message('Salvar'),
+  'itemsLabel': user_message('Itens'),
+  'itemsCount': user_message('Itens · {value_1}'),
+  'emptyPresetList': user_message('Nenhum modelo cadastrado.'),
+  'newModel': user_message('Novo modelo'),
+  'newJustification': user_message('Nova justificativa'),
+  'newResponse': user_message('Nova resposta'),
+  'presetSaved': user_message('Modelo salvo.'),
+  'presetSaveError': user_message('Não foi possível salvar: {value_1}'),
+  'unknownError': user_message('erro desconhecido'),
+  'deleteRequestConfirm': user_message('Excluir a requisição de "{value_1}"? Esta ação não pode ser desfeita.'),
+  'deleteRequestError': user_message('Erro ao excluir a requisição.'),
+  'selectedActionsAria': user_message('Ações da requisição selecionada'),
+  'viewRequest': user_message('Ver requisição'),
+  'editRequest': user_message('Editar requisição'),
+  'processRequest': user_message('Processar requisição'),
+  'organizeBy': user_message('Organizar por'),
+  'process': user_message('Processar'),
+  'reopen': user_message('Reabrir'),
+  'selectRowHint': user_message('Selecione uma linha para habilitar as ações.')
+}|tojson }}</script>
+
+<!-- Lista no formato de cards (com header sticky) -->
+<div class="impressoes-cards-scroll imp-req" id="requisicoes-scroll-container">
+  <div id="requisicoes-list" class="impressoes-cards" role="list">
+
+    <!-- Header -->
+    {{ cl.header([
+      {'text': '#', 'class': 'center'},
+      {'text': user_message('Solicitação'), 'class': 'left'},
+      {'text': user_message('Processamento'), 'class': 'left'},
+      {'text': user_message('Aluno'), 'class': 'left'},
+      {'text': user_message('Turma'), 'class': 'center'},
+      {'text': user_message('Tipo'), 'class': 'left'},
+      {'text': user_message('Grupo'), 'class': 'center'},
+      {'text': user_message('Atividade'), 'class': 'left'},
+      {'text': user_message('Status'), 'class': 'center'}
+    ]) }}
+
+    {% if requisicoes and requisicoes|length %}
+    {% for r in requisicoes %}
+  {# Helpers to ISO date for data attributes #}
+  {% set _de = r.data_evento %}
+  {% if _de %}
+    {% if _de.strftime is not undefined %}
+      {% set _de_iso = _de.strftime('%Y-%m-%d') %}
+    {% else %}
+      {% set _de_s = ("" ~ _de)|string %}
+      {% set _de_iso = _de_s.split(' ')[0] %}
+    {% endif %}
+  {% else %}
+    {% set _de_iso = '' %}
+  {% endif %}
+        {% set status_lc = (r.status or '')|lower %}
+        {% set status_cell = {}
+           %}
+        {% if status_lc in ['pendente','aguardando','pending'] %}
+          {% set status_cell = {'content':'Pendente','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'caution','title':'Processar requisição'} %}
+        {% elif status_lc in ['deferido','deferida','aprovado','aprovada','approved'] %}
+          {% set status_cell = {'content':'Deferida','badge':true,'badge_type':'success','status_badge':true,'status_tone':'positive'} %}
+        {% elif status_lc in ['deferida parcialmente','deferido parcialmente','parcialmente deferida','partially approved'] %}
+          {% set status_cell = {'content':'Deferida Parcialmente','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'caution'} %}
+        {% elif status_lc in ['indeferido','indeferida','rejeitada','rejeitado'] %}
+          {% set status_cell = {'content':'Indeferida','badge':true,'badge_type':'danger','status_badge':true,'status_tone':'negative'} %}
+        {% elif status_lc in ['devolvida','devolvido'] %}
+          {% set status_cell = {'content':'Devolvida','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'info'} %}
+        {% elif status_lc in ['encerrada','encerrado','closed'] %}
+          {% set status_cell = {'content':'Encerrada','badge':true,'badge_type':'danger','status_badge':true,'status_tone':'negative'} %}
+        {% else %}
+          {% set status_cell = {'content': (r.status or '-'), 'badge': true, 'status_badge': true, 'status_tone': 'neutral'} %}
+        {% endif %}
+        {% if r.matrix_scope_issue %}
+          {% set status_cell = {
+            'content': ((r.status or '-') ~ ' · Fora da matriz'),
+            'badge': true,
+            'badge_type': 'danger',
+            'status_badge': true,
+            'status_tone': 'negative',
+            'title': ('Atividade fora da matriz efetiva' ~ (' (' ~ r.matrix_scope_label ~ ')' if r.matrix_scope_label else ''))
+          } %}
+        {% endif %}
+        {% if r.data_solicitacao %}
+          {% if r.data_solicitacao.strftime is not undefined %}
+            {% set data_solicitacao_fmt = r.data_solicitacao.strftime('%d/%m/%Y') %}
+          {% else %}
+            {% set data_solicitacao_raw = (r.data_solicitacao|string).split(' ')[0] %}
+            {% if '-' in data_solicitacao_raw and data_solicitacao_raw|length >= 10 %}
+              {% set data_solicitacao_parts = data_solicitacao_raw.split('-') %}
+              {% set data_solicitacao_fmt = (data_solicitacao_parts[2] if data_solicitacao_parts|length > 2 else data_solicitacao_parts[-1]) ~ '/' ~ (data_solicitacao_parts[1] if data_solicitacao_parts|length > 1 else '') ~ '/' ~ data_solicitacao_parts[0] %}
+            {% else %}
+              {% set data_solicitacao_fmt = data_solicitacao_raw %}
+            {% endif %}
+          {% endif %}
+        {% else %}
+          {% set data_solicitacao_fmt = '-' %}
+        {% endif %}
+        {% if r.data_processamento %}
+          {% if r.data_processamento.strftime is not undefined %}
+            {% set data_processamento_fmt = r.data_processamento.strftime('%d/%m/%Y') %}
+          {% else %}
+            {% set data_processamento_raw = (r.data_processamento|string).split(' ')[0] %}
+            {% if '-' in data_processamento_raw and data_processamento_raw|length >= 10 %}
+              {% set data_processamento_parts = data_processamento_raw.split('-') %}
+              {% set data_processamento_fmt = (data_processamento_parts[2] if data_processamento_parts|length > 2 else data_processamento_parts[-1]) ~ '/' ~ (data_processamento_parts[1] if data_processamento_parts|length > 1 else '') ~ '/' ~ data_processamento_parts[0] %}
+            {% else %}
+              {% set data_processamento_fmt = data_processamento_raw %}
+            {% endif %}
+          {% endif %}
+        {% else %}
+          {% set data_processamento_fmt = '—' %}
+        {% endif %}
+        {% if r.tipo_atividade == 'Acadêmica Complementar' %}
+          {% set tipo_atividade_label = 'AAC' %}
+        {% elif r.tipo_atividade == 'Extensão Universitária' %}
+          {% set tipo_atividade_label = 'AEU' %}
+        {% else %}
+          {% set tipo_atividade_label = r.tipo_atividade or '-' %}
+        {% endif %}
+        {{ cl.row([
+          {'class': 'center', 'content': (r.id|string)},
+          {'class': 'left', 'content': data_solicitacao_fmt },
+          {'class': 'left', 'content': data_processamento_fmt },
+          {'class': 'left ellipsis', 'content': r.aluno_nome or ''},
+          {'class': 'center', 'content': r.turma_codigo or '-'},
+          {'class': 'left ellipsis', 'content': tipo_atividade_label},
+          {'class': 'center ellipsis', 'content': ( ( ( (r.grupo or '')|string ).split(' - ')[0]|trim ) or '-' ) },
+          {'class': 'left', 'content': (r.atividade_nome or '-'), 'class': 'left ellipsis'},
+          status_cell
+        ], attrs={
+          'data-req-id': r.id,
+          'data-req-aluno': r.aluno_nome|e,
+          'data-atividade-id': r.atividade_id,
+          'data-tipo': r.tipo_atividade,
+          'data-grupo': r.grupo|default('', true),
+          'data-status': (r.status or '')|e,
+          'data-matrix-scope-issue': '1' if r.matrix_scope_issue else '0',
+          'data-matrix-scope-label': (r.matrix_scope_label or '')|e,
+          'data-nome-evento': (r.nome_evento or '')|e,
+          'data-horas-solicitadas': r.horas_solicitadas or '',
+          'data-data-evento': _de_iso,
+          'data-observacao': (r.observacao or '')|e,
+          'data-delete-url': (url_for('admin_excluir_requisicao', req_id=r.id) if can_requisicoes_full else '')
+        }) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma requisição encontrada.</div>
+    {% endif %}
+
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
+    const canRequisicoesFull = {{ 'true' if can_requisicoes_full else 'false' }};
+    const csrfToken = window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    function buildPostHeaders(extraHeaders = {}) {
+      const headers = { 'X-Requested-With':'XMLHttpRequest', ...extraHeaders };
+      if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+      return headers;
+    }
+    const reqMessageTemplates = JSON.parse(document.getElementById('req-message-templates')?.textContent || '{}');
+    const toolbarQuery = window.createToolbarQueryHelpers();
+    // Icons
+    document.addEventListener('DOMContentLoaded', () => { if (window.lucide && lucide.createIcons) lucide.createIcons(); });
+
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-impressoes', rowsRootSelector: '#requisicoes-list' });
+    window.initToolbarSortMenu?.({
+      ...toolbarQuery,
+      buttonSelector: '#sort-field',
+      toggleSelector: '#sort-toggle',
+      labelSelector: '#sort-label',
+      dirLabelSelector: '#dir-label',
+      dirValueSelector: '#sort-dir',
+      defaultField: 'data_solicitacao',
+      defaultLabel: reqMessageTemplates.organizeBy
+    });
+    window.initToolbarFilterMenu?.({
+      ...toolbarQuery
+    });
+
+    // Seleção de linha + menu de Ações
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const rowSelectionApi = window.initToolbarRowSelection?.({
+        toolbarSelector: '#impressoes-toolbar',
+        rowsRootSelector: '#requisicoes-list',
+        enableSelectAllButton: false,
+        enableBulkDelete: false,
+      });
+      if (!rowSelectionApi) return;
+
+      const actBtn   = document.getElementById('btn-req-actions');
+      const actMenu  = document.getElementById('req-actions-menu');
+      const hint     = document.getElementById('req-actions-hint');
+      const itmView  = document.getElementById('req-action-view');
+      const itmEdit  = document.getElementById('req-action-edit');
+      const itmProc  = document.getElementById('req-action-process');
+      const itmDel   = document.getElementById('req-action-delete');
+      if (!actBtn || !actMenu) return;
+
+      function closeMenu(){ actMenu.hidden = true; actBtn.setAttribute('aria-expanded','false'); }
+      function openMenu(){
+        const r = actBtn.getBoundingClientRect();
+        const w = Math.max(actMenu.offsetWidth || 200, 200);
+        actMenu.style.position = 'fixed';
+        actMenu.style.top  = `${Math.round(r.bottom + 6)}px`;
+        actMenu.style.left = `${Math.round(Math.max(12, Math.min(r.left, window.innerWidth - w - 12)))}px`;
+        actMenu.hidden = false;
+        actBtn.setAttribute('aria-expanded','true');
+        syncItems();
+        window.lucide?.createIcons?.();
+      }
+
+      function syncItems(){
+        const rows = rowSelectionApi.getSelectedRows();
+        const row  = rows.length === 1 ? rows[0] : null;
+        const st   = (row?.getAttribute('data-status') || '').trim().toLowerCase();
+        const isPending = !st || st.includes('pend') || st.includes('aguard');
+        const hasRow = !!row;
+        if (itmView)  { itmView.disabled  = !hasRow; }
+        if (itmEdit)  {
+          const canUseEdit = canRequisicoesEdit && hasRow && isPending;
+          itmEdit.disabled = !canUseEdit;
+          itmEdit.hidden = !canRequisicoesEdit || !canUseEdit;
+        }
+        if (itmProc)  {
+          itmProc.disabled = !canRequisicoesEdit || !hasRow;
+          itmProc.hidden = !canRequisicoesEdit;
+          const icon = itmProc.querySelector('.lucide');
+          const label = itmProc.querySelector('span');
+          if (isPending){
+            if (icon) icon.setAttribute('data-lucide','circle-check-big');
+            if (label) label.textContent = reqMessageTemplates.process;
+          } else {
+            if (icon) icon.setAttribute('data-lucide','rotate-ccw');
+            if (label) label.textContent = reqMessageTemplates.reopen;
+          }
+        }
+        if (itmDel)   {
+          itmDel.disabled = !canRequisicoesFull || !hasRow;
+          itmDel.hidden = !canRequisicoesFull;
+        }
+        if (hint)     { hint.textContent  = hasRow ? '' : reqMessageTemplates.selectRowHint; }
+      }
+
+      actBtn.addEventListener('click', ()=>{ if (actMenu.hidden) openMenu(); else closeMenu(); });
+      actMenu.addEventListener('click', (e)=>{ e.stopPropagation(); });
+      document.addEventListener('click', (e)=>{ if (!actMenu.hidden && !e.target.closest('#req-actions-menu') && !e.target.closest('#btn-req-actions')) closeMenu(); });
+      document.addEventListener('keydown', (e)=>{ if (e.key==='Escape' && !actMenu.hidden) closeMenu(); });
+
+      itmView?.addEventListener('click', ()=>{ closeMenu(); const r=rowSelectionApi.getSelectedRows()[0]; if(r){ window.__openExistingReqModal?.(r.getAttribute('data-req-id'),'view'); } });
+      itmEdit?.addEventListener('click', ()=>{
+        if (!canRequisicoesEdit) return;
+        closeMenu();
+        const r=rowSelectionApi.getSelectedRows()[0];
+        if(r){ window.__openExistingReqModal?.(r.getAttribute('data-req-id'),'edit'); }
+      });
+      itmProc?.addEventListener('click', ()=>{
+        if (!canRequisicoesEdit) return;
+        closeMenu();
+        const r=rowSelectionApi.getSelectedRows()[0];
+        if(r){ window.__openExistingReqModal?.(r.getAttribute('data-req-id'),'process'); }
+      });
+      itmDel?.addEventListener('click', async ()=>{
+        if (!canRequisicoesFull) return;
+        const r = rowSelectionApi.getSelectedRows()[0];
+        if (!r || itmDel.disabled) return;
+        const aluno = r.getAttribute('data-req-aluno') || 'esta requisição';
+        if (!window.confirm(window.appFormatMessage(reqMessageTemplates.deleteRequestConfirm, { value_1: aluno }))) return;
+        closeMenu();
+        const url = r.getAttribute('data-delete-url');
+        if (!url) return;
+        try{
+          const res = await fetch(url, { method:'POST', headers: buildPostHeaders() });
+          if (res.ok || res.status === 204){ window.location.reload(); return; }
+          window.showToast?.(reqMessageTemplates.deleteRequestError, 'error');
+        }catch(_e){ window.showToast?.(reqMessageTemplates.deleteRequestError, 'error'); }
+      });
+    });
+  })();
+</script>
+<!-- Modal: Nova Requisição (Admin) -->
+<div id="req-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-modal-title">
+    <div class="modal-header">
+      <h3 id="req-modal-title"><i class="lucide" data-lucide="file-plus"></i> Nova Requisição</h3>
+      <button class="btn" id="req-modal-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <form id="req-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_nova_requisicao') if can_requisicoes_edit else '#' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-cards-narrow">
+          <div class="form-row">
+            <label class="row-label">Aluno</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="user-round"></i></div>
+              <select class="control" id="m_aluno_id_select" name="aluno_id" required>
+                <option value="">Selecione um aluno</option>
+                {% for aluno in alunos_opcoes %}
+                  <option value="{{ aluno.id }}">{{ aluno.nome }}{% if aluno.matricula %} · {{ aluno.matricula }}{% endif %} · {{ aluno.turma_label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row" id="m_scope_hint_row">
+            <label class="row-label">Escopo</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="network"></i></div>
+              <div class="control" id="m_scope_hint" style="display:flex; align-items:center; color: var(--text-secondary);">Selecione um aluno para carregar a matriz efetiva da turma.</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="row-label">Tipo</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+              <select class="control" id="m_tipo_atividade_select" name="tipo_atividade" required>
+                <option value="Acadêmica Complementar">Acadêmica Complementar</option>
+                <option value="Extensão Universitária">Extensão Universitária</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="row-label">Grupo</label>
+            <div class="field-card split-2 compact-left" id="m_grupo_card">
+              <div class="field-chip"><i class="lucide" data-lucide="tags"></i></div>
+              <select class="control" id="m_grupo_num" aria-label="Número do grupo"></select>
+              <div class="field-chip"><i class="lucide" data-lucide="bookmark"></i></div>
+              <input class="control" id="m_grupo_desc" type="text" placeholder="Descrição do grupo" value="" required readonly aria-readonly="true">
+              <input type="hidden" name="grupo" id="m_grupo_hidden" value="">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="row-label">Atividade</label>
+            <div class="field-card" id="m_atividade_card">
+              <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+              <select class="control" id="m_atividade_id_select" name="atividade_id" required aria-label="Atividade">
+                <option value="" data-placeholder="1">Selecione uma atividade</option>
+                {% for a in atividades %}
+                  <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}">{{ a.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="row-label">Nome do evento</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+              <input class="control" type="text" name="nome_evento" placeholder="Nome do evento" required>
+            </div>
+          </div>
+
+          <div class="form-row row-2col" style="--form-label-w: 280px;">
+            <label class="row-label" style="white-space:nowrap;">Horas sol./data do evento</label>
+            <div>
+              <div class="field-card is-compact" id="m_card-horas">
+                <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
+                <input class="control" type="number" name="horas_solicitadas" min="0" step="0.01" required>
+              </div>
+            </div>
+            <div>
+              <div class="field-card is-compact date-center" id="m_card-data">
+                <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
+                <input class="control" type="date" name="data_evento" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row" id="m_upload_row">
+            <label class="row-label">Comprovantes</label>
+            <div class="field-card file-card" data-upload-card>
+              <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
+              <input class="file-input" id="m_comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes">
+              <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+              <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+            </div>
+          </div>
+
+          <div id="m_comprovantes_container"></div>
+
+          <div class="form-row">
+            <label class="row-label">Observação (opcional)</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
+              <textarea class="control auto-grow" name="observacao" rows="1" placeholder="Digite uma observação se necessário" style="height: var(--btn-h);"></textarea>
+            </div>
+          </div>
+
+          <!-- Processamento: linhas normais, sem card dentro de card -->
+          <div class="form-row" id="m_proc_horas_row" hidden>
+            <label class="row-label">Horas deferidas</label>
+            <div class="field-card is-compact">
+              <div class="field-chip"><i class="lucide" data-lucide="timer"></i></div>
+              <input class="control" id="m_horas_deferidas" type="number" min="0" step="0.01" placeholder="Informe as horas deferidas">
+            </div>
+          </div>
+          <!-- Seleção de justificativa (pré-definida ou Outra) -->
+          <div class="form-row" id="m_proc_just_select_row" hidden>
+            <label class="row-label">Justificativa</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="list"></i></div>
+              <select class="control" id="m_just_select" aria-label="Selecionar justificativa pré-definida ou Outra">
+                <option value="outra">Outra (preencher livremente)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" id="m_proc_just_row" hidden>
+            <label class="row-label">Detalhamento</label>
+            <div class="field-card">
+              <div class="field-chip"><i class="lucide" data-lucide="flag"></i></div>
+              <textarea class="control auto-grow" id="m_justificativa" rows="1" style="height: var(--btn-h);" placeholder="Obrigatória para indeferir ou deferir parte"></textarea>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer req-footer" id="m_footer_actions">
+      <div class="req-footer-row req-footer-row-process" id="m_footer_process_row" hidden>
+        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" data-action="indeferir" title="Indeferir"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
+        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" data-action="deferir_parte" title="Deferir parcialmente"><i class="lucide" data-lucide="divide-square"></i><span class="btn-label">Deferir Parcialmente</span></button>
+        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" data-action="deferir" title="Deferir"><i class="lucide" data-lucide="check"></i><span class="btn-label">Deferir</span></button>
+      </div>
+      <div class="req-footer-row req-footer-row-post" id="m_footer_post_row" hidden>
+        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" data-action="encerrar" title="Encerrar"><i class="lucide" data-lucide="circle-x"></i><span class="btn-label">Encerrar</span></button>
+        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" data-action="devolver" title="Devolver para ajuste"><i class="lucide" data-lucide="undo-2"></i><span class="btn-label">Devolver</span></button>
+        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" data-action="reabrir" title="Reabrir"><i class="lucide" data-lucide="rotate-ccw"></i><span class="btn-label">Reabrir</span></button>
+      </div>
+      <div class="req-footer-row req-footer-row-confirm" id="m_footer_confirm_row" hidden>
+        <button type="button" class="btn" id="m_footer_cancel"><i class="lucide" data-lucide="x"></i><span class="btn-label">Cancelar</span></button>
+        <button type="button" class="btn primary" id="m_footer_confirm"><i class="lucide" data-lucide="check"></i><span class="btn-label">Confirmar</span></button>
+      </div>
+      <div class="req-footer-row req-footer-row-secondary" id="m_footer_secondary_row" hidden>
+        <button type="button" class="btn" id="m_footer_back"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></button>
+        <button type="submit" form="req-form" class="btn primary" id="m_create_submit" hidden><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Estilos utilitários do modal reaproveitando os da página de Atividades
+  (function(){
+    const style = document.createElement('style');
+    style.textContent = `
+    .modal-overlay{ position: fixed; inset: 0; background: rgba(2,6,23,.45); display: grid; place-items: center; z-index: 40; }
+    .modal-overlay[hidden]{ display: none !important; }
+  .modal-card{ background: var(--surface); color: var(--text-primary); border:0; border-radius: var(--radius); width: min(1200px, calc(100vw - 32px)); max-height: min(90vh, 900px); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(2,6,23,.25); }
+    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:0; }
+    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size: 16px; margin:0; }
+    .modal-body{ padding: 10px 12px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+  .modal-footer{ display:flex; justify-content:center; gap:8px; padding: 10px 12px; border-top:0; }
+  .req-footer{ display:grid; gap:10px; justify-items:center; }
+  .req-footer-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; }
+  /* View mode: remove bulky footer gap and add subtle bottom padding under form */
+  #req-modal[data-mode="view"] .modal-footer{ display:none; }
+  #req-modal[data-mode="view"] .form-cards-narrow{ padding-bottom: 72px; }
+  .form-cards-narrow{ width: calc(var(--form-card-w) * 0.75); max-width: calc(100vw - 64px); margin: 0 auto; padding-top: var(--form-top-pad); display: grid; row-gap: 12px; }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    .field-card.split-2.compact-left{ display:grid; grid-template-columns:40px 90px 40px 1fr; column-gap: var(--list-col-gap, 2px); }
+    .field-card.split-2.compact-left .control:first-of-type{ min-width: 70px; }
+    .field-card.split-2 .control + .field-chip{ border-left:1px solid var(--border-strong); }
+    .row-2col{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--btn-gap, 8px); }
+    .field-card.is-compact, .field-card.is-compact .control, .field-card.is-compact .field-chip{ height: 32px; min-height: 32px; }
+    #m_comprovantes_container{ display:grid; row-gap: 12px; }
+    .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns: 40px 1fr auto; align-items:center; column-gap: var(--list-col-gap, 6px); }
+    .field-card.file-card:focus-within{ outline:none; }
+    .field-card.file-card .file-input{ display:none; }
+    .field-card.file-card > .field-chip{ height: var(--btn-h); min-height: var(--btn-h); }
+    .field-card.file-card .file-name.control{ display:flex; align-items:center; min-height: var(--btn-h); padding-right: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .field-card.file-card.has-file .file-name.control{ color: var(--text); }
+  .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background: var(--surface-2, #f2f2f2); border: none; border-left: 1px solid var(--border-strong); border-radius: 0; cursor:pointer; color: #000; }
+  .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
+  /* manter cor preta mesmo com arquivo anexado */
+  .field-card.file-card.has-file .chip-right{ color:#000; }
+  .field-card.file-card.has-file .chip-right .lucide{ color:#000; }
+    .field-card.file-card .chip-right span{ padding-right: 4px; }
+  /* sem estilos extras: anexos aparecem como file-cards normais com has-file */
+    /* Textareas: altura padrão e alinhamento do placeholder */
+    textarea.control{ line-height: 1.2; padding-top: 8px; padding-bottom: 8px; }
+    textarea.control.auto-grow{ height: var(--btn-h); min-height: var(--btn-h); }
+    .btn-action-ghost{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 20px;
+      border-radius:6px;
+      font-weight:500;
+      transition:all 0.2s ease;
+      background:transparent;
+      cursor:pointer;
+    }
+    .btn-action-ghost .lucide{ width:16px; height:16px; }
+    .btn-indeferir{ border:1px solid #B8534C; color:#B8534C; }
+    .btn-indeferir:hover{ background-color: rgba(184, 83, 76, 0.05); }
+    .btn-parcial{ border:1px solid #9C7132; color:#9C7132; }
+    .btn-parcial:hover{ background-color: rgba(156, 113, 50, 0.05); }
+    .btn-deferir{ border:1px solid #5C9A7F; color:#5C9A7F; }
+    .btn-deferir:hover{ background-color: rgba(92, 154, 127, 0.05); }
+  /* Processamento: placeholders discretos */
+  #m_proc_horas_row .control::placeholder, #m_proc_just_row .control::placeholder{ color: var(--text-tertiary); }
+    `;
+    document.head.appendChild(style);
+  })();
+
+  // Lógica do modal e renderização de anexos (escopado para IDs com prefixo m_)
+  (function(){
+    const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
+    const canRequisicoesFull = {{ 'true' if can_requisicoes_full else 'false' }};
+    const modal = document.getElementById('req-modal');
+    const closeBtn = document.getElementById('req-modal-close');
+    const form = document.getElementById('req-form');
+    const titleEl = document.getElementById('req-modal-title');
+    const tipoSel   = document.getElementById('m_tipo_atividade_select');
+    const numSel    = document.getElementById('m_grupo_num');
+    const descInput = document.getElementById('m_grupo_desc');
+    const hidGrupo  = document.getElementById('m_grupo_hidden');
+    const atvSel    = document.getElementById('m_atividade_id_select');
+    const alunoSel  = document.getElementById('m_aluno_id_select');
+    const scopeHint = document.getElementById('m_scope_hint');
+    const uploadRow = document.getElementById('m_upload_row');
+    const createSubmit = document.getElementById('m_create_submit');
+    const footerBack = document.getElementById('m_footer_back');
+    const processRow = document.getElementById('m_footer_process_row');
+    const postRow = document.getElementById('m_footer_post_row');
+    const secondaryRow = document.getElementById('m_footer_secondary_row');
+    const confirmRow   = document.getElementById('m_footer_confirm_row');
+    const SAVE_ICON_SVG = createSubmit?.querySelector('svg, i')?.outerHTML || '<i class="lucide btn-icon-save" data-lucide="check"></i>';
+    if (!tipoSel || !numSel || !descInput || !hidGrupo || !atvSel || !alunoSel) return;
+
+    function setFooterRowVisibility(row, visible){
+      if (!row) return;
+      row.hidden = !visible;
+      row.style.display = visible ? 'flex' : 'none';
+    }
+
+    const allOptions = Array.from(atvSel.options);
+    let allowedActivityIds = null;
+    let pinnedActivityId = '';
+
+    function setScopeHint(text, tone='muted'){
+      if (!scopeHint) return;
+      scopeHint.textContent = text;
+      scopeHint.style.color = tone === 'error' ? 'var(--danger, #b91c1c)' : 'var(--text-secondary)';
+    }
+
+    function buildGruposPorTipo(){
+      const map = { 'Acadêmica Complementar': {}, 'Extensão Universitária': {} };
+      allOptions.forEach(opt => {
+        if (opt.getAttribute('data-placeholder') === '1') return;
+        const activityId = String(opt.value || '').trim();
+        if (allowedActivityIds && activityId && !allowedActivityIds.has(activityId) && activityId !== pinnedActivityId) return;
+        const t = (opt.getAttribute('data-tipo')||'').trim();
+        const g = (opt.getAttribute('data-grupo')||'').trim();
+        if (!t || !g) return;
+        const m = g.match(/^(\d+)\s*-\s*(.*)$/);
+        if (m){ const n=m[1]; const d=m[2]; if (!map[t]) map[t]={}; if(n && !map[t][n]) map[t][n]=d; }
+      });
+      return map;
+    }
+    const gruposPorTipo = buildGruposPorTipo();
+    function rebuildGruposPorTipo(){
+      const rebuilt = buildGruposPorTipo();
+      gruposPorTipo['Acadêmica Complementar'] = rebuilt['Acadêmica Complementar'] || {};
+      gruposPorTipo['Extensão Universitária'] = rebuilt['Extensão Universitária'] || {};
+    }
+    function ensureVisibleTipo(){
+      const acadCount = Object.keys(gruposPorTipo['Acadêmica Complementar'] || {}).length;
+      const extCount = Object.keys(gruposPorTipo['Extensão Universitária'] || {}).length;
+      if (tipoSel.value === 'Acadêmica Complementar' && acadCount) return;
+      if (tipoSel.value === 'Extensão Universitária' && extCount) return;
+      if (acadCount) tipoSel.value = 'Acadêmica Complementar';
+      else if (extCount) tipoSel.value = 'Extensão Universitária';
+    }
+    function populateNumeros(){
+      const t = tipoSel.value || 'Acadêmica Complementar';
+      const map = gruposPorTipo[t] || {};
+      const nums = Object.keys(map).sort((a,b)=> parseInt(a,10)-parseInt(b,10));
+      numSel.innerHTML = '';
+      const optDash = document.createElement('option'); optDash.value=''; optDash.textContent='-'; numSel.appendChild(optDash);
+      nums.forEach(n=>{ const op=document.createElement('option'); op.value=n; op.textContent=n; numSel.appendChild(op); });
+    }
+    function loadDescFromSelected(){ const t = tipoSel.value||'Acadêmica Complementar'; const n=numSel.value||''; const map=gruposPorTipo[t]||{}; const d=n ? (map[n]||'') : ''; descInput.value = d; }
+    function syncHidden(){ const n=(numSel.value||'').trim(); const d=(descInput.value||'').trim(); hidGrupo.value = n && d ? `${n} - ${d}` : (n || ''); }
+    function applyAtividadesFilter(){
+      const t=(tipoSel.value||'').toLowerCase(); const n=(numSel.value||'').toLowerCase();
+      let firstVisible=null;
+      allOptions.forEach(opt=>{
+        const isPlaceholder = opt.getAttribute('data-placeholder') === '1';
+        const activityId = String(opt.value || '').trim();
+        const topt=(opt.getAttribute('data-tipo')||'').toLowerCase();
+        const g=(opt.getAttribute('data-grupo')||'');
+        const gnum=(g.split(' - ')[0]||'').trim().toLowerCase();
+        const allowedByMatrix = isPlaceholder || !allowedActivityIds || !activityId || allowedActivityIds.has(activityId) || activityId === pinnedActivityId;
+        const show = isPlaceholder || (allowedByMatrix && (topt===t) && (!n || gnum===n));
+        opt.hidden = !show;
+        if (!isPlaceholder && show && !firstVisible) firstVisible = opt;
+      });
+      if (atvSel.selectedOptions.length && atvSel.selectedOptions[0].hidden){ atvSel.value = firstVisible ? firstVisible.value : ''; }
+      else if (!atvSel.value && firstVisible){ atvSel.value = firstVisible.value; }
+      atvSel.disabled = !firstVisible;
+    }
+    function setAllowedActivities(ids, currentId){
+      allowedActivityIds = Array.isArray(ids) ? new Set(ids.map(v => String(v))) : null;
+      pinnedActivityId = currentId ? String(currentId) : '';
+      rebuildGruposPorTipo();
+      ensureVisibleTipo();
+      populateNumeros();
+      loadDescFromSelected();
+      syncHidden();
+      applyAtividadesFilter();
+    }
+    function bindUploadCards(){
+      document.querySelectorAll('[data-upload-card]').forEach(card=>{
+        if (card.dataset.boundUploadCard === '1') return;
+        card.dataset.boundUploadCard = '1';
+        const input = card.querySelector('input[type="file"]');
+        const nameEl = card.querySelector('[data-file-name]');
+        const chipRight = card.querySelector('.chip-right');
+        function openPicker(){ if (input && !input.disabled) input.click(); }
+        function updateName(){
+          const files = Array.from((input && input.files) || []);
+          if (files.length === 1){
+            nameEl.textContent = files[0].name;
+            nameEl.setAttribute('title', files[0].name);
+            card.classList.add('has-file');
+          } else if (files.length > 1){
+            const summary = `${files.length} arquivos selecionados`;
+            nameEl.textContent = summary;
+            nameEl.setAttribute('title', files.map(file => file.name).join('\n'));
+            card.classList.add('has-file');
+          } else {
+            nameEl.textContent = 'Nenhum arquivo selecionado';
+            nameEl.removeAttribute('title');
+            card.classList.remove('has-file');
+          }
+        }
+        card.addEventListener('click', (e)=>{ if ((e.target && e.target.tagName) !== 'INPUT') openPicker(); });
+        chipRight?.addEventListener('click', (e)=>{ e.stopPropagation(); openPicker(); });
+        input?.addEventListener('change', updateName);
+        updateName();
+      });
+    }
+
+    function renderAnexos(anexos){
+      try{
+        const container = document.getElementById('m_comprovantes_container');
+        if (!container) return;
+        const items = Array.isArray(anexos) ? anexos : [];
+        container.innerHTML = '';
+        if (!items.length){
+          container.innerHTML = `
+            <div class="form-row">
+              <label class="row-label">Comprovantes</label>
+              <div class="field-card">
+                <div class="field-chip"><i class="lucide" data-lucide="file-x"></i></div>
+                <div class="control" style="display:flex; align-items:center; color: var(--text-secondary);">Nenhum comprovante enviado</div>
+              </div>
+            </div>`;
+          window.lucide?.createIcons?.();
+          return;
+        }
+        items.forEach((ax)=>{
+          const lbl = String(ax.label || 'Comprovante');
+          const row = document.createElement('div');
+          row.className = 'form-row';
+          const safe = lbl.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
+          const fname = ax.filename || '';
+          const titleAttr = fname ? ` title="${fname}"` : '';
+          const actionLabel = ax.url ? 'Abrir' : 'Arquivo';
+          row.innerHTML = `
+            <label class="row-label">Comprovante (${safe})</label>
+            <div class="field-card file-card ${fname ? 'has-file' : ''}" data-file-card>
+              <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
+              <div class="control file-name" data-file-name${titleAttr}>${fname || 'Nenhum arquivo enviado'}</div>
+              <div class="field-chip chip-right" title="${actionLabel}"><i class="lucide" data-lucide="paperclip"></i><span>${actionLabel}</span></div>
+            </div>`;
+          if (ax.url){
+            row.querySelector('.chip-right')?.addEventListener('click', (event)=>{
+              event.stopPropagation();
+              window.open(ax.url, '_blank', 'noopener');
+            });
+          }
+          container.appendChild(row);
+        });
+        window.lucide?.createIcons?.();
+      }catch(_e){ /* noop */ }
+    }
+
+    async function loadAlunoScope(alunoId){
+      if (!alunoId){
+        setAllowedActivities([], '');
+        setScopeHint('Selecione um aluno para carregar a matriz efetiva da turma.');
+        return;
+      }
+      try{
+        const res = await fetch(`/admin/api/aluno/${alunoId}/requisicao-scope`);
+        if (!res.ok) throw new Error('aluno-scope-not-found');
+        const data = await res.json();
+        setAllowedActivities(data.allowed_activity_ids || null, '');
+        if (data.matriz_scope?.label){
+          setScopeHint(`Turma ${data.turma_label}: ${data.matriz_scope.label}`);
+        } else {
+          setScopeHint(`Turma ${data.turma_label}: sem matriz vinculada, atividades liberadas conforme cadastro.`);
+        }
+      }catch(_e){
+        setAllowedActivities([], '');
+        setScopeHint('Não foi possível carregar o escopo do aluno selecionado.', 'error');
+      }
+    }
+
+    function openModal(){ if (!modal) return; modal.hidden = false; document.body.style.overflow='hidden'; window.lucide?.createIcons?.(); }
+    function setSaveButton(label, action){
+      if (!createSubmit || !form) return;
+      createSubmit.innerHTML = `${SAVE_ICON_SVG} ${label}`;
+      form.action = action;
+      window.lucide?.createIcons?.();
+    }
+    function closeModal(){ if (!modal) return; modal.hidden = true; document.body.style.overflow=''; setAllowedActivities(null, ''); }
+
+    window.__openReqModal = openModal;
+    window.__renderAnexos = renderAnexos;
+    window.__setReqAllowedActivities = setAllowedActivities;
+    window.__prefillReqForm = function(payload){
+      if (!payload) return;
+      try{
+        if (payload.alunoId != null && alunoSel){ alunoSel.value = String(payload.alunoId); }
+        if (payload.tipo && tipoSel){ tipoSel.value = payload.tipo; }
+        populateNumeros();
+        loadDescFromSelected();
+        syncHidden();
+        applyAtividadesFilter();
+        if (payload.grupo){
+          const num = (payload.grupo.split(' - ')[0]||'').trim();
+          if (numSel){ numSel.value = num; }
+          loadDescFromSelected();
+          syncHidden();
+          applyAtividadesFilter();
+        }
+        if (payload.atividadeId && atvSel){ atvSel.value = String(payload.atividadeId); }
+        const nomeInput = form.querySelector('input[name="nome_evento"]');
+        if (nomeInput && payload.nomeEvento != null){ nomeInput.value = payload.nomeEvento; }
+        const horasInput = form.querySelector('input[name="horas_solicitadas"]');
+        if (horasInput && payload.horasSolicitadas != null){ horasInput.value = payload.horasSolicitadas; }
+        const dataInput = form.querySelector('input[name="data_evento"]');
+        if (dataInput && payload.dataEvento != null){ dataInput.value = payload.dataEvento; }
+        const obs = form.querySelector('textarea[name="observacao"]');
+        if (obs && payload.observacao != null){ obs.value = payload.observacao; }
+        try{
+          const j = document.getElementById('m_justificativa'); if (j){ j.style.height='auto'; j.style.height = j.scrollHeight + 'px'; }
+          const o = form.querySelector('textarea[name="observacao"].auto-grow'); if (o){ o.style.height='auto'; o.style.height = o.scrollHeight + 'px'; }
+        }catch(_e){}
+      }catch(_e){ /* noop */ }
+    };
+    // Expõe setSaveButton para uso do segundo bloco de script
+    window.__setSaveButton = function(label, action){ setSaveButton(label, action); };
+
+    // Única fonte de verdade para visibilidade do rodapé do modal.
+    // statusHint: string com o status da requisição (ex.: 'Pendente', 'Deferida').
+    // Quando omitido, lê overlay.dataset.reqStatus (que deve ser gravado antes desta chamada).
+    window.__setReqModalMode = function(mode, statusHint){
+      const overlay = document.getElementById('req-modal');
+      if (!overlay) return;
+      const effectiveMode = (!canRequisicoesEdit && mode !== 'view') ? 'view' : mode;
+      const isCreate = effectiveMode === 'create';
+      const isEdit   = effectiveMode === 'edit';
+
+      // Sempre reset do estado de confirmação ao trocar de modo
+      setFooterRowVisibility(confirmRow, false);
+
+      // ── Rodapé ──────────────────────────────────────────────────────────────
+      const resolvedStatus = statusHint != null ? String(statusHint) : (overlay.dataset.reqStatus || '');
+      const s = resolvedStatus.trim().toLowerCase();
+      const isPending = !s || s.includes('pend') || s.includes('aguard');
+
+      if (isCreate || isEdit) {
+        // Editar / Criar: apenas Salvar + Voltar
+        setFooterRowVisibility(processRow, false);
+        setFooterRowVisibility(postRow, false);
+        setFooterRowVisibility(secondaryRow, true);
+        if (createSubmit) createSubmit.hidden = false;
+      } else if (effectiveMode === 'process') {
+        // Processar pendente → ações primárias; já processado → ações secundárias
+        setFooterRowVisibility(processRow,   isPending);
+        setFooterRowVisibility(postRow,      !isPending);
+        setFooterRowVisibility(secondaryRow, true);   // botão Voltar sempre disponível
+        if (createSubmit) createSubmit.hidden = true;
+      } else {
+        // Visualizar: rodapé ocultado via CSS [data-mode="view"] .modal-footer { display:none }
+        setFooterRowVisibility(processRow, false);
+        setFooterRowVisibility(postRow, false);
+        setFooterRowVisibility(secondaryRow, false);
+      }
+
+      // ── Editabilidade dos campos ─────────────────────────────────────────────
+      if (uploadRow) uploadRow.hidden = !(isCreate || isEdit);
+      if (form){
+        form.querySelectorAll('input, select, textarea').forEach(el=>{
+          if (el.type === 'hidden') return;
+          const isFile = (el.type === 'file');
+          if (isCreate || isEdit){
+            if (el.tagName === 'INPUT' && !isFile) el.readOnly = false;
+            el.disabled = false;
+            if (isEdit && el === alunoSel) el.disabled = true;
+            return;
+          }
+          if (el.tagName === 'INPUT' && !isFile) el.readOnly = true;
+          if (isFile || el.tagName !== 'INPUT') el.disabled = true;
+        });
+        form.querySelectorAll('#m_comprovantes_container .chip-right').forEach(chip=>{
+          chip.style.pointerEvents = (isCreate || isEdit) ? '' : 'none';
+          chip.style.opacity = (isCreate || isEdit) ? 1 : 0.6;
+        });
+      }
+      overlay.setAttribute('data-mode', effectiveMode);
+    };
+
+    window.__enterProcessConfirm = function(selectedAction){
+      // Mantém a linha de ações visível; esconde apenas os botões que não foram selecionados
+      const footer = document.getElementById('m_footer_actions');
+      if (footer){
+        footer.querySelectorAll('button[data-action]').forEach(btn=>{
+          if (btn.getAttribute('data-action') !== selectedAction){
+            btn.hidden = true;
+            btn.style.display = 'none';
+          }
+        });
+      }
+      setFooterRowVisibility(confirmRow, true);
+      setFooterRowVisibility(secondaryRow, false);
+    };
+
+    window.__exitProcessConfirm = function(statusHint){
+      // Restaura todos os botões de ação
+      const footer = document.getElementById('m_footer_actions');
+      if (footer){
+        footer.querySelectorAll('button[data-action]').forEach(btn=>{
+          btn.hidden = false;
+          btn.style.display = '';
+        });
+      }
+      setFooterRowVisibility(confirmRow, false);
+      const overlay = document.getElementById('req-modal');
+      const s = (statusHint || overlay?.dataset?.reqStatus || '').trim().toLowerCase();
+      const isPending = !s || s.includes('pend') || s.includes('aguard');
+      setFooterRowVisibility(processRow, isPending);
+      setFooterRowVisibility(postRow, !isPending);
+      setFooterRowVisibility(secondaryRow, true);
+      if (createSubmit) createSubmit.hidden = true;
+    };
+
+    window.__openAdminNewReqModal = async function(initialAlunoId=''){
+      if (!canRequisicoesEdit) return;
+      form.reset();
+      modal.dataset.reqId = '';
+      if (titleEl){ titleEl.innerHTML = '<i class="lucide" data-lucide="file-plus"></i> Nova Requisição'; }
+      const anexosContainer = document.getElementById('m_comprovantes_container');
+      document.getElementById('m_proc_horas_row')?.setAttribute('hidden', 'hidden');
+      document.getElementById('m_proc_just_select_row')?.setAttribute('hidden', 'hidden');
+      document.getElementById('m_proc_just_row')?.setAttribute('hidden', 'hidden');
+      if (anexosContainer) anexosContainer.innerHTML = '';
+      alunoSel.value = initialAlunoId ? String(initialAlunoId) : '';
+      setScopeHint('Selecione um aluno para carregar a matriz efetiva da turma.');
+      setAllowedActivities([], '');
+      setSaveButton('Salvar', '{{ url_for("admin_nova_requisicao") }}');
+      window.__setReqModalMode('create');
+      openModal();
+      bindUploadCards();
+      if (alunoSel.value){
+        await loadAlunoScope(alunoSel.value);
+      }
+    };
+    window.__openAdminEditReqModal = async function(reqId){
+      if (!canRequisicoesEdit || !reqId) return;
+      setSaveButton('Atualizar', `/admin/requisicoes/${reqId}/editar`);
+      await loadAlunoScope(alunoSel.value);
+    };
+
+    tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+    numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+    alunoSel.addEventListener('change', ()=>{ loadAlunoScope(alunoSel.value); });
+
+    const justSelect = document.getElementById('m_just_select');
+    justSelect?.addEventListener('change', ()=> { if (window.__applyJustSelectionBehavior) window.__applyJustSelectionBehavior(); });
+
+    bindUploadCards();
+    populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter();
+
+    closeBtn?.addEventListener('click', (e)=>{ e.stopPropagation(); closeModal(); });
+    footerBack?.addEventListener('click', (e)=>{ e.stopPropagation(); closeModal(); });
+    modal?.addEventListener('click', (e)=>{ if (e.target === modal) { e.stopPropagation(); closeModal(); } });
+    document.addEventListener('keydown', (e)=>{ if (!modal.hidden && e.key==='Escape') closeModal(); });
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('open_new') === '1') {
+      params.delete('open_new');
+      const alunoIdParam = params.get('aluno_id') || '';
+      const nextSearch = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+      window.__openAdminNewReqModal(alunoIdParam);
+    }
+  })();
+</script>
+
+<script>
+  // Barra flutuante de ações na lista de Requisições (Ver e Processar)
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
+    const canRequisicoesFull = {{ 'true' if can_requisicoes_full else 'false' }};
+    let bar = document.getElementById('pedido-actions-float');
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+    bar.setAttribute('role','toolbar');
+    bar.setAttribute('aria-label','Ações da requisição selecionada');
+    bar.innerHTML = `
+      ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="process" aria-label="Processar requisição" title="Processar"><i data-lucide="circle-check-big"></i></button>' : ''}
+      ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar requisição" title="Editar"><i data-lucide="pencil"></i></button>' : ''}
+      <button type="button" class="act-btn" data-action="view" aria-label="Ver requisição" title="Ver"><i data-lucide="eye"></i></button>
+    `;
+    window.lucide?.createIcons?.();
+
+    const scrollWrap = document.querySelector('#requisicoes-scroll-container');
+    let hideTimer = null;
+    let currentId = null;
+    let currentCard = null;
+
+    function positionFor(card){
+      if (!bar || !card) return;
+      const r = card.getBoundingClientRect();
+      const top = Math.round(r.top + (r.height/2) - (bar.offsetHeight/2));
+      bar.style.top = top + 'px';
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const tr = track.getBoundingClientRect();
+      const cs = window.getComputedStyle(track);
+      const pr = parseFloat(cs.paddingRight || '0') || 0;
+      const contentRight = tr.right - pr;
+      const left = Math.round(contentRight - bar.offsetWidth);
+      bar.style.left = left + 'px';
+      bar.style.right = 'auto';
+    }
+    function updatePrimaryActionFor(card){
+      try{
+        const st = (card?.getAttribute('data-status') || '').toLowerCase();
+        const btn = bar.querySelector('button[data-action="process"]');
+        const editBtn = bar.querySelector('button[data-action="edit"]');
+        if (!canRequisicoesEdit || !btn) return;
+        const isPending = (st.indexOf('pend') !== -1);
+        if (editBtn){
+          editBtn.style.display = isPending ? 'inline-grid' : 'none';
+          editBtn.hidden = !isPending;
+        }
+        if (!isPending){
+          btn.setAttribute('title','Reabrir');
+          btn.setAttribute('aria-label','Reabrir requisição');
+          btn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
+        } else {
+          btn.setAttribute('title','Processar');
+          btn.setAttribute('aria-label','Processar requisição');
+          btn.innerHTML = '<i data-lucide="circle-check-big"></i>';
+        }
+        // Re-inicializa o ícone após alterar o HTML (lucide substitui por SVG)
+        window.lucide?.createIcons?.();
+      }catch(_e){}
+    }
+    function show(){ bar.classList.add('is-visible'); }
+    function hide(){ bar.classList.remove('is-visible'); currentId = null; currentCard = null; }
+    function scheduleHide(){ clearTimeout(hideTimer); hideTimer = setTimeout(()=>{ hide(); }, 180); }
+    function cancelHide(){ clearTimeout(hideTimer); }
+
+    scrollWrap?.addEventListener('mouseover', (e)=>{
+      const card = e.target.closest('.impresso-card');
+      if (!card || card.classList.contains('header')) return;
+      currentId = card.getAttribute('data-req-id');
+      currentCard = card;
+      positionFor(currentCard);
+      updatePrimaryActionFor(currentCard);
+      show();
+    });
+    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+    window.addEventListener('resize', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
+
+  function setModalMode(mode, statusHint){
+      if (typeof window.__setReqModalMode === 'function'){
+        window.__setReqModalMode(mode, statusHint);
+      }
+    }
+
+    async function loadReqAndOpen(mode, explicitId=null){
+      const targetId = explicitId || currentId;
+      try{
+        if (!canRequisicoesEdit && mode !== 'view') {
+          mode = 'view';
+        }
+        if (!targetId) return;
+        // Use absolute path to avoid brittle path manipulation
+        const res = await fetch(`/admin/api/requisicao/${targetId}`);
+        if (!res.ok){ throw new Error('req-not-found'); }
+        const data = await res.json();
+        if (typeof window.__setReqAllowedActivities === 'function'){
+          window.__setReqAllowedActivities(data.allowed_activity_ids || null, data.atividade_id || '');
+        }
+        const alunoSel = document.getElementById('m_aluno_id_select');
+        const scopeHint = document.getElementById('m_scope_hint');
+        const titleEl = document.getElementById('req-modal-title');
+        if (alunoSel && data.aluno_id != null){ alunoSel.value = String(data.aluno_id); }
+        if (scopeHint){
+          if (data.matriz_scope?.label){
+            scopeHint.textContent = `Turma ${data.turma_label || 'Sem turma'}: ${data.matriz_scope.label}`;
+          } else {
+            scopeHint.textContent = `Turma ${data.turma_label || 'Sem turma'}: sem matriz vinculada.`;
+          }
+        }
+        if (titleEl){
+          titleEl.innerHTML = mode === 'edit'
+            ? '<i class="lucide" data-lucide="pencil"></i> Editar Requisição'
+            : '<i class="lucide" data-lucide="file-plus"></i> Requisição';
+        }
+        const inlineNome = currentCard ? (currentCard.getAttribute('data-nome-evento') || '') : '';
+        const payload = {
+          alunoId: data.aluno_id || '',
+          tipo: data.tipo_atividade || '',
+          grupo: data.grupo || '',
+          atividadeId: data.atividade_id || '',
+          nomeEvento: (data.nome_evento || inlineNome || ''),
+          horasSolicitadas: data.horas_solicitadas || '',
+          dataEvento: (data.data_evento || '').split(' ')[0] || '',
+          observacao: data.observacao || ''
+        };
+        if (typeof window.__prefillReqForm === 'function'){ window.__prefillReqForm(payload); }
+        if (typeof window.__renderAnexos === 'function'){ window.__renderAnexos(data.anexos || []); }
+        const overlay = document.getElementById('req-modal');
+        if (overlay) {
+          overlay.dataset.reqId = String(targetId);
+          overlay.dataset.reqStatus = String(data.status || currentCard?.getAttribute('data-status') || 'Pendente');
+        }
+        if (typeof window.__openReqModal === 'function'){
+          if (mode === 'edit'){
+            window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`);
+          }
+          setModalMode(mode, overlay?.dataset?.reqStatus || 'Pendente');
+          window.__openReqModal();
+          // Preparar UI de justificativas (carregar presets e resetar seleção)
+          try{
+            const selRow = document.getElementById('m_proc_just_select_row');
+            const jRow = document.getElementById('m_proc_just_row');
+            const dRow = document.getElementById('m_proc_just_detail_row');
+            const jSel = document.getElementById('m_just_select');
+            const jEl = document.getElementById('m_justificativa');
+            const dEl = document.getElementById('m_just_detalhamento');
+            if (selRow) selRow.hidden = true; // só mostra quando ação exigir
+            if (jRow) { jRow.hidden = true; if (jEl){ jEl.value = ''; jEl.readOnly = false; jEl.disabled = false; } }
+            if (dRow) { dRow.hidden = true; if (dEl){ dEl.value = ''; dEl.disabled = true; } }
+            // carrega presets e popula select
+            if (typeof window.__loadJustPresetsOnce === 'function') await window.__loadJustPresetsOnce();
+            if (typeof window.__populateJustSelect === 'function') await window.__populateJustSelect();
+            // reseta seleção para 'outra'
+            if (jSel){ jSel.value = 'outra'; }
+          }catch(_e){}
+        }
+      }catch(_e){
+        if (typeof window.__setReqAllowedActivities === 'function'){
+          window.__setReqAllowedActivities(null, currentCard?.getAttribute('data-atividade-id') || '');
+        }
+        const titleEl = document.getElementById('req-modal-title');
+        if (titleEl){
+          titleEl.innerHTML = mode === 'edit'
+            ? '<i class="lucide" data-lucide="pencil"></i> Editar Requisição'
+            : '<i class="lucide" data-lucide="file-plus"></i> Requisição';
+        }
+        // fallback: use inline payload when API fails
+        const payload = currentCard ? {
+          tipo: currentCard.getAttribute('data-tipo') || '',
+          grupo: currentCard.getAttribute('data-grupo') || '',
+          atividadeId: currentCard.getAttribute('data-atividade-id') || '',
+          nomeEvento: currentCard.getAttribute('data-nome-evento') || '',
+          horasSolicitadas: currentCard.getAttribute('data-horas-solicitadas') || '',
+          dataEvento: currentCard.getAttribute('data-data-evento') || '',
+          observacao: currentCard.getAttribute('data-observacao') || ''
+        } : null;
+        if (payload && typeof window.__prefillReqForm === 'function'){ window.__prefillReqForm(payload); }
+        if (typeof window.__renderAnexos === 'function'){ window.__renderAnexos([]); }
+        const overlay = document.getElementById('req-modal');
+        if (overlay && targetId) overlay.dataset.reqId = String(targetId);
+        if (typeof window.__openReqModal === 'function'){
+          if (mode === 'edit' && targetId){
+            window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`);
+          }
+          const fallbackStatus = currentCard?.getAttribute('data-status') || 'Pendente';
+          if (overlay) overlay.dataset.reqStatus = fallbackStatus;
+          setModalMode(mode, fallbackStatus);
+          window.__openReqModal();
+        }
+      }
+    }
+
+    window.__openExistingReqModal = function(reqId, mode='view'){
+      loadReqAndOpen(mode, reqId);
+    };
+
+    const openParams = new URLSearchParams(window.location.search);
+    if (canRequisicoesEdit && openParams.get('open_edit') === '1' && openParams.get('req_id')) {
+      const reqIdParam = openParams.get('req_id');
+      openParams.delete('open_edit');
+      const nextSearch = openParams.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+      window.__openExistingReqModal(reqIdParam, 'edit');
+    }
+
+    bar.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button.act-btn');
+      if (!btn || !currentId) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'view'){
+        loadReqAndOpen('view');
+      } else if (action === 'edit'){
+        if (!canRequisicoesEdit) return;
+        loadReqAndOpen('edit');
+      } else if (action === 'process'){
+        if (!canRequisicoesEdit) return;
+        loadReqAndOpen('process');
+      }
+    });
+
+    // Clique nos botões do rodapé (dentro do modal)
+    const footer = document.getElementById('m_footer_actions');
+    let pendingAction = null;
+
+    function getFields(){
+      return {
+        horasRow:      document.getElementById('m_proc_horas_row'),
+        justSelectRow: document.getElementById('m_proc_just_select_row'),
+        justRow:       document.getElementById('m_proc_just_row'),
+        horasEl:       document.getElementById('m_horas_deferidas'),
+        justEl:        document.getElementById('m_justificativa'),
+        justSel:       document.getElementById('m_just_select'),
+      };
+    }
+
+    function preparePanelFor(act){
+      const { horasRow, justSelectRow, justRow, horasEl, justEl, justSel } = getFields();
+      if (typeof window.__loadJustPresetsOnce === 'function') window.__loadJustPresetsOnce();
+      if (typeof window.__populateJustSelect === 'function') window.__populateJustSelect();
+      if (justSelectRow) justSelectRow.hidden = false;
+      if (justSel) justSel.disabled = false;
+      if (justRow){ justRow.hidden = false; if (justEl) justEl.disabled = false; }
+      if (act === 'deferir_parte'){
+        if (horasRow){ horasRow.hidden = false; if (horasEl){ horasEl.disabled = false; horasEl.readOnly = false; } }
+        horasEl?.focus();
+      } else {
+        if (horasRow) horasRow.hidden = true;
+        justEl?.focus();
+      }
+      if (typeof window.__applyJustSelectionBehavior === 'function') window.__applyJustSelectionBehavior();
+    }
+
+    function resetPanelFields(){
+      const { horasRow, justSelectRow, justRow, horasEl, justEl } = getFields();
+      if (horasRow) horasRow.hidden = true;
+      if (justSelectRow) justSelectRow.hidden = true;
+      if (justRow){ justRow.hidden = true; if (justEl) justEl.value = ''; }
+      if (horasEl) horasEl.value = '';
+    }
+
+    async function executeConfirmedAction(){
+      if (!canRequisicoesEdit) return;
+      const overlay = document.getElementById('req-modal');
+      const reqId = overlay?.dataset?.reqId;
+      if (!reqId || !pendingAction) return;
+      const { horasEl, justEl } = getFields();
+      const STATUS_MAP = {
+        deferir: 'Deferida', deferir_parte: 'Deferida Parcialmente', indeferir: 'Indeferida',
+        encerrar: 'Encerrada', devolver: 'Devolvida', reabrir: 'Pendente',
+      };
+      const status = STATUS_MAP[pendingAction];
+      if (!status) return;
+      const params = new URLSearchParams();
+      params.set('status', status);
+      if (status === 'Deferida Parcialmente'){
+        const hv = (horasEl?.value || '').trim();
+        if (!hv){ preparePanelFor('deferir_parte'); return; }
+        params.set('horas_deferidas', hv);
+      }
+      const j = (justEl?.value || '').trim();
+      if (status === 'Indeferida' || status === 'Deferida Parcialmente'){
+        if (!j){ preparePanelFor(pendingAction); return; }
+      }
+      if (status === 'Devolvida' && !j){ preparePanelFor('indeferir'); return; }
+      if (j) params.set('observacao', j);
+      try{
+        const headers = { 'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8' };
+        const csrfToken = window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+        const res = await fetch(`/admin/processar_requisicao/${reqId}`, { method:'POST', headers, body: params.toString() });
+        if (res.redirected){ window.location.href = res.url; return; }
+        if (!res.ok){ window.showToast && window.showToast('Falha ao processar a requisição. Tente novamente ou abra a tela completa.', 'error'); return; }
+        window.location.reload();
+      }catch(_e){
+        window.showToast && window.showToast('Falha ao processar a requisição. Verifique a conexão e tente novamente.', 'error');
+      }
+    }
+
+    // Confirmar: submete a ação pendente
+    document.getElementById('m_footer_confirm')?.addEventListener('click', () => { executeConfirmedAction(); });
+
+    // Cancelar: volta ao estado de processo ocioso
+    document.getElementById('m_footer_cancel')?.addEventListener('click', () => {
+      pendingAction = null;
+      resetPanelFields();
+      const overlay = document.getElementById('req-modal');
+      window.__exitProcessConfirm?.(overlay?.dataset?.reqStatus);
+    });
+
+    // Delegado para os botões de ação: entra no modo de confirmação (dois passos)
+    const ACTION_KEYS = new Set(['indeferir','deferir','deferir_parte','encerrar','devolver','reabrir']);
+    footer?.addEventListener('click', (e)=>{
+      if (!canRequisicoesEdit) return;
+      const b = e.target.closest('button[data-action]');
+      if (!b) return;
+      const action = b.getAttribute('data-action');
+      if (!ACTION_KEYS.has(action)) return;
+      const overlay = document.getElementById('req-modal');
+      if (!overlay?.dataset?.reqId) return;
+      pendingAction = action;
+      window.__enterProcessConfirm?.(action);
+      // Campos auxiliares conforme ação
+      if (action === 'deferir_parte' || action === 'indeferir' || action === 'devolver'){
+        preparePanelFor(action === 'deferir_parte' ? 'deferir_parte' : 'indeferir');
+      } else {
+        resetPanelFields();
+      }
+    });
+
+    // Auto-grow para a justificativa (altura padrão, expande conforme digita)
+    const autoGrow = (el)=>{ el.style.height='auto'; el.style.height = el.scrollHeight + 'px'; };
+    const just = document.getElementById('m_justificativa');
+    if (just){ autoGrow(just); just.addEventListener('input', ()=> autoGrow(just)); }
+
+    // Expor helpers globais usados acima
+    window.__loadJustPresetsOnce = async function(){
+      try{
+        if (window.__justPresetsOnce) return;
+        const resp = await fetch('/admin/api/presets');
+        let respostas = [];
+        if (resp.ok){ const data = await resp.json(); respostas = Array.isArray(data?.respostas) ? data.respostas : []; }
+        window.__justPresets = respostas;
+        window.__justPresetsOnce = true;
+        if (typeof window.__populateJustSelect === 'function') window.__populateJustSelect();
+      }catch(_e){ window.__justPresetsOnce = true; }
+    };
+    window.__populateJustSelect = function(){
+      try{
+        const sel = document.getElementById('m_just_select');
+        if (!sel) return;
+        const respostas = window.__justPresets || [];
+        const current = sel.value;
+        sel.innerHTML = '<option value="outra">Outra (preencher livremente)</option>';
+        respostas.forEach(p=>{ const o=document.createElement('option'); o.value=String(p.id); o.textContent=p.titulo||`Justificativa ${p.id}`; sel.appendChild(o); });
+        // Tenta restaurar seleção se ainda existir
+        if (current && Array.from(sel.options).some(o=>o.value===current)) sel.value = current; else sel.value = 'outra';
+      }catch(_e){}
+    };
+    window.__applyJustSelectionBehavior = function(){
+      try{
+        const sel = document.getElementById('m_just_select');
+        const dRow = document.getElementById('m_proc_just_row');
+        const dEl = document.getElementById('m_justificativa');
+        const val = sel?.value || 'outra';
+        const presets = window.__justPresets || [];
+        if (val !== 'outra'){
+          const p = presets.find(x=> String(x.id) === String(val));
+          // Para pré-definida, o card de baixo recebe o conteúdo da preset e pode ser ajustado
+          if (dEl){ dEl.value = (p?.texto || ''); dEl.disabled = false; }
+          if (dRow){ dRow.hidden = false; }
+        } else {
+          // Outra: o campo de baixo é a justificativa inteira
+          if (dRow){ dRow.hidden = false; }
+          if (dEl){ dEl.disabled = false; }
+        }
+        // auto-grow
+        const ag = (el)=>{ if (!el) return; el.style.height='auto'; el.style.height = el.scrollHeight + 'px'; };
+        ag(dEl);
+      }catch(_e){}
+    };
+  });
+</script>
+{% endblock %}

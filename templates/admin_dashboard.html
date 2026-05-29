@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+{% block title %}Dashboard (Admin){% endblock %}
+
+{% block extra_head %}
+  <style>
+    .admin-alertas-stack{ display:grid; gap:8px; margin:0 0 16px; }
+    .admin-alerta-card{
+      min-height:calc(var(--btn-h) * 0.8);
+      display:grid;
+      grid-template-columns:minmax(0, 1fr);
+      align-items:center;
+      gap:8px;
+      padding:0 8px 0 12px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      color:#0f172a;
+      box-shadow:var(--shadow-sm);
+      overflow:hidden;
+    }
+    .admin-alerta-card.is-link{
+      transition:transform .18s ease, box-shadow .18s ease;
+    }
+    .admin-alerta-card.is-link:hover{
+      transform:translateY(-1px);
+      box-shadow:var(--shadow-md);
+    }
+    .admin-alerta-card .lucide{ width:14px; height:14px; flex:0 0 auto; }
+    .admin-alerta-card-main{
+      min-width:0;
+      display:grid;
+      grid-template-columns:auto minmax(0, 1fr);
+      align-items:center;
+      gap:8px;
+      width:100%;
+      color:inherit;
+      text-align:left;
+    }
+    .admin-alerta-card.is-link .admin-alerta-card-main{ cursor:pointer; }
+    .admin-alerta-card-main:focus-visible{
+      outline:2px solid rgba(37,99,235,.35);
+      outline-offset:2px;
+    }
+    .admin-alerta-card-main span{
+      display:block;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-size:13px;
+      font-weight:500;
+      line-height:1.2;
+    }
+    .dashboard-kpi-view-btn{
+      width:var(--btn-h);
+      min-width:var(--btn-h);
+      padding:0;
+      justify-content:center;
+      border-color:rgba(0,51,102,.14);
+      background:#f8fafc;
+      color:var(--brand);
+      box-shadow:none;
+      transition:background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .dashboard-kpi-view-btn:hover{
+      background:#eef4f8;
+      border-color:rgba(0,51,102,.28);
+      color:var(--brand);
+      box-shadow:0 4px 12px rgba(0,51,102,.08);
+      transform:translateY(-1px);
+    }
+    .dashboard-kpi-view-btn .lucide{ margin:0; top:0; }
+    .dashboard-attention-btn{
+      background:#fef3c7;
+      border-color:#fcd34d;
+      color:#d97706;
+    }
+    .dashboard-attention-btn:hover{
+      background:#fde68a;
+      border-color:#f59e0b;
+      color:#b45309;
+      box-shadow:0 4px 12px rgba(217,119,6,.16);
+    }
+    .dashboard-primary-actions{ gap:var(--btn-gap); }
+    .dashboard-kpi-head{
+      align-items:flex-start;
+    }
+    .dashboard-kpi-head-spacer{
+      width:var(--btn-h);
+      min-width:var(--btn-h);
+      height:var(--btn-h);
+      flex:0 0 auto;
+      visibility:hidden;
+      pointer-events:none;
+    }
+    .dashboard-kpi-footnote{
+      margin-top:auto;
+      padding-top:8px;
+      font-size:13px;
+      line-height:1.35;
+      color:var(--muted);
+      font-weight:500;
+    }
+    .dashboard-kpi-card{
+      min-height:176px;
+      box-shadow:var(--shadow-sm);
+    }
+    .dashboard-kpi-card-attention-top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .dashboard-kpi-card-attention-main{
+      min-width:0;
+      display:grid;
+        gap:4px;
+    }
+    .dashboard-kpi-card-attention-main .kpi-title{
+      line-height:1.2;
+    }
+    .dashboard-kpi-card-attention-main .kpi-value{
+        line-height:1.08;
+    }
+    .dashboard-kpi-value-danger{
+      color:#b91c1c;
+    }
+    .dashboard-kpi-body{
+      display:grid;
+      gap:6px;
+    }
+    .dashboard-section{ margin-top:24px; }
+    .dashboard-turma-grid{
+      display:grid;
+      gap:24px;
+      width:100%;
+    }
+    .dashboard-turma-row{
+      display:grid;
+      gap:12px;
+      width:100%;
+    }
+    .dashboard-turma-row-kpis{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(180px, 1fr));
+      gap:24px;
+      width:100%;
+      align-items:stretch;
+    }
+    .dashboard-turma-card{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:176px;
+    }
+    .dashboard-turma-distribution-card{
+      grid-column:span 2;
+      display:grid;
+      gap:24px;
+      min-height:0;
+      align-content:start;
+    }
+    .dashboard-turma-distribution-body{
+      display:grid;
+      grid-template-columns:minmax(0, 212px) minmax(0, 1fr);
+      align-items:stretch;
+      gap:14px;
+      min-height:0;
+    }
+    .dashboard-turma-distribution-legend{
+      display:grid;
+      gap:8px;
+      align-content:start;
+    }
+    .dashboard-turma-distribution-legend-item{
+      display:grid;
+      grid-template-columns:auto minmax(0, 1fr);
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+      line-height:1.2;
+      padding-left:4px;
+    }
+    .dashboard-turma-distribution-legend-swatch{
+      width:10px;
+      height:10px;
+      border-radius:2px;
+      display:block;
+      flex:0 0 auto;
+    }
+    .dashboard-turma-distribution-legend-label{
+      color:var(--text);
+      font-weight:600;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
+    }
+    .dashboard-turma-distribution-legend-meta{
+      color:var(--muted);
+      font-weight:600;
+      font-variant-numeric:tabular-nums;
+      white-space:nowrap;
+    }
+    .dashboard-turma-distribution-visual{
+      display:grid;
+      align-items:stretch;
+      width:100%;
+      min-width:0;
+    }
+    .dashboard-turma-distribution-chart{
+      width:100%;
+      height:100%;
+      min-height:0;
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0, 1fr));
+      align-items:end;
+      gap:22px;
+      padding:0 6px;
+      box-shadow:inset 0 -1px 0 rgba(0,51,102,.12);
+    }
+    .dashboard-turma-distribution-chart-column{
+      width:100%;
+      height:100%;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+    }
+    .dashboard-turma-distribution-chart-bar{
+      width:100%;
+      display:block;
+      min-height:0;
+      border-radius:4px;
+      transition:height .2s ease;
+    }
+    .dashboard-turma-card-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .dashboard-turma-title{
+      min-width:0;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .dashboard-turma-kicker{
+      display:inline-block;
+      font-size:15px;
+      line-height:1.2;
+      color:#0f172a;
+      font-weight:700;
+    }
+    .dashboard-turma-title-value{
+      display:inline-block;
+      min-width:0;
+      font-size:15px;
+      line-height:1.2;
+      color:#0f172a;
+      font-weight:700;
+    }
+    .dashboard-turma-action{
+      margin:0;
+      align-self:flex-start;
+      flex:0 0 auto;
+    }
+    .dashboard-turma-progress-list{
+      display:grid;
+      gap:8px;
+    }
+    .dashboard-turma-progress-item{
+      display:grid;
+      gap:4px;
+    }
+    .dashboard-turma-progress-spacer{
+      height:8px;
+    }
+    .dashboard-turma-progress-head{
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) auto auto;
+      align-items:center;
+      gap:12px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .dashboard-turma-progress-label{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      min-width:0;
+      color:var(--text);
+      font-weight:600;
+    }
+    .dashboard-turma-progress-label small{
+      color:var(--muted);
+      font-size:12px;
+      font-weight:500;
+    }
+    .dashboard-turma-total{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding-top:6px;
+      border-top:1px solid var(--border);
+      font-size:13px;
+      line-height:1.1;
+    }
+    .dashboard-turma-total-label{
+      color:var(--muted);
+      font-weight:500;
+    }
+    .dashboard-turma-total-value{
+      color:var(--text);
+      font-size:16px;
+      font-weight:700;
+    }
+    .dashboard-empty-state{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:96px;
+      color:var(--muted);
+      font-size:14px;
+      font-weight:500;
+      border:1px dashed var(--border);
+      border-radius:var(--radius);
+      background:#fff;
+    }
+    .dashboard-turma-card-placeholder{
+      visibility:hidden;
+      pointer-events:none;
+      min-height:176px;
+    }
+    @media (max-width: 900px){
+      .dashboard-turma-row-kpis{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      .dashboard-turma-distribution-card{ grid-column:span 2; }
+    }
+    @media (max-width: 640px){
+      .dashboard-turma-row-kpis{ grid-template-columns:1fr; }
+      .dashboard-turma-distribution-card{ grid-column:span 1; }
+      .dashboard-turma-distribution-body{ grid-template-columns:1fr; gap:12px; }
+      .dashboard-turma-distribution-legend-item{ padding-left:0; }
+      .dashboard-turma-distribution-chart{ gap:10px; }
+      .dashboard-turma-progress-head{ grid-template-columns:minmax(0, 1fr) auto; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Dashboard</h1>
+
+{% if alertas_ativos %}
+<div class="admin-alertas-stack">
+  {% for alerta in alertas_ativos %}
+  {% set alerta_titulo = alerta.titulo if alerta.titulo is defined and alerta.titulo else 'Alerta ativo' %}
+  {% set alerta_mensagem = alerta.mensagem if alerta.mensagem is defined and alerta.mensagem else 'O alerta ' ~ alerta_titulo ~ ' está ativado' %}
+  <div class="admin-alerta-card{{ ' is-link' if alerta.href is defined and alerta.href }}" data-alerta-href="{{ alerta.href if alerta.href is defined and alerta.href else '' }}" data-bg-color="{{ alerta.bg_color }}" data-border-color="{{ alerta.border_color }}" title="{{ alerta_mensagem }}">
+    <div class="admin-alerta-card-main"{% if alerta.href is defined and alerta.href %} role="link" tabindex="0" aria-label="{{ alerta_mensagem }}"{% endif %}>
+      <i class="lucide" data-lucide="bell-ring" aria-hidden="true"></i>
+      <span>{{ alerta_mensagem }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# --- KPIs: cálculos seguros --- #}
+{% set pendentes = (requisicoes_pendentes or 0) %}
+{% set devolvidas_abertas = (requisicoes_devolvidas_abertas or 0) %}
+{% set atrasadas_meta_dias = (requisicoes_atrasadas_meta_dias or 0) %}
+{% set tempo_medio_resposta_dias_fmt = tempo_medio_resposta_dias_fmt or '0' %}
+{% set tempo_medio_resposta_meta_dias = tempo_medio_resposta_meta_dias or 10 %}
+
+<!-- KPIs em destaque -->
+<div class="kpi-grid">
+  <!-- PRINCIPAL: Requisições -->
+  <div class="kpi-card kpi-primary dashboard-kpi-card">
+    <div class="dashboard-kpi-card-attention-top">
+      <div class="dashboard-kpi-card-attention-main">
+        <span class="kpi-title">Requisições pendentes</span>
+        <div class="kpi-value">{{ pendentes }}</div>
+      </div>
+      <a href="{{ url_for('admin_requisicoes') }}" class="btn dashboard-kpi-view-btn dashboard-attention-btn" aria-label="Ver requisições" title="Ver requisições">
+        <i class="lucide" data-lucide="triangle-alert"></i>
+      </a>
+    </div>
+    <div class="kpi-sub">{{ devolvidas_abertas }} devolvida{{ 's' if devolvidas_abertas != 1 else '' }} em aberto</div>
+    <div class="dashboard-kpi-footnote">
+      {% if atrasadas_meta_dias %}
+        {{ atrasadas_meta_dias }} atrasada{{ 's' if atrasadas_meta_dias != 1 else '' }} há mais de {{ tempo_medio_resposta_meta_dias }} dia{{ 's' if tempo_medio_resposta_meta_dias != 1 else '' }}
+      {% else %}
+        Nenhuma atrasada há mais de {{ tempo_medio_resposta_meta_dias }} dia{{ 's' if tempo_medio_resposta_meta_dias != 1 else '' }}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Taxa média de resposta -->
+  <div class="kpi-card dashboard-kpi-card">
+    <div class="dashboard-kpi-card-attention-top">
+      <div class="dashboard-kpi-card-attention-main">
+        <span class="kpi-title">Taxa média de resposta</span>
+        <div class="kpi-value{% if tempo_medio_resposta_meta_excedida %} dashboard-kpi-value-danger{% endif %}">{{ tempo_medio_resposta_dias_fmt }}</div>
+      </div>
+      <div class="dashboard-kpi-head-spacer" aria-hidden="true"></div>
+    </div>
+    <div class="kpi-sub">Dias</div>
+    <div class="dashboard-kpi-footnote">
+      {% if tempo_medio_resposta_meta_excedida %}
+        Acima da meta ({{ tempo_medio_resposta_meta_dias }} dias)
+      {% else %}
+        Abaixo da meta ({{ tempo_medio_resposta_meta_dias }} dias)
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Alunos -->
+  <div class="kpi-card dashboard-kpi-card">
+    <div class="dashboard-kpi-card-attention-top">
+      <div class="dashboard-kpi-card-attention-main">
+        <span class="kpi-title">Alunos</span>
+        <div class="kpi-value">{{ total_alunos or 0 }}</div>
+      </div>
+      <a href="{{ url_for('admin_alunos') }}" class="btn dashboard-kpi-view-btn" aria-label="Ver alunos" title="Ver alunos">
+        <i class="lucide" data-lucide="eye"></i>
+      </a>
+    </div>
+    <div class="kpi-sub">Cadastrados</div>
+    <div class="dashboard-kpi-footnote">{{ total_turmas or 0 }} turmas</div>
+  </div>
+
+  <!-- Atividades -->
+  <div class="kpi-card dashboard-kpi-card">
+    <div class="dashboard-kpi-card-attention-top">
+      <div class="dashboard-kpi-card-attention-main">
+        <span class="kpi-title">Atividades</span>
+        <div class="kpi-value">{{ total_atividades or 0 }}</div>
+      </div>
+      <a href="{{ url_for('admin_atividades') }}" class="btn dashboard-kpi-view-btn" aria-label="Ver atividades" title="Ver atividades">
+        <i class="lucide" data-lucide="eye"></i>
+      </a>
+    </div>
+    <div class="kpi-sub">Disponíveis</div>
+    <div class="dashboard-kpi-footnote">AAC {{ total_atividades_academicas or 0 }} · AEU {{ total_atividades_extensao or 0 }}</div>
+  </div>
+</div>
+
+<div class="dashboard-section">
+  <div class="dashboard-turma-grid">
+    {% if turma_cards %}
+      {% for turma in turma_cards %}
+      <section class="dashboard-turma-row">
+        <div class="dashboard-turma-title">
+          <span class="dashboard-turma-kicker">Acompanhamento:</span>
+          <span class="dashboard-turma-title-value">{{ turma.label }}</span>
+        </div>
+        <div class="dashboard-turma-row-kpis">
+          <article class="kpi-card dashboard-kpi-card">
+            <div class="dashboard-kpi-card-attention-top">
+              <div class="dashboard-kpi-card-attention-main">
+                <span class="kpi-title">Dados</span>
+                <div class="kpi-value">{{ turma.total_alunos_ativos }}</div>
+              </div>
+              <div class="dashboard-kpi-head-spacer" aria-hidden="true"></div>
+            </div>
+            <div class="kpi-sub">Alunos ativos</div>
+            <div class="dashboard-kpi-footnote">{{ turma.periodo_atual_label }}</div>
+          </article>
+          <article class="kpi-card dashboard-turma-card">
+            <div class="dashboard-turma-card-head">
+              <span class="kpi-title">Cumprimento</span>
+              <a href="{{ url_for('admin_detalhes_turma', turma_id=turma.id) }}" class="btn dashboard-kpi-view-btn dashboard-turma-action" aria-label="Ver detalhes da turma {{ turma.label }}" title="Ver detalhes da turma {{ turma.label }}">
+                <i class="lucide" data-lucide="eye"></i>
+              </a>
+            </div>
+            <div class="dashboard-turma-progress-list">
+              <div class="dashboard-turma-progress-item">
+                <div class="dashboard-turma-progress-head">
+                  {% if turma.aac_applicable %}
+                  <span class="dashboard-turma-progress-label">AAC <small>{{ turma.aac_hours_fmt }}h</small></span>
+                  <span>{{ turma.aac_pct }}%</span>
+                  {% else %}
+                  <span class="dashboard-turma-progress-label">AAC</span>
+                  <span>N/A</span>
+                  {% endif %}
+                </div>
+                {% if turma.aac_applicable %}
+                <div class="progress" aria-label="Progresso AAC da turma {{ turma.label }}" data-pct="{{ turma.aac_pct }}">
+                  <div class="progress-bar"></div>
+                </div>
+                {% else %}
+                <div class="dashboard-turma-progress-spacer" aria-hidden="true"></div>
+                {% endif %}
+              </div>
+              <div class="dashboard-turma-progress-item">
+                <div class="dashboard-turma-progress-head">
+                  {% if turma.aeu_applicable %}
+                  <span class="dashboard-turma-progress-label">AEU <small>{{ turma.aeu_hours_fmt }}h</small></span>
+                  <span>{{ turma.aeu_pct }}%</span>
+                  {% else %}
+                  <span class="dashboard-turma-progress-label">AEU</span>
+                  <span>N/A</span>
+                  {% endif %}
+                </div>
+                {% if turma.aeu_applicable %}
+                <div class="progress" aria-label="Progresso AEU da turma {{ turma.label }}" data-pct="{{ turma.aeu_pct }}">
+                  <div class="progress-bar"></div>
+                </div>
+                {% else %}
+                <div class="dashboard-turma-progress-spacer" aria-hidden="true"></div>
+                {% endif %}
+              </div>
+              <div class="dashboard-turma-progress-item">
+                <div class="dashboard-turma-progress-head">
+                  {% if turma.total_applicable %}
+                  <span class="dashboard-turma-progress-label">Total <small>{{ turma.ch_total_fmt }}h</small></span>
+                  <span>{{ turma.total_pct }}%</span>
+                  {% else %}
+                  <span class="dashboard-turma-progress-label">Total</span>
+                  <span>N/A</span>
+                  {% endif %}
+                </div>
+                {% if turma.total_applicable %}
+                <div class="progress" aria-label="Progresso total da turma {{ turma.label }}" data-pct="{{ turma.total_pct }}">
+                  <div class="progress-bar"></div>
+                </div>
+                {% else %}
+                <div class="dashboard-turma-progress-spacer" aria-hidden="true"></div>
+                {% endif %}
+              </div>
+            </div>
+          </article>
+          <article class="kpi-card dashboard-turma-distribution-card">
+            <span class="kpi-title">Relação entre número de alunos percentual total atingido</span>
+            <div class="dashboard-turma-distribution-body" role="img" aria-label="Distribuição percentual dos alunos da turma {{ turma.label }} por faixas de cumprimento">
+              <div class="dashboard-turma-distribution-legend">
+                {% for bucket in turma.attainment_buckets|reverse %}
+                <div class="dashboard-turma-distribution-legend-item">
+                  <span class="dashboard-turma-distribution-legend-swatch" style="background: {{ bucket.color }};" aria-hidden="true"></span>
+                  <span class="dashboard-turma-distribution-legend-label">{{ bucket.label }} <span class="dashboard-turma-distribution-legend-meta">· {{ bucket.count }} alunos</span></span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="dashboard-turma-distribution-visual">
+                <div class="dashboard-turma-distribution-chart">
+                  {% for bucket in turma.attainment_buckets|reverse %}
+                  <div class="dashboard-turma-distribution-chart-column" title="{{ bucket.label }} · {{ bucket.count }} alunos">
+                    <span class="dashboard-turma-distribution-chart-bar" style="background: {{ bucket.color }}; height: {{ bucket.share_pct }}%;"></span>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+      {% endfor %}
+    {% else %}
+      <div class="dashboard-empty-state">Nenhuma turma cadastrada para exibir no dashboard.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.progress[data-pct]').forEach((el) => {
+      const pct = parseInt(el.getAttribute('data-pct') || '0', 10);
+      const bar = el.querySelector('.progress-bar');
+      if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    });
+    document.querySelectorAll('.admin-alerta-card').forEach((el) => {
+      const bgColor = el.getAttribute('data-bg-color') || '';
+      const borderColor = el.getAttribute('data-border-color') || '';
+      const href = String(el.getAttribute('data-alerta-href') || '').trim();
+      const main = el.querySelector('.admin-alerta-card-main');
+      if (bgColor) el.style.background = bgColor;
+      if (borderColor) el.style.borderColor = borderColor;
+      if (main && href) {
+        const navigate = () => {
+          window.location.href = href;
+        };
+        main.addEventListener('click', navigate);
+        main.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate();
+          }
+        });
+      }
+    });
+  });
+</script>
+{% endblock %}

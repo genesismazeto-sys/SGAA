@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo Impressões</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <style>
+    .page { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+    .page-header { display:flex; justify-content:space-between; align-items:center; }
+    .main-title { font-size: 20px; font-weight: 600; margin: 0; }
+    .sub-title { font-size: 13px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="page impressoes-list-page">
+    <header class="page-header">
+      <div class="page-head-left">
+        <h1 class="main-title">Impressão</h1>
+        <div id="impressoes-subtitle" class="sub-title">Lista de OIs</div>
+      </div>
+      <div class="page-head-actions">
+        <button type="button" id="btn-reload-impressoes" class="btn" aria-label="Recarregar">
+          <i data-lucide="rotate-cw"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar" id="impressoes-toolbar">
+      <div class="filters">
+        <div class="input-group" id="grp-busca-impressoes">
+          <span class="input-chip"><i data-lucide="search"></i></span>
+          <input id="busca-impressoes" type="search" placeholder="Buscar nº OI, cliente, arte..." aria-label="Buscar OI, cliente ou arte">
+        </div>
+
+        <div class="input-group" id="grp-ordenar">
+          <div class="input-chip"><i data-lucide="arrow-up-down"></i></div>
+          <button class="btn" id="sort-field" type="button" aria-haspopup="menu" aria-expanded="false" title="Selecionar campo">
+            <span id="sort-label">Ordenar por</span>
+            <i data-lucide="chevron-down" style="margin-left:6px"></i>
+          </button>
+          <button class="input-chip" id="sort-toggle" type="button" aria-label="Alternar direção" title="Alternar ordem">
+            <span id="sort-dir">↑</span>
+          </button>
+        </div>
+
+        <div class="input-group" id="grp-filtro">
+          <button class="input-chip" id="filter-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+            <i data-lucide="filter"></i>
+            <span style="margin-left:6px">Filtrar</span>
+            <span id="filter-badge" class="badge" style="margin-left:6px; display:none;"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btn-gerar-oi" class="btn primary" type="button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg> Gerar OI
+        </button>
+      </div>
+    </div>
+
+    <div id="sort-menu" class="popover" hidden>
+      <div class="menu-title">Classificar por</div>
+      <div class="menu-list" id="sort-fields-list"></div>
+    </div>
+
+    <div id="filter-menu" class="popover" hidden>
+      <div class="menu-title">Filtrar por</div>
+      <div id="filter-props" class="pill-row" style="margin-bottom:8px;"></div>
+      <div class="menu-list" id="filter-values"></div>
+      <div class="menu-actions">
+        <button class="btn" id="filter-clear-all" type="button"><i data-lucide="eraser"></i> Limpar tudo</button>
+        <button class="btn primary" id="filter-apply" type="button"><i data-lucide="check"></i> Aplicar</button>
+      </div>
+    </div>
+
+    <div class="impressoes-cards-scroll" id="impressoes-scroll-container">
+      <div id="impressoes-list" class="impressoes-cards" role="list">
+        <div class="impresso-card header" role="presentation">
+          <div class="cell numero">Nº OI</div>
+          <div class="cell pedido">Pedido</div>
+          <div class="cell cliente">Cliente</div>
+          <div class="cell arte">Arte/Embalagem</div>
+          <div class="cell execucao">Execução</div>
+          <div class="cell fornecedor_maquina">Fornecedor/Máquina</div>
+          <div class="cell cores">Cores</div>
+          <div class="cell data_prevista">Data prevista</div>
+          <div class="cell metragem">Metragem</div>
+          <div class="cell status">Status</div>
+        </div>
+
+        <div class="impresso-card" role="listitem" tabindex="0">
+          <div class="cell numero">1234</div>
+          <div class="cell pedido">P-9876</div>
+          <div class="cell cliente">Cliente Exemplo Ltda</div>
+          <div class="cell arte">Saco 30x40 CMYK</div>
+          <div class="cell execucao">Externa</div>
+          <div class="cell fornecedor_maquina">Parceiro XYZ</div>
+          <div class="cell cores">4</div>
+          <div class="cell data_prevista">10/10/2025</div>
+          <div class="cell metragem">15.000 m</div>
+          <div class="cell status"><span class="badge">Pendente</span></div>
+        </div>
+      </div>
+      <div id="impressoes-sem-dados" class="empty-hint" hidden>Nenhuma Ordem de Impressão encontrada.</div>
+      <div id="impressoes-list-error" class="error-hint" hidden>Erro ao carregar. <button class="btn" id="btn-oi-retry">Tentar novamente</button></div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

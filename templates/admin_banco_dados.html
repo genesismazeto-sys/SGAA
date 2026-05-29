@@ -1,0 +1,2114 @@
+﻿{% extends "base.html" %}
+{% block title %}Banco de dados{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .db-admin-grid{ --db-control-h:30px; }
+    .db-admin-grid{ display:grid; gap:16px; }
+    .db-admin-top{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); align-items:stretch; }
+    .db-card{
+      background:#fff;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);
+      padding:16px;
+      min-width:0;
+    }
+    .db-admin-top > .db-card{
+      display:flex;
+      flex-direction:column;
+      min-height:156px;
+    }
+    .db-card h2,
+    .db-card h3{ margin:0 0 6px; font-size:.96rem; }
+    .db-card h2{ letter-spacing:-.01em; }
+    .db-card p{ margin:0; color:#475569; line-height:1.4; font-size:13px; overflow-wrap:anywhere; }
+    .db-card .btn{ height:var(--db-control-h); min-height:var(--db-control-h); padding:0 10px; font-size:12.5px; }
+    .db-card .btn .lucide{ width:15px; height:15px; }
+    .db-meta{ display:grid; gap:6px; margin-top:10px; font-size:13px; }
+    .db-admin-top .db-meta{ margin-top:auto; padding-top:12px; }
+    .db-meta strong{ color:#0f172a; }
+    .db-meta > div,
+    .db-note,
+    .db-table td{ overflow-wrap:anywhere; word-break:break-word; min-width:0; }
+    .db-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    .db-table-wrap{ overflow:auto; }
+    .db-table{ width:100%; border-collapse:collapse; min-width:760px; font-size:12.5px; }
+    .db-table th,
+    .db-table td{ padding:8px 10px; border-bottom:1px solid #e2e8f0; text-align:left; vertical-align:middle; line-height:1.25; }
+    .db-table th{ padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#475569; white-space:nowrap; }
+    .db-table th:first-child,
+    .db-table td:first-child,
+    .db-table th:last-child,
+    .db-table td:last-child{ text-align:center; }
+    .db-note{ font-size:12.5px; color:#475569; }
+    .db-badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px; background:#e2e8f0; color:#0f172a; font-size:12px; line-height:1; white-space:nowrap; flex-wrap:nowrap; }
+    .db-badge.cloud{ background:#eff6ff; border-color:transparent; color:var(--accent-blue); font-weight:500; }
+    .db-badge.local{ background:#ecfdf3; border-color:transparent; color:#047857; font-weight:500; }
+    .db-origin-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:3px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:500;
+      line-height:1.4;
+      white-space:nowrap;
+    }
+    .db-origin-pill.cloud{ background:#E6F1FB; color:#0C447C; }
+    .db-origin-pill.local{ background:#E1F5EE; color:#085041; }
+    .db-origin-pill .lucide{ width:13px; height:13px; color:inherit; margin:0; }
+    .db-inline-form{ margin:0; }
+    .db-actions-cell{
+      display:inline-flex;
+      flex-wrap:nowrap;
+      align-items:center;
+      justify-content:center;
+      gap:2px;
+    }
+    .db-actions-cell .db-inline-form{
+      display:inline-flex;
+      margin:0;
+    }
+    .db-col-actions{
+      width:96px;
+      min-width:96px;
+      max-width:96px;
+      padding-left:0 !important;
+      padding-right:0 !important;
+      text-align:center !important;
+      white-space:nowrap;
+    }
+    .db-icon-btn{ min-width:30px; width:30px; padding:0; }
+    .db-icon-btn .lucide{ margin:0; }
+    .db-config-grid{ display:grid; gap:14px; grid-template-columns:minmax(0, 1.7fr) minmax(0, 1.7fr) minmax(120px, .6fr); align-items:start; width:100%; }
+    .db-field{ display:grid; gap:4px; }
+    .db-field label{ font-weight:600; color:#0f172a; font-size:12.5px; }
+    .db-field input,
+    .db-field select{
+      width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px 10px;
+      border:0.5px solid var(--border); border-radius:var(--radius);
+      background:var(--bg); color:var(--text-primary); font-size:12.5px;
+    }
+    .db-field .field-card.file-card{ width:100%; cursor:pointer; }
+    .db-field .field-card.file-card > .field-chip,
+    .db-field .field-card.file-card .file-name.control{
+      min-height:var(--db-control-h);
+      height:var(--db-control-h);
+      font-size:12.5px;
+    }
+    .db-field .field-card.file-card.has-file{ cursor:default; }
+    .db-field .field-card.file-card.has-file .chip-right{
+      opacity:.5;
+      cursor:default;
+      pointer-events:none;
+    }
+    .db-field small{ color:#64748b; line-height:1.35; font-size:11.5px; }
+    .db-inline-settings{
+      grid-column:1 / -1;
+      display:grid;
+      grid-template-columns:minmax(0, 1.7fr) minmax(220px, 1.2fr) auto;
+      gap:12px;
+      align-items:end;
+      width:100%;
+    }
+    .db-toggle-field{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-height:var(--db-control-h);
+      padding-bottom:1px;
+      white-space:nowrap;
+      justify-content:flex-end;
+    }
+    .db-toggle-field span{ font-size:12.5px; font-weight:600; color:#0f172a; }
+    .toggle-switch{ position:relative; display:inline-flex; align-items:center; width:42px; height:22px; }
+    .toggle-switch input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .toggle-switch-slider{ position:relative; display:block; width:42px; height:22px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
+    .toggle-switch-slider::before{ content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
+    .toggle-switch input:checked + .toggle-switch-slider{ background:#0f5b99; }
+    .toggle-switch input:checked + .toggle-switch-slider::before{ transform:translateX(20px); }
+    .toggle-switch input:focus-visible + .toggle-switch-slider{ outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
+    .db-recovery-row{ display:grid; gap:12px; grid-template-columns:minmax(0, 1fr) auto; align-items:end; }
+    .db-select{ width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px 10px; border:1px solid var(--border-strong); border-radius:var(--radius); font-size:12.5px; background:var(--bg); }
+    .db-path{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.25; }
+    .db-path-ellipsis{
+      display:inline-block;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      vertical-align:bottom;
+    }
+    .db-path-cell{
+      max-width:320px;
+      width:320px;
+    }
+    .db-table td:last-child{ white-space:nowrap; }
+    .db-retention-table{ min-width:0; table-layout:fixed; }
+    .db-retention-table col:nth-child(1){ width:24%; }
+    .db-retention-table col:nth-child(2){ width:22%; }
+    .db-retention-table col:nth-child(3){ width:12%; }
+    .db-retention-table th,
+    .db-retention-table td,
+    .db-retention-table th:first-child,
+    .db-retention-table td:first-child,
+    .db-retention-table th:last-child,
+    .db-retention-table td:last-child{ text-align:left; border-bottom:0; }
+    .db-retention-table td:last-child{ white-space:normal; }
+    .db-retention-table .db-select{ width:100%; }
+    .db-retention-helper{ display:block; font-size:11px; line-height:1.3; color:#64748b; }
+    .db-config-grid > .db-field:nth-child(-n+3){ grid-template-rows:minmax(32px, auto) var(--db-control-h) minmax(0, auto); }
+    .db-config-grid > .db-field:nth-child(-n+3) label{ min-height:32px; display:flex; align-items:flex-end; }
+    .db-config-grid > .db-field:nth-child(3) input{ text-align:left; }
+    .db-config-grid > .db-field:nth-child(3) small{ max-width:18ch; }
+    .db-path-input{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .db-config-grid > .db-field:nth-child(1),
+    .db-config-grid > .db-field:nth-child(2),
+    .db-inline-settings > .db-field{ min-width:0; }
+    .db-card form{ width:100%; }
+    .db-card form > .db-note{ margin-top:10px; max-width:96ch; }
+    .db-card form > .db-actions{
+      justify-content:flex-end;
+      padding-top:10px;
+      border-top:1px solid #edf2f7;
+    }
+    .db-card > .db-note + .db-actions,
+    .db-card > p + .db-actions{ margin-top:12px; }
+    /* ── Card/section header bar (matches Configurações style) ── */
+    .db-card-head {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:7px 16px;
+      margin:-16px -16px 16px;
+      border-bottom:1px solid var(--border-strong);
+    }
+    .db-section-label { font-size:13px; font-weight:500; color:var(--text-secondary); }
+    .db-chips { display:flex; align-items:center; gap:6px; }
+    .db-chip {
+      display:inline-flex; align-items:center; height:24px; padding:0 8px;
+      border-radius:var(--radius); background:var(--bg); border:0.5px solid var(--border);
+      color:var(--text-secondary); font-size:12px; font-weight:400; white-space:nowrap;
+    }
+    .db-chip.is-active { background:#eff6ff; border-color:transparent; color:var(--accent-blue); font-weight:500; }
+    /* Drive sub-sections */
+    .db-drive-sep { margin:14px -16px; border-top:1px solid var(--border-strong); }
+    .db-drive-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+    .db-provider-card{
+      display:grid;
+      gap:14px;
+      padding:16px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:#fff;
+      box-shadow:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+      min-width:0;
+    }
+    .db-provider-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .db-provider-title{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .db-provider-title .lucide,
+    .db-provider-title .db-provider-brand-icon{
+      width:18px;
+      height:18px;
+      color:#0f172a;
+      flex:0 0 auto;
+    }
+    .db-provider-head h3{
+      margin:0;
+      font-size:1rem;
+      color:#0f172a;
+      line-height:1.1;
+    }
+    .db-provider-head .db-badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:5px;
+      min-height:24px;
+      padding:0 8px;
+      border:1px solid var(--status-pill-border, #d9dde2);
+      border-radius:999px;
+      background:var(--status-pill-bg, #f4f5f6);
+      color:var(--status-pill-text, #48505a);
+      font-size:12.5px;
+      font-weight:600;
+      line-height:1;
+      white-space:nowrap;
+    }
+    .db-provider-head .db-badge::before{
+      content:'';
+      width:6px;
+      height:6px;
+      border-radius:50%;
+      background:var(--status-pill-dot, #7b8794);
+      flex:0 0 auto;
+    }
+    .db-provider-head .db-badge.local{
+      --status-pill-bg:#e9f5e7;
+      --status-pill-border:#b9d7b5;
+      --status-pill-text:#1f5a3c;
+      --status-pill-dot:#3e835a;
+    }
+    .db-provider-head .db-badge.warning{
+      --status-pill-bg:#faeed5;
+      --status-pill-border:#e3c17b;
+      --status-pill-text:#7b4b12;
+      --status-pill-dot:#c5801f;
+    }
+    .db-provider-head .db-badge:not(.local):not(.warning){
+      --status-pill-bg:#eef1f4;
+      --status-pill-border:#c4ced8;
+      --status-pill-text:#3a4755;
+      --status-pill-dot:#667585;
+    }
+    .db-provider-meta{
+      display:grid;
+      gap:8px;
+      font-size:13px;
+      color:#0f172a;
+    }
+    .db-provider-line{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+      line-height:1.35;
+    }
+    .db-provider-line .lucide{
+      width:15px;
+      height:15px;
+      margin-top:0;
+      color:#475569;
+      flex:0 0 auto;
+    }
+    .db-oauth-meta{
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid #e2e8f0;
+      display:grid;
+      gap:6px;
+      font-size:12.5px;
+      color:#475569;
+    }
+    .db-oauth-meta-head{
+      margin:0;
+      font-size:12.5px;
+      font-weight:600;
+      color:#0f172a;
+    }
+    .db-oauth-meta-note{
+      margin:0;
+      font-size:12px;
+      color:#64748b;
+      line-height:1.35;
+    }
+    .db-provider-line.is-muted{ color:#475569; }
+    .db-provider-line.is-warning{ color:#92400e; }
+    .db-provider-line span{
+      min-width:0;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+    }
+    .db-provider-note{
+      margin:0;
+      font-size:12.5px;
+      color:#475569;
+      line-height:1.35;
+    }
+    .db-provider-actions{
+      display:grid;
+      gap:10px;
+    }
+    .db-provider-primary,
+    .db-provider-secondary{
+      display:grid;
+      gap:8px;
+    }
+    .db-provider-secondary{
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+    }
+    .db-provider-primary form,
+    .db-provider-secondary form{
+      margin:0;
+      width:100%;
+    }
+    .db-provider-actions .btn{
+      width:100%;
+      white-space:nowrap;
+      justify-content:center;
+      padding:0 12px;
+    }
+    .db-provider-primary .btn{
+      min-height:var(--db-control-h);
+      height:var(--db-control-h);
+      font-size:12.5px;
+    }
+    .db-provider-primary .btn.primary[disabled],
+    .db-provider-primary .btn.primary[aria-disabled="true"]{
+      background:#c7d9f0;
+      border-color:#c7d9f0;
+      color:rgba(255,255,255,.95);
+      cursor:not-allowed;
+    }
+    .db-provider-secondary .btn[disabled],
+    .db-provider-secondary .btn[aria-disabled="true"]{
+      cursor:not-allowed;
+      opacity:.72;
+    }
+    .db-provider-secondary .btn .lucide,
+    .db-provider-primary .btn .lucide,
+    .db-provider-secondary .btn .db-provider-icon,
+    .db-provider-primary .btn .db-provider-icon{
+      margin-right:6px;
+    }
+    .db-provider-icon{
+      width:16px;
+      height:16px;
+      flex:0 0 auto;
+    }
+    .db-provider-toggle-form{
+      margin:0;
+      width:100%;
+    }
+    .db-provider-toggle-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding-top:14px;
+      border-top:1px solid #e2e8f0;
+    }
+    .db-provider-toggle-row.is-disabled .db-provider-toggle-label{
+      color:#64748b;
+    }
+    .db-provider-toggle-row.is-disabled .toggle-switch{
+      opacity:.68;
+    }
+    .db-provider-toggle-label{
+      font-size:13px;
+      font-weight:600;
+      color:#0f172a;
+      line-height:1.35;
+    }
+    .db-provider-toggle-noscript{
+      display:flex;
+      justify-content:flex-end;
+      padding-top:10px;
+    }
+    .db-provider-log{
+      margin-top:2px;
+    }
+    .db-folder-modal[hidden]{ display:none !important; }
+    .db-folder-modal{
+      position:fixed;
+      inset:0;
+      z-index:1200;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    .db-folder-modal-backdrop{
+      position:absolute;
+      inset:0;
+      background:rgba(15, 23, 42, .48);
+    }
+    .db-folder-modal-panel{
+      position:relative;
+      width:min(760px, 100%);
+      max-height:min(80vh, 640px);
+      display:grid;
+      grid-template-rows:auto auto minmax(0, 1fr) auto;
+      gap:10px;
+      background:#fff;
+      border:1px solid #d9e2ee;
+      border-radius:var(--radius);
+      box-shadow:0 20px 48px rgba(15, 23, 42, .28);
+      padding:16px;
+      min-width:0;
+    }
+    .db-folder-modal-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .db-folder-modal-head h3{
+      margin:0;
+      font-size:1rem;
+      color:#0f172a;
+    }
+    .db-folder-breadcrumb{
+      margin:0;
+      font-size:12.5px;
+      color:#475569;
+      overflow-wrap:anywhere;
+      min-height:18px;
+    }
+    .db-folder-toolbar{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .db-folder-list{
+      border:1px solid #e2e8f0;
+      border-radius:var(--radius);
+      background:#f8fafc;
+      overflow:auto;
+      padding:8px;
+      min-height:240px;
+    }
+    .db-folder-item{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border:1px solid #e2e8f0;
+      border-radius:var(--radius);
+      background:#fff;
+      color:#0f172a;
+      padding:9px 10px;
+      margin:0 0 8px;
+      cursor:pointer;
+      text-align:left;
+    }
+    .db-folder-item:last-child{ margin-bottom:0; }
+    .db-folder-item:hover{ border-color:#bdd4ee; background:#f8fbff; }
+    .db-folder-item-name{
+      min-width:0;
+      overflow-wrap:anywhere;
+      word-break:break-word;
+      font-size:13px;
+    }
+    .db-folder-empty{
+      margin:0;
+      padding:10px;
+      color:#475569;
+      font-size:12.5px;
+      text-align:center;
+    }
+    .db-folder-feedback{
+      margin:0;
+      font-size:12.5px;
+      color:#475569;
+    }
+    .db-folder-feedback.is-error{ color:#b91c1c; }
+    .db-folder-modal-actions{
+      display:flex;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      gap:8px;
+      border-top:1px solid #e2e8f0;
+      padding-top:10px;
+    }
+    .db-folder-btn-close{
+      min-width:30px;
+      width:30px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid #d6dce6;
+      border-radius:var(--radius);
+      background:#fff;
+      color:#0f172a;
+      cursor:pointer;
+    }
+    .db-folder-btn-close:hover{ background:#f8fafc; }
+    /* Sub-section inside card (Recuperar banco de dados) */
+    .db-subsection { margin:14px -16px 0; padding:14px 16px 0; border-top:1px solid var(--border-strong); }
+    .db-subsection-title { font-size:.92rem; font-weight:600; color:#0f172a; margin:0 0 6px; }
+
+    @media (max-width: 760px){
+      .db-config-grid,
+      .db-inline-settings,
+      .db-recovery-row,
+      .db-drive-grid { grid-template-columns:1fr; }
+      .db-toggle-field{ padding-bottom:0; }
+      .db-card form > .db-actions{ justify-content:flex-start; }
+      .db-provider-secondary{ grid-template-columns:1fr; }
+      .db-provider-toggle-row{
+        align-items:flex-start;
+      }
+      .db-folder-modal{
+        align-items:flex-end;
+        padding:0;
+      }
+      .db-folder-modal-panel{
+        width:100%;
+        max-height:90vh;
+        border-radius:var(--radius) var(--radius) 0 0;
+      }
+    }
+    @media (max-width: 980px){
+      .db-provider-secondary{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px){
+      .db-provider-secondary{ grid-template-columns:1fr; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<section class="db-admin-grid">
+  <header>
+    <h1 class="main-title">Banco de dados</h1>
+    <p class="db-note">O sistema mantém o schema versionado para upgrades futuros e gera snapshots consistentes do SQLite. A restauração cobre os dados básicos do banco; anexos enviados ficam fora desse escopo.</p>
+  </header>
+
+  <div class="db-admin-top">
+    <article class="db-card">
+      <h2>Compatibilidade futura</h2>
+      <div class="db-meta">
+        <div><strong>Versão atual:</strong> {{ schema_status.schema_version }}</div>
+        <div><strong>Versão alvo:</strong> {{ schema_status.target_schema_version }}</div>
+        <div><strong>Última migração:</strong> {{ schema_status.latest_migration.name if schema_status.latest_migration else 'Nenhuma' }}</div>
+      </div>
+    </article>
+
+    <article class="db-card">
+      <h2>Backup local</h2>
+      <p>Snapshots versionados são salvos em uma pasta local controlada pelo sistema antes de qualquer restauração.</p>
+      <div class="db-meta">
+        <div><strong>Pasta:</strong> {{ local_backup_dir }}</div>
+      </div>
+    </article>
+
+    <article class="db-card">
+      <h2>Destinos em nuvem e externos</h2>
+        <div class="db-meta">
+          <div>
+            <strong>Pasta sincronizada/local institucional (opcional):</strong>
+          {% if cloud_backup_dir %}
+            <span class="badge status-pill status-positive">Ativa</span>
+          {% else %}
+            <span class="badge status-pill status-neutral">Inativa</span>
+          {% endif %}
+        </div>
+        {% if latest_cloud_backup %}
+          <div><strong>Último snapshot:</strong> {{ latest_cloud_backup.created_at }}</div>
+        {% endif %}
+        <div>
+          <strong>Google Drive:</strong>
+          {% if gdrive_connected %}
+            <span class="badge status-pill status-positive">Conectado</span>
+          {% elif gdrive_legacy_connection_detected %}
+            <span class="badge status-pill status-caution">Reconectar</span>
+          {% else %}
+            <span class="badge status-pill status-neutral">Desconectado</span>
+          {% endif %}
+        </div>
+        {% if gdrive_last_upload_label %}
+          <div><strong>Último upload Google Drive:</strong> {{ gdrive_last_upload_label }}</div>
+        {% endif %}
+        <div>
+          <strong>OneDrive:</strong>
+          {% if onedrive_connected %}
+            <span class="badge status-pill status-positive">Conectado</span>
+          {% else %}
+            <span class="badge status-pill status-neutral">Desconectado</span>
+          {% endif %}
+        </div>
+        {% if onedrive_last_upload_label %}
+          <div><strong>Último upload OneDrive:</strong> {{ onedrive_last_upload_label }}</div>
+        {% endif %}
+      </div>
+    </article>
+  </div>
+
+  {# ────────── Destinos e sincronização ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Destinos e sincronização</span>
+      <div class="db-chips">
+        <span class="db-chip {% if cloud_backup_dir %}is-active{% endif %}">Pasta sincronizada</span>
+        <span class="db-chip {% if gdrive_connected %}is-active{% endif %}">Google Drive</span>
+        <span class="db-chip {% if onedrive_connected %}is-active{% endif %}">OneDrive</span>
+      </div>
+    </div>
+    <p>Configure onde os snapshots serão salvos e enviados. Google Drive e OneDrive via API ficam nos cards abaixo.</p>
+    {% if auth_can('banco_dados', 'edit') %}
+      <form method="post" action="{{ url_for('admin_banco_dados_configuracoes') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="db-config-grid">
+          <div class="db-field">
+            <label for="local_backup_dir">Pasta local de backup</label>
+            <input id="local_backup_dir" class="db-path-input" name="local_backup_dir" type="text" value="{{ backup_settings.local_backup_dir }}" required spellcheck="false" autocomplete="off">
+            <small>Pasta no servidor onde os snapshots locais são gerados.</small>
+          </div>
+          <div class="db-field">
+            <label for="cloud_backup_dir">Pasta sincronizada local/institucional (opcional)</label>
+            <input id="cloud_backup_dir" class="db-path-input" name="cloud_backup_dir" type="text" value="{{ backup_settings.cloud_backup_dir }}" spellcheck="false" autocomplete="off">
+            <small>Opcional. Caminho local/UNC já sincronizado pelo servidor.</small>
+          </div>
+          <div class="db-field">
+            <label for="cloud_sync_interval_seconds">Intervalo de verificação (s)</label>
+            <input id="cloud_sync_interval_seconds" name="cloud_sync_interval_seconds" type="number" min="0" step="1" value="{{ backup_settings.cloud_sync_interval_seconds }}">
+            <small title="Ex.: 7200 segundos = 2 horas.">0 = ao alterar</small>
+          </div>
+          <div class="db-inline-settings">
+            <div class="db-field">
+              <label for="external_backup_url">Servidor externo</label>
+              <input id="external_backup_url" name="external_backup_url" type="url" value="{{ backup_settings.external_backup_url }}" placeholder="https://servidor.externo/api/backups">
+            </div>
+            <div class="db-field">
+              <label for="external_backup_token">Token do servidor externo</label>
+              <div class="pw-wrapper">
+                <input id="external_backup_token" name="external_backup_token" type="password" value="{{ backup_settings.external_backup_token }}" placeholder="Bearer token opcional">
+                <button type="button" class="pw-toggle" aria-label="Mostrar senha" aria-pressed="false">
+                  <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+                  <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="db-toggle-field">
+              <span>Envio adicional</span>
+              <label class="toggle-switch" aria-label="Ativar envio adicional para servidor externo">
+                <input id="external_backup_enabled" name="external_backup_enabled" type="checkbox" value="1" {% if external_backup_enabled %}checked{% endif %}>
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <p class="db-note">Opcional. Se configurado, o sistema envia o banco e o manifesto do snapshot manual para a URL informada. O token será enviado no header Authorization.</p>
+        <div class="db-actions">
+          <button type="submit" class="btn primary">
+            <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar destinos
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="db-meta">
+        <div><strong>Pasta local:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ backup_settings.local_backup_dir }}">{{ backup_settings.local_backup_dir }}</span></div>
+        <div><strong>Pasta em nuvem:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ backup_settings.cloud_backup_dir or 'Não configurada' }}">{{ backup_settings.cloud_backup_dir or 'Não configurada' }}</span></div>
+        <div><strong>Servidor externo:</strong> {{ backup_settings.external_backup_url or 'Não configurado' }}</div>
+      </div>
+    {% endif %}
+
+    <div class="db-drive-sep"></div>
+    <div class="db-drive-grid">
+      {# Google Drive #}
+      <section class="db-provider-card">
+        <div class="db-provider-head">
+          <div class="db-provider-title">
+            <img src="{{ url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
+            <h3>Google Drive</h3>
+          </div>
+          {% if gdrive_connected %}
+            <span class="db-badge local">Conectado</span>
+          {% elif gdrive_legacy_connection_detected %}
+            <span class="db-badge warning">Reconectar</span>
+          {% else %}
+            <span class="db-badge">Desconectado</span>
+          {% endif %}
+        </div>
+
+        <div class="db-provider-meta">
+          {% if gdrive_connected %}
+            <div class="db-provider-line">
+              <span>{{ google_drive_account_email or drive_settings.gdrive_account_email or '—' }}</span>
+            </div>
+          {% elif gdrive_legacy_connection_detected %}
+            <div class="db-provider-line is-warning">
+              <span>Conexão antiga detectada. Reconecte o Google Drive.</span>
+            </div>
+            {% if gdrive_legacy_account_email %}
+              <div class="db-provider-line is-muted">
+                <span>{{ gdrive_legacy_account_email }}</span>
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="db-provider-line is-muted">
+              <span>Não conectado</span>
+            </div>
+          {% endif %}
+          <div class="db-provider-line">
+            <i class="lucide" data-lucide="folder"></i>
+            <span class="db-path db-path-ellipsis" data-ptip="{{ google_folder_label or 'Backups/sistema' }}">{{ google_folder_label or 'Backups/sistema' }}</span>
+          </div>
+        </div>
+
+        {% if drive_settings.gdrive_last_upload_error %}
+          <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.gdrive_last_upload_error[:120] }}</p>
+        {% elif gdrive_last_upload_label %}
+          <p class="db-provider-note"><strong>Último upload:</strong> {{ gdrive_last_upload_label }}</p>
+        {% endif %}
+
+        {% if auth_can('banco_dados', 'edit') %}
+          <div class="db-provider-actions">
+            <div class="db-provider-primary">
+              {% if gdrive_connected %}
+                <form method="post" action="{{ url_for('admin_backup_google_upload') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn primary" title="Enviar backup para Google Drive">
+                    <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn primary" disabled aria-disabled="true" title="Conecte o Google Drive para enviar backups">
+                  <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+                </button>
+              {% endif %}
+            </div>
+
+            <div class="db-provider-secondary">
+              <button
+                type="button"
+                class="btn"
+                data-google-picker-button
+                data-google-connected="{{ 'true' if gdrive_connected else 'false' }}"
+                data-google-picker-configured="{{ 'true' if google_picker_configured else 'false' }}"
+                {% if not gdrive_connected %}
+                  title="Conecte o Google Drive antes de selecionar a pasta."
+                {% elif not google_picker_configured %}
+                  title="Google Picker não configurado."
+                {% else %}
+                  title="Selecionar pasta de destino no Google Drive"
+                {% endif %}
+              >
+                <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
+              </button>
+
+              <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
+                <i class="lucide" data-lucide="refresh-cw"></i>{% if gdrive_connected or gdrive_legacy_connection_detected %}Reconectar{% else %}Conectar{% endif %}
+              </a>
+
+              {% if gdrive_connected or gdrive_legacy_connection_detected %}
+                <form method="post" action="{{ url_for('admin_banco_dados_oauth_disconnect') }}" onsubmit="return confirm('Desconectar Google Drive e revogar acesso');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="provider" value="google">
+                  <button type="submit" class="btn" title="Desconectar Google Drive">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="db-provider-icon icon icon-tabler icons-tabler-outline icon-tabler-plug-connected-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M20 16l-4 4" /><path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5" /><path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5" /><path d="M3 21l2.5 -2.5" /><path d="M18.5 5.5l2.5 -2.5" /><path d="M10 11l-2 2" /><path d="M13 14l-2 2" /><path d="M16 16l4 4" /></svg>Desconectar
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn" disabled aria-disabled="true" title="Google Drive não está conectado">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="db-provider-icon icon icon-tabler icons-tabler-outline icon-tabler-plug-connected-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M20 16l-4 4" /><path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5" /><path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5" /><path d="M3 21l2.5 -2.5" /><path d="M18.5 5.5l2.5 -2.5" /><path d="M10 11l-2 2" /><path d="M13 14l-2 2" /><path d="M16 16l4 4" /></svg>Desconectar
+                </button>
+              {% endif %}
+            </div>
+          </div>
+
+          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-toggle-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="provider" value="google">
+            <input type="hidden" name="gdrive_dest_folder" value="{{ google_folder_label or drive_settings.gdrive_dest_folder or 'Backups/sistema' }}">
+            <div class="db-provider-toggle-row is-disabled">
+              <span class="db-provider-toggle-label" title="Disponível quando o backup automático for ativado.">Incluir no backup automático</span>
+              <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático" title="Disponível quando o backup automático for ativado.">
+                <input type="checkbox" name="gdrive_enabled" value="1" {% if drive_settings.gdrive_enabled == '1' %}checked{% endif %} disabled aria-disabled="true" title="Disponível quando o backup automático for ativado.">
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+              </label>
+            </div>
+            <noscript>
+              <div class="db-provider-toggle-noscript">
+                <button type="submit" class="btn">
+                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar uso
+                </button>
+              </div>
+            </noscript>
+          </form>
+        {% endif %}
+
+        {% if google_backup_logs %}
+          <div class="db-table-wrap db-provider-log">
+            <table class="db-table" style="min-width:0;">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Provedor</th>
+                  <th>Arquivo</th>
+                  <th>Tamanho</th>
+                  <th>Status</th>
+                  <th>Erro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in google_backup_logs %}
+                  <tr>
+                    <td>{{ item.created_at or '-' }}</td>
+                    <td>{{ item.provider or '-' }}</td>
+                    <td>{{ item.file_name or '-' }}</td>
+                    <td>{{ item.size_label }}</td>
+                    <td>
+                      {% if item.status == 'sucesso' %}
+                        <span class="db-badge local">Sucesso</span>
+                      {% else %}
+                        <span class="db-badge">Erro</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ item.error_message or '-' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+
+      {# OneDrive #}
+      <section class="db-provider-card">
+        <div class="db-provider-head">
+          <div class="db-provider-title">
+            <img src="{{ url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
+            <h3>OneDrive</h3>
+          </div>
+          {% if onedrive_connected %}
+            <span class="db-badge local">Conectado</span>
+          {% else %}
+            <span class="db-badge">Desconectado</span>
+          {% endif %}
+        </div>
+
+        <div class="db-provider-meta">
+          {% if onedrive_connected %}
+            <div class="db-provider-line">
+              <span>{{ onedrive_account_email or drive_settings.onedrive_account_email or '—' }}</span>
+            </div>
+          {% else %}
+            <div class="db-provider-line is-muted">
+              <span>Não conectado</span>
+            </div>
+          {% endif %}
+          <div class="db-provider-line">
+            <i class="lucide" data-lucide="folder"></i>
+            <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_folder_label or 'SGAA - Backups' }}">{{ onedrive_folder_label or 'SGAA - Backups' }}</span>
+          </div>
+        </div>
+
+        {% if drive_settings.onedrive_last_upload_error %}
+          <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.onedrive_last_upload_error[:120] }}</p>
+        {% elif onedrive_last_upload_label %}
+          <p class="db-provider-note"><strong>Último upload:</strong> {{ onedrive_last_upload_label }}</p>
+        {% endif %}
+
+        {% if auth_can('banco_dados', 'edit') %}
+          <div class="db-provider-actions">
+            <div class="db-provider-primary">
+              {% if onedrive_connected %}
+                <form method="post" action="{{ url_for('admin_backup_onedrive_upload') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn primary" title="Enviar backup para OneDrive">
+                    <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn primary" disabled aria-disabled="true" title="Conecte o OneDrive para enviar backups">
+                  <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+                </button>
+              {% endif %}
+            </div>
+
+            <div class="db-provider-secondary">
+              <button
+                type="button"
+                class="btn"
+                data-cloud-folder-button
+                data-provider="onedrive"
+                data-provider-label="OneDrive"
+                {% if not onedrive_connected %}
+                  disabled
+                  aria-disabled="true"
+                  title="Conecte o OneDrive antes de selecionar a pasta."
+                {% else %}
+                  title="Selecionar pasta de destino no OneDrive"
+                {% endif %}
+              >
+                <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
+              </button>
+
+              <a href="{{ url_for('admin_backup_onedrive_connect') }}" class="btn" title="{% if onedrive_connected %}Reconectar OneDrive{% else %}Conectar OneDrive{% endif %}">
+                <i class="lucide" data-lucide="refresh-cw"></i>{% if onedrive_connected %}Reconectar{% else %}Conectar{% endif %}
+              </a>
+
+              {% if onedrive_connected %}
+                <form method="post" action="{{ url_for('admin_banco_dados_oauth_disconnect') }}" onsubmit="return confirm('Desconectar OneDrive e revogar acesso');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="provider" value="onedrive">
+                  <button type="submit" class="btn" title="Desconectar OneDrive">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="db-provider-icon icon icon-tabler icons-tabler-outline icon-tabler-plug-connected-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M20 16l-4 4" /><path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5" /><path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5" /><path d="M3 21l2.5 -2.5" /><path d="M18.5 5.5l2.5 -2.5" /><path d="M10 11l-2 2" /><path d="M13 14l-2 2" /><path d="M16 16l4 4" /></svg>Desconectar
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn" disabled aria-disabled="true" title="OneDrive não está conectado">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="db-provider-icon icon icon-tabler icons-tabler-outline icon-tabler-plug-connected-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M20 16l-4 4" /><path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5" /><path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5" /><path d="M3 21l2.5 -2.5" /><path d="M18.5 5.5l2.5 -2.5" /><path d="M10 11l-2 2" /><path d="M13 14l-2 2" /><path d="M16 16l4 4" /></svg>Desconectar
+                </button>
+              {% endif %}
+            </div>
+          </div>
+
+          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-toggle-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="provider" value="onedrive">
+            <input type="hidden" name="onedrive_dest_folder" value="{{ onedrive_folder_label or drive_settings.onedrive_dest_folder or 'SGAA - Backups' }}">
+            <div class="db-provider-toggle-row is-disabled">
+              <span class="db-provider-toggle-label" title="Disponível quando o backup automático for ativado.">Incluir no backup automático</span>
+              <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático" title="Disponível quando o backup automático for ativado.">
+                <input type="checkbox" name="onedrive_enabled" value="1" {% if drive_settings.onedrive_enabled == '1' %}checked{% endif %} disabled aria-disabled="true" title="Disponível quando o backup automático for ativado.">
+                <span class="toggle-switch-slider" aria-hidden="true"></span>
+              </label>
+            </div>
+            <noscript>
+              <div class="db-provider-toggle-noscript">
+                <button type="submit" class="btn">
+                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar uso
+                </button>
+              </div>
+            </noscript>
+          </form>
+        {% endif %}
+
+        {% if onedrive_backup_logs %}
+          <div class="db-table-wrap db-provider-log">
+            <table class="db-table" style="min-width:0;">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Provedor</th>
+                  <th>Arquivo</th>
+                  <th>Tamanho</th>
+                  <th>Status</th>
+                  <th>Erro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in onedrive_backup_logs %}
+                  <tr>
+                    <td>{{ item.created_at or '-' }}</td>
+                    <td>{{ item.provider or '-' }}</td>
+                    <td>{{ item.file_name or '-' }}</td>
+                    <td>{{ item.size_label }}</td>
+                    <td>
+                      {% if item.status == 'sucesso' %}
+                        <span class="db-badge local">Sucesso</span>
+                      {% else %}
+                        <span class="db-badge">Erro</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ item.error_message or '-' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+    </div>
+    {% if oauth_config_error %}
+      <p class="db-note" style="color:#dc2626; margin-top:12px;">
+        <strong>Configuração OAuth:</strong> {{ oauth_config_error }}
+      </p>
+    {% else %}
+      <div class="db-oauth-meta">
+        <p class="db-oauth-meta-head">Configuração técnica OAuth</p>
+        <p class="db-oauth-meta-note">Cadastre estes callbacks no Google Cloud e em Registros de aplicativo da Microsoft.</p>
+        <div><strong>APP_PUBLIC_BASE_URL:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ oauth_public_base_url or '—' }}">{{ oauth_public_base_url or '—' }}</span></div>
+        <div><strong>Google callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ google_oauth_callback_uri or '—' }}">{{ google_oauth_callback_uri or '—' }}</span></div>
+        <div><strong>OneDrive callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_oauth_callback_uri or '—' }}">{{ onedrive_oauth_callback_uri or '—' }}</span></div>
+      </div>
+    {% endif %}
+  </article>
+
+  {# ────────── Operações ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Operações</span>
+    </div>
+    <p>Use o backup manual para criar um snapshot imediato e atualizar a cópia em nuvem. Antes de restaurar, o sistema salva automaticamente uma cópia de segurança da base atual.</p>
+    <div class="db-actions">
+      {% if auth_can('banco_dados', 'edit') %}
+        <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn primary">
+            <i class="lucide" data-lucide="database"></i>Gerar backup agora
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="db-subsection">
+      <h3 class="db-subsection-title">Recuperar banco de dados</h3>
+      <p>Restaura um backup do banco de dados. Os documentos dos alunos ficam armazenados separadamente na pasta documentos_alunos. Antes da recuperação, o sistema cria automaticamente um snapshot de segurança da base atual.</p>
+      {% if backups and auth_can('banco_dados', 'full') %}
+        <form id="restore-snapshot-form" method="post" action="{{ url_for('admin_banco_dados_restaurar') }}" onsubmit="return confirm('Confirmar recuperação do banco de dados a partir do snapshot selecionado');" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="db-recovery-row">
+            <div class="db-field">
+              <label for="manifest_path">Snapshot interno</label>
+              <select id="manifest_path" class="db-select" name="manifest_path" required>
+                {% for backup in backups %}
+                  <option value="{{ backup.manifest_path }}">{{ backup.created_at or '-' }} • {{ 'Nuvem' if backup.location == 'cloud' else 'Local' }}{% if backup.reason %} • {{ backup.reason|replace('manual-backup', 'manual')|replace('pre-restore-safety', 'pré-restore') }}{% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn primary">
+              <i class="lucide" data-lucide="rotate-ccw"></i>Recuperar banco
+            </button>
+          </div>
+        </form>
+        <form id="restore-upload-form" method="post" action="{{ url_for('admin_banco_dados_restaurar_upload') }}" enctype="multipart/form-data" onsubmit="return confirm('Confirmar recuperação do banco de dados a partir do arquivo enviado');" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="db-recovery-row">
+            <div class="db-field">
+              <label for="backup_file">Carregar arquivo</label>
+              <div class="field-card file-card" data-db-upload-card>
+                <div class="field-chip"><i class="lucide" data-lucide="file-up"></i></div>
+                <input class="file-input" id="backup_file" type="file" name="backup_file" accept=".zip,.db,.sqlite,.sqlite3" required>
+                <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+                <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+              </div>
+            </div>
+            <button type="submit" class="btn">
+              <i class="lucide" data-lucide="upload"></i>Carregar arquivo
+            </button>
+          </div>
+          <p class="db-note" style="margin-top:8px;">Formatos aceitos: ZIP oficial do banco, ZIP legado banco-only, .db, .sqlite e .sqlite3.</p>
+        </form>
+      {% elif not backups %}
+        <form id="restore-upload-form" method="post" action="{{ url_for('admin_banco_dados_restaurar_upload') }}" enctype="multipart/form-data" onsubmit="return confirm('Confirmar recuperação do banco de dados a partir do arquivo enviado');" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="db-recovery-row">
+            <div class="db-field">
+              <label for="backup_file">Carregar arquivo</label>
+              <div class="field-card file-card" data-db-upload-card>
+                <div class="field-chip"><i class="lucide" data-lucide="file-up"></i></div>
+                <input class="file-input" id="backup_file" type="file" name="backup_file" accept=".zip,.db,.sqlite,.sqlite3" required>
+                <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+                <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+              </div>
+            </div>
+            <button type="submit" class="btn">
+              <i class="lucide" data-lucide="upload"></i>Carregar arquivo
+            </button>
+          </div>
+          <p class="db-note" style="margin-top:8px;">Nenhum snapshot interno disponível no momento.</p>
+        </form>
+      {% else %}
+        <p class="db-note" style="margin-top:8px;">Seu perfil não possui permissão total para recuperar o banco.</p>
+      {% endif %}
+    </div>
+  </article>
+
+  {# ────────── Política de retenção ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Política de retenção</span>
+      <div class="db-chips">
+        <span class="db-chip">GFS · {{ retention_windows_meta|length }} janelas</span>
+      </div>
+    </div>
+    <p>Define por quanto tempo os snapshots são mantidos em cada janela temporal (GFS). Snapshots criados manualmente nunca são removidos automaticamente.</p>
+    {% if auth_can('banco_dados', 'edit') %}
+      <form method="post" action="{{ url_for('admin_banco_dados_retencao') }}" id="retention-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="db-table-wrap" style="margin-top:10px;">
+          <table class="db-table db-retention-table">
+            <colgroup>
+              <col>
+              <col>
+              <col>
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Janela</th>
+                <th>Intervalo de captura</th>
+                <th>Slots máximos</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for w in retention_windows_meta %}
+                {% set iv_key = "retention_" ~ w.key ~ "_interval_hours" %}
+                {% set sl_key = "retention_" ~ w.key ~ "_slots" %}
+                {% set cur_iv = retention_policy[iv_key] %}
+                {% set cur_sl = retention_policy[sl_key] %}
+                {% set current = namespace(interval_label='') %}
+                {% for val, lbl in retention_interval_options %}
+                  {% if val == cur_iv %}
+                    {% set current.interval_label = lbl %}
+                  {% endif %}
+                {% endfor %}
+                <tr data-retention-row>
+                  <td>{{ w.label }}</td>
+                  <td>
+                    <select name="{{ iv_key }}" class="db-select" data-retention-interval>
+                      {% for val, lbl in retention_interval_options %}
+                        <option value="{{ val }}" {% if val == cur_iv %}selected{% endif %}>{{ lbl }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  <td>
+                    <input type="number" name="{{ sl_key }}" value="{{ cur_sl }}" min="1" max="200" class="db-select" data-retention-slots>
+                  </td>
+                  <td><small class="db-retention-helper" data-retention-helper>Slots = até {{ cur_sl }} snapshots; 1 snapshot {{ current.interval_label }}.</small></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="db-actions">
+          <button type="button" class="btn" onclick="resetRetentionForm()">
+            <i class="lucide" data-lucide="rotate-ccw"></i>Restaurar padrões
+          </button>
+          <button type="submit" class="btn primary">
+            <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar política
+          </button>
+        </div>
+      </form>
+      <script>
+        var _retentionDefaults = {
+          {% for w in retention_windows_meta %}
+            "retention_{{ w.key }}_interval_hours": "{{ w.default_interval }}",
+            "retention_{{ w.key }}_slots": "{{ w.default_slots }}"{% if not loop.last %},{% endif %}
+          {% endfor %}
+        };
+        function updateRetentionHelpers() {
+          var form = document.getElementById("retention-form");
+          if (!form) return;
+          var rows = form.querySelectorAll("[data-retention-row]");
+          for (var i = 0; i < rows.length; i += 1) {
+            var row = rows[i];
+            var interval = row.querySelector("[data-retention-interval]");
+            var slots = row.querySelector("[data-retention-slots]");
+            var helper = row.querySelector("[data-retention-helper]");
+            if (!interval || !slots || !helper) continue;
+            var option = interval.options[interval.selectedIndex];
+            var intervalLabel = option ? option.text : "";
+            var slotsValue = slots.value || slots.getAttribute("value") || "-";
+            helper.textContent = "Slots = até " + slotsValue + " snapshots; 1 snapshot " + intervalLabel + ".";
+          }
+        }
+        function resetRetentionForm() {
+          var form = document.getElementById("retention-form");
+          for (var name in _retentionDefaults) {
+            var el = form.elements[name];
+            if (el) el.value = _retentionDefaults[name];
+          }
+          updateRetentionHelpers();
+        }
+        document.addEventListener("DOMContentLoaded", function() {
+          var form = document.getElementById("retention-form");
+          if (!form) return;
+          form.addEventListener("input", updateRetentionHelpers);
+          form.addEventListener("change", updateRetentionHelpers);
+          updateRetentionHelpers();
+        });
+      </script>
+    {% else %}
+      <div class="db-meta">
+        {% for w in retention_windows_meta %}
+          {% set iv_key = "retention_" ~ w.key ~ "_interval_hours" %}
+          {% set sl_key = "retention_" ~ w.key ~ "_slots" %}
+          <div><strong>{{ w.label }}:</strong> intervalo {{ retention_policy[iv_key] }}h · {{ retention_policy[sl_key] }} slots</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </article>
+
+  {# ────────── Snapshots disponíveis ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Snapshots disponíveis</span>
+      {% if backups %}
+        <span class="db-chip is-active">{{ backups|length }} snapshot{{ 's' if backups|length != 1 else '' }}</span>
+      {% endif %}
+    </div>
+    {% if backups %}
+      <div class="db-table-wrap">
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th>Origem</th>
+              <th>Criado em</th>
+              <th>Motivo</th>
+              <th>Schema</th>
+              <th>Tamanho</th>
+              <th>Caminho</th>
+              <th class="db-col-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for backup in backups %}
+              <tr>
+                <td>
+                  <span class="db-origin-pill {{ backup.location }}">
+                    <i class="lucide" data-lucide="{{ 'cloud' if backup.location == 'cloud' else 'monitor' }}"></i>
+                    {{ 'Nuvem' if backup.location == 'cloud' else 'Local' }}
+                  </span>
+                </td>
+                <td>{{ backup.created_at or '-' }}</td>
+                <td>{{ backup.reason or '-' }}</td>
+                <td>{{ backup.schema_version or '-' }} / {{ backup.target_schema_version or '-' }}</td>
+                <td>{{ backup.size_label }}</td>
+                <td class="db-path-cell"><span class="db-path db-path-ellipsis" data-ptip="{{ backup.database_path or '-' }}">{{ backup.database_path or '-' }}</span></td>
+                <td class="db-col-actions">
+                  <div class="db-actions-cell">
+                    <a class="btn db-icon-btn" href="{{ url_for('admin_banco_dados_download', manifest_path=backup.manifest_path) }}" title="Baixar snapshot" aria-label="Baixar snapshot">
+                      <i class="lucide" data-lucide="download"></i>
+                    </a>
+                    {% if auth_can('banco_dados', 'full') %}
+                      <form class="db-inline-form" method="post" action="{{ url_for('admin_banco_dados_excluir') }}" onsubmit="return confirm('Excluir este snapshot permanentemente');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="manifest_path" value="{{ backup.manifest_path }}">
+                        <button type="submit" class="btn db-icon-btn" title="Excluir snapshot" aria-label="Excluir snapshot">
+                          <i class="lucide" data-lucide="trash-2"></i>
+                        </button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="db-note">Nenhum snapshot foi gerado ainda.</p>
+    {% endif %}
+  </article>
+
+  <div id="cloud-folder-modal" class="db-folder-modal" hidden>
+    <div class="db-folder-modal-backdrop" data-cloud-folder-close></div>
+    <div class="db-folder-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cloud-folder-modal-title">
+      <div class="db-folder-modal-head">
+        <h3 id="cloud-folder-modal-title">Selecionar pasta</h3>
+        <button type="button" class="db-folder-btn-close" title="Fechar" data-cloud-folder-close>
+          <i class="lucide" data-lucide="x"></i>
+        </button>
+      </div>
+      <p id="cloud-folder-breadcrumb" class="db-folder-breadcrumb"></p>
+      <div class="db-folder-toolbar">
+        <button type="button" class="btn" id="cloud-folder-back-btn">
+          <i class="lucide" data-lucide="arrow-left"></i>Voltar
+        </button>
+        <button type="button" class="btn" id="cloud-folder-reload-btn">
+          <i class="lucide" data-lucide="refresh-cw"></i>Atualizar
+        </button>
+      </div>
+      <div id="cloud-folder-list" class="db-folder-list"></div>
+      <p id="cloud-folder-feedback" class="db-folder-feedback"></p>
+      <div class="db-folder-modal-actions">
+        <button type="button" class="btn" data-cloud-folder-close>Cancelar</button>
+        <button type="button" class="btn primary" id="cloud-folder-select-current-btn">
+          <i class="lucide" data-lucide="check"></i>Usar pasta atual
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    (function () {
+      "use strict";
+
+      async function requestJson(url, options) {
+        var response = await fetch(url, options || {});
+        var payload = {};
+        try {
+          payload = await response.json();
+        } catch (err) {
+          payload = {};
+        }
+        if (!response.ok || !payload.ok) {
+          var message = payload && payload.message ? payload.message : "Operação não concluída.";
+          throw new Error(message);
+        }
+        return payload;
+      }
+
+      function initCloudFolderPicker() {
+        var triggerButtons = document.querySelectorAll("[data-cloud-folder-button]");
+        if (!triggerButtons.length) return;
+
+        var modal = document.getElementById("cloud-folder-modal");
+        var closeButtons = modal ? modal.querySelectorAll("[data-cloud-folder-close]") : [];
+        var titleEl = document.getElementById("cloud-folder-modal-title");
+        var breadcrumbEl = document.getElementById("cloud-folder-breadcrumb");
+        var feedbackEl = document.getElementById("cloud-folder-feedback");
+        var listEl = document.getElementById("cloud-folder-list");
+        var backBtn = document.getElementById("cloud-folder-back-btn");
+        var reloadBtn = document.getElementById("cloud-folder-reload-btn");
+        var selectCurrentBtn = document.getElementById("cloud-folder-select-current-btn");
+
+        if (!modal || !titleEl || !breadcrumbEl || !feedbackEl || !listEl || !backBtn || !reloadBtn || !selectCurrentBtn) {
+          return;
+        }
+
+        var pickerState = {
+          provider: "",
+          providerLabel: "",
+          stack: [],
+          loading: false,
+        };
+
+        function refreshIcons() {
+          if (window.lucide && typeof window.lucide.createIcons === "function") {
+            window.lucide.createIcons();
+          }
+        }
+
+        function rootLabelForProvider(provider) {
+          return provider === "google" ? "Meu Drive" : "OneDrive";
+        }
+
+        function getCurrentNode() {
+          if (!pickerState.stack.length) return null;
+          return pickerState.stack[pickerState.stack.length - 1];
+        }
+
+        function setFeedback(message, isError) {
+          feedbackEl.textContent = message || "";
+          feedbackEl.classList.toggle("is-error", !!isError);
+        }
+
+        function setLoading(isLoading) {
+          pickerState.loading = !!isLoading;
+          reloadBtn.disabled = pickerState.loading;
+          backBtn.disabled = pickerState.loading || pickerState.stack.length <= 1;
+          selectCurrentBtn.disabled = pickerState.loading || !getCurrentNode();
+        }
+
+        function renderBreadcrumb() {
+          var labels = [];
+          for (var i = 0; i < pickerState.stack.length; i += 1) {
+            labels.push(pickerState.stack[i].pathLabel);
+          }
+          breadcrumbEl.textContent = labels.join(" / ");
+        }
+
+        function renderFolderList(folders) {
+          listEl.innerHTML = "";
+          if (!folders.length) {
+            var empty = document.createElement("p");
+            empty.className = "db-folder-empty";
+            empty.textContent = "Nenhuma subpasta encontrada neste nível.";
+            listEl.appendChild(empty);
+            return;
+          }
+
+          for (var i = 0; i < folders.length; i += 1) {
+            (function (folder) {
+              var itemBtn = document.createElement("button");
+              itemBtn.type = "button";
+              itemBtn.className = "db-folder-item";
+              itemBtn.setAttribute("title", "Entrar em " + folder.name);
+              itemBtn.innerHTML = [
+                '<span class="db-folder-item-name"><i class="lucide" data-lucide="folder"></i> ',
+                folder.name,
+                "</span>",
+                '<i class="lucide" data-lucide="chevron-right"></i>'
+              ].join("");
+              itemBtn.addEventListener("click", function () {
+                var current = getCurrentNode();
+                if (!current) return;
+                var nextPathLabel = (current.pathLabel ? current.pathLabel + " / " : "") + folder.name;
+                pickerState.stack.push({
+                  id: folder.id,
+                  name: folder.name,
+                  pathLabel: nextPathLabel,
+                  driveId: folder.drive_id || current.driveId || "",
+                });
+                loadCurrentFolder();
+              });
+              listEl.appendChild(itemBtn);
+            })(folders[i]);
+          }
+          refreshIcons();
+        }
+
+        async function loadCurrentFolder() {
+          var current = getCurrentNode();
+          if (!current) return;
+          setLoading(true);
+          setFeedback("", false);
+          renderBreadcrumb();
+          try {
+            var params = new URLSearchParams();
+            params.set("parent_id", current.id || "root");
+            if (current.driveId) {
+              params.set("drive_id", current.driveId);
+            }
+            var payload = await requestJson(
+              "/admin/backup/cloud-folders/" + encodeURIComponent(pickerState.provider) + "?" + params.toString()
+            );
+            var folders = Array.isArray(payload.folders) ? payload.folders : [];
+            var notice = payload.notice || "";
+            if (folders.length) {
+              renderFolderList(folders);
+              setFeedback(notice, false);
+            } else if (notice) {
+              listEl.innerHTML = "";
+              setFeedback(notice, false);
+            } else {
+              renderFolderList([]);
+              setFeedback("", false);
+            }
+            backBtn.disabled = pickerState.loading || pickerState.stack.length <= 1;
+            selectCurrentBtn.disabled = false;
+          } catch (err) {
+            listEl.innerHTML = "";
+            setFeedback(err && err.message ? err.message : "Falha ao carregar pastas.", true);
+          } finally {
+            setLoading(false);
+            renderBreadcrumb();
+          }
+        }
+
+        async function saveCurrentFolder() {
+          var current = getCurrentNode();
+          if (!current) return;
+          setLoading(true);
+          setFeedback("", false);
+          try {
+            var payload = {
+              folder_id: current.id || "root",
+              drive_id: current.driveId || "",
+              folder_name: current.name || rootLabelForProvider(pickerState.provider),
+              folder_path_label: current.pathLabel || rootLabelForProvider(pickerState.provider),
+            };
+            await requestJson(
+              "/admin/backup/cloud-folder/" + encodeURIComponent(pickerState.provider),
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              }
+            );
+            window.location.reload();
+          } catch (err) {
+            setFeedback(err && err.message ? err.message : "Falha ao salvar pasta de destino.", true);
+            setLoading(false);
+          }
+        }
+
+        function openModal(provider, providerLabel) {
+          pickerState.provider = provider;
+          pickerState.providerLabel = providerLabel;
+          var rootLabel = rootLabelForProvider(provider);
+          pickerState.stack = [
+            {
+              id: "root",
+              name: rootLabel,
+              pathLabel: rootLabel,
+              driveId: "",
+            }
+          ];
+          titleEl.textContent = "Selecionar pasta no " + providerLabel;
+          setFeedback("", false);
+          modal.hidden = false;
+          setLoading(false);
+          renderBreadcrumb();
+          loadCurrentFolder();
+          refreshIcons();
+        }
+
+        function closeModal() {
+          modal.hidden = true;
+          pickerState.provider = "";
+          pickerState.providerLabel = "";
+          pickerState.stack = [];
+          setFeedback("", false);
+          listEl.innerHTML = "";
+        }
+
+        for (var i = 0; i < triggerButtons.length; i += 1) {
+          triggerButtons[i].addEventListener("click", function (event) {
+            var btn = event.currentTarget;
+            if (!btn || btn.disabled) return;
+            openModal(
+              btn.getAttribute("data-provider") || "",
+              btn.getAttribute("data-provider-label") || "Drive"
+            );
+          });
+        }
+
+        for (var c = 0; c < closeButtons.length; c += 1) {
+          closeButtons[c].addEventListener("click", closeModal);
+        }
+
+        backBtn.addEventListener("click", function () {
+          if (pickerState.loading || pickerState.stack.length <= 1) return;
+          pickerState.stack.pop();
+          loadCurrentFolder();
+        });
+
+        reloadBtn.addEventListener("click", function () {
+          if (pickerState.loading) return;
+          loadCurrentFolder();
+        });
+
+        selectCurrentBtn.addEventListener("click", function () {
+          if (pickerState.loading) return;
+          saveCurrentFolder();
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && !modal.hidden) {
+            closeModal();
+          }
+        });
+      }
+
+      function initGoogleDrivePicker() {
+        var triggerButton = document.querySelector("[data-google-picker-button]");
+        if (!triggerButton) return;
+
+        var googlePickerConfig = {
+          clientId: {{ google_client_id|tojson }},
+          apiKey: {{ google_picker_api_key|tojson }},
+          appId: {{ google_app_id|tojson }},
+          connectedEmail: {{ (google_drive_account_email or drive_settings.gdrive_account_email or "")|tojson }},
+          configured: {{ google_picker_configured|tojson }},
+          backendConnected: {{ gdrive_connected|tojson }},
+          saveUrl: {{ url_for('admin_backup_cloud_folder', provider='google')|tojson }},
+          scope: "https://www.googleapis.com/auth/drive.file"
+        };
+        var googlePickerState = {
+          gapiScriptPromise: null,
+          gisScriptPromise: null,
+          pickerModulePromise: null,
+          tokenClient: null,
+          accessToken: "",
+          loading: false,
+          cspBlocked: {
+            gapi: false,
+            gis: false
+          },
+          pickerLoaded: false
+        };
+        var defaultButtonHtml = triggerButton.innerHTML;
+        var cspListenerBound = false;
+
+        function makePickerError(code, message) {
+          var err = new Error(message);
+          err.code = code;
+          return err;
+        }
+
+        function consoleState(label, isPresent) {
+          console.info("[GooglePicker] " + label + " " + (isPresent ? "sim" : "nao"));
+        }
+
+        function resolvePickerErrorMessage(err) {
+          var code = err && err.code ? String(err.code) : "";
+          if (
+            code === "GOOGLE_CLIENT_ID_MISSING"
+            || code === "GOOGLE_PICKER_API_KEY_MISSING"
+            || code === "GOOGLE_APP_ID_MISSING"
+          ) {
+            return "Google Picker não configurado. Configure GOOGLE_PICKER_API_KEY e GOOGLE_APP_ID.";
+          }
+          if (code === "GIS_SCRIPT_BLOCKED" || code === "GAPI_SCRIPT_BLOCKED") {
+            return "Script do Google Picker bloqueado pelo navegador ou pela Content-Security-Policy.";
+          }
+          if (code === "GIS_SCRIPT_NOT_LOADED") return "Google Identity Services não carregou.";
+          if (code === "GAPI_SCRIPT_NOT_LOADED") return "gapi não carregou.";
+          if (code === "PICKER_API_NOT_LOADED") return "Google Picker API não carregou.";
+          if (code === "GOOGLE_BROWSER_AUTH_FAILED") {
+            return "Não foi possível obter autorização do Google no navegador. Faça login com a mesma conta conectada ao Google Drive.";
+          }
+          return err && err.message ? err.message : "Falha ao selecionar a pasta no Google Drive.";
+        }
+
+        function setButtonLoading(isLoading) {
+          googlePickerState.loading = !!isLoading;
+          triggerButton.disabled = !!isLoading;
+          triggerButton.setAttribute("aria-busy", isLoading ? "true" : "false");
+          triggerButton.innerHTML = isLoading
+            ? '<i class="lucide" data-lucide="loader-circle"></i>Abrindo Picker...'
+            : defaultButtonHtml;
+          if (window.lucide && typeof window.lucide.createIcons === "function") {
+            window.lucide.createIcons();
+          }
+        }
+
+        function showMessage(message) {
+          window.alert(message);
+        }
+
+        function bindCspListener() {
+          if (cspListenerBound) {
+            return;
+          }
+          cspListenerBound = true;
+          document.addEventListener("securitypolicyviolation", function (event) {
+            var blockedUri = String((event && event.blockedURI) || "");
+            if (blockedUri.indexOf("apis.google.com") !== -1) {
+              googlePickerState.cspBlocked.gapi = true;
+            }
+            if (blockedUri.indexOf("accounts.google.com") !== -1) {
+              googlePickerState.cspBlocked.gis = true;
+            }
+            if (
+              blockedUri.indexOf("apis.google.com") !== -1
+              || blockedUri.indexOf("accounts.google.com") !== -1
+            ) {
+              console.warn("[GooglePicker] CSP bloqueou recurso externo:", blockedUri || "<desconhecido>");
+            }
+          }, true);
+        }
+
+        function validateGooglePickerConfig() {
+          consoleState("Google Picker config: clientId presente?", !!googlePickerConfig.clientId);
+          consoleState("Google Picker config: apiKey presente?", !!googlePickerConfig.apiKey);
+          consoleState("Google Picker config: appId presente?", !!googlePickerConfig.appId);
+
+          if (!googlePickerConfig.clientId) {
+            throw makePickerError("GOOGLE_CLIENT_ID_MISSING", "Google Picker não configurado.");
+          }
+          if (!googlePickerConfig.apiKey) {
+            throw makePickerError("GOOGLE_PICKER_API_KEY_MISSING", "Google Picker não configurado.");
+          }
+          if (!googlePickerConfig.appId) {
+            throw makePickerError("GOOGLE_APP_ID_MISSING", "Google Picker não configurado.");
+          }
+        }
+
+        function waitUntil(readyCheck, timeoutMs, intervalMs) {
+          return new Promise(function (resolve, reject) {
+            var timeout = Number(timeoutMs || 12000);
+            var interval = Number(intervalMs || 120);
+            var startedAt = Date.now();
+
+            function tick() {
+              try {
+                if (readyCheck()) {
+                  resolve(true);
+                  return;
+                }
+              } catch (err) {
+                reject(err);
+                return;
+              }
+              if (Date.now() - startedAt >= timeout) {
+                resolve(false);
+                return;
+              }
+              setTimeout(tick, interval);
+            }
+
+            tick();
+          });
+        }
+
+        function ensureScriptLoaded(options) {
+          if (options.readyCheck()) {
+            return Promise.resolve();
+          }
+
+          bindCspListener();
+
+          var src = options.src;
+          var script = document.querySelector('script[src="' + src + '"]');
+          if (!script) {
+            script = document.createElement("script");
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+          }
+
+          return new Promise(function (resolve, reject) {
+            var finished = false;
+
+            function doneWithError(errorCode, fallbackMessage) {
+              if (finished) return;
+              finished = true;
+              cleanup();
+              reject(makePickerError(errorCode, fallbackMessage));
+            }
+
+            function doneWithSuccess() {
+              if (finished) return;
+              finished = true;
+              cleanup();
+              resolve();
+            }
+
+            function cleanup() {
+              clearTimeout(timeoutHandle);
+              script.removeEventListener("load", handleLoad);
+              script.removeEventListener("error", handleError);
+            }
+
+            function handleLoad() {
+              waitUntil(options.readyCheck, 3000, 100).then(function (ok) {
+                if (ok) {
+                  doneWithSuccess();
+                  return;
+                }
+                if (options.blockedCheck && options.blockedCheck()) {
+                  doneWithError(options.blockedCode, options.blockedMessage);
+                  return;
+                }
+                doneWithError(options.notReadyCode, options.notReadyMessage);
+              }).catch(function () {
+                doneWithError(options.notReadyCode, options.notReadyMessage);
+              });
+            }
+
+            function handleError() {
+              if (options.blockedCheck && options.blockedCheck()) {
+                doneWithError(options.blockedCode, options.blockedMessage);
+                return;
+              }
+              doneWithError(options.notReadyCode, options.notReadyMessage);
+            }
+
+            var timeoutHandle = setTimeout(function () {
+              if (options.readyCheck()) {
+                doneWithSuccess();
+                return;
+              }
+              if (options.blockedCheck && options.blockedCheck()) {
+                doneWithError(options.blockedCode, options.blockedMessage);
+                return;
+              }
+              doneWithError(options.notReadyCode, options.notReadyMessage);
+            }, 12000);
+
+            script.addEventListener("load", handleLoad, { once: true });
+            script.addEventListener("error", handleError, { once: true });
+            waitUntil(options.readyCheck, 200, 100).then(function (ok) {
+              if (ok) {
+                doneWithSuccess();
+              }
+            }).catch(function () {
+              doneWithError(options.notReadyCode, options.notReadyMessage);
+            });
+          });
+        }
+
+        async function ensureGooglePickerLibraries() {
+          validateGooglePickerConfig();
+
+          if (!googlePickerState.gisScriptPromise) {
+            googlePickerState.gisScriptPromise = ensureScriptLoaded({
+              src: "https://accounts.google.com/gsi/client",
+              readyCheck: function () {
+                return !!(window.google && window.google.accounts && window.google.accounts.oauth2);
+              },
+              blockedCheck: function () {
+                return !!googlePickerState.cspBlocked.gis;
+              },
+              blockedCode: "GIS_SCRIPT_BLOCKED",
+              blockedMessage: "Script do Google Identity Services bloqueado.",
+              notReadyCode: "GIS_SCRIPT_NOT_LOADED",
+              notReadyMessage: "Google Identity Services não carregou."
+            });
+          }
+          if (!googlePickerState.gapiScriptPromise) {
+            googlePickerState.gapiScriptPromise = ensureScriptLoaded({
+              src: "https://apis.google.com/js/api.js",
+              readyCheck: function () {
+                return !!window.gapi;
+              },
+              blockedCheck: function () {
+                return !!googlePickerState.cspBlocked.gapi;
+              },
+              blockedCode: "GAPI_SCRIPT_BLOCKED",
+              blockedMessage: "Script gapi bloqueado.",
+              notReadyCode: "GAPI_SCRIPT_NOT_LOADED",
+              notReadyMessage: "gapi não carregou."
+            });
+          }
+
+          await Promise.all([googlePickerState.gisScriptPromise, googlePickerState.gapiScriptPromise]);
+          consoleState("GIS carregado?", !!(window.google && window.google.accounts && window.google.accounts.oauth2));
+          consoleState("gapi carregado?", !!window.gapi);
+
+          if (!googlePickerState.pickerModulePromise) {
+            googlePickerState.pickerModulePromise = new Promise(function (resolve, reject) {
+              var timeoutHandle = setTimeout(function () {
+                reject(makePickerError("PICKER_API_NOT_LOADED", "Google Picker API não carregou."));
+              }, 10000);
+              try {
+                if (!window.gapi || typeof window.gapi.load !== "function") {
+                  clearTimeout(timeoutHandle);
+                  reject(makePickerError("GAPI_SCRIPT_NOT_LOADED", "gapi não carregou."));
+                  return;
+                }
+                window.gapi.load("picker", {
+                  callback: function () {
+                    clearTimeout(timeoutHandle);
+                    googlePickerState.pickerLoaded = true;
+                    resolve();
+                  },
+                  onerror: function () {
+                    clearTimeout(timeoutHandle);
+                    reject(makePickerError("PICKER_API_NOT_LOADED", "Google Picker API não carregou."));
+                  }
+                });
+              } catch (err) {
+                clearTimeout(timeoutHandle);
+                reject(makePickerError("PICKER_API_NOT_LOADED", "Google Picker API não carregou."));
+              }
+            });
+          }
+
+          await googlePickerState.pickerModulePromise;
+          consoleState("picker carregado?", !!googlePickerState.pickerLoaded);
+        }
+
+        async function requestGoogleAccessToken() {
+          if (googlePickerState.accessToken) {
+            return googlePickerState.accessToken;
+          }
+
+          if (!googlePickerState.tokenClient) {
+            var tokenClientConfig = {
+              client_id: googlePickerConfig.clientId,
+              scope: googlePickerConfig.scope,
+              callback: function () {}
+            };
+            if (googlePickerConfig.connectedEmail) {
+              tokenClientConfig.hint = googlePickerConfig.connectedEmail;
+              tokenClientConfig.login_hint = googlePickerConfig.connectedEmail;
+            }
+            googlePickerState.tokenClient = window.google.accounts.oauth2.initTokenClient(tokenClientConfig);
+          }
+
+          function requestTokenWithPrompt(promptValue) {
+            return new Promise(function (resolve, reject) {
+              googlePickerState.tokenClient.callback = function (response) {
+                if (response && response.access_token) {
+                  googlePickerState.accessToken = response.access_token;
+                  resolve({ token: response.access_token, canceled: false, error: "" });
+                  return;
+                }
+                var rawError = String((response && response.error) || "").toLowerCase();
+                if (
+                  rawError === "popup_closed"
+                  || rawError === "popup_closed_by_user"
+                  || rawError === "access_denied"
+                ) {
+                  resolve({ token: "", canceled: true, error: rawError });
+                  return;
+                }
+                resolve({ token: "", canceled: false, error: rawError || "authorization_failed" });
+              };
+
+              try {
+                googlePickerState.tokenClient.requestAccessToken({
+                  prompt: promptValue
+                });
+              } catch (err) {
+                reject(makePickerError("GOOGLE_BROWSER_AUTH_FAILED", "Não foi possível iniciar a autorização do Google Picker."));
+              }
+            });
+          }
+
+          var silentAttempt = await requestTokenWithPrompt("");
+          if (silentAttempt.token) {
+            return silentAttempt.token;
+          }
+          if (silentAttempt.canceled) {
+            return "";
+          }
+
+          var interactiveAttempt = await requestTokenWithPrompt("consent");
+          if (interactiveAttempt.token) {
+            return interactiveAttempt.token;
+          }
+          if (interactiveAttempt.canceled) {
+            return "";
+          }
+
+          throw makePickerError("GOOGLE_BROWSER_AUTH_FAILED", "Não foi possível autorizar o Google Picker.");
+        }
+
+        async function openGoogleFolderPicker(accessToken) {
+          return new Promise(function (resolve, reject) {
+            try {
+              var foldersView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS);
+              foldersView.setIncludeFolders(true);
+              foldersView.setSelectFolderEnabled(true);
+              foldersView.setMimeTypes("application/vnd.google-apps.folder");
+              if (
+                window.google.picker.DocsViewMode
+                && typeof foldersView.setMode === "function"
+              ) {
+                foldersView.setMode(window.google.picker.DocsViewMode.LIST);
+              }
+
+              var pickerBuilder = new window.google.picker.PickerBuilder();
+              pickerBuilder.setTitle("Selecionar pasta de backup");
+              if (typeof pickerBuilder.setSize === "function") {
+                pickerBuilder.setSize(900, 620);
+              }
+              if (typeof pickerBuilder.setLocale === "function") {
+                pickerBuilder.setLocale("pt-BR");
+              }
+              pickerBuilder.setOAuthToken(accessToken);
+              pickerBuilder.setDeveloperKey(googlePickerConfig.apiKey);
+              pickerBuilder.setAppId(googlePickerConfig.appId);
+              pickerBuilder.setOrigin(window.location.origin);
+              pickerBuilder.addView(foldersView);
+              if (typeof pickerBuilder.setMaxItems === "function") {
+                pickerBuilder.setMaxItems(1);
+              }
+              pickerBuilder.setCallback(function (data) {
+                var action = data[window.google.picker.Response.ACTION];
+                if (action === window.google.picker.Action.PICKED) {
+                  var docs = data[window.google.picker.Response.DOCUMENTS] || [];
+                  if (!docs.length) {
+                    reject(new Error("Não foi possível identificar a pasta selecionada."));
+                    return;
+                  }
+                  var folder = docs[0] || {};
+                  var folderId = folder[window.google.picker.Document.ID] || folder.id || "";
+                  var folderName = folder[window.google.picker.Document.NAME] || folder.name || "";
+                  if (!folderId || !folderName) {
+                    reject(new Error("Não foi possível identificar a pasta selecionada."));
+                    return;
+                  }
+                  resolve({
+                    folder_id: folderId,
+                    folder_name: folderName,
+                    folder_path_label: folderName
+                  });
+                  return;
+                }
+
+                if (
+                  action === window.google.picker.Action.CANCEL
+                  || action === window.google.picker.Action.DISMISS
+                ) {
+                  resolve(null);
+                  return;
+                }
+              });
+
+              var picker = pickerBuilder.build();
+
+              picker.setVisible(true);
+            } catch (err) {
+              reject(new Error("Não foi possível abrir o Google Picker."));
+            }
+          });
+        }
+
+        async function saveGoogleFolderSelection(folder) {
+          await requestJson(googlePickerConfig.saveUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              folder_id: folder.folder_id,
+              folder_name: folder.folder_name,
+              folder_path_label: folder.folder_path_label
+            })
+          });
+        }
+
+        triggerButton.addEventListener("click", async function () {
+          if (googlePickerState.loading) {
+            return;
+          }
+          if (!googlePickerConfig.backendConnected) {
+            showMessage("Conecte o Google Drive antes de selecionar uma pasta.");
+            return;
+          }
+
+          setButtonLoading(true);
+          try {
+            await ensureGooglePickerLibraries();
+            var accessToken = await requestGoogleAccessToken();
+            if (!accessToken) {
+              showMessage("Seleção cancelada.");
+              return;
+            }
+            var selectedFolder = await openGoogleFolderPicker(accessToken);
+            if (!selectedFolder) {
+              showMessage("Seleção cancelada.");
+              return;
+            }
+            await saveGoogleFolderSelection(selectedFolder);
+            showMessage("Pasta de backup do Google Drive atualizada.");
+            window.location.reload();
+          } catch (err) {
+            showMessage(resolvePickerErrorMessage(err));
+          } finally {
+            setButtonLoading(false);
+          }
+        });
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        initCloudFolderPicker();
+        initGoogleDrivePicker();
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      "use strict";
+
+      function bindRestoreUploadCards() {
+        document.querySelectorAll("[data-db-upload-card]").forEach(function (card) {
+          if (card.dataset.boundUploadCard === "1") return;
+          card.dataset.boundUploadCard = "1";
+
+          var input = card.querySelector('input[type="file"]');
+          var nameEl = card.querySelector("[data-file-name]");
+          var chip = card.querySelector(".chip-right");
+
+          function syncState() {
+            var file = input && input.files && input.files[0];
+            if (file) {
+              nameEl.textContent = file.name;
+              nameEl.setAttribute("title", file.name);
+              card.classList.add("has-file");
+              chip && chip.setAttribute("aria-disabled", "true");
+              return;
+            }
+            nameEl.textContent = "Nenhum arquivo selecionado";
+            nameEl.removeAttribute("title");
+            card.classList.remove("has-file");
+            chip && chip.removeAttribute("aria-disabled");
+          }
+
+          function openPicker() {
+            if (!input || card.classList.contains("has-file")) return;
+            input.click();
+          }
+
+          card.addEventListener("click", function (event) {
+            if (event.target && event.target.tagName === "INPUT") return;
+            openPicker();
+          });
+
+          chip && chip.addEventListener("click", function (event) {
+            event.stopPropagation();
+            openPicker();
+          });
+
+          input && input.addEventListener("change", syncState);
+          syncState();
+        });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bindRestoreUploadCards);
+      } else {
+        bindRestoreUploadCards();
+      }
+    })();
+  </script>
+{% endblock %}

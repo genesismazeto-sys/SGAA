@@ -1,0 +1,41 @@
+{#
+Reusable card list macros for the "impresso"-style grids.
+Keeps exact markup: wrapper uses caller-defined classes, header and rows
+use .impresso-card with .cell elements and optional per-cell classes.
+#}
+{% macro header(cells, extra_classes='') -%}
+  <div class="impresso-card header {{ extra_classes }}" role="presentation">
+  {%- for c in cells %}
+    <div class="cell {{ c.class or '' }}">{{ c.text }}</div>
+  {%- endfor %}
+  </div>
+{%- endmacro %}
+
+{% macro row(cells, attrs=None, extra_classes='') -%}
+  {%- set _attrs = attrs or {} -%}
+  <div class="impresso-card {{ extra_classes }}" role="listitem" tabindex="0"
+    {%- for k,v in _attrs.items() %} {{k}}="{{v}}"{%- endfor %}>
+  {%- for c in cells %}
+    <div class="cell {{ c.class or '' }}">
+      {%- if c.badge is defined and c.badge %}
+        {%- set badge_type_class = c.badge_type if c.badge_type is defined and c.badge_type else 'success' -%}
+        {%- set badge_classes = 'badge ' ~ badge_type_class -%}
+        {%- if c.status_badge is defined and c.status_badge -%}
+          {%- set badge_classes = badge_classes ~ ' status-badge status-pill status-' ~ (c.status_tone if c.status_tone is defined and c.status_tone else 'neutral') -%}
+        {%- endif -%}
+        {%- if c.href is defined and c.href %}
+          <a href="{{ c.href|e }}" class="{{ badge_classes }}" title="{{ c.title|default('')|e }}">{{ c.content }}</a>
+        {%- else %}
+          <span class="{{ badge_classes }}">{{ c.content }}</span>
+        {%- endif %}
+      {%- elif c.href is defined and c.href %}
+        <a href="{{ c.href|e }}" title="{{ c.title|default('')|e }}">{{ c.content }}</a>
+      {%- elif c.strong is defined and c.strong %}
+        <strong>{{ c.content }}</strong>
+      {%- else %}
+        {{ c.content }}
+      {%- endif %}
+    </div>
+  {%- endfor %}
+  </div>
+{%- endmacro %}

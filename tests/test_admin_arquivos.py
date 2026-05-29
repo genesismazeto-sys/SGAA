@@ -1,0 +1,200 @@
+import io
+import os
+import sys
+
+import pytest
+
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE not in sys.path:
+    sys.path.insert(0, BASE)
+
+import main
+
+
+@pytest.fixture()
+def client():
+    app = main.app
+    with app.app_context():
+        main.init_db()
+        yield app.test_client()
+
+
+def _login_admin(client):
+    with client.session_transaction() as sess:
+        sess["user_id"] = 1
+        sess["user_type"] = "admin"
+        sess["user_name"] = "Administrador"
+
+
+def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
+    titulo = "Arquivo Admin Teste"
+    titulo_editado = "Arquivo Admin Editado"
+
+    upload_root = tmp_path / "uploads"
+    documents_root = tmp_path / "documentos_alunos"
+    upload_root.mkdir(parents=True, exist_ok=True)
+    documents_root.mkdir(parents=True, exist_ok=True)
+    original_upload_folder = main.app.config.get("UPLOAD_FOLDER")
+    original_documents_folder = main.app.config.get("DOCUMENTOS_ALUNOS_FOLDER")
+    main.app.config["UPLOAD_FOLDER"] = str(upload_root)
+    main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = str(documents_root)
+
+    try:
+        _login_admin(client)
+
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            main.ensure_admin_arquivos_table(conn)
+            existing = conn.execute("SELECT id, filename FROM admin_arquivos WHERE titulo IN (?, ?)", (titulo, titulo_editado)).fetchall()
+            for row in existing:
+                conn.execute("DELETE FROM admin_arquivos WHERE id = ?", (row["id"],))
+                main._best_effort_remove_admin_arquivo_file(row["filename"])
+            conn.commit()
+
+        page_response = client.get("/admin/arquivos")
+        assert page_response.status_code == 200
+        html = page_response.data.decode("utf-8")
+        assert "/admin/arquivos/adicionar" in html
+        assert "/admin/arquivos/0/editar" in html
+        assert "/admin/arquivos/0/deletar" in html
+
+        create_response = client.post(
+            "/admin/arquivos/adicionar",
+            data={
+                "titulo": titulo,
+                "descricao": "Descricao inicial",
+                "visivel": "1",
+                "arquivo": (io.BytesIO(b"arquivo-admin"), "arquivo-admin.pdf"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+        assert create_response.status_code == 302
+        assert create_response.headers["Location"].endswith("/admin/arquivos")
+
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            created = conn.execute(
+                "SELECT id, titulo, descricao, filename, original_filename, visivel FROM admin_arquivos WHERE titulo = ? ORDER BY id DESC LIMIT 1",
+                (titulo,),
+            ).fetchone()
+            assert created is not None
+            arquivo_id = created["id"]
+            assert created["original_filename"] == "arquivo-admin.pdf"
+            assert created["visivel"] == 1
+            saved_upload_path = upload_root / str(created["filename"])
+            saved_docs_path = documents_root / str(created["filename"])
+            assert saved_upload_path.is_file()
+            assert not saved_docs_path.exists()
+
+        edit_page_response = client.get(f"/admin/arquivos/{arquivo_id}/editar")
+        assert edit_page_response.status_code == 302
+        assert f"edit_arquivo={arquivo_id}" in edit_page_response.headers["Location"]
+
+        edit_response = client.post(
+            f"/admin/arquivos/{arquivo_id}/editar",
+            data={
+                "titulo": titulo_editado,
+                "descricao": "Descricao editada",
+                "visivel": "0",
+            },
+            follow_redirects=False,
+        )
+        assert edit_response.status_code == 302
+        assert edit_response.headers["Location"].endswith("/admin/arquivos")
+
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            edited = conn.execute(
+                "SELECT titulo, descricao, visivel, filename FROM admin_arquivos WHERE id = ?",
+                (arquivo_id,),
+            ).fetchone()
+            assert edited is not None
+            assert edited["titulo"] == titulo_editado
+            assert edited["descricao"] == "Descricao editada"
+            assert edited["visivel"] == 0
+            filename = edited["filename"]
+
+        view_response = client.get(f"/admin/arquivos/{arquivo_id}/visualizar")
+        assert view_response.status_code == 302
+        assert "/uploads/" in view_response.headers["Location"]
+        assert filename.replace('\\', '/') in view_response.headers["Location"]
+
+        delete_response = client.post(f"/admin/arquivos/{arquivo_id}/deletar", follow_redirects=False)
+        assert delete_response.status_code == 302
+        assert delete_response.headers["Location"].endswith("/admin/arquivos")
+
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            deleted = conn.execute("SELECT id FROM admin_arquivos WHERE id = ?", (arquivo_id,)).fetchone()
+            assert deleted is None
+    finally:
+        main.app.config["UPLOAD_FOLDER"] = original_upload_folder
+        main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = original_documents_folder
+
+
+def test_admin_arquivos_filter_schema_and_typed_filters(client):
+    titulo_a = "Arquivo Filtro Tipado A"
+    titulo_b = "Arquivo Filtro Tipado B"
+
+    _login_admin(client)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        main.ensure_admin_arquivos_table(conn)
+        conn.execute("DELETE FROM admin_arquivos WHERE titulo IN (?, ?)", (titulo_a, titulo_b))
+        conn.execute(
+            """
+            INSERT INTO admin_arquivos (titulo, descricao, filename, original_filename, visivel, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                titulo_a,
+                "Descricao filtro alfa",
+                "admin_arquivos/filtro_tipado_a.pdf",
+                "filtro-tipado-a.pdf",
+                1,
+                "2026-01-10 10:00:00",
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO admin_arquivos (titulo, descricao, filename, original_filename, visivel, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                titulo_b,
+                "Descricao filtro beta",
+                "admin_arquivos/filtro_tipado_b.png",
+                "filtro-tipado-b.png",
+                0,
+                "2026-02-15 10:00:00",
+            ),
+        )
+        conn.commit()
+
+    response = client.get(
+        "/admin/arquivos",
+        query_string={
+            "titulo": "Tipado A",
+            "descricao": "alfa",
+            "tipo": "PDF",
+            "data_upload_min": "2026-01-01",
+            "data_upload_max": "2026-01-31",
+            "visivel": "1",
+        },
+    )
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert '"param": "titulo"' in html
+    assert '"param": "tipo"' in html
+    assert '"param": "descricao"' in html
+    assert '"param": "data_upload"' in html
+    assert '"param": "visivel"' in html
+    assert '"type": "text_contains"' in html
+    assert '"type": "date_range"' in html
+    assert '"type": "multi_select"' in html
+
+    assert titulo_a in html
+    assert titulo_b not in html

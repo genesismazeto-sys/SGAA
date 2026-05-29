@@ -1,0 +1,557 @@
+{% extends "base_aluno.html" %}
+{% block title %}Painel{% endblock %}
+{% block extra_head %}
+  <style>
+    .card-header-inline{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      width:100%;
+    }
+    .card-header-inline [data-lucide]{
+      width:16px;
+      height:16px;
+      stroke-width:1.75;
+      color:var(--text-secondary);
+    }
+    .kpi-card{ box-shadow:var(--shadow-sm); }
+    .dashboard-kpi-view-btn{
+      width:var(--btn-h);
+      min-width:var(--btn-h);
+      padding:0;
+      justify-content:center;
+      border-color:rgba(0,51,102,.14);
+      background:#f8fafc;
+      color:var(--brand);
+      box-shadow:none;
+      transition:background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .dashboard-kpi-view-btn:hover{
+      background:#eef4f8;
+      border-color:rgba(0,51,102,.28);
+      color:var(--brand);
+      box-shadow:0 4px 12px rgba(0,51,102,.08);
+      transform:translateY(-1px);
+    }
+    .dashboard-kpi-view-btn .lucide{ margin:0; top:0; }
+    .corrigir-action-btn{
+      background:#fef3c7;
+      border-color:#fcd34d;
+      color:#d97706;
+    }
+    .corrigir-action-btn:hover{
+      background:#fde68a;
+      border-color:#f59e0b;
+      color:#b45309;
+      box-shadow:0 4px 12px rgba(217,119,6,.16);
+    }
+    /* Centraliza colunas 3 (Data), 4 (Horas sol.) e 5 (Deferidas) nas tabelas de recentes */
+    .recentes-table th:nth-child(3), .recentes-table td:nth-child(3),
+    .recentes-table th:nth-child(4), .recentes-table td:nth-child(4),
+    .recentes-table th:nth-child(5), .recentes-table td:nth-child(5){
+      text-align: center;
+    }
+    .recentes-table{
+      table-layout:fixed;
+    }
+    .recentes-table th:nth-child(1), .recentes-table td:nth-child(1){ width:52px; }
+    .recentes-table th:nth-child(3), .recentes-table td:nth-child(3){ width:104px; }
+    .recentes-table th:nth-child(4), .recentes-table td:nth-child(4){ width:124px; }
+    .recentes-table th:nth-child(5), .recentes-table td:nth-child(5){ width:118px; }
+    .recentes-table th:nth-child(6), .recentes-table td:nth-child(6){ width:112px; }
+    .recentes-table th:nth-child(2), .recentes-table td:nth-child(2){ min-width:0; }
+    .aluno-alertas-stack{ display:grid; gap:8px; margin:0 0 16px; }
+    .aluno-alerta-card{
+      min-height:calc(var(--btn-h) * 0.8);
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) auto;
+      align-items:center;
+      gap:8px;
+      padding:0 8px 0 12px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      color:#0f172a;
+      box-shadow:var(--shadow-sm);
+      overflow:hidden;
+    }
+    .aluno-alerta-card.is-link{
+      cursor:pointer;
+      text-decoration:none;
+      transition:transform .12s ease, box-shadow .12s ease;
+    }
+    .aluno-alerta-card.is-link:hover{
+      transform:translateY(-1px);
+      box-shadow:var(--shadow-md);
+    }
+    .aluno-alerta-card .lucide{ width:14px; height:14px; flex:0 0 auto; }
+    .aluno-alerta-card-main{
+      min-width:0;
+      display:grid;
+      grid-template-columns:auto minmax(0, 1fr);
+      align-items:center;
+      gap:8px;
+      width:100%;
+      color:inherit;
+      text-align:left;
+    }
+    .aluno-alerta-card.is-link .aluno-alerta-card-main{ cursor:pointer; }
+    .aluno-alerta-card-main:focus-visible,
+    .aluno-alerta-card-close:focus-visible{
+      outline:2px solid rgba(37,99,235,.35);
+      outline-offset:2px;
+    }
+    .aluno-alerta-card-main span{
+      display:block;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-size:13px;
+      font-weight:500;
+      line-height:1.2;
+    }
+    .aluno-alerta-card-close{
+      display:inline-grid;
+      place-items:center;
+      width:var(--btn-h);
+      height:var(--btn-h);
+      min-width:var(--btn-h);
+      padding:0;
+      gap:0;
+      background:transparent;
+      border-color:transparent;
+      color:var(--text-tertiary);
+      box-shadow:none;
+    }
+    .aluno-alerta-card-close:hover{
+      background:#f3f4f6;
+      border-color:var(--border-strong);
+      color:var(--text-primary);
+    }
+    .aluno-alerta-card-close .lucide{ margin:0; top:0; color:inherit; }
+
+    /* === Alinhamento vertical cruzado entre cards KPI do painel do aluno === */
+    /* Converte cada card para grid de 4 linhas:
+       row 1 (auto) – kpi-head  |  row 2 (auto) – kpi-value
+       row 3 (1fr)  – kpi-sub "% cumprido" (progress) / vazio (pendentes)
+       row 4 (auto) – barra de progresso (progress) / kpi-sub (pendentes) */
+    .aluno-kpi-progress .kpi-card {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 0;          /* cancela o gap flex herdado do .kpi-card global */
+      row-gap: 8px;    /* mantém o espaçamento de 8 px entre linhas */
+    }
+    /* Iguala a altura do kpi-head em todos os cards:
+       nos "Pendentes" o botão determina a altura (var(--btn-h));
+       nos cards de progresso forçamos o mesmo mínimo */
+    .aluno-kpi-progress .kpi-card .kpi-head {
+      min-height: var(--btn-h);
+      /* align-items:center já herdado do .kpi-head global */
+    }
+    /* Empurra o kpi-sub dos cards "Pendentes" para a row 4,
+       alinhando-o com as barras de progresso dos cards adjacentes */
+    .aluno-kpi-progress .kpi-card[data-kind^="pend-"] .kpi-sub {
+      grid-row: 4;
+      align-self: start;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+{% macro data_br(d) -%}
+  {%- if d -%}
+    {%- set s = d|string -%}
+    {%- set s10 = s[:10] -%}
+    {%- set y = s10[0:4] -%}
+    {%- set m = s10[5:7] -%}
+    {%- set dd = s10[8:10] -%}
+    {{ dd }}/{{ m }}/{{ y }}
+  {%- else -%}
+    --
+  {%- endif -%}
+{%- endmacro %}
+<h1 class="main-title">Painel</h1>
+
+{% if alertas_ativos %}
+<div class="aluno-alertas-stack">
+  {% for alerta in alertas_ativos %}
+  {% set alerta_href = alerta.href if alerta.href is defined else None %}
+  <div class="aluno-alerta-card{{ ' is-link' if alerta_href }}" data-alerta-href="{{ alerta_href or '' }}" data-bg-color="{{ alerta.bg_color }}" data-border-color="{{ alerta.border_color }}" title="{{ alerta.mensagem }}">
+    <div class="aluno-alerta-card-main"{% if alerta_href %} role="link" tabindex="0" aria-label="{{ alerta.mensagem }}"{% endif %}>
+      <i class="lucide" data-lucide="bell-ring" aria-hidden="true"></i>
+      <span>{{ alerta.mensagem }}</span>
+    </div>
+    <button class="btn aluno-alerta-card-close" type="button" aria-label="Fechar alerta" title="Fechar">
+      <i class="lucide" data-lucide="x"></i>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# Resumo no topo em largura total, antes dos 4 KPIs #}
+<section class="content-block" style="margin-bottom:24px;">
+  <div class="content-block-header">Resumo</div>
+  <div class="content-block-body">
+    <div class="item">
+      <span class="value">{{ total_reqs or 0 }}</span>
+      <span class="label"><i class="lucide" data-lucide="file-check-2"></i>Total de requisições</span>
+    </div>
+    <div class="item">
+      <span class="value">{{ deferidas or 0 }}</span>
+      <span class="label"><i class="lucide" data-lucide="check-circle-2"></i>Deferidas</span>
+    </div>
+    <div class="item">
+      <span class="value">{{ indeferidas or 0 }}</span>
+      <span class="label"><i class="lucide" data-lucide="x-circle"></i>Indeferidas</span>
+    </div>
+    <div class="item">
+      <span class="value">{{ pendentes or 0 }}</span>
+      <span class="label"><i class="lucide" data-lucide="clock-3"></i>Pendentes</span>
+    </div>
+    <div class="item" title="Requisições indeferidas marcadas como corrigíveis (30 dias)">
+      <span class="value">{{ corrigiveis or 0 }}</span>
+      <span class="label"><i class="lucide" data-lucide="edit"></i>Corrigíveis</span>
+    </div>
+  </div>
+  
+  {# === Progresso total de horas (Acad + Ext) vs meta total === #}
+  {% set acad = total_horas_academicas or 0 %}
+  {% set ext  = total_horas_extensao   or 0 %}
+  {% set meta_acad = meta_horas_academicas or 0 %}
+  {% set meta_ext  = meta_horas_extensao   or 0 %}
+  {% set total_horas = acad + ext %}
+  {% set meta_total  = meta_acad + meta_ext %}
+  {% set pct_total   = (total_horas * 100 // meta_total) if meta_total > 0 else 0 %}
+  {% set total_horas_fmt = total_horas_academicas_fmt if not total_horas_extensao else (total_horas_academicas_fmt ~ ' + ' ~ total_horas_extensao_fmt) %}
+
+  <div class="resume-total-wrapper" style="margin-top:10px;width:100%;">
+    <div class="resume-total-line" style="display:flex;justify-content:space-between;align-items:center;font:500 12px/1.3 system-ui;color:#555;margin-bottom:6px;">
+      <span class="rt-label">Progresso total de horas</span>
+      <span class="rt-val">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total|int if meta_total == (meta_total|int) else meta_total }} h ({{ pct_total }}%)</span>
+    </div>
+    <div class="resume-total-bar" data-pct="{{ pct_total }}" style="height:12px;border-radius:4px;background:#ececec;overflow:hidden;">
+      <span style="display:block;height:100%;width:0;background:linear-gradient(90deg,#8359ff,#5c30e0);transition:width .5s cubic-bezier(.4,0,.2,1);"></span>
+    </div>
+  </div>
+</section>
+
+{# KPIs principais no padrão moderno #}
+{% set total = total_reqs or 0 %}
+{% set pend_pct_i = (pend_pct or 0)|round(0, 'floor') %}
+
+{# === NOVO CABEÇALHO KPI (atualizado): 1) Acadêmicas 2) Pendentes Acadêmicas 3) Extensão 4) Pendentes Extensão === #}
+{% set total_acad_req = total_horas_academicas or 0 %}
+{% set total_ext_req  = total_horas_extensao   or 0 %}
+{# Totais de referência vindos do curso do aluno #}
+{% set alvo_acad = meta_horas_academicas or 0 %}
+{% set alvo_ext  = meta_horas_extensao   or 0 %}
+{% set pct_acad = 0 if alvo_acad <= 0 else ((total_acad_req * 100 // alvo_acad) if total_acad_req < alvo_acad else 100) %}
+{% set pct_ext  = 0 if alvo_ext  <= 0 else ((total_ext_req  * 100 // alvo_ext ) if total_ext_req  < alvo_ext  else 100) %}
+
+<div class="kpi-grid aluno-kpi-progress">
+  <!-- 1: Progresso Acadêmicas -->
+  <div class="kpi-card kpi-primary" data-kind="acad">
+    <div class="kpi-head">
+      <span class="kpi-title">Acadêmicas Complementares</span>
+    </div>
+    <div class="kpi-value">{{ total_horas_academicas_fmt }}/{{ meta_horas_academicas_fmt }} h</div>
+    <div class="kpi-sub">{{ pct_acad }}% cumprido</div>
+    <div class="progress is-bar" aria-label="Progresso horas acadêmicas" data-pct="{{ pct_acad }}">
+      <div class="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- 2: Pendentes Acadêmicas -->
+  <div class="kpi-card" data-kind="pend-acad">
+    <div class="kpi-head card-header-inline">
+      <span class="kpi-title">Pendentes</span>
+      <a href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}" class="btn dashboard-kpi-view-btn" aria-label="Ver requisições do aluno" title="Ver requisições do aluno">
+        <i class="lucide" data-lucide="eye"></i>
+      </a>
+    </div>
+    <div class="kpi-value">{{ pendentes_acad or 0 }}</div>
+    <div class="kpi-sub">Acadêmicas Complementares</div>
+  </div>
+
+  <!-- 3: Progresso Extensão -->
+  <div class="kpi-card kpi-primary" data-kind="ext">
+    <div class="kpi-head">
+      <span class="kpi-title">Extensão Universitária</span>
+    </div>
+    <div class="kpi-value">{{ total_horas_extensao_fmt }}/{{ meta_horas_extensao_fmt }} h</div>
+    <div class="kpi-sub">{{ pct_ext }}% cumprido</div>
+    <div class="progress is-bar" aria-label="Progresso horas de extensão" data-pct="{{ pct_ext }}">
+      <div class="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- 4: Pendentes Extensão -->
+  <div class="kpi-card" data-kind="pend-ext">
+    <div class="kpi-head card-header-inline">
+      <span class="kpi-title">Pendentes</span>
+      <a href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}" class="btn dashboard-kpi-view-btn" aria-label="Ver requisições do aluno" title="Ver requisições do aluno">
+        <i class="lucide" data-lucide="eye"></i>
+      </a>
+    </div>
+    <div class="kpi-value">{{ pendentes_ext or 0 }}</div>
+    <div class="kpi-sub">Extensão Universitária</div>
+  </div>
+</div>
+
+<div class="content-grid">
+  <!-- Para Corrigir - Acadêmicas Complementares -->
+  <section class="content-block">
+    <div class="content-block-header card-header-inline">
+      <span>Para Corrigir - Acadêmicas Complementares</span>
+      <a href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}" class="btn dashboard-kpi-view-btn corrigir-action-btn" aria-label="Ver requisições do aluno" title="Ver requisições do aluno">
+        <i class="lucide" data-lucide="alert-triangle"></i>
+      </a>
+    </div>
+    <style>
+      /* Cores da barra conforme tempo disponível */
+      .days-bar.ok > span { background: linear-gradient(90deg,#2ecc71,#27ae60); }
+      .days-bar.warn > span { background: linear-gradient(90deg,#f1c40f,#e67e22); }
+      .days-bar.danger > span { background: linear-gradient(90deg,#e74c3c,#c0392b); }
+      /* Layout 2 colunas apenas para esta seção */
+    .content-block-body-corrigir.corrigir-2cols{ grid-template-columns: 8fr 2fr; }
+    /* Botão acao reversivel para itens corrigiveis */
+    .corrigir-action-btn .lucide{ width:16px; height:16px; stroke:currentColor; stroke-width:2; }
+    </style>
+  <div class="content-block-body content-block-body-corrigir corrigir-2cols" style="width:100%;">
+      {% set lista_acad = corrigiveis_acad or [] %}
+      {% if lista_acad %}
+        <!-- Coluna 1 (esquerda): nomes + bloco Expira em (mesma largura da coluna direita) -->
+        <div class="corrigir-col-left" style="display:flex;flex-direction:column;gap:10px;">
+          {% for c in lista_acad %}
+            <div class="corrigir-left-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <span class="corrigir-nome" style="font:600 14px/1.2 system-ui;color:#111;">{{ c.nome }}</span>
+              <div class="corrigir-expira" style="display:flex;flex-direction:column;align-items:center;width:72px;gap:4px;">
+                <span style="font:600 11px/1.1 system-ui;color:#666;">Expira em:</span>
+                <span style="font:600 12px/1.1 system-ui;color:#222;">{{ c.data_expira or '' }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <!-- Coluna 2 (direita): X/30 acima e barra abaixo -->
+        <div class="corrigir-col-right" style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+          {% for c in lista_acad %}
+            {% set pct_dias = (c.dias_restantes * 100 // 30) if c.dias_restantes > 0 else 0 %}
+            {% set cls = 'ok' if c.dias_restantes > 10 else ('warn' if c.dias_restantes > 5 else 'danger') %}
+            <div class="corrigir-right-item" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:120px;">
+              <span class="corrigir-badge" title="dias restantes/total" style="font:600 12px/1 system-ui;color:#222;text-align:center;width:100%;margin:0;">{{ c.dias_restantes }}/30</span>
+              <div class="days-bar {{ cls }}" data-pct="{{ pct_dias }}" aria-label="{{ pct_dias }}% do prazo" style="height:8px;border-radius:5px;background:#eee;overflow:hidden;width:100%;">
+                <span style="display:block;height:100%;width:0;transition:width .5s;"></span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="limit-empty" style="font:500 13px/1.4 system-ui;color:#666;">Nenhuma requisição corrigível acadêmica.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Para Corrigir - Extensão Universitária -->
+  <section class="content-block">
+    <div class="content-block-header card-header-inline">
+      <span>Para Corrigir - Extensão Universitária</span>
+      <a href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}" class="btn dashboard-kpi-view-btn corrigir-action-btn" aria-label="Ver requisições do aluno" title="Ver requisições do aluno">
+        <i class="lucide" data-lucide="alert-triangle"></i>
+      </a>
+    </div>
+  <div class="content-block-body content-block-body-corrigir corrigir-2cols" style="width:100%;">
+      {% set lista_ext = corrigiveis_ext or [] %}
+      {% if lista_ext %}
+        <!-- Coluna 1 (esquerda): nomes + bloco Expira em (mesma largura da coluna direita) -->
+        <div class="corrigir-col-left" style="display:flex;flex-direction:column;gap:10px;">
+          {% for c in lista_ext %}
+            <div class="corrigir-left-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <span class="corrigir-nome" style="font:600 14px/1.2 system-ui;color:#111;">{{ c.nome }}</span>
+              <div class="corrigir-expira" style="display:flex;flex-direction:column;align-items:center;width:72px;gap:4px;">
+                <span style="font:600 11px/1.1 system-ui;color:#666;">Expira em:</span>
+                <span style="font:600 12px/1.1 system-ui;color:#222;">{{ c.data_expira or '' }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <!-- Coluna 2 (direita): X/30 acima e barra abaixo -->
+        <div class="corrigir-col-right" style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+          {% for c in lista_ext %}
+            {% set pct_dias = (c.dias_restantes * 100 // 30) if c.dias_restantes > 0 else 0 %}
+            {% set cls = 'ok' if c.dias_restantes > 10 else ('warn' if c.dias_restantes > 5 else 'danger') %}
+            <div class="corrigir-right-item" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:120px;">
+              <span class="corrigir-badge" title="dias restantes/total" style="font:600 12px/1 system-ui;color:#222;text-align:center;width:100%;margin:0;">{{ c.dias_restantes }}/30</span>
+              <div class="days-bar {{ cls }}" data-pct="{{ pct_dias }}" aria-label="{{ pct_dias }}% do prazo" style="height:8px;border-radius:5px;background:#eee;overflow:hidden;width:100%;">
+                <span style="display:block;height:100%;width:0;transition:width .5s;"></span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="limit-empty" style="font:500 13px/1.4 system-ui;color:#666;">Nenhuma requisição corrigível de extensão.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Limitações - Acadêmicas Complementares -->
+  <section class="content-block">
+    <div class="content-block-header">Limitações - Acadêmicas Complementares</div>
+    <!-- Observação: a grade 7.5fr / 2.5fr exige APENAS dois filhos diretos abaixo -->
+    <style>
+      .limit-name { font:600 14px/1.2 system-ui; color:#111; }
+      .limit-bar { height:10px; border-radius:6px; background:#eee; overflow:hidden; }
+      .limit-bar > span { display:block; height:100%; background: linear-gradient(90deg,#4da4ff,#2e71ff); }
+      .limit-bar.is-high > span { background: linear-gradient(90deg,#ffb300,#ff6a00); }
+      .limit-bar.is-critical > span { background: linear-gradient(90deg,#ff5b5b,#d60000); }
+      .limit-empty { font:500 13px/1.4 system-ui; color:#666; padding:8px 0; }
+    </style>
+    <div class="content-block-body content-block-body-corrigir" style="width:100%;">
+      {% if limitacoes_acad %}
+        <!-- Filho 1: nomes + consumo -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          {% for item in limitacoes_acad %}
+                <div class="limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %} {{ item.consumido_fmt }}/{{ item.limite_fmt }}</div>
+          {% endfor %}
+        </div>
+        <!-- Filho 2: percentual + barra -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:120px;">
+          {% for item in limitacoes_acad %}
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+                    <span class="limit-pct" style="text-align:center; width:100%; font:600 12px/1 system-ui;color:#333;">{{ item.pct }}%</span>
+                    <div class="limit-bar {% if item.pct>=80 and item.pct<100 %}is-high{% elif item.pct>=100 %}is-critical{% endif %}" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}" style="width:100%;">
+                    <span></span>
+                  </div>
+                </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- Limitações - Extensão Universitária -->
+  <section class="content-block">
+    <div class="content-block-header">Limitações - Extensão Universitária</div>
+    <div class="content-block-body content-block-body-corrigir" style="width:100%;">
+      {% if limitacoes_ext %}
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          {% for item in limitacoes_ext %}
+                <div class="limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %} {{ item.consumido_fmt }}/{{ item.limite_fmt }}</div>
+          {% endfor %}
+        </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:120px;">
+          {% for item in limitacoes_ext %}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
+                  <span class="limit-pct" style="font:600 12px/1 system-ui;color:#333;text-align:center;width:100%;">{{ item.pct }}%</span>
+                  <div class="limit-bar {% if item.pct>=80 and item.pct<100 %}is-high{% elif item.pct>=100 %}is-critical{% endif %}" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}" style="width:100%;">
+                    <span></span>
+                  </div>
+                </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+      {% endif %}
+    </div>
+  </section>
+  {# Requisições Recentes divididas em duas colunas: esquerda (Acadêmicas) e direita (Extensão) #}
+  <!-- Requisições Recentes - Acadêmicas (Esquerda) -->
+  <section class="content-block">
+    <div class="content-block-header">Requisições Recentes - Acadêmicas Complementares</div>
+    <div class="content-block-body" style="width:100%;">
+      {%- set cols_acad = [
+        {'key':'id','label':'#'},
+        {'key':'atividade_nome','label':'Atividade','class':'ellipsis'},
+        {'key':'data_evento_fmt','label':'Data'},
+        {'key':'horas_solicitadas','label':'Solicitadas (h)'},
+        {'key':'horas_deferidas_fmt','label':'Deferidas (h)'},
+        {'key':'status','label':'Status'}
+      ] -%}
+      {%- set table_class = 'recentes-table' -%}
+      {%- set rows = requisicoes_recentes_acad or [] -%}
+      {% include 'components/list_table.html' with context %}
+    </div>
+  </section>
+
+  <!-- Requisições Recentes - Extensão (Direita) -->
+  <section class="content-block">
+    <div class="content-block-header">Requisições Recentes - Extensão Universitária</div>
+    <div class="content-block-body" style="width:100%;">
+      {%- set cols_ext = [
+        {'key':'id','label':'#'},
+        {'key':'atividade_nome','label':'Atividade','class':'ellipsis'},
+        {'key':'data_evento_fmt','label':'Data'},
+        {'key':'horas_solicitadas','label':'Solicitadas (h)'},
+        {'key':'horas_deferidas_fmt','label':'Deferidas (h)'},
+        {'key':'status','label':'Status'}
+      ] -%}
+      {%- set table_class = 'recentes-table' -%}
+      {%- set rows = requisicoes_recentes_ext or [] -%}
+      {% include 'components/list_table.html' with context %}
+    </div>
+  </section>
+
+  
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.querySelectorAll('.kpi-card .progress').forEach(p=>{
+      const pct = parseInt(p.getAttribute('data-pct')||'0',10);
+      const bar = p.querySelector('.progress-bar');
+      if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    });
+
+    // Progress bars for limited activity consumption
+    document.querySelectorAll('.limit-bar').forEach(el => {
+      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
+      const span = el.querySelector('span');
+      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    });
+
+    // Total hours progress bar in Resumo
+    document.querySelectorAll('.resume-total-bar').forEach(el => {
+      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
+      const span = el.querySelector('span');
+      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    });
+
+    document.querySelectorAll('.aluno-alerta-card').forEach(el => {
+      const bgColor = el.getAttribute('data-bg-color') || '';
+      const borderColor = el.getAttribute('data-border-color') || '';
+      const href = String(el.getAttribute('data-alerta-href') || '').trim();
+      const main = el.querySelector('.aluno-alerta-card-main');
+      if (bgColor) el.style.background = bgColor;
+      if (borderColor) el.style.borderColor = borderColor;
+      if (main && href) {
+        const navigate = () => {
+          window.location.href = href;
+        };
+        main.addEventListener('click', navigate);
+        main.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate();
+          }
+        });
+      }
+      el.querySelector('.aluno-alerta-card-close')?.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        el.hidden = true;
+      });
+    });
+
+    // Days remaining bars (corrigir)
+    document.querySelectorAll('.days-bar').forEach(el => {
+      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
+      const span = el.querySelector('span');
+      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    });
+  });
+ </script>
+{% endblock %}

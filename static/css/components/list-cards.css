@@ -1,0 +1,509 @@
+/* =============================================================
+  File: list-cards.css
+  Scope: LIST/CARD GRIDS ONLY (impresso/requisicoes/turmas/alunos/cursos)
+  Toolbar, popovers, status badges, and per-list layout tweaks.
+  Do NOT place global layout/form/button/table styles here.
+  Those stay in ../modern-style.css to keep concerns separated.
+  ============================================================= */
+/* ====== DESIGN TOKENS ====== */
+:root{
+  --font-sans:'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --bg:#f3f4f6;
+  --surface:#ffffff;
+  --border-strong:#cbd5e1;
+  --text-primary:#1f2937;
+  --text-secondary:#6b7280;
+  --text-tertiary:#9ca3af;
+  --brand:#003366;
+
+  --radius:4px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.10);
+  --shadow-md:0 8px 20px rgba(0,0,0,.05);
+
+  --font-size-base:14px;
+  --font-size-small:13px;
+
+  --btn-h:32px;
+  --btn-px:10px;
+  --btn-gap:2px;
+
+  /* Azul de ação unificado compartilhado com modern-style.css */
+  --accent-blue:#0369a1;
+
+  --btn-primary:var(--brand);
+  --btn-primary-strong:#002244;
+  --btn-primary-light:#335f8a;
+  /* Usa o mesmo azul de foco padrão do sistema (brand/accent) */
+  --focus-ring-color: rgba(37,99,235,.35);
+
+  /* Grid de colunas da lista de Impressões (ajuste se necessário) */
+  --imp-cols:
+    minmax(80px, 100px)     /* Nº OI */
+    minmax(100px, 120px)    /* Pedido */
+    minmax(150px, 220px)    /* Cliente */
+    minmax(120px, 180px)    /* Arte/Embalagem */
+    minmax(100px, 130px)    /* Execução */
+    minmax(150px, 220px)    /* Fornecedor/Máquina */
+    minmax(80px, 120px)     /* Cores */
+    minmax(100px, 130px)    /* Data prevista */
+    minmax(80px, 120px)     /* Metragem */
+    minmax(100px, 150px);   /* Status */
+  --imp-col-gap:12px;
+}
+
+/* ====== BASE ====== */
+*{ box-sizing:border-box; }
+body{
+  margin:0; padding:0; background:var(--bg); color:var(--text-primary);
+  font-family:var(--font-sans); font-size:var(--font-size-base);
+}
+
+/* ====== BOTÕES ====== */
+.btn{
+  display:inline-flex; align-items:center; gap:var(--btn-gap);
+  min-height:var(--btn-h); padding:0 var(--btn-px);
+  border:1px solid var(--border-strong); border-radius:var(--radius);
+  background:var(--surface); color:var(--text-primary);
+  font-size:var(--font-size-base); font-weight:400; line-height:1;
+  text-decoration:none; cursor:pointer; min-width:0;
+  transition:background .15s, color .15s, border-color .15s, box-shadow .15s, transform .12s;
+}
+.btn:hover{ background:#f3f4f6; }
+.btn.primary{
+  background:var(--btn-primary); border-color:var(--btn-primary-strong); color:#fff; box-shadow:0 1px 0 rgba(0,0,0,.06);
+}
+.btn.primary:hover{ background:var(--btn-primary-strong); border-color:var(--btn-primary-strong); box-shadow:0 6px 16px rgba(0,51,102,.18); }
+
+/* ====== BADGE ====== */
+.badge{ display:inline-block; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:500; }
+
+/* ====== TOOLBAR + INPUT GROUP ====== */
+.toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin:12px 0 16px; }
+.toolbar .filters, .toolbar .actions{ display:flex; align-items:center; gap:2px; }
+.toolbar-actions-group{ display:flex; align-items:center; gap:var(--btn-gap); }
+.toolbar-actions-shell{ display:flex; align-items:center; }
+
+.input-group{
+  display:inline-flex; align-items:center; gap:0;
+  border:1px solid var(--border-strong); border-radius:var(--radius);
+  background:var(--surface); height:calc(var(--btn-h) - 2px); overflow:hidden; box-shadow:var(--shadow-sm);
+  transition:border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.input-group:has(> input, > select):hover{
+  border-color:var(--field-hover-border);
+  background:var(--field-hover-bg);
+  box-shadow:none;
+}
+.input-group:has(> input, > select):focus-within{
+  border-color:var(--field-focus-border);
+  background:var(--field-focus-bg);
+  box-shadow:0 0 0 1px var(--field-focus-ring);
+}
+.toolbar .filters .input-group[id^="grp-busca"]:hover,
+.toolbar .filters .input-group[id*="grp-busca-"]:hover{
+  border-color:var(--field-hover-border);
+  background:var(--field-hover-bg);
+  box-shadow:none;
+}
+.toolbar .filters .input-group[id^="grp-busca"]:focus-within,
+.toolbar .filters .input-group[id*="grp-busca-"]:focus-within{
+  border-color:var(--field-focus-border);
+  background:var(--field-focus-bg);
+  box-shadow:0 0 0 1px var(--field-focus-ring);
+}
+.input-group:has(> input, > select):hover .input-chip{
+  background:var(--field-chip-hover-bg, #f1f5f9);
+  border-right-color:var(--field-hover-border);
+}
+.input-group:has(> input, > select):focus-within .input-chip{
+  background:var(--field-chip-focus-bg, #f1f5f9);
+  border-right-color:var(--field-focus-border);
+}
+.toolbar .filters .input-group[id^="grp-busca"]:hover .input-chip,
+.toolbar .filters .input-group[id*="grp-busca-"]:hover .input-chip{
+  background:var(--field-chip-hover-bg, #f1f5f9);
+  border-right-color:var(--field-hover-border);
+}
+.toolbar .filters .input-group[id^="grp-busca"]:focus-within .input-chip,
+.toolbar .filters .input-group[id*="grp-busca-"]:focus-within .input-chip{
+  background:var(--field-chip-focus-bg, #f1f5f9);
+  border-right-color:var(--field-focus-border);
+}
+.input-chip{
+  display:inline-flex; align-items:center; justify-content:center; height:100%;
+  padding:0 12px; color:var(--text-secondary); background:#f1f5f9; border-right:1px solid var(--border-strong);
+}
+.input-group > input, .input-group > select{
+  height:100%; border:0; outline:0; background:transparent; padding:0 12px; min-width:220px; font:inherit; font-size:13px;
+}
+
+/* Botões do toolbar: altura uniforme */
+.toolbar .filters .btn,
+.toolbar .actions .btn,
+.toolbar .filters select { height:calc(var(--btn-h) - 2px); min-height:calc(var(--btn-h) - 2px); font-size:13px; }
+
+/* ====== POPOVER (menus ordenar/filtrar) ====== */
+.popover{
+  position:absolute; background:var(--surface); border:1px solid var(--border-strong);
+  border-radius:var(--radius); box-shadow:0 12px 28px rgba(0,0,0,.10); padding:12px; min-width:520px; z-index:1000;
+}
+.menu-title{ font-size:12px; font-weight:400; color:var(--text-secondary); margin:2px 2px 8px; }
+.pill-row{ display:flex; flex-wrap:wrap; gap:6px; }
+.filter-popover{ width:min(520px, calc(100vw - 24px)); max-width:calc(100vw - 24px); }
+.filter-pills{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.filter-pill{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  min-height:22px; padding:0 10px; border:1px solid var(--border-strong); border-radius:4px;
+  background:var(--surface); color:var(--text-primary); font:inherit; font-size:13px; cursor:pointer;
+  transition:border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.filter-pill:hover{ background:#f8fafc; border-color:#94a3b8; }
+.filter-pill.is-active,
+.filter-pill.has-selection{
+  border-color:var(--btn-primary);
+  background:rgba(3,105,161,.08);
+  color:var(--btn-primary-strong);
+}
+.sort-popover{ width:min(320px, calc(100vw - 24px)); max-width:calc(100vw - 24px); }
+.sort-popover .menu-meta{ margin-top:6px; font-size:12px; color:var(--text-secondary); }
+.sort-popover .menu-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+.sort-popover .menu-actions .btn{ border-radius:var(--radius); }
+.filter-values{ display:flex; flex-direction:column; gap:0; max-height:260px; overflow:auto; }
+.filter-text-wrap,
+.filter-range-wrap{
+  display:grid;
+  gap:8px;
+}
+.filter-text-input,
+.filter-range-input{
+  width:100%;
+  height:32px;
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius);
+  background:var(--surface);
+  color:var(--text-primary);
+  padding:0 10px;
+  font:inherit;
+  box-sizing:border-box;
+}
+.filter-text-input:focus,
+.filter-range-input:focus{
+  outline:none;
+  border-color:var(--field-focus-border, #0369a1);
+  box-shadow:0 0 0 1px var(--field-focus-ring, rgba(3,105,161,.2));
+}
+.filter-range-label{
+  font-size:12px;
+  color:var(--text-secondary);
+}
+.check-row{
+  display:flex; align-items:center; gap:8px; width:100%; cursor:pointer;
+  padding-top:8px; margin-top:8px; border-top:1px solid #e2e8f0;
+}
+.check-row:first-child{ margin-top:0; padding-top:0; border-top:0; }
+.check-row input[type="checkbox"]{
+  width:16px; height:16px; margin:0; flex:0 0 auto; accent-color:var(--btn-primary);
+}
+.check-text{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--text-primary); font-size:13px;
+}
+.filter-empty{ color:var(--text-secondary); font-size:13px; padding:8px 2px 2px; }
+.menu-list{ display:flex; flex-direction:column; gap:1px; max-height:260px; overflow:auto; }
+.menu-item{
+  display:flex; align-items:center; width:100%; border:1px solid var(--border-strong);
+  background:var(--surface); border-radius:var(--radius); padding:6px 10px; cursor:pointer; font-weight:400;
+}
+.menu-item:hover{ background:#f8fafc; }
+.toolbar-actions-menu{ min-width:190px; }
+.toolbar-actions-menu .menu-list{ display:grid; gap:4px; }
+.toolbar-actions-menu .menu-item{ justify-content:flex-start; gap:8px; text-align:left; font:inherit; }
+.menu-item .lucide,
+.menu-item > svg{
+  width:var(--btn-icon-size-compact);
+  height:var(--btn-icon-size-compact);
+  margin:0;
+  flex:0 0 auto;
+  stroke-width:1.75px;
+}
+.toolbar-actions-menu button.menu-item{ cursor:pointer; }
+.toolbar-actions-menu button.menu-item:disabled{ opacity:.45; cursor:not-allowed; }
+.toolbar-actions-menu .menu-item.danger{ color:#b91c1c; }
+.toolbar-actions-menu .menu-hint{ margin-top:8px; font-size:12px; color:var(--text-secondary); }
+#filter-menu .menu-item.selected,
+#sort-menu .menu-item.selected{
+  /* Azul padrão único para itens selecionados (mesmo tom dos cards e chips) */
+  border-color:#0369a1;
+}
+#filter-menu .menu-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+
+/* Botão filtro compacto (se usar o id sugerido) */
+#grp-filtro .input-chip#filter-btn{
+  display:inline-flex; align-items:center; gap:6px; height:calc(var(--btn-h) - 2px); padding:0 12px;
+  background:var(--surface); color:var(--text-primary);
+  border:0; box-shadow:none; font-weight:400;
+}
+/* Hover dos botões da toolbar: não alteramos borda, apenas o que já vier do estilo base */
+/* (sem borda especial ao passar o mouse em Buscar / Filtrar / Classificar) */
+
+/* ====== LISTA IMPRESSÕES (cards em grid) ====== */
+/* .impressoes-list-page existe apenas como escopo semântico; seletores abaixo são suficientes. */
+
+.impressoes-cards-scroll{
+  position:relative; overflow-x:auto; overflow-y:hidden;
+}
+
+.impressoes-cards{
+  display:flex; flex-direction:column; gap:0; padding:4px 0 10px; width:fit-content;
+}
+
+.impresso-card{
+  position:relative;
+  display:grid; grid-template-columns: var(--imp-cols);
+  column-gap: var(--imp-col-gap);
+  align-items:center;
+  background:var(--surface);
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius);
+  height:var(--btn-h); min-height:var(--btn-h); line-height:var(--btn-h);
+  padding:0 8px; width:fit-content; max-width:100%;
+  transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+}
+.impresso-card[role="listitem"]{ cursor:pointer; }
+.impresso-card + .impresso-card { margin-top:1px; }
+
+.impresso-card .cell{
+  display:flex; align-items:center; justify-content:center;
+  min-width:0; padding:0 2px; font-size:13px; line-height:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Cabeçalho sticky */
+.impresso-card.header{
+  position:sticky; top:0; z-index:5;
+  background:transparent !important; border-color:transparent !important;
+  box-shadow:none !important; padding:0 8px;
+  height:var(--btn-h); min-height:var(--btn-h); line-height:var(--btn-h);
+  pointer-events:none;
+}
+
+@media (max-width: 640px){
+  .filter-popover{ width:min(100vw - 16px, 520px); min-width:0; }
+}
+.impresso-card.header .cell{ font-size:12px; font-weight:600; color:var(--text-secondary); text-overflow:clip; }
+
+/* Estados */
+.impresso-card.selected{
+  border-color:var(--accent-blue, #0369a1);
+  border-width:1px;
+  background-color:var(--surface, #fff);
+  box-shadow:0 0 0 1px var(--field-focus-ring, rgba(3,105,161,.22));
+}
+.impresso-card:hover:not(.selected){
+  background:#f8fafc;
+  border-color:#0369a1;
+}
+
+.toolbar-bulk-delete[hidden],
+.toolbar-select-all[hidden]{
+  display:none !important;
+}
+
+.impresso-card.toolbar-live-search-hidden{
+  display:none !important;
+}
+
+.impresso-card.toolbar-filter-hidden{
+  display:none !important;
+}
+
+.toolbar-select-all{
+  background:var(--surface);
+  color:var(--text-primary);
+}
+
+.toolbar-select-all:hover{
+  background:#f3f4f6;
+}
+
+.toolbar-select-all:disabled{
+  background:var(--surface);
+  color:var(--text-primary);
+  opacity:1;
+}
+
+/* Placeholder para células vazias */
+.impresso-card .cell:empty::before{ content:"—"; color:var(--text-secondary); font-style:italic; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Requisições (.imp-req)
+   (Moved from inline <style> in admin_requisicoes.html)
+   ============================================================= */
+.imp-req { --imp-cols:
+  minmax(40px, 48px)   /* ID */
+  minmax(88px, 96px)   /* Solicitado em */
+  minmax(96px, 104px)  /* Processado em */
+  minmax(200px, 300px) /* Aluno */
+  minmax(120px, 160px) /* Turma */
+  minmax(52px, 68px)   /* Tipo */
+  minmax(72px, 72px)   /* Grupo */
+  minmax(280px, 460px) /* Atividade */
+  minmax(120px, 160px) /* Status */
+};
+.imp-req .impresso-card .cell:first-child{ padding:0 4px; }
+.imp-req .impresso-card.header .cell:first-child{ padding:0 4px; }
+.imp-req .impresso-card .cell:nth-child(2){ justify-content:start; }
+.imp-req .impresso-card .cell:nth-child(3){ justify-content:start; }
+.imp-req .impresso-card .cell:nth-child(4){ justify-content:start; }
+
+/* Generic cell alignment helpers (shared) */
+.cell.left{ justify-content:flex-start; }
+.cell.center{ justify-content:center; }
+.cell.right{ justify-content:flex-end; }
+.cell .muted{ color:#6b7280; font-size:12px; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Turmas (.imp-turmas)
+   (Moved from inline <style> in admin_turmas.html)
+   ============================================================= */
+.imp-turmas { --imp-cols:
+  minmax(112px, 144px) /* Código */
+  minmax(248px, 1.35fr) /* Curso */
+  minmax(220px, 1.1fr)  /* Matriz */
+  minmax(96px, 124px)   /* Nº Turma */
+  minmax(110px, 130px)  /* Início */
+  minmax(110px, 130px)  /* Fim */
+  minmax(96px, 116px)   /* Alunos */
+  minmax(90px, 110px)   /* Status */
+};
+.impressoes-cards-scroll.imp-turmas{ width:100%; }
+.imp-turmas .impressoes-cards, .imp-turmas .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-turmas .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-turmas .impresso-card.header .cell:nth-child(4), .imp-turmas .impresso-card .cell:nth-child(4),
+.imp-turmas .impresso-card.header .cell:nth-child(5), .imp-turmas .impresso-card .cell:nth-child(5),
+.imp-turmas .impresso-card.header .cell:nth-child(6), .imp-turmas .impresso-card .cell:nth-child(6),
+.imp-turmas .impresso-card.header .cell:nth-child(7), .imp-turmas .impresso-card .cell:nth-child(7),
+.imp-turmas .impresso-card.header .cell:nth-child(4), .imp-turmas .impresso-card .cell:nth-child(4),
+.imp-turmas .impresso-card.header .cell:nth-child(8), .imp-turmas .impresso-card .cell:nth-child(8){ justify-content:center; text-align:center; }
+.imp-turmas .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Alunos (.imp-alunos)
+   (Moved from inline <style> in admin_alunos.html)
+   ============================================================= */
+.imp-alunos { --imp-cols:
+  minmax(300px, 1.6fr) /* Nome */
+  minmax(260px, 1.3fr) /* E-mail */
+  minmax(220px, 2fr)   /* Curso */
+  minmax(120px, 160px) /* Turma */
+  minmax(120px, 150px) /* Solicitações pendentes */
+  minmax(62px, 70px)   /* Status */
+};
+.impressoes-cards-scroll.imp-alunos{ width:100%; }
+.imp-alunos .impressoes-cards{ width:100% !important; }
+.imp-alunos .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-alunos .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-alunos .impresso-card.header .cell:nth-child(4), .imp-alunos .impresso-card .cell:nth-child(4){ justify-content:center; text-align:center; }
+.imp-alunos .impresso-card.header .cell:nth-child(5), .imp-alunos .impresso-card .cell:nth-child(5){ justify-content:center; text-align:center; }
+.imp-alunos .impresso-card.header .cell:nth-child(6), .imp-alunos .impresso-card .cell:nth-child(6){ justify-content:center; text-align:center; }
+.imp-alunos .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Cursos (.imp-cursos)
+   (Moved from inline <style> in admin_cursos.html)
+   ============================================================= */
+.imp-cursos { --imp-cols:
+  minmax(90px, 120px)   /* Código */
+  minmax(300px, 1.5fr)  /* Nome */
+  minmax(110px, 130px)  /* Duração */
+  minmax(88px, 104px)   /* Turmas */
+  minmax(88px, 104px)   /* Alunos */
+  minmax(96px, 120px)   /* Status */
+};
+.imp-cursos .badge.status-badge{ display:inline-flex; align-items:center; justify-content:center; border-radius:999px; height:18px; min-width:18px; padding:0 6px; font-size:11px; font-weight:500; line-height:1; }
+.imp-cursos .badge.status-pill.status-positive{ color:#1f5a3c !important; background-color:#e9f5e7 !important; border-color:#b9d7b5 !important; }
+.imp-cursos .badge.status-pill.status-negative{ color:#8d2431 !important; background-color:#f9e3e6 !important; border-color:#e3b0b8 !important; }
+.imp-cursos .cell.left{ justify-content:flex-start; text-align:left; }
+.impressoes-cards-scroll.imp-cursos{ width:100%; }
+.imp-cursos .impressoes-cards{ width:100% !important; }
+.imp-cursos .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-cursos .impresso-card .cell:nth-child(1),
+.imp-cursos .impresso-card .cell:nth-child(2){ justify-content:flex-start !important; text-align:left !important; }
+.imp-cursos .badge.status-badge{ line-height:1; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Matrizes (.imp-matrizes)
+   ============================================================= */
+.imp-matrizes { --imp-cols:
+  minmax(280px, 1.65fr)  /* Nome */
+  minmax(240px, 1.35fr)  /* Curso */
+  minmax(90px, 110px)    /* Versão */
+  minmax(170px, 1.05fr)  /* Vigência */
+  minmax(88px, 100px)    /* AAC */
+  minmax(104px, 118px)   /* Extensão */
+  minmax(104px, 124px)   /* Status */
+};
+.impressoes-cards-scroll.imp-matrizes{ width:100%; }
+.imp-matrizes .impressoes-cards{ width:100% !important; }
+.imp-matrizes .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-matrizes .impresso-card .cell:nth-child(1),
+.imp-matrizes .impresso-card .cell:nth-child(2){ justify-content:flex-start !important; text-align:left !important; }
+.imp-matrizes .badge.status-badge{ line-height:1; }
+
+/* =============================================================
+  Scoped Layout Adjustments: Arquivos (.imp-arquivos)
+  ============================================================= */
+.imp-arquivos { --imp-cols:
+  minmax(206px, 0.72fr) /* Título */
+  minmax(136px, 154px)  /* Tipo de arquivo */
+  minmax(260px, 1fr)    /* Descrição */
+  minmax(120px, 132px)  /* Data de upload */
+};
+.impressoes-cards-scroll.imp-arquivos{ width:100%; }
+.imp-arquivos .impressoes-cards,
+.imp-arquivos .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-arquivos .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-arquivos .impresso-card.header .cell:nth-child(2),
+.imp-arquivos .impresso-card .cell:nth-child(2),
+.imp-arquivos .impresso-card.header .cell:nth-child(4),
+.imp-arquivos .impresso-card .cell:nth-child(4){ justify-content:center; text-align:center; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Atividades (.imp-atividades)
+   (Moved from inline <style> in admin_atividades.html)
+   ============================================================= */
+.imp-atividades { --imp-cols:
+  minmax(180px, 220px)  /* Tipo */
+  minmax(320px, 560px)  /* Nome */
+  minmax(80px, 110px)   /* Grupo */
+  minmax(180px, 260px)  /* Limitações */
+};
+.imp-atividades /* note: removed broad no-left card padding rules to preserve row padding */
+.imp-atividades .cell.left{ justify-content:flex-start; }
+.imp-atividades .cell.center{ justify-content:center; }
+
+/* Normalize header vs rows so columns align precisely */
+.imp-atividades .impressoes-cards{ width:100% !important; }
+.imp-atividades .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-atividades .impresso-card.header, .imp-atividades .impresso-card{ padding:0 8px; }
+/* Apply same outer padding to rows so header and rows align; keep small inner cell padding */
+.imp-atividades .impresso-card .cell{ padding:0 2px; }
+/* First column should not add extra left padding; wrapper (.impresso-card) provides the lateral spacing */
+.imp-atividades .impresso-card .cell:first-child{ padding-left:2px; }
+/* Only remove left padding for cards explicitly marked as "no-left" (keeps header and normal rows padded) */
+.imp-atividades .impresso-card.header.impresso-card-header-no-left .cell:first-child{
+  padding-left:0 !important;
+}
+
+/* ====== PRINT ====== */
+@media print {
+  .page-header, .toolbar, .btn, .input-group, .filters { display:none !important; }
+  body { margin:0 !important; padding:10px !important; }
+
+  .impressoes-cards-scroll { overflow:visible !important; position:static !important; }
+  .impressoes-cards { display:table !important; width:100% !important; table-layout:fixed !important; }
+  .impresso-card { display:table-row !important; width:100% !important; height:auto !important; line-height:normal !important; padding:4px 0 !important; margin:0 !important; border:none !important; border-bottom:1px solid #ccc !important; background:transparent !important; }
+  .impresso-card.header { display:table-row !important; background:#f5f5f5 !important; font-weight:bold !important; border-bottom:2px solid #333 !important; }
+  .impresso-card .cell { display:table-cell !important; padding:4px 8px !important; text-align:center !important; vertical-align:middle !important; border-right:1px solid #ddd !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+  .impresso-card .cell:last-child { border-right:none !important; }
+}

@@ -1,0 +1,12 @@
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-stack" aria-live="polite">
+    {% for category, message in messages %}
+      {% set flash_text = '' if message is none else message|string|trim %}
+      {% if flash_text %}
+      <div class="flash flash-{{ category }}">{{ flash_text }}</div>
+      {% endif %}
+    {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}

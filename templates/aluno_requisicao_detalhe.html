@@ -1,0 +1,68 @@
+{% extends "base_aluno.html" %}
+{% block title %}Requisição #{{ r.id }}{% endblock %}
+{% block content %}
+<h1 class="main-title">Requisição #{{ r.id }}</h1>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="content-block-body" style="justify-content:flex-start; gap:24px; flex-wrap:wrap;">
+    <div class="item"><div class="label">Atividade</div><div class="value">{{ r.atividade_nome }}</div></div>
+    <div class="item"><div class="label">Tipo</div><div class="value">{{ r.tipo_atividade }}</div></div>
+    <div class="item"><div class="label">Grupo</div><div class="value">{{ r.grupo }}</div></div>
+  <div class="item"><div class="label">Data do Evento</div><div class="value">{{ r.data_evento }}</div></div>
+  <div class="item"><div class="label">Nome do Evento</div><div class="value">{{ r.nome_evento or '—' }}</div></div>
+    <div class="item"><div class="label">Solicitação</div><div class="value">{{ r.data_solicitacao }}</div></div>
+    <div class="item"><div class="label">Status</div><div class="value">{{ r.status }}</div></div>
+  <div class="item"><div class="label">Solicitadas (h)</div><div class="value">{{ r.horas_solicitadas }}</div></div>
+  <div class="item"><div class="label">Deferidas (h)</div><div class="value">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="content-block-header">Comprovantes e Observações</div>
+  <div class="content-block-body" style="flex-direction:column; gap:12px;">
+    {% if anexos and anexos|length %}
+      <div>
+        <div class="help">Comprovantes enviados</div>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+          {% for anexo in anexos %}
+            <a href="{{ url_for('uploaded_file', filename=anexo.filename) }}" target="_blank" rel="noopener">{{ anexo.label or 'Arquivo' }}{% if anexo.filename %}: {{ anexo.filename.split('/')[-1] }}{% endif %}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% elif r.arquivo_comprovante %}
+      <div>
+        <span class="help">Comprovante atual:</span>
+        <a href="{{ url_for('uploaded_file', filename=r.arquivo_comprovante) }}" target="_blank" rel="noopener">{{ r.arquivo_comprovante }}</a>
+      </div>
+    {% else %}
+      <div class="help">Nenhum comprovante anexado.</div>
+    {% endif %}
+
+    {% if r.status == 'Pendente' %}
+      <form method="post" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:8px; max-width:520px;">
+        <label>
+          <div class="help">Adicionar comprovantes</div>
+          <input class="input" type="file" name="comprovantes_files" multiple />
+        </label>
+        <label>
+          <div class="help">Observação</div>
+          <textarea class="input" rows="3" name="observacao">{{ r.observacao or '' }}</textarea>
+        </label>
+        <div style="display:flex; gap:8px;">
+          <a class="btn" href="{{ request.args.get('return_to') or route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
+          <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i> Atualizar</button>
+        </div>
+      </form>
+    {% else %}
+      <div>
+        <div class="help">Observação</div>
+        <div>{{ r.observacao or '—' }}</div>
+      </div>
+      <a class="btn" href="{{ request.args.get('return_to') or route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>document.addEventListener('DOMContentLoaded',()=>{ if(window.lucide) lucide.createIcons(); });</script>
+{% endblock %}

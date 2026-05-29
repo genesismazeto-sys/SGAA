@@ -1,0 +1,454 @@
+<!-- templates/admin_editar_turma.html -->
+{% extends "base.html" %}
+{% block title %}Editar Turma{% endblock %}
+{% block content %}
+<h1 class="main-title">Editar Turma</h1>
+
+<form method="POST">
+  <div class="page-m30">
+    <div class="form-cards-narrow">
+    <div class="form-row">
+      <label class="row-label">Curso</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+        <select class="control" name="curso_id" required>
+          {% for c in cursos %}
+            <option value="{{ c.id }}" data-duracao="{{ c.duracao_periodos }}" {{ 'selected' if c.id == turma.curso_id else '' }}>
+              {{ c.nome }} ({{ c.codigo }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Numero da Turma</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+        <input class="control" type="number" name="numero_turma" id="numero_turma" min="1" step="1" inputmode="numeric" autocomplete="off" value="{{ turma.numero }}">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Matrizes de atividades</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="layers-3"></i></div>
+        <select class="control" name="matriz_id" id="matriz_id" required></select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Inicio/Fim</label>
+      <div class="split-2-card-row">
+        <!-- Inicio -->
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
+          <div class="inicio-grid">
+            <select class="control" name="semestre_inicio" id="semestre_inicio">
+              <option value="1" {{ 'selected' if turma.semestre_inicio == 1 else '' }}>1</option>
+              <option value="2" {{ 'selected' if turma.semestre_inicio == 2 else '' }}>2</option>
+            </select>
+            <div class="input-with-icon">
+              <input class="control" type="text" inputmode="numeric" pattern="[0-9]{4}" name="ano_inicio" id="ano_inicio" value="{{ turma.ano_inicio or '' }}" placeholder="AAAA" style="padding-right:28px;">
+              <button type="button" class="calendar-btn" id="inicio_month_btn" title="Escolher mes/ano">
+                <i class="lucide" data-lucide="calendar"></i>
+              </button>
+              <input type="month" id="inicio_month_picker" class="month-picker-hidden" aria-hidden="true">
+            </div>
+          </div>
+        </div>
+        <!-- Fim (calculado) -->
+        <div class="field-card is-off">
+          <div class="field-chip"><i class="lucide" data-lucide="calendar-check"></i></div>
+          <div class="control" id="fim_preview" style="padding:6px 10px;">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Turno</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="sun"></i></div>
+        <select class="control" name="turno">
+          {% set turnos = ['','Manha','Tarde','Noite','Integral'] %}
+          {% for t in turnos %}
+            <option value="{{ t }}" {{ 'selected' if (turma.turno or '') == t else '' }}>{{ t or '-' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="row-label">Status</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" name="status">
+          <option {{ 'selected' if turma.status=='Ativa' else '' }}>Ativa</option>
+          <option {{ 'selected' if turma.status=='Inativa' else '' }}>Inativa</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- hidden end fields filled by JS -->
+    <input type="hidden" name="ano_fim" id="ano_fim_hidden" value="{{ turma.ano_fim or '' }}">
+    <input type="hidden" name="semestre_fim" id="semestre_fim_hidden" value="{{ turma.semestre_fim or '' }}">
+    <script id="matrizes-por-curso-data" type="application/json">{{ matrizes_by_curso|tojson }}</script>
+
+    </div>
+
+    <!-- Itens: Alunos da Turma -->
+    <div class="alunos-wide">
+      <div class="turma-alunos-card" aria-label="Alunos da Turma">
+        <div class="turma-alunos-header">
+          <div class="turma-alunos-actions turma-alunos-actions-left"></div>
+          <h3 class="turma-alunos-title">Alunos da turma</h3>
+          <div class="turma-alunos-actions turma-alunos-actions-right" style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
+            <input type="file" id="csv-import" accept=".csv,.xlsx" hidden>
+            <button type="button" class="btn secondary small" id="btn-importar-csv" title="Importar CSV/XLSX (matricula,nome,email)" aria-label="Importar CSV/XLSX"><i class="lucide" data-lucide="file-up"></i></button>
+            <button type="button" class="btn secondary small" id="btn-remover-aluno" title="Remover aluno selecionado" disabled><i class="lucide" data-lucide="minus"></i></button>
+            <button type="button" class="btn secondary small" id="btn-adicionar-aluno" title="Adicionar aluno"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
+          </div>
+        </div>
+        <div class="turma-alunos-content">
+          <div class="turma-aluno-row header">
+            <div class="turma-aluno-row-shell">
+              <div class="turma-aluno-chip">#</div>
+              <div class="turma-aluno-row-inner">
+                <div class="turma-aluno-card">Aluno</div>
+                <div class="turma-aluno-card">E-mail</div>
+                <div class="turma-aluno-card">Matricula</div>
+                <div class="turma-aluno-card">Situação</div>
+              </div>
+            </div>
+          </div>
+          <div class="turma-alunos-table-rows" id="alunos-rows">
+            {% if alunos and alunos|length %}
+              {% for al in alunos %}
+              <div class="turma-aluno-row">
+                <div class="turma-aluno-row-shell">
+                  <div class="turma-aluno-chip">{{ loop.index }}</div>
+                  <div class="turma-aluno-row-inner">
+                    <div class="turma-aluno-card">
+                      <input type="text" name="aluno_nome[]" placeholder="Nome do aluno" value="{{ al.nome or '' }}" autocomplete="off">
+                    </div>
+                    <div class="turma-aluno-card">
+                      <input type="email" name="aluno_email[]" placeholder="E-mail" value="{{ al.email or '' }}" autocomplete="off">
+                    </div>
+                    <div class="turma-aluno-card">
+                      <input type="text" name="aluno_matricula[]" placeholder="Matricula" value="{{ al.matricula or '' }}" autocomplete="off">
+                    </div>
+                    <div class="turma-aluno-card">
+                      <div class="status-cell">
+                        {% set s = (al.status or 'Ativo') %}
+                        <input type="hidden" name="aluno_situacao[]" value="{{ 'ATIVO' if s == 'Ativo' else 'TRANCADO' }}">
+                        <span class="badge status-badge status-pill {{ 'success status-positive' if s=='Ativo' else 'warning status-neutral' }}" data-status-badge>{{ 'Ativo' if s=='Ativo' else 'Trancado' }}</span>
+                        <select class="status-arrow" title="Alterar status" data-status-arrow>
+                          <option value="ATIVO" {{ 'selected' if s=='Ativo' else '' }}>Ativo</option>
+                          <option value="TRANCADO" {{ 'selected' if s!='Ativo' else '' }}>Trancado</option>
+                          <option value="CONCLUIDO">Concluido</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="turma-aluno-row-actions">
+                  <button type="button" class="turma-aluno-remove" title="Excluir aluno" aria-label="Excluir aluno" data-remove-aluno>
+                    <i class="lucide" data-lucide="minus"></i>
+                  </button>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_turmas') }}">Cancelar</a>
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+    </div>
+  </div>
+</form>
+<!-- Leitor XLSX (SheetJS) para suportar planilhas no navegador -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+  // Itens: Alunos da Turma - add/remove, selecao e reindexacao (#)
+  (function(){
+    const rowsBox = document.getElementById('alunos-rows');
+    const btnAdd = document.getElementById('btn-adicionar-aluno');
+    const btnRemove = document.getElementById('btn-remover-aluno');
+    const btnImp = document.getElementById('btn-importar-csv');
+    const fileImp = document.getElementById('csv-import');
+    const alunoNomeCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', usage: 'sort' });
+
+    function reindexChips(){ rowsBox?.querySelectorAll('.turma-aluno-row .turma-aluno-chip')?.forEach((chip, idx)=>{ chip.textContent = String(idx + 1); }); }
+    function removeRow(row){ row.remove(); reindexChips(); }
+    function sortRowsByNome(){ const rows = Array.from(rowsBox?.querySelectorAll('.turma-aluno-row') || []); rows.sort((rowA, rowB)=>{ const nomeA = (rowA.querySelector('input[name="aluno_nome[]"]')?.value || '').trim(); const nomeB = (rowB.querySelector('input[name="aluno_nome[]"]')?.value || '').trim(); if (!nomeA && !nomeB) return 0; if (!nomeA) return 1; if (!nomeB) return -1; return alunoNomeCollator.compare(nomeA, nomeB); }); rows.forEach((row)=> rowsBox?.appendChild(row)); reindexChips(); }
+    function alunoRowEl(){ const row = document.createElement('div'); row.className = 'turma-aluno-row'; row.innerHTML = `
+        <div class="turma-aluno-row-shell">
+          <div class="turma-aluno-chip">#</div>
+          <div class="turma-aluno-row-inner">
+            <div class="turma-aluno-card"><input type="text" name="aluno_nome[]" placeholder="Nome do aluno" autocomplete="off"></div>
+            <div class="turma-aluno-card"><input type="email" name="aluno_email[]" placeholder="E-mail" autocomplete="off"></div>
+            <div class="turma-aluno-card"><input type="text" name="aluno_matricula[]" placeholder="Matrícula" autocomplete="off"></div>
+            <div class="turma-aluno-card">
+              <div class="status-cell">
+                <input type="hidden" name="aluno_situacao[]" value="ATIVO">
+                <span class="badge status-badge status-pill success status-positive" data-status-badge>Ativo</span>
+                <select class="status-arrow" title="Alterar status" data-status-arrow>
+                  <option value="ATIVO">Ativo</option>
+                  <option value="TRANCADO">Trancado</option>
+                  <option value="CONCLUIDO">Concluído</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="turma-aluno-row-actions"><button type="button" class="turma-aluno-remove" title="Excluir aluno" aria-label="Excluir aluno" data-remove-aluno><i class="lucide" data-lucide="minus"></i></button></div>`;
+      row.addEventListener('click', (ev)=>{ const target = ev.target; const isFormControl = target.closest('input, select, textarea, button, a'); if (isFormControl) return; row.classList.toggle('selected'); }); return row; }
+    function addAluno(nome, email, matricula='', situacao='ATIVO'){ const r = alunoRowEl(); rowsBox?.appendChild(r); const nomeEl = r.querySelector('input[name="aluno_nome[]"]'); const emailEl = r.querySelector('input[name="aluno_email[]"]'); const matEl = r.querySelector('input[name="aluno_matricula[]"]'); const sitEl = r.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); if (nomeEl) nomeEl.value = nome || ''; if (emailEl) emailEl.value = email || ''; if (matEl) matEl.value = matricula || ''; if (sitEl) sitEl.value = situacao || 'ATIVO'; try{ (window.App?.Util?.icones || window.lucide?.createIcons)?.(); }catch(_){ } reindexChips(); wireStatusArrow(r); }
+
+    function parseCSVText(text){ const lines = String(text||'').split(/\r?\n/).filter(x=>x.trim().length); if (!lines.length){ alert('CSV vazio.'); return; } const head = (lines[0]||'').toLowerCase(); let headerMap = null; let start = 0; if (/(matr(?:i|\u00ed)cula|matricula)/.test(head) && head.includes('nome') && head.includes('email')){ const cols = lines[0].split(/,|;|\t/).map(s=> (s||'').trim().toLowerCase()); headerMap = { mat: cols.findIndex(c=> /(matr(?:i|\u00ed)cula|matricula)/.test(c) ), nome: cols.findIndex(c=> c.includes('nome') ), email: cols.findIndex(c=> c.includes('email') ), }; start = 1; } let added = 0; for (let i=start; i<lines.length; i++){ const parts = lines[i].split(/,|;|\t/).map(s=> (s||'').trim()); const mat = headerMap ? (parts[headerMap.mat]||'') : (parts[0]||''); const nome = headerMap ? (parts[headerMap.nome]||'') : (parts[1]||''); const email = headerMap ? (parts[headerMap.email]||'') : (parts[2]||''); if (!mat && !nome && !email) continue; addAluno(nome, email, mat); added++; } if (added>0){ sortRowsByNome(); alert(`${added} aluno(s) adicionados a partir do CSV.`); } else alert('Nenhuma linha válida encontrada no CSV.'); }
+    function parseXLSXFile(file){ if (!window.XLSX){ alert('Leitor de XLSX não carregado.'); return; } const reader = new FileReader(); reader.onload = (e)=>{ try{ const data = new Uint8Array(e.target.result); const wb = XLSX.read(data, { type:'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json(ws, { header:1 }); if (!rows || !rows.length){ alert('Planilha vazia.'); return; } let headerMap = null; let start = 0; const first = (rows[0]||[]).map(v => String(v||'').toLowerCase()); const hasHeader = first.some(c=>/(matr(?:i|\u00ed)cula|matricula)/.test(c)) && first.some(c=>c.includes('nome')) && first.some(c=>c.includes('email')); if (hasHeader){ headerMap = { mat: first.findIndex(c=> /(matr(?:i|\u00ed)cula|matricula)/.test(c) ), nome: first.findIndex(c=> c.includes('nome') ), email: first.findIndex(c=> c.includes('email') ), }; start = 1; } let added = 0; for (let i=start; i<rows.length; i++){ const r = rows[i] || []; const mat = headerMap ? String(r[headerMap.mat]||'').trim() : String(r[0]||'').trim(); const nome = headerMap ? String(r[headerMap.nome]||'').trim() : String(r[1]||'').trim(); const email = headerMap ? String(r[headerMap.email]||'').trim() : String(r[2]||'').trim(); if (!mat && !nome && !email) continue; addAluno(nome, email, mat); added++; } if (added>0){ sortRowsByNome(); alert(`${added} aluno(s) adicionados a partir do XLSX.`); } else alert('Nenhuma linha válida encontrada no XLSX.'); } catch(err){ console.error(err); alert('Erro ao ler XLSX.'); } }; reader.readAsArrayBuffer(file); }
+    fileImp?.addEventListener('change', ()=>{ const f = fileImp.files && fileImp.files[0]; if (!f){ return; } const name = (f.name||'').toLowerCase(); if (name.endsWith('.xlsx') || name.endsWith('.xls')){ parseXLSXFile(f); } else { const reader = new FileReader(); reader.onload = () => parseCSVText(reader.result); reader.readAsText(f, 'utf-8'); } fileImp.value = ''; });
+
+    const STATUS_STYLES = { 'ATIVO': { label:'Ativo', cls:'success', tone:'positive' }, 'TRANCADO': { label:'Trancado', cls:'warning', tone:'neutral' }, 'CONCLUIDO': { label:'Concluído', cls:'danger', tone:'positive' } };
+    function wireStatusArrow(scope){ scope.querySelectorAll('.status-cell').forEach(cell =>{ const hidden = cell.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); const badge  = cell.querySelector('[data-status-badge]'); const arrow  = cell.querySelector('[data-status-arrow]'); if (!hidden || !badge || !arrow) return; const sync = ()=>{ const s = STATUS_STYLES[hidden.value] || STATUS_STYLES['ATIVO']; badge.textContent = s.label; badge.classList.remove('success','warning','danger','status-positive','status-neutral','status-caution','status-negative','status-info'); badge.classList.add(s.cls, `status-${s.tone}`); arrow.value = hidden.value; }; sync(); arrow.addEventListener('change', ()=>{ hidden.value = arrow.value; sync(); }); }); }
+    function wireRowSelection(scope){ scope?.querySelectorAll('.turma-aluno-row')?.forEach(row =>{ if (row.classList.contains('header')) return; if (row.dataset.selWired === '1') return; row.dataset.selWired = '1'; row.addEventListener('click', (ev)=>{ const target = ev.target; const isFormControl = target.closest('input, select, textarea, button, a'); if (isFormControl) return; row.classList.toggle('selected'); }); }); }
+    wireStatusArrow(document);
+    wireRowSelection(rowsBox);
+
+    rowsBox?.addEventListener('click', (ev)=>{ const removeBtn = ev.target.closest('[data-remove-aluno]'); if (!removeBtn) return; ev.preventDefault(); ev.stopPropagation(); const row = removeBtn.closest('.turma-aluno-row'); if (row) removeRow(row); updateRemoveBtn(); });
+    rowsBox?.addEventListener('click', ()=>{ updateRemoveBtn(); });
+    function updateRemoveBtn(){ if (btnRemove) btnRemove.disabled = !rowsBox?.querySelector('.turma-aluno-row.selected'); }
+    btnRemove?.addEventListener('click', ()=>{ rowsBox?.querySelectorAll('.turma-aluno-row.selected').forEach(row => removeRow(row)); updateRemoveBtn(); });
+
+    btnAdd?.addEventListener('click', ()=>{ const r = alunoRowEl(); rowsBox?.appendChild(r); try{ (window.App?.Util?.icones || window.lucide?.createIcons)?.(); }catch(_){ } reindexChips(); wireStatusArrow(r); });
+    btnImp?.addEventListener('click', ()=> fileImp?.click());
+
+    // espelha comportamento da pagina de Nova Turma: cria 1 linha se vazio
+    if (rowsBox && rowsBox.children.length === 0) {
+      btnAdd?.click();
+    }
+  })();
+</script>
+
+<script>
+  // Calcula fim automaticamente a partir de inicio e duracao do curso (espelhando Nova Turma)
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const anoI = document.getElementById('ano_inicio');
+    const semI = document.getElementById('semestre_inicio');
+    const out  = document.getElementById('fim_preview');
+    const anoF = document.getElementById('ano_fim_hidden');
+    const semF = document.getElementById('semestre_fim_hidden');
+    const matrizSel = document.getElementById('matriz_id');
+    const matrizesByCurso = JSON.parse(document.getElementById('matrizes-por-curso-data')?.textContent || '{}');
+    const defaultMatrizId = '{{ matriz_default_id or "" }}';
+
+    const cursoSel = document.querySelector('select[name="curso_id"]');
+    const getDuracao = () => { const opt = cursoSel?.selectedOptions?.[0]; const d = parseInt(opt?.getAttribute('data-duracao')||'8', 10); return isNaN(d) ? 8 : d; };
+
+    const recompute = () => { const y0 = parseInt(anoI?.value||'0',10); const s0 = parseInt(semI?.value||'1',10); const dur = getDuracao(); if (!y0 || !s0){ if(out) out.textContent = '-'; if(anoF) anoF.value=''; if(semF) semF.value=''; return; } const total = (y0*2 + (s0-1)) + (dur-1); const yEnd = Math.floor(total/2); const sEnd = (total % 2) + 1; if (out) out.textContent = `${sEnd}S-${yEnd}`; if (anoF) anoF.value = yEnd; if (semF) semF.value = sEnd; };
+
+    const populateMatrizes = (preferredId = '') => {
+      if (!matrizSel) return;
+      const courseId = cursoSel?.value || '';
+      const options = matrizesByCurso[courseId] || [];
+      const targetId = String(preferredId || matrizSel.value || '');
+      matrizSel.innerHTML = '';
+      if (!options.length){
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Nenhuma matriz cadastrada para este curso';
+        matrizSel.appendChild(emptyOption);
+        matrizSel.disabled = true;
+        matrizSel.value = '';
+        return;
+      }
+      matrizSel.disabled = false;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecione a matriz';
+      matrizSel.appendChild(placeholder);
+      options.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = String(item.id);
+        option.textContent = item.label;
+        matrizSel.appendChild(option);
+      });
+      const selectedValue = options.some((item) => String(item.id) === targetId)
+        ? targetId
+        : String(options[0].id);
+      matrizSel.value = selectedValue;
+    };
+
+    [anoI, semI].forEach(el=> el && el.addEventListener('input', recompute));
+    cursoSel && cursoSel.addEventListener('change', ()=>{ populateMatrizes(''); recompute(); });
+    populateMatrizes(defaultMatrizId);
+    recompute();
+
+    const monthBtn = document.getElementById('inicio_month_btn');
+    const monthInp = document.getElementById('inicio_month_picker');
+    if (monthBtn && monthInp){ monthBtn.addEventListener('click', ()=>{ if (monthInp.showPicker) monthInp.showPicker(); else monthInp.focus(); }); monthInp.addEventListener('change', ()=>{ const v = monthInp.value; if (v && /^\d{4}-\d{2}$/.test(v)){ const [yStr, mStr] = v.split('-'); const y = parseInt(yStr,10); const m = parseInt(mStr,10); if (!isNaN(y) && !isNaN(m)){ if (anoI) anoI.value = y; if (semI) semI.value = (m <= 6 ? '1' : '2'); recompute(); } } }); }
+    const form = document.querySelector('form[method="POST"]'); form && form.addEventListener('submit', recompute);
+  });
+</script>
+{% endblock %}
+{% block extra_head %}
+  <style>
+    .page-m30{ margin: 0 30px; }
+    /* Gap padrao entre cards (ajustavel globalmente) */
+    :root{ --card-gap: 2px; }
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.55);
+      max-width: calc(100vw - 64px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .turma-alunos-actions .btn.secondary.small{
+      display: inline-grid;
+      place-items: center;
+      width: var(--btn-h);
+      min-width: var(--btn-h);
+      padding: 0;
+      gap: 0;
+    }
+    .turma-alunos-actions .btn.secondary.small .lucide{
+      margin: 0;
+      top: 0;
+    }
+    .split-2-card-row{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--card-gap, 2px); align-items:start; }
+    .inicio-grid{ display:grid; grid-template-columns: 0.4fr 0.6fr; gap:8px; padding:0 10px; width:100%; }
+    .inicio-grid .control{ width:100%; }
+    .inicio-grid .input-with-icon{ width:100%; }
+    .input-with-icon{ position:relative; display:inline-block; }
+    .calendar-btn{ position:absolute; right:6px; top:50%; transform:translateY(-50%); width:22px; height:22px; padding:0; border:0; background:transparent; color:#94a3b8; cursor:pointer; display:grid; place-items:center; }
+    .calendar-btn .lucide{ width:16px; height:16px; }
+    .month-picker-hidden{ position:absolute; opacity:0; width:0; height:0; pointer-events:none; }
+    /* Mantem labels externas alinhadas iguais ao contrato atual */
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+    /* Centraliza acoes do formulario nesta pagina */
+    .form-actions{ justify-content:center; }
+    /* Ajuste fino de alinhamento do conteudo nos botoes */
+    :root{ --btn-icon-nudge-y: -0.75px; --btn-text-nudge-y: 0.5px; }
+    .form-actions .btn{ font-weight:400; display:inline-flex; align-items:center; justify-content:center; gap:6px; line-height:1; }
+    .form-actions .btn .lucide{ display:block; width:16px; height:16px; margin:0; flex:0 0 auto; position:relative; top: var(--btn-icon-nudge-y); }
+    .form-actions .btn .btn-label{ display:block; position:relative; top: var(--btn-text-nudge-y); }
+
+    /* ================= Turma / Alunos ================= */
+    .turma-alunos-card{
+      margin-top: 16px;
+      background: var(--surface); border:1px solid var(--border-strong);
+      border-radius: var(--radius); box-shadow: var(--shadow-sm);
+      overflow: visible; /* permitir overlay do botao excluir para fora */
+    }
+    .turma-alunos-header{
+      display:grid; grid-template-columns:auto 1fr auto; align-items:center;
+      min-height: var(--btn-h); padding: 6px 8px; border-bottom:1px solid var(--border-strong);
+      background: var(--turma-alunos-header-bg);
+      border-radius: var(--radius) var(--radius) 0 0;
+      overflow: hidden;
+    }
+    .turma-alunos-title{ margin:0; text-align:center; font-size:14px; font-weight:600; color: var(--text-primary); }
+    .turma-alunos-header > button{ height: var(--btn-h); display:flex; align-items:center; justify-content:center; }
+    .turma-alunos-actions-left{ justify-self:start; }
+    .turma-alunos-actions-right{ justify-self:end; }
+    .turma-alunos-content{ padding: 8px; display:flex; flex-direction:column; gap:8px; overflow: visible; background: var(--turma-alunos-content-bg);
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    /* Larguras sincronizadas entre header e linhas */
+    .alunos-wide{
+      --alunos-cols: 41% 34% 13% 12%;
+      --turma-alunos-header-bg: var(--bg);
+      --turma-alunos-content-bg: var(--bg);
+      --turma-aluno-row-shell-bg: #f3f4f6;
+    }
+    .turma-aluno-chip{ width:40px; height: var(--btn-h); display:grid; place-items:center; color: var(--text-secondary); font-weight:600; }
+    .turma-aluno-row.header .turma-aluno-chip{ border:1px solid var(--turma-alunos-content-bg); font-size:12px; background: var(--turma-alunos-content-bg); }
+    .turma-aluno-row.header .turma-aluno-card{ background: var(--turma-alunos-content-bg); border:1px solid var(--turma-alunos-content-bg); font-size:12px; }
+    .turma-aluno-row.header .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); border:1px solid var(--turma-alunos-content-bg); }
+
+    /* Lista de alunos: wrappers com fundo de conteudo e header com fundo dedicado */
+    .alunos-wide .turma-alunos-card,
+    .alunos-wide .turma-alunos-content{ background: var(--turma-alunos-content-bg); }
+
+    .alunos-wide .turma-aluno-row.header,
+    .alunos-wide .turma-aluno-row-header{ background: var(--turma-alunos-content-bg); }
+
+    /* Por seguranca, aplica fundo de conteudo nos wrappers internos */
+    .alunos-wide .turma-alunos-content .turma-aluno-card,
+    .alunos-wide .turma-alunos-content .turma-aluno-chip,
+    .alunos-wide .turma-alunos-content .turma-alunos-table-header,
+    .alunos-wide .turma-alunos-content .turma-alunos-table-header-inner,
+    .alunos-wide .turma-aluno-row,
+    .alunos-wide .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); }
+
+    .alunos-wide .turma-aluno-row.header .turma-aluno-card,
+    .alunos-wide .turma-aluno-row.header .turma-aluno-chip{ background: var(--turma-alunos-content-bg); border-color: var(--turma-alunos-content-bg); }
+
+    /* Linhas de dados permanecem brancas */
+    .alunos-wide .turma-aluno-row:not(.header),
+    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-card,
+    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-chip,
+    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); }
+    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-row-shell{ background: var(--turma-aluno-row-shell-bg); }
+
+    /* Garante cards das LINHAS sempre brancos */
+    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-card{ background: var(--surface) !important; }
+
+    /* Remove contorno do header — shell fica invisível, mesmo layout do shell de dados */
+    .alunos-wide .turma-aluno-row-header,
+    .alunos-wide .turma-aluno-row.header{ border:0 !important; outline:0; box-shadow:none !important; }
+    .turma-aluno-row.header .turma-aluno-row-shell{
+      border-color: var(--turma-alunos-content-bg);
+      background: var(--turma-alunos-content-bg);
+      box-shadow: none;
+      overflow: visible;
+    }
+
+    .turma-alunos-table-rows{ display:flex; flex-direction:column; gap:4px; overflow: visible; }
+    .turma-aluno-row{ position:relative; min-height: var(--btn-h); overflow:visible; }
+    .turma-aluno-row-shell{
+      display:grid; grid-template-columns:40px 1fr; align-items:center;
+      min-height: var(--btn-h); border:1px solid var(--border-strong);
+      border-radius: var(--radius); background: var(--turma-aluno-row-shell-bg); overflow:hidden;
+      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+    .turma-aluno-row:hover .turma-aluno-row-shell{ border-color: var(--brand); }
+    .turma-aluno-row.header:hover .turma-aluno-row-shell{ border-color: var(--turma-alunos-content-bg); cursor: default; }
+    /* Mantem apenas o contorno azul no container, nao nos cards internos */
+    .turma-aluno-row:hover .turma-aluno-card,
+    .turma-aluno-row:hover .turma-aluno-chip{ border-color: var(--border-strong); }
+    .turma-aluno-row.selected .turma-aluno-row-shell{
+      border-color: var(--brand);
+    }
+    .turma-aluno-row-inner{ display:grid; grid-template-columns: var(--alunos-cols); column-gap: var(--btn-gap, 8px); padding: 4px 8px; align-items:center; }
+    .turma-aluno-row-actions{ position:absolute; top:50%; right:-40px; transform:translateY(-50%); display:flex; align-items:center; justify-content:center; }
+    .turma-aluno-remove{ width:32px; height:var(--btn-h); min-width:32px; min-height:var(--btn-h); border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); display:none; place-items:center; color:var(--danger, #b91c1c); }
+    .turma-aluno-row.selected .turma-aluno-remove{ display:grid; }
+    #btn-remover-aluno{ color: var(--danger, #b91c1c); }
+    #btn-remover-aluno[disabled]{ opacity: .35; cursor: not-allowed; pointer-events: none; }
+    .turma-aluno-card{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); min-height: var(--btn-h); display:flex; align-items:center; justify-content:center; padding: 0 8px; overflow:hidden; }
+
+    /* Status: badge + seta (select nativo compacto) */
+    .status-cell{ position:relative; display:block; width:100%; text-align:center; }
+    .status-cell [data-status-badge]{ display:inline-flex; }
+    .status-arrow{
+      height:22px; min-height:22px; width:24px; min-width:24px;
+      border:1px solid var(--border-strong); background:var(--surface); border-radius:6px;
+      padding:0; cursor:pointer; line-height:1;
+      color: transparent; font-size:0; text-indent: -9999px; overflow:hidden;
+      -webkit-appearance: menulist; -moz-appearance: menulist; appearance: menulist;
+      position:absolute; top:50%; right:0; transform:translateY(-50%);
+    }
+    .turma-aluno-card input,
+    .turma-aluno-card select{
+      width:100%; border:0; background:transparent; outline:0; text-align:center; font-size:12px; min-height: var(--btn-h); font-family: inherit; color: var(--text-primary);
+    }
+  </style>
+{% endblock %}
+

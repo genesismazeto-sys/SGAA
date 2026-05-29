@@ -1,0 +1,412 @@
+{% extends "base_aluno.html" %}
+{% block title %}Nova Requisição{% endblock %}
+{% block extra_head %}
+  <style>
+    /* Replicar estrutura do form de Atividades (admin) */
+    .form-actions{ justify-content:center; }
+    .form-cards-narrow{
+      width: calc(var(--form-card-w) * 0.55);
+      max-width: calc(100vw - 64px);
+      margin: 0 auto;
+      padding-top: var(--form-top-pad);
+      display: grid;
+      row-gap: 12px;
+    }
+    .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
+  /* Card dividido com esquerda compacta */
+  .field-card.split-2.compact-left{ display:grid; grid-template-columns:40px 90px 40px 1fr; column-gap: var(--list-col-gap, 2px); }
+  .field-card.split-2.compact-left .control:first-of-type{ min-width: 70px; }
+  .field-card.split-2 .control + .field-chip{ border-left:1px solid var(--border-strong); }
+  /* Grid 2-col helper for side-by-side rows */
+  .row-2col{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--btn-gap, 8px); }
+  /* Compact field-cards to reduce visual height */
+  .field-card.is-compact,
+  .field-card.is-compact .control,
+  .field-card.is-compact .field-chip{ height: 32px; min-height: 32px; }
+  .field-card .input-row{ display:flex; align-items:center; gap:6px; }
+  .unit-chip{
+    height: 22px; min-width: 22px; padding: 0 6px;
+    display:inline-grid; place-items:center;
+    border-radius: 6px; border:1px solid var(--border-strong);
+    background: var(--surface); font-size:12px; line-height:1; color: var(--text-secondary);
+  }
+  /* Date input centering tweaks */
+  .date-center .control[type="date"]{ text-align:center; text-align-last:center; }
+  .date-center .control[type="date"]::-webkit-datetime-edit{ text-align:center; }
+  .date-center .control[type="date"]::-webkit-datetime-edit-fields-wrapper{ display:inline-flex; justify-content:center; width:100%; }
+  .date-center .control[type="date"]::-webkit-datetime-edit-text{ padding:0 2px; }
+  .date-center .control[type="date"]::-webkit-calendar-picker-indicator{ margin-left:4px; }
+  .attachments-list{ display:grid; row-gap: 12px; }
+
+  /* File attach chip on right and clickable card (restored) */
+  .field-card.file-card{
+    position:relative; cursor:pointer;
+    display:grid; grid-template-columns: 40px 1fr auto; align-items:center;
+    column-gap: var(--list-col-gap, 6px);
+  }
+  .field-card.file-card:focus-within{ outline:none; }
+  .field-card.file-card .file-input{ display:none; }
+  /* Garantir que o chip esquerdo mantém o padrão dos outros cards */
+  .field-card.file-card > .field-chip{ height: var(--btn-h); min-height: var(--btn-h); }
+  .field-card.file-card .file-name.control{
+    display:flex; align-items:center; min-height: var(--btn-h);
+    padding-right: 0;
+    color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* impedir quebra e crescimento */
+  }
+  .field-card.file-card.has-file .file-name.control{ color: var(--text); }
+  .field-card.file-card .chip-right{
+    display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px;
+    background: var(--surface-2, #f2f2f2); /* fundo cinza */
+    border: none; border-left: 1px solid var(--border-strong); /* borda no canto esquerdo */
+    border-radius: 0; cursor:pointer;
+    color: #000; /* texto e ícone pretos */
+  }
+  .field-card.file-card .chip-right .lucide{ width:16px; height:16px; }
+  .field-card.file-card .chip-right .lucide{ color:#000; }
+  /* Quando houver arquivo anexado, usar cinza claro como os chips esquerdos */
+  .field-card.file-card.has-file .chip-right{ color: var(--text-tertiary); }
+  .field-card.file-card.has-file .chip-right .lucide{ color: var(--text-tertiary); }
+  .field-card.file-card .chip-right span{ padding-right: 4px; }
+  /* Simulação de readonly para selects sem alterar aparência */
+  select.control[aria-readonly="true"],
+  select.control[aria-readonly="true"]:focus{
+    background: inherit;
+    border-color: inherit;
+    box-shadow:none;
+    color: inherit;
+    cursor: default;
+    pointer-events: none; /* impede abrir dropdown no modo leitura */
+  }
+  select.control[aria-readonly="true"] option{ color: var(--text); }
+  </style>
+{% endblock %}
+{% block content %}
+{% set page_mode = mode or 'create' %}
+<h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição') }}</h1>
+
+
+<form method="post" enctype="multipart/form-data">
+  <div class="form-cards-narrow">
+    {% set t = (tipo_atual or 'Acadêmica Complementar') %}
+    <!-- Tipo da Atividade (topo) -->
+    <div class="form-row">
+      <label class="row-label">Tipo</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+  <select class="control" id="tipo_atividade_select" name="tipo_atividade" required {% if mode == 'view_readonly' %}aria-readonly="true" tabindex="-1"{% endif %}>
+          {% set selTipo = t if t in ['Acadêmica Complementar','Extensão Universitária'] else 'Acadêmica Complementar' %}
+          <option value="Acadêmica Complementar" {% if selTipo=='Acadêmica Complementar' %}selected{% endif %}>Acadêmica Complementar</option>
+          <option value="Extensão Universitária" {% if selTipo=='Extensão Universitária' %}selected{% endif %}>Extensão Universitária</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Grupo (nº/descrição) -->
+  {% if mode == 'view_readonly' %}
+    <div class="form-row">
+      <label class="row-label">Grupo</label>
+      <div class="field-card split-2 compact-left" id="grupo_card">
+        <div class="field-chip"><i class="lucide" data-lucide="tags"></i></div>
+        <input class="control" type="text" readonly aria-readonly="true" value="{{ init.grupo_num if init and init.grupo_num else (init.grupo.split(' - ')[0] if init and init.grupo and ' - ' in init.grupo else (init.grupo or '')) }}" aria-label="Número do grupo" />
+        <div class="field-chip"><i class="lucide" data-lucide="bookmark"></i></div>
+        <input class="control" id="grupo_desc" type="text" placeholder="Descrição do grupo" value="{{ (init.grupo.split(' - ')[1] if init and init.grupo and ' - ' in init.grupo else '') }}" required readonly aria-readonly="true">
+        <input type="hidden" name="grupo" id="grupo_hidden" value="{{ init.grupo if init and init.grupo else '' }}">
+      </div>
+    </div>
+    {% else %}
+    <div class="form-row">
+      <label class="row-label">Grupo</label>
+      <div class="field-card split-2 compact-left" id="grupo_card">
+        <div class="field-chip"><i class="lucide" data-lucide="tags"></i></div>
+        <select class="control" id="grupo_num" aria-label="Número do grupo"></select>
+        <div class="field-chip"><i class="lucide" data-lucide="bookmark"></i></div>
+        <input class="control" id="grupo_desc" type="text" placeholder="Descrição do grupo" value="" required readonly aria-readonly="true">
+        <input type="hidden" name="grupo" id="grupo_hidden" value="">
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Atividade (carregada pelo grupo) -->
+  {% if mode == 'view_readonly' %}
+    <div class="form-row">
+      <label class="row-label">Atividade</label>
+      <div class="field-card" id="atividade_card">
+        <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+        <input class="control" type="text" readonly aria-readonly="true" value="{% for a in atividades %}{% if init and init.atividade_id and a.id==init.atividade_id %}{{ a.nome }}{% endif %}{% endfor %}" />
+      </div>
+    </div>
+    {% else %}
+    <div class="form-row">
+      <label class="row-label">Atividade</label>
+      <div class="field-card" id="atividade_card">
+        <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+        <select class="control" id="atividade_id_select" name="atividade_id" required aria-label="Atividade">
+          <option value="" data-placeholder="1">Selecione o grupo...</option>
+          {% for a in atividades %}
+            <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}" {% if init and init.atividade_id and a.id==init.atividade_id %}selected{% endif %}>{{ a.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
+
+        <!-- Nome do evento (card sozinho) -->
+        <div class="form-row">
+          <label class="row-label">Nome do evento</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+            <input class="control" type="text" name="nome_evento" placeholder="Nome do evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %} value="{{ (init.nome_evento if init and init.nome_evento is not none else '') }}">
+          </div>
+        </div>
+
+        <!-- Solicitadas (h)/Data do evento (lado a lado, compactos) -->
+        <div class="form-row row-2col" style="--form-label-w: 280px;">
+          <label class="row-label" style="white-space:nowrap;">Solicitadas (h)/data do evento</label>
+          <div>
+            <div class="field-card is-compact" id="card-horas">
+              <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
+              <input class="control" type="number" name="horas_solicitadas" min="0" step="0.01" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %} value="{{ (init.horas_solicitadas if init and init.horas_solicitadas is not none else '') }}">
+            </div>
+          </div>
+          <div>
+            <div class="field-card is-compact date-center" id="card-data">
+              <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
+              <input class="control" type="date" name="data_evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %} value="{{ (init.data_evento if init and init.data_evento else '') }}">
+            </div>
+          </div>
+        </div>
+
+  {% if page_mode != 'view_readonly' %}
+  <div class="form-row">
+    <label class="row-label">Comprovantes</label>
+    <div class="field-card file-card" data-upload-card>
+      <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
+      <input class="file-input" id="comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes">
+      <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+      <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if anexos and anexos|length %}
+  <div class="attachments-list">
+  {% for ax in anexos %}
+    <div class="form-row">
+      <label class="row-label">Comprovante enviado</label>
+      <div class="field-card file-card has-file" data-file-card style="grid-template-columns:40px 1fr auto;">
+        <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
+        <div class="control file-name" title="{{ ax.filename }}" style="display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          <a href="{{ url_for('uploaded_file', filename=ax.filename) }}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--text);">{{ ax.filename }}</a>
+        </div>
+        <div class="field-chip chip-right" aria-disabled="true" style="pointer-events:none;opacity:.5;">
+          <i class="lucide" data-lucide="paperclip"></i><span>Arquivo</span>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+  {% endif %}
+
+    <!-- Observação no final, auto-grow com altura padrão -->
+    <div class="form-row">
+      <label class="row-label">Observação (opcional)</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
+  <textarea class="control auto-grow" name="observacao" rows="1" placeholder="Digite uma observação se necessário" style="height: var(--btn-h);" {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %}>{{ (init.observacao if init and init.observacao is not none else '') }}</textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+  <a class="btn" href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
+  {% if page_mode != 'view_readonly' %}
+  <button class="btn primary" type="submit"><i class="lucide" data-lucide="{{ 'save' if page_mode == 'edit' else 'send' }}"></i> {{ 'Atualizar' if page_mode == 'edit' else 'Enviar' }}</button>
+  {% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}
+{% block extra_scripts %}
+<!-- Inicialização do modo edição somente leitura -->
+<script id="init-form-json" type="application/json">{{ (init or {}) | tojson | safe }}</script>
+<meta id="readonly-flag" data-readonly="{{ '1' if page_mode=='view_readonly' else '0' }}">
+<script>
+  // Grupo (nº/descrição) e filtro de Atividade por Tipo+Grupo
+  (function(){
+    const isRO = (document.getElementById('readonly-flag')?.getAttribute('data-readonly') === '1');
+    const tipoSel   = document.getElementById('tipo_atividade_select');
+    const numSel    = document.getElementById('grupo_num');
+    const descInput = document.getElementById('grupo_desc');
+    const hidGrupo  = document.getElementById('grupo_hidden');
+    const atvSel    = document.getElementById('atividade_id_select');
+    if (!tipoSel || !numSel || !descInput || !hidGrupo || !atvSel) return;
+
+    const allOptions = Array.from(atvSel.options);
+
+    // Constrói mapa: tipo -> { numero: descricao }
+    function buildGruposPorTipo(){
+      const map = { 'Acadêmica Complementar': {}, 'Extensão Universitária': {} };
+      allOptions.forEach(opt => {
+        const t = (opt.getAttribute('data-tipo')||'').trim();
+        const g = (opt.getAttribute('data-grupo')||'').trim();
+        if (!t || !g) return;
+        const m = g.match(/^(\d+)\s*-\s*(.*)$/);
+        if (m){
+          const n = m[1];
+          const d = m[2];
+          if (!map[t]) map[t] = {};
+          if (n && !map[t][n]) map[t][n] = d;
+        }
+      });
+      return map;
+    }
+    const gruposPorTipo = buildGruposPorTipo();
+
+    function populateNumeros(){
+      const t = tipoSel.value || 'Acadêmica Complementar';
+      const map = gruposPorTipo[t] || {};
+      const nums = Object.keys(map).sort((a,b)=> parseInt(a,10)-parseInt(b,10));
+      numSel.innerHTML = '';
+      const optDash = document.createElement('option'); optDash.value=''; optDash.textContent='-'; numSel.appendChild(optDash);
+      nums.forEach(n=>{ const op=document.createElement('option'); op.value=n; op.textContent=n; numSel.appendChild(op); });
+      // Se havia um data-selected futuro, poderia aplicar aqui
+    }
+
+    function loadDescFromSelected(){
+      const t = tipoSel.value || 'Acadêmica Complementar';
+      const n = numSel.value || '';
+      const map = gruposPorTipo[t] || {};
+      const d  = n ? (map[n] || '') : '';
+      descInput.value = d;
+    }
+
+    function syncHidden(){
+      const n = (numSel.value||'').trim();
+      const d = (descInput.value||'').trim();
+      hidGrupo.value = n && d ? `${n} - ${d}` : (n || '');
+    }
+
+    function applyAtividadesFilter(){
+      const t = (tipoSel.value||'').toLowerCase();
+      const nRaw = (numSel.value||'').trim();
+      const n = nRaw.toLowerCase();
+      let firstVisible = null;
+      allOptions.forEach(opt => {
+        const isPlaceholder = opt.getAttribute('data-placeholder') === '1';
+        const topt = (opt.getAttribute('data-tipo')||'').toLowerCase();
+        const g    = (opt.getAttribute('data-grupo')||'');
+        const gnum = (g.split(' - ')[0]||'').trim().toLowerCase();
+        let show = false;
+        if (isPlaceholder){
+          show = true; // sempre exibe placeholder
+        } else if (n){
+          show = (topt === t) && (gnum === n);
+        }
+        opt.hidden = !show;
+        if (show && !isPlaceholder && !firstVisible) firstVisible = opt;
+      });
+      if (!n){
+        atvSel.value = '';
+        atvSel.disabled = true;
+        return;
+      }
+      if (atvSel.selectedOptions.length && atvSel.selectedOptions[0].hidden){
+        atvSel.value = firstVisible ? firstVisible.value : '';
+      } else if (!atvSel.value && firstVisible){
+        atvSel.value = firstVisible.value;
+      }
+      atvSel.disabled = !firstVisible;
+    }
+
+    function bindUploadCards(){
+      document.querySelectorAll('[data-upload-card]').forEach(card=>{
+        if (card.dataset.boundUploadCard === '1') return;
+        card.dataset.boundUploadCard = '1';
+        const input = card.querySelector('input[type="file"]');
+        const nameEl = card.querySelector('[data-file-name]');
+        const chipRight = card.querySelector('.chip-right');
+        function openPicker(){ if (input) input.click(); }
+        function updateName(){
+          const files = Array.from((input && input.files) || []);
+          if (files.length === 1){
+            nameEl.textContent = files[0].name;
+            nameEl.setAttribute('title', files[0].name);
+            card.classList.add('has-file');
+          } else if (files.length > 1){
+            const summary = `${files.length} arquivos selecionados`;
+            nameEl.textContent = summary;
+            nameEl.setAttribute('title', files.map(file => file.name).join('\n'));
+            card.classList.add('has-file');
+          } else {
+            nameEl.textContent = 'Nenhum arquivo selecionado';
+            nameEl.removeAttribute('title');
+            card.classList.remove('has-file');
+          }
+        }
+        card.addEventListener('click', (e)=>{
+          const tag = e.target && e.target.tagName;
+          if (tag !== 'INPUT') openPicker();
+        });
+        chipRight?.addEventListener('click', (e)=>{ e.stopPropagation(); openPicker(); });
+        input?.addEventListener('change', updateName);
+        updateName();
+      });
+    }
+
+    // Init básico (sem valores do modo edição)
+    populateNumeros();
+    loadDescFromSelected();
+    syncHidden();
+    applyAtividadesFilter();
+
+    // Prefill para modo edição/leitura (colocado aqui para ter acesso às funções e variáveis)
+    try{
+      let init = {};
+      try{ init = JSON.parse(document.getElementById('init-form-json')?.textContent || '{}'); }catch(e){ init = {}; }
+      if (init && Object.keys(init).length){
+        if (init.tipo_atividade){ tipoSel.value = init.tipo_atividade; }
+        populateNumeros();
+        if (init.grupo_num){ numSel.value = init.grupo_num; }
+        loadDescFromSelected();
+        syncHidden();
+        applyAtividadesFilter();
+        if (init.atividade_id){
+          atvSel.value = String(init.atividade_id);
+          // Em modo leitura, manter selects visuais mas sem interação
+          if (isRO){
+            atvSel.disabled = false; // visível, mas não interativo via aria-readonly/tabindex
+          }
+        }
+        const nomeEl = document.querySelector('input[name="nome_evento"]');
+        const horasEl = document.querySelector('input[name="horas_solicitadas"]');
+        const dataEl  = document.querySelector('input[name="data_evento"]');
+        const obsEl   = document.querySelector('textarea[name="observacao"]');
+        if (nomeEl && init.nome_evento!=null) nomeEl.value = init.nome_evento;
+        if (horasEl && init.horas_solicitadas!=null) horasEl.value = init.horas_solicitadas;
+        if (dataEl && init.data_evento) dataEl.value = init.data_evento;
+        if (obsEl && init.observacao!=null) obsEl.value = init.observacao;
+        try{ bindUploadCards(); }catch(_e){}
+      }
+    }catch(_e){}
+
+    bindUploadCards();
+
+    // Bind (somente se não for modo leitura)
+    if (!isRO){
+      tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+      numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+    }
+  })();
+
+  // Auto-grow para textarea de observação
+  (function(){
+    const autoGrow = (el)=>{ el.style.height='auto'; el.style.height = el.scrollHeight + 'px'; };
+    document.querySelectorAll('textarea.auto-grow').forEach(el=>{
+      el.style.height = 'var(--btn-h)';
+      autoGrow(el);
+      el.addEventListener('input', ()=> autoGrow(el));
+    });
+    // (Prefill removido desta IIFE – agora feito acima para evitar escopo perdido)
+  })();
+</script>
+{% endblock %}
