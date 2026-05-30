@@ -3043,6 +3043,15 @@ def is_versioned_resolver_shadow_read_enabled() -> bool:
     }
 
 
+def is_versioned_requisicao_snapshot_write_enabled() -> bool:
+    return str(os.getenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "0")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _versioned_shadow_read_dedicated_log_path() -> str:
     app_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(app_dir, "logs", "versioned_shadow_reads.log")
@@ -3117,6 +3126,221 @@ def _append_versioned_shadow_read_event_line(event_line: str) -> None:
             )
         except Exception:
             pass
+
+
+def _load_versioned_requisicao_snapshot_rule_row(
+    conn,
+    *,
+    atividade_versao_id,
+    atividade_id_legacy,
+):
+    return conn.execute(
+        """
+        SELECT av.id AS atividade_versao_id,
+               av.atividade_base_id,
+               av.codigo_normativo,
+               av.eixo,
+               av.grupo,
+               av.ch_por_evento,
+               av.limite_semestre,
+               av.limite_total,
+               av.status AS versao_status,
+               ab.nome_conceito AS atividade_base_nome,
+               COALESCE(
+                   a.nome,
+                   (
+                       SELECT a2.nome
+                         FROM atividade_legacy_map alm2
+                         JOIN atividades a2 ON a2.id = alm2.atividade_id_legacy
+                        WHERE alm2.atividade_base_id = av.atividade_base_id
+                     ORDER BY alm2.atividade_id_legacy
+                        LIMIT 1
+                   ),
+                   ab.nome_conceito
+               ) AS nome_exibivel,
+               COALESCE(
+                   a.nome,
+                   (
+                       SELECT a2.nome
+                         FROM atividade_legacy_map alm2
+                         JOIN atividades a2 ON a2.id = alm2.atividade_id_legacy
+                        WHERE alm2.atividade_base_id = av.atividade_base_id
+                     ORDER BY alm2.atividade_id_legacy
+                        LIMIT 1
+                   )
+               ) AS nome_legacy,
+               COALESCE(
+                   a.tipo_atividade,
+                   (
+                       SELECT a2.tipo_atividade
+                         FROM atividade_legacy_map alm2
+                         JOIN atividades a2 ON a2.id = alm2.atividade_id_legacy
+                        WHERE alm2.atividade_base_id = av.atividade_base_id
+                     ORDER BY alm2.atividade_id_legacy
+                        LIMIT 1
+                   )
+               ) AS tipo_atividade_legacy
+          FROM atividade_versao av
+          JOIN atividade_base ab ON ab.id = av.atividade_base_id
+          LEFT JOIN atividade_legacy_map alm
+            ON alm.atividade_base_id = av.atividade_base_id
+           AND alm.atividade_id_legacy = ?
+          LEFT JOIN atividades a ON a.id = alm.atividade_id_legacy
+         WHERE av.id = ?
+        """,
+        (atividade_id_legacy, atividade_versao_id),
+    ).fetchone()
+
+
+def _build_versioned_requisicao_snapshot_payload(
+    *,
+    flow_origin: str,
+    atividade_id_legacy,
+    resolver_result,
+    rule_row,
+) -> dict[str, object]:
+    snapshot_written_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
+    return {
+        "atividade_base_id": resolver_result.get("atividade_base_id"),
+        "atividade_id_legacy": atividade_id_legacy,
+        "atividade_versao_id": resolver_result.get("atividade_versao_id"),
+        "ch_por_evento": rule_row["ch_por_evento"],
+        "codigo_normativo": resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
+        "eixo": resolver_result.get("eixo") or rule_row["eixo"],
+        "flow_origin": flow_origin,
+        "grupo": rule_row["grupo"],
+        "legacy_scope_ok": resolver_result.get("legacy_scope_ok"),
+        "limite_semestre": rule_row["limite_semestre"],
+        "limite_total": rule_row["limite_total"],
+        "matriz_id_efetiva": resolver_result.get("matriz_id_efetiva"),
+        "nome_exibivel": rule_row["nome_exibivel"],
+        "nome_legacy": rule_row["nome_legacy"],
+        "resolver_status": resolver_result.get("status"),
+        "resolver_warnings": list(resolver_result.get("warnings") or []),
+        "schema_version": "d6.4.0-v1",
+        "snapshot_written_at": snapshot_written_at,
+        "tipo_atividade_legacy": rule_row["tipo_atividade_legacy"],
+        "versao_status": rule_row["versao_status"],
+    }
+
+
+def maybe_write_versioned_requisicao_snapshot(
+    conn,
+    *,
+    flow_origin: str,
+    req_id,
+    aluno_id,
+    atividade_id_legacy,
+):
+    if not is_versioned_requisicao_snapshot_write_enabled():
+        return None
+
+    try:
+        resolver_result = resolver_versao_por_aluno(
+            conn,
+            aluno_id=aluno_id,
+            atividade_id_legacy=atividade_id_legacy,
+            strict_legacy_scope=True,
+        )
+    except Exception:
+        try:
+            logger.exception(
+                "event=versioned_requisicao_snapshot_exception origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s",
+                flow_origin,
+                req_id,
+                aluno_id,
+                atividade_id_legacy,
+            )
+        except Exception:
+            pass
+        return None
+
+    if resolver_result.get("status") != "resolved":
+        try:
+            logger.warning(
+                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=%s reason=%s",
+                flow_origin,
+                req_id,
+                aluno_id,
+                atividade_id_legacy,
+                resolver_result.get("status"),
+                resolver_result.get("reason"),
+            )
+        except Exception:
+            pass
+        return resolver_result
+
+    atividade_versao_id = resolver_result.get("atividade_versao_id")
+    if not atividade_versao_id:
+        try:
+            logger.warning(
+                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=resolved reason=missing_atividade_versao_id",
+                flow_origin,
+                req_id,
+                aluno_id,
+                atividade_id_legacy,
+            )
+        except Exception:
+            pass
+        return resolver_result
+
+    rule_row = _load_versioned_requisicao_snapshot_rule_row(
+        conn,
+        atividade_versao_id=atividade_versao_id,
+        atividade_id_legacy=atividade_id_legacy,
+    )
+    if not rule_row:
+        try:
+            logger.warning(
+                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=resolved reason=missing_rule_row",
+                flow_origin,
+                req_id,
+                aluno_id,
+                atividade_id_legacy,
+            )
+        except Exception:
+            pass
+        return resolver_result
+
+    payload = _build_versioned_requisicao_snapshot_payload(
+        flow_origin=flow_origin,
+        atividade_id_legacy=atividade_id_legacy,
+        resolver_result=resolver_result,
+        rule_row=rule_row,
+    )
+    snapshot_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    conn.execute(
+        """
+        UPDATE requisicoes
+           SET atividade_versao_id = ?,
+               regra_snapshot_json = ?,
+               codigo_normativo_snapshot = ?
+         WHERE id = ?
+        """,
+        (
+            atividade_versao_id,
+            snapshot_json,
+            resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
+            req_id,
+        ),
+    )
+    try:
+        logger.info(
+            "event=versioned_requisicao_snapshot_written origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s atividade_versao_id=%s codigo_normativo=%s",
+            flow_origin,
+            req_id,
+            aluno_id,
+            atividade_id_legacy,
+            atividade_versao_id,
+            resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
+        )
+    except Exception:
+        pass
+    return resolver_result
 
 
 def maybe_run_versioned_resolver_shadow_read(
@@ -8189,6 +8413,13 @@ def admin_nova_requisicao():
     if first_saved:
         conn.execute("UPDATE requisicoes SET arquivo_comprovante = ? WHERE id = ?", (first_saved, req_id))
 
+    maybe_write_versioned_requisicao_snapshot(
+        conn,
+        flow_origin="admin_create",
+        aluno_id=aluno_id,
+        atividade_id_legacy=atividade_id,
+        req_id=req_id,
+    )
     conn.commit()
     try:
         maybe_run_versioned_resolver_shadow_read(

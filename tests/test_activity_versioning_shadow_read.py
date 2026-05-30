@@ -1,10 +1,13 @@
 import base64
+import io
+import json
 import logging
 import os
 import sqlite3
 import sys
 import uuid
 
+import openpyxl
 import pytest
 
 
@@ -92,19 +95,81 @@ def _fetch_req(aluno_id, nome_evento):
         ).fetchone()
 
 
+def _fetch_req_by_id(req_id):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        return conn.execute(
+            """
+            SELECT id, aluno_id, atividade_id, atividade_versao_id, regra_snapshot_json,
+                   codigo_normativo_snapshot, status, observacao
+              FROM requisicoes
+             WHERE id = ?
+            """,
+            (req_id,),
+        ).fetchone()
+
+
+def _resolve_for_student(aluno_id, atividade_id_legacy):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        return main.resolver_versao_por_aluno(
+            conn,
+            aluno_id=aluno_id,
+            atividade_id_legacy=atividade_id_legacy,
+            strict_legacy_scope=True,
+        )
+
+
+def _load_snapshot(req_row):
+    assert req_row["regra_snapshot_json"] is not None
+    return json.loads(req_row["regra_snapshot_json"])
+
+
+def _insert_pending_req(aluno_id, atividade_id, *, nome_evento=None):
+    nome_evento = nome_evento or f"Req Manual {uuid.uuid4().hex[:6]}"
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        cur = conn.execute(
+            """
+            INSERT INTO requisicoes (
+                aluno_id, atividade_id, data_solicitacao, data_evento,
+                horas_solicitadas, nome_evento, status, observacao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                aluno_id,
+                atividade_id,
+                "2026-05-30 10:00:00",
+                "2026-05-24",
+                4,
+                nome_evento,
+                "Pendente",
+                "requisicao manual de teste",
+            ),
+        )
+        req_id = cur.lastrowid
+        conn.commit()
+    return req_id
+
+
 def _log_recorder(monkeypatch):
     info_logs = []
+    warning_logs = []
     exception_logs = []
 
     def _capture_info(msg, *args):
         info_logs.append(msg % args if args else msg)
 
+    def _capture_warning(msg, *args):
+        warning_logs.append(msg % args if args else msg)
+
     def _capture_exception(msg, *args):
         exception_logs.append(msg % args if args else msg)
 
     monkeypatch.setattr(main.logger, "info", _capture_info)
+    monkeypatch.setattr(main.logger, "warning", _capture_warning)
     monkeypatch.setattr(main.logger, "exception", _capture_exception)
-    return info_logs, exception_logs
+    return info_logs, warning_logs, exception_logs
 
 
 def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env, monkeypatch):
@@ -113,8 +178,9 @@ def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env,
     db_path = env["db_path"]
     seed = _seed_student_in_turma()
     _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    info_logs, _ = _log_recorder(monkeypatch)
+    info_logs, _, _ = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Aluno {uuid.uuid4().hex[:6]}"
     calls = []
@@ -184,8 +250,9 @@ def test_shadow_read_student_create_does_not_block_on_resolver_error(shadow_read
     client = env["client"]
     seed = _seed_student_in_turma()
     _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    _, exception_logs = _log_recorder(monkeypatch)
+    _, _, exception_logs = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Aluno Erro {uuid.uuid4().hex[:6]}"
 
@@ -254,8 +321,9 @@ def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, m
     db_path = env["db_path"]
     seed = _seed_student_in_turma()
     _set_admin_session(client)
-    info_logs, _ = _log_recorder(monkeypatch)
+    info_logs, _, _ = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Admin {uuid.uuid4().hex[:6]}"
     calls = []
@@ -326,8 +394,9 @@ def test_shadow_read_admin_create_does_not_block_on_resolver_error(shadow_read_e
     client = env["client"]
     seed = _seed_student_in_turma()
     _set_admin_session(client)
-    _, exception_logs = _log_recorder(monkeypatch)
+    _, _, exception_logs = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Admin Erro {uuid.uuid4().hex[:6]}"
 
@@ -390,6 +459,278 @@ def test_shadow_read_admin_create_skips_resolver_when_flag_off(shadow_read_env, 
     assert req is not None
     assert req["atividade_id"] == 1
     assert req["atividade_versao_id"] is None
+
+
+def test_snapshot_write_student_create_writes_aac_snapshot_with_shadow_off(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    seed = _seed_student_in_turma()
+    _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    expected = _resolve_for_student(seed["aluno_id"], 1)
+    assert expected["status"] == "resolved"
+
+    event_name = f"Evento Snapshot AAC {uuid.uuid4().hex[:6]}"
+    response = client.post(
+        "/aluno/nova-requisicao",
+        data={
+            "atividade_id": "1",
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "4",
+            "observacao": "snapshot aluno aac",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    assert req["atividade_id"] == 1
+    assert req["atividade_versao_id"] == expected["atividade_versao_id"]
+    assert req["codigo_normativo_snapshot"] == expected["codigo_normativo"]
+    snapshot = _load_snapshot(req)
+    assert snapshot["schema_version"] == "d6.4.0-v1"
+    assert snapshot["flow_origin"] == "aluno_create"
+    assert snapshot["resolver_status"] == "resolved"
+    assert snapshot["atividade_id_legacy"] == 1
+    assert snapshot["atividade_versao_id"] == expected["atividade_versao_id"]
+    assert snapshot["atividade_base_id"] == expected["atividade_base_id"]
+    assert snapshot["codigo_normativo"] == expected["codigo_normativo"]
+    assert snapshot["eixo"] == expected["eixo"] == "AAC"
+    assert snapshot["legacy_scope_ok"] is True
+    assert snapshot["matriz_id_efetiva"] == expected["matriz_id_efetiva"]
+    assert snapshot["resolver_warnings"] == []
+    assert snapshot["nome_exibivel"]
+    assert snapshot["nome_legacy"]
+    assert snapshot["tipo_atividade_legacy"] == "Acadêmica Complementar"
+    assert snapshot["versao_status"] == "ativa"
+    assert "T" in snapshot["snapshot_written_at"]
+    assert snapshot["snapshot_written_at"].endswith("Z")
+    assert not os.path.exists(main._versioned_shadow_read_dedicated_log_path())
+
+
+def test_snapshot_write_admin_create_writes_aeu_snapshot_with_shadow_off(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    seed = _seed_student_in_turma()
+    _set_admin_session(client)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    expected = _resolve_for_student(seed["aluno_id"], 29)
+    assert expected["status"] == "resolved"
+    assert expected["eixo"] == "AEU"
+
+    event_name = f"Evento Snapshot AEU {uuid.uuid4().hex[:6]}"
+    response = client.post(
+        "/admin/requisicoes/nova",
+        data={
+            "aluno_id": str(seed["aluno_id"]),
+            "atividade_id": "29",
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "5",
+            "observacao": "snapshot admin aeu",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    assert req["atividade_id"] == 29
+    assert req["atividade_versao_id"] == expected["atividade_versao_id"]
+    assert req["codigo_normativo_snapshot"] == expected["codigo_normativo"]
+    snapshot = _load_snapshot(req)
+    assert snapshot["flow_origin"] == "admin_create"
+    assert snapshot["atividade_id_legacy"] == 29
+    assert snapshot["atividade_versao_id"] == expected["atividade_versao_id"]
+    assert snapshot["codigo_normativo"] == expected["codigo_normativo"] == "AEU-rev1"
+    assert snapshot["eixo"] == "AEU"
+    assert snapshot["tipo_atividade_legacy"] == "Extensão Universitária"
+    assert snapshot["legacy_scope_ok"] is True
+    assert snapshot["resolver_status"] == "resolved"
+    assert snapshot["resolver_warnings"] == []
+    assert not os.path.exists(main._versioned_shadow_read_dedicated_log_path())
+
+
+def test_snapshot_write_student_create_keeps_null_when_resolver_not_resolved(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    seed = _seed_student_in_turma()
+    _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    info_logs, warning_logs, exception_logs = _log_recorder(monkeypatch)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    def fake_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
+        return {
+            "status": "legacy_activity_without_base_map",
+            "atividade_versao_id": None,
+            "atividade_base_id": None,
+            "codigo_normativo": None,
+            "eixo": None,
+            "matriz_id_efetiva": 2,
+            "legacy_scope_ok": True,
+            "warnings": [],
+            "reason": "sem mapeamento para base",
+        }
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", fake_resolver)
+
+    event_name = f"Evento Snapshot Unresolved {uuid.uuid4().hex[:6]}"
+    response = client.post(
+        "/aluno/nova-requisicao",
+        data={
+            "atividade_id": "1",
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "3",
+            "observacao": "snapshot unresolved",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    assert req["atividade_versao_id"] is None
+    assert req["regra_snapshot_json"] is None
+    assert req["codigo_normativo_snapshot"] is None
+    assert info_logs == []
+    assert exception_logs == []
+    assert any(
+        "event=versioned_requisicao_snapshot_skip" in log
+        and "origin=aluno_create" in log
+        and "status=legacy_activity_without_base_map" in log
+        for log in warning_logs
+    )
+
+
+def test_snapshot_write_admin_edit_remains_out_of_scope(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    seed = _seed_student_in_turma()
+    _set_admin_session(client)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
+        raise AssertionError("resolvedor nao deveria ser chamado em admin_edit")
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+
+    req_id = _insert_pending_req(seed["aluno_id"], 1, nome_evento="Req edit sem snapshot")
+    response = client.post(
+        f"/admin/requisicoes/{req_id}/editar",
+        data={
+            "atividade_id": "1",
+            "nome_evento": "Req edit sem snapshot atualizada",
+            "horas_solicitadas": "8",
+            "data_evento": "2026-05-25",
+            "observacao": "edicao sem dual-write",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    req = _fetch_req_by_id(req_id)
+    assert req is not None
+    assert req["atividade_versao_id"] is None
+    assert req["regra_snapshot_json"] is None
+    assert req["codigo_normativo_snapshot"] is None
+
+
+def test_snapshot_write_admin_processar_remains_out_of_scope(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    seed = _seed_student_in_turma()
+    _set_admin_session(client)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
+        raise AssertionError("resolvedor nao deveria ser chamado em admin_processar_requisicao")
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+
+    req_id = _insert_pending_req(seed["aluno_id"], 1, nome_evento="Req process sem snapshot")
+    response = client.post(
+        f"/admin/processar_requisicao/{req_id}",
+        data={
+            "status": "Indeferida",
+            "observacao": "processamento sem dual-write",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    req = _fetch_req_by_id(req_id)
+    assert req is not None
+    assert req["status"] == "Indeferida"
+    assert req["atividade_versao_id"] is None
+    assert req["regra_snapshot_json"] is None
+    assert req["codigo_normativo_snapshot"] is None
+
+
+def test_snapshot_write_admin_importar_remains_out_of_scope(shadow_read_env, monkeypatch):
+    env = shadow_read_env
+    client = env["client"]
+    _set_admin_session(client)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
+        raise AssertionError("resolvedor nao deveria ser chamado em admin_importar_requisicoes")
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        atividade_nome = conn.execute(
+            "SELECT nome FROM atividades WHERE id = 1"
+        ).fetchone()["nome"]
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Requisições"
+    sheet.cell(row=3, column=6, value=atividade_nome)
+    sheet.cell(row=3, column=7, value=4)
+    sheet.cell(row=3, column=8, value="2026-05-24")
+    sheet.cell(row=3, column=9, value="Pendente")
+    payload = io.BytesIO()
+    workbook.save(payload)
+    payload.seek(0)
+
+    response = client.post(
+        "/admin/importar_requisicoes",
+        data={
+            "arquivo_excel": (payload, "requisicoes.xlsx"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        req = conn.execute(
+            """
+            SELECT id, atividade_versao_id, regra_snapshot_json, codigo_normativo_snapshot
+              FROM requisicoes
+             WHERE aluno_id IS NULL AND observacao = ?
+             ORDER BY id DESC
+             LIMIT 1
+            """,
+            ("Importado da planilha linha 3",),
+        ).fetchone()
+    assert req is not None
+    assert req["atividade_versao_id"] is None
+    assert req["regra_snapshot_json"] is None
+    assert req["codigo_normativo_snapshot"] is None
 
 
 def test_shadow_read_resolver_exception_captures_traceback_details(

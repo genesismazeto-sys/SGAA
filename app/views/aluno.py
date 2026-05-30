@@ -56,6 +56,7 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
         "maybe_run_versioned_resolver_shadow_read": main.maybe_run_versioned_resolver_shadow_read,
+        "maybe_write_versioned_requisicao_snapshot": main.maybe_write_versioned_requisicao_snapshot,
         "wants_pagination": main.wants_pagination,
         "app": main.app,
     }
@@ -1481,6 +1482,7 @@ def aluno_nova_requisicao():
     helpers = _get_main_helpers()
     allowed_attachments = helpers["ALLOWED_ATTACHMENTS"]
     maybe_run_versioned_resolver_shadow_read = helpers["maybe_run_versioned_resolver_shadow_read"]
+    maybe_write_versioned_requisicao_snapshot = helpers["maybe_write_versioned_requisicao_snapshot"]
 
     conn = get_db_connection()
     tipo_filtro = request.args.get("tipo", "Acadêmica Complementar")
@@ -1600,6 +1602,13 @@ def aluno_nova_requisicao():
                     (first_saved, req_id),
                 )
 
+            maybe_write_versioned_requisicao_snapshot(
+                conn,
+                flow_origin="aluno_create",
+                aluno_id=aluno_id,
+                atividade_id_legacy=atividade_id,
+                req_id=req_id,
+            )
             conn.commit()
             try:
                 maybe_run_versioned_resolver_shadow_read(
