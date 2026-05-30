@@ -609,8 +609,10 @@ def test_shadow_read_not_invoked_for_dashboard_and_admin_list(shadow_read_env, m
     assert calls == []
 
 
-def test_pytest_does_not_write_to_real_workspace_logs():
-    # Regressao D6.3.6-R: a suite nao pode tocar nenhum log real do workspace.
+def test_pytest_does_not_write_to_real_general_workspace_logs():
+    # Regressao D6.3.6-R / D6 dedicated log: a suite nao pode tocar logs
+    # gerais reais do workspace. O log dedicado de shadow read pode existir
+    # como evidencia operacional, mas nao deve ser escrito pelo pytest.
     # A fixture autouse _isolate_real_log_writes (conftest) deve estar ativa.
     real_logs_dir = os.path.abspath(os.path.join(BASE, "logs"))
     real_dedicated = os.path.join(real_logs_dir, "versioned_shadow_reads.log")
@@ -636,10 +638,18 @@ def test_pytest_does_not_write_to_real_workspace_logs():
             if base:
                 assert os.path.abspath(base) not in forbidden
 
-    # 3) Escrever um evento de shadow read agora nao recria o log real.
+    # 3) Escrever um evento de shadow read agora nao pode tocar o log dedicado
+    # real do workspace; se ele existir como evidencia D6, deve permanecer
+    # inalterado.
+    dedicated_exists_before = os.path.exists(real_dedicated)
+    dedicated_size_before = (
+        os.path.getsize(real_dedicated) if dedicated_exists_before else None
+    )
     main._append_versioned_shadow_read_event_line(
         "event=versioned_resolver_shadow_read origin=aluno_create req_id=1 "
         "aluno_id=1 atividade_id_legacy=1 status=resolved atividade_versao_id=2 "
         "codigo_normativo=AAC-rev6 eixo=AAC warnings=[] reason=ok"
     )
-    assert not os.path.exists(real_dedicated)
+    assert os.path.exists(real_dedicated) is dedicated_exists_before
+    if dedicated_exists_before:
+        assert os.path.getsize(real_dedicated) == dedicated_size_before
