@@ -38,7 +38,8 @@ def _cleanup_root_output_artifacts() -> None:
     # Safety guard: cleanup only in the dedicated clean baseline workspace.
     if PROJECT_ROOT.name != "SGAA_clean_baseline":
         return
-    for name in ("backups", "logs", "uploads", "documentos_alunos"):
+    # Preserve runtime logs to keep diagnostic evidence produced outside pytest.
+    for name in ("backups", "uploads", "documentos_alunos"):
         target = PROJECT_ROOT / name
         if target.exists():
             shutil.rmtree(target, ignore_errors=True)

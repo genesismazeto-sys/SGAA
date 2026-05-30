@@ -342,6 +342,9 @@ def test_shadow_diagnostic_prefers_dedicated_log_over_fallback_sources(
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["source_mode"] == "dedicated"
+    assert payload["dedicated_log_path"] == str(dedicated_log)
+    assert payload["dedicated_log_exists"] is True
+    assert payload["dedicated_log_in_paths"] is True
     assert payload["log_paths"] == [str(dedicated_log)]
     assert payload["raw_count"] == 2
     assert payload["deduplicated_count"] == 1
