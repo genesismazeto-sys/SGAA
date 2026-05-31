@@ -131,3 +131,37 @@ $env:SGAA_VERSIONED_RESOLVER_SHADOW_READ = "1"
 - Confirmar que snapshots antigos permanecem intactos para auditoria.
 - Confirmar que `atividade_id` continua sendo o caminho operacional.
 - Confirmar que nao houve tentativa de backfill reverso.
+
+## Validacao controlada realizada - D6.4.0-ACTIVATE-1
+
+- Hash validado: `ba5a3dfbdf43d7c904b1f7d88d234e3c8a7db307`
+
+Flags usadas:
+
+- `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=1`
+- `SGAA_VERSIONED_RESOLVER_SHADOW_READ=1`
+
+Requisicoes com snapshot:
+
+- `33` - `aluno_create` AAC
+- `34` - `admin_create` AEU
+
+Rollback testado:
+
+- `35` - criada com `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=0` e campos versionados `NULL`
+
+Resultado:
+
+- `atividade_id` preservado
+- snapshot preenchido somente com flag `ON`
+- base mista funcionando
+- shadow read dedicado funcionando
+- `/aluno/dashboard` -> `200`
+- `/admin/requisicoes` -> `200`
+- `/admin/processar_requisicao/34` -> `200`
+- `pytest -q` -> `237 passed`
+
+- Sem backfill.
+- Sem cutover de leitura.
+- Sem commit de codigo.
+- Sem alteracao no projeto antigo.
