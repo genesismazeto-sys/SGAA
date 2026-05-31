@@ -39,6 +39,29 @@
       border: 1px solid var(--border-strong); border-radius: 999px;
       background: var(--surface); color: var(--text-secondary);
     }
+    .req-atividade-stack{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:4px;
+      min-width:0;
+    }
+    .req-atividade-name{
+      display:block;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .req-snapshot-badge{
+      height:16px;
+      min-width:0;
+      padding:0 5px;
+      font-size:10px;
+      background:#f6f8fb;
+      color:var(--text-secondary);
+      border-color:var(--border);
+    }
 
   /* (layout column + alignment rules migrated to list-cards.css under .imp-req) */
   </style>
@@ -659,6 +682,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
         {% else %}
           {% set tipo_atividade_label = r.tipo_atividade or '-' %}
         {% endif %}
+        {% set activity_cell %}
+          <div class="req-atividade-stack">
+            <span class="req-atividade-name">{{ r.atividade_nome or '-' }}</span>
+            {% if r.snapshot_versionado_presente %}
+              <span class="badge req-snapshot-badge" title="Snapshot versionado presente">Snapshot versionado</span>
+            {% endif %}
+          </div>
+        {% endset %}
         {{ cl.row([
           {'class': 'center', 'content': (r.id|string)},
           {'class': 'left', 'content': data_solicitacao_fmt },
@@ -667,7 +698,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           {'class': 'center', 'content': r.turma_codigo or '-'},
           {'class': 'left ellipsis', 'content': tipo_atividade_label},
           {'class': 'center ellipsis', 'content': ( ( ( (r.grupo or '')|string ).split(' - ')[0]|trim ) or '-' ) },
-          {'class': 'left', 'content': (r.atividade_nome or '-'), 'class': 'left ellipsis'},
+          {'class': 'left', 'content': activity_cell, 'class': 'left'},
           status_cell
         ], attrs={
           'data-req-id': r.id,
@@ -682,6 +713,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           'data-horas-solicitadas': r.horas_solicitadas or '',
           'data-data-evento': _de_iso,
           'data-observacao': (r.observacao or '')|e,
+          'data-snapshot-versioned': '1' if r.snapshot_versionado_presente else '0',
           'data-delete-url': (url_for('admin_excluir_requisicao', req_id=r.id) if can_requisicoes_full else '')
         }) }}
       {% endfor %}

@@ -3343,6 +3343,105 @@ def maybe_write_versioned_requisicao_snapshot(
     return resolver_result
 
 
+_ADMIN_REQUISICAO_SNAPSHOT_DIAGNOSTIC_FIELDS = (
+    "codigo_normativo",
+    "eixo",
+    "grupo",
+    "ch_por_evento",
+    "limite_semestre",
+    "limite_total",
+    "flow_origin",
+    "snapshot_written_at",
+    "resolver_status",
+    "resolver_warnings",
+    "legacy_scope_ok",
+    "atividade_id_legacy",
+    "atividade_base_id",
+    "matriz_id_efetiva",
+    "versao_status",
+)
+
+
+def _snapshot_diagnostic_row_value(row, key):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(key)
+    try:
+        return row[key]
+    except Exception:
+        return None
+
+
+def _has_versioned_requisicao_snapshot(row) -> bool:
+    atividade_versao_id = _snapshot_diagnostic_row_value(row, "atividade_versao_id")
+    codigo_normativo_snapshot = _snapshot_diagnostic_row_value(row, "codigo_normativo_snapshot")
+    if atividade_versao_id not in (None, ""):
+        return True
+    return bool(str(codigo_normativo_snapshot or "").strip())
+
+
+def _build_admin_requisicao_snapshot_diagnostic(row) -> dict[str, object] | None:
+    if not _has_versioned_requisicao_snapshot(row):
+        return None
+
+    atividade_versao_id = _snapshot_diagnostic_row_value(row, "atividade_versao_id")
+    codigo_normativo_snapshot = str(
+        _snapshot_diagnostic_row_value(row, "codigo_normativo_snapshot") or ""
+    ).strip()
+    raw_snapshot = _snapshot_diagnostic_row_value(row, "regra_snapshot_json")
+
+    diagnostic: dict[str, object] = {
+        "snapshot_versionado_presente": True,
+        "diagnostico_disponivel": False,
+    }
+    if atividade_versao_id not in (None, ""):
+        diagnostic["atividade_versao_id"] = atividade_versao_id
+    if codigo_normativo_snapshot:
+        diagnostic["codigo_normativo_snapshot"] = codigo_normativo_snapshot
+
+    if raw_snapshot is None:
+        return diagnostic
+    raw_snapshot = str(raw_snapshot).strip()
+    if not raw_snapshot:
+        return diagnostic
+
+    try:
+        payload = json.loads(raw_snapshot)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return diagnostic
+
+    if not isinstance(payload, dict):
+        return diagnostic
+
+    diagnostic["diagnostico_disponivel"] = True
+    parsed_atividade_versao_id = payload.get("atividade_versao_id")
+    if "atividade_versao_id" not in diagnostic and parsed_atividade_versao_id not in (None, ""):
+        diagnostic["atividade_versao_id"] = parsed_atividade_versao_id
+
+    for key in _ADMIN_REQUISICAO_SNAPSHOT_DIAGNOSTIC_FIELDS:
+        value = payload.get(key)
+        if key == "resolver_warnings":
+            if value is None:
+                continue
+            if isinstance(value, list):
+                warnings = [str(item).strip() for item in value if str(item).strip()]
+            else:
+                normalized = str(value).strip()
+                warnings = [normalized] if normalized else []
+            diagnostic[key] = warnings
+            continue
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        diagnostic[key] = value
+
+    return diagnostic
+
+
 def maybe_run_versioned_resolver_shadow_read(
     conn,
     *,
@@ -8165,6 +8264,7 @@ def admin_requisicoes():
     matrix_scope_cache = {}
     for row in requisicoes_rows:
         item = {k: row[k] for k in row.keys()}
+        item["snapshot_versionado_presente"] = _has_versioned_requisicao_snapshot(item)
         cache_key = (item.get("turma_curso_id"), item.get("turma_matriz_id"))
         if cache_key not in matrix_scope_cache:
             matrix_scope_cache[cache_key] = get_allowed_activity_ids_for_turma_matrix(
@@ -8881,8 +8981,14 @@ def admin_processar_requisicao(req_id):
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
 
+    snapshot_diag = _build_admin_requisicao_snapshot_diagnostic(requisicao)
+
     if request.method == "GET":
-        return render_template("admin_processar_requisicao.html", requisicao=requisicao)
+        return render_template(
+            "admin_processar_requisicao.html",
+            requisicao=requisicao,
+            snapshot_diag=snapshot_diag,
+        )
 
     if request.method == "POST":
         status = request.form["status"]
@@ -9010,7 +9116,11 @@ def admin_processar_requisicao(req_id):
         flash("Requisição processada com sucesso.", "success")
         return redirect(url_for("admin_requisicoes"))
 
-    return render_template("admin_processar_requisicao.html", requisicao=requisicao)
+    return render_template(
+        "admin_processar_requisicao.html",
+        requisicao=requisicao,
+        snapshot_diag=snapshot_diag,
+    )
 
 # ===================== Rotas Admin: Atividades =====================
 

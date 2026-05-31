@@ -20,6 +20,50 @@
   </div>
   {% endif %}
 
+  <div style="margin-bottom:12px; padding:12px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface);">
+    <div class="help" style="margin-bottom:8px;"><strong>Diagnóstico do snapshot</strong></div>
+    {% if snapshot_diag %}
+      {% if snapshot_diag.diagnostico_disponivel %}
+        <div class="form-grid" style="gap:10px 16px;">
+          {% if snapshot_diag.atividade_versao_id is defined %}
+            <div><span class="help">atividade_versao_id</span><div>{{ snapshot_diag.atividade_versao_id }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.codigo_normativo_snapshot is defined %}
+            <div><span class="help">codigo_normativo_snapshot</span><div>{{ snapshot_diag.codigo_normativo_snapshot }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.eixo is defined %}
+            <div><span class="help">eixo</span><div>{{ snapshot_diag.eixo }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.grupo is defined %}
+            <div><span class="help">grupo</span><div>{{ snapshot_diag.grupo }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.ch_por_evento is defined %}
+            <div><span class="help">ch_por_evento</span><div>{{ snapshot_diag.ch_por_evento }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.limite_semestre is defined %}
+            <div><span class="help">limite_semestre</span><div>{{ snapshot_diag.limite_semestre }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.limite_total is defined %}
+            <div><span class="help">limite_total</span><div>{{ snapshot_diag.limite_total }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.flow_origin is defined %}
+            <div><span class="help">flow_origin</span><div>{{ snapshot_diag.flow_origin }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.snapshot_written_at is defined %}
+            <div><span class="help">snapshot_written_at</span><div>{{ snapshot_diag.snapshot_written_at }}</div></div>
+          {% endif %}
+          {% if snapshot_diag.resolver_status is defined %}
+            <div><span class="help">resolver_status</span><div>{{ snapshot_diag.resolver_status }}</div></div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="help">Snapshot versionado presente, mas diagnóstico indisponível.</div>
+      {% endif %}
+    {% else %}
+      <div class="help">Sem snapshot versionado para esta requisição.</div>
+    {% endif %}
+  </div>
+
   <form method="post" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="status" id="status-hidden" required />
