@@ -165,3 +165,60 @@ Resultado:
 - Sem cutover de leitura.
 - Sem commit de codigo.
 - Sem alteracao no projeto antigo.
+
+## Validacao controlada no ambiente alvo - D6.4.0-ACTIVATE-TARGET-1
+
+- Hash validado: `ba5a3dfbdf43d7c904b1f7d88d234e3c8a7db307`
+
+Porta efetiva:
+
+- `127.0.0.1:5001`
+
+Motivo:
+
+- porta `5000` estava ocupada por `gerador_provas_app`; foi usado fallback permitido para `5001`.
+
+Flags usadas na ativacao:
+
+- `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=1`
+- `SGAA_VERSIONED_RESOLVER_SHADOW_READ=1`
+
+Observacao operacional:
+
+- evitar espaco a direita no valor da flag. Usar `"1"`, nao `"1 "`.
+
+Requisicoes criadas com snapshot:
+
+- `39` - `aluno_create` AAC
+- `40` - `admin_create` AEU
+
+Rollback testado:
+
+- `41` - criada com `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=0` e campos versionados `NULL`
+
+Validacoes:
+
+- `atividade_id` preservado
+- `atividade_versao_id` preenchido nas reqs `39` e `40`
+- `codigo_normativo_snapshot` preenchido nas reqs `39` e `40`
+- `regra_snapshot_json` valido
+- snapshot sem observacoes, texto livre, documentos, paths ou dados pessoais adicionais
+- `/aluno/dashboard` -> `200`
+- `/admin/requisicoes` -> `200`
+- `/admin/processar_requisicao/40` -> `200`
+- JOIN legado `r.atividade_id = atividades.id` funcionando
+- `logs/versioned_shadow_reads.log` ativo
+- reqs `39` e `40` registradas como `resolved`
+- `resolver_exception=0`
+- `error=0`
+- `pytest -q` -> `237 passed`
+
+Estado final:
+
+- app religado com flags ON em `127.0.0.1:5001`
+
+- Sem backfill.
+- Sem cutover de leitura.
+- Sem alteracao de codigo.
+- Sem commit de runtime.
+- Sem alteracao no projeto antigo.
