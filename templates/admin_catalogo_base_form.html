@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Nova atividade-base{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Nova atividade-base</h1>
+
+<form action="{{ url_for('admin_catalogo_nova_base') }}"
+      method="post"
+      autocomplete="off">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-cards-narrow">
+
+    <!-- Nome conceitual -->
+    <div class="form-row">
+      <label class="row-label" for="nome_conceito">Nome da atividade-base</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+        <input id="nome_conceito"
+               name="nome_conceito"
+               type="text"
+               class="control"
+               placeholder="Ex.: Extensão universitária"
+               value="{{ nome_conceito }}"
+               required>
+      </div>
+    </div>
+
+    <!-- Descrição -->
+    <div class="form-row">
+      <label class="row-label" for="descricao">Descrição</label>
+      <div class="field-card field-card--textarea">
+        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
+        <textarea id="descricao"
+                  name="descricao"
+                  class="control"
+                  rows="3"
+                  placeholder="Descrição opcional">{{ descricao }}</textarea>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="form-row">
+      <label class="row-label" for="status">Status</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-right"></i></div>
+        <select id="status" name="status" class="control">
+          <option value="ativo" {% if status == 'ativo' %}selected{% endif %}>Ativo</option>
+          <option value="inativo" {% if status == 'inativo' %}selected{% endif %}>Inativo</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="form-row form-actions">
+      <span></span>
+      <div style="display:flex; gap:8px;">
+        <a href="{{ url_for('admin_catalogo_versoes') }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-primary">Criar atividade-base</button>
+      </div>
+    </div>
+
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.lucide) lucide.createIcons();
+  });
+</script>
+{% endblock %}

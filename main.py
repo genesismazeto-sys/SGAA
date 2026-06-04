@@ -12148,6 +12148,130 @@ def admin_mapeamento_legado():
     )
 
 
+@app.route("/admin/catalogo-versoes/nova-base", methods=["GET", "POST"])
+@admin_required
+def admin_catalogo_nova_base():
+    """
+    Formulário para criar uma nova atividade_base.
+    POST valida e insere; em sucesso redireciona para o detalhe da base criada.
+    """
+    if request.method == "POST":
+        nome_conceito = (request.form.get("nome_conceito") or "").strip()
+        descricao = (request.form.get("descricao") or "").strip()
+        status = (request.form.get("status") or "").strip()
+
+        if not nome_conceito:
+            flash("Nome da atividade-base é obrigatório.", "error")
+            return render_template("admin_catalogo_base_form.html",
+                                   nome_conceito=nome_conceito,
+                                   descricao=descricao,
+                                   status=status)
+
+        if status not in ("ativo", "inativo"):
+            flash("Status deve ser 'ativo' ou 'inativo'.", "error")
+            return render_template("admin_catalogo_base_form.html",
+                                   nome_conceito=nome_conceito,
+                                   descricao=descricao,
+                                   status=status)
+
+        conn = get_db_connection()
+
+        existing = conn.execute(
+            "SELECT id FROM atividade_base WHERE LOWER(nome_conceito) = LOWER(?)",
+            (nome_conceito,),
+        ).fetchone()
+        if existing:
+            flash("Já existe uma atividade-base com este nome.", "error")
+            return render_template("admin_catalogo_base_form.html",
+                                   nome_conceito=nome_conceito,
+                                   descricao=descricao,
+                                   status=status)
+
+        try:
+            conn.execute(
+                "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
+                (nome_conceito, descricao or None, status),
+            )
+            conn.commit()
+            base_id = conn.execute(
+                "SELECT id FROM atividade_base WHERE nome_conceito = ?",
+                (nome_conceito,),
+            ).fetchone()["id"]
+            flash("Atividade-base criada com sucesso.", "success")
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+        except Exception as exc:
+            flash(f"Erro ao criar atividade-base: {exc}", "error")
+            return render_template("admin_catalogo_base_form.html",
+                                   nome_conceito=nome_conceito,
+                                   descricao=descricao,
+                                   status=status)
+
+    return render_template("admin_catalogo_base_form.html",
+                           nome_conceito="",
+                           descricao="",
+                           status="ativo")
+
+
+@app.route("/admin/normas-atividade/nova", methods=["GET", "POST"])
+@admin_required
+def admin_norma_nova():
+    """
+    Formulário para criar uma nova norma_atividade.
+    POST valida e insere; em sucesso redireciona para a listagem de normas.
+    """
+    if request.method == "POST":
+        codigo = (request.form.get("codigo") or "").strip()
+        eixo = (request.form.get("eixo") or "").strip()
+        revisao = (request.form.get("revisao") or "").strip()
+        nome = (request.form.get("nome") or "").strip()
+        descricao = (request.form.get("descricao") or "").strip()
+        status = (request.form.get("status") or "").strip()
+
+        def _render_form(msg):
+            if msg:
+                flash(msg, "error")
+            return render_template("admin_norma_form.html",
+                                   codigo=codigo, eixo=eixo,
+                                   revisao=revisao, nome=nome,
+                                   descricao=descricao, status=status)
+
+        if not codigo:
+            return _render_form("Código da norma é obrigatório.")
+        if eixo not in ("AAC", "AEU"):
+            return _render_form("Eixo deve ser 'AAC' ou 'AEU'.")
+        if not revisao:
+            return _render_form("Revisão é obrigatória.")
+        if status not in ("ativa", "inativa"):
+            return _render_form("Status deve ser 'ativa' ou 'inativa'.")
+
+        conn = get_db_connection()
+
+        existing = conn.execute(
+            "SELECT id FROM norma_atividade WHERE LOWER(codigo) = LOWER(?)",
+            (codigo,),
+        ).fetchone()
+        if existing:
+            return _render_form("Já existe uma norma com este código.")
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO norma_atividade (codigo, eixo, revisao, nome, descricao, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (codigo, eixo, revisao, nome or None, descricao or None, status),
+            )
+            conn.commit()
+            flash("Norma de atividade criada com sucesso.", "success")
+            return redirect(url_for("admin_normas_atividade"))
+        except Exception as exc:
+            return _render_form(f"Erro ao criar norma: {exc}")
+
+    return render_template("admin_norma_form.html",
+                           codigo="", eixo="AAC", revisao="",
+                           nome="", descricao="", status="ativa")
+
+
 ALERTA_COLOR_OPTIONS = [
     {"label": "Azul", "bg": "#e3eefd", "border": "#7e95b2"},
     {"label": "Amarelo", "bg": "#fef4c0", "border": "#c9a227"},
