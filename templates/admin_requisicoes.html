@@ -53,15 +53,6 @@
       text-overflow:ellipsis;
       white-space:nowrap;
     }
-    .req-snapshot-badge{
-      height:16px;
-      min-width:0;
-      padding:0 5px;
-      font-size:10px;
-      background:#f6f8fb;
-      color:var(--text-secondary);
-      border-color:var(--border);
-    }
 
   /* (layout column + alignment rules migrated to list-cards.css under .imp-req) */
   </style>
@@ -635,16 +626,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         {% else %}
           {% set status_cell = {'content': (r.status or '-'), 'badge': true, 'status_badge': true, 'status_tone': 'neutral'} %}
         {% endif %}
-        {% if r.matrix_scope_issue %}
-          {% set status_cell = {
-            'content': ((r.status or '-') ~ ' · Fora da matriz'),
-            'badge': true,
-            'badge_type': 'danger',
-            'status_badge': true,
-            'status_tone': 'negative',
-            'title': ('Atividade fora da matriz efetiva' ~ (' (' ~ r.matrix_scope_label ~ ')' if r.matrix_scope_label else ''))
-          } %}
-        {% endif %}
         {% if r.data_solicitacao %}
           {% if r.data_solicitacao.strftime is not undefined %}
             {% set data_solicitacao_fmt = r.data_solicitacao.strftime('%d/%m/%Y') %}
@@ -685,9 +666,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         {% set activity_cell %}
           <div class="req-atividade-stack">
             <span class="req-atividade-name">{{ r.atividade_nome or '-' }}</span>
-            {% if r.snapshot_versionado_presente %}
-              <span class="badge req-snapshot-badge" title="Snapshot versionado presente">Snapshot versionado</span>
-            {% endif %}
           </div>
         {% endset %}
         {{ cl.row([

@@ -298,7 +298,7 @@ def test_admin_requisicoes_list_shows_legacy_and_versioned_rows_in_mixed_base(cl
     assert html.count('data-snapshot-versioned="0"') == 1
 
 
-def test_admin_requisicoes_list_shows_snapshot_badge_for_versioned_request(client):
+def test_admin_requisicoes_list_omits_snapshot_visual_badge_for_versioned_request(client):
     seeded = _seed_admin_request(
         label="badge",
         snapshot_payload=_snapshot_payload(atividade_versao_id=777, atividade_id_legacy=1),
@@ -313,7 +313,10 @@ def test_admin_requisicoes_list_shows_snapshot_badge_for_versioned_request(clien
     html = response.get_data(as_text=True)
 
     assert seeded["activity_name"] in html
-    assert "Snapshot versionado" in html
+    assert "Registrada" not in html
+    assert "Snapshot versionado" not in html
+    assert "Versão registrada" not in html
+    assert "req-snapshot-badge" not in html
     assert 'data-snapshot-versioned="1"' in html
 
 
@@ -359,9 +362,9 @@ def test_admin_processar_requisicao_shows_snapshot_diagnostic_block(client):
     assert "segredo.pdf" not in html
     assert "C:/interno" not in html
     assert "nao mostrar texto livre" not in html
-    assert "Comparacao read-only" not in html
-    assert "Nome atual no cadastro - legado" not in html
-    assert "Nome no momento da solicitacao - snapshot" not in html
+    assert "Comparação com cadastro atual" not in html
+    assert "Nome atual no cadastro" not in html
+    assert "Nome no momento da solicitação" not in html
 
 
 def test_admin_processar_requisicao_with_display_flag_on_shows_legacy_vs_snapshot_comparison(client, monkeypatch):
@@ -380,17 +383,17 @@ def test_admin_processar_requisicao_with_display_flag_on_shows_legacy_vs_snapsho
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Comparação read-only" in html
-    assert "Este bloco é diagnóstico e não altera a decisão operacional." in html
-    assert "Nome atual no cadastro - legado" in html
+    assert "Comparação com cadastro atual" in html
+    assert "Este bloco é apenas para conferência e não altera a decisão operacional." in html
+    assert "Nome atual no cadastro" in html
     assert seeded["activity_name"] in html
-    assert "Tipo atual no cadastro - legado" in html
-    assert "atividade_id legado" in html
+    assert "Tipo atual no cadastro" in html
+    assert "ID atual no cadastro" in html
     assert str(seeded["atividade_id"]) in html
-    assert "Nome no momento da solicitação - snapshot" in html
+    assert "Nome no momento da solicitação" in html
     assert "Atividade versionada" in html
-    assert "Tipo no momento da solicitação - snapshot" in html
-    assert "Nome legado capturado no snapshot" in html
+    assert "Tipo no momento da solicitação" in html
+    assert "Nome registrado na solicitação" in html
     assert "Atividade legado" in html
     assert "atividade_versao_id" in html
     assert "334" in html
@@ -404,7 +407,7 @@ def test_admin_processar_requisicao_without_snapshot_shows_neutral_state(client)
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Sem snapshot versionado" in html
+    assert "Sem registro de versão" in html
 
 
 def test_admin_processar_requisicao_with_malformed_snapshot_json_shows_unavailable_message(client):
@@ -420,7 +423,7 @@ def test_admin_processar_requisicao_with_malformed_snapshot_json_shows_unavailab
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Snapshot versionado presente, mas" in html
+    assert "Registro da solicitação presente, mas" in html
 
 
 def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break(client, monkeypatch):
@@ -441,15 +444,15 @@ def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Snapshot versionado presente, mas" not in html
-    assert "Comparação read-only" in html
+    assert "Registro da solicitação presente, mas" not in html
+    assert "Comparação com cadastro atual" in html
     assert "flow_origin" in html
     assert "aluno_create" in html
     assert "resolver_status" in html
     assert "resolved" in html
     assert "2026-05-31T13:45:00Z" in html
-    assert "Nome no momento da solicitação - snapshot" not in html
-    assert "Tipo no momento da solicitação - snapshot" not in html
+    assert "Nome no momento da solicitação" not in html
+    assert "Tipo no momento da solicitação" not in html
 
 
 def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(client, monkeypatch):
@@ -513,7 +516,9 @@ def test_admin_requisicoes_does_not_gain_snapshot_comparison_when_display_flag_i
     html = response.get_data(as_text=True)
 
     assert seeded["activity_name"] in html
-    assert "Snapshot versionado" in html
-    assert "Comparacao read-only" not in html
-    assert "Nome atual no cadastro - legado" not in html
-    assert "Nome no momento da solicitacao - snapshot" not in html
+    assert "Registrada" not in html
+    assert "Snapshot versionado" not in html
+    assert "req-snapshot-badge" not in html
+    assert "Comparação com cadastro atual" not in html
+    assert "Nome atual no cadastro" not in html
+    assert "Nome no momento da solicitação" not in html

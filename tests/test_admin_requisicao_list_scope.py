@@ -25,7 +25,7 @@ def _login_admin(client):
         sess["user_name"] = "Administrador"
 
 
-def test_admin_requisicoes_marks_items_outside_turma_matrix(client):
+def test_admin_requisicoes_does_not_show_matrix_alert_in_list(client):
     allowed_name = "AAC Lista Scope Permitida"
     blocked_name = "AAC Lista Scope Bloqueada"
     email = "admin.list.scope@teste.local"
@@ -122,7 +122,24 @@ def test_admin_requisicoes_marks_items_outside_turma_matrix(client):
     response = client.get("/admin/requisicoes")
     assert response.status_code == 200
     html = response.data.decode("utf-8")
-    assert "Fora da matriz" in html
+    # Decisão D7-RECOVERY-0V: listagem admin não deve exibir alerta "Fora da matriz".
+    # Aluno não pode solicitar fora da matriz (regra já coberta em test_aluno_matrix_scope).
+    # Em caso de inconsistência legada/importada, tratar em diagnóstico específico,
+    # não na coluna Status da listagem principal.
+    assert "Fora da matriz" not in html
+    assert "req-matrix-alert" not in html
+    assert "req-status-stack" not in html
+    # Não concatenar status com alerta de matriz
+    assert "Pendente · Fora da matriz" not in html
+    assert "Deferida · Fora da matriz" not in html
+    assert "Indeferida · Fora da matriz" not in html
+    # O status operacional limpo (Pendente) deve continuar aparecendo como pill
+    assert "Pendente" in html
+    # O listagem não deve mais exibir pills de snapshot
+    assert "Registrada" not in html
+    assert "Snapshot versionado" not in html
+    assert "req-snapshot-badge" not in html
+    # Atributo data-matrix-scope-issue preservado para diagnóstico/JS, mas não usado visualmente
     assert 'data-matrix-scope-issue="1"' in html
 
 
