@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-04
-Closeout: D6.7-PLAN-CLOSEOUT-DOCS-1
+Closeout: D7.1-CLOSEOUT-DOCS-1
 Executor: Codex
 
 ## Permanent State
@@ -57,6 +57,20 @@ Executor: Codex
 - No read cutover was performed.
 - No operational use of snapshot data was approved.
 
+### D7.1 - activity version matrix contract tests
+- Implemented and approved.
+- Commit `e0427ee` — `Add activity version matrix contract tests`.
+- Added helper `_get_turma_explicit_matriz_id_for_snapshot`.
+- Added pre-check in `maybe_write_versioned_requisicao_snapshot`.
+- Proved contract: if `turma.matriz_id` is `NULL`, the writer does **not** stamp `atividade_versao_id`.
+- Ambiguity of version remains a hard error.
+- Resolver remains read-only.
+- No UI was changed.
+- No schema was changed.
+- No calculation or deferment was changed.
+- No cutover or backfill was performed.
+- `app/db.py` contains auto-fill in a seed/dev tool, but that does not run in the normal runtime of this branch.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -66,6 +80,7 @@ Executor: Codex
 - `bb1ca51` - Add admin snapshot diagnostics
 - `b9ffda2` - Add admin snapshot comparison display
 - `09749ef` - Fix snapshot comparison labels
+- `e0427ee` - Add activity version matrix contract tests
 
 ## Current Risks And Limits
 
@@ -77,6 +92,8 @@ Executor: Codex
 - Student dashboards and progress remain on the legacy path.
 - Backfill for old requests has not been performed yet.
 - D6.7 concluded with the recommendation to pause at D6.6 rather than expand snapshot surfaces now.
+- D7.1 proved the contract for `turma.matriz_id == NULL` but did not introduce any new runtime surface.
+- D7.2 must address UI/admin catalog + controlled legacy mapping, but requires a new scope before starting.
 
 ## Permanent Working Directives
 
