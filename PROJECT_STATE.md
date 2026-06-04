@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-04
-Closeout: D6.5-CLOSEOUT-1
+Closeout: D6.6-CLOSEOUT-1
 Executor: GPT-5.2 Codex
 
 ## Permanent State
@@ -27,6 +27,19 @@ Executor: GPT-5.2 Codex
 - Raw JSON is not exposed.
 - Forbidden fields do not leak: observations, free text, documents, paths, or additional personal data.
 
+### D6.6 - admin read-only comparison display
+- D6.6-DISPLAY-1 approved.
+- Commit `b9ffda2` - `Add admin snapshot comparison display`.
+- Flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY` exists and remains default `OFF` in code.
+- The display flag is independent from `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE`.
+- The display flag is independent from `SGAA_VERSIONED_RESOLVER_SHADOW_READ`.
+- With the flag `ON`, `/admin/processar_requisicao/<id>` `GET` shows the read-only comparison `Legado atual` vs `Snapshot versionado`.
+- `/admin/requisicoes` did not gain a new comparison and still shows only the D6.5 badge.
+- POST, processing, calculation, limits, and matrix scope remain on the legacy `atividade_id`.
+- No backfill was performed.
+- No cutover was performed.
+- No student screen was changed.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -34,16 +47,18 @@ Executor: GPT-5.2 Codex
 - `8845dce` - Record controlled snapshot activation validation
 - `18c169a` - Record target snapshot activation validation
 - `bb1ca51` - Add admin snapshot diagnostics
+- `b9ffda2` - Add admin snapshot comparison display
 
 ## Current Risks And Limits
 
-- D6.5 is not yet an operational read path based on snapshot data.
+- D6.6 remains admin-only display work, not an operational read path based on snapshot data.
 - Snapshot data must not be used to approve or reject requests.
 - Snapshot data must not be used to calculate hours or limits.
+- Snapshot data must not be used for matrix scope, dashboards, import flow, or student screens.
 - Import flow remains out of scope.
 - Student dashboards and progress remain on the legacy path.
 - Backfill for old requests has not been performed yet.
-- Any D6.6 work must start in read-only or planning mode.
+- Any next D6.7 work should start only after controlled runtime validation of D6.6 display behavior.
 
 ## Permanent Working Directives
 
