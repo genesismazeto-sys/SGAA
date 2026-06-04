@@ -495,6 +495,69 @@ body{
   padding-left:0 !important;
 }
 
+/* =============================================================
+   Scoped Layout Adjustments: Catálogo de versões (.imp-catalogo)
+   ============================================================= */
+.imp-catalogo { --imp-cols:
+  minmax(300px, 1.8fr)  /* Atividade-base */
+  minmax(96px, 120px)   /* Status */
+  minmax(80px, 96px)    /* Versões */
+  minmax(80px, 96px)    /* Ativas */
+  minmax(72px, 88px)    /* Ver */
+};
+.impressoes-cards-scroll.imp-catalogo{ width:100%; }
+.imp-catalogo .impressoes-cards{ width:100% !important; }
+.imp-catalogo .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-catalogo .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-catalogo .impresso-card .cell:nth-child(2),
+.imp-catalogo .impresso-card .cell:nth-child(3),
+.imp-catalogo .impresso-card .cell:nth-child(4),
+.imp-catalogo .impresso-card .cell:nth-child(5){ justify-content:center; text-align:center; }
+.imp-catalogo .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Normas de atividade (.imp-normas)
+   ============================================================= */
+.imp-normas { --imp-cols:
+  minmax(100px, 130px)  /* Código */
+  minmax(72px, 88px)    /* Eixo */
+  minmax(80px, 100px)   /* Revisão */
+  minmax(260px, 1.5fr)  /* Nome */
+  minmax(96px, 120px)   /* Status */
+  minmax(80px, 96px)    /* Versões */
+  minmax(80px, 96px)    /* Ativas */
+};
+.impressoes-cards-scroll.imp-normas{ width:100%; }
+.imp-normas .impressoes-cards{ width:100% !important; }
+.imp-normas .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-normas .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-normas .impresso-card .cell:nth-child(2),
+.imp-normas .impresso-card .cell:nth-child(3),
+.imp-normas .impresso-card .cell:nth-child(5),
+.imp-normas .impresso-card .cell:nth-child(6),
+.imp-normas .impresso-card .cell:nth-child(7){ justify-content:center; text-align:center; }
+.imp-normas .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
+/* =============================================================
+   Scoped Layout Adjustments: Mapeamento legado (.imp-mapeamento)
+   ============================================================= */
+.imp-mapeamento { --imp-cols:
+  minmax(260px, 1.5fr)  /* Atividade legada */
+  minmax(160px, 200px)  /* Tipo */
+  minmax(80px, 100px)   /* Grupo */
+  minmax(120px, 150px)  /* Status do mapa */
+  minmax(240px, 1.2fr)  /* Atividade-base */
+  minmax(96px, 120px)   /* Requisições */
+};
+.impressoes-cards-scroll.imp-mapeamento{ width:100%; }
+.imp-mapeamento .impressoes-cards{ width:100% !important; }
+.imp-mapeamento .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-mapeamento .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+.imp-mapeamento .impresso-card .cell:nth-child(3),
+.imp-mapeamento .impresso-card .cell:nth-child(4),
+.imp-mapeamento .impresso-card .cell:nth-child(6){ justify-content:center; text-align:center; }
+.imp-mapeamento .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
 /* ====== PRINT ====== */
 @media print {
   .page-header, .toolbar, .btn, .input-group, .filters { display:none !important; }
