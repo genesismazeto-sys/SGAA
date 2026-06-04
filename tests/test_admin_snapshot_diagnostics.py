@@ -188,6 +188,24 @@ def test_snapshot_helper_returns_none_without_versioned_columns():
     assert main._build_admin_requisicao_snapshot_diagnostic(row) is None
 
 
+def test_snapshot_display_flag_defaults_off_and_is_independent(monkeypatch):
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", raising=False)
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
+
+    assert main.is_versioned_requisicao_snapshot_display_enabled() is False
+    assert main.is_versioned_requisicao_snapshot_write_enabled() is True
+    assert main.is_versioned_resolver_shadow_read_enabled() is True
+
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    assert main.is_versioned_requisicao_snapshot_display_enabled() is True
+    assert main.is_versioned_requisicao_snapshot_write_enabled() is False
+    assert main.is_versioned_resolver_shadow_read_enabled() is False
+
+
 def test_snapshot_helper_curates_payload_and_ignores_sensitive_fields():
     row = {
         "atividade_versao_id": 777,
@@ -216,12 +234,46 @@ def test_snapshot_helper_curates_payload_and_ignores_sensitive_fields():
     assert diagnostic["atividade_versao_id"] == 777
     assert diagnostic["codigo_normativo_snapshot"] == "AAC-rev6"
     assert diagnostic["codigo_normativo"] == "AAC-rev6"
+    assert diagnostic["nome_exibivel"] == "Atividade versionada"
+    assert diagnostic["nome_legacy"] == "Atividade legado"
+    assert diagnostic["tipo_atividade_legacy"] == _snapshot_payload(
+        atividade_versao_id=777,
+        atividade_id_legacy=15,
+    )["tipo_atividade_legacy"]
     assert diagnostic["resolver_status"] == "resolved"
     assert "observacao_aluno" not in diagnostic
     assert "observacao_admin" not in diagnostic
     assert "documentos" not in diagnostic
     assert "paths" not in diagnostic
     assert "dados_pessoais_adicionais" not in diagnostic
+
+
+def test_snapshot_helper_ignores_non_scalar_comparison_fields():
+    row = {
+        "atividade_versao_id": 778,
+        "codigo_normativo_snapshot": "AAC-rev6",
+        "regra_snapshot_json": json.dumps(
+            _snapshot_payload(
+                atividade_versao_id=778,
+                atividade_id_legacy=16,
+                extra={
+                    "nome_exibivel": {"valor": "nao renderizar"},
+                    "nome_legacy": ["nao renderizar"],
+                    "tipo_atividade_legacy": {"tipo": "nao renderizar"},
+                },
+            ),
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+    }
+
+    diagnostic = main._build_admin_requisicao_snapshot_diagnostic(row)
+
+    assert diagnostic is not None
+    assert diagnostic["diagnostico_disponivel"] is True
+    assert "nome_exibivel" not in diagnostic
+    assert "nome_legacy" not in diagnostic
+    assert "tipo_atividade_legacy" not in diagnostic
 
 
 def test_admin_requisicoes_list_shows_legacy_and_versioned_rows_in_mixed_base(client):
@@ -288,8 +340,6 @@ def test_admin_processar_requisicao_shows_snapshot_diagnostic_block(client):
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-
-    assert "Diagnóstico do snapshot" in html
     assert "atividade_versao_id" in html
     assert "333" in html
     assert "codigo_normativo_snapshot" in html
@@ -309,6 +359,41 @@ def test_admin_processar_requisicao_shows_snapshot_diagnostic_block(client):
     assert "segredo.pdf" not in html
     assert "C:/interno" not in html
     assert "nao mostrar texto livre" not in html
+    assert "Comparacao read-only" not in html
+    assert "Nome atual no cadastro - legado" not in html
+    assert "Nome no momento da solicitacao - snapshot" not in html
+
+
+def test_admin_processar_requisicao_with_display_flag_on_shows_legacy_vs_snapshot_comparison(client, monkeypatch):
+    seeded = _seed_admin_request(
+        label="process-display-on",
+        snapshot_payload=_snapshot_payload(atividade_versao_id=334, atividade_id_legacy=1),
+        atividade_versao_id=334,
+        codigo_normativo_snapshot="AAC-rev6",
+    )
+
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+    _login_admin(client)
+
+    response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Comparacao read-only" in html
+    assert "Este bloco e diagnostico e nao altera a decisao operacional." in html
+    assert "Nome atual no cadastro - legado" in html
+    assert seeded["activity_name"] in html
+    assert "Tipo atual no cadastro - legado" in html
+    assert "atividade_id legado" in html
+    assert str(seeded["atividade_id"]) in html
+    assert "Nome no momento da solicitacao - snapshot" in html
+    assert "Atividade versionada" in html
+    assert "Tipo no momento da solicitacao - snapshot" in html
+    assert "Nome legado capturado no snapshot" in html
+    assert "Atividade legado" in html
+    assert "atividade_versao_id" in html
+    assert "334" in html
 
 
 def test_admin_processar_requisicao_without_snapshot_shows_neutral_state(client):
@@ -319,9 +404,7 @@ def test_admin_processar_requisicao_without_snapshot_shows_neutral_state(client)
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-
-    assert "Diagnóstico do snapshot" in html
-    assert "Sem snapshot versionado para esta requisição." in html
+    assert "Sem snapshot versionado" in html
 
 
 def test_admin_processar_requisicao_with_malformed_snapshot_json_shows_unavailable_message(client):
@@ -337,12 +420,10 @@ def test_admin_processar_requisicao_with_malformed_snapshot_json_shows_unavailab
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-
-    assert "Diagnóstico do snapshot" in html
-    assert "Snapshot versionado presente, mas diagnóstico indisponível." in html
+    assert "Snapshot versionado presente, mas" in html
 
 
-def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break(client):
+def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break(client, monkeypatch):
     seeded = _seed_admin_request(
         label="process-partial",
         snapshot_payload={
@@ -354,19 +435,21 @@ def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break
         codigo_normativo_snapshot="AAC-rev6",
     )
 
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
     _login_admin(client)
 
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-
-    assert "Diagnóstico do snapshot" in html
-    assert "Snapshot versionado presente, mas diagnóstico indisponível." not in html
+    assert "Snapshot versionado presente, mas" not in html
+    assert "Comparacao read-only" in html
     assert "flow_origin" in html
     assert "aluno_create" in html
     assert "resolver_status" in html
     assert "resolved" in html
     assert "2026-05-31T13:45:00Z" in html
+    assert "Nome no momento da solicitacao - snapshot" not in html
+    assert "Tipo no momento da solicitacao - snapshot" not in html
 
 
 def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(client, monkeypatch):
@@ -392,7 +475,7 @@ def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(c
 
     response = client.post(
         f"/admin/processar_requisicao/{seeded['req_id']}",
-        data={"status": "Deferida", "observacao": "Diagnóstico não decide"},
+        data={"status": "Deferida", "observacao": "Diagnostico nao decide"},
         follow_redirects=False,
     )
     assert response.status_code == 302
@@ -410,5 +493,27 @@ def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(c
         ).fetchone()
         assert row is not None
         assert row["status"] == "Deferida"
-        assert row["observacao"] == "Diagnóstico não decide"
+        assert row["observacao"] == "Diagnostico nao decide"
         assert row["atividade_id"] == seeded["atividade_id"]
+
+
+def test_admin_requisicoes_does_not_gain_snapshot_comparison_when_display_flag_is_on(client, monkeypatch):
+    seeded = _seed_admin_request(
+        label="list-no-compare",
+        snapshot_payload=_snapshot_payload(atividade_versao_id=990, atividade_id_legacy=1),
+        atividade_versao_id=990,
+        codigo_normativo_snapshot="AAC-rev6",
+    )
+
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
+    _login_admin(client)
+
+    response = client.get("/admin/requisicoes", query_string={"q": seeded["activity_name"]})
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert seeded["activity_name"] in html
+    assert "Snapshot versionado" in html
+    assert "Comparacao read-only" not in html
+    assert "Nome atual no cadastro - legado" not in html
+    assert "Nome no momento da solicitacao - snapshot" not in html

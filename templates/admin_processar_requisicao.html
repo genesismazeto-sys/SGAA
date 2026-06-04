@@ -56,6 +56,36 @@
             <div><span class="help">resolver_status</span><div>{{ snapshot_diag.resolver_status }}</div></div>
           {% endif %}
         </div>
+        {% if snapshot_display_enabled %}
+        <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+          <div class="help" style="margin-bottom:8px;">
+            <strong>Comparacao read-only</strong><br>
+            Este bloco e diagnostico e nao altera a decisao operacional.
+          </div>
+          <div class="form-grid" style="gap:10px 16px;">
+            <div>
+              <div class="help" style="margin-bottom:6px;"><strong>Legado atual</strong></div>
+              <div><span class="help">Nome atual no cadastro - legado</span><div>{{ requisicao.atividade_nome }}</div></div>
+              <div><span class="help">Tipo atual no cadastro - legado</span><div>{{ requisicao.atividade_tipo_legacy_atual or '-' }}</div></div>
+              <div><span class="help">atividade_id legado</span><div>{{ requisicao.atividade_id }}</div></div>
+            </div>
+            <div>
+              <div class="help" style="margin-bottom:6px;"><strong>Snapshot versionado</strong></div>
+              {% if snapshot_diag.nome_exibivel is defined %}
+                <div><span class="help">Nome no momento da solicitacao - snapshot</span><div>{{ snapshot_diag.nome_exibivel }}</div></div>
+              {% elif snapshot_diag.nome_legacy is defined %}
+                <div><span class="help">Nome no momento da solicitacao - snapshot</span><div>{{ snapshot_diag.nome_legacy }}</div></div>
+              {% endif %}
+              {% if snapshot_diag.tipo_atividade_legacy is defined %}
+                <div><span class="help">Tipo no momento da solicitacao - snapshot</span><div>{{ snapshot_diag.tipo_atividade_legacy }}</div></div>
+              {% endif %}
+              {% if snapshot_diag.nome_legacy is defined %}
+                <div><span class="help">Nome legado capturado no snapshot</span><div>{{ snapshot_diag.nome_legacy }}</div></div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
       {% else %}
         <div class="help">Snapshot versionado presente, mas diagnóstico indisponível.</div>
       {% endif %}

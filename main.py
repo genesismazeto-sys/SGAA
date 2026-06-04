@@ -3043,6 +3043,15 @@ def is_versioned_resolver_shadow_read_enabled() -> bool:
     }
 
 
+def is_versioned_requisicao_snapshot_display_enabled() -> bool:
+    return str(os.getenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "0")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def is_versioned_requisicao_snapshot_write_enabled() -> bool:
     return str(os.getenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "0")).strip().lower() in {
         "1",
@@ -3350,6 +3359,9 @@ _ADMIN_REQUISICAO_SNAPSHOT_DIAGNOSTIC_FIELDS = (
     "ch_por_evento",
     "limite_semestre",
     "limite_total",
+    "nome_exibivel",
+    "nome_legacy",
+    "tipo_atividade_legacy",
     "flow_origin",
     "snapshot_written_at",
     "resolver_status",
@@ -3371,6 +3383,17 @@ def _snapshot_diagnostic_row_value(row, key):
         return row[key]
     except Exception:
         return None
+
+
+def _normalize_snapshot_diagnostic_scalar(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, tuple, set)):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return value
 
 
 def _has_versioned_requisicao_snapshot(row) -> bool:
@@ -3431,12 +3454,9 @@ def _build_admin_requisicao_snapshot_diagnostic(row) -> dict[str, object] | None
                 warnings = [normalized] if normalized else []
             diagnostic[key] = warnings
             continue
+        value = _normalize_snapshot_diagnostic_scalar(value)
         if value is None:
             continue
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                continue
         diagnostic[key] = value
 
     return diagnostic
@@ -8966,8 +8986,10 @@ def admin_processar_requisicao(req_id):
     conn = get_db_connection()
     ensure_turmas_matriz_schema(conn)
     ensure_matriz_atividade_links_table(conn)
+    snapshot_display_enabled = is_versioned_requisicao_snapshot_display_enabled()
     requisicao = conn.execute("""
-        SELECT r.*, a.nome as atividade_nome, a.tem_limitacao, a.tipo_limitacao,
+        SELECT r.*, a.nome as atividade_nome, a.tipo_atividade AS atividade_tipo_legacy_atual,
+               a.tem_limitacao, a.tipo_limitacao,
                a.limite_horas_total, a.limite_horas_semestral, al.nome as aluno_nome,
                t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id
         FROM requisicoes r
@@ -8988,6 +9010,7 @@ def admin_processar_requisicao(req_id):
             "admin_processar_requisicao.html",
             requisicao=requisicao,
             snapshot_diag=snapshot_diag,
+            snapshot_display_enabled=snapshot_display_enabled,
         )
 
     if request.method == "POST":
@@ -9120,6 +9143,7 @@ def admin_processar_requisicao(req_id):
         "admin_processar_requisicao.html",
         requisicao=requisicao,
         snapshot_diag=snapshot_diag,
+        snapshot_display_enabled=snapshot_display_enabled,
     )
 
 # ===================== Rotas Admin: Atividades =====================
