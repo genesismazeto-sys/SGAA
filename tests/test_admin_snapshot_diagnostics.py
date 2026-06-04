@@ -380,16 +380,16 @@ def test_admin_processar_requisicao_with_display_flag_on_shows_legacy_vs_snapsho
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Comparacao read-only" in html
-    assert "Este bloco e diagnostico e nao altera a decisao operacional." in html
+    assert "Comparação read-only" in html
+    assert "Este bloco é diagnóstico e não altera a decisão operacional." in html
     assert "Nome atual no cadastro - legado" in html
     assert seeded["activity_name"] in html
     assert "Tipo atual no cadastro - legado" in html
     assert "atividade_id legado" in html
     assert str(seeded["atividade_id"]) in html
-    assert "Nome no momento da solicitacao - snapshot" in html
+    assert "Nome no momento da solicitação - snapshot" in html
     assert "Atividade versionada" in html
-    assert "Tipo no momento da solicitacao - snapshot" in html
+    assert "Tipo no momento da solicitação - snapshot" in html
     assert "Nome legado capturado no snapshot" in html
     assert "Atividade legado" in html
     assert "atividade_versao_id" in html
@@ -442,14 +442,14 @@ def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Snapshot versionado presente, mas" not in html
-    assert "Comparacao read-only" in html
+    assert "Comparação read-only" in html
     assert "flow_origin" in html
     assert "aluno_create" in html
     assert "resolver_status" in html
     assert "resolved" in html
     assert "2026-05-31T13:45:00Z" in html
-    assert "Nome no momento da solicitacao - snapshot" not in html
-    assert "Tipo no momento da solicitacao - snapshot" not in html
+    assert "Nome no momento da solicitação - snapshot" not in html
+    assert "Tipo no momento da solicitação - snapshot" not in html
 
 
 def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(client, monkeypatch):
