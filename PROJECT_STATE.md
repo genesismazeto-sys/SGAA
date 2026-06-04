@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-04
-Closeout: D7.1-CLOSEOUT-DOCS-1
+Closeout: D7.2B1-CLOSEOUT-DOCS-1
 Executor: Codex
 
 ## Permanent State
@@ -71,6 +71,29 @@ Executor: Codex
 - No cutover or backfill was performed.
 - `app/db.py` contains auto-fill in a seed/dev tool, but that does not run in the normal runtime of this branch.
 
+### D7.2B1 - read-only activity version catalog (admin)
+- Implemented and approved.
+- Commit `73d45ac` — `Add read-only activity version catalog`.
+- Commit `a3537cf` — `Fix activity version catalog card grids`.
+- Read-only helpers added in `main.py`.
+- 4 admin `GET` routes:
+  - `/admin/catalogo-versoes`
+  - `/admin/catalogo-versoes/<base_id>`
+  - `/admin/normas-atividade`
+  - `/admin/mapeamento-legado`
+- 4 new templates:
+  - `admin_catalogo_versoes.html`
+  - `admin_catalogo_versao_detalhe.html`
+  - `admin_normas_atividade.html`
+  - `admin_mapeamento_legado.html`
+- New test file: `tests/test_admin_activity_version_catalog_readonly.py`.
+- CSS adjustments in `static/css/components/list-cards.css` with overrides for `.imp-catalogo`, `.imp-normas`, and `.imp-mapeamento`.
+- Tests: D7.2B1 specific `17 passed`; D7.1/resolver/aluno scope regressions `17 passed`.
+- Runtime check: `/admin/catalogo-versoes` `200`; `/admin/catalogo-versoes/1` `200`; `/admin/catalogo-versoes/999999` clean redirect, no `500`; `/admin/normas-atividade` `200`; `/admin/mapeamento-legado` `200`.
+- CSS fix validated visually: no overflow on listings, final columns visible.
+- Guarantees preserved: no new `POST`, no DB writes through the new routes, no auto-mapping, no student change, no operational matrix change, no calculation/deferment change, no schema/migration, no snapshot writer, no flags, no menu/sidebar entry, no backfill, no cutover.
+- `main` / `origin/main` intact at `7e5eb56`.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -81,6 +104,8 @@ Executor: Codex
 - `b9ffda2` - Add admin snapshot comparison display
 - `09749ef` - Fix snapshot comparison labels
 - `e0427ee` - Add activity version matrix contract tests
+- `73d45ac` - Add read-only activity version catalog
+- `a3537cf` - Fix activity version catalog card grids
 
 ## Current Risks And Limits
 
@@ -93,7 +118,10 @@ Executor: Codex
 - Backfill for old requests has not been performed yet.
 - D6.7 concluded with the recommendation to pause at D6.6 rather than expand snapshot surfaces now.
 - D7.1 proved the contract for `turma.matriz_id == NULL` but did not introduce any new runtime surface.
-- D7.2 must address UI/admin catalog + controlled legacy mapping, but requires a new scope before starting.
+- D7.2B1 created the read-only admin catalog, but the new screens are not linked from the menu/sidebar yet.
+- Buttons `Nova base`, `Nova norma`, and `Criar versão` are disabled until D7.2B2.
+- D7.2B2 must handle the controlled creation of `atividade_base` and `norma_atividade`.
+- D7.2B2 must not start without a new explicit scope.
 
 ## Permanent Working Directives
 
