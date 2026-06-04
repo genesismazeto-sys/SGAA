@@ -1,0 +1,130 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Catálogo de versões{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    #catalogo-toolbar .input-chip{ background:transparent; border-right:none; }
+    #catalogo-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-catalogo{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-catalogo .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-catalogo{ padding:0; }
+    .info-banner{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      padding:10px 14px;
+      margin-bottom:14px;
+      border:1px solid #bfdbfe;
+      border-radius:var(--radius);
+      background:#eff6ff;
+      color:#1e40af;
+      font-size:13px;
+      line-height:1.5;
+    }
+    .info-banner .lucide{ flex-shrink:0; width:16px; height:16px; margin-top:1px; }
+    .badge-versoes{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      font-size:12px;
+      font-weight:500;
+      color:var(--text-secondary);
+    }
+    .badge-ativas{
+      display:inline-flex;
+      align-items:center;
+      padding:1px 7px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:600;
+      background:#dcfce7;
+      color:#166534;
+    }
+    .badge-ativas.zero{
+      background:#f1f5f9;
+      color:#94a3b8;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Catálogo de versões</h1>
+
+<div class="info-banner" role="note">
+  <i class="lucide" data-lucide="info"></i>
+  <span>Alunos veem apenas o nome da atividade. Códigos normativos e versões são dados administrativos.</span>
+</div>
+
+<div class="toolbar" id="catalogo-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-catalogo">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-catalogo" type="search" placeholder="Buscar por nome da atividade-base…" aria-label="Buscar">
+    </div>
+  </div>
+  <div class="actions">
+    {# Criação de base é escopo da D7.2B2 — desabilitado nesta fase #}
+    <button class="btn" type="button" disabled title="Disponível na próxima fase">
+      <i class="lucide" data-lucide="plus"></i>
+      <span class="btn-label">Nova base</span>
+    </button>
+  </div>
+</div>
+
+<div class="impressoes-cards-scroll imp-catalogo" id="catalogo-scroll-container">
+  <div id="catalogo-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text': 'Atividade-base',   'class': 'left'},
+      {'text': 'Status',           'class': 'center'},
+      {'text': 'Versões',          'class': 'center'},
+      {'text': 'Ativas',           'class': 'center'},
+      {'text': 'Ver',              'class': 'center'},
+    ]) }}
+
+    {% if bases and bases|length %}
+      {% for b in bases %}
+        {% set status_lc = (b.status or '')|lower %}
+        {% set detalhe_url = url_for('admin_catalogo_versao_detalhe', base_id=b.id) %}
+        {{ cl.row([
+          {'content': b.nome_conceito or '-', 'class': 'left ellipsis'},
+          {
+            'content': b.status or 'ativo',
+            'class': 'center',
+            'badge': true,
+            'badge_type': 'success',
+            'status_badge': true,
+            'status_tone': (
+              'positive' if status_lc == 'ativo' else
+              'neutral'
+            )
+          },
+          {'content': (b.total_versoes or 0)|string, 'class': 'center'},
+          {'content': (b.versoes_ativas or 0)|string, 'class': 'center'},
+          {
+            'content': 'Ver',
+            'class': 'center',
+            'href': detalhe_url,
+            'badge': false,
+          },
+        ], {'data-base-id': b.id, 'data-view-url': detalhe_url}) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding:1rem; text-align:center; color:#6b7280;">
+        Nenhuma atividade-base cadastrada ainda.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-catalogo', rowsRootSelector: '#catalogo-list' });
+    document.addEventListener('DOMContentLoaded', ()=>{ if (window.lucide) lucide.createIcons(); });
+  })();
+</script>
+{% endblock %}

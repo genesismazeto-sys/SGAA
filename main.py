@@ -2251,6 +2251,155 @@ def validar_integridade_versionamento_atividades(conn, *, raise_on_error: bool =
     return issues
 
 
+# ===================== Helpers: Catálogo Versionado (read-only) =====================
+
+def get_atividade_base_list(conn) -> list:
+    """
+    Retorna todas as atividade_base com contagem de versões.
+    Estritamente read-only — nenhum INSERT/UPDATE/DELETE.
+    """
+    return conn.execute(
+        """
+        SELECT
+            ab.id,
+            ab.nome_conceito,
+            ab.descricao,
+            ab.status,
+            ab.created_at,
+            COUNT(av.id)                                              AS total_versoes,
+            SUM(CASE WHEN av.status = 'ativa' THEN 1 ELSE 0 END)     AS versoes_ativas
+          FROM atividade_base ab
+          LEFT JOIN atividade_versao av ON av.atividade_base_id = ab.id
+         GROUP BY ab.id
+         ORDER BY LOWER(ab.nome_conceito) ASC
+        """
+    ).fetchall()
+
+
+def get_atividade_base(conn, base_id: int):
+    """
+    Retorna uma atividade_base pelo id, ou None.
+    Estritamente read-only.
+    """
+    return conn.execute(
+        "SELECT * FROM atividade_base WHERE id = ?",
+        (base_id,),
+    ).fetchone()
+
+
+def get_versoes_por_base(conn, base_id: int) -> list:
+    """
+    Retorna as atividade_versao vinculadas a uma base, enriquecidas com dados da norma
+    e contagem de uso em matrizes. Estritamente read-only.
+    """
+    return conn.execute(
+        """
+        SELECT
+            av.id,
+            av.atividade_base_id,
+            av.norma_id,
+            av.codigo_normativo,
+            av.eixo,
+            av.grupo,
+            av.ch_por_evento,
+            av.limite_semestre,
+            av.limite_total,
+            av.observacao_aluno,
+            av.observacao_admin,
+            av.vigencia_inicio,
+            av.vigencia_fim,
+            av.status,
+            av.versao_anterior_id,
+            av.created_at,
+            n.codigo          AS norma_codigo,
+            n.nome            AS norma_nome,
+            n.revisao         AS norma_revisao,
+            n.status          AS norma_status,
+            COUNT(DISTINCT mavi.matriz_id) AS uso_em_matrizes
+          FROM atividade_versao av
+          JOIN norma_atividade n ON n.id = av.norma_id
+          LEFT JOIN matriz_atividade_versao_item mavi ON mavi.atividade_versao_id = av.id
+         WHERE av.atividade_base_id = ?
+         GROUP BY av.id
+         ORDER BY
+            CASE av.status
+                WHEN 'ativa'          THEN 0
+                WHEN 'rascunho'       THEN 1
+                WHEN 'inativa'        THEN 2
+                WHEN 'substituida'    THEN 3
+                WHEN 'descontinuada'  THEN 4
+                ELSE 5
+            END ASC,
+            av.created_at DESC
+        """,
+        (base_id,),
+    ).fetchall()
+
+
+def get_norma_list(conn) -> list:
+    """
+    Retorna todas as norma_atividade com contagem de versões vinculadas.
+    Estritamente read-only.
+    """
+    return conn.execute(
+        """
+        SELECT
+            n.id,
+            n.codigo,
+            n.eixo,
+            n.revisao,
+            n.nome,
+            n.descricao,
+            n.status,
+            n.created_at,
+            COUNT(av.id)                                              AS total_versoes,
+            SUM(CASE WHEN av.status = 'ativa' THEN 1 ELSE 0 END)     AS versoes_ativas
+          FROM norma_atividade n
+          LEFT JOIN atividade_versao av ON av.norma_id = n.id
+         GROUP BY n.id
+         ORDER BY n.eixo ASC, LOWER(n.codigo) ASC
+        """
+    ).fetchall()
+
+
+def get_legacy_map_list(conn) -> list:
+    """
+    Retorna as atividades legadas com seus dados de mapeamento
+    (LEFT JOIN em atividade_legacy_map) e contagem de requisições existentes.
+    Estritamente read-only — não cria nenhuma entrada em atividade_legacy_map.
+    """
+    return conn.execute(
+        """
+        SELECT
+            a.id                     AS atividade_id,
+            a.nome                   AS atividade_nome,
+            a.tipo_atividade,
+            a.grupo,
+            alm.id                   AS mapa_id,
+            alm.status               AS mapa_status,
+            alm.atividade_base_id    AS base_id,
+            ab.nome_conceito         AS base_nome,
+            alm.observacao_admin,
+            alm.created_at           AS mapa_criado_em,
+            COUNT(r.id)              AS qtd_requisicoes
+          FROM atividades a
+          LEFT JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = a.id
+          LEFT JOIN atividade_base ab ON ab.id = alm.atividade_base_id
+          LEFT JOIN requisicoes r ON r.atividade_id = a.id
+         GROUP BY a.id
+         ORDER BY
+            CASE COALESCE(alm.status, 'sem_mapa')
+                WHEN 'pendente'   THEN 0
+                WHEN 'revisar'    THEN 1
+                WHEN 'sem_mapa'   THEN 2
+                WHEN 'mapeada'    THEN 3
+                ELSE 4
+            END ASC,
+            LOWER(a.nome) ASC
+        """
+    ).fetchall()
+
+
 def get_preferred_matriz_for_curso(conn, curso_id: int | None):
     if not curso_id:
         return None
@@ -11922,6 +12071,81 @@ def admin_excluir_matriz(matriz_id: int):
     else:
         flash("Matriz não encontrada.", "error")
     return redirect(url_for("admin_matrizes"))
+
+
+# ===================== Rotas Admin: Catálogo Versionado (read-only) =====================
+
+@app.route("/admin/catalogo-versoes")
+@admin_required
+def admin_catalogo_versoes():
+    """
+    Lista todas as atividade_base com contagem de versões.
+    GET-only, sem escrita no banco.
+    """
+    conn = get_db_connection()
+    bases = get_atividade_base_list(conn)
+    return render_template(
+        "admin_catalogo_versoes.html",
+        bases=bases,
+    )
+
+
+@app.route("/admin/catalogo-versoes/<int:base_id>")
+@admin_required
+def admin_catalogo_versao_detalhe(base_id: int):
+    """
+    Detalhe de uma atividade_base com todas as versões vinculadas.
+    GET-only, sem escrita no banco.
+    """
+    conn = get_db_connection()
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+    versoes = get_versoes_por_base(conn, base_id)
+    return render_template(
+        "admin_catalogo_versao_detalhe.html",
+        base=base,
+        versoes=versoes,
+    )
+
+
+@app.route("/admin/normas-atividade")
+@admin_required
+def admin_normas_atividade():
+    """
+    Lista todas as norma_atividade com contagem de versões vinculadas.
+    GET-only, sem escrita no banco.
+    """
+    conn = get_db_connection()
+    normas = get_norma_list(conn)
+    return render_template(
+        "admin_normas_atividade.html",
+        normas=normas,
+    )
+
+
+@app.route("/admin/mapeamento-legado")
+@admin_required
+def admin_mapeamento_legado():
+    """
+    Lista atividades legadas com status de mapeamento para atividade_base.
+    GET-only, sem inferência automática por nome, sem escrita no banco.
+    """
+    conn = get_db_connection()
+    status_filter = (request.args.get("status") or "").strip().lower()
+    mapa = get_legacy_map_list(conn)
+    # Filtro opcional por status (pendente, mapeada, revisar, sem_mapa)
+    if status_filter in ("pendente", "mapeada", "revisar", "sem_mapa"):
+        if status_filter == "sem_mapa":
+            mapa = [m for m in mapa if m["mapa_id"] is None]
+        else:
+            mapa = [m for m in mapa if (m["mapa_status"] or "") == status_filter]
+    return render_template(
+        "admin_mapeamento_legado.html",
+        mapa=mapa,
+        status_filter=status_filter,
+    )
 
 
 ALERTA_COLOR_OPTIONS = [

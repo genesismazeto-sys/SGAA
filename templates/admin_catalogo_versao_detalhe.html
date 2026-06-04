@@ -1,0 +1,219 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}{{ base.nome_conceito }} — Versões{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    .detalhe-topbar{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:18px;
+    }
+    .detalhe-topbar .main-title{ margin:0; }
+    .detalhe-topbar-back{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      font-size:13px;
+      color:var(--text-secondary);
+      text-decoration:none;
+    }
+    .detalhe-topbar-back:hover{ color:var(--text-primary); }
+    .detalhe-topbar-spacer{ flex:1 1 auto; min-width:0; }
+    .info-banner{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      padding:10px 14px;
+      margin-bottom:14px;
+      border:1px solid #bfdbfe;
+      border-radius:var(--radius);
+      background:#eff6ff;
+      color:#1e40af;
+      font-size:13px;
+      line-height:1.5;
+    }
+    .info-banner .lucide{ flex-shrink:0; width:16px; height:16px; margin-top:1px; }
+    .base-meta{
+      display:flex;
+      gap:20px;
+      flex-wrap:wrap;
+      margin-bottom:20px;
+      padding:12px 16px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+      font-size:13px;
+    }
+    .base-meta-item{ display:flex; flex-direction:column; gap:2px; }
+    .base-meta-label{ font-size:11px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.04em; }
+    .base-meta-value{ color:var(--text-primary); font-weight:500; }
+    .section-title{
+      font-size:14px;
+      font-weight:600;
+      color:var(--text-secondary);
+      margin:0 0 10px;
+      padding-bottom:6px;
+      border-bottom:1px solid var(--border);
+    }
+    .versoes-grid{
+      display:grid;
+      gap:8px;
+    }
+    .versao-card{
+      display:grid;
+      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px;
+      align-items:center;
+      column-gap:12px;
+      padding:10px 14px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+      font-size:13px;
+    }
+    .versao-card.header-row{
+      background:var(--surface-2, #f8fafc);
+      font-size:11px;
+      font-weight:600;
+      color:var(--text-tertiary);
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      padding:6px 14px;
+    }
+    .versao-card .vc-code{ font-weight:600; color:var(--text-primary); }
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:600;
+    }
+    .status-pill.rascunho   { background:#f1f5f9; color:#64748b; }
+    .status-pill.ativa      { background:#dcfce7; color:#166534; }
+    .status-pill.inativa    { background:#fef9c3; color:#854d0e; }
+    .status-pill.substituida,
+    .status-pill.descontinuada { background:#fee2e2; color:#991b1b; }
+    .use-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:2px 7px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f1f5f9;
+      color:#64748b;
+    }
+    .use-badge.used{ background:#eff6ff; color:#1e40af; }
+    .horas-text{ color:var(--text-secondary); font-size:12px; }
+    .vigencia-text{ color:var(--text-secondary); font-size:12px; }
+    .empty-versoes{
+      padding:1.5rem;
+      text-align:center;
+      color:#6b7280;
+      border:1px dashed var(--border-strong);
+      border-radius:var(--radius);
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="detalhe-topbar">
+  <a class="detalhe-topbar-back" href="{{ url_for('admin_catalogo_versoes') }}">
+    <i class="lucide" data-lucide="arrow-left"></i>
+    Catálogo de versões
+  </a>
+  <div class="detalhe-topbar-spacer"></div>
+</div>
+
+<h1 class="main-title" style="margin-bottom:14px;">{{ base.nome_conceito }}</h1>
+
+<div class="info-banner" role="note">
+  <i class="lucide" data-lucide="info"></i>
+  <span>Alunos veem apenas o nome desta atividade. Código normativo, eixo e versão são dados administrativos.</span>
+</div>
+
+<div class="base-meta">
+  <div class="base-meta-item">
+    <span class="base-meta-label">Status da base</span>
+    <span class="base-meta-value">{{ base.status or 'ativo' }}</span>
+  </div>
+  {% if base.descricao %}
+  <div class="base-meta-item">
+    <span class="base-meta-label">Descrição</span>
+    <span class="base-meta-value">{{ base.descricao }}</span>
+  </div>
+  {% endif %}
+  <div class="base-meta-item">
+    <span class="base-meta-label">Versões cadastradas</span>
+    <span class="base-meta-value">{{ versoes|length }}</span>
+  </div>
+</div>
+
+<p class="section-title">Versões da atividade</p>
+
+{% if versoes and versoes|length %}
+  <div class="versoes-grid">
+    <!-- Cabeçalho -->
+    <div class="versao-card header-row">
+      <span>Código normativo</span>
+      <span>Eixo</span>
+      <span>Norma</span>
+      <span>CH/evento</span>
+      <span>Lim. semestre</span>
+      <span>Lim. total</span>
+      <span>Status</span>
+      <span>Matrizes</span>
+    </div>
+
+    {% for v in versoes %}
+      {% set status_key = (v.status or 'rascunho')|lower %}
+      <div class="versao-card">
+        <span class="vc-code">{{ v.codigo_normativo or '-' }}</span>
+        <span>{{ v.eixo or '-' }}</span>
+        <span title="{{ v.norma_nome or '' }}">
+          {{ v.norma_codigo or '-' }}
+          {% if v.norma_status == 'inativa' %}
+            <span style="font-size:10px; color:#f59e0b; margin-left:4px;">(inativa)</span>
+          {% endif %}
+        </span>
+        <span class="horas-text">
+          {% if v.ch_por_evento %}{{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h{% else %}-{% endif %}
+        </span>
+        <span class="horas-text">
+          {% if v.limite_semestre %}{{ v.limite_semestre|int if v.limite_semestre == (v.limite_semestre|int) else v.limite_semestre }} h{% else %}-{% endif %}
+        </span>
+        <span class="horas-text">
+          {% if v.limite_total %}{{ v.limite_total|int if v.limite_total == (v.limite_total|int) else v.limite_total }} h{% else %}-{% endif %}
+        </span>
+        <span class="status-pill {{ status_key }}">{{ v.status or 'rascunho' }}</span>
+        <span class="use-badge {% if v.uso_em_matrizes and v.uso_em_matrizes > 0 %}used{% endif %}">
+          <i class="lucide" data-lucide="table-2" style="width:12px;height:12px;"></i>
+          {{ v.uso_em_matrizes or 0 }}
+        </span>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-versoes">
+    Nenhuma versão cadastrada para esta atividade-base.
+    <br><small style="color:#9ca3af;">A criação de versões estará disponível na próxima fase (D7.2B2).</small>
+  </div>
+{% endif %}
+
+<div style="margin-top:24px;">
+  <button class="btn" type="button" disabled title="Disponível na próxima fase">
+    <i class="lucide" data-lucide="plus"></i>
+    Criar versão — próxima fase
+  </button>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', ()=>{ if (window.lucide) lucide.createIcons(); });
+</script>
+{% endblock %}

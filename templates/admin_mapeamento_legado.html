@@ -1,0 +1,167 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Mapeamento legado{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    #mapeamento-toolbar .input-chip{ background:transparent; border-right:none; }
+    #mapeamento-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-mapeamento{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-mapeamento .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-mapeamento{ padding:0; }
+    .mapa-filter-chips{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      margin-bottom:12px;
+    }
+    .mapa-filter-chip{
+      display:inline-flex;
+      align-items:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:500;
+      text-decoration:none;
+      border:1px solid var(--border-strong);
+      background:var(--surface);
+      color:var(--text-secondary);
+      cursor:pointer;
+    }
+    .mapa-filter-chip.active{
+      background:#1e40af;
+      color:#fff;
+      border-color:#1e40af;
+    }
+    .mapa-filter-chip:hover:not(.active){ background:var(--surface-2, #f8fafc); }
+    .req-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:3px;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:600;
+      background:#f1f5f9;
+      color:#64748b;
+    }
+    .req-badge.has-reqs{ background:#fef9c3; color:#854d0e; }
+    .notice-banner{
+      padding:10px 14px;
+      margin-bottom:14px;
+      border:1px solid #fed7aa;
+      border-radius:var(--radius);
+      background:#fff7ed;
+      color:#9a3412;
+      font-size:13px;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Mapeamento legado</h1>
+
+<div class="notice-banner" role="note">
+  <strong>Decisão humana obrigatória.</strong>
+  O mapeamento de atividades legadas para atividade-base <strong>nunca é automático</strong>.
+  O administrador deve escolher manualmente a correspondência correta.
+</div>
+
+<!-- Filtro por status -->
+<div class="mapa-filter-chips">
+  <a class="mapa-filter-chip {% if not status_filter %}active{% endif %}"
+     href="{{ url_for('admin_mapeamento_legado') }}">
+    Todos
+  </a>
+  <a class="mapa-filter-chip {% if status_filter == 'pendente' %}active{% endif %}"
+     href="{{ url_for('admin_mapeamento_legado', status='pendente') }}">
+    Pendente
+  </a>
+  <a class="mapa-filter-chip {% if status_filter == 'revisar' %}active{% endif %}"
+     href="{{ url_for('admin_mapeamento_legado', status='revisar') }}">
+    Revisar
+  </a>
+  <a class="mapa-filter-chip {% if status_filter == 'sem_mapa' %}active{% endif %}"
+     href="{{ url_for('admin_mapeamento_legado', status='sem_mapa') }}">
+    Sem entrada
+  </a>
+  <a class="mapa-filter-chip {% if status_filter == 'mapeada' %}active{% endif %}"
+     href="{{ url_for('admin_mapeamento_legado', status='mapeada') }}">
+    Mapeada
+  </a>
+</div>
+
+<div class="toolbar" id="mapeamento-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-mapeamento">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-mapeamento" type="search" placeholder="Buscar por atividade legada ou base mapeada…" aria-label="Buscar mapeamento">
+    </div>
+  </div>
+</div>
+
+<div class="impressoes-cards-scroll imp-mapeamento" id="mapeamento-scroll-container">
+  <div id="mapeamento-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text': 'Atividade legada',  'class': 'left'},
+      {'text': 'Tipo',              'class': 'left'},
+      {'text': 'Grupo',             'class': 'center'},
+      {'text': 'Status do mapa',    'class': 'center'},
+      {'text': 'Atividade-base',    'class': 'left'},
+      {'text': 'Requisições',       'class': 'center'},
+    ]) }}
+
+    {% if mapa and mapa|length %}
+      {% for m in mapa %}
+        {% set mapa_status = m.mapa_status or 'sem entrada' %}
+        {% set status_tone =
+            'positive'  if mapa_status == 'mapeada'  else
+            'caution'   if mapa_status == 'revisar'  else
+            'neutral'   if mapa_status == 'pendente' else
+            'neutral'
+        %}
+        {{ cl.row([
+          {'content': m.atividade_nome or '-', 'class': 'left ellipsis'},
+          {'content': m.tipo_atividade or '-', 'class': 'left ellipsis'},
+          {
+            'content': (m.grupo or '-').split(' - ')[0]|trim if m.grupo else '-',
+            'class': 'center',
+          },
+          {
+            'content': mapa_status,
+            'class': 'center',
+            'badge': true,
+            'badge_type': 'success',
+            'status_badge': true,
+            'status_tone': status_tone,
+          },
+          {'content': m.base_nome or '—',  'class': 'left ellipsis'},
+          {'content': (m.qtd_requisicoes or 0)|string, 'class': 'center'},
+        ], {
+          'data-atividade-id': m.atividade_id,
+          'data-mapa-status': mapa_status,
+        }) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding:1rem; text-align:center; color:#6b7280;">
+        Nenhuma atividade encontrada para o filtro selecionado.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<p style="margin-top:12px; font-size:12px; color:var(--text-tertiary);">
+  O formulário de mapeamento manual estará disponível na próxima fase (D7.2B2).
+</p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-mapeamento', rowsRootSelector: '#mapeamento-list' });
+    document.addEventListener('DOMContentLoaded', ()=>{ if (window.lucide) lucide.createIcons(); });
+  })();
+</script>
+{% endblock %}

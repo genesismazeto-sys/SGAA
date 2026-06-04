@@ -1,0 +1,102 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Normas de atividade{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <style>
+    #normas-toolbar .input-chip{ background:transparent; border-right:none; }
+    #normas-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+    #grp-busca-normas{ gap:10px; padding:0 8px 0 16px; }
+    #grp-busca-normas .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+    #busca-normas{ padding:0; }
+    .eixo-badge{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:.03em;
+    }
+    .eixo-badge.aac{ background:#eff6ff; color:#1e40af; }
+    .eixo-badge.aeu{ background:#f0fdf4; color:#166534; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Normas de atividade</h1>
+
+<div class="toolbar" id="normas-toolbar">
+  <div class="filters">
+    <div class="input-group" id="grp-busca-normas">
+      <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
+      <input id="busca-normas" type="search" placeholder="Buscar por código, nome ou revisão…" aria-label="Buscar normas">
+    </div>
+  </div>
+  <div class="actions">
+    {# Criação de norma é escopo da D7.2B2 — desabilitado nesta fase #}
+    <button class="btn" type="button" disabled title="Disponível na próxima fase">
+      <i class="lucide" data-lucide="plus"></i>
+      <span class="btn-label">Nova norma</span>
+    </button>
+  </div>
+</div>
+
+<div class="impressoes-cards-scroll imp-normas" id="normas-scroll-container">
+  <div id="normas-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text': 'Código',           'class': 'left'},
+      {'text': 'Eixo',             'class': 'center'},
+      {'text': 'Revisão',          'class': 'center'},
+      {'text': 'Nome',             'class': 'left'},
+      {'text': 'Status',           'class': 'center'},
+      {'text': 'Versões',          'class': 'center'},
+      {'text': 'Ativas',           'class': 'center'},
+    ]) }}
+
+    {% if normas and normas|length %}
+      {% for n in normas %}
+        {% set status_lc = (n.status or '')|lower %}
+        {% set eixo_lc   = (n.eixo or '')|lower %}
+        {{ cl.row([
+          {'content': n.codigo or '-',   'class': 'left', 'strong': true},
+          {
+            'content': n.eixo or '-',
+            'class': 'center',
+          },
+          {'content': n.revisao or '-', 'class': 'center'},
+          {'content': n.nome or '-',    'class': 'left ellipsis'},
+          {
+            'content': n.status or 'ativa',
+            'class': 'center',
+            'badge': true,
+            'badge_type': 'success',
+            'status_badge': true,
+            'status_tone': (
+              'positive' if status_lc == 'ativa' else
+              'neutral'
+            )
+          },
+          {'content': (n.total_versoes or 0)|string,  'class': 'center'},
+          {'content': (n.versoes_ativas or 0)|string, 'class': 'center'},
+        ], {'data-norma-id': n.id}) }}
+      {% endfor %}
+    {% else %}
+      <div style="padding:1rem; text-align:center; color:#6b7280;">
+        Nenhuma norma cadastrada ainda.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+  (function(){
+    window.initToolbarLiveSearch?.({ inputSelector: '#busca-normas', rowsRootSelector: '#normas-list' });
+    document.addEventListener('DOMContentLoaded', ()=>{ if (window.lucide) lucide.createIcons(); });
+  })();
+</script>
+{% endblock %}
