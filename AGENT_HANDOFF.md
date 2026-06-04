@@ -1,12 +1,14 @@
 # Agent Handoff
 
 Last updated: 2026-06-04
-Closeout: D6.6-CLOSEOUT-1
-Executor: GPT-5.2 Codex
+Closeout: D6.6-DISPLAY-RUNTIME-CLOSEOUT-1
+Executor: MiniMax
 
 ## Current State
 
 - D6.6-DISPLAY-1R is approved.
+- D6.6-DISPLAY-TEXT-ACCENTS-1R is approved.
+- Runtime/visual validation of D6.6 display behavior is approved.
 - Expected `HEAD`: `b9ffda2` or later.
 - Commit `b9ffda2` added the admin snapshot comparison display.
 - Implementation test status: admin snapshot `13 passed`, shadow read `17 passed`, diagnostic `9 passed`, resolver `6 passed`, full suite `250 passed`, with known `openpyxl` warnings only.

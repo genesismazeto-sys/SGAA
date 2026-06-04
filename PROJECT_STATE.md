@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-04
-Closeout: D6.6-CLOSEOUT-1
-Executor: GPT-5.2 Codex
+Closeout: D6.6-DISPLAY-RUNTIME-CLOSEOUT-1
+Executor: MiniMax
 
 ## Permanent State
 
@@ -30,6 +30,8 @@ Executor: GPT-5.2 Codex
 ### D6.6 - admin read-only comparison display
 - D6.6-DISPLAY-1 approved.
 - Commit `b9ffda2` - `Add admin snapshot comparison display`.
+- Commit `09749ef` - `Fix snapshot comparison labels`.
+- D6.6-DISPLAY-TEXT-ACCENTS-1R approved.
 - Flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY` exists and remains default `OFF` in code.
 - The display flag is independent from `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE`.
 - The display flag is independent from `SGAA_VERSIONED_RESOLVER_SHADOW_READ`.
@@ -48,6 +50,7 @@ Executor: GPT-5.2 Codex
 - `18c169a` - Record target snapshot activation validation
 - `bb1ca51` - Add admin snapshot diagnostics
 - `b9ffda2` - Add admin snapshot comparison display
+- `09749ef` - Fix snapshot comparison labels
 
 ## Current Risks And Limits
 
