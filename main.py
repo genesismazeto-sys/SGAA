@@ -3237,6 +3237,29 @@ def _build_versioned_requisicao_snapshot_payload(
     }
 
 
+def _get_turma_explicit_matriz_id_for_snapshot(conn, aluno_id: int | None) -> int | None:
+    """Returns turma.matriz_id only when explicitly set for the aluno's turma.
+
+    No fallback to preferred matriz for the curso — that is a heuristic that must
+    not silently determine which version gets stamped on a requisição operacional.
+    Used exclusively by the versioned snapshot writer; not by legacy scoping.
+    """
+    if not aluno_id:
+        return None
+    row = conn.execute(
+        """
+        SELECT t.matriz_id
+          FROM alunos a
+          LEFT JOIN turmas t ON t.id = a.turma_id
+         WHERE a.id = ?
+        """,
+        (aluno_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return row["matriz_id"]
+
+
 def maybe_write_versioned_requisicao_snapshot(
     conn,
     *,
@@ -3246,6 +3269,24 @@ def maybe_write_versioned_requisicao_snapshot(
     atividade_id_legacy,
 ):
     if not is_versioned_requisicao_snapshot_write_enabled():
+        return None
+
+    # Strict check: turma must have an explicit matriz_id for the versioned stamp.
+    # Fallback to preferred matriz is deliberately excluded — it is a heuristic and
+    # must not silently determine which version gets stamped on a requisição.
+    explicit_matriz_id = _get_turma_explicit_matriz_id_for_snapshot(conn, aluno_id)
+    if not explicit_matriz_id:
+        try:
+            logger.info(
+                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s "
+                "atividade_id_legacy=%s status=turma_without_explicit_matrix",
+                flow_origin,
+                req_id,
+                aluno_id,
+                atividade_id_legacy,
+            )
+        except Exception:
+            pass
         return None
 
     try:
