@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-04
-Closeout: D6.6-DISPLAY-RUNTIME-CLOSEOUT-1
-Executor: MiniMax
+Closeout: D6.7-PLAN-CLOSEOUT-DOCS-1
+Executor: Codex
 
 ## Permanent State
 
@@ -42,6 +42,21 @@ Executor: MiniMax
 - No cutover was performed.
 - No student screen was changed.
 
+### D6.7 - planning decision after D6.6 display
+- D6.7-PLAN completed in read-only mode on `HEAD` `04b40cc`.
+- No code, template, test, database, env, flag, or schema change was made during the analysis.
+- Recommendation: pause at D6.6.
+- `/admin/processar_requisicao/<id>` `GET` is already the safe and sufficient diagnostic surface.
+- `/admin/processar_requisicao/<id>` `POST` remains legacy and out of scope.
+- `/admin/requisicoes` should remain badge-only.
+- Student request screens should not receive snapshot display now.
+- Dashboards, progress, turma, and import flow remain out of scope.
+- Snapshot remains admin-only, diagnostic, and read-only.
+- `atividade_id` remains the operational source of truth.
+- No backfill was performed.
+- No read cutover was performed.
+- No operational use of snapshot data was approved.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -61,7 +76,7 @@ Executor: MiniMax
 - Import flow remains out of scope.
 - Student dashboards and progress remain on the legacy path.
 - Backfill for old requests has not been performed yet.
-- Any next D6.7 work should start only after controlled runtime validation of D6.6 display behavior.
+- D6.7 concluded with the recommendation to pause at D6.6 rather than expand snapshot surfaces now.
 
 ## Permanent Working Directives
 
