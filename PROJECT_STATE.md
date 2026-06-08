@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-08
-Closeout: D7.2B2-CLOSEOUT-DOCS-1
+Closeout: D7.2B3-PATCH1-CLOSEOUT-DOCS-1
 Executor: Codex
 
 ## Permanent State
@@ -156,6 +156,51 @@ Executor: Codex
   - no cutover.
 - `main` / `origin/main` intact at `7e5eb56`.
 
+### D7.2B3-PATCH1 - draft activity version creation
+- Implemented and approved locally (commit `16b1480`).
+- 1 new admin `GET/POST` route:
+  - `/admin/catalogo-versoes/<int:base_id>/nova-versao`
+- 1 new template: `templates/admin_catalogo_versao_form.html`.
+- 1 updated template: `templates/admin_catalogo_versao_detalhe.html` (button enabled).
+- 1 new test file: `tests/test_admin_activity_version_catalog_version_form.py` (17 tests).
+- Helpers added in `main.py`:
+  - `get_norma_by_id(conn, norma_id)` — read-only lookup.
+  - `get_versoes_da_base_por_eixo(conn, base_id, eixo)` — read-only lookup now
+    actively used to populate the optional `versao_anterior_id` select.
+- Functional guarantees:
+  - rota GET/POST `/admin/catalogo-versoes/<base_id>/nova-versao`;
+  - helper `get_norma_by_id`;
+  - helper `get_versoes_da_base_por_eixo` agora usado no formulário;
+  - criação de `atividade_versao` com status forçado em rascunho;
+  - `codigo_normativo` derivado de `norma_atividade.codigo`;
+  - `eixo` derivado de `norma_atividade.eixo`;
+  - `norma_id` obrigatório, sem primeira norma automática;
+  - select de norma com placeholder obrigatório;
+  - `versao_anterior_id` como select opcional com placeholder "Sem versão anterior";
+  - validação server-side de base, norma ativa, duplicidade base+norma,
+    números inválidos/negativos, versão anterior inexistente, de outra base
+    ou de eixo incompatível;
+  - botão "Criar versão" habilitado no detalhe da atividade-base;
+  - novo template `templates/admin_catalogo_versao_form.html`;
+  - novo teste `tests/test_admin_activity_version_catalog_version_form.py`
+    com 17 testes;
+  - suíte parcial validada com 91 passed.
+- Garantias explícitas de fora do escopo do PATCH1:
+  - edição de versão;
+  - ativação/publicação;
+  - vínculo com matriz;
+  - UI de matriz;
+  - fluxo do aluno;
+  - cálculo/deferimento;
+  - snapshot writer;
+  - schema/migration;
+  - backfill/cutover;
+  - importação de regulamentos reais;
+  - menu/sidebar;
+  - mapeamento legado salvo.
+- `main` / `origin/main` intact at `7e5eb56`.
+- Branch `recovery/d7-activity-versioning` local at `16b1480`; not yet pushed.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -170,6 +215,7 @@ Executor: Codex
 - `a3537cf` - Fix activity version catalog card grids
 - `b91d03f` - Add create forms for activity base and norms
 - `44d367a` - Clarify activity version creation placeholder
+- `16b1480` - Add draft activity version creation
 
 ## Current Risks And Limits
 
@@ -184,11 +230,16 @@ Executor: Codex
 - D7.1 proved the contract for `turma.matriz_id == NULL` but did not introduce any new runtime surface.
 - D7.2B1 created the read-only admin catalog, but the new screens are not linked from the menu/sidebar yet.
 - D7.2B2 only delivered controlled creation of `atividade_base` and `norma_atividade`.
-  Creation/edition of `atividade_versao` still does not exist.
-- The `Criar versão` button remains disabled and points to a `fase posterior`.
+- D7.2B3-PATCH1 delivered controlled creation of `atividade_versao` in rascunho
+  (commit `16b1480`). Edition of `atividade_versao` still does not exist.
+- The `Criar versão` button is now enabled in the detail of each `atividade_base`
+  and points to the new draft creation form.
+- All `atividade_versao` created by PATCH1 are inserted with `status = 'rascunho'`
+  and are not yet usable by any matrix.
 - The legacy mapping (`mapeamento-legado`) remains read-only.
 - The matrix still does not choose `atividade_versao_id` through the UI.
-- D7.2B3 is not approved; it requires a new explicit scope.
+- D7.2B3-PATCH2 (edition of rascunho versions) is not approved; it requires a
+  new explicit scope and must not start without authorization.
 
 ## Permanent Working Directives
 

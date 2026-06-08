@@ -1,12 +1,15 @@
 # Agent Handoff
 
 Last updated: 2026-06-08
-Closeout: D7.2B2-CLOSEOUT-DOCS-1
+Closeout: D7.2B3-PATCH1-CLOSEOUT-DOCS-1
 Executor: Codex
 
 ## Current State
 
-- D7.2B2-CLOSEOUT-DOCS-1 is approved.
+- D7.2B3-PATCH1-CLOSEOUT-DOCS-1 is approved.
+- D7.2B3-PATCH1 functional code committed locally at `16b1480`
+  on `recovery/d7-activity-versioning` (not yet pushed to origin).
+- D7.2B2-CLOSEOUT-DOCS-1 remains approved.
 - D7.2B1-CLOSEOUT-DOCS-1 remains approved.
 - D7.1-CLOSEOUT-DOCS-1 remains approved.
 - D6.6-DISPLAY-1R remains approved.
@@ -65,29 +68,41 @@ Executor: Codex
 
 ## Last Closed Phase
 
-- D7.2B2-CLOSEOUT-DOCS-1 approved.
-- Controlled creation of `atividade_base` and `norma_atividade` in the admin catalog.
-- Commits `b91d03f` and `44d367a` on `recovery/d7-activity-versioning`.
-- 2 admin `GET/POST` routes, 2 new templates, 1 new test file, textual fix in
-  `admin_catalogo_versao_detalhe.html`.
-- No `atividade_versao` creation, no edit, no legacy mapping save,
-  no schema/migration, no flags, no menu/sidebar entry, no backfill, no cutover.
+- D7.2B3-PATCH1-CLOSEOUT-DOCS-1 approved.
+- Controlled creation of `atividade_versao` in rascunho in the admin catalog.
+- Commit `16b1480` on `recovery/d7-activity-versioning` (not yet pushed).
+- 1 admin `GET/POST` route (`/admin/catalogo-versoes/<base_id>/nova-versao`),
+  1 new template (`admin_catalogo_versao_form.html`), 1 new test file
+  (`test_admin_activity_version_catalog_version_form.py` with 17 tests),
+  textual fix in `admin_catalogo_versao_detalhe.html` (button enabled).
+- 2 read-only helpers added in `main.py`: `get_norma_by_id` and
+  `get_versoes_da_base_por_eixo` (the latter now actively used to populate
+  the optional `versao_anterior_id` select).
+- 17 new tests pass; 91 total tests pass in the targeted suite.
+- No edit of `atividade_versao`, no activation/publication, no matrix link,
+  no student flow change, no calculation/deferment change, no snapshot writer
+  change, no schema/migration, no flags, no menu/sidebar entry, no backfill,
+  no cutover.
 - `atividade_id` preserved as the operational source.
 - Snapshot remains admin-only and read-only.
 - `main` / `origin/main` intact at `7e5eb56`.
+- Branch `recovery/d7-activity-versioning` local at `16b1480`; not yet pushed.
 
 ## Recommended Next Phase
 
 - No new implementation phase is approved right now.
-- D7.2B2 is closed, but D7.2B3 (creation/edition of `atividade_versao`,
-  matrix selection of `atividade_versao_id`, anything that unblocks the
-  `Criar versão` button) is **not** approved and **must not** start
-  without a new explicit scope.
+- D7.2B3-PATCH1 is closed (draft version creation in rascunho). Patch 2
+  probable scope is **edition of `atividade_versao` in rascunho**, but it is
+  **not approved** and **must not** start without a new explicit scope.
 - Keep the current D6.6 state: admin-only, diagnostic, read-only.
 - The new catalog screens exist but are not linked from the menu/sidebar yet.
-- The `Criar versão` button remains disabled and points to a `fase posterior`.
-- If work resumes later, prefer docs/runbook clarification or a fresh architectural review
-  before any new code phase.
+- The `Criar versão` button is now enabled and points to the draft form.
+- Immediate next step after docs closeout: commit documental
+  (this closeout) and, if approved, push the branch.
+- Patch 2 (edition of rascunho versions) and any matrix selection of
+  `atividade_versao_id` must not start without a new approved scope.
+- If work resumes later, prefer docs/runbook clarification or a fresh
+  architectural review before any new code phase.
 
 ## Risks To Keep In View
 
@@ -102,13 +117,17 @@ Executor: Codex
 - Always validate mixed data: older rows with `NULL` snapshot fields and newer rows with snapshot data.
 - Do not claim the system distinguishes an admin's explicit choice from a dev-tool auto-fill; that distinction does not exist in the current schema.
 - D7.2B1 created read-only screens without menu/sidebar links; users must access them by direct URL only.
-- D7.2B2 only created `atividade_base` and `norma_atividade`; creation/edition of
-  `atividade_versao` still does not exist.
-- The `Criar versão` button is still disabled and points to a `fase posterior`.
+- D7.2B2 only created `atividade_base` and `norma_atividade`.
+- D7.2B3-PATCH1 created `atividade_versao` in rascunho; edition of versions
+  still does not exist.
+- The `Criar versão` button is now enabled in the detail of each
+  `atividade_base` and points to the draft creation form.
+- All `atividade_versao` created by PATCH1 are inserted with
+  `status = 'rascunho'` and are not yet usable by any matrix.
 - The legacy mapping (`/admin/mapeamento-legado`) remains read-only.
 - The matrix still does not choose `atividade_versao_id` through the UI.
-- D7.2B3 must not start without a new explicit scope covering creation/edition of
-  `atividade_versao` and any matrix UI change.
+- D7.2B3-PATCH2 (edition of rascunho versions) and any matrix selection of
+  `atividade_versao_id` must not start without a new approved scope.
 
 ## Instructions For The Next Agent
 
@@ -116,7 +135,9 @@ Executor: Codex
 - Summarize understanding before implementing anything.
 - Treat `atividade_id` as the operational source of truth.
 - Do not expand snapshot display beyond the current admin-only read-only surfaces unless a new approved phase explicitly authorizes it.
-- D7.2B3 (creation/edition of `atividade_versao`, matrix selection of
-  `atividade_versao_id`, unblocking the `Criar versão` button) must not start
+- D7.2B3-PATCH2 (edition of rascunho `atividade_versao`, matrix selection of
+  `atividade_versao_id`, activation/publication of versions) must not start
   without a new approved scope.
-- Do not start D7.2B3 based on this closeout alone.
+- The branch `recovery/d7-activity-versioning` is local at `16b1480` and has
+  not been pushed; do not push without authorization.
+- Do not start D7.2B3-PATCH2 based on this closeout alone.
