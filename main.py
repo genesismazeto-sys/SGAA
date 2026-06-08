@@ -2362,6 +2362,33 @@ def get_norma_list(conn) -> list:
     ).fetchall()
 
 
+def get_norma_by_id(conn, norma_id: int):
+    """
+    Retorna uma norma_atividade pelo id, ou None.
+    Estritamente read-only.
+    """
+    return conn.execute(
+        "SELECT * FROM norma_atividade WHERE id = ?",
+        (norma_id,),
+    ).fetchone()
+
+
+def get_versoes_da_base_por_eixo(conn, base_id: int, eixo: str) -> list:
+    """
+    Retorna as atividade_versao da mesma base e eixo, ordenadas por created_at DESC.
+    Estritamente read-only — usado para popular versao_anterior_id.
+    """
+    return conn.execute(
+        """
+        SELECT id, codigo_normativo, eixo, status, created_at
+          FROM atividade_versao
+         WHERE atividade_base_id = ? AND eixo = ?
+         ORDER BY created_at DESC
+        """,
+        (base_id, eixo),
+    ).fetchall()
+
+
 def get_legacy_map_list(conn) -> list:
     """
     Retorna as atividades legadas com seus dados de mapeamento
@@ -12270,6 +12297,159 @@ def admin_norma_nova():
     return render_template("admin_norma_form.html",
                            codigo="", eixo="AAC", revisao="",
                            nome="", descricao="", status="ativa")
+
+
+@app.route("/admin/catalogo-versoes/<int:base_id>/nova-versao", methods=["GET", "POST"])
+@admin_required
+def admin_catalogo_nova_versao(base_id: int):
+    """
+    Formulário para criar uma nova atividade_versao em rascunho
+    vinculada a uma atividade_base e uma norma_atividade.
+    POST valida e insere; em sucesso redireciona para o detalhe da base.
+    """
+    conn = get_db_connection()
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+
+    normas = get_norma_list(conn)
+    versoes_anteriores = (
+        get_versoes_da_base_por_eixo(conn, base_id, "AAC")
+        + get_versoes_da_base_por_eixo(conn, base_id, "AEU")
+    )
+
+    if request.method == "POST":
+        norma_id_raw = (request.form.get("norma_id") or "").strip()
+        grupo = (request.form.get("grupo") or "").strip()
+        ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
+        limite_semestre_raw = (request.form.get("limite_semestre") or "").strip()
+        limite_total_raw = (request.form.get("limite_total") or "").strip()
+        observacao_aluno = (request.form.get("observacao_aluno") or "").strip()
+        observacao_admin = (request.form.get("observacao_admin") or "").strip()
+        vigencia_inicio = (request.form.get("vigencia_inicio") or "").strip()
+        vigencia_fim = (request.form.get("vigencia_fim") or "").strip()
+        versao_anterior_id_raw = (request.form.get("versao_anterior_id") or "").strip()
+
+        def _render_form(msg):
+            if msg:
+                flash(msg, "error")
+            return render_template(
+                "admin_catalogo_versao_form.html",
+                base=base,
+                normas=normas,
+                versoes_anteriores=versoes_anteriores,
+                norma_id=norma_id_raw,
+                grupo=grupo,
+                ch_por_evento=ch_por_evento_raw,
+                limite_semestre=limite_semestre_raw,
+                limite_total=limite_total_raw,
+                observacao_aluno=observacao_aluno,
+                observacao_admin=observacao_admin,
+                vigencia_inicio=vigencia_inicio,
+                vigencia_fim=vigencia_fim,
+                versao_anterior_id=versao_anterior_id_raw,
+            )
+
+        if not norma_id_raw:
+            return _render_form("Norma é obrigatória.")
+        try:
+            norma_id = int(norma_id_raw)
+        except (TypeError, ValueError):
+            return _render_form("Norma inválida.")
+
+        norma = get_norma_by_id(conn, norma_id)
+        if not norma:
+            return _render_form("Norma não encontrada.")
+        if norma["status"] != "ativa":
+            return _render_form("Norma deve estar ativa para criar uma versão.")
+
+        eixo = norma["eixo"]
+        codigo_normativo = norma["codigo"]
+
+        # validação numérica
+        def _parse_float(raw, nome):
+            if not raw:
+                return None
+            try:
+                v = float(raw)
+                if v < 0:
+                    return nome
+                return v
+            except (TypeError, ValueError):
+                return nome
+
+        ch_por_evento = _parse_float(ch_por_evento_raw, "ch_por_evento")
+        limite_semestre = _parse_float(limite_semestre_raw, "limite_semestre")
+        limite_total = _parse_float(limite_total_raw, "limite_total")
+        for maybe_err in (ch_por_evento, limite_semestre, limite_total):
+            if isinstance(maybe_err, str):
+                return _render_form(f"{maybe_err} deve ser um número válido e maior ou igual a zero.")
+
+        versao_anterior_id = None
+        if versao_anterior_id_raw:
+            try:
+                versao_anterior_id = int(versao_anterior_id_raw)
+            except (TypeError, ValueError):
+                return _render_form("Versão anterior inválida.")
+            prev = conn.execute(
+                "SELECT atividade_base_id, eixo FROM atividade_versao WHERE id = ?",
+                (versao_anterior_id,),
+            ).fetchone()
+            if not prev:
+                return _render_form("Versão anterior não encontrada.")
+            if prev["atividade_base_id"] != base_id:
+                return _render_form("Versão anterior deve pertencer à mesma atividade-base.")
+            if prev["eixo"] != eixo:
+                return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
+
+        # duplicidade
+        existing = conn.execute(
+            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
+            (base_id, norma_id),
+        ).fetchone()
+        if existing:
+            return _render_form("Já existe uma versão para esta atividade-base vinculada a esta norma.")
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO atividade_versao (
+                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                    ch_por_evento, limite_semestre, limite_total,
+                    observacao_aluno, observacao_admin,
+                    vigencia_inicio, vigencia_fim, status, versao_anterior_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
+                """,
+                (
+                    base_id, norma_id, codigo_normativo, eixo, grupo or None,
+                    ch_por_evento, limite_semestre, limite_total,
+                    observacao_aluno or None, observacao_admin or None,
+                    vigencia_inicio or None, vigencia_fim or None, versao_anterior_id,
+                ),
+            )
+            conn.commit()
+            flash("Versão criada com sucesso em rascunho.", "success")
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+        except Exception as exc:
+            return _render_form(f"Erro ao criar versão: {exc}")
+
+    return render_template(
+        "admin_catalogo_versao_form.html",
+        base=base,
+        normas=normas,
+        versoes_anteriores=versoes_anteriores,
+        norma_id="",
+        grupo="",
+        ch_por_evento="",
+        limite_semestre="",
+        limite_total="",
+        observacao_aluno="",
+        observacao_admin="",
+        vigencia_inicio="",
+        vigencia_fim="",
+        versao_anterior_id="",
+    )
 
 
 ALERTA_COLOR_OPTIONS = [

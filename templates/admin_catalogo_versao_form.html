@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Nova versão — {{ base.nome_conceito }}{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Nova versão</h1>
+
+<p style="margin-bottom:18px; color:var(--text-secondary);">
+  Atividade-base: <strong>{{ base.nome_conceito }}</strong>
+</p>
+
+<form action="{{ url_for('admin_catalogo_nova_versao', base_id=base.id) }}"
+      method="post"
+      autocomplete="off">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-cards-narrow">
+
+    <!-- Norma -->
+    <div class="form-row">
+      <label class="row-label" for="norma_id">Norma</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="layers"></i></div>
+        <select id="norma_id" name="norma_id" class="control" required>
+          <option value="">Selecione uma norma…</option>
+          {% for n in normas %}
+            <option value="{{ n.id }}"
+                    {% if norma_id|string == n.id|string %}selected{% endif %}>
+              {{ n.codigo }} ({{ n.eixo }} — {{ n.revisao }})
+              {% if n.status != 'ativa' %}[{{ n.status }}]{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Grupo -->
+    <div class="form-row">
+      <label class="row-label" for="grupo">Grupo</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="folder"></i></div>
+        <input id="grupo"
+               name="grupo"
+               type="text"
+               class="control"
+               placeholder="Ex.: 1 - AAC vigente"
+               value="{{ grupo }}">
+      </div>
+    </div>
+
+    <!-- CH por evento -->
+    <div class="form-row">
+      <label class="row-label" for="ch_por_evento">Carga horária por evento</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
+        <input id="ch_por_evento"
+               name="ch_por_evento"
+               type="text"
+               class="control"
+               placeholder="Ex.: 4"
+               value="{{ ch_por_evento }}">
+      </div>
+    </div>
+
+    <!-- Limite semestre -->
+    <div class="form-row">
+      <label class="row-label" for="limite_semestre">Limite por semestre</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="gauge"></i></div>
+        <input id="limite_semestre"
+               name="limite_semestre"
+               type="text"
+               class="control"
+               placeholder="Ex.: 40"
+               value="{{ limite_semestre }}">
+      </div>
+    </div>
+
+    <!-- Limite total -->
+    <div class="form-row">
+      <label class="row-label" for="limite_total">Limite total</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="gauge"></i></div>
+        <input id="limite_total"
+               name="limite_total"
+               type="text"
+               class="control"
+               placeholder="Ex.: 100"
+               value="{{ limite_total }}">
+      </div>
+    </div>
+
+    <!-- Observação aluno -->
+    <div class="form-row">
+      <label class="row-label" for="observacao_aluno">Observação para o aluno</label>
+      <div class="field-card field-card--textarea">
+        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
+        <textarea id="observacao_aluno"
+                  name="observacao_aluno"
+                  class="control"
+                  rows="3"
+                  placeholder="Texto que o aluno poderá ver (quando houver tela de aluno versionada)">{{ observacao_aluno }}</textarea>
+      </div>
+    </div>
+
+    <!-- Observação admin -->
+    <div class="form-row">
+      <label class="row-label" for="observacao_admin">Observação administrativa</label>
+      <div class="field-card field-card--textarea">
+        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
+        <textarea id="observacao_admin"
+                  name="observacao_admin"
+                  class="control"
+                  rows="3"
+                  placeholder="Instruções internas para análise administrativa">{{ observacao_admin }}</textarea>
+      </div>
+    </div>
+
+    <!-- Vigência início -->
+    <div class="form-row">
+      <label class="row-label" for="vigencia_inicio">Vigência início</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
+        <input id="vigencia_inicio"
+               name="vigencia_inicio"
+               type="date"
+               class="control"
+               value="{{ vigencia_inicio }}">
+      </div>
+    </div>
+
+    <!-- Vigência fim -->
+    <div class="form-row">
+      <label class="row-label" for="vigencia_fim">Vigência fim</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
+        <input id="vigencia_fim"
+               name="vigencia_fim"
+               type="date"
+               class="control"
+               value="{{ vigencia_fim }}">
+      </div>
+    </div>
+
+    <!-- Versão anterior -->
+    <div class="form-row">
+      <label class="row-label" for="versao_anterior_id">Versão anterior (opcional)</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="git-commit"></i></div>
+        <select id="versao_anterior_id" name="versao_anterior_id" class="control">
+          <option value="">Sem versão anterior</option>
+          {% for v in versoes_anteriores %}
+            <option value="{{ v.id }}"
+                    {% if versao_anterior_id|string == v.id|string %}selected{% endif %}>
+              {{ v.id }} — {{ v.codigo_normativo }} ({{ v.eixo }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="form-row form-actions">
+      <span></span>
+      <div style="display:flex; gap:8px;">
+        <a href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-primary">Criar versão em rascunho</button>
+      </div>
+    </div>
+
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.lucide) lucide.createIcons();
+  });
+</script>
+{% endblock %}
