@@ -1,7 +1,7 @@
 # Project State
 
-Last updated: 2026-06-04
-Closeout: D7.2B1-CLOSEOUT-DOCS-1
+Last updated: 2026-06-08
+Closeout: D7.2B2-CLOSEOUT-DOCS-1
 Executor: Codex
 
 ## Permanent State
@@ -94,6 +94,68 @@ Executor: Codex
 - Guarantees preserved: no new `POST`, no DB writes through the new routes, no auto-mapping, no student change, no operational matrix change, no calculation/deferment change, no schema/migration, no snapshot writer, no flags, no menu/sidebar entry, no backfill, no cutover.
 - `main` / `origin/main` intact at `7e5eb56`.
 
+### D7.2B2 - controlled creation of activity base and norms (admin)
+- Implemented and approved.
+- Commit `b91d03f` — `Add create forms for activity base and norms`.
+- Commit `44d367a` — `Clarify activity version creation placeholder` (current `HEAD`).
+- 2 new admin `GET/POST` routes:
+  - `/admin/catalogo-versoes/nova-base`
+  - `/admin/normas-atividade/nova`
+- 2 new templates:
+  - `templates/admin_catalogo_base_form.html`
+  - `templates/admin_norma_form.html`
+- Buttons `Nova base` and `Nova norma` enabled in the existing list screens
+  (`templates/admin_catalogo_versoes.html` and `templates/admin_normas_atividade.html`).
+- New test file: `tests/test_admin_activity_version_catalog_create.py`.
+- Validations for `atividade_base`:
+  - `nome_conceito` required;
+  - whitespace trim;
+  - empty name rejected;
+  - `status` restricted to `ativo`/`inativo`;
+  - duplicate rejected by case-insensitive pre-check;
+  - success redirects to the detail of the created base.
+- Validations for `norma_atividade`:
+  - `codigo` required;
+  - `codigo` trimmed;
+  - `eixo` restricted to `AAC`/`AEU`;
+  - `revisao` required;
+  - `status` restricted to `ativa`/`inativa`;
+  - duplicate rejected by case-insensitive pre-check;
+  - success redirects to `/admin/normas-atividade`.
+- Runtime check:
+  - backup created before real `POST`s;
+  - `GET`s of the new screens returned `200`;
+  - invalid `POST`s did not insert rows;
+  - valid `POST`s created temporary `D7TEMP` rows;
+  - `D7TEMP` rows removed surgically by `id`/`codigo`/`nome`;
+  - zero `D7TEMP` rows remaining;
+  - `PRAGMA foreign_key_check` reported no violations;
+  - hashes and counts of relevant tables returned to baseline;
+  - local database restored to the pre-phase state;
+  - `64 passed` tests.
+- Textual fix in `44d367a`:
+  - in `templates/admin_catalogo_versao_detalhe.html`, removed the obsolete
+    reference to D7.2B2 in the version-creation placeholder;
+  - placeholder now uses `fase posterior`;
+  - `Criar versão` button remains disabled;
+  - no new route, `POST`, or version-creation functionality was introduced;
+  - `47 passed` tests.
+- Guarantees preserved:
+  - no `atividade_versao` creation;
+  - no edit;
+  - no legacy mapping save;
+  - no change in `matriz_atividade_versao_item`;
+  - no change in `matrizes_atividades_itens`;
+  - no change in `aluno`;
+  - no change in calculation/deferment;
+  - no schema/migration change;
+  - no snapshot writer;
+  - no flags;
+  - no menu/sidebar entry;
+  - no backfill;
+  - no cutover.
+- `main` / `origin/main` intact at `7e5eb56`.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -106,6 +168,8 @@ Executor: Codex
 - `e0427ee` - Add activity version matrix contract tests
 - `73d45ac` - Add read-only activity version catalog
 - `a3537cf` - Fix activity version catalog card grids
+- `b91d03f` - Add create forms for activity base and norms
+- `44d367a` - Clarify activity version creation placeholder
 
 ## Current Risks And Limits
 
@@ -119,9 +183,12 @@ Executor: Codex
 - D6.7 concluded with the recommendation to pause at D6.6 rather than expand snapshot surfaces now.
 - D7.1 proved the contract for `turma.matriz_id == NULL` but did not introduce any new runtime surface.
 - D7.2B1 created the read-only admin catalog, but the new screens are not linked from the menu/sidebar yet.
-- Buttons `Nova base`, `Nova norma`, and `Criar versão` are disabled until D7.2B2.
-- D7.2B2 must handle the controlled creation of `atividade_base` and `norma_atividade`.
-- D7.2B2 must not start without a new explicit scope.
+- D7.2B2 only delivered controlled creation of `atividade_base` and `norma_atividade`.
+  Creation/edition of `atividade_versao` still does not exist.
+- The `Criar versão` button remains disabled and points to a `fase posterior`.
+- The legacy mapping (`mapeamento-legado`) remains read-only.
+- The matrix still does not choose `atividade_versao_id` through the UI.
+- D7.2B3 is not approved; it requires a new explicit scope.
 
 ## Permanent Working Directives
 
