@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-08
-Closeout: D7.2B3-PATCH1-CLOSEOUT-DOCS-1
-Executor: Codex
+Closeout: D7.2B3-PATCH2-DOCS-CLOSEOUT
+Executor: MiniMax-M3
 
 ## Permanent State
 
@@ -159,7 +159,7 @@ Executor: Codex
 ### D7.2B3-PATCH1 - draft activity version creation
 - Implemented and approved.
 - Commit `16b1480` — `Add draft activity version creation`.
-- Commit `ccf1a7e` — `Record D7.2B3 draft version creation` (current `HEAD`).
+- Commit `ccf1a7e` — `Record D7.2B3 draft version creation`.
 - 1 new admin `GET/POST` route:
   - `/admin/catalogo-versoes/<int:base_id>/nova-versao`
 - 1 new template: `templates/admin_catalogo_versao_form.html`.
@@ -203,6 +203,60 @@ Executor: Codex
 - `main` / `origin/main` intact at `7e5eb56`.
 - Branch `recovery/d7-activity-versioning` pushed to origin at `ccf1a7e`.
 
+### D7.2B3-PATCH2 - draft activity version editing
+- Implemented and approved locally.
+- Commit `c90ffe3` — `Add draft activity version editing` (current `HEAD`).
+- 1 new admin `GET/POST` route:
+  - `/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar`
+- 2 new helpers in `main.py`:
+  - `get_atividade_versao_by_id(conn, versao_id)` — read-only lookup with JOIN to base.
+  - `get_atividade_versao_usage_counts(conn, versao_id)` — read-only usage check
+    across `matriz_atividade_versao_item`, `requisicoes`, `atividade_transicao`.
+- Template `admin_catalogo_versao_form.html` parametrized for creation and editing
+  (`form_action`, `form_title`, `submit_label`).
+- Template `admin_catalogo_versao_detalhe.html` gains an "Ações" column:
+  - "Editar" link visible only when versão status is `rascunho`.
+- New test file:
+  `tests/test_admin_activity_version_catalog_version_edit.py` (28 tests).
+- Functional guarantees:
+  - edição permitida **somente** para `status = 'rascunho'`;
+  - GET e POST bloqueiam versões `ativa`, `inativa`, `descontinuada`, `substituida`;
+  - bloqueio total se a versão tiver **qualquer uso** em:
+    - `matriz_atividade_versao_item`;
+    - `requisicoes.atividade_versao_id`;
+    - `atividade_transicao.from_atividade_versao_id`;
+    - `atividade_transicao.to_atividade_versao_id`;
+  - `codigo_normativo` recalculado de `norma_atividade.codigo`;
+  - `eixo` recalculado de `norma_atividade.eixo`;
+  - `status` **não editável** (ignorado via payload);
+  - `atividade_base_id` **não editável** (ignorado via payload);
+  - `created_at` preservado;
+  - `documentos_json` preservado e fora do escopo do PATCH2;
+  - validação de norma obrigatória, existente e ativa;
+  - validação de duplicidade base+norma ignorando a própria versão;
+  - validação de números: vazios → NULL, não numéricos rejeitados, negativos rejeitados;
+  - validação de `versao_anterior_id` opcional:
+    - deve existir;
+    - deve pertencer à mesma base;
+    - deve ter mesmo eixo;
+    - não pode ser a própria versão.
+- Explicitly out of scope:
+  - ativação/publicação;
+  - edição de status;
+  - vínculo com matriz ou UI de matriz escolhendo versão;
+  - fluxo do aluno;
+  - cálculo/deferimento/indeferimento;
+  - snapshot writer;
+  - schema/migration;
+  - backfill/cutover;
+  - importação de regulamentos reais;
+  - menu/sidebar;
+  - `documentos_json`;
+  - mapeamento legado salvo.
+- Test suite validated: **119 passed**.
+- `main` / `origin/main` intact at `7e5eb56`.
+- Branch `recovery/d7-activity-versioning` local at `c90ffe3`; not yet pushed.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -219,6 +273,7 @@ Executor: Codex
 - `44d367a` - Clarify activity version creation placeholder
 - `16b1480` - Add draft activity version creation
 - `ccf1a7e` - Record D7.2B3 draft version creation
+- `c90ffe3` - Add draft activity version editing
 
 ## Current Risks And Limits
 
@@ -234,15 +289,22 @@ Executor: Codex
 - D7.2B1 created the read-only admin catalog, but the new screens are not linked from the menu/sidebar yet.
 - D7.2B2 only delivered controlled creation of `atividade_base` and `norma_atividade`.
 - D7.2B3-PATCH1 delivered controlled creation of `atividade_versao` in rascunho
-  (commit `16b1480`). Edition of `atividade_versao` still does not exist.
+  (commit `16b1480` / `ccf1a7e`).
+- D7.2B3-PATCH2 delivered controlled editing of `atividade_versao` em rascunho
+  (commit `c90ffe3`). Versões com `status != 'rascunho'` e versões com qualquer
+  uso em matriz, requisição ou transição estão protegidas contra edição.
 - The `Criar versão` button is now enabled in the detail of each `atividade_base`
   and points to the new draft creation form.
-- All `atividade_versao` created by PATCH1 are inserted with `status = 'rascunho'`
+- All `atividade_versao` created by PATCH1/2 are inserted with `status = 'rascunho'`
   and are not yet usable by any matrix.
 - The legacy mapping (`mapeamento-legado`) remains read-only.
 - The matrix still does not choose `atividade_versao_id` through the UI.
-- D7.2B3-PATCH2 (edition of rascunho versions) is not approved; it requires a
-  new explicit scope and must not start without authorization.
+- Versões que já estão em uso (matriz, requisição, transição) ficam imutáveis
+  pela rota de edição — qualquer alteração futura exigiria nova versão.
+- Ativação/publicação de versão ainda não existe.
+- Vínculo matriz→versão ainda não existe.
+- PATCH3 ou fase seguinte não deve começar sem escopo explícito e planejamento
+  read-only separado.
 
 ## Permanent Working Directives
 
