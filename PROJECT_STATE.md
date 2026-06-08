@@ -97,7 +97,7 @@ Executor: Codex
 ### D7.2B2 - controlled creation of activity base and norms (admin)
 - Implemented and approved.
 - Commit `b91d03f` — `Add create forms for activity base and norms`.
-- Commit `44d367a` — `Clarify activity version creation placeholder` (current `HEAD`).
+- Commit `44d367a` — `Clarify activity version creation placeholder`.
 - 2 new admin `GET/POST` routes:
   - `/admin/catalogo-versoes/nova-base`
   - `/admin/normas-atividade/nova`
@@ -157,7 +157,9 @@ Executor: Codex
 - `main` / `origin/main` intact at `7e5eb56`.
 
 ### D7.2B3-PATCH1 - draft activity version creation
-- Implemented and approved locally (commit `16b1480`).
+- Implemented and approved.
+- Commit `16b1480` — `Add draft activity version creation`.
+- Commit `ccf1a7e` — `Record D7.2B3 draft version creation` (current `HEAD`).
 - 1 new admin `GET/POST` route:
   - `/admin/catalogo-versoes/<int:base_id>/nova-versao`
 - 1 new template: `templates/admin_catalogo_versao_form.html`.
@@ -199,7 +201,7 @@ Executor: Codex
   - menu/sidebar;
   - mapeamento legado salvo.
 - `main` / `origin/main` intact at `7e5eb56`.
-- Branch `recovery/d7-activity-versioning` local at `16b1480`; not yet pushed.
+- Branch `recovery/d7-activity-versioning` pushed to origin at `ccf1a7e`.
 
 ## Relevant Commits
 
@@ -216,6 +218,7 @@ Executor: Codex
 - `b91d03f` - Add create forms for activity base and norms
 - `44d367a` - Clarify activity version creation placeholder
 - `16b1480` - Add draft activity version creation
+- `ccf1a7e` - Record D7.2B3 draft version creation
 
 ## Current Risks And Limits
 

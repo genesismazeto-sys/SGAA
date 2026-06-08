@@ -7,8 +7,8 @@ Executor: Codex
 ## Current State
 
 - D7.2B3-PATCH1-CLOSEOUT-DOCS-1 is approved.
-- D7.2B3-PATCH1 functional code committed locally at `16b1480`
-  on `recovery/d7-activity-versioning` (not yet pushed to origin).
+- D7.2B3-PATCH1 functional code committed at `16b1480`
+  on `recovery/d7-activity-versioning`; pushed to origin at `ccf1a7e`.
 - D7.2B2-CLOSEOUT-DOCS-1 remains approved.
 - D7.2B1-CLOSEOUT-DOCS-1 remains approved.
 - D7.1-CLOSEOUT-DOCS-1 remains approved.
@@ -19,7 +19,7 @@ Executor: Codex
   - `73d45ac` — `Add read-only activity version catalog`.
   - `a3537cf` — `Fix activity version catalog card grids`.
   - `b91d03f` — `Add create forms for activity base and norms`.
-  - `44d367a` — `Clarify activity version creation placeholder` (current `HEAD`).
+   - `44d367a` — `Clarify activity version creation placeholder`.
 - D7.2B2 delivered the controlled creation of `atividade_base` and `norma_atividade`
   in the admin catalog:
   - 2 new `GET/POST` admin routes: `/admin/catalogo-versoes/nova-base` and
@@ -68,9 +68,9 @@ Executor: Codex
 
 ## Last Closed Phase
 
-- D7.2B3-PATCH1-CLOSEOUT-DOCS-1 approved.
+- D7.2B3-PATCH1-CLOSEOUT-DOCS-1 approved and pushed.
 - Controlled creation of `atividade_versao` in rascunho in the admin catalog.
-- Commit `16b1480` on `recovery/d7-activity-versioning` (not yet pushed).
+- Commit `16b1480` on `recovery/d7-activity-versioning`; pushed at `ccf1a7e`.
 - 1 admin `GET/POST` route (`/admin/catalogo-versoes/<base_id>/nova-versao`),
   1 new template (`admin_catalogo_versao_form.html`), 1 new test file
   (`test_admin_activity_version_catalog_version_form.py` with 17 tests),
@@ -86,7 +86,7 @@ Executor: Codex
 - `atividade_id` preserved as the operational source.
 - Snapshot remains admin-only and read-only.
 - `main` / `origin/main` intact at `7e5eb56`.
-- Branch `recovery/d7-activity-versioning` local at `16b1480`; not yet pushed.
+- Branch `recovery/d7-activity-versioning` local at `ccf1a7e`; pushed to origin.
 
 ## Recommended Next Phase
 
@@ -138,6 +138,6 @@ Executor: Codex
 - D7.2B3-PATCH2 (edition of rascunho `atividade_versao`, matrix selection of
   `atividade_versao_id`, activation/publication of versions) must not start
   without a new approved scope.
-- The branch `recovery/d7-activity-versioning` is local at `16b1480` and has
-  not been pushed; do not push without authorization.
+- The branch `recovery/d7-activity-versioning` has been pushed to origin at
+  `ccf1a7e`.
 - Do not start D7.2B3-PATCH2 based on this closeout alone.
