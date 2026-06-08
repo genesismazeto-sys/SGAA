@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Nova versão — {{ base.nome_conceito }}{% endblock %}
+{% block title %}{{ form_title }} — {{ base.nome_conceito }}{% endblock %}
 
 {% block content %}
-<h1 class="main-title">Nova versão</h1>
+<h1 class="main-title">{{ form_title }}</h1>
 
 <p style="margin-bottom:18px; color:var(--text-secondary);">
   Atividade-base: <strong>{{ base.nome_conceito }}</strong>
 </p>
 
-<form action="{{ url_for('admin_catalogo_nova_versao', base_id=base.id) }}"
+<form action="{{ form_action }}"
       method="post"
       autocomplete="off">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -163,7 +163,7 @@
       <span></span>
       <div style="display:flex; gap:8px;">
         <a href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}" class="btn btn-ghost">Cancelar</a>
-        <button type="submit" class="btn btn-primary">Criar versão em rascunho</button>
+        <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
       </div>
     </div>
 

@@ -65,7 +65,7 @@
     }
     .versao-card{
       display:grid;
-      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px;
+      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px 90px;
       align-items:center;
       column-gap:12px;
       padding:10px 14px;
@@ -108,6 +108,18 @@
       color:#64748b;
     }
     .use-badge.used{ background:#eff6ff; color:#1e40af; }
+    .vc-edit-link{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      font-size:12px;
+      font-weight:600;
+      color:#1e40af;
+      text-decoration:none;
+    }
+    .vc-edit-link:hover{ text-decoration:underline; }
+    .vc-edit-link .lucide{ width:13px; height:13px; }
+    .vc-no-action{ color:var(--text-tertiary); font-size:12px; }
     .horas-text{ color:var(--text-secondary); font-size:12px; }
     .vigencia-text{ color:var(--text-secondary); font-size:12px; }
     .empty-versoes{
@@ -167,6 +179,7 @@
       <span>Lim. total</span>
       <span>Status</span>
       <span>Matrizes</span>
+      <span>Ações</span>
     </div>
 
     {% for v in versoes %}
@@ -193,6 +206,18 @@
         <span class="use-badge {% if v.uso_em_matrizes and v.uso_em_matrizes > 0 %}used{% endif %}">
           <i class="lucide" data-lucide="table-2" style="width:12px;height:12px;"></i>
           {{ v.uso_em_matrizes or 0 }}
+        </span>
+        <span>
+          {% if status_key == 'rascunho' %}
+            <a class="vc-edit-link"
+               href="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
+               title="Editar esta versão em rascunho">
+              <i class="lucide" data-lucide="pencil"></i>
+              Editar
+            </a>
+          {% else %}
+            <span class="vc-no-action">—</span>
+          {% endif %}
         </span>
       </div>
     {% endfor %}
