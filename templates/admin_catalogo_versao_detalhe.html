@@ -119,6 +119,24 @@
     }
     .vc-edit-link:hover{ text-decoration:underline; }
     .vc-edit-link .lucide{ width:13px; height:13px; }
+    .vc-activate-form{ display:inline-block; margin:0; }
+    .vc-activate-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:3px 9px;
+      font-size:12px;
+      font-weight:600;
+      color:#166534;
+      background:#dcfce7;
+      border:1px solid #86efac;
+      border-radius:6px;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    .vc-activate-btn:hover{ background:#bbf7d0; }
+    .vc-activate-btn .lucide{ width:13px; height:13px; }
+    .vc-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .vc-no-action{ color:var(--text-tertiary); font-size:12px; }
     .horas-text{ color:var(--text-secondary); font-size:12px; }
     .vigencia-text{ color:var(--text-secondary); font-size:12px; }
@@ -209,12 +227,26 @@
         </span>
         <span>
           {% if status_key == 'rascunho' %}
-            <a class="vc-edit-link"
-               href="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
-               title="Editar esta versão em rascunho">
-              <i class="lucide" data-lucide="pencil"></i>
-              Editar
-            </a>
+            <span class="vc-actions">
+              <a class="vc-edit-link"
+                 href="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
+                 title="Editar esta versão em rascunho">
+                <i class="lucide" data-lucide="pencil"></i>
+                Editar
+              </a>
+              <form class="vc-activate-form"
+                    method="post"
+                    action="{{ url_for('admin_catalogo_ativar_versao', base_id=base.id, versao_id=v.id) }}"
+                    onsubmit="return window.confirm('Ativar esta versão? Após ativada, ela não poderá ser editada por esta tela.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="vc-activate-btn"
+                        title="Ativar esta versão">
+                  <i class="lucide" data-lucide="check"></i>
+                  Ativar
+                </button>
+              </form>
+            </span>
           {% else %}
             <span class="vc-no-action">—</span>
           {% endif %}

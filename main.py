@@ -12709,6 +12709,80 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     )
 
 
+@app.route(
+    "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/ativar",
+    methods=["POST"],
+)
+@admin_required
+def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
+    """
+    Ativação mínima de uma atividade_versao em rascunho.
+
+    Permite mudar status = 'rascunho' -> 'ativa' por ação administrativa
+    explícita. Validações server-side:
+      - atividade_base existe
+      - atividade_versao existe e pertence ao base_id da URL
+      - status atual == 'rascunho'
+      - norma_atividade vinculada existe e está ativa
+
+    Operação: UPDATE atividade_versao SET status = 'ativa'
+    WHERE id = ? AND status = 'rascunho'. Se rowcount != 1, rollback.
+
+    Não cria entrada em matriz_atividade_versao_item, não altera
+    requisicoes, atividade_transicao, snapshot, cálculo ou aluno.
+    Não usa fallback silencioso nem primeira ativa.
+    """
+    conn = get_db_connection()
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+
+    versao = get_atividade_versao_by_id(conn, versao_id)
+    if not versao or versao["atividade_base_id"] != base_id:
+        flash("Versão não encontrada para esta atividade-base.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if versao["status"] != "rascunho":
+        flash("Apenas versões em rascunho podem ser ativadas.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    norma = get_norma_by_id(conn, versao["norma_id"])
+    if not norma:
+        flash("Não é possível ativar: a norma vinculada não existe.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    if norma["status"] != "ativa":
+        flash(
+            "Não é possível ativar: a norma vinculada não está ativa.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    try:
+        cur = conn.execute(
+            "UPDATE atividade_versao "
+            "SET status = 'ativa' "
+            "WHERE id = ? AND status = 'rascunho'",
+            (versao_id,),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            flash(
+                "Ativação não aplicada: a versão não está mais em rascunho.",
+                "error",
+            )
+            return redirect(
+                url_for("admin_catalogo_versao_detalhe", base_id=base_id)
+            )
+        conn.commit()
+        flash("Versão ativada com sucesso.", "success")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao ativar versão: {exc}", "error")
+
+    return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+
 ALERTA_COLOR_OPTIONS = [
     {"label": "Azul", "bg": "#e3eefd", "border": "#7e95b2"},
     {"label": "Amarelo", "bg": "#fef4c0", "border": "#c9a227"},

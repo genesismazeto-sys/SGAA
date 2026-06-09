@@ -684,6 +684,58 @@ def _setup_isolated_csrf_clients(tmp_path: Path):
             """,
             ("onedrive", "folder-onedrive", "SGAA - Backups", "SGAA - Backups", ""),
         )
+        # ---------------------------------------------------------------------------
+        # Seed para evidência CSRF de /admin/catalogo-versoes/<base_id>(/<...>).
+        #
+        # O crawler materializa cada regra GET com `sample_values` para renderizar a
+        # página. Para o detail da atividade-base e para as rotas de criação,
+        # edição e ativação de atividade_versao serem alcançáveis pelo inventário
+        # CSRF, é preciso que `base_id` (e `versao_id`) existam no sample e que a
+        # página de detalhe renderize pelo menos uma versão em rascunho (único
+        # status em que o form "Ativar" e o link "Editar" são exibidos). Sem
+        # essa seed, as 3 rotas mutating do catálogo de versões caem em
+        # blocked_real_risk / no_rendered_or_test_evidence porque a evidência
+        # real (form POST com csrf_token renderizado) nunca é alcançada.
+        # ---------------------------------------------------------------------------
+        main.ensure_atividade_versioning_schema(conn)
+        nome_conceito_base = f"Atividade Inventory Catalog {suffix}"
+        conn.execute(
+            "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
+            (nome_conceito_base, "Base para inventário CSRF do catálogo", "ativo"),
+        )
+        base_id = int(
+            conn.execute(
+                "SELECT id FROM atividade_base WHERE nome_conceito = ?",
+                (nome_conceito_base,),
+            ).fetchone()["id"]
+        )
+        cod_norma = f"NRM-INV-{suffix}"
+        conn.execute(
+            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (cod_norma, "AAC", "rev1", "Norma Inventory Catalog", "ativa"),
+        )
+        norma_id = int(
+            conn.execute(
+                "SELECT id FROM norma_atividade WHERE codigo = ?",
+                (cod_norma,),
+            ).fetchone()["id"]
+        )
+        conn.execute(
+            """
+            INSERT INTO atividade_versao (
+                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (base_id, norma_id, cod_norma, "AAC", "1 - Grupo Inventory CSRF", "rascunho"),
+        )
+        versao_id = int(
+            conn.execute(
+                "SELECT id FROM atividade_versao "
+                "WHERE atividade_base_id = ? AND norma_id = ?",
+                (base_id, norma_id),
+            ).fetchone()["id"]
+        )
         conn.commit()
         main.create_database_snapshot(
             str(temp_database),
@@ -704,6 +756,8 @@ def _setup_isolated_csrf_clients(tmp_path: Path):
             "atividade_id": int(atividade_id),
             "alerta_id": int(alerta_id),
             "arquivo_id": int(arquivo_id),
+            "base_id": int(base_id),
+            "versao_id": int(versao_id),
             "curso_id": int(support["curso_id"]),
             "matriz_id": int(support["matriz_id"]),
             "reporte_id": int(reporte_id),
@@ -782,11 +836,13 @@ def _build_page_requests(app, ids: dict) -> list[dict]:
     sample_values = {
         "arquivo_id": int(ids["arquivo_id"]),
         "atividade_id": int(ids["atividade_id"]),
+        "base_id": int(ids["base_id"]),
         "curso_id": int(ids["curso_id"]),
         "matriz_id": int(ids["matriz_id"]),
         "req_id": int(ids["req_id"]),
         "turma_id": int(ids["turma_id"]),
         "usuario_id": int(ids["aluno_user_id"]),
+        "versao_id": int(ids["versao_id"]),
     }
 
     with app.test_request_context():
