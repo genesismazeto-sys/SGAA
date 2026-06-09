@@ -1,9 +1,9 @@
 {
   "summary": {
-    "total_mutating_routes": 73,
+    "total_mutating_routes": 75,
     "status_counts": {
       "ok_dynamic_form_token": 14,
-      "ok_rendered_form_token": 51,
+      "ok_rendered_form_token": 53,
       "not_applicable_documented": 2,
       "ok_api_csrf_contract": 1,
       "ok_fetch_token": 3,
@@ -1490,6 +1490,38 @@
       "status": "ok_rendered_form_token"
     },
     {
+      "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/descontinuar",
+      "method": "POST",
+      "view_function": "main.admin_catalogo_descontinuar_versao",
+      "template_related": [],
+      "requires_login": "admin",
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [
+        {
+          "page": "/admin/catalogo-versoes/<int:base_id>",
+          "action": "/admin/catalogo-versoes/1/versoes/2/descontinuar",
+          "token_counts": [
+            1
+          ]
+        }
+      ],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": false,
+      "risk": [],
+      "notes": [],
+      "evidence": [
+        {
+          "kind": "rendered_form",
+          "page": "/admin/catalogo-versoes/<int:base_id>",
+          "action": "/admin/catalogo-versoes/1/versoes/2/descontinuar",
+          "token_count": 1
+        }
+      ],
+      "status": "ok_rendered_form_token"
+    },
+    {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar",
       "method": "POST",
       "view_function": "main.admin_catalogo_editar_versao",
@@ -1518,6 +1550,38 @@
           "kind": "rendered_form",
           "page": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar",
           "action": "/admin/catalogo-versoes/1/versoes/1/editar",
+          "token_count": 1
+        }
+      ],
+      "status": "ok_rendered_form_token"
+    },
+    {
+      "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/inativar",
+      "method": "POST",
+      "view_function": "main.admin_catalogo_inativar_versao",
+      "template_related": [],
+      "requires_login": "admin",
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [
+        {
+          "page": "/admin/catalogo-versoes/<int:base_id>",
+          "action": "/admin/catalogo-versoes/1/versoes/2/inativar",
+          "token_counts": [
+            1
+          ]
+        }
+      ],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": false,
+      "risk": [],
+      "notes": [],
+      "evidence": [
+        {
+          "kind": "rendered_form",
+          "page": "/admin/catalogo-versoes/<int:base_id>",
+          "action": "/admin/catalogo-versoes/1/versoes/2/inativar",
           "token_count": 1
         }
       ],
@@ -3279,6 +3343,20 @@
         },
         {
           "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_cea3431124716729/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_59a501572ecd1f69/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
           "action": "/admin/mensagens/msg_55dd1e4a19e485a3/reset",
           "token_counts": [
             1
@@ -3385,6 +3463,76 @@
         {
           "page": "/admin/mensagens",
           "action": "/admin/mensagens/msg_f6bad9c526b5ebe5/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_fcb2b37ab48f43a9/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_f690f88e963fd059/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_5612eed59aea0ce9/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_cd8d8ee74d8bfdba/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_0f561ddf19711223/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_94ce7877b917ccb2/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_3b02f541830c0a37/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_9787a42fd5af40f7/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_c3da41e67609760b/reset",
+          "token_counts": [
+            1
+          ]
+        },
+        {
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_7453cacb133c8c42/reset",
           "token_counts": [
             1
           ]
@@ -6598,6 +6746,18 @@
         {
           "kind": "rendered_form",
           "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_cea3431124716729/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_59a501572ecd1f69/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
           "action": "/admin/mensagens/msg_55dd1e4a19e485a3/reset",
           "token_count": 1
         },
@@ -6689,6 +6849,66 @@
           "kind": "rendered_form",
           "page": "/admin/mensagens",
           "action": "/admin/mensagens/msg_f6bad9c526b5ebe5/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_fcb2b37ab48f43a9/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_f690f88e963fd059/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_5612eed59aea0ce9/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_cd8d8ee74d8bfdba/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_0f561ddf19711223/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_94ce7877b917ccb2/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_3b02f541830c0a37/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_9787a42fd5af40f7/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_c3da41e67609760b/reset",
+          "token_count": 1
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/mensagens",
+          "action": "/admin/mensagens/msg_7453cacb133c8c42/reset",
           "token_count": 1
         },
         {

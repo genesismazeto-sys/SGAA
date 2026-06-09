@@ -13077,6 +13077,138 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
     return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
 
+@app.route(
+    "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/inativar",
+    methods=["POST"],
+)
+@admin_required
+def admin_catalogo_inativar_versao(base_id: int, versao_id: int):
+    """
+    Inativação administrativa de uma atividade_versao ativa.
+
+    Permite a transição status = 'ativa' → 'inativa'.
+    A versão deixa de ser considerada ativa pelo resolvedor sem qualquer
+    alteração no resolvedor, writer, requisicoes, snapshot, cálculo ou aluno.
+
+    Bloqueio B1 — Rejeita se houver vínculo em matriz_atividade_versao_item.
+    O admin deve remover o vínculo na tela de versões da matriz primeiro.
+
+    Não remove vínculos, não cria atividade_transicao, não altera resolvedor,
+    não faz fallback, não escolhe substituta, sem efeito colateral silencioso.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+
+    versao = get_atividade_versao_by_id(conn, versao_id)
+    if not versao or versao["atividade_base_id"] != base_id:
+        flash("Versão não encontrada para esta atividade-base.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if versao["status"] != "ativa":
+        flash("Apenas versões ativas podem ser inativadas.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    usage = get_atividade_versao_usage_counts(conn, versao_id)
+    if usage["matriz_atividade_versao_item"] > 0:
+        flash(
+            f"Não é possível inativar: esta versão está vinculada a "
+            f"{usage['matriz_atividade_versao_item']} matriz(es). "
+            "Remova o vínculo na tela de versões da matriz antes de inativar.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    try:
+        cur = conn.execute(
+            "UPDATE atividade_versao SET status = 'inativa'"
+            " WHERE id = ? AND status = 'ativa'",
+            (versao_id,),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            flash("Inativação não aplicada: a versão não está mais ativa.", "error")
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+        conn.commit()
+        flash("Versão inativada com sucesso.", "success")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao inativar versão: {exc}", "error")
+
+    return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+
+@app.route(
+    "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/descontinuar",
+    methods=["POST"],
+)
+@admin_required
+def admin_catalogo_descontinuar_versao(base_id: int, versao_id: int):
+    """
+    Descontinuação administrativa de uma atividade_versao ativa.
+
+    Permite a transição status = 'ativa' → 'descontinuada'.
+    A versão deixa de ser considerada ativa pelo resolvedor sem qualquer
+    alteração no resolvedor, writer, requisicoes, snapshot, cálculo ou aluno.
+
+    Bloqueio B1 — Rejeita se houver vínculo em matriz_atividade_versao_item.
+    O admin deve remover o vínculo na tela de versões da matriz primeiro.
+
+    Não remove vínculos, não cria atividade_transicao, não altera resolvedor,
+    não faz fallback, não escolhe substituta, sem efeito colateral silencioso.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+
+    versao = get_atividade_versao_by_id(conn, versao_id)
+    if not versao or versao["atividade_base_id"] != base_id:
+        flash("Versão não encontrada para esta atividade-base.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if versao["status"] != "ativa":
+        flash("Apenas versões ativas podem ser descontinuadas.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    usage = get_atividade_versao_usage_counts(conn, versao_id)
+    if usage["matriz_atividade_versao_item"] > 0:
+        flash(
+            f"Não é possível descontinuar: esta versão está vinculada a "
+            f"{usage['matriz_atividade_versao_item']} matriz(es). "
+            "Remova o vínculo na tela de versões da matriz antes de descontinuar.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    try:
+        cur = conn.execute(
+            "UPDATE atividade_versao SET status = 'descontinuada'"
+            " WHERE id = ? AND status = 'ativa'",
+            (versao_id,),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            flash(
+                "Descontinuação não aplicada: a versão não está mais ativa.", "error"
+            )
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+        conn.commit()
+        flash("Versão descontinuada com sucesso.", "success")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao descontinuar versão: {exc}", "error")
+
+    return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+
 ALERTA_COLOR_OPTIONS = [
     {"label": "Azul", "bg": "#e3eefd", "border": "#7e95b2"},
     {"label": "Amarelo", "bg": "#fef4c0", "border": "#c9a227"},
