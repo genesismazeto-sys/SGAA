@@ -334,6 +334,14 @@
       <span>Lista de AEU</span>
       <span class="matriz-tab-count">({{ extensao_count }})</span>
     </a>
+    <a
+      class="matriz-tab"
+      href="{{ url_for('admin_matriz_versoes', matriz_id=matriz_id) }}"
+      role="tab"
+      aria-selected="false"
+    >
+      <span>Versões</span>
+    </a>
   {% else %}
     <span
       class="matriz-tab disabled"
@@ -354,6 +362,15 @@
     >
       <span>Lista de AEU</span>
       <span class="matriz-tab-count">({{ extensao_count }})</span>
+    </span>
+    <span
+      class="matriz-tab disabled"
+      role="tab"
+      aria-selected="false"
+      aria-disabled="true"
+      title="Salve a matriz para gerenciar as versões"
+    >
+      <span>Versões</span>
     </span>
   {% endif %}
 </div>

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Versões da Matriz — {{ matriz.nome }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .mv-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 2px 0 14px;
+  }
+  .mv-subtitle .badge {
+    margin-left: 6px;
+    font-size: 11px;
+    vertical-align: middle;
+  }
+  .mv-back { margin-bottom: 14px; }
+  .mv-table-wrap { overflow-x: auto; }
+  .mv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .mv-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+  }
+  .mv-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+    vertical-align: middle;
+  }
+  .mv-table tr:last-child td { border-bottom: 0; }
+  .mv-versao-atual {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #e8f4ef;
+    border: 1px solid #a3d4b8;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a6640;
+  }
+  .mv-versao-atual .lucide { width: 13px; height: 13px; }
+  .mv-sem-vinculo {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+  .mv-form-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .mv-form-inline select.control {
+    height: var(--btn-h);
+    font-size: 13px;
+    min-width: 200px;
+    max-width: 300px;
+  }
+  .mv-empty {
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .mv-empty p { margin: 0 0 6px; }
+  .mv-empty p:last-child { margin-bottom: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="main-title">Versões da Matriz</h1>
+<p class="mv-subtitle">
+  {{ matriz.nome }}{% if matriz.versao %} — {{ matriz.versao }}{% endif %}
+</p>
+
+<div class="mv-back">
+  <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz.id, tab='dados') }}">
+    <i class="lucide" data-lucide="arrow-left"></i>
+    <span>Voltar à matriz</span>
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert"
+           style="margin-bottom:10px; padding:10px 14px; border-radius:var(--radius); font-size:13px;
+                  background:{{ '#fee2e2' if category == 'error' else ('#dcfaeb' if category == 'success' else '#e3eefd') }};
+                  border:1px solid {{ '#f87171' if category == 'error' else ('#86efac' if category == 'success' else '#93c5fd') }};">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+{% if bases_info %}
+<div class="mv-table-wrap">
+  <table class="mv-table">
+    <thead>
+      <tr>
+        <th>Atividade-base</th>
+        <th>Versão atual</th>
+        <th>Definir versão ativa</th>
+        <th>Remover vínculo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in bases_info %}
+      <tr>
+        <td>
+          <strong>{{ item.base.nome_conceito }}</strong>
+        </td>
+        <td>
+          {% if item.vinculo %}
+            <span class="mv-versao-atual">
+              <i class="lucide" data-lucide="check-circle-2"></i>
+              {{ item.vinculo.codigo_normativo }} ({{ item.vinculo.eixo }})
+            </span>
+          {% else %}
+            <span class="mv-sem-vinculo">Sem vínculo</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.versoes_disponiveis %}
+            <form method="POST"
+                  action="{{ url_for('admin_matriz_versoes_definir', matriz_id=matriz.id) }}"
+                  class="mv-form-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="base_id" value="{{ item.base.id }}">
+              <select name="versao_id" class="control field-card" required>
+                <option value="">-- Selecione --</option>
+                {% for v in item.versoes_disponiveis %}
+                  <option value="{{ v.id }}"
+                    {{ 'selected' if item.vinculo and item.vinculo.atividade_versao_id == v.id else '' }}>
+                    {{ v.codigo_normativo }} ({{ v.eixo }})
+                  </option>
+                {% endfor %}
+              </select>
+              <button class="btn primary" type="submit">Definir</button>
+            </form>
+          {% else %}
+            <span class="mv-sem-vinculo">Nenhuma versão ativa disponível</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.vinculo %}
+            <form method="POST"
+                  action="{{ url_for('admin_matriz_versoes_remover', matriz_id=matriz.id) }}"
+                  onsubmit="return confirm('Remover vínculo de versão para esta atividade-base?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="base_id" value="{{ item.base.id }}">
+              <button class="btn"
+                      type="submit"
+                      style="color:var(--danger,#dc2626); border-color:var(--danger,#dc2626);">
+                Remover
+              </button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="mv-empty">
+  <p>Nenhuma atividade-base no escopo desta matriz.</p>
+  <p>Configure as listas de AAC e AEU da matriz para que as bases apareçam aqui.</p>
+</div>
+{% endif %}
+{% endblock %}

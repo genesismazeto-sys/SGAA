@@ -736,6 +736,58 @@ def _setup_isolated_csrf_clients(tmp_path: Path):
                 (base_id, norma_id),
             ).fetchone()["id"]
         )
+        # ---------------------------------------------------------------------------
+        # Seed D7.2B4: vínculo matriz→versão — evidência real para as rotas
+        # admin_matriz_versoes_definir e admin_matriz_versoes_remover.
+        # Precisamos de: norma ativa, versão ativa, atividade_legacy_map,
+        # matrizes_atividades_itens, matriz_norma e matriz_atividade_versao_item
+        # para que o GET admin/matrizes/<id>/versoes renderize os formulários POST.
+        # ---------------------------------------------------------------------------
+        cod_norma_lnk = f"NRM-LNK-{suffix}"
+        conn.execute(
+            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (cod_norma_lnk, "AAC", "rev2", "Norma Inventory Link", "ativa"),
+        )
+        norma_lnk_id = int(
+            conn.execute(
+                "SELECT id FROM norma_atividade WHERE codigo = ?",
+                (cod_norma_lnk,),
+            ).fetchone()["id"]
+        )
+        conn.execute(
+            """
+            INSERT INTO atividade_versao (
+                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (base_id, norma_lnk_id, cod_norma_lnk, "AAC", "1 - Grupo Inventory Link", "ativa"),
+        )
+        versao_lnk_id = int(
+            conn.execute(
+                "SELECT id FROM atividade_versao "
+                "WHERE atividade_base_id = ? AND norma_id = ?",
+                (base_id, norma_lnk_id),
+            ).fetchone()["id"]
+        )
+        conn.execute(
+            "INSERT INTO atividade_legacy_map"
+            " (atividade_id_legacy, atividade_base_id, status) VALUES (?, ?, ?)",
+            (int(atividade_id), base_id, "mapeada"),
+        )
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (int(support["matriz_id"]), int(atividade_id)),
+        )
+        conn.execute(
+            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
+            (int(support["matriz_id"]), norma_lnk_id),
+        )
+        conn.execute(
+            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
+            " VALUES (?, ?)",
+            (int(support["matriz_id"]), versao_lnk_id),
+        )
         conn.commit()
         main.create_database_snapshot(
             str(temp_database),

@@ -2431,6 +2431,124 @@ def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
     }
 
 
+# ===================== Helpers: D7.2B4 - Vínculo Matriz → atividade_versao =====================
+
+def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
+    """
+    Retorna as atividade_base no escopo legado de uma matriz via
+    matrizes_atividades_itens + atividade_legacy_map.
+    Estritamente read-only — sem fallback ou inferência.
+    """
+    return conn.execute(
+        """
+        SELECT DISTINCT
+            ab.id,
+            ab.nome_conceito,
+            ab.status
+          FROM matrizes_atividades_itens mai
+          JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
+          JOIN atividade_base ab ON ab.id = alm.atividade_base_id
+         WHERE mai.matriz_id = ?
+         ORDER BY LOWER(ab.nome_conceito) ASC
+        """,
+        (matriz_id,),
+    ).fetchall()
+
+
+def get_versoes_ativas_por_base_na_matriz(conn, matriz_id: int, base_id: int) -> list:
+    """
+    Retorna versões ativas de uma atividade_base cuja norma está vinculada
+    à matriz em matriz_norma. Apenas status 'ativa'.
+    Estritamente read-only — sem fallback, sem inferência, sem primeira ativa.
+    """
+    return conn.execute(
+        """
+        SELECT
+            av.id,
+            av.codigo_normativo,
+            av.eixo,
+            av.status,
+            n.id      AS norma_id,
+            n.codigo  AS norma_codigo
+          FROM atividade_versao av
+          JOIN norma_atividade n ON n.id = av.norma_id
+          JOIN matriz_norma mn ON mn.norma_id = n.id AND mn.matriz_id = ?
+         WHERE av.atividade_base_id = ?
+           AND av.status = 'ativa'
+         ORDER BY av.id
+        """,
+        (matriz_id, base_id),
+    ).fetchall()
+
+
+def get_vinculo_versao_da_matriz(conn, matriz_id: int, base_id: int):
+    """
+    Retorna o vínculo atual (matriz_atividade_versao_item) para uma matriz+base.
+    Deve existir no máximo um por matriz+base (invariante garantido pelo set).
+    Retorna None se não houver vínculo.
+    Estritamente read-only.
+    """
+    return conn.execute(
+        """
+        SELECT
+            mavi.id                AS item_id,
+            mavi.atividade_versao_id,
+            av.codigo_normativo,
+            av.eixo,
+            av.status              AS versao_status,
+            av.atividade_base_id
+          FROM matriz_atividade_versao_item mavi
+          JOIN atividade_versao av ON av.id = mavi.atividade_versao_id
+         WHERE mavi.matriz_id = ?
+           AND av.atividade_base_id = ?
+         LIMIT 1
+        """,
+        (matriz_id, base_id),
+    ).fetchone()
+
+
+def _set_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int, versao_id: int) -> None:
+    """
+    Define (substitui) o vínculo matriz→atividade_versao para uma atividade_base.
+    Operação "set": remove qualquer vínculo anterior da mesma matriz+base antes de inserir.
+    Garante no máximo um vínculo por matriz+base — nunca cria ambiguidade.
+    Não commita — responsabilidade do chamador.
+    """
+    conn.execute(
+        """
+        DELETE FROM matriz_atividade_versao_item
+         WHERE matriz_id = ?
+           AND atividade_versao_id IN (
+               SELECT id FROM atividade_versao WHERE atividade_base_id = ?
+           )
+        """,
+        (matriz_id, base_id),
+    )
+    conn.execute(
+        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
+        (matriz_id, versao_id),
+    )
+
+
+def _remover_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int) -> int:
+    """
+    Remove o vínculo matriz→atividade_versao para uma atividade_base.
+    Retorna o número de linhas apagadas (0 ou 1).
+    Não commita — responsabilidade do chamador.
+    """
+    cur = conn.execute(
+        """
+        DELETE FROM matriz_atividade_versao_item
+         WHERE matriz_id = ?
+           AND atividade_versao_id IN (
+               SELECT id FROM atividade_versao WHERE atividade_base_id = ?
+           )
+        """,
+        (matriz_id, base_id),
+    )
+    return cur.rowcount
+
+
 def get_legacy_map_list(conn) -> list:
     """
     Retorna as atividades legadas com seus dados de mapeamento
@@ -12140,6 +12258,182 @@ def admin_excluir_matriz(matriz_id: int):
     else:
         flash("Matriz não encontrada.", "error")
     return redirect(url_for("admin_matrizes"))
+
+
+# ===================== Rotas Admin: Vínculo Matriz → atividade_versao (D7.2B4) =====================
+
+@app.route("/admin/matrizes/<int:matriz_id>/versoes")
+@admin_required
+def admin_matriz_versoes(matriz_id: int):
+    """
+    Página admin para gerenciar vínculos explícitos matriz→atividade_versao.
+
+    Para cada atividade_base no escopo legado da matriz mostra:
+      - vínculo atual (se houver);
+      - versões ativas disponíveis (somente ativas, cujas normas estão em matriz_norma).
+
+    GET-only — sem escrita. Escrita via POST /definir e POST /remover.
+    Não usa fallback para primeira ativa. Sem inferência de versão.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
+    if not matriz:
+        flash("Matriz não encontrada.", "error")
+        return redirect(url_for("admin_matrizes"))
+
+    bases = get_bases_escopo_matriz(conn, matriz_id)
+    bases_info = []
+    for base in bases:
+        vinculo = get_vinculo_versao_da_matriz(conn, matriz_id, base["id"])
+        versoes_disponiveis = get_versoes_ativas_por_base_na_matriz(conn, matriz_id, base["id"])
+        bases_info.append({
+            "base": base,
+            "vinculo": vinculo,
+            "versoes_disponiveis": versoes_disponiveis,
+        })
+
+    return render_template(
+        "admin_matriz_versoes.html",
+        matriz=matriz,
+        bases_info=bases_info,
+    )
+
+
+@app.route("/admin/matrizes/<int:matriz_id>/versoes/definir", methods=["POST"])
+@admin_required
+def admin_matriz_versoes_definir(matriz_id: int):
+    """
+    Define (substitui) o vínculo matriz→atividade_versao para uma atividade_base.
+
+    Validações server-side:
+      1. Matriz existe.
+      2. atividade_base existe.
+      3. atividade_versao existe.
+      4. atividade_versao pertence à atividade_base informada.
+      5. atividade_versao.status == 'ativa'.
+      6. atividade_base no escopo legado da matriz (matrizes_atividades_itens + atividade_legacy_map).
+      7. norma_id da versão está em matriz_norma para esta matriz.
+
+    Operação "set": remove vínculo anterior da mesma matriz+base e insere novo.
+    Nunca cria ambiguidade nova (invariante por matriz+base).
+    Rollback + flash em falha.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+
+    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
+    if not matriz:
+        flash("Matriz não encontrada.", "error")
+        return redirect(url_for("admin_matrizes"))
+
+    base_id_raw = (request.form.get("base_id") or "").strip()
+    versao_id_raw = (request.form.get("versao_id") or "").strip()
+
+    if not base_id_raw.isdigit() or not versao_id_raw.isdigit():
+        flash("Parâmetros inválidos.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    base_id = int(base_id_raw)
+    versao_id = int(versao_id_raw)
+
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    versao = get_atividade_versao_by_id(conn, versao_id)
+    if not versao:
+        flash("Versão não encontrada.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    if versao["atividade_base_id"] != base_id:
+        flash("A versão selecionada não pertence à atividade-base informada.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    if versao["status"] != "ativa":
+        flash("Apenas versões com status 'ativa' podem ser vinculadas à matriz.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    in_scope = conn.execute(
+        """
+        SELECT 1
+          FROM matrizes_atividades_itens mai
+          JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
+         WHERE mai.matriz_id = ?
+           AND alm.atividade_base_id = ?
+         LIMIT 1
+        """,
+        (matriz_id, base_id),
+    ).fetchone() is not None
+    if not in_scope:
+        flash("A atividade-base não está no escopo legado desta matriz.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    norma_in_matriz = conn.execute(
+        "SELECT 1 FROM matriz_norma WHERE matriz_id = ? AND norma_id = ?",
+        (matriz_id, versao["norma_id"]),
+    ).fetchone() is not None
+    if not norma_in_matriz:
+        flash("A norma desta versão não está vinculada a esta matriz.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    try:
+        _set_versao_da_matriz_para_base(conn, matriz_id, base_id, versao_id)
+        conn.commit()
+        flash("Versão definida com sucesso.", "success")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao definir versão: {exc}", "error")
+
+    return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+
+@app.route("/admin/matrizes/<int:matriz_id>/versoes/remover", methods=["POST"])
+@admin_required
+def admin_matriz_versoes_remover(matriz_id: int):
+    """
+    Remove o vínculo matriz→atividade_versao para uma atividade_base.
+
+    Validações server-side:
+      1. Matriz existe.
+      2. atividade_base existe.
+
+    Idempotente: se não houver vínculo, retorna info sem erro.
+    Rollback + flash em falha.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+
+    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
+    if not matriz:
+        flash("Matriz não encontrada.", "error")
+        return redirect(url_for("admin_matrizes"))
+
+    base_id_raw = (request.form.get("base_id") or "").strip()
+    if not base_id_raw.isdigit():
+        flash("Parâmetros inválidos.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    base_id = int(base_id_raw)
+
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base não encontrada.", "error")
+        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
+
+    try:
+        rows_deleted = _remover_versao_da_matriz_para_base(conn, matriz_id, base_id)
+        conn.commit()
+        if rows_deleted:
+            flash("Vínculo removido com sucesso.", "success")
+        else:
+            flash("Não havia vínculo para remover.", "info")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao remover vínculo: {exc}", "error")
+
+    return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
 
 # ===================== Rotas Admin: Catálogo Versionado (read-only) =====================
