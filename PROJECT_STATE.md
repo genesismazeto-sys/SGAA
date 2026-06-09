@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-09
-Closeout: D7.2B3-PATCH3-DOCS-CLOSEOUT
-Executor: MiniMax-M3 (functional) / Codex/GitCP (docs closeout)
+Closeout: D7.2B4-PATCH1
+Executor: Claude Sonnet 4.6 (functional + docs)
 
 ## Permanent State
 
@@ -305,6 +305,70 @@ Executor: MiniMax-M3 (functional) / Codex/GitCP (docs closeout)
   - primeira ativa ou fallback silencioso.
 - Artifacts CSRF gerados por teste (`tests/_artifacts/csrf_inventory_shadow_*.json`) foram restaurados e não fazem parte do closeout.
 
+### D7.2B4-PATCH1 - admin UI for explicit matrix→atividade_versao links
+- Implemented and committed.
+- Commit `255ff80` — `Add admin UI for explicit matrix→atividade_versao links (D7.2B4)`.
+- Branch `recovery/d7-activity-versioning` at `255ff80` (not yet pushed to origin).
+- `main` / `origin/main` intact at `7e5eb56`.
+- **New helpers in `main.py`** (read-only + write, all scoped to admin routes):
+  - `get_bases_escopo_matriz(conn, matriz_id)` — bases in matrix legacy scope via `matrizes_atividades_itens + atividade_legacy_map`.
+  - `get_versoes_ativas_por_base_na_matriz(conn, matriz_id, base_id)` — active versions for a base whose norma is in `matriz_norma` for this matrix.
+  - `get_vinculo_versao_da_matriz(conn, matriz_id, base_id)` — single explicit link from `matriz_atividade_versao_item` for a matriz+base.
+  - `_set_versao_da_matriz_para_base(conn, matriz_id, base_id, versao_id)` — DELETE old + INSERT new, enforcing max-1 per matriz+base.
+  - `_remover_versao_da_matriz_para_base(conn, matriz_id, base_id)` — removes any link for this matriz+base, returns rowcount.
+- **3 new admin routes**:
+  - `GET  /admin/matrizes/<id>/versoes` → `admin_matriz_versoes` (page listing all scope bases with their current link and available versions).
+  - `POST /admin/matrizes/<id>/versoes/definir` → `admin_matriz_versoes_definir` (set/replace explicit link, 7 server-side validations).
+  - `POST /admin/matrizes/<id>/versoes/remover` → `admin_matriz_versoes_remover` (remove link, idempotent).
+- **Server-side validations in `admin_matriz_versoes_definir`**:
+  1. Matriz exists.
+  2. `base_id` and `versao_id` are digits.
+  3. `atividade_base` exists.
+  4. `atividade_versao` exists.
+  5. Versão belongs to the given base.
+  6. Versão `status == 'ativa'`.
+  7. Base is in the matrix's legacy scope (`matrizes_atividades_itens + atividade_legacy_map`).
+  8. Versão's `norma_id` is in `matriz_norma` for this matrix.
+  - Rollback + flash + redirect on error; commit + flash + redirect on success.
+- **1 new template**: `templates/admin_matriz_versoes.html`.
+  - Table: Atividade-base | Versão atual | Definir versão ativa | Remover vínculo.
+  - "Definir" form only shown when `versoes_disponiveis` non-empty.
+  - "Remover" form only shown when `vinculo` is set.
+  - Both forms include `name="csrf_token"` with `{{ csrf_token() }}`.
+- **Updated template**: `templates/admin_matriz_form.html`.
+  - "Versões" tab added in both `{% if activity_tabs_enabled %}` branch (active link to `admin_matriz_versoes`) and `{% else %}` branch (disabled span).
+- **New test file**: `tests/test_admin_matriz_versao_link.py` — **14 tests** covering:
+  1. GET 200.
+  2. UI shows scope bases.
+  3. Helper returns only ativas.
+  4. Helper excludes rascunho/inativa/descontinuada/substituida.
+  5. POST rejects version whose norma is not in `matriz_norma`.
+  6. POST creates valid link in DB.
+  7. POST replaces previous link (no duplicates per matriz+base).
+  8. POST removes link.
+  9. Resolver resolves after link set.
+  10. Resolver returns `base_without_version_for_matrix` after link removed.
+  11. POST rejects base not in matrix's legacy scope.
+  12. POST rejects version with norma absent from `matriz_norma`.
+  13. No first-active fallback without explicit link.
+  14. CSRF token present in rendered POST forms.
+- **Updated test**: `tests/test_csrf_inventory_audit.py` — seed data added (norma ativa, versão ativa, atividade_legacy_map, matrizes_atividades_itens, matriz_norma, matriz_atividade_versao_item) so the CSRF crawler renders the POST forms for the 2 new mutating routes.
+- **Test suite**: **381 passed**, 4 warnings (openpyxl). Up from 367 (+14 from new file, net).
+- **Permanent constraints preserved**:
+  - `resolver_versao_por_matriz` / `resolver_versao_por_aluno` / `resolver_versao` / `maybe_write_versioned_requisicao_snapshot` — untouched.
+  - No silent fallback / no first-active / version ambiguity remains a hard error.
+  - No version inference by name / eixo / date.
+  - No calculation / deferment / student screens changed.
+  - No schema / migration.
+  - No backfill / cutover.
+  - No merge to main.
+- Explicitly out of scope:
+  - Inativação/descontinuação/substituição de versão.
+  - Bulk import / real regulations.
+  - Matrix operational join switch.
+  - Student screens / calculation / deferment.
+  - Snapshot writer.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -323,6 +387,7 @@ Executor: MiniMax-M3 (functional) / Codex/GitCP (docs closeout)
 - `ccf1a7e` - Record D7.2B3 draft version creation
 - `c90ffe3` - Add draft activity version editing
 - `28d922d` - Add draft activity version activation
+- `255ff80` - Add admin UI for explicit matrix→atividade_versao links (D7.2B4)
 
 ## Current Risks And Limits
 
@@ -351,12 +416,12 @@ Executor: MiniMax-M3 (functional) / Codex/GitCP (docs closeout)
 - Versões que já estão em uso (matriz, requisição, transição) ficam imutáveis
   pela rota de edição — qualquer alteração futura exigiria nova versão.
 - Ativação de versão (rascunho→ativa) foi implementada no PATCH3.
+- Vínculo explícito matriz→versão foi implementado em D7.2B4-PATCH1.
 - Inativação/descontinuação/substituição de versão ainda não existem.
-- Vínculo matriz→versão ainda não existe.
-- Catálogo pode ter múltiplas versões ativas; ambiguidade deve ser controlada
-  na fase de vínculo matriz→atividade_versao.
-- Não há auditoria de quem ativou quando.
-- PATCH4 ou fase seguinte não deve começar sem escopo explícito e planejamento
+- Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
+  pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
+- Não há auditoria de quem definiu/removeu vínculo.
+- PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
 ## Permanent Working Directives
