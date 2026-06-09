@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-08
-Closeout: D7.2B3-PATCH2-DOCS-CLOSEOUT
-Executor: MiniMax-M3
+Last updated: 2026-06-09
+Closeout: D7.2B3-PATCH3-DOCS-CLOSEOUT
+Executor: MiniMax-M3 (functional) / Codex/GitCP (docs closeout)
 
 ## Permanent State
 
@@ -257,6 +257,54 @@ Executor: MiniMax-M3
 - `main` / `origin/main` intact at `7e5eb56`.
 - Branch `recovery/d7-activity-versioning` local at `c90ffe3`; not yet pushed.
 
+### D7.2B3-PATCH3 - draft activity version activation
+- Implemented, approved, and pushed.
+- Commit `28d922d` — `Add draft activity version activation`.
+- Commit pushed to `origin/recovery/d7-activity-versioning` at `28d922d`.
+- `main` / `origin/main` intact at `7e5eb56`.
+- 1 new admin POST route:
+  - `/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/ativar`
+- Functional guarantees:
+  - ativação explícita `status = 'rascunho'` → `status = 'ativa'`;
+  - `@admin_required` na rota;
+  - validação server-side: base existe, versão existe e pertence à base, status == `'rascunho'`, norma vinculada existe e está `'ativa'`;
+  - `UPDATE atividade_versao SET status='ativa' WHERE id=? AND status='rascunho'` com rowcount check;
+  - rollback + flash + redirect em falha, sem 500;
+  - commit + flash + redirect no sucesso;
+  - botão/form "Ativar" apenas para versões em rascunho no template de detalhe;
+  - `csrf_token` real renderizado no form;
+  - confirmação JS (`window.confirm`) é apenas UX; segurança é server-side.
+- Change in `tests/test_csrf_inventory_audit.py` (56 lines):
+  - **apenas seed/evidência real**: inserção de `atividade_base`, `norma_atividade` (ativa) e `atividade_versao` (rascunho) no setup isolado;
+  - adição de `base_id` e `versao_id` ao `sample_values` do crawler;
+  - **sem whitelist, sem bypass, sem relaxamento de política CSRF, sem remoção de rota do inventário.**
+- Decisões de produto aplicadas:
+  - **D1** — múltiplas versões ativas permitidas no catálogo; bloqueio de ambiguidade fica para fase de vínculo matriz→atividade_versao.
+  - **D2** — norma vinculada inativa bloqueia ativação.
+  - **D3** — CH, limites e vigência não são exigidos para ativação.
+  - **D4** — confirmação simples no form (JS opcional), segurança server-side.
+- Testes validados:
+  - `test_csrf_inventory_audit.py` — **2 passed**;
+  - `test_admin_activity_version_catalog_version_activate.py` — **17 passed** (novo);
+  - `test_admin_activity_version_catalog_version_edit.py` — **28 passed**;
+  - `test_admin_activity_version_catalog_version_form.py` — **17 passed**;
+  - `test_matriz_versao_contract.py` + `test_activity_versioning_resolver.py` — **14 passed**;
+  - `pytest -q --tb=line` (full suite) — **367 passed**, 4 warnings (openpyxl deprecation).
+- Explicitly out of scope:
+  - inativação/descontinuação/substituição de versão;
+  - auditoria de "quem ativou quando";
+  - vínculo matriz → atividade_versao;
+  - UI de matriz escolhendo versão;
+  - fluxo do aluno;
+  - cálculo/deferimento/indeferimento;
+  - snapshot writer;
+  - schema/migration;
+  - backfill/cutover;
+  - importação de regulamentos reais;
+  - menu/sidebar;
+  - primeira ativa ou fallback silencioso.
+- Artifacts CSRF gerados por teste (`tests/_artifacts/csrf_inventory_shadow_*.json`) foram restaurados e não fazem parte do closeout.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -274,6 +322,7 @@ Executor: MiniMax-M3
 - `16b1480` - Add draft activity version creation
 - `ccf1a7e` - Record D7.2B3 draft version creation
 - `c90ffe3` - Add draft activity version editing
+- `28d922d` - Add draft activity version activation
 
 ## Current Risks And Limits
 
@@ -301,9 +350,13 @@ Executor: MiniMax-M3
 - The matrix still does not choose `atividade_versao_id` through the UI.
 - Versões que já estão em uso (matriz, requisição, transição) ficam imutáveis
   pela rota de edição — qualquer alteração futura exigiria nova versão.
-- Ativação/publicação de versão ainda não existe.
+- Ativação de versão (rascunho→ativa) foi implementada no PATCH3.
+- Inativação/descontinuação/substituição de versão ainda não existem.
 - Vínculo matriz→versão ainda não existe.
-- PATCH3 ou fase seguinte não deve começar sem escopo explícito e planejamento
+- Catálogo pode ter múltiplas versões ativas; ambiguidade deve ser controlada
+  na fase de vínculo matriz→atividade_versao.
+- Não há auditoria de quem ativou quando.
+- PATCH4 ou fase seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
 ## Permanent Working Directives
