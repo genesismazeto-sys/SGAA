@@ -1,12 +1,13 @@
 # Agent Handoff
 
 Last updated: 2026-06-09
-Closeout: D7.2B4-PATCH1
+Closeout: D7.2B5-PATCH1
 Executor: Claude Sonnet 4.6 (functional + docs)
 
 ## Current State
 
-- D7.2B4-PATCH1 completed.
+- D7.2B5-PATCH1 completed.
+- D7.2B5-PATCH1 functional code committed at `f235f62` (local only; not yet pushed to origin).
 - D7.2B4-PATCH1 functional code committed at `255ff80` (local only; not yet pushed to origin).
 - D7.2B3-PATCH3-DOCS-CLOSEOUT remains approved.
 - D7.2B3-PATCH3 functional code committed at `28d922d` and pushed to
@@ -21,7 +22,7 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - D6.6-DISPLAY-1R remains approved.
 - D6.6-DISPLAY-TEXT-ACCENTS-1R remains approved.
 - D6.7-PLAN remains approved.
-- Commits on `recovery/d7-activity-versioning` (local ahead of remote by 1):
+- Commits on `recovery/d7-activity-versioning` (local ahead of remote by 2):
   - `73d45ac` — `Add read-only activity version catalog`.
   - `a3537cf` — `Fix activity version catalog card grids`.
   - `b91d03f` — `Add create forms for activity base and norms`.
@@ -30,22 +31,18 @@ Executor: Claude Sonnet 4.6 (functional + docs)
   - `ccf1a7e` — `Record D7.2B3 draft version creation`.
   - `c90ffe3` — `Add draft activity version editing`.
   - `28d922d` (origin/recovery/d7-activity-versioning) — `Add draft activity version activation`.
-  - `255ff80` (HEAD -> recovery/d7-activity-versioning) — `Add admin UI for explicit matrix→atividade_versao links (D7.2B4)`.
+  - `255ff80` — `Add admin UI for explicit matrix→atividade_versao links (D7.2B4)`.
+  - `f235f62` (HEAD -> recovery/d7-activity-versioning) — `Add admin lifecycle transitions for atividade_versao (D7.2B5)`.
+- D7.2B5-PATCH1 delivered inativação and descontinuação of ativa versões:
+  - 2 new admin POST routes: `admin_catalogo_inativar_versao`, `admin_catalogo_descontinuar_versao`;
+  - hard B1 block if any `matriz_atividade_versao_item` link exists (no silent DELETE);
+  - updated template `templates/admin_catalogo_versao_detalhe.html` (Inativar / Descontinuar buttons for ativa versões);
+  - 1 new test file: `tests/test_admin_activity_version_catalog_version_lifecycle.py` (19 tests);
+  - CSRF inventory unchanged (existing `versao_lnk_id` ativa provides form evidence);
+  - **400 passed** na suíte completa (up from 381).
 - D7.2B4-PATCH1 delivered admin UI for explicit matriz→atividade_versao links:
-  - 5 new helpers: `get_bases_escopo_matriz`, `get_versoes_ativas_por_base_na_matriz`, `get_vinculo_versao_da_matriz`, `_set_versao_da_matriz_para_base`, `_remover_versao_da_matriz_para_base`;
-  - 3 new admin routes: GET `admin_matriz_versoes`, POST `admin_matriz_versoes_definir`, POST `admin_matriz_versoes_remover`;
-  - 1 new template: `templates/admin_matriz_versoes.html`;
-  - 1 updated template: `templates/admin_matriz_form.html` ("Versões" tab added);
-  - 1 new test file: `tests/test_admin_matriz_versao_link.py` (14 tests);
-  - updated `tests/test_csrf_inventory_audit.py` (seed/evidência real para as 2 novas rotas POST);
-  - **381 passed** na suíte completa (up from 367).
-- D7.2B3-PATCH3 delivered controlled activation of `atividade_versao` in rascunho:
-  - 1 new admin POST route: `/admin/catalogo-versoes/<base_id>/versoes/<versao_id>/ativar`;
-  - no new helpers (reuses `get_atividade_base`, `get_atividade_versao_by_id`, `get_norma_by_id`);
-  - template `admin_catalogo_versao_detalhe.html` ganhou form "Ativar" com csrf_token ao lado do link "Editar";
-  - alteração em `test_csrf_inventory_audit.py` (seed/evidência real, sem whitelist);
-  - novo teste: `test_admin_activity_version_catalog_version_activate.py` com 17 testes;
-  - 367 passed na suíte completa.
+  - 5 new helpers, 3 new admin routes, 1 new template, 1 updated template, 14 tests; 381 passed.
+- D7.2B3-PATCH3 delivered controlled activation of `atividade_versao` in rascunho; 367 passed.
 - D7.2B3-PATCH2 delivered controlled editing of `atividade_versao` in rascunho.
 - D7.2B2 previously delivered controlled creation of `atividade_base` and `norma_atividade`.
 - D7.2B1 produced the first admin read-only layer of the versioned catalog.
@@ -54,31 +51,31 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 
 ## Last Closed Phase
 
-- D7.2B4-PATCH1 completed (functional code committed locally).
-- Admin UI for explicit matrix→atividade_versao links.
-- Commit `255ff80` on `recovery/d7-activity-versioning` (local only; not yet pushed to origin).
-- 5 new helpers + 3 new admin routes + 1 new template + 1 updated template + 1 new test file (14 tests) + 1 updated CSRF test.
-- "set" operation enforces max-1 per matriz+base via DELETE+INSERT in `matriz_atividade_versao_item`.
-- 14 new tests pass; 381 total tests pass in the full suite.
-- Resolver untouched. No silent fallback. No first-active. Ambiguity remains a hard error.
+- D7.2B5-PATCH1 completed (functional code committed locally).
+- Admin lifecycle transitions: ativa → inativa; ativa → descontinuada.
+- Commit `f235f62` on `recovery/d7-activity-versioning` (local only; not yet pushed to origin).
+- 2 new POST routes + template update + 19 new tests.
+- Hard B1 block: inativar/descontinuar rejeitadas se há vínculo em `matriz_atividade_versao_item`.
+  Error message orientates admin to remove the link first; no automatic deletion.
+- 19 new tests pass; 400 total tests pass in the full suite.
+- Resolver untouched. No `atividade_transicao`. No substituta. No silent fallback.
 - No student flow, no calculation/deferment, no schema/migration, no snapshot writer, no backfill, no cutover.
 - `main` / `origin/main` intact at `7e5eb56`.
-- Branch `recovery/d7-activity-versioning` local at `255ff80`, remote at `28d922d`.
+- Branch `recovery/d7-activity-versioning` local at `f235f62`, remote at `28d922d`.
 
 ## Recommended Next Phase
 
 - No new implementation phase is approved right now.
-- D7.2B4-PATCH1 is closed (admin UI for explicit matrix→versao links).
-- Próxima fase provável ainda não aprovada:
-  - inativação/descontinuação/substituição de versão; ou
-  - importação/cadastro real de regulamentos; ou
-  - auditoria de ações de vínculo (quem definiu/removeu, quando).
+- D7.2B5-PATCH1 is closed (inativação + descontinuação de versão ativa).
+- Próximas fases prováveis ainda não aprovadas:
+  - substituição de versão (`substituida`), com ou sem `atividade_transicao`; ou
+  - auditoria de ações de ciclo de vida (quem inativou/descontinuou, quando); ou
+  - importação/cadastro real de regulamentos.
   - Nenhuma deve iniciar sem planejamento read-only separado e escopo aprovado.
 - Keep the current D6.6 state: admin-only, diagnostic, read-only.
 - The new catalog screens exist but are not linked from the menu/sidebar yet.
-- Immediate next step: if approved, push the docs commit.
-- Any matrix selection of `atividade_versao_id` or version lifecycle expansion
-  must not start without a new approved scope.
+- Immediate next step: if approved, push the pending commits (D7.2B4 + D7.2B5).
+- Any version lifecycle expansion beyond inativa/descontinuada must not start without a new approved scope.
 - If work resumes later, prefer docs/runbook clarification or a fresh
   architectural review before any new code phase.
 
@@ -101,8 +98,12 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - D7.2B4-PATCH1 added the admin UI to set/remove explicit matriz→versão links.
   - Max 1 link per matriz+base enforced by "set" operation (DELETE old + INSERT new).
   - Resolver still requires an explicit link; no first-active fallback.
-- Inativação/descontinuação/substituição de versão ainda não existem.
-- Não há auditoria de quem definiu/removeu vínculo.
+- D7.2B5-PATCH1 added inativação (ativa→inativa) and descontinuação (ativa→descontinuada).
+  - Bloqueio B1: a operação rejeita se houver qualquer vínculo em `matriz_atividade_versao_item`.
+  - Sem DELETE automático de vínculo. Sem `atividade_transicao`. Sem substituta. Sem fallback.
+- Substituição de versão (`substituida`) ainda não existe.
+- Reativação de versão (inativa/descontinuada → ativa) ainda não existe.
+- Não há auditoria de quem ativou/inativou/descontinuou/definiu/removeu vínculo.
 - Fase seguinte não deve começar sem escopo explícito.
 
 ## Instructions For The Next Agent
@@ -111,10 +112,10 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - Summarize understanding before implementing anything.
 - Treat `atividade_id` as the operational source of truth.
 - Do not expand snapshot display beyond the current admin-only read-only surfaces unless a new approved phase explicitly authorizes it.
-- D7.2B4-PATCH1 is closed. Inativação/descontinuação/substituição de versão
-  e qualquer outra extensão não devem começar sem escopo explícito aprovado.
-- The branch `recovery/d7-activity-versioning` is local at `255ff80`, remote at `28d922d`.
-  Push of the D7.2B4-PATCH1 commit (`255ff80`) requires authorization.
+- D7.2B5-PATCH1 is closed. Substituição, reativação, `atividade_transicao`, e qualquer
+  outra extensão de ciclo de vida não devem começar sem escopo explícito aprovado.
+- The branch `recovery/d7-activity-versioning` is local at `f235f62`, remote at `28d922d`.
+  Push of commits `255ff80` and `f235f62` requires authorization.
 - Escopo proibido contínuo: main, matriz operacional, aluno, cálculo,
   deferimento, snapshot writer, schema/migration, backfill/cutover,
   primeira ativa, inferência de versão por nome/eixo/data, fallback silencioso,

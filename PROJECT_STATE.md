@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-09
-Closeout: D7.2B4-PATCH1
+Closeout: D7.2B5-PATCH1
 Executor: Claude Sonnet 4.6 (functional + docs)
 
 ## Permanent State
@@ -369,6 +369,54 @@ Executor: Claude Sonnet 4.6 (functional + docs)
   - Student screens / calculation / deferment.
   - Snapshot writer.
 
+### D7.2B5-PATCH1 - admin lifecycle transitions for atividade_versao
+- Implemented and committed.
+- Commit `f235f62` — `Add admin lifecycle transitions for atividade_versao (D7.2B5)`.
+- Branch `recovery/d7-activity-versioning` at `f235f62` (not yet pushed to origin).
+- `main` / `origin/main` intact at `7e5eb56`.
+- **2 new admin POST routes**:
+  - `POST /admin/catalogo-versoes/<base_id>/versoes/<versao_id>/inativar` → `admin_catalogo_inativar_versao`.
+  - `POST /admin/catalogo-versoes/<base_id>/versoes/<versao_id>/descontinuar` → `admin_catalogo_descontinuar_versao`.
+- **Functional guarantees**:
+  - Ambas exigem `@admin_required` e CSRF real no form.
+  - Validação server-side: base existe, versão existe e pertence à base da URL, status atual == `'ativa'`.
+  - **Bloqueio B1**: rejeita se houver qualquer vínculo em `matriz_atividade_versao_item`; mensagem orienta o admin a remover o vínculo na tela de versões da matriz primeiro, sem realizar nenhum efeito colateral.
+  - `UPDATE atividade_versao SET status = 'inativa'/'descontinuada' WHERE id = ? AND status = 'ativa'` com rowcount check.
+  - Rollback + flash + redirect em falha; commit + flash + redirect em sucesso.
+  - A versão inativada/descontinuada sai automaticamente do escopo do resolvedor (pois `_atividade_versao_status_ativo` retorna `False` para esses status) sem nenhuma alteração no resolvedor.
+- **Template `templates/admin_catalogo_versao_detalhe.html`**:
+  - Nova branch `{% elif status_key == 'ativa' %}` na coluna Ações com botões "Inativar" (âmbar) e "Descontinuar" (vermelho).
+  - Ambos os botões têm `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">`.
+  - Confirmação JS (`window.confirm`) é apenas UX; segurança é server-side.
+  - CSS: `.vc-inativar-btn` e `.vc-descontinuar-btn` adicionados ao bloco `<style>`.
+- **New test file**: `tests/test_admin_activity_version_catalog_version_lifecycle.py` — **19 tests**:
+  1–8: inativar — ativa sem vínculo, inexistente, outra base, já inativa, rascunho, descontinuada, substituida, com vínculo (bloqueio B1 completo).
+  9: resolver retorna ausência de versão após inativar.
+  10–14: descontinuar — ativa sem vínculo, com vínculo, rascunho, já descontinuada, inativa.
+  15–17: template — buttons rendered for ativa only, not rascunho, not outros.
+  18: CSRF token presente em ambos os forms.
+  19: regressão D7.2B4 — inativar versão A não quebra resolver para versão B da mesma matriz.
+- **CSRF inventory test** (`tests/test_csrf_inventory_audit.py`): **sem alterações** — `versao_lnk_id` (ativa, da seed D7.2B4) já fornece evidência renderizada para ambas as novas rotas POST.
+- **Test suite**: **400 passed**, 4 warnings (openpyxl). Up from 381 (+19 from new file, net).
+- **Permanent constraints preserved**:
+  - `resolver_versao_por_matriz` / `resolver_versao_por_aluno` / `resolver_versao` / `maybe_write_versioned_requisicao_snapshot` — untouched.
+  - No silent fallback / no first-active / version ambiguity remains a hard error.
+  - No DELETE automático de `matriz_atividade_versao_item`.
+  - No `atividade_transicao` created.
+  - No version substituta chosen.
+  - No calculation / deferment / student screens changed.
+  - No schema / migration.
+  - No backfill / cutover.
+  - No merge to main.
+- **Explicitly out of scope**:
+  - Substituição de versão (`substituida`).
+  - Reativação de versão inativa ou descontinuada.
+  - `atividade_transicao`.
+  - Auditoria de quem inativou/descontinuou.
+  - Bulk import / real regulations.
+  - Student screens / calculation / deferment.
+  - Snapshot writer.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -388,6 +436,7 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - `c90ffe3` - Add draft activity version editing
 - `28d922d` - Add draft activity version activation
 - `255ff80` - Add admin UI for explicit matrix→atividade_versao links (D7.2B4)
+- `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
 
 ## Current Risks And Limits
 
@@ -417,10 +466,11 @@ Executor: Claude Sonnet 4.6 (functional + docs)
   pela rota de edição — qualquer alteração futura exigiria nova versão.
 - Ativação de versão (rascunho→ativa) foi implementada no PATCH3.
 - Vínculo explícito matriz→versão foi implementado em D7.2B4-PATCH1.
-- Inativação/descontinuação/substituição de versão ainda não existem.
+- Inativação e descontinuação de versão foram implementadas em D7.2B5-PATCH1.
+  Substituição de versão ainda não existe.
 - Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
-- Não há auditoria de quem definiu/removeu vínculo.
+- Não há auditoria de quem ativou/inativou/descontinuou versão.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
