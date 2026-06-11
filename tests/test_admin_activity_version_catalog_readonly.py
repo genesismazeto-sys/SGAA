@@ -17,6 +17,7 @@ Provas obrigatórias:
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import pytest
@@ -47,7 +48,20 @@ def _login_admin(client):
         sess["user_name"] = "Administrador"
 
 
-def _seed_base_and_norma(client):
+def _seed_base_and_norma(
+    client,
+    *,
+    base_nome: str = "Atividade Teste D72B1",
+    base_descricao: str = "Descrição de teste",
+    norma_codigo: str = "TST-rev1",
+    norma_eixo: str = "AAC",
+    norma_revisao: str = "rev1",
+    norma_nome: str = "Norma Teste D72B1",
+    norma_status: str = "ativa",
+    versao_codigo_normativo: str | None = None,
+    versao_grupo: str = "1 - Grupo Teste",
+    versao_status: str = "ativa",
+):
     """
     Insere diretamente uma atividade_base, norma_atividade e atividade_versao
     no banco de teste para que os testes de listagem tenham algo a exibir.
@@ -59,38 +73,39 @@ def _seed_base_and_norma(client):
         # Garante que não há colisão de nome único
         existing = conn.execute(
             "SELECT id FROM atividade_base WHERE nome_conceito = ?",
-            ("Atividade Teste D72B1",),
+            (base_nome,),
         ).fetchone()
         if existing:
             base_id = existing["id"]
         else:
             conn.execute(
                 "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
-                ("Atividade Teste D72B1", "Descrição de teste", "ativo"),
+                (base_nome, base_descricao, "ativo"),
             )
             conn.commit()
             base_id = conn.execute(
                 "SELECT id FROM atividade_base WHERE nome_conceito = ?",
-                ("Atividade Teste D72B1",),
+                (base_nome,),
             ).fetchone()["id"]
 
         existing_norma = conn.execute(
             "SELECT id FROM norma_atividade WHERE codigo = ?",
-            ("TST-rev1",),
+            (norma_codigo,),
         ).fetchone()
         if existing_norma:
             norma_id = existing_norma["id"]
         else:
             conn.execute(
                 "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-                ("TST-rev1", "AAC", "rev1", "Norma Teste D72B1", "ativa"),
+                (norma_codigo, norma_eixo, norma_revisao, norma_nome, norma_status),
             )
             conn.commit()
             norma_id = conn.execute(
                 "SELECT id FROM norma_atividade WHERE codigo = ?",
-                ("TST-rev1",),
+                (norma_codigo,),
             ).fetchone()["id"]
 
+        codigo_normativo = versao_codigo_normativo or norma_codigo
         existing_versao = conn.execute(
             "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
             (base_id, norma_id),
@@ -104,7 +119,14 @@ def _seed_base_and_norma(client):
                     (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (base_id, norma_id, "TST-rev1", "AAC", "1 - Grupo Teste", "ativa"),
+                (
+                    base_id,
+                    norma_id,
+                    codigo_normativo,
+                    norma_eixo,
+                    versao_grupo,
+                    versao_status,
+                ),
             )
             conn.commit()
             versao_id = conn.execute(
@@ -113,6 +135,40 @@ def _seed_base_and_norma(client):
             ).fetchone()["id"]
 
     return base_id, norma_id, versao_id
+
+
+def _insert_transicao(
+    from_versao_id: int,
+    to_versao_id: int,
+    *,
+    tipo_transicao: str = "mesmo_eixo",
+    justificativa: str | None = None,
+    observacao_admin: str | None = None,
+    created_at: str = "2026-06-11 08:15:00",
+):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            """
+            INSERT INTO atividade_transicao (
+                from_atividade_versao_id,
+                to_atividade_versao_id,
+                tipo_transicao,
+                justificativa,
+                observacao_admin,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                from_versao_id,
+                to_versao_id,
+                tipo_transicao,
+                justificativa,
+                observacao_admin,
+                created_at,
+            ),
+        )
+        conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +262,131 @@ def test_catalogo_versao_detalhe_shows_base_name(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Atividade Teste D72B1" in html
+
+
+def test_catalogo_versao_detalhe_shows_empty_transition_history(client):
+    _login_admin(client)
+    base_id, _, _ = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Vazio D72B6",
+        norma_codigo="HIST-EMPTY-D72B6",
+        norma_nome="Norma Historico Vazio D72B6",
+        norma_revisao="rev-empty-d72b6",
+    )
+
+    response = client.get(f"/admin/catalogo-versoes/{base_id}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Histórico de transições" in html
+    assert "Nenhuma transição registrada para esta atividade-base." in html
+
+
+def test_catalogo_versao_detalhe_lists_transition_history_for_current_base(client):
+    _login_admin(client)
+    base_id, _, origem_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Lista D72B6",
+        norma_codigo="HIST-LISTA-ORIG-D72B6",
+        norma_nome="Norma Origem Historico Lista D72B6",
+        norma_revisao="rev-lista-orig-d72b6",
+    )
+    _, _, destino_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Lista D72B6",
+        norma_codigo="HIST-LISTA-DEST-D72B6",
+        norma_nome="Norma Destino Historico Lista D72B6",
+        norma_revisao="rev-lista-dest-d72b6",
+    )
+    _insert_transicao(
+        origem_id,
+        destino_id,
+        created_at="2026-06-11 09:45:00",
+    )
+
+    response = client.get(f"/admin/catalogo-versoes/{base_id}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "HIST-LISTA-ORIG-D72B6" in html
+    assert "HIST-LISTA-DEST-D72B6" in html
+    assert "mesmo_eixo" in html
+    assert "2026-06-11 09:45:00" in html
+
+
+def test_catalogo_versao_detalhe_filters_transition_history_by_base(client):
+    _login_admin(client)
+    base_id, _, origem_a_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Filtro A D72B6",
+        norma_codigo="HIST-FILT-A-ORIG-D72B6",
+        norma_nome="Norma Filtro A Origem D72B6",
+        norma_revisao="rev-filt-a-orig-d72b6",
+    )
+    _, _, destino_a_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Filtro A D72B6",
+        norma_codigo="HIST-FILT-A-DEST-D72B6",
+        norma_nome="Norma Filtro A Destino D72B6",
+        norma_revisao="rev-filt-a-dest-d72b6",
+    )
+    _insert_transicao(origem_a_id, destino_a_id, created_at="2026-06-11 10:10:10")
+
+    _, _, origem_b_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Filtro B D72B6",
+        norma_codigo="HIST-FILT-B-ORIG-D72B6",
+        norma_nome="Norma Filtro B Origem D72B6",
+        norma_revisao="rev-filt-b-orig-d72b6",
+    )
+    _, _, destino_b_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Filtro B D72B6",
+        norma_codigo="HIST-FILT-B-DEST-D72B6",
+        norma_nome="Norma Filtro B Destino D72B6",
+        norma_revisao="rev-filt-b-dest-d72b6",
+    )
+    _insert_transicao(origem_b_id, destino_b_id, created_at="2026-06-11 10:20:20")
+
+    response = client.get(f"/admin/catalogo-versoes/{base_id}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "HIST-FILT-A-ORIG-D72B6" in html
+    assert "HIST-FILT-A-DEST-D72B6" in html
+    assert "HIST-FILT-B-ORIG-D72B6" not in html
+    assert "HIST-FILT-B-DEST-D72B6" not in html
+
+
+def test_catalogo_versao_detalhe_shows_dash_for_empty_transition_note(client):
+    _login_admin(client)
+    base_id, _, origem_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Nota Vazia D72B6",
+        norma_codigo="HIST-NOTA-ORIG-D72B6",
+        norma_nome="Norma Nota Origem D72B6",
+        norma_revisao="rev-nota-orig-d72b6",
+    )
+    _, _, destino_id = _seed_base_and_norma(
+        client,
+        base_nome="Atividade Historico Nota Vazia D72B6",
+        norma_codigo="HIST-NOTA-DEST-D72B6",
+        norma_nome="Norma Nota Destino D72B6",
+        norma_revisao="rev-nota-dest-d72b6",
+    )
+    _insert_transicao(
+        origem_id,
+        destino_id,
+        justificativa=None,
+        observacao_admin=None,
+        created_at="2026-06-11 11:11:11",
+    )
+
+    response = client.get(f"/admin/catalogo-versoes/{base_id}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert re.search(r'<td class="history-note-cell">\s*-\s*</td>', html)
 
 
 # ---------------------------------------------------------------------------

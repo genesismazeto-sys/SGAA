@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-11
-Closeout: D7.2B5-PATCH2
+Closeout: D7.2B6 docs-only pending commit
 Executor: Codex GPT-5 (docs closeout)
 
 ## Permanent State
@@ -420,7 +420,7 @@ Executor: Codex GPT-5 (docs closeout)
 ### D7.2B5-PATCH2 - explicit activity version substitution
 - Implemented and committed.
 - Commit `9d2e9fb` - `Add explicit activity version substitution`.
-- Branch `recovery/d7-activity-versioning` local at `9d2e9fb`; `origin/recovery/d7-activity-versioning` remains at `23002ae`.
+- Branch `recovery/d7-activity-versioning` later advanced to docs closeout `5f7dbc8`, aligned with `origin/recovery/d7-activity-versioning`.
 - `main` / `origin/main` intact at `7e5eb56`.
 - 1 new admin POST route:
   - `/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir`
@@ -451,6 +451,46 @@ Executor: Codex GPT-5 (docs closeout)
   - matriz/resolver/csrf: `30 passed`;
   - lifecycle isolated: `34 passed`.
 
+### D7.2B6 - admin transition history (read-only, pending commit)
+- Functionally approved and documented, but **not committed yet**.
+- Git base for this phase:
+  - `HEAD` local: `5f7dbc8`;
+  - `origin/recovery/d7-activity-versioning`: `5f7dbc8`;
+  - `main` / `origin/main`: `7e5eb56`.
+- Functional files currently modified in the working tree:
+  - `main.py`
+  - `templates/admin_catalogo_versao_detalhe.html`
+  - `tests/test_admin_activity_version_catalog_readonly.py`
+- Functional scope delivered:
+  - new read-only helper `get_atividade_transicoes_por_base`;
+  - `JOIN` entre `atividade_transicao` e versões origem/destino;
+  - filtro por `atividade_base` da origem ou do destino;
+  - payload com `versao_origem`, `versao_destino`, `tipo_transicao`, `eixo`, `created_at` e `motivo`;
+  - `motivo` usa `justificativa` ou `observacao_admin` ou fallback `"-"`;
+  - rota `GET /admin/catalogo-versoes/<base_id>` passa `transicoes_historico` ao template existente;
+  - `templates/admin_catalogo_versao_detalhe.html` ganhou a seção read-only `Histórico de transições` com tabela e estado vazio.
+- Garantias preservadas:
+  - sem `POST` novo;
+  - sem CSRF novo;
+  - sem schema/triggers;
+  - sem fluxo do aluno;
+  - sem cálculo/deferimento;
+  - sem writer/versioned snapshot;
+  - sem matriz;
+  - sem alteração da lógica de ativar/inativar/descontinuar/substituir.
+- Testes executados:
+  - `python -m pytest tests/test_admin_activity_version_catalog_readonly.py -q --tb=short` → `21 passed in 10.03s`;
+  - `python -m pytest tests/test_admin_activity_version_catalog_version_lifecycle.py -q --tb=short` → `34 passed in 102.08s`.
+- Revisão visual executada:
+  - renderização headless temporária do template;
+  - cenário sem transições exibiu `Nenhuma transição registrada para esta atividade-base.`;
+  - cenário com transição exibiu origem, destino, `tipo_transicao`, fallback `"-"` em motivo e `created_at`;
+  - botões `Ativar`, `Inativar`, `Descontinuar` e `Substituir` permaneceram visíveis sem quebra visual óbvia.
+- Riscos residuais:
+  - `created_at` segue exibido em formato cru do SQLite;
+  - não há auditoria de ator/admin na tabela `atividade_transicao`;
+  - a UI lista tipos de transição de forma genérica, sem fluxo novo para além de `mesmo_eixo`.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -472,6 +512,7 @@ Executor: Codex GPT-5 (docs closeout)
 - `255ff80` - Add admin UI for explicit matrix→atividade_versao links (D7.2B4)
 - `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
 - `9d2e9fb` - Add explicit activity version substitution
+- `5f7dbc8` - Record D7.2B5-PATCH2 substitution closeout
 
 ## Current Risks And Limits
 
@@ -508,6 +549,8 @@ Executor: Codex GPT-5 (docs closeout)
   - cria `atividade_transicao` com `tipo_transicao='mesmo_eixo'`;
   - bloqueia origem com vínculo em matriz;
   - bloqueia origem/destino com transição prévia como `from`.
+- D7.2B6 adicionou histórico administrativo read-only no detalhe da atividade-base,
+  mas o patch funcional ainda está apenas no working tree e aguarda commit seletivo.
 - Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
 - Não há auditoria de quem ativou/inativou/descontinuou/substituiu versão.

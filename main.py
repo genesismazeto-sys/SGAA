@@ -2431,6 +2431,60 @@ def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
     }
 
 
+def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
+    """
+    Lista o histórico administrativo de atividade_transicao relacionado a uma
+    atividade_base, sem mutar dados.
+    """
+    rows = conn.execute(
+        """
+        SELECT t.id,
+               t.tipo_transicao,
+               t.justificativa,
+               t.observacao_admin,
+               t.created_at,
+               src.id AS from_id,
+               src.atividade_base_id AS from_base_id,
+               src.codigo_normativo AS from_codigo_normativo,
+               src.eixo AS from_eixo,
+               dst.id AS to_id,
+               dst.atividade_base_id AS to_base_id,
+               dst.codigo_normativo AS to_codigo_normativo,
+               dst.eixo AS to_eixo
+          FROM atividade_transicao t
+          LEFT JOIN atividade_versao src ON src.id = t.from_atividade_versao_id
+          LEFT JOIN atividade_versao dst ON dst.id = t.to_atividade_versao_id
+         WHERE src.atividade_base_id = ?
+            OR dst.atividade_base_id = ?
+         ORDER BY datetime(t.created_at) DESC, t.id DESC
+        """,
+        (base_id, base_id),
+    ).fetchall()
+
+    transicoes = []
+    for row in rows:
+        justificativa = (row["justificativa"] or "").strip()
+        observacao_admin = (row["observacao_admin"] or "").strip()
+        from_label = "-"
+        if row["from_id"] is not None:
+            from_label = row["from_codigo_normativo"] or f"Versão #{row['from_id']}"
+        to_label = "-"
+        if row["to_id"] is not None:
+            to_label = row["to_codigo_normativo"] or f"Versão #{row['to_id']}"
+        transicoes.append(
+            {
+                "id": row["id"],
+                "versao_origem": from_label,
+                "versao_destino": to_label,
+                "tipo_transicao": row["tipo_transicao"],
+                "motivo": justificativa or observacao_admin or "-",
+                "created_at": row["created_at"] or "-",
+                "eixo": row["from_eixo"] or row["to_eixo"] or "-",
+            }
+        )
+    return transicoes
+
+
 # ===================== Helpers: D7.2B4 - Vínculo Matriz → atividade_versao =====================
 
 def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
@@ -12499,11 +12553,13 @@ def admin_catalogo_versao_detalhe(base_id: int):
             and destino["eixo"] == origem["eixo"]
             and destino["id"] not in transicoes_origem
         ]
+    transicoes_historico = get_atividade_transicoes_por_base(conn, base_id)
     return render_template(
         "admin_catalogo_versao_detalhe.html",
         base=base,
         versoes=versoes,
         substituicao_candidatas=substituicao_candidatas,
+        transicoes_historico=transicoes_historico,
     )
 
 

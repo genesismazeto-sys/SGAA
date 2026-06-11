@@ -211,6 +211,60 @@
       border:1px dashed var(--border-strong);
       border-radius:var(--radius);
     }
+    .history-table-wrap{
+      margin-top:24px;
+      overflow:auto;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+    }
+    .history-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .history-table thead th{
+      padding:8px 12px;
+      background:var(--surface-2, #f8fafc);
+      border-bottom:1px solid var(--border);
+      font-size:11px;
+      font-weight:600;
+      color:var(--text-tertiary);
+      text-align:left;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      white-space:nowrap;
+    }
+    .history-table td{
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      vertical-align:top;
+      color:var(--text-primary);
+    }
+    .history-table tbody tr:last-child td{ border-bottom:none; }
+    .history-type-pill{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      background:#e0f2fe;
+      color:#075985;
+      font-size:11px;
+      font-weight:600;
+    }
+    .history-note-cell{
+      min-width:180px;
+      color:var(--text-secondary);
+    }
+    .history-empty{
+      margin-top:24px;
+      padding:1.25rem;
+      text-align:center;
+      color:#6b7280;
+      border:1px dashed var(--border-strong);
+      border-radius:var(--radius);
+      background:var(--surface);
+    }
   </style>
 {% endblock %}
 
@@ -376,6 +430,41 @@
   <div class="empty-versoes">
     Nenhuma versão cadastrada para esta atividade-base.
     <br><small style="color:#9ca3af;">Use o botão abaixo para criar uma versão em rascunho.</small>
+  </div>
+{% endif %}
+
+<p class="section-title" style="margin-top:24px;">Histórico de transições</p>
+
+{% if transicoes_historico and transicoes_historico|length %}
+  <div class="history-table-wrap">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Versão origem</th>
+          <th>Versão destino</th>
+          <th>Tipo</th>
+          <th>Eixo</th>
+          <th>Motivo</th>
+          <th>Criada em</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for transicao in transicoes_historico %}
+          <tr>
+            <td>{{ transicao.versao_origem }}</td>
+            <td>{{ transicao.versao_destino }}</td>
+            <td><span class="history-type-pill">{{ transicao.tipo_transicao }}</span></td>
+            <td>{{ transicao.eixo }}</td>
+            <td class="history-note-cell">{{ transicao.motivo }}</td>
+            <td>{{ transicao.created_at }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="history-empty">
+    Nenhuma transição registrada para esta atividade-base.
   </div>
 {% endif %}
 
