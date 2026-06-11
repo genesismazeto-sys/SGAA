@@ -65,7 +65,7 @@
     }
     .versao-card{
       display:grid;
-      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px 90px;
+      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px 250px;
       align-items:center;
       column-gap:12px;
       padding:10px 14px;
@@ -167,6 +167,39 @@
     }
     .vc-descontinuar-btn:hover{ background:#fecaca; }
     .vc-descontinuar-btn .lucide{ width:13px; height:13px; }
+    .vc-substituir-form{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .vc-substituir-select{
+      min-width:130px;
+      padding:4px 6px;
+      font-size:12px;
+      border:1px solid var(--border-strong);
+      border-radius:6px;
+      background:#fff;
+    }
+    .vc-substituir-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:3px 9px;
+      font-size:12px;
+      font-weight:600;
+      color:#1d4ed8;
+      background:#dbeafe;
+      border:1px solid #93c5fd;
+      border-radius:6px;
+      cursor:pointer;
+    }
+    .vc-substituir-btn:hover{ background:#bfdbfe; }
+    .vc-substituir-btn:disabled,
+    .vc-substituir-select:disabled{
+      cursor:not-allowed;
+      opacity:.65;
+    }
     .vc-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .vc-no-action{ color:var(--text-tertiary); font-size:12px; }
     .horas-text{ color:var(--text-secondary); font-size:12px; }
@@ -279,6 +312,7 @@
               </form>
             </span>
           {% elif status_key == 'ativa' %}
+            {% set substituicao_options = substituicao_candidatas.get(v.id, []) %}
             <span class="vc-actions">
               <form class="vc-lifecycle-form"
                     method="post"
@@ -302,6 +336,32 @@
                         title="Descontinuar esta versão">
                   <i class="lucide" data-lucide="x-circle"></i>
                   Descontinuar
+                </button>
+              </form>
+              <form class="vc-substituir-form"
+                    method="post"
+                    action="{{ url_for('admin_catalogo_substituir_versao', base_id=base.id, versao_id=v.id) }}"
+                    onsubmit="return window.confirm('Substituir esta versão ativa pela candidata selecionada?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="to_versao_id"
+                        class="vc-substituir-select"
+                        aria-label="Selecionar versão substituta"
+                        {% if not substituicao_options %}disabled{% endif %}>
+                  {% if substituicao_options %}
+                    <option value="">Destino</option>
+                    {% for candidato in substituicao_options %}
+                      <option value="{{ candidato.id }}">{{ candidato.codigo_normativo }} - {{ candidato.eixo }}</option>
+                    {% endfor %}
+                  {% else %}
+                    <option value="">Sem candidata válida</option>
+                  {% endif %}
+                </select>
+                <button type="submit"
+                        class="vc-substituir-btn"
+                        title="Substituir esta versão"
+                        {% if not substituicao_options %}disabled{% endif %}>
+                  <i class="lucide" data-lucide="shuffle"></i>
+                  Substituir
                 </button>
               </form>
             </span>

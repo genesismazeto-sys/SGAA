@@ -12466,10 +12466,44 @@ def admin_catalogo_versao_detalhe(base_id: int):
         flash("Atividade-base não encontrada.", "error")
         return redirect(url_for("admin_catalogo_versoes"))
     versoes = get_versoes_por_base(conn, base_id)
+    transicoes_origem = {
+        row["from_atividade_versao_id"]
+        for row in conn.execute(
+            """
+            SELECT DISTINCT from_atividade_versao_id
+              FROM atividade_transicao
+             WHERE from_atividade_versao_id IS NOT NULL
+            """
+        ).fetchall()
+    }
+    substituicao_candidatas = {}
+    for origem in versoes:
+        origem_id = origem["id"]
+        origem_bloqueada = (
+            origem["status"] != "ativa"
+            or (origem["uso_em_matrizes"] or 0) > 0
+            or origem_id in transicoes_origem
+        )
+        if origem_bloqueada:
+            substituicao_candidatas[origem_id] = []
+            continue
+        substituicao_candidatas[origem_id] = [
+            {
+                "id": destino["id"],
+                "codigo_normativo": destino["codigo_normativo"],
+                "eixo": destino["eixo"],
+            }
+            for destino in versoes
+            if destino["id"] != origem_id
+            and destino["status"] == "ativa"
+            and destino["eixo"] == origem["eixo"]
+            and destino["id"] not in transicoes_origem
+        ]
     return render_template(
         "admin_catalogo_versao_detalhe.html",
         base=base,
         versoes=versoes,
+        substituicao_candidatas=substituicao_candidatas,
     )
 
 
@@ -13073,6 +13107,116 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
     except Exception as exc:
         conn.rollback()
         flash(f"Erro ao ativar versão: {exc}", "error")
+
+    return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+
+@app.route(
+    "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir",
+    methods=["POST"],
+)
+@admin_required
+def admin_catalogo_substituir_versao(base_id: int, versao_id: int):
+    """
+    Substitui explicitamente uma atividade_versao ativa por outra ativa
+    da mesma atividade-base e do mesmo eixo.
+    """
+    conn = get_db_connection()
+    ensure_atividade_versioning_schema(conn)
+
+    base = get_atividade_base(conn, base_id)
+    if not base:
+        flash("Atividade-base nÃ£o encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versoes"))
+
+    origem = get_atividade_versao_by_id(conn, versao_id)
+    if not origem or origem["atividade_base_id"] != base_id:
+        flash("VersÃ£o de origem nÃ£o encontrada para esta atividade-base.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if origem["status"] != "ativa":
+        flash("Apenas versÃµes ativas podem ser substituÃ­das.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    origem_usage = get_atividade_versao_usage_counts(conn, versao_id)
+    if origem_usage["matriz_atividade_versao_item"] > 0:
+        flash(
+            "NÃ£o Ã© possÃ­vel substituir: esta versÃ£o estÃ¡ vinculada a matriz.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    if origem_usage["atividade_transicao_origem"] > 0:
+        flash(
+            "NÃ£o Ã© possÃ­vel substituir: a versÃ£o de origem jÃ¡ possui transiÃ§Ã£o registrada.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    to_versao_id_raw = (request.form.get("to_versao_id") or "").strip()
+    if not to_versao_id_raw:
+        flash("Selecione a versÃ£o de destino para substituir.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    try:
+        to_versao_id = int(to_versao_id_raw)
+    except (TypeError, ValueError):
+        flash("VersÃ£o de destino invÃ¡lida.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if to_versao_id == versao_id:
+        flash("A versÃ£o de destino deve ser diferente da origem.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    destino = get_atividade_versao_by_id(conn, to_versao_id)
+    if not destino:
+        flash("VersÃ£o de destino nÃ£o encontrada.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    if destino["status"] != "ativa":
+        flash("A versÃ£o de destino deve estar ativa.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    if destino["atividade_base_id"] != base_id:
+        flash("A versÃ£o de destino deve pertencer Ã  mesma atividade-base.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    if destino["eixo"] != origem["eixo"]:
+        flash("A versÃ£o de destino deve ter o mesmo eixo da origem.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    destino_usage = get_atividade_versao_usage_counts(conn, to_versao_id)
+    if destino_usage["atividade_transicao_origem"] > 0:
+        flash(
+            "NÃ£o Ã© possÃ­vel substituir: a versÃ£o de destino jÃ¡ possui transiÃ§Ã£o registrada como origem.",
+            "error",
+        )
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    try:
+        cur = conn.execute(
+            "UPDATE atividade_versao SET status = 'substituida' "
+            "WHERE id = ? AND status = 'ativa'",
+            (versao_id,),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            flash(
+                "SubstituiÃ§Ã£o nÃ£o aplicada: a versÃ£o de origem nÃ£o estÃ¡ mais ativa.",
+                "error",
+            )
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+        conn.execute(
+            """
+            INSERT INTO atividade_transicao (
+                from_atividade_versao_id,
+                to_atividade_versao_id,
+                tipo_transicao
+            ) VALUES (?, ?, 'mesmo_eixo')
+            """,
+            (versao_id, to_versao_id),
+        )
+        conn.commit()
+        flash("VersÃ£o substituÃ­da com sucesso.", "success")
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao substituir versÃ£o: {exc}", "error")
 
     return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
