@@ -1,20 +1,17 @@
 # Agent Handoff
 
 Last updated: 2026-06-11
-Closeout: D7.2B6 docs-only pending commit
+Closeout: D7.2B6 push closeout
 Executor: Codex GPT-5 (docs closeout)
 
 ## Current State
 
-- D7.2B6 functional implementation completed and approved, but **not committed yet**.
+- D7.2B6 functional implementation is completed, approved, committed, and published.
 - Current branch: `recovery/d7-activity-versioning`.
-- Current `HEAD`: `5f7dbc8` (`Record D7.2B5-PATCH2 substitution closeout`).
-- `origin/recovery/d7-activity-versioning` is aligned with local at `5f7dbc8`.
+- Current `HEAD` before this docs closeout commit: `95cb897` (`Add admin transition history for activity versions`).
+- `origin/recovery/d7-activity-versioning` is aligned with local at `95cb897`.
 - `main` / `origin/main` remain intact at `7e5eb56`.
-- Working tree currently contains pending D7.2B6 functional changes in:
-  - `main.py`
-  - `templates/admin_catalogo_versao_detalhe.html`
-  - `tests/test_admin_activity_version_catalog_readonly.py`
+- Working tree was clean after the functional push.
 - Existing approved committed milestones remain:
   - D7.2B5-PATCH2 committed at `9d2e9fb`;
   - D7.2B5-PATCH1 committed at `f235f62`;
@@ -41,6 +38,12 @@ Executor: Codex GPT-5 (docs closeout)
   - no writer/versioned snapshot change;
   - no matrix behavior change;
   - no change to activation/inactivation/discontinuation/substitution logic.
+- Functional publication state:
+  - functional commit: `95cb897` - `Add admin transition history for activity versions`;
+  - remote hash: `95cb89797f1a0a16ff812933d9788f2019b14ad4`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0` after the functional push;
+  - `origin/main...main = 0 0`;
+  - no next phase has started yet.
 
 ## Validation Already Executed
 
@@ -68,34 +71,30 @@ Executor: Codex GPT-5 (docs closeout)
 - `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
 - `9d2e9fb` - Add explicit activity version substitution
 - `5f7dbc8` - Record D7.2B5-PATCH2 substitution closeout
+- `95cb897` - Add admin transition history for activity versions
 
 ## Risks To Keep In View
 
-- D7.2B6 is still only in the working tree; there is no commit yet for this phase.
 - `created_at` is displayed raw; no formatting pass was added in this phase.
 - There is still no actor/admin audit field in `atividade_transicao`.
 - The read-only history UI is generic and may later show transition types beyond `mesmo_eixo`.
 - The catalog screens still are not linked from the menu/sidebar.
 - Reativação de versão still does not exist.
-- No new phase should begin before the D7.2B6 selective commit decision is made.
+- No new phase has started after the D7.2B6 publication.
 
 ## Recommended Next Step
 
-- If authorized, perform a selective commit for D7.2B6 only.
-- Do **not** use `git add .`; stage only:
-  - `main.py`
-  - `templates/admin_catalogo_versao_detalhe.html`
-  - `tests/test_admin_activity_version_catalog_readonly.py`
-  - optionally `PROJECT_STATE.md` and `AGENT_HANDOFF.md` if the docs closeout should be committed together.
-- Do not push without explicit authorization.
+- Keep D7.2B6 closed.
+- Do not start a new implementation phase without explicit approved scope.
+- If a later docs-only closeout commit exists, it should remain separated from any future functional phase.
 
 ## Instructions For The Next Agent
 
 - Read `PROJECT_STATE.md` and `AGENT_HANDOFF.md` before any action.
 - Treat `atividade_id` as the operational source of truth.
-- D7.2B6 is functionally approved but not committed.
-- The branch `recovery/d7-activity-versioning` is aligned locally/remotely at `5f7dbc8`, with D7.2B6 changes pending in the working tree.
-- Next action should be a selective commit of D7.2B6 only after authorization.
+- D7.2B6 is functionally published in `95cb897`.
+- The branch `recovery/d7-activity-versioning` is aligned locally/remotely at the latest pushed state after this docs closeout.
+- The next phase has not started yet.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;

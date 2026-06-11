@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-11
-Closeout: D7.2B6 docs-only pending commit
+Closeout: D7.2B6 push closeout
 Executor: Codex GPT-5 (docs closeout)
 
 ## Permanent State
@@ -451,16 +451,16 @@ Executor: Codex GPT-5 (docs closeout)
   - matriz/resolver/csrf: `30 passed`;
   - lifecycle isolated: `34 passed`.
 
-### D7.2B6 - admin transition history (read-only, pending commit)
-- Functionally approved and documented, but **not committed yet**.
-- Git base for this phase:
-  - `HEAD` local: `5f7dbc8`;
-  - `origin/recovery/d7-activity-versioning`: `5f7dbc8`;
-  - `main` / `origin/main`: `7e5eb56`.
-- Functional files currently modified in the working tree:
-  - `main.py`
-  - `templates/admin_catalogo_versao_detalhe.html`
-  - `tests/test_admin_activity_version_catalog_readonly.py`
+### D7.2B6 - admin transition history (read-only)
+- Implemented, validated, committed, and published.
+- Functional commit published on `recovery/d7-activity-versioning`:
+  - `95cb897` - `Add admin transition history for activity versions`
+  - remote hash: `95cb89797f1a0a16ff812933d9788f2019b14ad4`
+- Branch state after functional push:
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`
+  - `origin/main...main = 0 0`
+  - working tree was clean after the functional push
+  - `main` / `origin/main` remained at `7e5eb56`
 - Functional scope delivered:
   - new read-only helper `get_atividade_transicoes_por_base`;
   - `JOIN` entre `atividade_transicao` e versões origem/destino;
@@ -490,6 +490,11 @@ Executor: Codex GPT-5 (docs closeout)
   - `created_at` segue exibido em formato cru do SQLite;
   - não há auditoria de ator/admin na tabela `atividade_transicao`;
   - a UI lista tipos de transição de forma genérica, sem fluxo novo para além de `mesmo_eixo`.
+- Status de projeto após a publicação:
+  - branch ativa continua `recovery/d7-activity-versioning`;
+  - `HEAD` da branch avança além de `95cb897` apenas com closeouts documentais subsequentes;
+  - D7.2B6 funcional está fechada e publicada em `95cb897`;
+  - próxima fase ainda não foi iniciada.
 
 ## Relevant Commits
 
@@ -549,8 +554,8 @@ Executor: Codex GPT-5 (docs closeout)
   - cria `atividade_transicao` com `tipo_transicao='mesmo_eixo'`;
   - bloqueia origem com vínculo em matriz;
   - bloqueia origem/destino com transição prévia como `from`.
-- D7.2B6 adicionou histórico administrativo read-only no detalhe da atividade-base,
-  mas o patch funcional ainda está apenas no working tree e aguarda commit seletivo.
+- D7.2B6 adicionou histórico administrativo read-only no detalhe da atividade-base
+  e foi publicada no commit `95cb897`.
 - Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
 - Não há auditoria de quem ativou/inativou/descontinuou/substituiu versão.
