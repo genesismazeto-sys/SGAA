@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-09
-Closeout: D7.2B5-PATCH1
-Executor: Claude Sonnet 4.6 (functional + docs)
+Last updated: 2026-06-11
+Closeout: D7.2B5-PATCH2
+Executor: Codex GPT-5 (docs closeout)
 
 ## Permanent State
 
@@ -417,6 +417,40 @@ Executor: Claude Sonnet 4.6 (functional + docs)
   - Student screens / calculation / deferment.
   - Snapshot writer.
 
+### D7.2B5-PATCH2 - explicit activity version substitution
+- Implemented and committed.
+- Commit `9d2e9fb` - `Add explicit activity version substitution`.
+- Branch `recovery/d7-activity-versioning` local at `9d2e9fb`; `origin/recovery/d7-activity-versioning` remains at `23002ae`.
+- `main` / `origin/main` intact at `7e5eb56`.
+- 1 new admin POST route:
+  - `/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir`
+- Functional guarantees:
+  - explicit substitution only; no fallback and no implicit target selection;
+  - origin must exist, belong to the URL base, and be `status = 'ativa'`;
+  - origin is blocked if any `matriz_atividade_versao_item` link exists;
+  - `to_versao_id` is mandatory and must be a valid integer;
+  - destination must exist, be `status = 'ativa'`, belong to the same `atividade_base`, have the same `eixo`, and differ from origin;
+  - origin cannot already be `from_atividade_versao_id` in `atividade_transicao`;
+  - destination cannot already be `from_atividade_versao_id` in `atividade_transicao`;
+  - operation is transactional: `UPDATE atividade_versao SET status='substituida'` on origin + `INSERT INTO atividade_transicao (..., tipo_transicao='mesmo_eixo')`;
+  - rollback on failure; commit on success.
+- Template `templates/admin_catalogo_versao_detalhe.html` updated:
+  - active versions now render a `Substituir` form;
+  - form includes explicit `to_versao_id` select with active same-base same-axis candidates only, excluding the origin itself;
+  - form is disabled when no valid candidate exists;
+  - CSRF token present in the rendered form.
+- Scope explicitly unchanged:
+  - no resolver changes;
+  - no snapshot writer changes;
+  - no schema/migration changes;
+  - no aluno/calculation/deferment changes;
+  - no `aac_para_aeu`;
+  - no reactivation.
+- Focused tests already executed:
+  - lifecycle + activate/edit/form: `96 passed`;
+  - matriz/resolver/csrf: `30 passed`;
+  - lifecycle isolated: `34 passed`.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -437,6 +471,7 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - `28d922d` - Add draft activity version activation
 - `255ff80` - Add admin UI for explicit matrix→atividade_versao links (D7.2B4)
 - `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
+- `9d2e9fb` - Add explicit activity version substitution
 
 ## Current Risks And Limits
 
@@ -467,10 +502,15 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - Ativação de versão (rascunho→ativa) foi implementada no PATCH3.
 - Vínculo explícito matriz→versão foi implementado em D7.2B4-PATCH1.
 - Inativação e descontinuação de versão foram implementadas em D7.2B5-PATCH1.
-  Substituição de versão ainda não existe.
+- Substituição explícita de versão foi implementada em D7.2B5-PATCH2:
+  - exige `to_versao_id` explícito;
+  - marca origem como `substituida`;
+  - cria `atividade_transicao` com `tipo_transicao='mesmo_eixo'`;
+  - bloqueia origem com vínculo em matriz;
+  - bloqueia origem/destino com transição prévia como `from`.
 - Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
-- Não há auditoria de quem ativou/inativou/descontinuou versão.
+- Não há auditoria de quem ativou/inativou/descontinuou/substituiu versão.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 

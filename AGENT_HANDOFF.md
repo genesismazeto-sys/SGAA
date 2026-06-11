@@ -1,12 +1,13 @@
 # Agent Handoff
 
-Last updated: 2026-06-09
-Closeout: D7.2B5-PATCH1
-Executor: Claude Sonnet 4.6 (functional + docs)
+Last updated: 2026-06-11
+Closeout: D7.2B5-PATCH2
+Executor: Codex GPT-5 (docs closeout)
 
 ## Current State
 
-- D7.2B5-PATCH1 completed.
+- D7.2B5-PATCH2 completed.
+- D7.2B5-PATCH2 functional code committed at `9d2e9fb` (local only; not yet pushed to origin).
 - D7.2B5-PATCH1 functional code committed at `f235f62` (local only; not yet pushed to origin).
 - D7.2B4-PATCH1 functional code committed at `255ff80` (local only; not yet pushed to origin).
 - D7.2B3-PATCH3-DOCS-CLOSEOUT remains approved.
@@ -22,7 +23,7 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - D6.6-DISPLAY-1R remains approved.
 - D6.6-DISPLAY-TEXT-ACCENTS-1R remains approved.
 - D6.7-PLAN remains approved.
-- Commits on `recovery/d7-activity-versioning` (local ahead of remote by 2):
+- Commits on `recovery/d7-activity-versioning` (local ahead of remote by 1):
   - `73d45ac` — `Add read-only activity version catalog`.
   - `a3537cf` — `Fix activity version catalog card grids`.
   - `b91d03f` — `Add create forms for activity base and norms`.
@@ -32,7 +33,18 @@ Executor: Claude Sonnet 4.6 (functional + docs)
   - `c90ffe3` — `Add draft activity version editing`.
   - `28d922d` (origin/recovery/d7-activity-versioning) — `Add draft activity version activation`.
   - `255ff80` — `Add admin UI for explicit matrix→atividade_versao links (D7.2B4)`.
-  - `f235f62` (HEAD -> recovery/d7-activity-versioning) — `Add admin lifecycle transitions for atividade_versao (D7.2B5)`.
+  - `f235f62` — `Add admin lifecycle transitions for atividade_versao (D7.2B5)`.
+  - `9d2e9fb` (HEAD -> recovery/d7-activity-versioning) — `Add explicit activity version substitution`.
+- D7.2B5-PATCH2 delivered explicit substitution of ativa versões:
+  - 1 new admin POST route: `admin_catalogo_substituir_versao`;
+  - explicit `to_versao_id` required;
+  - origin `ativa` → `substituida`;
+  - inserts `atividade_transicao` with `tipo_transicao='mesmo_eixo'`;
+  - blocks origin with `matriz_atividade_versao_item` link;
+  - blocks origin/destination with prior transition as `from`;
+  - transaction is `UPDATE + INSERT` with rollback on failure and commit on success;
+  - updated template `templates/admin_catalogo_versao_detalhe.html` with `Substituir` form for active versions only;
+  - focused tests already executed: lifecycle + activate/edit/form `96 passed`, matriz/resolver/csrf `30 passed`, lifecycle isolated `34 passed`.
 - D7.2B5-PATCH1 delivered inativação and descontinuação of ativa versões:
   - 2 new admin POST routes: `admin_catalogo_inativar_versao`, `admin_catalogo_descontinuar_versao`;
   - hard B1 block if any `matriz_atividade_versao_item` link exists (no silent DELETE);
@@ -51,31 +63,34 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 
 ## Last Closed Phase
 
-- D7.2B5-PATCH1 completed (functional code committed locally).
-- Admin lifecycle transitions: ativa → inativa; ativa → descontinuada.
-- Commit `f235f62` on `recovery/d7-activity-versioning` (local only; not yet pushed to origin).
-- 2 new POST routes + template update + 19 new tests.
-- Hard B1 block: inativar/descontinuar rejeitadas se há vínculo em `matriz_atividade_versao_item`.
-  Error message orientates admin to remove the link first; no automatic deletion.
-- 19 new tests pass; 400 total tests pass in the full suite.
-- Resolver untouched. No `atividade_transicao`. No substituta. No silent fallback.
-- No student flow, no calculation/deferment, no schema/migration, no snapshot writer, no backfill, no cutover.
+- D7.2B5-PATCH2 completed (functional code already committed locally).
+- Explicit substitution route added: ativa → substituida with explicit `to_versao_id`.
+- Commit `9d2e9fb` on `recovery/d7-activity-versioning` (local only; not yet pushed to origin).
+- `atividade_transicao` is now used only for explicit substitution with `tipo_transicao='mesmo_eixo'`.
+- Hard blocks:
+  - reject if origin has `matriz_atividade_versao_item` link;
+  - reject if origin already has prior transition as `from`;
+  - reject if destination already has prior transition as `from`;
+  - reject invalid/missing destination, different base, different axis, non-active destination, or self-substitution.
+- Transaction is exactly `UPDATE origem status='substituida' + INSERT atividade_transicao`.
+- Resolver untouched. No writer/schema/aluno/calculation/deferment changes. No `aac_para_aeu`. No reactivation.
+- Focused tests already executed: `96 passed`, `30 passed`, and isolated lifecycle `34 passed`.
 - `main` / `origin/main` intact at `7e5eb56`.
-- Branch `recovery/d7-activity-versioning` local at `f235f62`, remote at `28d922d`.
+- Branch `recovery/d7-activity-versioning` local at `9d2e9fb`, remote at `23002ae`.
 
 ## Recommended Next Phase
 
 - No new implementation phase is approved right now.
-- D7.2B5-PATCH1 is closed (inativação + descontinuação de versão ativa).
+- D7.2B5-PATCH2 is closed (explicit substitution of activity version).
 - Próximas fases prováveis ainda não aprovadas:
-  - substituição de versão (`substituida`), com ou sem `atividade_transicao`; ou
-  - auditoria de ações de ciclo de vida (quem inativou/descontinuou, quando); ou
+  - auditoria de ações de ciclo de vida (quem inativou/descontinuou/substituiu, quando); ou
+  - reativação de versão; ou
   - importação/cadastro real de regulamentos.
   - Nenhuma deve iniciar sem planejamento read-only separado e escopo aprovado.
 - Keep the current D6.6 state: admin-only, diagnostic, read-only.
 - The new catalog screens exist but are not linked from the menu/sidebar yet.
-- Immediate next step: if approved, push the pending commits (D7.2B4 + D7.2B5).
-- Any version lifecycle expansion beyond inativa/descontinuada must not start without a new approved scope.
+- Immediate next step: if approved, push commit `9d2e9fb` and the docs closeout commit.
+- Any version lifecycle expansion beyond the current inativar/descontinuar/substituir set must not start without a new approved scope.
 - If work resumes later, prefer docs/runbook clarification or a fresh
   architectural review before any new code phase.
 
@@ -101,9 +116,15 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - D7.2B5-PATCH1 added inativação (ativa→inativa) and descontinuação (ativa→descontinuada).
   - Bloqueio B1: a operação rejeita se houver qualquer vínculo em `matriz_atividade_versao_item`.
   - Sem DELETE automático de vínculo. Sem `atividade_transicao`. Sem substituta. Sem fallback.
-- Substituição de versão (`substituida`) ainda não existe.
+- D7.2B5-PATCH2 added substituição explícita de versão:
+  - exige `to_versao_id` explícito;
+  - origem `ativa` → `substituida`;
+  - cria `atividade_transicao` com `tipo_transicao='mesmo_eixo'`;
+  - bloqueia origem com vínculo em matriz;
+  - bloqueia origem/destino com transição prévia como `from`;
+  - sem fallback e sem escolha implícita de destino.
 - Reativação de versão (inativa/descontinuada → ativa) ainda não existe.
-- Não há auditoria de quem ativou/inativou/descontinuou/definiu/removeu vínculo.
+- Não há auditoria de quem ativou/inativou/descontinuou/substituiu/definiu/removeu vínculo.
 - Fase seguinte não deve começar sem escopo explícito.
 
 ## Instructions For The Next Agent
@@ -112,10 +133,10 @@ Executor: Claude Sonnet 4.6 (functional + docs)
 - Summarize understanding before implementing anything.
 - Treat `atividade_id` as the operational source of truth.
 - Do not expand snapshot display beyond the current admin-only read-only surfaces unless a new approved phase explicitly authorizes it.
-- D7.2B5-PATCH1 is closed. Substituição, reativação, `atividade_transicao`, e qualquer
-  outra extensão de ciclo de vida não devem começar sem escopo explícito aprovado.
-- The branch `recovery/d7-activity-versioning` is local at `f235f62`, remote at `28d922d`.
-  Push of commits `255ff80` and `f235f62` requires authorization.
+- D7.2B5-PATCH2 is closed. Reativação e qualquer outra extensão de ciclo de vida
+  não devem começar sem escopo explícito aprovado.
+- The branch `recovery/d7-activity-versioning` is local at `9d2e9fb`, remote at `23002ae`.
+  Push of commit `9d2e9fb` and the docs closeout requires authorization.
 - Escopo proibido contínuo: main, matriz operacional, aluno, cálculo,
   deferimento, snapshot writer, schema/migration, backfill/cutover,
   primeira ativa, inferência de versão por nome/eixo/data, fallback silencioso,
