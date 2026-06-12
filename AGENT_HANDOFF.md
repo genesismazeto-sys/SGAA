@@ -1,36 +1,25 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3C canonical fixture creation closeout
-Executor: Kimi (fixture creation + docs closeout)
+Closeout: D7.3D normative dry-run importer closeout
+Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
-- D7.3C canonical fixture created and validated.
+- D7.3D dry-run importer implemented, audited (Kimi K2.6), and committed.
 - Current branch: `recovery/d7-activity-versioning`.
-- Current `HEAD`: `cbde400` (`Record D7.3A closeout`).
-- `origin/recovery/d7-activity-versioning` aligned with local at `cbde400`.
+- Current `HEAD`: TBD (D7.3D commit, being set by this closeout).
+- `origin/recovery/d7-activity-versioning` will be aligned after push.
 - `main` / `origin/main` remain intact at `7e5eb56`.
-- Working tree has one new untracked directory: `normative_fixtures/` (to be committed).
-- D7.3A analyzed three DOCX regulations stored in `_normativos_inbox/`:
-  - `ACC-rev5.docx` → internal codigo AAC-rev5 (histórico/legado).
-  - `ACC-rev6.docx` → internal codigo AAC-rev6 (AAC vigente).
-  - `AE-rev1.docx` → internal codigo AEU-rev1 (AEU vigente).
-- D7.3B-PLAN specified the fixture format (YAML, controlled vocabulary, mapping to schema).
-- D7.3C created the canonical fixture: `normative_fixtures/d73c_normative_fixture.yaml`.
-  - 3 normas: AAC-rev5, AAC-rev6, AEU-rev1.
-  - 32 unique conceptual activities.
-  - 61 total versions across all norms.
-  - 2 activities removed in AAC-rev6: SIMULADOR_VOO, TRAB_VOLUNTARIO_TERCEIRO_SETOR.
-  - 3 native AEU activities: ORG_EVENTOS_EXTENSIONISTAS, PART_EVENTOS_EXTENSIONISTAS, CURSOS_OFICINAS_PALESTRAS_COMUNIDADE.
-  - 1 explicit transition: TRAB_VOLUNTARIO_TERCEIRO_SETOR (AAC-rev5 → AEU-rev1).
-  - PROJETOS_EXTENSAO is ambiguous (AAC apoio institucional vs AEU extensão) and requires human decision.
-  - `status_inicial` = "rascunho" for all versions.
-  - `ch_regra_condicional` uses controlled vocabulary.
-  - YAML validated with `python -c "yaml.safe_load(...)"` → `YAML_OK`.
-  - No code, template, test, DB, or seed was changed.
-  - The DOCX files remain excluded from Git and must not be committed.
-- Existing approved committed milestones remain:
+- Working tree clean after commit (expected).
+- New files delivered in D7.3D:
+  - `tools/d73d_normative_importer_dryrun.py` — CLI dry-run importer.
+  - `tests/test_d73d_normative_importer_dryrun.py` — 5 tests, all passing.
+  - `requirements.txt` — added `PyYAML==6.0.2`.
+- D7.3D-PATCH1 accepted: 5 tests pass, no bloqueante/alto findings, database.db intacto.
+- Importação real para `database.db` ainda não foi executada.
+- Existing approved committed milestones:
+  - D7.3C committed at `5f66239`;
   - D7.2B6 committed/pushed at `95cb897`;
   - D7.2B5-PATCH2 committed at `9d2e9fb`;
   - D7.2B5-PATCH1 committed at `f235f62`;
@@ -38,7 +27,29 @@ Executor: Kimi (fixture creation + docs closeout)
   - D7.2B3-PATCH3 committed/pushed at `28d922d`;
   - `main` / `origin/main` preserved at `7e5eb56`.
 
-## D7.3A — Last Closed Phase
+## D7.3D — Last Closed Phase
+
+- Scope: dry-run importer consuming `normative_fixtures/d73c_normative_fixture.yaml` into an isolated SQLite DB.
+- Files delivered:
+  - `tools/d73d_normative_importer_dryrun.py` (979 lines) — CLI, validation, upsert logic, schema + triggers.
+  - `tests/test_d73d_normative_importer_dryrun.py` (236 lines) — 5 tests, all passing.
+  - `requirements.txt` — added `PyYAML==6.0.2`.
+- Audit: D7.3D-PATCH1-REVIEW by Kimi K2.6, result: **ACEITAR D7.3D-PATCH1**. No bloqueante/alto findings.
+  - Risco baixo B-01: `documentacao_exigida` validada somente quando a chave existe.
+- Functional guarantees:
+  - `--fixture` obrigatório; `--report text/json`; `--strict` eleva warnings a erros.
+  - Sem `--apply`, sem modo real; recusa `--db database.db` antes de qualquer conexão.
+  - Sem import de `main`, `create_app`, `init_db`, ou `APP_DATABASE`.
+  - Banco temporário via `tempfile`, removido em `finally`; ou `--db` explícito seguro.
+  - `database.db` real preservado: tamanho e SHA256 inalterados (verificado por teste).
+  - Schema idêntico ao de `main.py`: 4 tabelas, 6 triggers.
+  - Idempotência: segunda execução no mesmo `--db` → inserted=0, skipped=3/32/61/1.
+  - Transação atômica: rollback completo em qualquer falha de insert.
+- Contagens com fixture D7.3C: 3 normas, 32 bases, 61 versões, 1 transição.
+- Testes: `python -m pytest tests/test_d73d_normative_importer_dryrun.py -q --tb=short` → 5 passed.
+- Importação real para `database.db` não foi executada. D7.3D está fechada.
+
+## D7.3A — Prior Closed Phase
 
 - Scope: read-only documental diagnosis of three real normative DOCX files.
 - Documents analyzed (stored in `_normativos_inbox/`, excluded from Git):
@@ -86,19 +97,12 @@ Executor: Kimi (fixture creation + docs closeout)
 
 ## Recent Commits
 
-- `73d45ac` - Add read-only activity version catalog
-- `a3537cf` - Fix activity version catalog card grids
-- `b91d03f` - Add create forms for activity base and norms
-- `44d367a` - Clarify activity version creation placeholder
-- `16b1480` - Add draft activity version creation
-- `ccf1a7e` - Record D7.2B3 draft version creation
-- `c90ffe3` - Add draft activity version editing
-- `28d922d` - Add draft activity version activation
-- `255ff80` - Add admin UI for explicit matrix→atividade_versao links (D7.2B4)
-- `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
 - `9d2e9fb` - Add explicit activity version substitution
 - `5f7dbc8` - Record D7.2B5-PATCH2 substitution closeout
 - `95cb897` - Add admin transition history for activity versions
+- `cbde400` - Record D7.3A normative canonization
+- `5f66239` - Add D7.3C canonical normative fixture and docs closeout
+- TBD        - Add D7.3D normative dry-run importer
 
 ## Risks To Keep In View
 
@@ -106,18 +110,17 @@ Executor: Kimi (fixture creation + docs closeout)
 - There is still no actor/admin audit field in `atividade_transicao`.
 - The catalog screens still are not linked from the menu/sidebar.
 - Reativação de versão still does not exist.
-- Three normative regulations were canonized (D7.3A) and fixture was created (D7.3C), but no data has been imported yet.
-- D7.3D (dry-run importer) must consume the fixture YAML, not the DOCX directly.
-- Importação must not touch matrix, requests, student, calculation, or deferment.
+- D7.3D delivered the dry-run importer; real importation into `database.db` has NOT been performed.
+- Real importation must not be started without explicit approved scope and a separate plan.
 - Ambiguous cases between "apoio institucional" (AAC) and "extensão" (AEU) require human review.
-- Fixture is uncommitted; working tree has `normative_fixtures/` ready to stage.
+- B-01: `documentacao_exigida` validated only when key is present; future fixture versions that omit the key will pass silently.
+- `atividade_transicao` has no DB-level UNIQUE on `(from, to, tipo)`; idempotency relies on SELECT-before-INSERT in the tool.
 
 ## Recommended Next Step
 
-- D7.3C is closed (fixture created, validated, no code).
-- D7.3D: create a dry-run importer consuming the fixture YAML into an isolated DB.
-- Dry-run importer must not touch matrix, requests, student, calculation, or deferment.
-- Do not start any new implementation phase without explicit approved scope.
+- D7.3D is closed (dry-run importer implemented, audited, committed).
+- Real importation into `database.db` requires separate explicit scope approval before starting.
+- Do not start any new implementation phase without explicit approved scope and read-only planning pass.
 
 ## Instructions For The Next Agent
 
@@ -125,9 +128,12 @@ Executor: Kimi (fixture creation + docs closeout)
 - Treat `atividade_id` as the operational source of truth.
 - D7.3A canonized three norms: AAC-rev5 (histórico), AAC-rev6 (vigente), AEU-rev1 (vigente).
 - D7.3C created the canonical fixture: `normative_fixtures/d73c_normative_fixture.yaml`.
+- D7.3D delivered the dry-run importer: `tools/d73d_normative_importer_dryrun.py`.
+  - Run with: `python tools/d73d_normative_importer_dryrun.py --fixture normative_fixtures/d73c_normative_fixture.yaml`
+  - Tests: `python -m pytest tests/test_d73d_normative_importer_dryrun.py -q --tb=short`
+  - Do NOT run with a real `--db` pointing to `database.db`; the tool will refuse, but do not attempt it.
 - The canonical DOCX are stored in `_normativos_inbox/` and excluded from Git; do not commit them.
-- The branch `recovery/d7-activity-versioning` is aligned locally/remotely at `cbde400` before this docs closeout.
-- D7.3D must consume the fixture YAML, not the DOCX directly.
+- Real importation into `database.db` has NOT been performed. Do not perform it without explicit scope approval.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;

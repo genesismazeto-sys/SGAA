@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3C canonical fixture creation closeout
-Executor: Kimi (fixture creation + docs closeout)
+Closeout: D7.3D normative dry-run importer closeout
+Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
 
 ## Permanent State
 
@@ -572,6 +572,39 @@ Executor: Kimi (fixture creation + docs closeout)
 - The DOCX files remain in `_normativos_inbox/` and are excluded from Git.
 - Next step: D7.3D dry-run importer consuming the fixture YAML into an isolated DB.
 
+### D7.3D-PATCH1 - normative dry-run importer
+- Implemented, audited, and committed.
+- D7.3D-PATCH1-REVIEW executed by Kimi K2.6 in read-only mode: ACEITAR D7.3D-PATCH1.
+- New files:
+  - `tools/d73d_normative_importer_dryrun.py` — CLI dry-run importer.
+  - `tests/test_d73d_normative_importer_dryrun.py` — test suite (5 tests).
+- Modified file:
+  - `requirements.txt` — added `PyYAML==6.0.2`.
+- Functional guarantees:
+  - `--fixture` obrigatório; `--report text/json`; `--strict` trata warnings como erro.
+  - Sem `--apply`, sem modo real, sem importação operacional.
+  - Recusa `--db` com basename `database.db` (case-insensitive) antes de qualquer conexão.
+  - Não importa `main`, `create_app`, `init_db`, ou `APP_DATABASE`.
+  - Banco temporário criado via `tempfile.NamedTemporaryFile` e removido em `finally`.
+  - `database.db` real preservado: tamanho e SHA256 inalterados após qualquer execução.
+  - Schema SCHEMA_SQL idêntico ao de `main.py` (4 tabelas + 6 triggers).
+  - Validações de fixture: YAML parseável; top-level meta/normas/atividades; normas únicas; códigos únicos; nomes canônicos únicos (NFKD); norma_ref existente; transicao_proposta de/para existentes; ch_regra_condicional em vocabulário aprovado; documentacao_exigida não vazia se presente; atividade_removida_em sem versão indevida; atividade_nova_em sem versão legada indevida salvo exige_decisao_humana.
+  - Idempotência: segunda execução no mesmo `--db` produz inserted=0, skipped=3/32/61/1.
+  - Transação atômica: rollback automático se qualquer insert falhar.
+- Contagens validadas com `normative_fixtures/d73c_normative_fixture.yaml`:
+  - 3 normas, 32 bases, 61 versões, 1 transição.
+  - Todas as versões inseridas com status `rascunho`.
+  - 2 removidas em AAC-rev6 não geram versão na norma removida.
+  - 3 nativas AEU presentes somente em AEU-rev1.
+  - Transição AAC-rev5 → AEU-rev1 (aac_para_aeu) com eixos corretos.
+- Testes:
+  - `python -m pytest tests/test_d73d_normative_importer_dryrun.py -q --tb=short`
+  - Executor: 5 passed in 7.40s.
+  - Auditor: 5 passed in 4.07s.
+- Risco backlog [B-01]: `documentacao_exigida` validada somente quando a chave existe; futura iteração pode tornar a chave obrigatória em toda versão.
+- Importação real para `database.db` não foi executada. D7.3D fica fechada neste ponto.
+- Próximo passo: não iniciar importador real sem escopo explícito aprovado.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -594,6 +627,10 @@ Executor: Kimi (fixture creation + docs closeout)
 - `f235f62` - Add admin lifecycle transitions for atividade_versao (D7.2B5)
 - `9d2e9fb` - Add explicit activity version substitution
 - `5f7dbc8` - Record D7.2B5-PATCH2 substitution closeout
+- `95cb897` - Add admin transition history for activity versions
+- `cbde400` - Record D7.3A normative canonization
+- `5f66239` - Add D7.3C canonical normative fixture and docs closeout
+- TBD        - Add D7.3D normative dry-run importer
 
 ## Current Risks And Limits
 
@@ -642,6 +679,8 @@ Executor: Kimi (fixture creation + docs closeout)
   - 2 removidas (AAC-rev6), 3 nativas AEU, 1 transição explícita (AAC→AEU).
   - YAML validado, sem erros de estrutura ou valores inválidos.
 - Importação de dados reais ainda não foi executada; fixture está pronto para D7.3D.
+- D7.3D entregou o importador dry-run (tools/d73d_normative_importer_dryrun.py).
+  A importação real para database.db ainda não foi executada.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
