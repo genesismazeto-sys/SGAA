@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3A normative canonization closeout
-Executor: MiniMax-M3 (docs closeout)
+Closeout: D7.3C canonical fixture creation closeout
+Executor: Kimi (fixture creation + docs closeout)
 
 ## Permanent State
 
@@ -540,6 +540,38 @@ Executor: MiniMax-M3 (docs closeout)
   excluded from Git via `.git/info/exclude`, and must not be committed at this stage.
 - Next step: plan D7.3B as reviewable canonical specification/fixture; do not implement yet.
 
+### D7.3B-PLAN - Fixture format specification
+- Accepted as read-only specification. No code, template, test, DB, or seed change.
+- Format: YAML chosen over JSON/CSV for human readability, multiline support, and Git diff clarity.
+- Directory: `normative_fixtures/` (no `data/` directory exists in project).
+- Structure: `meta`, `normas`, `atividades` with `versoes`, `atividade_removida_em`, `atividade_nova_em`, `transicao_proposta`.
+- `status_inicial` = "rascunho" for all versions.
+- `ch_regra_condicional` uses controlled vocabulary: null, equivalente_curso, equivalente_horas, tempo_declarado_ou_limite, carga_declarada_ou_limite_evento, tier_documental, horas_por_evento, horas_por_banca, regra_especial_ivao, exige_decisao_humana.
+- `[REGRA: ...]` and `[ANEXOS: ...]` prefixes used in `observacao_admin` to preserve normative metadata.
+- `transicao_proposta` must include `de` (from norma), `para` (to norma), `tipo`, `justificativa`.
+- `atividade_nova_em` only for activities that are genuinely new and do not exist in previous norms.
+- `atividade_removida_em` only for activities that exist in previous norms but not in the current one.
+- Next step: create the canonical fixture YAML (D7.3C).
+
+### D7.3C - Canonical fixture creation
+- Scope: create the real canonical normative fixture YAML from the three DOCX regulations.
+- Output: `normative_fixtures/d73c_normative_fixture.yaml`.
+- Contents validated:
+  - 3 normas: AAC-rev5 (29 activities), AAC-rev6 (27 activities), AEU-rev1 (5 activities).
+  - 32 unique conceptual activities mapped to `atividade_base`.
+  - 61 total versions across all norms.
+  - 2 activities removed in AAC-rev6: SIMULADOR_VOO, TRAB_VOLUNTARIO_TERCEIRO_SETOR.
+  - 3 native AEU activities: ORG_EVENTOS_EXTENSIONISTAS, PART_EVENTOS_EXTENSIONISTAS, CURSOS_OFICINAS_PALESTRAS_COMUNIDADE.
+  - 1 explicit transition: TRAB_VOLUNTARIO_TERCEIRO_SETOR (AAC-rev5 → AEU-rev1, tipo: aac_para_aeu).
+  - PROJETOS_EXTENSAO is ambiguous (AAC apoio institucional vs AEU extensão) and requires human decision (noted in `observacao_admin` of AEU-rev1 version).
+  - `status_inicial` = "rascunho" for all 61 versions.
+  - `ch_regra_condicional` uses controlled vocabulary throughout; no invalid values.
+  - YAML validated with Python `yaml.safe_load` → `YAML_OK`.
+  - Deep validation: no invalid `ch_regra_condicional` values, no missing required fields.
+- No code, template, test, DB, or seed was changed during D7.3C.
+- The DOCX files remain in `_normativos_inbox/` and are excluded from Git.
+- Next step: D7.3D dry-run importer consuming the fixture YAML into an isolated DB.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -604,8 +636,12 @@ Executor: MiniMax-M3 (docs closeout)
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
 - Não há auditoria de quem ativou/inativou/descontinuou/substituiu versão.
 - D7.3A realizou canonização documental dos regulamentos AAC/AEU (read-only, sem código).
-- Três normas foram identificadas e codificadas: AAC-rev5 (histórico), AAC-rev6 (vigente),
-  AEU-rev1 (vigente). Importação de dados reais ainda não foi executada.
+- D7.3B-PLAN especificou o formato do fixture YAML (controlled vocabulary, mapping ao schema).
+- D7.3C criou o fixture canônico: `normative_fixtures/d73c_normative_fixture.yaml`.
+  - 32 atividades únicas, 61 versões totais, 3 normas.
+  - 2 removidas (AAC-rev6), 3 nativas AEU, 1 transição explícita (AAC→AEU).
+  - YAML validado, sem erros de estrutura ou valores inválidos.
+- Importação de dados reais ainda não foi executada; fixture está pronto para D7.3D.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
