@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3E fixture database convergence diagnostic closeout
-Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
+Closeout: D7.3F reconciliation matrix decisions closeout
+Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
 
 ## Permanent State
 
@@ -686,6 +686,68 @@ Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 
     - require human decision;
     - never overwrite a version already used in matrix or request without an explicit plan.
 
+### D7.3F-PLAN - reconciliation matrix between fixture and real database
+- Accepted as a read-only reconciliation plan between the canonical fixture and the current real database.
+- No code, fixture, importer, test, requirements, database, script, migration, or seed change was made during D7.3F-PLAN.
+- Execution state observed during the plan:
+  - initial `HEAD` `f10db80`;
+  - branch `recovery/d7-activity-versioning`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - working tree clean;
+  - SQLite connection opened only by URI read-only mode (`mode=ro`);
+  - no file or database was altered during the diagnosis.
+- Real database preserved:
+  - before: `528384` bytes;
+  - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - after: `528384` bytes;
+  - SHA256 after: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Reconciliation matrix summary:
+  - `30` fixture activities have preservable mappings to existing bases;
+  - `59` of `61` fixture versions have an existing preservable candidate;
+  - the `2` pending versions were `VISITAS_TECNICAS_PROFESSORES` in `AAC-rev5` and `AAC-rev6`;
+  - all versions `1..59` are already linked in `matriz_atividade_versao_item`;
+  - versions `2`, `8`, `10`, `56`, and `58` also appear in versioned request snapshots;
+  - `atividade_versao.id=60` is runtime `NRM-RT-2cb9b503` and must remain outside official fixture reconciliation;
+  - fixture transition `TRAB_VOLUNTARIO_TERCEIRO_SETOR` `AAC-rev5 -> AEU-rev1` already exists as `atividade_transicao.id=27`, but with divergent `justificativa`.
+- Architectural decision closed for `PROJETOS_EXTENSAO`:
+  - preserve the current split in the live database;
+  - do not collapse it into a single base;
+  - preserve `base27` / `v52` / `v53` for extension projects;
+  - preserve `base8` / `v51` for institutional support projects;
+  - preserve the extra persisted `aac_para_aeu` transition already present in runtime history;
+  - human decision closed: keep the runtime split.
+- Architectural decision closed for `VISITAS_TECNICAS_PROFESSORES`:
+  - do not auto-map it to `base6`;
+  - `base6` is too generic for a safe canonical mapping;
+  - if a future apply phase is approved, create a new specific `atividade_base` plus draft versions for `AAC-rev5` and `AAC-rev6`;
+  - this closeout does not authorize any real creation now;
+  - human decision closed: future draft creation, not remapping to `base6`.
+- Frozen reconciliation rules:
+  - never overwrite `atividade_versao.id=1..59`;
+  - never overwrite versions with versioned request snapshots: `2`, `8`, `10`, `56`, `58`;
+  - never overwrite `atividade_transicao.id=1..31`;
+  - never alter `NRM-RT*` runtime items;
+  - any future structural reconciliation must happen through a new draft version or explicit mapping, never by overwrite.
+- Runtime items outside fixture remain `PRESERVE_EXISTING / OUT_OF_FIXTURE`:
+  - `NRM-RT`;
+  - `NRM-RT-5c96604e`;
+  - `NRM-RT-2cb9b503`;
+  - `Runtime Base`;
+  - `Runtime Base 5c96604e`;
+  - `Runtime Base 2cb9b503`.
+- Risk classification after closeout:
+  - critical: overwriting versions already used in matrix or versioned requests;
+  - critical: reconciling `PROJETOS_EXTENSAO` without preserving the live split;
+  - high: mapping `VISITAS_TECNICAS_PROFESSORES` to `base6` without explicit approval;
+  - high: changing `NRM-RT` runtime items;
+  - medium: future reconciliation of structural differences in group / workload / limits;
+  - low: textual divergences when IDs and persisted history are preserved.
+- Recommended next step:
+  - `D7.3G-PLAN-APPLY` may now be planned after this closeout;
+  - `D7.3G` must still be planning only, not real apply;
+  - any real apply requires intact backup, item-by-item plan, dry-run against a copy, and explicit approval.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -769,9 +831,11 @@ Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 
   - `13` requisições com snapshot/versionamento preenchido;
   - namespace `NRM-RT` fora da fixture;
   - histórico adicional em `atividade_transicao`.
-- `PROJETOS_EXTENSAO` permanece caso ambíguo e exige decisão humana antes de qualquer reconciliação com escrita.
-- PATCH seguinte não deve começar sem escopo explícito e planejamento
-  read-only separado.
+- D7.3F-PLAN fechou as decisões humanas pendentes:
+  - `PROJETOS_EXTENSAO` permanece dividido entre apoio institucional e extensão;
+  - `VISITAS_TECNICAS_PROFESSORES` não deve mapear para `base6` e exigirá criação futura específica se houver apply aprovado.
+- Versões `1..59` e transições `1..31` ficam congeladas contra overwrite em qualquer plano futuro.
+- Próxima fase ainda deve permanecer em planejamento; apply real continua proibido sem backup, cópia isolada e autorização explícita.
 
 ## Permanent Working Directives
 
