@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3H controlled reconciliation apply closeout
-Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.3I apply copy validation closeout
+Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -869,6 +869,59 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - any future phase must be an explicit decision either to execute only on a
     controlled DB copy or to stop the trail without applying to live.
 
+### D7.3I-VALIDATE-APPLY-COPY - validation of apply on a controlled DB copy
+- Accepted.
+- Scope executed:
+  - validated `tools/d73h_reconciliation_apply.py`;
+  - ran `--apply` only against a temporary copy of `database.db`;
+  - used `--backup-path`, `--backup-confirmed`, and
+    `--allow-create-visitas-professores`;
+  - performed no write against live `database.db`.
+- Result of the apply on the DB copy:
+  - process returned `0`;
+  - `mode=apply`;
+  - `disposition=create`;
+  - records created in the copy:
+    - `atividade_base.id=37`;
+    - `atividade_versao.id=61`, `AAC-rev5`, `status=rascunho`;
+    - `atividade_versao.id=62`, `AAC-rev6`, `status=rascunho`.
+- Confirmed deltas in the copy:
+  - `atividade_base`: `35 -> 36` (`+1`);
+  - `atividade_versao`: `60 -> 62` (`+2`);
+  - `norma_atividade`: `6 -> 6` (`+0`);
+  - `atividade_transicao`: `31 -> 31` (`+0`);
+  - `matriz_atividade_versao_item`: `59 -> 59` (`+0`);
+  - `requisicoes`: `41 -> 41` (`+0`).
+- Before/after comparison:
+  - remained unchanged:
+    - `norma_atividade`;
+    - `atividade_transicao`;
+    - `matriz_atividade_versao_item`;
+    - `requisicoes`;
+    - all pre-existing rows of `atividade_base`;
+    - all pre-existing rows of `atividade_versao`;
+  - only observed effect: insertion of the 3 expected records in the copy.
+- Guardrails confirmed:
+  - `base6`/`base7` exist, but were treated as prohibited candidates;
+  - `base6`/`base7` were not used as destination;
+  - `PROJETOS_EXTENSAO` was not touched;
+  - `NRM-RT*` was not touched.
+- Live `database.db`:
+  - was not a write target;
+  - size before/after: `528384` bytes;
+  - SHA256 before/after:
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Conclusion:
+  - validation on a DB copy passed;
+  - the script behaved correctly in the controlled scenario;
+  - this still does **not** authorize real apply on live.
+- Next step after this closeout:
+  - D7.3I is closed at the validation/documentation level;
+  - the next decision must be explicit:
+    - either end the trail without any real apply;
+    - or open a separate decision/risk phase for a possible future live apply;
+  - no real apply is authorized by this closeout.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -961,6 +1014,9 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   e sua suíte focada `tests/test_d73h_reconciliation_apply.py`.
 - O script de D7.3H não autoriza apply real no `database.db`; ele apenas cria um
   caminho controlado para `plan` e para `apply` em cópia segura.
+- D7.3I validou esse `apply` somente em cópia temporária e confirmou os deltas
+  esperados: `+1` `atividade_base`, `+2` `atividade_versao`, `+0` nas demais
+  tabelas monitoradas.
 - `VISITAS_TECNICAS_PROFESSORES` continua sendo o único caso de escrita admitido
   em princípio, e somente via `CREATE_DRAFT`.
 - `documentos_json` permanece `NULL` em D7.3H-v1.

@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3H controlled reconciliation apply closeout
-Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
+Closeout: D7.3I apply copy validation closeout
+Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
 
 ## Current State
 
@@ -11,13 +11,14 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - D7.3F-PLAN read-only reconciliation matrix accepted and its architectural decisions are now closed.
 - D7.3G-PLAN-APPLY accepted as a read-only future apply plan.
 - D7.3H-PATCH1 controlled reconciliation apply script implemented and accepted after independent audit.
+- D7.3I-VALIDATE-APPLY-COPY accepted after controlled execution against a temporary DB copy.
 - Current branch: `recovery/d7-activity-versioning`.
 - `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
 - `origin/main...main = 0 0`.
 - `main` / `origin/main` preserved at `7e5eb56`.
-- Working tree had only the 2 expected untracked D7.3H files before selective staging.
+- Working tree was clean before this closeout.
 - Real importation into `database.db` has still not been performed.
-- `database.db` remained preserved during D7.3H:
+- `database.db` remained preserved during D7.3I:
   - before: `528384` bytes;
   - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
   - after: `528384` bytes;
@@ -221,6 +222,53 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - `documentos_json` remains `NULL` in D7.3H-v1;
   - partial/conflicting state fails intentionally rather than repairing it.
 
+## D7.3I-VALIDATE-APPLY-COPY - Validation Of Apply On Controlled DB Copy
+
+- Scope executed:
+  - validation of `tools/d73h_reconciliation_apply.py`;
+  - `--apply` executed only on a temporary copy of `database.db`;
+  - `--backup-path`, `--backup-confirmed`, and
+    `--allow-create-visitas-professores` were required and supplied;
+  - no write was performed against live `database.db`.
+- Result of the apply on the copy:
+  - process returned `0`;
+  - `mode=apply`;
+  - `disposition=create`;
+  - created records:
+    - `atividade_base.id=37`;
+    - `atividade_versao.id=61`, `AAC-rev5`, `status=rascunho`;
+    - `atividade_versao.id=62`, `AAC-rev6`, `status=rascunho`.
+- Deltas confirmed on the copy:
+  - `atividade_base`: `35 -> 36` (`+1`);
+  - `atividade_versao`: `60 -> 62` (`+2`);
+  - `norma_atividade`: `6 -> 6` (`+0`);
+  - `atividade_transicao`: `31 -> 31` (`+0`);
+  - `matriz_atividade_versao_item`: `59 -> 59` (`+0`);
+  - `requisicoes`: `41 -> 41` (`+0`).
+- Before/after comparison:
+  - remained unchanged:
+    - `norma_atividade`;
+    - `atividade_transicao`;
+    - `matriz_atividade_versao_item`;
+    - `requisicoes`;
+    - all pre-existing rows of `atividade_base`;
+    - all pre-existing rows of `atividade_versao`;
+  - the only observed effect was insertion of the 3 expected records in the copy.
+- Guardrails confirmed:
+  - `base6`/`base7` exist, but were treated as prohibited candidates;
+  - `base6`/`base7` were not used as destination;
+  - `PROJETOS_EXTENSAO` was not touched;
+  - `NRM-RT*` was not touched.
+- Live `database.db`:
+  - was not a write target;
+  - stayed at `528384` bytes;
+  - stayed at SHA256
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Conclusion:
+  - validation on a DB copy passed;
+  - the script behaved correctly in the controlled scenario;
+  - this does **not** authorize any real apply on live.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -252,7 +300,7 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 
 ## Recommended Next Step
 
-- D7.3H is closed at the implementation/documentation level.
+- D7.3I is closed at the validation/documentation level.
 - No real apply on live `database.db` is authorized.
 - Any next phase must be an explicit product/operations decision between:
   - executing only on a controlled database copy;
@@ -268,7 +316,7 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - The only future apply path currently admitted in planning is `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
-- D7.3H is already implemented and accepted.
+- D7.3H is already implemented and accepted, and D7.3I validated it on a controlled DB copy only.
 - No next agent should perform real apply on `database.db` without a new explicit authorization phase.
 - Continuous prohibited scope remains:
   - `main` branch;
