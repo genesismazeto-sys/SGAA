@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3I apply copy validation closeout
-Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.3J live draft creation and suite stabilization closeout
+Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -922,6 +922,111 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
     - or open a separate decision/risk phase for a possible future live apply;
   - no real apply is authorized by this closeout.
 
+### D7.3J-LIVE-APPLY-CREATE-DRAFT - live create-draft execution and suite stabilization
+- Accepted.
+- Initial state before the live apply:
+  - `HEAD=aedf936`;
+  - branch `recovery/d7-activity-versioning`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - live `database.db` before apply:
+    - `528384` bytes;
+    - SHA256
+      `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Backup created:
+  - `backups/database.pre-d73j-live-apply-20260612-165031.db`;
+  - `528384` bytes;
+  - SHA256
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - backup matches the initial live DB.
+- Live apply execution model:
+  - executed first only against a controlled DB copy;
+  - then live `database.db` was replaced by the validated copy;
+  - no manual SQL was executed;
+  - there was no direct apply against the live file;
+  - script used: `tools/d73h_reconciliation_apply.py`.
+- Records created in live:
+  - `atividade_base.id=37`;
+  - `atividade_versao.id=61`, `norma_codigo=AAC-rev5`, `status=rascunho`,
+    `eixo=AAC`;
+  - `atividade_versao.id=62`, `norma_codigo=AAC-rev6`, `status=rascunho`,
+    `eixo=AAC`.
+- Final deltas in live:
+  - `atividade_base`: `35 -> 36` (`+1`);
+  - `atividade_versao`: `60 -> 62` (`+2`);
+  - `norma_atividade`: `6 -> 6` (`+0`);
+  - `atividade_transicao`: `31 -> 31` (`+0`);
+  - `matriz_atividade_versao_item`: `59 -> 59` (`+0`);
+  - `requisicoes`: `41 -> 41` (`+0`).
+- Guarantees confirmed:
+  - no new norm;
+  - no new transition;
+  - no new matrix link;
+  - no request changed;
+  - no old version changed;
+  - `PROJETOS_EXTENSAO` was not touched;
+  - `NRM-RT*` was not touched;
+  - `base6`/`base7` were treated as prohibited candidates and not used as
+    destination;
+  - versions `61/62` remained `rascunho` and without matrix link.
+- Live final signature:
+  - `528384` bytes;
+  - SHA256
+    `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Post-apply test anomaly:
+  - after the live apply, `4` focused D7.3H tests failed;
+  - cause: the tests assumed `REAL_DB_PATH` still reflected the pre-apply state;
+  - that assumption became invalid because live had moved to post-apply;
+  - this was not a script defect and not a data defect.
+- D7.3J-PATCH1-TEST-STABILIZE:
+  - changed only `tests/test_d73h_reconciliation_apply.py`;
+  - create-path tests now use a temporary controlled pre-apply scenario;
+  - already-exists / idempotency tests now use a temporary controlled
+    post-apply scenario;
+  - the fallback without backup removes only the 3 D7.3J rows in a temporary
+    copy;
+  - if `VISITAS_TECNICAS_PROFESSORES` gains more complex links or state in the
+    future, the helper fails on purpose instead of masking the new scenario.
+- Validations after stabilization:
+  - focused pytest:
+    - `python -m pytest tests/test_d73h_reconciliation_apply.py -q --tb=short`
+    - result: `18 passed`;
+  - live `plan` JSON updated:
+    - `status=ok`;
+    - `mode=plan`;
+    - `disposition=already_exists`;
+    - `planned_counts={"atividade_base": 0, "atividade_versao": 0}`;
+    - `planned_actions=[]`;
+    - `created_ids={"atividade_base": null, "atividade_versao": []}`;
+  - live counts:
+    - `atividade_base=36`;
+    - `atividade_versao=62`;
+    - `norma_atividade=6`;
+    - `atividade_transicao=31`;
+    - `matriz_atividade_versao_item=59`;
+    - `requisicoes=41`.
+- Git operational note:
+  - `database.db` is ignored by the repository;
+  - `git status --short` can appear clean after an operational DB change;
+  - `git status --short --ignored` shows `database.db`, `database.db-wal`,
+    `database.db-shm`, backups, and `tmp/` as ignored;
+  - none of those artifacts must be committed.
+- Final D7.3J state:
+  - `VISITAS_TECNICAS_PROFESSORES` was created in live as draft;
+  - it was not activated;
+  - it was not linked to any matrix;
+  - it did not alter requests;
+  - it did not alter transitions;
+  - it did not alter norms;
+  - no refactor was performed.
+- Next step after this closeout:
+  - D7.3J is closed after this documental commit/push;
+  - the next phase, if any, must be a separate decision:
+    - `D7.3K-DECIDE-MATRIX-LINK`, if matrix linking of the draft versions is
+      needed;
+    - or close the D7.3 trail with no immediate follow-up;
+  - no activation or matrix link is authorized by this closeout.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -948,6 +1053,9 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
 - `cbde400` - Record D7.3A normative canonization
 - `5f66239` - Add D7.3C canonical normative fixture and docs closeout
 - `45dd39d` - Add D7.3D normative dry-run importer
+- `da869e9` - Record D7.3F reconciliation matrix decisions
+- `ecdc9f5` - Add D7.3H controlled reconciliation apply script
+- `aedf936` - Record D7.3I apply copy validation
 
 ## Current Risks And Limits
 
@@ -1014,14 +1122,19 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
   e sua suíte focada `tests/test_d73h_reconciliation_apply.py`.
 - O script de D7.3H não autoriza apply real no `database.db`; ele apenas cria um
   caminho controlado para `plan` e para `apply` em cópia segura.
-- D7.3I validou esse `apply` somente em cópia temporária e confirmou os deltas
-  esperados: `+1` `atividade_base`, `+2` `atividade_versao`, `+0` nas demais
-  tabelas monitoradas.
-- `VISITAS_TECNICAS_PROFESSORES` continua sendo o único caso de escrita admitido
-  em princípio, e somente via `CREATE_DRAFT`.
+- D7.3I validou esse `apply` em cópia temporária e confirmou os deltas esperados:
+  `+1` `atividade_base`, `+2` `atividade_versao`, `+0` nas demais tabelas
+  monitoradas.
+- D7.3J executou o `CREATE_DRAFT` controlado no live e criou
+  `atividade_base.id=37` e `atividade_versao.id=61/62`, ambas em `rascunho`.
+- O live agora contém esses 3 novos registros com `+0` mudanças em normas,
+  transições, vínculos de matriz e requisições.
+- `VISITAS_TECNICAS_PROFESSORES` não está mais pendente de criação; qualquer
+  próxima decisão, se existir, é apenas sobre ativação, vínculo de matriz ou
+  encerramento da trilha.
 - `documentos_json` permanece `NULL` em D7.3H-v1.
-- Apply real no live continua proibido sem decisão explícita posterior; o closeout
-  atual não aprova nenhuma execução em `database.db`.
+- Nenhum apply adicional no live, nenhuma ativação e nenhum vínculo de matriz
+  estão autorizados sem nova fase explícita.
 
 ## Permanent Working Directives
 

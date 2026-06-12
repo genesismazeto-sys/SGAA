@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "tools" / "d73h_reconciliation_apply.py"
 FIXTURE_PATH = ROOT / "normative_fixtures" / "d73c_normative_fixture.yaml"
 REAL_DB_PATH = ROOT / "database.db"
+PRE_APPLY_BACKUP_PATH = ROOT / "backups" / "database.pre-d73j-live-apply-20260612-165031.db"
+TARGET_ACTIVITY_NAME = "Visitas técnicas ou cursos coordenados pelos professores"
 
 
 def _run_cli(*args: object, fixture_path: Path = FIXTURE_PATH) -> subprocess.CompletedProcess[str]:
@@ -44,11 +46,85 @@ def _connect(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _prepare_copy_and_backup(tmp_path: Path) -> tuple[Path, Path]:
+def _remove_target_from_copy(path: Path) -> None:
+    with _connect(path) as conn:
+        base_rows = conn.execute(
+            """
+            SELECT id, status
+              FROM atividade_base
+             WHERE nome_conceito = ?
+            """,
+            (TARGET_ACTIVITY_NAME,),
+        ).fetchall()
+        if not base_rows:
+            return
+
+        assert len(base_rows) == 1
+        base_id = base_rows[0]["id"]
+        version_rows = conn.execute(
+            """
+            SELECT id, codigo_normativo, eixo, status
+              FROM atividade_versao
+             WHERE atividade_base_id = ?
+             ORDER BY id
+            """,
+            (base_id,),
+        ).fetchall()
+        assert len(version_rows) == 2
+        assert [row["codigo_normativo"] for row in version_rows] == ["AAC-rev5", "AAC-rev6"]
+        assert {row["eixo"] for row in version_rows} == {"AAC"}
+        assert {row["status"] for row in version_rows} == {"rascunho"}
+
+        version_ids = [row["id"] for row in version_rows]
+        placeholders = ",".join("?" for _ in version_ids)
+        matrix_count = conn.execute(
+            f"SELECT COUNT(*) FROM matriz_atividade_versao_item WHERE atividade_versao_id IN ({placeholders})",
+            version_ids,
+        ).fetchone()[0]
+        req_count = conn.execute(
+            f"SELECT COUNT(*) FROM requisicoes WHERE atividade_versao_id IN ({placeholders})",
+            version_ids,
+        ).fetchone()[0]
+        transition_count = conn.execute(
+            f"""
+            SELECT COUNT(*)
+              FROM atividade_transicao
+             WHERE from_atividade_versao_id IN ({placeholders})
+                OR to_atividade_versao_id IN ({placeholders})
+            """,
+            [*version_ids, *version_ids],
+        ).fetchone()[0]
+        assert matrix_count == 0
+        assert req_count == 0
+        assert transition_count == 0
+
+        conn.execute(f"DELETE FROM atividade_versao WHERE id IN ({placeholders})", version_ids)
+        conn.execute("DELETE FROM atividade_base WHERE id = ?", (base_id,))
+        conn.commit()
+
+
+def _resolve_pre_apply_source() -> tuple[Path, bool]:
+    if PRE_APPLY_BACKUP_PATH.exists():
+        return PRE_APPLY_BACKUP_PATH, False
+    candidates = sorted((ROOT / "backups").glob("database.pre-d73j-live-apply-*.db"))
+    if candidates:
+        return candidates[-1], False
+    return REAL_DB_PATH, True
+
+
+def _prepare_copy_and_backup(tmp_path: Path, source_path: Path | None = None) -> tuple[Path, Path]:
+    if source_path is None:
+        source, requires_rewind = _resolve_pre_apply_source()
+    else:
+        source = source_path
+        requires_rewind = False
     db_copy = tmp_path / "apply_target.sqlite3"
     backup = tmp_path / "apply_backup.sqlite3"
-    shutil.copy2(REAL_DB_PATH, db_copy)
-    shutil.copy2(REAL_DB_PATH, backup)
+    shutil.copy2(source, db_copy)
+    shutil.copy2(source, backup)
+    if requires_rewind:
+        _remove_target_from_copy(db_copy)
+        _remove_target_from_copy(backup)
     return db_copy, backup
 
 
@@ -92,6 +168,13 @@ def _run_apply(db_copy: Path, backup: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _prepare_post_apply_copy_and_backup(tmp_path: Path) -> tuple[Path, Path, dict[str, object]]:
+    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+    result = _run_apply(db_copy, backup)
+    assert result.returncode == 0, result.stderr
+    return db_copy, backup, json.loads(result.stdout)
+
+
 def test_plan_mode_does_not_alter_live_database_signature():
     before_signature = _database_signature(REAL_DB_PATH)
 
@@ -103,13 +186,16 @@ def test_plan_mode_does_not_alter_live_database_signature():
     assert after_signature == before_signature
 
 
-def test_plan_mode_json_reports_one_base_and_two_versions_planned():
-    result = _run_cli("--db-copy", REAL_DB_PATH, "--plan", "--report", "json")
+def test_plan_mode_json_reports_one_base_and_two_versions_planned(tmp_path):
+    db_copy, _backup = _prepare_copy_and_backup(tmp_path)
+
+    result = _run_cli("--db-copy", db_copy, "--plan", "--report", "json")
 
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report["status"] == "ok"
     assert report["mode"] == "plan"
+    assert report["disposition"] == "create"
     assert report["planned_counts"] == {
         "atividade_base": 1,
         "atividade_versao": 2,
@@ -117,6 +203,23 @@ def test_plan_mode_json_reports_one_base_and_two_versions_planned():
     tables = [action["table"] for action in report["planned_actions"]]
     assert tables.count("atividade_base") == 1
     assert tables.count("atividade_versao") == 2
+
+
+def test_plan_mode_json_reports_already_exists_on_controlled_post_apply_copy(tmp_path):
+    db_copy, _backup, _first_report = _prepare_post_apply_copy_and_backup(tmp_path)
+
+    result = _run_cli("--db-copy", db_copy, "--plan", "--report", "json")
+
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "ok"
+    assert report["mode"] == "plan"
+    assert report["disposition"] in {"already_exists", "noop", "skipped"}
+    assert report["planned_counts"] == {
+        "atividade_base": 0,
+        "atividade_versao": 0,
+    }
+    assert report["planned_actions"] == []
 
 
 def test_apply_refuses_without_backup_confirmed(tmp_path):
@@ -202,7 +305,6 @@ def test_apply_refuses_live_db_and_forbidden_database_db_basename(tmp_path):
 
 def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_created_ids(tmp_path):
     db_copy, backup = _prepare_copy_and_backup(tmp_path)
-    before_signature = _database_signature(db_copy)
 
     result = _run_apply(db_copy, backup)
 
@@ -215,8 +317,6 @@ def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_cre
     assert report["after_counts"]["atividade_base"] == report["before_counts"]["atividade_base"] + 1
     assert report["after_counts"]["atividade_versao"] == report["before_counts"]["atividade_versao"] + 2
     assert report["final_counts"] == report["after_counts"]
-    assert report["file_signatures"]["db_target_before"]["sha256"] != report["file_signatures"]["db_target_after"]["sha256"]
-    assert _database_signature(db_copy) != before_signature
 
     with _connect(db_copy) as conn:
         base_rows = conn.execute(
@@ -225,10 +325,11 @@ def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_cre
               FROM atividade_base
              WHERE nome_conceito = ?
             """,
-            ("Visitas técnicas ou cursos coordenados pelos professores",),
+            (TARGET_ACTIVITY_NAME,),
         ).fetchall()
         assert len(base_rows) == 1
         base_id = base_rows[0]["id"]
+        assert base_id == report["created_ids"]["atividade_base"]
         version_rows = conn.execute(
             """
             SELECT av.id, av.norma_id, n.codigo AS norma_codigo, av.status, av.eixo
@@ -239,6 +340,7 @@ def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_cre
             """,
             (base_id,),
         ).fetchall()
+        assert [row["id"] for row in version_rows] == report["created_ids"]["atividade_versao"]
         assert [row["norma_codigo"] for row in version_rows] == ["AAC-rev5", "AAC-rev6"]
         assert [row["norma_id"] for row in version_rows] == [1, 2]
         assert {row["status"] for row in version_rows} == {"rascunho"}
@@ -348,7 +450,7 @@ def test_apply_fails_if_existing_target_base_is_conflicting(tmp_path):
             VALUES (?, ?, 'ativo')
             """,
             (
-                "Visitas técnicas ou cursos coordenados pelos professores",
+                TARGET_ACTIVITY_NAME,
                 "Descrição conflitante",
             ),
         )

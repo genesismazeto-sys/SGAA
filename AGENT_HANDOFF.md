@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3I apply copy validation closeout
-Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
+Closeout: D7.3J live draft creation and suite stabilization closeout
+Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
 
 ## Current State
 
@@ -12,19 +12,30 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
 - D7.3G-PLAN-APPLY accepted as a read-only future apply plan.
 - D7.3H-PATCH1 controlled reconciliation apply script implemented and accepted after independent audit.
 - D7.3I-VALIDATE-APPLY-COPY accepted after controlled execution against a temporary DB copy.
+- D7.3J-LIVE-APPLY-CREATE-DRAFT accepted after controlled execution first on a DB copy and then by replacing live with the validated copy.
+- D7.3J-PATCH1-TEST-STABILIZE accepted after decoupling the focused suite from mutable live DB state.
 - Current branch: `recovery/d7-activity-versioning`.
 - `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
 - `origin/main...main = 0 0`.
 - `main` / `origin/main` preserved at `7e5eb56`.
-- Working tree was clean before this closeout.
-- Real importation into `database.db` has still not been performed.
-- `database.db` remained preserved during D7.3I:
-  - before: `528384` bytes;
-  - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
-  - after: `528384` bytes;
-  - SHA256 after: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Working tree before the doc closeout had only:
+  - `M tests/test_d73h_reconciliation_apply.py`
+- No broad real importation into `database.db` has been performed; only the
+  narrow D7.3J controlled `CREATE_DRAFT` live apply.
+- `database.db` changed during D7.3J:
+  - before apply: `528384` bytes;
+  - SHA256 before apply:
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - after apply: `528384` bytes;
+  - SHA256 after apply:
+    `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Live now contains:
+  - `atividade_base.id=37`;
+  - `atividade_versao.id=61`, `AAC-rev5`, `status=rascunho`;
+  - `atividade_versao.id=62`, `AAC-rev6`, `status=rascunho`;
+  - no matrix links, no transition changes, and no request changes for those rows.
 
-## D7.3D - Last Write Phase
+## D7.3D - Historical Tooling Write Phase
 
 - Scope: dry-run importer consuming `normative_fixtures/d73c_normative_fixture.yaml` into an isolated SQLite DB.
 - Delivered files:
@@ -269,6 +280,102 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
   - the script behaved correctly in the controlled scenario;
   - this does **not** authorize any real apply on live.
 
+## D7.3J-LIVE-APPLY-CREATE-DRAFT - Controlled Live Apply And Suite Stabilization
+
+- Initial state before the live apply:
+  - `HEAD=aedf936`;
+  - branch `recovery/d7-activity-versioning`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - live `database.db` before apply:
+    - `528384` bytes;
+    - SHA256
+      `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Backup created:
+  - `backups/database.pre-d73j-live-apply-20260612-165031.db`;
+  - `528384` bytes;
+  - SHA256
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - backup matched the initial live DB.
+- Apply execution model:
+  - executed first only on a controlled DB copy;
+  - after validation, live `database.db` was replaced by that validated copy;
+  - no manual SQL was executed;
+  - there was no direct apply against the live file;
+  - script used: `tools/d73h_reconciliation_apply.py`.
+- Records created in live:
+  - `atividade_base.id=37`;
+  - `atividade_versao.id=61`, `norma_codigo=AAC-rev5`, `status=rascunho`,
+    `eixo=AAC`;
+  - `atividade_versao.id=62`, `norma_codigo=AAC-rev6`, `status=rascunho`,
+    `eixo=AAC`.
+- Final deltas in live:
+  - `atividade_base`: `35 -> 36` (`+1`);
+  - `atividade_versao`: `60 -> 62` (`+2`);
+  - `norma_atividade`: `6 -> 6` (`+0`);
+  - `atividade_transicao`: `31 -> 31` (`+0`);
+  - `matriz_atividade_versao_item`: `59 -> 59` (`+0`);
+  - `requisicoes`: `41 -> 41` (`+0`).
+- Guarantees confirmed:
+  - no new norm;
+  - no new transition;
+  - no new matrix link;
+  - no request changed;
+  - no old version changed;
+  - `PROJETOS_EXTENSAO` was not touched;
+  - `NRM-RT*` was not touched;
+  - `base6`/`base7` were treated as prohibited candidates and not used as destination;
+  - versions `61/62` remained `rascunho` and without matrix link.
+- Live final signature:
+  - `528384` bytes;
+  - SHA256
+    `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Post-apply test anomaly:
+  - after the live apply, `4` focused D7.3H tests failed;
+  - cause: those tests assumed `REAL_DB_PATH` still reflected the pre-apply state;
+  - that premise stopped being valid because live moved to post-apply;
+  - this was not a defect in the script and not a defect in the data.
+- D7.3J-PATCH1-TEST-STABILIZE:
+  - changed only `tests/test_d73h_reconciliation_apply.py`;
+  - create-path tests now use a temporary controlled pre-apply scenario;
+  - already-exists / idempotency tests now use a temporary controlled
+    post-apply scenario;
+  - fallback without backup removes only the 3 D7.3J rows in a temporary copy;
+  - if `VISITAS_TECNICAS_PROFESSORES` gains more complex links or state later,
+    the helper fails on purpose instead of masking the new scenario.
+- Validation after stabilization:
+  - focused pytest:
+    - `python -m pytest tests/test_d73h_reconciliation_apply.py -q --tb=short`
+    - result: `18 passed`;
+  - live `plan` JSON updated:
+    - `status=ok`;
+    - `mode=plan`;
+    - `disposition=already_exists`;
+    - `planned_counts={"atividade_base": 0, "atividade_versao": 0}`;
+    - `planned_actions=[]`;
+    - `created_ids={"atividade_base": null, "atividade_versao": []}`;
+  - live counts:
+    - `atividade_base=36`;
+    - `atividade_versao=62`;
+    - `norma_atividade=6`;
+    - `atividade_transicao=31`;
+    - `matriz_atividade_versao_item=59`;
+    - `requisicoes=41`.
+- Git operational note:
+  - `database.db` is ignored by the repository;
+  - `git status --short` can appear clean after an operational DB change;
+  - `git status --short --ignored` shows `database.db`, `database.db-wal`,
+    `database.db-shm`, backups, and `tmp/` as ignored;
+  - none of those artifacts must be committed.
+- Final D7.3J state:
+  - `VISITAS_TECNICAS_PROFESSORES` exists in live as draft;
+  - it was not activated;
+  - it was not linked to any matrix;
+  - it did not alter requests;
+  - it did not alter transitions;
+  - it did not alter norms;
+  - no refactor was performed.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -277,6 +384,8 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
 - `45dd39d` - Add D7.3D normative dry-run importer
 - `f10db80` - Record D7.3E fixture database convergence diagnostic
 - `da869e9` - Record D7.3F reconciliation matrix decisions
+- `ecdc9f5` - Add D7.3H controlled reconciliation apply script
+- `aedf936` - Record D7.3I apply copy validation
 
 ## Risks To Keep In View
 
@@ -288,7 +397,8 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
   - changing `NRM-RT` runtime items;
   - promoting the dry-run importer into a real apply path.
 - High:
-  - broadening D7.3G beyond the `CREATE_DRAFT` path for `VISITAS_TECNICAS_PROFESSORES`.
+  - broadening beyond the single completed `CREATE_DRAFT` path for `VISITAS_TECNICAS_PROFESSORES`;
+  - activating or matrix-linking versions `61/62` without a separate authorization phase.
 - Medium:
   - structural divergences in group / workload / limits;
   - fixture does not cover all persisted transition history.
@@ -300,24 +410,25 @@ Executor: Codex GPT-5 (D7.3I validation + docs closeout; D7.3H docs closeout); C
 
 ## Recommended Next Step
 
-- D7.3I is closed at the validation/documentation level.
-- No real apply on live `database.db` is authorized.
+- D7.3J is closed after this documental commit/push.
+- No additional live apply, no activation, and no matrix link are authorized now.
 - Any next phase must be an explicit product/operations decision between:
-  - executing only on a controlled database copy;
-  - or ending the trail without any live apply.
+  - opening `D7.3K-DECIDE-MATRIX-LINK` for the draft versions `61/62`;
+  - or ending the D7.3 trail with no immediate follow-up.
 
 ## Instructions For The Next Agent
 
 - Read `PROJECT_STATE.md` and `AGENT_HANDOFF.md` before any action.
 - Treat `atividade_id` as the operational source of truth.
-- Do not attempt any real import, reconciliation write, or importer `apply` against `database.db`.
+- `database.db` is already in the post-D7.3J state; do not assume pre-apply live.
+- Do not attempt any additional real import, reconciliation write, or importer `apply` against `database.db`.
 - `PROJETOS_EXTENSAO` is no longer open for semantic collapse: preserve the live split.
 - `VISITAS_TECNICAS_PROFESSORES` must not be mapped to `base6`.
-- The only future apply path currently admitted in planning is `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
+- The only admitted live write path was the now-completed `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
+- Versions `61/62` already exist in `rascunho` and remain unlinked to matrix.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
-- D7.3H is already implemented and accepted, and D7.3I validated it on a controlled DB copy only.
-- No next agent should perform real apply on `database.db` without a new explicit authorization phase.
+- No next agent should activate, matrix-link, or perform any additional live apply without a new explicit authorization phase.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;
