@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3G future apply plan closeout
-Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D7.3H controlled reconciliation apply closeout
+Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
 
 ## Current State
 
@@ -10,14 +10,14 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - D7.3E-RO1 read-only fixture vs real database convergence diagnostic accepted.
 - D7.3F-PLAN read-only reconciliation matrix accepted and its architectural decisions are now closed.
 - D7.3G-PLAN-APPLY accepted as a read-only future apply plan.
+- D7.3H-PATCH1 controlled reconciliation apply script implemented and accepted after independent audit.
 - Current branch: `recovery/d7-activity-versioning`.
-- Initial `HEAD` of D7.3G-PLAN-APPLY: `da869e9` (`Record D7.3F reconciliation matrix decisions`).
 - `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
 - `origin/main...main = 0 0`.
 - `main` / `origin/main` preserved at `7e5eb56`.
-- Working tree was clean at the start of this closeout.
+- Working tree had only the 2 expected untracked D7.3H files before selective staging.
 - Real importation into `database.db` has still not been performed.
-- `database.db` remained preserved during D7.3F:
+- `database.db` remained preserved during D7.3H:
   - before: `528384` bytes;
   - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
   - after: `528384` bytes;
@@ -167,6 +167,60 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - focused post-apply tests;
   - guaranteed `+0` changes to matrix, requests, transitions, and norms.
 
+## D7.3H-PATCH1 - Controlled Reconciliation Apply Script
+
+- Scope: new independent controlled `plan/apply` script for the only future write
+  case admitted in planning: `CREATE_DRAFT` of `VISITAS_TECNICAS_PROFESSORES`.
+- Delivered files:
+  - `tools/d73h_reconciliation_apply.py`
+  - `tests/test_d73h_reconciliation_apply.py`
+- Script behavior:
+  - `--plan` opens the target DB only by read-only URI mode;
+  - `--apply` only accepts an explicit safe DB copy via `--db-copy`;
+  - `--apply` refuses live `database.db`;
+  - `--apply` refuses any `--db-copy` whose basename is `database.db`;
+  - `--apply` requires `--backup-path`;
+  - `--apply` requires `--backup-confirmed`;
+  - `--apply` requires `--allow-create-visitas-professores`.
+- Write scope allowed by the script:
+  - `+1` `atividade_base`;
+  - `+2` `atividade_versao` in `rascunho`;
+  - `+0` `norma_atividade`;
+  - `+0` `atividade_transicao`;
+  - `+0` `matriz_atividade_versao_item`;
+  - `+0` `requisicoes`.
+- Guarantees preserved:
+  - no general apply path;
+  - no overwrite;
+  - no touch to `PROJETOS_EXTENSAO`;
+  - no touch to `NRM-RT*`;
+  - no use of `base6`/`base7` as destination;
+  - no alteration of existing versions;
+  - no matrix change;
+  - no request change;
+  - no transition change.
+- Validation evidence accepted:
+  - real `database.db` preserved at `528384` bytes and
+    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - focused pytest:
+    - `python -m pytest tests/test_d73h_reconciliation_apply.py -q --tb=short`
+    - result: `17 passed`;
+  - CLI `plan` text OK;
+  - CLI `plan` JSON OK;
+  - `apply` in temporary copy OK;
+  - `apply` on live DB refused;
+  - `git diff --check` clean.
+- Audit:
+  - `D7.3H-PATCH1-REVIEW` verdict: **ACEITAR D7.3H-PATCH1**;
+  - no blocking/high/medium/low findings;
+  - non-blocking observation: the suite does not explicitly assert default mode
+    without `--plan/--apply` nor mutual exclusion by direct CLI execution, but
+    the behavior is implemented and was independently audited as correct.
+- Residual risks:
+  - script assumes `AAC-rev5=id=1` and `AAC-rev6=id=2`;
+  - `documentos_json` remains `NULL` in D7.3H-v1;
+  - partial/conflicting state fails intentionally rather than repairing it.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -198,16 +252,11 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 
 ## Recommended Next Step
 
-- `D7.3H-IMPL-PLAN-SCRIPT` should be the next phase.
-- Scope of `D7.3H-IMPL-PLAN-SCRIPT`:
-  - implement only a controlled script with `plan/apply`;
-  - keep the real apply path limited to the future `CREATE_DRAFT` case for `VISITAS_TECNICAS_PROFESSORES`;
-  - refuse any operation outside that scope.
-- Any future real apply still requires:
-  - intact backup;
-  - item-by-item approved plan;
-  - dry-run against a database copy;
-  - explicit authorization.
+- D7.3H is closed at the implementation/documentation level.
+- No real apply on live `database.db` is authorized.
+- Any next phase must be an explicit product/operations decision between:
+  - executing only on a controlled database copy;
+  - or ending the trail without any live apply.
 
 ## Instructions For The Next Agent
 
@@ -219,7 +268,8 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - The only future apply path currently admitted in planning is `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
-- Next intended phase is `D7.3H-IMPL-PLAN-SCRIPT`.
+- D7.3H is already implemented and accepted.
+- No next agent should perform real apply on `database.db` without a new explicit authorization phase.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;

@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3G future apply plan closeout
-Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
+Closeout: D7.3H controlled reconciliation apply closeout
+Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -809,6 +809,66 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - D7.3H must still begin as script implementation planning;
   - no real apply is authorized at this point.
 
+### D7.3H-PATCH1 - controlled reconciliation apply script
+- Implemented, audited, and accepted.
+- New files:
+  - `tools/d73h_reconciliation_apply.py`
+  - `tests/test_d73h_reconciliation_apply.py`
+- Scope delivered:
+  - controlled `plan/apply` script for the only future write case admitted by D7.3G:
+    `CREATE_DRAFT` of `VISITAS_TECNICAS_PROFESSORES`;
+  - `--plan` always opens the target DB by read-only URI mode;
+  - `--apply` only operates on an explicit safe copy passed by `--db-copy`;
+  - live `database.db` is refused for `--apply`;
+  - `--apply` requires `--backup-path`, `--backup-confirmed`, and
+    `--allow-create-visitas-professores`.
+- Write scope allowed by the script:
+  - `+1` `atividade_base`;
+  - `+2` `atividade_versao` with `status='rascunho'`;
+  - `+0` `norma_atividade`;
+  - `+0` `atividade_transicao`;
+  - `+0` `matriz_atividade_versao_item`;
+  - `+0` `requisicoes`.
+- Guarantees preserved:
+  - no general apply/import path;
+  - no overwrite of existing versions;
+  - does not touch `PROJETOS_EXTENSAO`;
+  - does not touch runtime `NRM-RT*`;
+  - does not use `base6`/`base7` as destination;
+  - does not alter existing versions;
+  - does not alter matrix links;
+  - does not alter requests;
+  - does not alter transitions.
+- Validations accepted:
+  - real `database.db` preserved during implementation/review/closeout:
+    - before: `528384` bytes;
+    - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+    - after: `528384` bytes;
+    - SHA256 after: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - focused test suite:
+    - `python -m pytest tests/test_d73h_reconciliation_apply.py -q --tb=short`
+    - result: `17 passed`;
+  - CLI `plan` text validated;
+  - CLI `plan` JSON validated;
+  - `apply` against a temporary DB copy validated;
+  - `apply` against live `database.db` refused with clear error;
+  - `git diff --check` clean.
+- Audit result:
+  - `D7.3H-PATCH1-REVIEW` accepted the patch;
+  - no blocking/high/medium/low findings;
+  - non-blocking observation: the suite does not assert the default behavior
+    without `--plan/--apply` and the mutual exclusion by direct CLI execution,
+    but the behavior is implemented and was audited as correct.
+- Residual risks:
+  - the script assumes `AAC-rev5=id=1` and `AAC-rev6=id=2`;
+  - `documentos_json` remains `NULL` in D7.3H-v1 by design;
+  - partial/conflicting state fails intentionally instead of attempting repair.
+- Next step after this closeout:
+  - D7.3H is closed at the script/documentation level;
+  - no real apply on the live database is authorized;
+  - any future phase must be an explicit decision either to execute only on a
+    controlled DB copy or to stop the trail without applying to live.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -897,7 +957,15 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - `VISITAS_TECNICAS_PROFESSORES` não deve mapear para `base6` e exigirá criação futura específica se houver apply aprovado.
 - Versões `1..59` e transições `1..31` ficam congeladas contra overwrite em qualquer plano futuro.
 - D7.3G-PLAN-APPLY estreitou formalmente o apply futuro ao caso `CREATE_DRAFT` de `VISITAS_TECNICAS_PROFESSORES`.
-- Próxima fase ainda deve permanecer em planejamento; apply real continua proibido sem backup, cópia isolada e autorização explícita.
+- D7.3H-PATCH1 entregou o script controlado `tools/d73h_reconciliation_apply.py`
+  e sua suíte focada `tests/test_d73h_reconciliation_apply.py`.
+- O script de D7.3H não autoriza apply real no `database.db`; ele apenas cria um
+  caminho controlado para `plan` e para `apply` em cópia segura.
+- `VISITAS_TECNICAS_PROFESSORES` continua sendo o único caso de escrita admitido
+  em princípio, e somente via `CREATE_DRAFT`.
+- `documentos_json` permanece `NULL` em D7.3H-v1.
+- Apply real no live continua proibido sem decisão explícita posterior; o closeout
+  atual não aprova nenhuma execução em `database.db`.
 
 ## Permanent Working Directives
 
