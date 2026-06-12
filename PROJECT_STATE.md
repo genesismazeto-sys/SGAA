@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-11
-Closeout: D7.2B6 push closeout
-Executor: Codex GPT-5 (docs closeout)
+Last updated: 2026-06-12
+Closeout: D7.3A normative canonization closeout
+Executor: MiniMax-M3 (docs closeout)
 
 ## Permanent State
 
@@ -496,6 +496,50 @@ Executor: Codex GPT-5 (docs closeout)
   - D7.2B6 funcional está fechada e publicada em `95cb897`;
   - próxima fase ainda não foi iniciada.
 
+### D7.3A - normative canonization of AAC/AEU regulations
+- Accepted as read-only documental diagnosis. No code, template, test, DB, or seed change.
+- Documents analyzed (stored in `_normativos_inbox/`, excluded from Git):
+  - `ACC-rev5.docx` — Regulamento de Atividades Complementares antigo (160 h, 5 grupos).
+  - `ACC-rev6.docx` — Regulamento de Atividades Complementares atualizado, simplificado.
+  - `AE-rev1.docx` — Regulamento de Atividades de Extensão Universitária (Res. CNE/CES 7/2018).
+- Canonization accepted:
+  - `ACC-rev5.docx` → internal codigo_normativo **AAC-rev5** (eixo AAC, revisão rev5).
+  - `ACC-rev6.docx` → internal codigo_normativo **AAC-rev6** (eixo AAC, revisão rev6).
+  - `AE-rev1.docx` → internal codigo_normativo **AEU-rev1** (eixo AEU, revisão rev1).
+- Normative status:
+  - AAC-rev5: histórico/legado, preservado para matrizes legadas quando aplicável.
+  - AAC-rev6: AAC vigente.
+  - AEU-rev1: AEU vigente.
+- Key differences ACC-rev5 vs ACC-rev6:
+  - ACC-rev6 simplifies documentation requirements for several categories.
+  - ACC-rev6 removes "Horas de voo em simulador".
+  - ACC-rev6 removes/relocates "Trabalho voluntário em organizações do terceiro setor" to AEU.
+  - ACC-rev6 separates "Projetos de apoio institucional" from "Projetos de extensão".
+  - ACC-rev6 simplifies book reading to 10h/book (was 5h non-technical / 10h technical).
+  - ACC-rev6 reduces minimum report length (2 pages instead of 3).
+- Key differences AAC vs AEU:
+  - AEU requires interaction with external community.
+  - Trabalho voluntário em terceiro setor migrates to AEU.
+  - Projetos de extensão belong to AEU axis.
+  - AEU has own activities: organização de eventos extensionistas, participação em
+    eventos extensionistas, cursos/oficinas/palestras para comunidade externa.
+  - Ambiguous cases between "apoio institucional" and "extensão" require human decision.
+- Schema/model gaps:
+  - Conditional workload rules depend on observation fields.
+  - Documentation requirements and annexes have no dedicated structured fields.
+  - AEU-rev1 does not define mandatory total workload; depends on PPC.
+  - AAC→AEU transitions must be explicit and justified.
+  - Direct DOCX import must not be the primary operational source.
+- Architectural decision:
+  - D7.3B must not import directly from DOCX to the production database.
+  - Preferred next step: create a reviewable canonical fixture (YAML/JSON/CSV),
+    derived from the DOCX and audited, before any importer.
+  - Only then create a dry-run importer consuming the fixture.
+  - Dry-run importer must not touch matrix, requests, student, calculation, or deferment.
+- DOCX disposal: the DOCX files are local diagnostic inputs in `_normativos_inbox/`,
+  excluded from Git via `.git/info/exclude`, and must not be committed at this stage.
+- Next step: plan D7.3B as reviewable canonical specification/fixture; do not implement yet.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -559,6 +603,9 @@ Executor: Codex GPT-5 (docs closeout)
 - Catálogo pode ter múltiplas versões ativas; ambiguidade é controlada
   pelo vínculo explícito em `matriz_atividade_versao_item` (max 1 por matriz+base).
 - Não há auditoria de quem ativou/inativou/descontinuou/substituiu versão.
+- D7.3A realizou canonização documental dos regulamentos AAC/AEU (read-only, sem código).
+- Três normas foram identificadas e codificadas: AAC-rev5 (histórico), AAC-rev6 (vigente),
+  AEU-rev1 (vigente). Importação de dados reais ainda não foi executada.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 

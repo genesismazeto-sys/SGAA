@@ -1,61 +1,48 @@
 # Agent Handoff
 
-Last updated: 2026-06-11
-Closeout: D7.2B6 push closeout
-Executor: Codex GPT-5 (docs closeout)
+Last updated: 2026-06-12
+Closeout: D7.3A normative canonization closeout
+Executor: MiniMax-M3 (docs closeout)
 
 ## Current State
 
-- D7.2B6 functional implementation is completed, approved, committed, and published.
+- D7.3A documental canonization completed (read-only, no code change).
 - Current branch: `recovery/d7-activity-versioning`.
-- Current `HEAD` before this docs closeout commit: `95cb897` (`Add admin transition history for activity versions`).
-- `origin/recovery/d7-activity-versioning` is aligned with local at `95cb897`.
+- Current `HEAD`: `5ffab77` (`Record D7.2B6 push closeout`).
+- `origin/recovery/d7-activity-versioning` aligned with local at `5ffab77`.
 - `main` / `origin/main` remain intact at `7e5eb56`.
-- Working tree was clean after the functional push.
+- Working tree is clean.
+- D7.3A analyzed three DOCX regulations stored in `_normativos_inbox/`:
+  - `ACC-rev5.docx` → internal codigo AAC-rev5 (histórico/legado).
+  - `ACC-rev6.docx` → internal codigo AAC-rev6 (AAC vigente).
+  - `AE-rev1.docx` → internal codigo AEU-rev1 (AEU vigente).
+- Canonization is accepted. No code, template, test, DB, or seed was changed.
+- The DOCX files are excluded from Git via `.git/info/exclude` and must not be committed.
+- D7.3B (fixture/importer) has not started.
 - Existing approved committed milestones remain:
+  - D7.2B6 committed/pushed at `95cb897`;
   - D7.2B5-PATCH2 committed at `9d2e9fb`;
   - D7.2B5-PATCH1 committed at `f235f62`;
   - D7.2B4-PATCH1 committed at `255ff80`;
   - D7.2B3-PATCH3 committed/pushed at `28d922d`;
   - `main` / `origin/main` preserved at `7e5eb56`.
 
-## D7.2B6 Summary
+## D7.3A — Last Closed Phase
 
-- Scope delivered:
-  - read-only helper `get_atividade_transicoes_por_base`;
-  - `JOIN` between `atividade_transicao` and source/destination versions;
-  - filter by `atividade_base` through source or destination;
-  - payload with `versao_origem`, `versao_destino`, `tipo_transicao`, `eixo`, `created_at`, and `motivo`;
-  - `motivo = justificativa or observacao_admin or '-'`;
-  - existing `GET /admin/catalogo-versoes/<base_id>` now passes `transicoes_historico`;
-  - `templates/admin_catalogo_versao_detalhe.html` renders a read-only `Histórico de transições` section with table and empty state.
-- Scope explicitly unchanged:
-  - no new `POST`;
-  - no CSRF change;
-  - no schema or trigger change;
-  - no student flow change;
-  - no calculation or deferment change;
-  - no writer/versioned snapshot change;
-  - no matrix behavior change;
-  - no change to activation/inactivation/discontinuation/substitution logic.
-- Functional publication state:
-  - functional commit: `95cb897` - `Add admin transition history for activity versions`;
-  - remote hash: `95cb89797f1a0a16ff812933d9788f2019b14ad4`;
-  - `origin/recovery/d7-activity-versioning...HEAD = 0 0` after the functional push;
-  - `origin/main...main = 0 0`;
-  - no next phase has started yet.
-
-## Validation Already Executed
-
-- `python -m pytest tests/test_admin_activity_version_catalog_readonly.py -q --tb=short`
-  - Result: `21 passed in 10.03s`.
-- `python -m pytest tests/test_admin_activity_version_catalog_version_lifecycle.py -q --tb=short`
-  - Result: `34 passed in 102.08s`.
-- Visual gate already executed:
-  - temporary headless render of the template;
-  - empty-history scenario displayed `Nenhuma transição registrada para esta atividade-base.`;
-  - populated-history scenario displayed origin, destination, `tipo_transicao`, fallback `'-'`, and `created_at`;
-  - existing `Ativar`, `Inativar`, `Descontinuar`, and `Substituir` actions remained visible without obvious layout breakage.
+- Scope: read-only documental diagnosis of three real normative DOCX files.
+- Documents analyzed (stored in `_normativos_inbox/`, excluded from Git):
+  - `ACC-rev5.docx` → AAC-rev5 (histórico/legado).
+  - `ACC-rev6.docx` → AAC-rev6 (AAC vigente).
+  - `AE-rev1.docx` → AEU-rev1 (AEU vigente).
+- Key findings:
+  - ACC-rev6 simplifies documentation vs ACC-rev5, removes simulador, relocates
+    "trabalho voluntário 3º setor" to AEU.
+  - AEU-rev1 requires interaction with external community, has own activities
+    (organização/participação em eventos extensionistas, cursos/oficinas para comunidade).
+  - Canonical fixture (YAML/JSON/CSV) recommended before any importer.
+- No code, template, test, DB, or seed was changed during D7.3A.
+- The DOCX files are excluded from Git and must not be committed.
+- D7.3B has not started; recommended next step: plan fixture first, then dry-run importer.
 
 ## Recent Commits
 
@@ -75,26 +62,31 @@ Executor: Codex GPT-5 (docs closeout)
 
 ## Risks To Keep In View
 
-- `created_at` is displayed raw; no formatting pass was added in this phase.
+- `created_at` is displayed raw; no formatting pass was added.
 - There is still no actor/admin audit field in `atividade_transicao`.
-- The read-only history UI is generic and may later show transition types beyond `mesmo_eixo`.
 - The catalog screens still are not linked from the menu/sidebar.
 - Reativação de versão still does not exist.
-- No new phase has started after the D7.2B6 publication.
+- Three normative regulations were canonized (D7.3A) but no data has been imported yet.
+- D7.3B (fixture/importer) must not import directly from DOCX; fixture first, dry-run second.
+- Importação must not touch matrix, requests, student, calculation, or deferment.
+- Ambiguous cases between "apoio institucional" (AAC) and "extensão" (AEU) require human review.
 
 ## Recommended Next Step
 
-- Keep D7.2B6 closed.
-- Do not start a new implementation phase without explicit approved scope.
-- If a later docs-only closeout commit exists, it should remain separated from any future functional phase.
+- D7.3A is closed (normative canonization, read-only, no code).
+- D7.3B: create a reviewable canonical fixture (YAML/JSON/CSV) derived from the three DOCX.
+- Only after fixture audit, create a dry-run importer consuming the fixture into an isolated DB.
+- Dry-run importer must not touch matrix, requests, student, calculation, or deferment.
+- Do not start any new implementation phase without explicit approved scope.
 
 ## Instructions For The Next Agent
 
 - Read `PROJECT_STATE.md` and `AGENT_HANDOFF.md` before any action.
 - Treat `atividade_id` as the operational source of truth.
-- D7.2B6 is functionally published in `95cb897`.
-- The branch `recovery/d7-activity-versioning` is aligned locally/remotely at the latest pushed state after this docs closeout.
-- The next phase has not started yet.
+- D7.3A canonized three norms: AAC-rev5 (histórico), AAC-rev6 (vigente), AEU-rev1 (vigente).
+- The canonical DOCX are stored in `_normativos_inbox/` and excluded from Git; do not commit them.
+- The branch `recovery/d7-activity-versioning` is aligned locally/remotely at `5ffab77` before this docs closeout.
+- D7.3B must not start importing directly from DOCX; fixture first, then dry-run.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;
