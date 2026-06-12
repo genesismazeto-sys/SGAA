@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3J live draft creation and suite stabilization closeout
-Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.3K matrix link decision and D7.3 final closeout
+Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1027,6 +1027,83 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
     - or close the D7.3 trail with no immediate follow-up;
   - no activation or matrix link is authorized by this closeout.
 
+### D7.3K-DECIDE-MATRIX-LINK - read-only matrix link diagnosis and final D7.3 decision
+- Accepted.
+- Execution mode:
+  - read-only architectural / operational diagnosis only;
+  - no file edits in the diagnosis phase;
+  - no DB writes in the diagnosis phase;
+  - only Git inspection, file reads, SQLite `SELECT` and `PRAGMA` in
+    `mode=ro`.
+- Initial state confirmed before diagnosis:
+  - branch `recovery/d7-activity-versioning`;
+  - `HEAD=b8ad2ae`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - `git status --short` was empty;
+  - live `database.db`:
+    - `528384` bytes;
+    - SHA256
+      `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Operational guarantees confirmed:
+  - no file was changed during the diagnosis phase;
+  - no bank was changed during the diagnosis phase;
+  - no apply was executed;
+  - no manual SQL was executed;
+  - no activation was executed;
+  - no matrix link was executed.
+- Live state confirmed by read-only queries:
+  - `atividade_base.id=37` exists and is `status='ativo'`;
+  - `atividade_versao.id=61` exists, `AAC-rev5`, `status='rascunho'`,
+    `eixo='AAC'`;
+  - `atividade_versao.id=62` exists, `AAC-rev6`, `status='rascunho'`,
+    `eixo='AAC'`;
+  - both have no row in `matriz_atividade_versao_item`;
+  - both have no row in `requisicoes`;
+  - both have no row in `atividade_transicao` as origin or destination.
+- Live counts confirmed:
+  - `atividade_base=36`;
+  - `atividade_versao=62`;
+  - `norma_atividade=6`;
+  - `atividade_transicao=31`;
+  - `matriz_atividade_versao_item=59`;
+  - `requisicoes=41`.
+- Matrix diagnosis:
+  - matrix `1` has `AAC-rev6` in `matriz_norma`;
+  - matrix `2` has `AAC-rev5` in `matriz_norma`;
+  - however, there is no real candidate matrix now because `atividade_base.id=37`
+    has no row in `atividade_legacy_map` and therefore is outside the legacy
+    scope of every matrix.
+- Technical rule confirmed:
+  - matrixâ†’`atividade_versao` link requires version `status='ativa'`;
+  - the admin UI lists only active versions as available options;
+  - the route also requires the base to be in the matrix legacy scope;
+  - the route also requires the version norm to be present in `matriz_norma`.
+- Architectural decision:
+  - do not activate `61/62` now;
+  - do not link `61/62` now;
+  - keep both versions as `rascunho`;
+  - close D7.3 with no additional DB action.
+- Reason for the decision:
+  - a draft version cannot be linked;
+  - isolated activation would still be insufficient;
+  - there is no legitimate legacy mapping for base `37`;
+  - forcing a mapping now would create collision risk without proven
+    operational need.
+- Future prohibition recorded:
+  - do not reuse `base6` / `base7` as destination to resolve base `37`;
+  - do not activate or link `61/62` without a new separate phase.
+- Future phase permitted only if a real operational need appears:
+  - decide the correct legacy activity to map to base `37`;
+  - create or validate the legacy mapping;
+  - activate the correct version;
+  - link explicitly to the correct matrix;
+  - test the resolver and the admin link route.
+- Final D7.3 conclusion:
+  - D7.3J created the controlled draft versions;
+  - D7.3K decided not to expose, activate, or link them;
+  - the D7.3 trail is closable with no further action now.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -1056,6 +1133,7 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
 - `da869e9` - Record D7.3F reconciliation matrix decisions
 - `ecdc9f5` - Add D7.3H controlled reconciliation apply script
 - `aedf936` - Record D7.3I apply copy validation
+- `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
 
 ## Current Risks And Limits
 
@@ -1129,12 +1207,15 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
   `atividade_base.id=37` e `atividade_versao.id=61/62`, ambas em `rascunho`.
 - O live agora contém esses 3 novos registros com `+0` mudanças em normas,
   transições, vínculos de matriz e requisições.
-- `VISITAS_TECNICAS_PROFESSORES` não está mais pendente de criação; qualquer
-  próxima decisão, se existir, é apenas sobre ativação, vínculo de matriz ou
-  encerramento da trilha.
+- D7.3K confirmou, em modo read-only, que `61/62` não podem ser vinculadas no
+  estado atual: seguem `rascunho`, a UI aceita apenas versões ativas e
+  `atividade_base.id=37` não está no escopo legado de nenhuma matriz.
+- `VISITAS_TECNICAS_PROFESSORES` não está mais pendente de criação e também não
+  seguirá para ativação ou vínculo nesta trilha.
 - `documentos_json` permanece `NULL` em D7.3H-v1.
+- A decisão final da trilha é encerrar D7.3 sem ativar nem vincular `61/62`.
 - Nenhum apply adicional no live, nenhuma ativação e nenhum vínculo de matriz
-  estão autorizados sem nova fase explícita.
+  estão autorizados sem nova fase explícita e necessidade operacional real.
 
 ## Permanent Working Directives
 

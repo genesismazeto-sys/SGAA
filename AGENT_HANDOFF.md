@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3J live draft creation and suite stabilization closeout
-Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
+Closeout: D7.3K matrix link decision and D7.3 final closeout
+Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
 
 ## Current State
 
@@ -14,12 +14,13 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
 - D7.3I-VALIDATE-APPLY-COPY accepted after controlled execution against a temporary DB copy.
 - D7.3J-LIVE-APPLY-CREATE-DRAFT accepted after controlled execution first on a DB copy and then by replacing live with the validated copy.
 - D7.3J-PATCH1-TEST-STABILIZE accepted after decoupling the focused suite from mutable live DB state.
+- D7.3K-DECIDE-MATRIX-LINK accepted after read-only diagnosis.
+- D7.3 final decision: keep `61/62` as draft and close the trail with no activation and no matrix link.
 - Current branch: `recovery/d7-activity-versioning`.
 - `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
 - `origin/main...main = 0 0`.
 - `main` / `origin/main` preserved at `7e5eb56`.
-- Working tree before the doc closeout had only:
-  - `M tests/test_d73h_reconciliation_apply.py`
+- Working tree before this doc closeout was clean.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` changed during D7.3J:
@@ -34,6 +35,11 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
   - `atividade_versao.id=61`, `AAC-rev5`, `status=rascunho`;
   - `atividade_versao.id=62`, `AAC-rev6`, `status=rascunho`;
   - no matrix links, no transition changes, and no request changes for those rows.
+- D7.3K confirmed in read-only mode:
+  - no file changed during diagnosis;
+  - no DB changed during diagnosis;
+  - only SQLite `SELECT` / `PRAGMA` were executed in `mode=ro`;
+  - there is still no legitimate matrix candidate for base `37`.
 
 ## D7.3D - Historical Tooling Write Phase
 
@@ -376,6 +382,71 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
   - it did not alter norms;
   - no refactor was performed.
 
+## D7.3K-DECIDE-MATRIX-LINK - Read-Only Diagnosis And Final D7.3 Decision
+
+- Execution mode:
+  - read-only architectural / operational diagnosis only;
+  - no file edits in the diagnosis phase;
+  - no DB writes in the diagnosis phase;
+  - only Git inspection, file reads, SQLite `SELECT` and `PRAGMA` in `mode=ro`.
+- Initial state confirmed:
+  - branch `recovery/d7-activity-versioning`;
+  - `HEAD=b8ad2ae`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - `git status --short` was empty;
+  - live `database.db` stayed at `528384` bytes and
+    `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Live state confirmed by read-only queries:
+  - `atividade_base.id=37` exists and is `status='ativo'`;
+  - `atividade_versao.id=61` exists with `AAC-rev5`, `status='rascunho'`, `eixo='AAC'`;
+  - `atividade_versao.id=62` exists with `AAC-rev6`, `status='rascunho'`, `eixo='AAC'`;
+  - both have no row in `matriz_atividade_versao_item`;
+  - both have no row in `requisicoes`;
+  - both have no row in `atividade_transicao` as origin or destination.
+- Counts confirmed:
+  - `atividade_base=36`;
+  - `atividade_versao=62`;
+  - `norma_atividade=6`;
+  - `atividade_transicao=31`;
+  - `matriz_atividade_versao_item=59`;
+  - `requisicoes=41`.
+- Matrix diagnosis:
+  - matrix `1` has `AAC-rev6` in `matriz_norma`;
+  - matrix `2` has `AAC-rev5` in `matriz_norma`;
+  - there is no real candidate matrix now because base `37` has no
+    `atividade_legacy_map` row and therefore is outside the legacy scope of
+    every matrix.
+- Technical rule confirmed:
+  - matrixâ†’`atividade_versao` link requires version `status='ativa'`;
+  - the admin UI lists only active versions;
+  - the route also requires the base to be in the matrix legacy scope;
+  - the route also requires the version norm to be present in `matriz_norma`.
+- Architectural decision:
+  - do not activate `61/62` now;
+  - do not link `61/62` now;
+  - keep both versions as `rascunho`;
+  - close D7.3 with no additional DB action.
+- Reason:
+  - a draft version cannot be linked;
+  - isolated activation would still be insufficient;
+  - there is no legitimate legacy mapping for base `37`;
+  - forcing a mapping now would create collision risk without proven
+    operational need.
+- Future prohibition recorded:
+  - do not reuse `base6` / `base7` as destination to resolve base `37`;
+  - do not activate or link `61/62` without a new separate phase.
+- Future phase permitted only if a real operational need appears:
+  - decide the correct legacy activity to map to base `37`;
+  - create or validate the legacy mapping;
+  - activate the correct version;
+  - link explicitly to the correct matrix;
+  - test the resolver and the admin link route.
+- Final D7.3 conclusion:
+  - D7.3J created the controlled draft versions;
+  - D7.3K decided not to expose, activate, or link them;
+  - the D7.3 trail is closable with no further action now.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -386,6 +457,7 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
 - `da869e9` - Record D7.3F reconciliation matrix decisions
 - `ecdc9f5` - Add D7.3H controlled reconciliation apply script
 - `aedf936` - Record D7.3I apply copy validation
+- `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
 
 ## Risks To Keep In View
 
@@ -410,11 +482,11 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
 
 ## Recommended Next Step
 
-- D7.3J is closed after this documental commit/push.
+- D7.3 is closed at the documentation / architecture level.
 - No additional live apply, no activation, and no matrix link are authorized now.
-- Any next phase must be an explicit product/operations decision between:
-  - opening `D7.3K-DECIDE-MATRIX-LINK` for the draft versions `61/62`;
-  - or ending the D7.3 trail with no immediate follow-up.
+- Only reopen this area if a real operational need appears for base `37`, in a
+  separate phase focused on legitimate legacy mapping, controlled activation,
+  explicit matrix link, and resolver validation.
 
 ## Instructions For The Next Agent
 
@@ -424,11 +496,12 @@ Executor: Codex GPT-5 (D7.3J live apply + suite stabilization + docs closeout; D
 - Do not attempt any additional real import, reconciliation write, or importer `apply` against `database.db`.
 - `PROJETOS_EXTENSAO` is no longer open for semantic collapse: preserve the live split.
 - `VISITAS_TECNICAS_PROFESSORES` must not be mapped to `base6`.
-- The only admitted live write path was the now-completed `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
+- `VISITAS_TECNICAS_PROFESSORES` must not be forced into `base7` either.
+- The only admitted live write path in D7.3 was the now-completed `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
 - Versions `61/62` already exist in `rascunho` and remain unlinked to matrix.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
-- No next agent should activate, matrix-link, or perform any additional live apply without a new explicit authorization phase.
+- No next agent should activate, matrix-link, remap legacy scope, or perform any additional live apply without a new explicit authorization phase and real operational need.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;
