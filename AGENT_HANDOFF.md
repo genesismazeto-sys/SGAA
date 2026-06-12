@@ -1,7 +1,7 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3F reconciliation matrix decisions closeout
+Closeout: D7.3G future apply plan closeout
 Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
@@ -9,8 +9,9 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - D7.3D dry-run importer implemented, audited, and committed.
 - D7.3E-RO1 read-only fixture vs real database convergence diagnostic accepted.
 - D7.3F-PLAN read-only reconciliation matrix accepted and its architectural decisions are now closed.
+- D7.3G-PLAN-APPLY accepted as a read-only future apply plan.
 - Current branch: `recovery/d7-activity-versioning`.
-- Initial `HEAD` of D7.3F-PLAN: `f10db80` (`Record D7.3E fixture database convergence diagnostic`).
+- Initial `HEAD` of D7.3G-PLAN-APPLY: `da869e9` (`Record D7.3F reconciliation matrix decisions`).
 - `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
 - `origin/main...main = 0 0`.
 - `main` / `origin/main` preserved at `7e5eb56`.
@@ -111,6 +112,61 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - `PROJETOS_EXTENSAO`: keep runtime split;
   - `VISITAS_TECNICAS_PROFESSORES`: no mapping to `base6`; future specific draft creation only if later approved.
 
+## D7.3G-PLAN-APPLY - Future Apply Plan
+
+- Scope: read-only technical plan for a possible future apply, derived from D7.3F.
+- Execution state observed:
+  - initial `HEAD` `da869e9`;
+  - branch `recovery/d7-activity-versioning`;
+  - remotes aligned;
+  - working tree clean;
+  - `database.db` intact at `528384` bytes and SHA256 `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Apply scope frozen:
+  - not a general reconciliation;
+  - not a real import of the entire fixture;
+  - only a possible future `CREATE_DRAFT` path for `VISITAS_TECNICAS_PROFESSORES`.
+- `PRESERVE / NO-OP` set:
+  - norms `AAC-rev5`, `AAC-rev6`, `AEU-rev1`;
+  - all already reconciled bases and versions;
+  - `atividade_versao.id=1..59`;
+  - `atividade_transicao.id=1..31`;
+  - `matriz_norma`;
+  - `matriz_atividade_versao_item`;
+  - `requisicoes`;
+  - runtime `NRM-RT*`.
+- `PROJETOS_EXTENSAO` remains preserve-only:
+  - preserve `base8` / `v51`;
+  - preserve `base27` / `v52` / `v53`;
+  - preserve the extra persisted `aac_para_aeu` transition;
+  - do not collapse.
+- `CREATE_DRAFT` is the only future write path allowed in principle:
+  - create `1` new specific `atividade_base` for `VISITAS_TECNICAS_PROFESSORES`;
+  - create `1` draft `atividade_versao` for `AAC-rev5`;
+  - create `1` draft `atividade_versao` for `AAC-rev6`;
+  - do not create matrix links;
+  - do not create transitions;
+  - do not modify requests.
+- `FORBIDDEN` set:
+  - overwrite any existing `atividade_versao`;
+  - change `ativa -> rascunho`;
+  - alter matrix;
+  - alter requests or snapshots;
+  - alter existing transitions;
+  - alter runtime `NRM-RT*`;
+  - collapse `PROJETOS_EXTENSAO`;
+  - create new AAC/AEU norms;
+  - create new versions for already mapped activities;
+  - create new transitions in the initial apply.
+- Mandatory preconditions for any real future apply:
+  - intact verifiable backup of `database.db`;
+  - recorded size and SHA256 before execution;
+  - execute first against a DB copy;
+  - produce logical before/after diff report;
+  - explicit rollback path;
+  - explicit human approval;
+  - focused post-apply tests;
+  - guaranteed `+0` changes to matrix, requests, transitions, and norms.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -118,6 +174,7 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - `5f66239` - Add D7.3C canonical normative fixture and docs closeout
 - `45dd39d` - Add D7.3D normative dry-run importer
 - `f10db80` - Record D7.3E fixture database convergence diagnostic
+- `da869e9` - Record D7.3F reconciliation matrix decisions
 
 ## Risks To Keep In View
 
@@ -128,6 +185,8 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - mapping `VISITAS_TECNICAS_PROFESSORES` to `base6`;
   - changing `NRM-RT` runtime items;
   - promoting the dry-run importer into a real apply path.
+- High:
+  - broadening D7.3G beyond the `CREATE_DRAFT` path for `VISITAS_TECNICAS_PROFESSORES`.
 - Medium:
   - structural divergences in group / workload / limits;
   - fixture does not cover all persisted transition history.
@@ -139,12 +198,12 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 
 ## Recommended Next Step
 
-- `D7.3G-PLAN-APPLY` should be the next phase.
-- Scope of `D7.3G-PLAN-APPLY`:
-  - produce an item-by-item apply plan that respects the D7.3F frozen rules and decisions;
-  - keep the work planning-only;
-  - do not write to `database.db`.
-- Any future real apply requires:
+- `D7.3H-IMPL-PLAN-SCRIPT` should be the next phase.
+- Scope of `D7.3H-IMPL-PLAN-SCRIPT`:
+  - implement only a controlled script with `plan/apply`;
+  - keep the real apply path limited to the future `CREATE_DRAFT` case for `VISITAS_TECNICAS_PROFESSORES`;
+  - refuse any operation outside that scope.
+- Any future real apply still requires:
   - intact backup;
   - item-by-item approved plan;
   - dry-run against a database copy;
@@ -157,9 +216,10 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
 - Do not attempt any real import, reconciliation write, or importer `apply` against `database.db`.
 - `PROJETOS_EXTENSAO` is no longer open for semantic collapse: preserve the live split.
 - `VISITAS_TECNICAS_PROFESSORES` must not be mapped to `base6`.
+- The only future apply path currently admitted in planning is `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
-- Next intended phase is `D7.3G-PLAN-APPLY`, still planning-only.
+- Next intended phase is `D7.3H-IMPL-PLAN-SCRIPT`.
 - Continuous prohibited scope remains:
   - `main` branch;
   - matriz operacional;

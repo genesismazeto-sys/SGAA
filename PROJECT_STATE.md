@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3F reconciliation matrix decisions closeout
+Closeout: D7.3G future apply plan closeout
 Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
 
 ## Permanent State
@@ -748,6 +748,67 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - `D7.3G` must still be planning only, not real apply;
   - any real apply requires intact backup, item-by-item plan, dry-run against a copy, and explicit approval.
 
+### D7.3G-PLAN-APPLY - future technical apply plan
+- Accepted as a read-only future apply plan derived from the frozen D7.3F reconciliation decisions.
+- No code, fixture, importer, test, requirements, database, script, migration, or seed change was made during D7.3G-PLAN-APPLY.
+- Execution state observed during the plan:
+  - initial `HEAD` `da869e9`;
+  - branch `recovery/d7-activity-versioning`;
+  - remotes aligned;
+  - working tree clean;
+  - `database.db` intact at `528384` bytes;
+  - SHA256 `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`.
+- Scope of any future apply was narrowed explicitly:
+  - it is not a general reconciliation;
+  - it is not a real import of the whole fixture;
+  - it is only a plan for a possible future `CREATE_DRAFT` path for `VISITAS_TECNICAS_PROFESSORES`.
+- `PRESERVE / NO-OP` set frozen for any future apply:
+  - norms `AAC-rev5`, `AAC-rev6`, `AEU-rev1`;
+  - all already reconciled bases and versions;
+  - `atividade_versao.id=1..59`;
+  - `atividade_transicao.id=1..31`;
+  - `matriz_norma`;
+  - `matriz_atividade_versao_item`;
+  - `requisicoes`;
+  - runtime `NRM-RT*`.
+- `PROJETOS_EXTENSAO` remains preserve-only:
+  - preserve live split;
+  - preserve `base8` / `v51`;
+  - preserve `base27` / `v52` / `v53`;
+  - preserve the extra persisted `aac_para_aeu` transition;
+  - do not collapse.
+- `CREATE_DRAFT` remains the only future write path allowed in principle:
+  - create `1` new specific `atividade_base` for `VISITAS_TECNICAS_PROFESSORES`;
+  - create `1` draft `atividade_versao` for `AAC-rev5`;
+  - create `1` draft `atividade_versao` for `AAC-rev6`;
+  - do not create matrix links;
+  - do not create transitions;
+  - do not touch requests.
+- `FORBIDDEN` set frozen for the future apply:
+  - overwrite of any existing `atividade_versao`;
+  - status change `ativa -> rascunho`;
+  - any matrix alteration;
+  - any request or snapshot alteration;
+  - any change to existing transitions;
+  - any change to runtime `NRM-RT*`;
+  - collapsing `PROJETOS_EXTENSAO`;
+  - creating new AAC/AEU norms;
+  - creating new versions for already mapped activities;
+  - creating new transitions in the initial apply.
+- Mandatory preconditions for any future real apply:
+  - intact and verifiable backup of `database.db`;
+  - recorded size and SHA256 before execution;
+  - execution first against a DB copy;
+  - logical before/after diff report;
+  - explicit rollback path;
+  - explicit human approval;
+  - focused post-apply tests;
+  - guaranteed `+0` changes to matrix, requests, transitions, and norms.
+- Recommended next step:
+  - `D7.3H-IMPL-PLAN-SCRIPT` may be planned after this closeout;
+  - D7.3H must still begin as script implementation planning;
+  - no real apply is authorized at this point.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -835,6 +896,7 @@ Executor: Codex GPT-5 (docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi 
   - `PROJETOS_EXTENSAO` permanece dividido entre apoio institucional e extensão;
   - `VISITAS_TECNICAS_PROFESSORES` não deve mapear para `base6` e exigirá criação futura específica se houver apply aprovado.
 - Versões `1..59` e transições `1..31` ficam congeladas contra overwrite em qualquer plano futuro.
+- D7.3G-PLAN-APPLY estreitou formalmente o apply futuro ao caso `CREATE_DRAFT` de `VISITAS_TECNICAS_PROFESSORES`.
 - Próxima fase ainda deve permanecer em planejamento; apply real continua proibido sem backup, cópia isolada e autorização explícita.
 
 ## Permanent Working Directives
