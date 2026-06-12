@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3D normative dry-run importer closeout
+Closeout: D7.3E fixture database convergence diagnostic closeout
 Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation)
 
 ## Permanent State
@@ -605,6 +605,87 @@ Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 
 - Importação real para `database.db` não foi executada. D7.3D fica fechada neste ponto.
 - Próximo passo: não iniciar importador real sem escopo explícito aprovado.
 
+### D7.3E-RO1 - fixture vs real database convergence diagnostic
+- Accepted as read-only convergence diagnosis between canonical fixture and the current real database.
+- No code, fixture, importer, test, requirements, database, script, migration, or seed change was made during D7.3E-RO1.
+- Observed Git state:
+  - branch `recovery/d7-activity-versioning`;
+  - `HEAD` `45dd39d`;
+  - `origin/recovery/d7-activity-versioning...HEAD = 0 0`;
+  - `origin/main...main = 0 0`;
+  - working tree clean.
+- `main` / `origin/main` preserved at `7e5eb56`.
+- Real database preserved:
+  - before: `528384` bytes;
+  - SHA256 before: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - after: `528384` bytes;
+  - SHA256 after: `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
+  - SQLite connection opened in read-only URI mode (`mode=ro`);
+  - only `SELECT`, `PRAGMA`, and `sqlite_master` reads were executed.
+- Current database counts:
+  - `norma_atividade`: `6`;
+  - `atividade_base`: `35`;
+  - `atividade_versao`: `60`;
+  - `atividade_transicao`: `31`;
+  - `matriz_atividade_versao_item`: `59` links;
+  - `requisicoes`: `41` total;
+  - `requisicoes` fully versioned: `13` rows with `atividade_versao_id`, `regra_snapshot_json`, and `codigo_normativo_snapshot` populated;
+  - only `1` version outside matrix links: `id=60`, `Runtime Base 2cb9b503`, `NRM-RT-2cb9b503`, `status='rascunho'`.
+- Fixture counts:
+  - `3` normas;
+  - `32` atividades;
+  - `61` versÃµes;
+  - `1` proposed transition;
+  - `2` removed activities;
+  - `3` new activities;
+  - by norm: `AAC-rev5=29`, `AAC-rev6=27`, `AEU-rev1=5`.
+- Norm comparison:
+  - `AAC-rev5` exists by `codigo`, but `nome` diverges;
+  - `AAC-rev6` exists by `codigo`, but `nome` diverges;
+  - `AEU-rev1` exists by `codigo`, but `nome` diverges;
+  - extra norms outside fixture: `NRM-RT`, `NRM-RT-5c96604e`, `NRM-RT-2cb9b503`.
+- Technical result:
+  - under the current dry-run importer semantics, execution against the real DB would abort on the first divergent `norma_atividade`;
+  - this confirms the dry-run importer is not a real importer and must not be reused as `apply`.
+- Activity/version comparison summary:
+  - `20` bases with exactly matching `nome_conceito` still have divergent `descricao`;
+  - `11` clear nominal duplicates;
+  - `1` near match: `Prova de InglÃªs ICAO` vs `Prova de inglÃªs ICAO`;
+  - `38` fixture versions have some comparable DB version, but all are divergent;
+  - `23` fixture versions remain `missing` in semantic crosswalk because of `nome_conceito` differences;
+  - `18` divergences are status-only;
+  - `20` divergences also include structural field differences;
+  - all comparable existing versions are already linked in matrix.
+- Transition comparison:
+  - fixture transition `TRAB_VOLUNTARIO_TERCEIRO_SETOR` `AAC-rev5 -> AEU-rev1` already exists in DB as `aac_para_aeu`, but with divergent `justificativa`;
+  - no direct fixture transition is missing;
+  - DB contains extra transition history outside fixture:
+    - `25` `mesmo_eixo`;
+    - `1` additional `aac_para_aeu` for `ParticipaÃ§Ã£o em projetos de extensÃ£o`;
+    - `3` `nova_aeu`;
+    - `1` `descontinuada` for `SIMULADOR_VOO`.
+- High risks:
+  - applying the fixture directly would fail or require reconciliation before the first norm;
+  - high risk of duplicating bases where names are not exact matches;
+  - `59` matrix links and `13` versioned requests depend on the current catalog;
+  - any overwrite or recreation may break runtime/history;
+  - `PROJETOS_EXTENSAO` requires explicit human decision because fixture canonizes one base while DB materialized distinct bases and its own transition.
+- Medium risks:
+  - `NRM-RT` namespace exists outside fixture;
+  - fixture does not cover all transition history already persisted in `atividade_transicao`.
+- Decision:
+  - do not apply the fixture to `database.db`;
+  - do not build a real importer yet;
+  - next technical phase should be `D7.3F-PLAN`, read-only reconciliation planning only.
+- Recommended next step:
+  - `D7.3F-PLAN` - build a read-only reconciliation matrix for each norm/base/version/transition with explicit outcomes:
+    - map to existing;
+    - create new;
+    - preserve existing;
+    - do not apply;
+    - require human decision;
+    - never overwrite a version already used in matrix or request without an explicit plan.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -630,7 +711,7 @@ Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 
 - `95cb897` - Add admin transition history for activity versions
 - `cbde400` - Record D7.3A normative canonization
 - `5f66239` - Add D7.3C canonical normative fixture and docs closeout
-- TBD        - Add D7.3D normative dry-run importer
+- `45dd39d` - Add D7.3D normative dry-run importer
 
 ## Current Risks And Limits
 
@@ -681,6 +762,14 @@ Executor: Claude Sonnet 4.6 (docs closeout); Kimi K2.6 (audit); executor-PATCH1 
 - Importação de dados reais ainda não foi executada; fixture está pronto para D7.3D.
 - D7.3D entregou o importador dry-run (tools/d73d_normative_importer_dryrun.py).
   A importação real para database.db ainda não foi executada.
+- D7.3E-RO1 confirmou, em modo read-only, que fixture e banco real não convergem de forma aplicável sem reconciliação.
+- O dry-run atual abortaria na primeira norma divergente se apontado para o banco real; ele não deve ser promovido para `apply`.
+- O banco real contém dependências operacionais relevantes no catálogo versionado atual:
+  - `59` vínculos em `matriz_atividade_versao_item`;
+  - `13` requisições com snapshot/versionamento preenchido;
+  - namespace `NRM-RT` fora da fixture;
+  - histórico adicional em `atividade_transicao`.
+- `PROJETOS_EXTENSAO` permanece caso ambíguo e exige decisão humana antes de qualquer reconciliação com escrita.
 - PATCH seguinte não deve começar sem escopo explícito e planejamento
   read-only separado.
 
