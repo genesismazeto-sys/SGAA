@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-12
-Closeout: D7.3K matrix link decision and D7.3 final closeout
-Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW); auditor-PATCH1-REVIEW
+Closeout: D7.4G branch archive and D7.4 trail closeout
+Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -16,20 +16,24 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 - D7.3J-PATCH1-TEST-STABILIZE accepted after decoupling the focused suite from mutable live DB state.
 - D7.3K-DECIDE-MATRIX-LINK accepted after read-only diagnosis.
 - D7.3 final decision: keep `61/62` as draft and close the trail with no activation and no matrix link.
-- Current branch: `recovery/d7-activity-versioning`.
-- `origin/recovery/d7-activity-versioning...HEAD = 0 0` before this closeout.
+- D7.4F read-only archive audit completed: all expected states confirmed before archival.
+- D7.4G branch archive executed:
+  - tag `archive/d7-activity-versioning` created at
+    `b5aafa7605bab4f8ef4b61885ec5200627ea2f0b` and published to remote;
+  - `recovery/d7-activity-versioning` remote branch deleted;
+  - local branch `recovery/d7-activity-versioning` preserved at `b5aafa7` (`[gone]`);
+  - no apply, SQL, activation, matrix link, merge, rebase, or code change executed.
+- Current branch: `main`.
+- `main` / `origin/main` at
+  `6a9bf2d9146c8a0011ddc3376c7fb842eebf7da6` — Update CSRF inventory artifacts after D7 merge.
 - `origin/main...main = 0 0`.
-- `main` / `origin/main` preserved at `7e5eb56`.
-- Working tree before this doc closeout was clean.
+- Working tree clean.
+- D7 fully integrated into `main`. D7.4 trail is closeable.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
-- `database.db` changed during D7.3J:
-  - before apply: `528384` bytes;
-  - SHA256 before apply:
-    `AD8CD589D190489580BD6E3FC82E90DD146B376FAA6D259722376732D3C44A88`;
-  - after apply: `528384` bytes;
-  - SHA256 after apply:
-    `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- `database.db` current state:
+  - `528384` bytes;
+  - SHA256 `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
 - Live now contains:
   - `atividade_base.id=37`;
   - `atividade_versao.id=61`, `AAC-rev5`, `status=rascunho`;
@@ -447,6 +451,42 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
   - D7.3K decided not to expose, activate, or link them;
   - the D7.3 trail is closable with no further action now.
 
+## D7.4G-BRANCH-ARCHIVE-EXECUTE - Branch Archive And D7.4 Trail Closeout
+
+- Execution mode:
+  - archival of `recovery/d7-activity-versioning` as annotated reference;
+  - documentation update only — no code, no DB, no apply, no SQL, no activation,
+    no matrix link, no merge, no rebase.
+- Initial state confirmed before execution:
+  - branch `main`;
+  - `HEAD=6a9bf2d9146c8a0011ddc3376c7fb842eebf7da6`;
+  - `origin/main...main = 0 0`;
+  - `origin/recovery...main = 0 1`;
+  - `origin/main...origin/recovery = 1 0`;
+  - `merge-base = b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`;
+  - tag `archive/d7-activity-versioning` did not exist;
+  - `git status --short` was empty;
+  - `database.db`: `528384` bytes;
+    SHA256 `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- Operations executed:
+  1. `git tag archive/d7-activity-versioning b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`
+  2. `git push origin archive/d7-activity-versioning`
+  3. `git push origin --delete recovery/d7-activity-versioning`
+- Confirmations:
+  - tag `archive/d7-activity-versioning` exists at remote:
+    `b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`;
+  - `refs/heads/recovery/d7-activity-versioning` no longer exists on remote
+    (ls-remote returned empty);
+  - local branch `recovery/d7-activity-versioning` preserved at `b5aafa7` (`[gone]`);
+    not deleted in this phase.
+- `database.db` preserved throughout:
+  - `528384` bytes;
+  - SHA256 `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- D7 trail status: all functional work is integrated into `main`. The
+  `archive/d7-activity-versioning` tag is the permanent named reference to the
+  D7 activity versioning trail endpoint.
+- No further work is required on the D7.4 trail.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -458,6 +498,8 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 - `ecdc9f5` - Add D7.3H controlled reconciliation apply script
 - `aedf936` - Record D7.3I apply copy validation
 - `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
+- `b5aafa7` - Record D7.3K matrix link decision
+- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (current main HEAD)
 
 ## Risks To Keep In View
 
@@ -482,9 +524,13 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 
 ## Recommended Next Step
 
-- D7.3 is closed at the documentation / architecture level.
+- D7 is fully integrated into `main`. The D7.4 trail is closed.
+- The permanent archival reference is tag `archive/d7-activity-versioning` at
+  `b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`.
+- No active feature branch for D7 exists on the remote.
+- Any new phase starts from `main`, not from the archived recovery branch.
 - No additional live apply, no activation, and no matrix link are authorized now.
-- Only reopen this area if a real operational need appears for base `37`, in a
+- Only reopen the D7.3 area if a real operational need appears for base `37`, in a
   separate phase focused on legitimate legacy mapping, controlled activation,
   explicit matrix link, and resolver validation.
 
@@ -493,6 +539,13 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 - Read `PROJECT_STATE.md` and `AGENT_HANDOFF.md` before any action.
 - Treat `atividade_id` as the operational source of truth.
 - `database.db` is already in the post-D7.3J state; do not assume pre-apply live.
+- There is no active feature branch for D7 on the remote. Any new work must start
+  from `main` at `6a9bf2d`. Do not reference or attempt to push to
+  `recovery/d7-activity-versioning`.
+- The archive tag `archive/d7-activity-versioning` at `b5aafa7` is the permanent
+  reference to the D7 trail endpoint — treat it as read-only history.
+- Local branch `recovery/d7-activity-versioning` may still exist as `[gone]` and
+  should be treated as a stale local ref only; do not work from it.
 - Do not attempt any additional real import, reconciliation write, or importer `apply` against `database.db`.
 - `PROJETOS_EXTENSAO` is no longer open for semantic collapse: preserve the live split.
 - `VISITAS_TECNICAS_PROFESSORES` must not be mapped to `base6`.

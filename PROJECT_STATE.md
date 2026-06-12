@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-12
-Closeout: D7.3K matrix link decision and D7.3 final closeout
-Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.4G branch archive and D7.4 trail closeout
+Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1134,6 +1134,8 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 - `ecdc9f5` - Add D7.3H controlled reconciliation apply script
 - `aedf936` - Record D7.3I apply copy validation
 - `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
+- `b5aafa7` - Record D7.3K matrix link decision
+- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (current main HEAD)
 
 ## Current Risks And Limits
 
@@ -1216,6 +1218,17 @@ Executor: Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live app
 - A decisão final da trilha é encerrar D7.3 sem ativar nem vincular `61/62`.
 - Nenhum apply adicional no live, nenhuma ativação e nenhum vínculo de matriz
   estão autorizados sem nova fase explícita e necessidade operacional real.
+- D7.4F (read-only archive audit) confirmou estado esperado; nenhuma divergência.
+- D7.4G arquivou a branch `recovery/d7-activity-versioning`:
+  - tag `archive/d7-activity-versioning` criada e publicada em
+    `b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`;
+  - branch remota `recovery/d7-activity-versioning` deletada;
+  - `main` / `origin/main` em `6a9bf2d`;
+  - `database.db` preservado: `528384` bytes;
+    SHA256 `09C0791A00B9A6EAB3BABC7E8349E8582092ADE6EB911798CE55062819A48E1A`.
+- D7 está integrada em `main`. Qualquer nova fase parte de `main`, não da
+  branch archivada. Não existe branch ativa `recovery/d7-activity-versioning`
+  no remoto.
 
 ## Permanent Working Directives
 
