@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-13
-Closeout: D7.5C matrix activity creation commit closeout
-Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.6B2 activity version schema closeout
+Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1193,6 +1193,36 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
   - no table transformation;
   - preserve D7.5C and D7.5D behavior.
 
+### D7.6B2 - operational version numbers for atividade_versao
+
+- Implemented, hardened (R1 + R2), and accepted.
+- Commits:
+  - `1ca00a3` — `Add operational activity version numbers`
+  - `5184143` — `D7.6B2-R1: fix numero_versao DEFAULT 0 -> DEFAULT 1 in atividade_versao`
+  - `6b1579a` — `D7.6B2-R2: harden numero_versao schema — full unique index + pos triggers`
+- Schema changes delivered:
+  - `atividade_versao.numero_versao INTEGER NOT NULL DEFAULT 1` added.
+  - Old constraint `UNIQUE(atividade_base_id, norma_id)` removed.
+  - New index: `UNIQUE INDEX idx_atividade_versao_base_num ON atividade_versao(atividade_base_id, numero_versao)` — full, non-partial (no WHERE clause).
+  - `numero_versao >= 1` enforced by triggers `trg_atividade_versao_num_pos_insert` and `trg_atividade_versao_num_pos_update` for `database.db`; and by `CHECK(numero_versao >= 1)` in the DDL for fresh databases.
+  - Existing rows migrated via `ROW_NUMBER() OVER (PARTITION BY atividade_base_id ORDER BY id ASC)`.
+  - `AUTOINCREMENT` sequence preserved after migration.
+- Operational model:
+  - `numero_versao` is the operational version number: v1, v2, v3… per `atividade_base`, assigned sequentially.
+  - `codigo_normativo` remains normative metadata (the regulation/norm code); it is not the operational version identifier or badge.
+  - `norma_id` and `codigo_normativo` remain `NOT NULL` in this phase.
+- Helpers added in `main.py`:
+  - `get_next_numero_versao(conn, base_id)` — returns `MAX(numero_versao) + 1` for a base.
+  - `get_ultima_versao_ativa_por_base(conn, base_id)` — returns the row with highest `numero_versao` where `status='ativa'`.
+- All INSERTs into `atividade_versao` in routes and tests supply `numero_versao` explicitly via `get_next_numero_versao`.
+- New test file: `tests/test_atividade_versao_numero.py` — 12 tests (T01–T12).
+- Test results:
+  - `tests/test_atividade_versao_numero.py`: 12/12 passed.
+  - D7 regression suite (4 files): 45/45 passed.
+- Backup before R2: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`, 544.768 bytes,
+  SHA256 `92627DED44C9094E74F01DA5718C995CD3FDD5AC467EF79298541A75B777CD8C`.
+- Matrix visual adjustment not yet done; D7.6C and D7.6D remain pending.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -1228,6 +1258,10 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
 - `bc8a4f6` - Add matrix-scoped activity creation
 - `cdbc7ab` - Record D7.5C matrix activity creation closeout
 - `0dbd2b1` - Add matrix card version creation
+- `3d3c4ff` - Record D7.5D matrix card version closeout
+- `1ca00a3` - Add operational activity version numbers
+- `5184143` - D7.6B2-R1: fix numero_versao DEFAULT 0 -> DEFAULT 1 in atividade_versao
+- `6b1579a` - D7.6B2-R2: harden numero_versao schema — full unique index + pos triggers
 
 ## Current Risks And Limits
 
@@ -1321,6 +1355,13 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
 - D7 está integrada em `main`. Qualquer nova fase parte de `main`, não da
   branch archivada. Não existe branch ativa `recovery/d7-activity-versioning`
   no remoto.
+- D7.6B2 concluída: schema operacional de `numero_versao` em `atividade_versao` entregue e endurecido.
+  - `UNIQUE(atividade_base_id, norma_id)` removida; `UNIQUE(atividade_base_id, numero_versao)` ativa (índice não-parcial).
+  - `numero_versao <= 0` bloqueado por triggers em `database.db` existente; `CHECK(numero_versao >= 1)` no DDL de bancos novos.
+  - `codigo_normativo` permanece metadado normativo, não badge operacional.
+  - `norma_id` e `codigo_normativo` permanecem `NOT NULL`.
+  - `database.db` pós-D7.6B2: 544.768 bytes, SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
+- D7.6C e D7.6D permanecem pendentes. Não implementar sem nova autorização.
 
 ## Permanent Working Directives
 
@@ -1333,9 +1374,10 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
 - Every phase must leave a report, evidence, tests or justification, risks, and a clear next step.
 - `PROJECT_STATE.md` and `AGENT_HANDOFF.md` must be updated after an important phase closeout, agent or chat handoff, structural change, or relevant risk change.
 - D7.5D-PATCH-CARD-VERSION-MENU is complete (functional commit `0dbd2b1`).
-- Next recommended phase after this closeout:
-  - `D7.5E-CARD-VERSION-BADGE-UI`;
-  - show version label (norm code) on linked activity cards without changing card height;
-  - no overlap between truncated name and label;
-  - no table transformation;
-  - preserve D7.5C and D7.5D behavior.
+- D7.6B2 is complete: `numero_versao` operacional entregue, schema endurecido, testes validados.
+- Próxima fase técnica autorizada: `D7.6C` — Admin → Atividades cria nova versão operacional.
+  - Não criar versão pela matriz como fluxo principal.
+  - Não usar `codigo_normativo` como badge ou identificador principal de versão.
+  - Não alterar schema sem nova auditoria.
+  - Não misturar UI da matriz com UI de atividades.
+  - Não implementar D7.6D junto com D7.6C.
