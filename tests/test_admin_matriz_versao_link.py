@@ -192,9 +192,9 @@ def test_get_versoes_page_excludes_non_ativas(versioned_env):
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (1, ?, ?, 'AAC', '1 - Draft', 'rascunho')",
-            (norma_draft_id, f"AACdraft{t}"),
+            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)"
+            " VALUES (1, ?, ?, 'AAC', '1 - Draft', ?, 'rascunho')",
+            (norma_draft_id, f"AACdraft{t}", main.get_next_numero_versao(conn, 1)),
         )
         # Vincular norma à matriz 1 para que ela "qualificaria" sem o filtro de status
         conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (1, ?)", (norma_draft_id,))
@@ -229,9 +229,10 @@ def test_post_definir_rejeita_versao_sem_norma_na_matriz(versioned_env):
         ).fetchone()["id"]
         versao_fora_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - Fora', 'ativa') RETURNING id",
-            (seed["base_id"], norma_fora_id, f"NRMfora{t}"),
+            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)"
+            " VALUES (?, ?, ?, 'AAC', '1 - Fora', ?, 'ativa') RETURNING id",
+            (seed["base_id"], norma_fora_id, f"NRMfora{t}",
+             main.get_next_numero_versao(conn, seed["base_id"])),
         ).fetchone()["id"]
         # NÃO inserir norma_fora_id em matriz_norma
         conn.commit()
@@ -304,9 +305,10 @@ def test_post_definir_troca_versao_anterior_sem_ambiguidade(versioned_env):
         ).fetchone()["id"]
         versao2_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - Grupo B4 v2', 'ativa') RETURNING id",
-            (seed["base_id"], norma2_id, f"B4NRM2{t}"),
+            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)"
+            " VALUES (?, ?, ?, 'AAC', '1 - Grupo B4 v2', ?, 'ativa') RETURNING id",
+            (seed["base_id"], norma2_id, f"B4NRM2{t}",
+             main.get_next_numero_versao(conn, seed["base_id"])),
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
@@ -519,9 +521,10 @@ def test_post_definir_rejeita_versao_com_norma_nao_na_matriz(versioned_env):
         ).fetchone()["id"]
         versao_extra_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - Extra', 'ativa') RETURNING id",
-            (seed["base_id"], norma_extra_id, f"B4EXT{t}"),
+            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)"
+            " VALUES (?, ?, ?, 'AAC', '1 - Extra', ?, 'ativa') RETURNING id",
+            (seed["base_id"], norma_extra_id, f"B4EXT{t}",
+             main.get_next_numero_versao(conn, seed["base_id"])),
         ).fetchone()["id"]
         # NÃO inserir norma_extra_id em matriz_norma
         conn.commit()

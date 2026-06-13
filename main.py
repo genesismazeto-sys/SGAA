@@ -1884,25 +1884,7 @@ def ensure_matriz_atividade_links_table(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_itens_atividade ON matrizes_atividades_itens(atividade_id)")
 
 
-def _needs_atividade_versao_migration(conn) -> bool:
-    """True if atividade_versao exists but still carries the old UNIQUE(base, norma) constraint."""
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='atividade_versao'"
-    ).fetchone()
-    if not row:
-        return False
-    schema_sql = row["sql"] or ""
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(atividade_versao)").fetchall()}
-    return "numero_versao" not in cols or "UNIQUE(atividade_base_id, norma_id)" in schema_sql
-
-
-def _migrate_atividade_versao_to_numero_versao(conn) -> None:
-    """Recreates atividade_versao with numero_versao assigned via ROW_NUMBER() per base."""
-    conn.executescript("""
-        PRAGMA foreign_keys = OFF;
-        BEGIN;
-        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_insert;
-        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_update;
+_VERSAO_NEW_DDL = """
         CREATE TABLE atividade_versao_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             atividade_base_id INTEGER NOT NULL,
@@ -1918,27 +1900,55 @@ def _migrate_atividade_versao_to_numero_versao(conn) -> None:
             documentos_json TEXT,
             vigencia_inicio TEXT,
             vigencia_fim TEXT,
-            numero_versao INTEGER NOT NULL DEFAULT 0,
+            numero_versao INTEGER NOT NULL DEFAULT 1,
             status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
             versao_anterior_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
             FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
             FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao_new(id) ON DELETE RESTRICT
-        );
+        )"""
+
+
+def _needs_atividade_versao_migration(conn) -> bool:
+    """True if atividade_versao exists but still carries the old UNIQUE(base, norma) constraint."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='atividade_versao'"
+    ).fetchone()
+    if not row:
+        return False
+    schema_sql = row["sql"] or ""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(atividade_versao)").fetchall()}
+    return "numero_versao" not in cols or "UNIQUE(atividade_base_id, norma_id)" in schema_sql
+
+
+def _needs_atividade_versao_default_fix(conn) -> bool:
+    """True if atividade_versao has numero_versao DEFAULT 0 instead of DEFAULT 1."""
+    for row in conn.execute("PRAGMA table_info(atividade_versao)").fetchall():
+        if row["name"] == "numero_versao":
+            return row["dflt_value"] == "0"
+    return False
+
+
+def _recreate_atividade_versao(conn, *, copy_sql: str) -> None:
+    """
+    Core helper: drops+recreates atividade_versao using _VERSAO_NEW_DDL.
+    copy_sql must be a SELECT that provides all columns including numero_versao.
+    Drops atividade_transicao triggers before rename to avoid SQLite validation error.
+    """
+    conn.executescript(f"""
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_insert;
+        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_update;
+        {_VERSAO_NEW_DDL};
         INSERT INTO atividade_versao_new (
             id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
             ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
             documentos_json, vigencia_inicio, vigencia_fim,
             numero_versao, status, versao_anterior_id, created_at
         )
-        SELECT
-            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
-            ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
-            documentos_json, vigencia_inicio, vigencia_fim,
-            CAST(ROW_NUMBER() OVER (PARTITION BY atividade_base_id ORDER BY id ASC) AS INTEGER),
-            status, versao_anterior_id, created_at
-        FROM atividade_versao;
+        {copy_sql};
         DROP TABLE atividade_versao;
         ALTER TABLE atividade_versao_new RENAME TO atividade_versao;
         DELETE FROM sqlite_sequence WHERE name = 'atividade_versao';
@@ -1949,6 +1959,37 @@ def _migrate_atividade_versao_to_numero_versao(conn) -> None:
     """)
 
 
+def _migrate_atividade_versao_to_numero_versao(conn) -> None:
+    """Recreates atividade_versao with numero_versao assigned via ROW_NUMBER() per base."""
+    _recreate_atividade_versao(
+        conn,
+        copy_sql="""
+        SELECT
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
+            documentos_json, vigencia_inicio, vigencia_fim,
+            CAST(ROW_NUMBER() OVER (PARTITION BY atividade_base_id ORDER BY id ASC) AS INTEGER),
+            status, versao_anterior_id, created_at
+        FROM atividade_versao
+        """,
+    )
+
+
+def _fix_atividade_versao_default(conn) -> None:
+    """Recreates atividade_versao to change DEFAULT 0 → DEFAULT 1, preserving all data."""
+    _recreate_atividade_versao(
+        conn,
+        copy_sql="""
+        SELECT
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
+            documentos_json, vigencia_inicio, vigencia_fim,
+            numero_versao, status, versao_anterior_id, created_at
+        FROM atividade_versao
+        """,
+    )
+
+
 def ensure_atividade_versioning_schema(conn) -> None:
     """Garante schema aditivo para versionamento normativo de atividades.
 
@@ -1956,6 +1997,8 @@ def ensure_atividade_versioning_schema(conn) -> None:
     """
     if _needs_atividade_versao_migration(conn):
         _migrate_atividade_versao_to_numero_versao(conn)
+    elif _needs_atividade_versao_default_fix(conn):
+        _fix_atividade_versao_default(conn)
 
     ensure_matriz_atividade_links_table(conn)
 
@@ -2003,7 +2046,7 @@ def ensure_atividade_versioning_schema(conn) -> None:
             documentos_json TEXT,
             vigencia_inicio TEXT,
             vigencia_fim TEXT,
-            numero_versao INTEGER NOT NULL DEFAULT 0,
+            numero_versao INTEGER NOT NULL DEFAULT 1,
             status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
             versao_anterior_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),

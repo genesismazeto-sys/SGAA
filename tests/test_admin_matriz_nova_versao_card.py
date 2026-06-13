@@ -343,10 +343,11 @@ def test_post_reuses_existing_versao_without_duplicate(d75d_env):
         preexisting_id = conn.execute(
             """
             INSERT INTO atividade_versao
-                (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (seed["base_id"], seed["norma_2_id"], "AAC-rev6", "AAC", "7 - Pre-existing", "ativa"),
+            (seed["base_id"], seed["norma_2_id"], "AAC-rev6", "AAC", "7 - Pre-existing",
+             main.get_next_numero_versao(conn, seed["base_id"]), "ativa"),
         ).lastrowid
         conn.commit()
         count_before = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]

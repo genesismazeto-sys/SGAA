@@ -189,9 +189,9 @@ def test_contrato_4_ambiguidade_retorna_erro_duro_sem_versao_id(versioned_env):
 
         conn.execute(
             "INSERT INTO atividade_versao "
-            "(atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status) "
-            "VALUES (?, ?, ?, 'AAC', '1 - AAC ambíguo', 'ativa')",
-            (1, norma_id, novo_codigo),
+            "(atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status) "
+            "VALUES (?, ?, ?, 'AAC', '1 - AAC ambíguo', ?, 'ativa')",
+            (1, norma_id, novo_codigo, main.get_next_numero_versao(conn, 1)),
         )
         nova_versao_id = conn.execute(
             "SELECT id FROM atividade_versao WHERE norma_id = ?", (norma_id,)
@@ -275,9 +275,9 @@ def test_contrato_4b_writer_nao_grava_atividade_versao_id_quando_ambiguo(version
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO atividade_versao "
-            "(atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status) "
-            "VALUES (?, ?, ?, 'AAC', '1 - AAC C4b', 'ativa')",
-            (1, norma_id, novo_codigo),
+            "(atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status) "
+            "VALUES (?, ?, ?, 'AAC', '1 - AAC C4b', ?, 'ativa')",
+            (1, norma_id, novo_codigo, main.get_next_numero_versao(conn, 1)),
         )
         nova_versao_id = conn.execute(
             "SELECT id FROM atividade_versao WHERE norma_id = ?", (norma_id,)
