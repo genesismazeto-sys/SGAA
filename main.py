@@ -1900,7 +1900,7 @@ _VERSAO_NEW_DDL = """
             documentos_json TEXT,
             vigencia_inicio TEXT,
             vigencia_fim TEXT,
-            numero_versao INTEGER NOT NULL DEFAULT 1,
+            numero_versao INTEGER NOT NULL DEFAULT 1 CHECK(numero_versao >= 1),
             status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
             versao_anterior_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1928,6 +1928,16 @@ def _needs_atividade_versao_default_fix(conn) -> bool:
         if row["name"] == "numero_versao":
             return row["dflt_value"] == "0"
     return False
+
+
+def _needs_index_hardening(conn) -> bool:
+    """True if idx_atividade_versao_base_num exists as a partial (WHERE) index."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_atividade_versao_base_num'"
+    ).fetchone()
+    if not row:
+        return False
+    return " WHERE " in (row["sql"] or "").upper()
 
 
 def _recreate_atividade_versao(conn, *, copy_sql: str) -> None:
@@ -1999,6 +2009,8 @@ def ensure_atividade_versioning_schema(conn) -> None:
         _migrate_atividade_versao_to_numero_versao(conn)
     elif _needs_atividade_versao_default_fix(conn):
         _fix_atividade_versao_default(conn)
+    if _needs_index_hardening(conn):
+        conn.execute("DROP INDEX IF EXISTS idx_atividade_versao_base_num")
 
     ensure_matriz_atividade_links_table(conn)
 
@@ -2046,7 +2058,7 @@ def ensure_atividade_versioning_schema(conn) -> None:
             documentos_json TEXT,
             vigencia_inicio TEXT,
             vigencia_fim TEXT,
-            numero_versao INTEGER NOT NULL DEFAULT 1,
+            numero_versao INTEGER NOT NULL DEFAULT 1 CHECK(numero_versao >= 1),
             status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
             versao_anterior_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -2182,6 +2194,30 @@ def ensure_atividade_versioning_schema(conn) -> None:
 
     conn.execute(
         """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_num_pos_insert
+        BEFORE INSERT ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.numero_versao <= 0
+        BEGIN
+            SELECT RAISE(ABORT, 'numero_versao deve ser >= 1');
+        END;
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_num_pos_update
+        BEFORE UPDATE OF numero_versao ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.numero_versao <= 0
+        BEGIN
+            SELECT RAISE(ABORT, 'numero_versao deve ser >= 1');
+        END;
+        """
+    )
+
+    conn.execute(
+        """
         CREATE TRIGGER IF NOT EXISTS trg_atividade_transicao_aac_para_aeu_insert
         BEFORE INSERT ON atividade_transicao
         FOR EACH ROW
@@ -2247,7 +2283,6 @@ def ensure_atividade_versioning_schema(conn) -> None:
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_atividade_versao_base_num"
         " ON atividade_versao(atividade_base_id, numero_versao)"
-        " WHERE numero_versao > 0"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_eixo ON atividade_versao(eixo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_status ON atividade_versao(status)")

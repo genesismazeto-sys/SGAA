@@ -251,3 +251,41 @@ def test_autoincrement_preservado_apos_migracao(env):
     assert inserted_id > max_id_before, (
         f"Novo id={inserted_id} não é maior que max anterior={max_id_before}"
     )
+
+
+# ---------------------------------------------------------------------------
+# T11 — numero_versao=0 é bloqueado
+# ---------------------------------------------------------------------------
+
+
+def test_bloqueia_numero_versao_zero(env):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        with pytest.raises((sqlite3.IntegrityError, sqlite3.OperationalError)):
+            conn.execute(
+                """
+                INSERT INTO atividade_versao
+                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                     numero_versao, status)
+                VALUES (26, 1, 'AAC-zero', 'AAC', '1 - Zero', 0, 'rascunho')
+                """
+            )
+
+
+# ---------------------------------------------------------------------------
+# T12 — numero_versao negativo é bloqueado
+# ---------------------------------------------------------------------------
+
+
+def test_bloqueia_numero_versao_negativo(env):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        with pytest.raises((sqlite3.IntegrityError, sqlite3.OperationalError)):
+            conn.execute(
+                """
+                INSERT INTO atividade_versao
+                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                     numero_versao, status)
+                VALUES (26, 1, 'AAC-neg', 'AAC', '1 - Negativo', -5, 'rascunho')
+                """
+            )
