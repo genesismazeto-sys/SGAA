@@ -1145,11 +1145,53 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
   - `tests/test_admin_matrix_new_activity.py`.
 - Next authorized phase:
   - `D7.5D-PATCH-CARD-VERSION-MENU`.
-- D7.5D remains pending and must preserve:
-  - menu on the card;
-  - new version cloned from the card flow;
-  - relink only the current matrix;
-  - no in-place `UPDATE` of a version already used by older matrices.
+- D7.5D was pending at D7.5C closeout and is now complete (see below).
+
+### D7.5D - card version menu on linked activity cards
+- Implemented, visually validated by the user (including R1 visual alert fix), and committed.
+- Functional commit `0dbd2b1` - `Add matrix card version creation`.
+- Scope delivered:
+  - `⋮` button on right-column (selected/linked) activity cards in the matrix edit screen;
+  - `Criar nova versão` action opens a modal with norma select and context label;
+  - context label: `Versão nesta matriz: [codigo_normativo]` for orientation;
+  - POST route `admin_matriz_nova_versao_card` at
+    `/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao`.
+- Backend guarantees:
+  - creates new `atividade_versao` if `(atividade_base_id, norma_id)` does not exist;
+  - reuses existing `atividade_versao` if the same pair already exists;
+  - UNIQUE constraint `(atividade_base_id, norma_id)` always respected;
+  - only the current matrix is relinked via `_set_versao_da_matriz_para_base`;
+  - older matrices keep their original version link — no cross-matrix mutation;
+  - no in-place `UPDATE` of a version already used by older matrices or requests;
+  - matrix name is not written into `codigo_normativo`;
+  - full rollback on any intermediate failure;
+  - CSRF-protected POST.
+- Read-only helper `get_card_version_menu_data` added to `main.py`:
+  - returns alternative normas for each linked activity in the current matrix;
+  - serialized to JS variable via `card_version_menu_data | tojson`.
+- R1 visual alert correction:
+  - warning `<p class="matriz-modal-warning">` replaced with
+    `<div class="flash flash-warning" role="alert">`;
+  - no new CSS; reuses system-wide `flash flash-warning` style
+    (`#fef4c0` background, 13px font).
+- Contract preserved:
+  - no schema or migration change;
+  - no `database.db` edit in this closeout;
+  - no student flow change;
+  - D7.5C preserved and not reopened.
+- Focused validation:
+  - `python -m pytest tests/test_admin_matriz_nova_versao_card.py -q --tb=short`
+  - result: `15 passed`.
+- New focused test file:
+  - `tests/test_admin_matriz_nova_versao_card.py` (15 tests: T01–T15).
+- Next authorized phase:
+  - `D7.5E-CARD-VERSION-BADGE-UI`.
+- D7.5E must preserve:
+  - show version label on the card without changing card height;
+  - first line: truncated activity name + version label at right edge;
+  - no overlap between name and label;
+  - no table transformation;
+  - preserve D7.5C and D7.5D behavior.
 
 ## Relevant Commits
 
@@ -1184,6 +1226,8 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
 - `b5aafa7` - Record D7.3K matrix link decision
 - `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (pre-D7.5C main baseline)
 - `bc8a4f6` - Add matrix-scoped activity creation
+- `cdbc7ab` - Record D7.5C matrix activity creation closeout
+- `0dbd2b1` - Add matrix card version creation
 
 ## Current Risks And Limits
 
@@ -1288,8 +1332,10 @@ Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit c
 - Sensitive data, real databases, production actions, security work, backfill or cutover, and critical decisions must not be delegated to a low-cost agent without final audit.
 - Every phase must leave a report, evidence, tests or justification, risks, and a clear next step.
 - `PROJECT_STATE.md` and `AGENT_HANDOFF.md` must be updated after an important phase closeout, agent or chat handoff, structural change, or relevant risk change.
+- D7.5D-PATCH-CARD-VERSION-MENU is complete (functional commit `0dbd2b1`).
 - Next recommended phase after this closeout:
-  - `D7.5D-PATCH-CARD-VERSION-MENU`;
-  - clone a new `atividade_versao` from the card flow;
-  - relink only the current matrix;
-  - never mutate in place a version already used by older matrices.
+  - `D7.5E-CARD-VERSION-BADGE-UI`;
+  - show version label (norm code) on linked activity cards without changing card height;
+  - no overlap between truncated name and label;
+  - no table transformation;
+  - preserve D7.5C and D7.5D behavior.
