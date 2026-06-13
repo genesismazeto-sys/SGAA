@@ -11936,6 +11936,134 @@ def _matriz_activity_type_for_tab(active_tab: str) -> str | None:
     return None
 
 
+def _matriz_axis_for_tab(active_tab: str) -> str | None:
+    if active_tab == "aac":
+        return "AAC"
+    if active_tab == "aea":
+        return "AEU"
+    return None
+
+
+def _get_grupos_por_tipo(conn) -> dict[str, dict[str, str]]:
+    rows = conn.execute(
+        "SELECT tipo_atividade, grupo FROM atividades WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
+    ).fetchall()
+    grupos = {}
+    for row in rows:
+        tipo = row["tipo_atividade"]
+        label = (row["grupo"] or "").strip()
+        match = re.match(r"^\s*(\d+)\s*-\s*(.*)$", label)
+        if match:
+            numero = match.group(1)
+            descricao = (match.group(2) or "").strip()
+        else:
+            match = re.match(r"^\s*(\d+)\s*$", label)
+            if not match:
+                continue
+            numero = match.group(1)
+            descricao = ""
+        if tipo not in grupos:
+            grupos[tipo] = {}
+        if numero not in grupos[tipo] or (not grupos[tipo][numero] and descricao):
+            grupos[tipo][numero] = descricao
+    try:
+        rows = conn.execute("SELECT tipo_atividade, numero, descricao FROM grupos_def").fetchall()
+        for row in rows:
+            tipo = row["tipo_atividade"]
+            numero = str(row["numero"])
+            descricao = (row["descricao"] or "").strip()
+            if tipo not in grupos:
+                grupos[tipo] = {}
+            grupos[tipo][numero] = descricao
+    except Exception:
+        pass
+    return grupos
+
+
+def _get_matriz_active_normas_for_axis(conn, matriz_id: int, eixo: str) -> list:
+    return conn.execute(
+        """
+        SELECT
+            n.id,
+            n.codigo,
+            n.eixo,
+            n.revisao,
+            n.nome
+          FROM matriz_norma mn
+          JOIN norma_atividade n ON n.id = mn.norma_id
+         WHERE mn.matriz_id = ?
+           AND n.eixo = ?
+           AND n.status = 'ativa'
+         ORDER BY LOWER(n.codigo) ASC, n.id ASC
+        """,
+        (matriz_id, eixo),
+    ).fetchall()
+
+
+def _build_matriz_new_activity_modal_context(
+    conn,
+    matriz,
+    active_tab: str,
+    *,
+    form_data: dict | None = None,
+    is_open: bool = False,
+):
+    matriz_id = matriz["id"] if matriz else None
+    activity_type = _matriz_activity_type_for_tab(active_tab)
+    axis = _matriz_axis_for_tab(active_tab)
+    if not matriz_id or not activity_type or not axis:
+        return None
+
+    form_data = form_data or {}
+    grupos_por_tipo = _get_grupos_por_tipo(conn)
+    group_map = grupos_por_tipo.get(activity_type, {})
+
+    def _group_sort_key(value: str):
+        normalized = str(value or "").strip()
+        if normalized.isdigit():
+            return (0, int(normalized))
+        return (1, normalized.lower())
+
+    group_suggestions = [
+        {"numero": numero, "descricao": group_map[numero]}
+        for numero in sorted(group_map.keys(), key=_group_sort_key)
+    ]
+    try:
+        normas = _get_matriz_active_normas_for_axis(conn, matriz_id, axis)
+    except sqlite3.OperationalError:
+        normas = []
+
+    raw_add_to_matrix = form_data.get("add_to_matrix")
+    if raw_add_to_matrix is None:
+        add_to_matrix_checked = True
+    elif isinstance(raw_add_to_matrix, bool):
+        add_to_matrix_checked = raw_add_to_matrix
+    else:
+        add_to_matrix_checked = str(raw_add_to_matrix).strip().lower() in {"1", "true", "on", "yes"}
+
+    return {
+        "is_open": bool(is_open),
+        "form_action": url_for("admin_matriz_nova_atividade", matriz_id=matriz_id, active_tab=active_tab),
+        "activity_type_label": activity_type,
+        "axis": axis,
+        "matrix_context_label": (matriz["nome"] or "").strip(),
+        "group_suggestions": group_suggestions,
+        "normas": normas,
+        "norm_count": len(normas),
+        "has_normas": bool(normas),
+        "requires_norma_selection": len(normas) > 1,
+        "single_norma": normas[0] if len(normas) == 1 else None,
+        "submit_disabled": not normas,
+        "prefill": {
+            "nome": str(form_data.get("nome") or "").strip(),
+            "grupo_numero": str(form_data.get("grupo_numero") or "").strip(),
+            "grupo_descricao": str(form_data.get("grupo_descricao") or "").strip(),
+            "norma_id": str(form_data.get("norma_id") or "").strip(),
+            "add_to_matrix": add_to_matrix_checked,
+        },
+    }
+
+
 def _matriz_transfer_meta(active_tab: str) -> dict[str, str]:
     if active_tab == "aea":
         return {
@@ -12040,7 +12168,13 @@ def _matriz_counts(conn, matriz_id: int) -> tuple[int, int]:
     return counts["Acadêmica Complementar"], counts["Extensão Universitária"]
 
 
-def _render_matriz_form(conn, matriz=None, active_tab: str = "dados", readonly: bool = False):
+def _render_matriz_form(
+    conn,
+    matriz=None,
+    active_tab: str = "dados",
+    readonly: bool = False,
+    new_activity_modal=None,
+):
     cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
     matriz_id = matriz["id"] if matriz else None
     activity_tabs_enabled = bool(matriz_id)
@@ -12058,6 +12192,10 @@ def _render_matriz_form(conn, matriz=None, active_tab: str = "dados", readonly: 
         academicas_count, extensao_count = _matriz_counts(conn, matriz_id)
         if active_tab in {"aac", "aea"}:
             transfer_available, transfer_selected, transfer_groups = _matriz_transfer_lists(conn, matriz_id, active_tab)
+            if new_activity_modal is None:
+                new_activity_modal = _build_matriz_new_activity_modal_context(conn, matriz, active_tab)
+    else:
+        new_activity_modal = None
 
     return render_template(
         "admin_matriz_form.html",
@@ -12078,6 +12216,7 @@ def _render_matriz_form(conn, matriz=None, active_tab: str = "dados", readonly: 
         transfer_available=transfer_available,
         transfer_selected=transfer_selected,
         transfer_groups=transfer_groups,
+        new_activity_modal=new_activity_modal,
         readonly=readonly,
     )
 
@@ -12273,6 +12412,196 @@ def admin_editar_matriz(matriz_id: int):
 
     matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
     return _render_matriz_form(conn, matriz=matriz, active_tab=active_tab, readonly=readonly)
+
+
+@app.route("/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>", methods=["POST"])
+@admin_required
+def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
+    conn = get_db_connection()
+    ensure_atividades_schema_current(conn)
+    ensure_matriz_atividade_links_table(conn)
+    ensure_atividade_versioning_schema(conn)
+
+    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
+    if not matriz:
+        flash("Matriz não encontrada.", "error")
+        return redirect(url_for("admin_matrizes"))
+
+    auth_context = _get_current_admin_access_context()
+    readonly = not _admin_can("matrizes", "edit", auth_context)
+
+    active_tab = (active_tab or "").strip().lower()
+    activity_type = _matriz_activity_type_for_tab(active_tab)
+    axis = _matriz_axis_for_tab(active_tab)
+    if not activity_type or not axis:
+        flash("Aba de gestão de atividades inválida.", "error")
+        return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
+
+    form_data = {
+        "nome": (request.form.get("nome") or "").strip(),
+        "grupo_numero": (request.form.get("grupo_numero") or "").strip(),
+        "grupo_descricao": (request.form.get("grupo_descricao") or "").strip(),
+        "norma_id": (request.form.get("norma_id") or "").strip(),
+        "add_to_matrix": request.form.get("add_to_matrix"),
+    }
+
+    def _render_modal_error(message: str):
+        if message:
+            flash(message, "error")
+        modal_context = _build_matriz_new_activity_modal_context(
+            conn,
+            matriz,
+            active_tab,
+            form_data=form_data,
+            is_open=True,
+        )
+        return _render_matriz_form(
+            conn,
+            matriz=matriz,
+            active_tab=active_tab,
+            readonly=readonly,
+            new_activity_modal=modal_context,
+        )
+
+    normas = _get_matriz_active_normas_for_axis(conn, matriz_id, axis)
+    if not normas:
+        return _render_modal_error(
+            f"Esta matriz não possui norma ativa de {axis} vinculada para criar uma nova atividade."
+        )
+
+    norma_by_id = {int(row["id"]): row for row in normas}
+    norma_id_raw = form_data["norma_id"]
+    norma = None
+    if norma_id_raw:
+        if not norma_id_raw.isdigit():
+            return _render_modal_error("Selecione uma norma/regulamento base válida.")
+        norma = norma_by_id.get(int(norma_id_raw))
+        if not norma:
+            return _render_modal_error("Selecione uma norma compatível com esta matriz e com o eixo atual.")
+    elif len(normas) == 1:
+        norma = normas[0]
+    else:
+        return _render_modal_error("Selecione explicitamente a norma/regulamento base para esta atividade.")
+
+    nome = form_data["nome"]
+    if not nome:
+        return _render_modal_error("Informe o nome da atividade.")
+
+    if activity_type == "Acadêmica Complementar":
+        grupo_numero = form_data["grupo_numero"]
+        if not grupo_numero.isdigit():
+            return _render_modal_error("Informe um número de grupo válido para a atividade AAC.")
+        grupo_raw = _build_grupo_label(grupo_numero, form_data["grupo_descricao"])
+    else:
+        grupo_raw = "NA"
+    grupo = _normalize_atividade_grupo(activity_type, grupo_raw)
+    if activity_type != "Extensão Universitária" and not grupo:
+        return _render_modal_error("Informe o grupo da atividade.")
+
+    add_to_matrix = str(request.form.get("add_to_matrix") or "").strip().lower() in {"1", "true", "on", "yes"}
+    form_data["add_to_matrix"] = add_to_matrix
+
+    try:
+        atividade_cursor = conn.execute(
+            """
+            INSERT INTO atividades (
+                grupo,
+                nome,
+                descricao,
+                limite_horas,
+                tipo_atividade,
+                tem_limitacao,
+                tipo_limitacao,
+                limite_horas_total,
+                limite_horas_semestral
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                grupo,
+                nome,
+                None,
+                None,
+                activity_type,
+                0,
+                "total",
+                None,
+                None,
+            ),
+        )
+        atividade_id = atividade_cursor.lastrowid
+
+        base_cursor = conn.execute(
+            """
+            INSERT INTO atividade_base (nome_conceito, descricao, status)
+            VALUES (?, ?, 'ativo')
+            """,
+            (nome, None),
+        )
+        base_id = base_cursor.lastrowid
+
+        conn.execute(
+            """
+            INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status)
+            VALUES (?, ?, 'mapeada')
+            """,
+            (atividade_id, base_id),
+        )
+
+        if add_to_matrix:
+            conn.execute(
+                "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+                (matriz_id, atividade_id),
+            )
+
+        versao_cursor = conn.execute(
+            """
+            INSERT INTO atividade_versao (
+                atividade_base_id,
+                norma_id,
+                codigo_normativo,
+                eixo,
+                grupo,
+                status
+            ) VALUES (?, ?, ?, ?, ?, 'ativa')
+            """,
+            (
+                base_id,
+                norma["id"],
+                norma["codigo"],
+                norma["eixo"],
+                grupo,
+            ),
+        )
+        versao_id = versao_cursor.lastrowid
+
+        if add_to_matrix:
+            conn.execute(
+                "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
+                (matriz_id, versao_id),
+            )
+
+        conn.commit()
+    except sqlite3.IntegrityError as exc:
+        conn.rollback()
+        error_message = str(exc).lower()
+        if "unique constraint failed: atividades.nome" in error_message:
+            return _render_modal_error("Já existe atividade com este nome.")
+        if "unique constraint failed: atividade_base.nome_conceito" in error_message:
+            return _render_modal_error("Já existe atividade-base com este nome.")
+        if "unique constraint failed: atividade_legacy_map.atividade_id_legacy" in error_message:
+            return _render_modal_error("Falha ao mapear a atividade criada para a atividade-base.")
+        if "unique constraint failed: atividade_versao.atividade_base_id, atividade_versao.norma_id" in error_message:
+            return _render_modal_error("Já existe uma versão desta atividade para a norma selecionada.")
+        return _render_modal_error(f"Erro de integridade ao criar atividade: {exc}")
+    except Exception as exc:
+        conn.rollback()
+        return _render_modal_error(f"Erro ao criar atividade: {exc}")
+
+    if add_to_matrix:
+        flash("Atividade criada e adicionada à matriz com sucesso.", "success")
+    else:
+        flash("Atividade criada com sucesso.", "success")
+    return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
 
 
 @app.route("/admin/matrizes/excluir", methods=["POST"])

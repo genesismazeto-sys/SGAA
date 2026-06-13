@@ -103,6 +103,16 @@
       font-weight:600;
       color: var(--text-primary);
     }
+    .matriz-transfer-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .matriz-new-activity-trigger{
+      white-space:nowrap;
+    }
     .matriz-transfer-filters{
       display:grid;
       gap:10px;
@@ -283,6 +293,144 @@
       visibility: hidden;
       pointer-events: none;
     }
+    .matriz-modal-overlay{
+      position:fixed;
+      inset:0;
+      z-index:40;
+      display:grid;
+      place-items:center;
+      padding:16px;
+      background: rgba(2, 6, 23, .45);
+    }
+    .matriz-modal-overlay[hidden]{ display:none !important; }
+    .matriz-modal-card{
+      width:min(560px, calc(100vw - 32px));
+      max-height:min(86vh, 760px);
+      display:flex;
+      flex-direction:column;
+      background:var(--surface);
+      color:var(--text-primary);
+      border-radius:var(--radius);
+      box-shadow:0 10px 30px rgba(2, 6, 23, .25);
+    }
+    .matriz-modal-header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      padding:18px 20px 10px;
+    }
+    .matriz-modal-title{
+      margin:0;
+      font-size:16px;
+      font-weight:600;
+    }
+    .matriz-modal-subtitle{
+      margin:4px 0 0;
+      font-size:12px;
+      color:var(--text-secondary);
+    }
+    .matriz-modal-close{
+      width:32px;
+      height:32px;
+      min-width:32px;
+      display:inline-grid;
+      place-items:center;
+      border:0;
+      border-radius:8px;
+      background:transparent;
+      color:var(--text-secondary);
+      cursor:pointer;
+    }
+    .matriz-modal-close:hover{ background:#f4f4f5; }
+    .matriz-modal-close .lucide{
+      width:16px;
+      height:16px;
+      margin:0;
+      top:0;
+    }
+    .matriz-modal-form{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+    .matriz-modal-body{
+      display:grid;
+      gap:12px;
+      padding:0 20px 20px;
+      overflow-y:auto;
+    }
+    .matriz-modal-field{
+      display:grid;
+      gap:6px;
+    }
+    .matriz-modal-label{
+      font-size:12px;
+      font-weight:600;
+      color:var(--text-secondary);
+    }
+    .matriz-modal-group-card{
+      display:grid;
+      grid-template-columns:40px 120px 40px minmax(0, 1fr);
+      column-gap:2px;
+    }
+    .matriz-modal-group-card .control + .field-chip{
+      border-left:1px solid var(--border-strong);
+    }
+    .matriz-modal-chip{
+      min-height:var(--btn-h);
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:0 12px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:#f8fafc;
+      color:var(--text-primary);
+      font-size:13px;
+    }
+    .matriz-modal-chip .lucide{
+      width:16px;
+      height:16px;
+      color:var(--text-secondary);
+    }
+    .matriz-modal-note{
+      margin:0;
+      font-size:12px;
+      color:var(--text-secondary);
+    }
+    .matriz-modal-warning{
+      margin:0;
+      padding:10px 12px;
+      border:1px solid #fbbf24;
+      border-radius:var(--radius);
+      background:#fffbeb;
+      color:#92400e;
+      font-size:12px;
+      line-height:1.45;
+    }
+    .matriz-modal-checkbox{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      padding:10px 12px;
+      border:1px solid var(--border-strong);
+      border-radius:var(--radius);
+      background:#fbfdff;
+      font-size:13px;
+      color:var(--text-primary);
+    }
+    .matriz-modal-checkbox input{
+      margin-top:2px;
+      accent-color:var(--brand);
+    }
+    .matriz-modal-footer{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      padding:12px 20px 20px;
+      border-top:1px solid var(--border);
+    }
     @media (max-width: 1040px){
       .matriz-transfer-layout{
         --matriz-transfer-panel-height: auto;
@@ -296,6 +444,19 @@
       .matriz-transfer-card{
         min-height: 360px;
         height: auto;
+      }
+    }
+    @media (max-width: 640px){
+      .matriz-modal-group-card{
+        grid-template-columns:40px 1fr;
+        row-gap:2px;
+      }
+      .matriz-modal-footer{
+        flex-direction:column-reverse;
+      }
+      .matriz-modal-footer .btn{
+        width:100%;
+        justify-content:center;
       }
     }
   </style>
@@ -480,7 +641,19 @@
     <input type="hidden" name="active_tab" value="{{ active_tab }}">
     <div class="matriz-transfer-layout">
       <section class="matriz-transfer-card" aria-labelledby="transfer-available-heading">
-        <h2 class="matriz-transfer-title" id="transfer-available-heading">{{ transfer_meta.available_title }} (<span data-count-available>{{ transfer_available|length }}</span>)</h2>
+        <div class="matriz-transfer-head">
+          <h2 class="matriz-transfer-title" id="transfer-available-heading">{{ transfer_meta.available_title }} (<span data-count-available>{{ transfer_available|length }}</span>)</h2>
+          {% if not readonly and new_activity_modal %}
+            <button
+              class="btn matriz-new-activity-trigger"
+              type="button"
+              id="matriz-new-activity-trigger"
+              data-open-new-activity-modal
+              aria-haspopup="dialog"
+              aria-controls="matriz-new-activity-modal"
+            >+ Nova atividade</button>
+          {% endif %}
+        </div>
         <div class="matriz-transfer-filters">
           <div class="input-group">
             <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
@@ -559,13 +732,155 @@
       {% endfor %}
     </div>
 
-    <div class="form-actions">
+  <div class="form-actions">
       <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if readonly else 'Cancelar' }}</a>
       {% if not readonly %}
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       {% endif %}
     </div>
   </form>
+
+  {% if not readonly and new_activity_modal %}
+    <div
+      id="matriz-new-activity-modal"
+      class="matriz-modal-overlay"
+      data-open="{{ '1' if new_activity_modal.is_open else '0' }}"
+      hidden
+    >
+      <div class="matriz-modal-card" role="dialog" aria-modal="true" aria-labelledby="matriz-new-activity-modal-title">
+        <div class="matriz-modal-header">
+          <div>
+            <h3 class="matriz-modal-title" id="matriz-new-activity-modal-title">Nova atividade {{ new_activity_modal.axis }}</h3>
+            <p class="matriz-modal-subtitle">Crie a atividade no contexto da matriz e gere a versão inicial vinculada à norma.</p>
+          </div>
+          <button class="matriz-modal-close" type="button" data-close-new-activity-modal aria-label="Fechar modal">
+            <i class="lucide" data-lucide="x"></i>
+          </button>
+        </div>
+
+        <form
+          method="post"
+          id="matriz-new-activity-form"
+          class="matriz-modal-form"
+          action="{{ new_activity_modal.form_action }}"
+          autocomplete="off"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="matriz-modal-body">
+            {% if new_activity_modal.matrix_context_label %}
+              <div class="matriz-modal-field">
+                <span class="matriz-modal-label">Contexto da versão</span>
+                <div class="matriz-modal-chip">
+                  <i class="lucide" data-lucide="git-branch-plus"></i>
+                  <span>Versão nesta matriz: {{ new_activity_modal.matrix_context_label }}</span>
+                </div>
+              </div>
+            {% endif %}
+
+            <div class="matriz-modal-field">
+              <label class="matriz-modal-label" for="matriz-new-activity-name">Nome da atividade</label>
+              <div class="field-card">
+                <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+                <input
+                  class="control"
+                  id="matriz-new-activity-name"
+                  type="text"
+                  name="nome"
+                  value="{{ new_activity_modal.prefill.nome }}"
+                  placeholder="Ex.: Participação em oficina, projeto ou ação"
+                  required
+                >
+              </div>
+            </div>
+
+            {% if new_activity_modal.activity_type_label == 'Acadêmica Complementar' %}
+              <div class="matriz-modal-field">
+                <label class="matriz-modal-label" for="matriz-new-activity-group-number">Grupo (nº/descrição)</label>
+                <div class="field-card matriz-modal-group-card">
+                  <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+                  <input
+                    class="control"
+                    id="matriz-new-activity-group-number"
+                    type="text"
+                    name="grupo_numero"
+                    value="{{ new_activity_modal.prefill.grupo_numero }}"
+                    list="matriz-new-activity-group-numbers"
+                    inputmode="numeric"
+                    placeholder="Nº"
+                    required
+                  >
+                  <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+                  <input
+                    class="control"
+                    type="text"
+                    name="grupo_descricao"
+                    value="{{ new_activity_modal.prefill.grupo_descricao }}"
+                    placeholder="Descrição do grupo"
+                  >
+                </div>
+                <p class="matriz-modal-note">O grupo é aplicado tanto na atividade legada quanto na versão inicial AAC.</p>
+                <datalist id="matriz-new-activity-group-numbers">
+                  {% for suggestion in new_activity_modal.group_suggestions %}
+                    <option value="{{ suggestion.numero }}">{{ suggestion.descricao }}</option>
+                  {% endfor %}
+                </datalist>
+              </div>
+            {% else %}
+              <div class="matriz-modal-field">
+                <span class="matriz-modal-label">Grupo</span>
+                <div class="matriz-modal-chip">
+                  <i class="lucide" data-lucide="tag"></i>
+                  <span>NA</span>
+                </div>
+              </div>
+            {% endif %}
+
+            <div class="matriz-modal-field">
+              <span class="matriz-modal-label">Norma/regulamento base</span>
+              {% if not new_activity_modal.has_normas %}
+                <p class="matriz-modal-warning">Esta matriz não possui norma ativa {{ new_activity_modal.axis }} vinculada. O cadastro fica bloqueado até existir uma norma compatível.</p>
+              {% elif new_activity_modal.requires_norma_selection %}
+                <div class="field-card">
+                  <div class="field-chip"><i class="lucide" data-lucide="scroll-text"></i></div>
+                  <select class="control" name="norma_id" required>
+                    <option value="">Selecione a norma</option>
+                    {% for norma in new_activity_modal.normas %}
+                      <option value="{{ norma.id }}" {% if new_activity_modal.prefill.norma_id == (norma.id|string) %}selected{% endif %}>
+                        {{ norma.codigo }}{% if norma.nome %} • {{ norma.nome }}{% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <p class="matriz-modal-note">Há mais de uma norma ativa compatível neste eixo; a seleção explícita é obrigatória.</p>
+              {% else %}
+                <div class="matriz-modal-chip">
+                  <i class="lucide" data-lucide="scroll-text"></i>
+                  <span>
+                    {{ new_activity_modal.single_norma.codigo }}
+                    {% if new_activity_modal.single_norma.nome %} • {{ new_activity_modal.single_norma.nome }}{% endif %}
+                  </span>
+                </div>
+                <input type="hidden" name="norma_id" value="{{ new_activity_modal.single_norma.id }}">
+              {% endif %}
+            </div>
+
+            <label class="matriz-modal-checkbox">
+              <input type="checkbox" name="add_to_matrix" value="1" {% if new_activity_modal.prefill.add_to_matrix %}checked{% endif %}>
+              <span>Adicionar à matriz atual</span>
+            </label>
+          </div>
+
+          <div class="matriz-modal-footer">
+            <button class="btn" type="button" data-close-new-activity-modal>Cancelar</button>
+            <button class="btn primary" type="submit" {% if new_activity_modal.submit_disabled %}disabled{% endif %}>
+              <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Criar atividade</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
 </section>
 {% endif %}
 {% endblock %}
@@ -697,6 +1012,40 @@
     applyAvailableFilters();
     applySelectedFilters();
     refreshCounts();
+  })();
+</script>
+<script>
+  (function(){
+    const modal = document.getElementById('matriz-new-activity-modal');
+    if (!modal) return;
+
+    const openButton = document.querySelector('[data-open-new-activity-modal]');
+    const closeButtons = modal.querySelectorAll('[data-close-new-activity-modal]');
+    const firstInput = modal.querySelector('input[name="nome"]');
+
+    function openModal(){
+      modal.hidden = false;
+      window.requestAnimationFrame(() => {
+        firstInput?.focus();
+      });
+    }
+
+    function closeModal(){
+      modal.hidden = true;
+    }
+
+    openButton?.addEventListener('click', openModal);
+    closeButtons.forEach((button) => {
+      button.addEventListener('click', closeModal);
+    });
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.hidden) closeModal();
+    });
+
+    if (modal.dataset.open === '1') openModal();
   })();
 </script>
 {% endif %}
