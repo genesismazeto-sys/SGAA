@@ -9857,7 +9857,11 @@ def admin_atividades():
     order_sql = sort_map.get(sort_field)
     if not order_sql:
         order_sql = " ORDER BY tipo_atividade, grupo, nome" if (not where) else " ORDER BY grupo, nome"
-    query = "SELECT *" + base_from + where_sql + order_sql
+    query = (
+        "SELECT *, (SELECT atividade_base_id FROM atividade_legacy_map"
+        " WHERE atividade_id_legacy = id) AS base_id"
+        + base_from + where_sql + order_sql
+    )
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
     total = conn.execute(count_sql, params).fetchone()[0]
     apply_limit = wants_pagination()
