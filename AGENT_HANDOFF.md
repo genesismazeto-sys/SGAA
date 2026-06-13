@@ -1,8 +1,8 @@
 # Agent Handoff
 
-Last updated: 2026-06-12
-Closeout: D7.4G branch archive and D7.4 trail closeout
-Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Last updated: 2026-06-13
+Closeout: D7.5C matrix activity creation commit closeout
+Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -23,12 +23,30 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
   - `recovery/d7-activity-versioning` remote branch deleted;
   - local branch `recovery/d7-activity-versioning` preserved at `b5aafa7` (`[gone]`);
   - no apply, SQL, activation, matrix link, merge, rebase, or code change executed.
+- D7.5C accepted after implementation, focused tests, and user visual validation.
+- D7.5C functional commit created:
+  - `bc8a4f6` - `Add matrix-scoped activity creation`;
+  - files: `main.py`, `templates/admin_matriz_form.html`,
+    `tests/test_admin_matrix_new_activity.py`.
+- D7.5C delivered:
+  - generic `+ Nova atividade` button in the left header of the matrix screen;
+  - same flow for `Lista de AAC` and `Lista de AEU`;
+  - modal/form opened from the matrix screen;
+  - initial `atividade_versao` created transactionally;
+  - `matriz_atividade_versao_item` created when `Adicionar à matriz atual` is checked;
+  - matrix name used only as contextual UI label, never in `codigo_normativo`.
+- D7.5C preserved:
+  - no schema/migration;
+  - no `database.db` change in the feature closeout;
+  - no D7.5D menu/card behavior yet.
 - Current branch: `main`.
+- D7.5C functional state is recorded by commit `bc8a4f6` on `main`.
 - `main` / `origin/main` at
   `6a9bf2d9146c8a0011ddc3376c7fb842eebf7da6` — Update CSRF inventory artifacts after D7 merge.
 - `origin/main...main = 0 0`.
 - Working tree clean.
 - D7 fully integrated into `main`. D7.4 trail is closeable.
+- D7.4 remains closed and the next feature phase is D7.5D, not a D7.3/D7.4 reopen.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state:
@@ -487,6 +505,46 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
   D7 activity versioning trail endpoint.
 - No further work is required on the D7.4 trail.
 
+## D7.5C-COMMIT-CLOSEOUT - Matrix-Scoped Activity Creation
+
+- Execution mode:
+  - focused feature closeout only;
+  - no new functionality beyond D7.5C;
+  - no D7.5D implementation;
+  - no push.
+- Functional commit:
+  - `bc8a4f6` - `Add matrix-scoped activity creation`.
+- Delivered behavior:
+  - generic `+ Nova atividade` button in the left-column header of the matrix
+    edit screen;
+  - identical flow in `Lista de AAC` and `Lista de AEU`;
+  - modal/form opened from the matrix screen;
+  - creation of legacy activity + `atividade_base` + `atividade_legacy_map`;
+  - initial `atividade_versao` created in the same transaction;
+  - `matriz_atividade_versao_item` created when `Adicionar à matriz atual` is checked.
+- Contract preserved:
+  - server infers the axis from the matrix tab/route;
+  - matrix name is only a contextual UI label;
+  - matrix name is not written into `codigo_normativo`;
+  - `codigo_normativo` remains the norm/regulation code;
+  - multiple compatible active norms require explicit choice;
+  - there is no fallback to the first active norm;
+  - rollback is total on intermediate failure;
+  - POST is CSRF-protected;
+  - no schema/migration;
+  - no D7.5D card menu/version cloning yet.
+- Validation:
+  - user visually validated the live screen after implementation;
+  - focused pytest rerun passed:
+    - `python -m pytest tests/test_admin_matrizes.py tests/test_admin_matrizes_csrf_ui.py tests/test_admin_matriz_versao_link.py tests/test_admin_matrix_new_activity.py -q --tb=short`
+    - result: `28 passed`.
+- Files touched in the functional commit:
+  - `main.py`
+  - `templates/admin_matriz_form.html`
+  - `tests/test_admin_matrix_new_activity.py`
+- Next phase authorized after this closeout:
+  - `D7.5D-PATCH-CARD-VERSION-MENU`.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -499,7 +557,8 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
 - `aedf936` - Record D7.3I apply copy validation
 - `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
 - `b5aafa7` - Record D7.3K matrix link decision
-- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (current main HEAD)
+- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (pre-D7.5C main baseline)
+- `bc8a4f6` - Add matrix-scoped activity creation
 
 ## Risks To Keep In View
 
@@ -524,19 +583,18 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
 
 ## Recommended Next Step
 
-- D7 is fully integrated into `main`. The D7.4 trail is closed.
-- The permanent archival reference is tag `archive/d7-activity-versioning` at
-  `b5aafa7605bab4f8ef4b61885ec5200627ea2f0b`.
-- No active feature branch for D7 exists on the remote.
-- Any new phase starts from `main`, not from the archived recovery branch.
-- No additional live apply, no activation, and no matrix link are authorized now.
-- Only reopen the D7.3 area if a real operational need appears for base `37`, in a
-  separate phase focused on legitimate legacy mapping, controlled activation,
-  explicit matrix link, and resolver validation.
+- `D7.5D-PATCH-CARD-VERSION-MENU`.
+- Implement the card menu for version branching from the matrix screen.
+- Clone a new `atividade_versao` from the selected card flow instead of updating
+  an in-use version in place.
+- Relink only the current matrix to the new version.
+- Preserve older matrices and never mutate in place a version already used by
+  historical matrix links or requests.
 
 ## Instructions For The Next Agent
 
 - Read `PROJECT_STATE.md` and `AGENT_HANDOFF.md` before any action.
+- Start from `main`; D7.5C functional state is commit `bc8a4f6`.
 - Treat `atividade_id` as the operational source of truth.
 - `database.db` is already in the post-D7.3J state; do not assume pre-apply live.
 - There is no active feature branch for D7 on the remote. Any new work must start
@@ -552,6 +610,13 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
 - `VISITAS_TECNICAS_PROFESSORES` must not be forced into `base7` either.
 - The only admitted live write path in D7.3 was the now-completed `CREATE_DRAFT` for `VISITAS_TECNICAS_PROFESSORES`.
 - Versions `61/62` already exist in `rascunho` and remain unlinked to matrix.
+- D7.5C is complete and visually validated; do not reopen it unless a concrete
+  regression is found.
+- D7.5D is the next authorized feature scope:
+  - add the card menu;
+  - create a new version from the card flow;
+  - relink only the current matrix;
+  - do not update a version in place when it is already used by older matrices.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
 - No next agent should activate, matrix-link, remap legacy scope, or perform any additional live apply without a new explicit authorization phase and real operational need.

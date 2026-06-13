@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-12
-Closeout: D7.4G branch archive and D7.4 trail closeout
-Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Last updated: 2026-06-13
+Closeout: D7.5C matrix activity creation commit closeout
+Executor: Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1104,6 +1104,53 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
   - D7.3K decided not to expose, activate, or link them;
   - the D7.3 trail is closable with no further action now.
 
+### D7.5C - matrix-scoped activity creation from the matrix screen
+- Implemented, visually validated by the user, and committed.
+- Functional commit `bc8a4f6` - `Add matrix-scoped activity creation`.
+- Scope delivered:
+  - generic button `+ Nova atividade` in the left-column header of the matrix
+    edit screen;
+  - same behavior in tabs `Lista de AAC` and `Lista de AEU`;
+  - modal/form opened from the matrix screen;
+  - server-scoped POST route for matrix activity creation;
+  - initial `atividade_versao` created together with the new activity.
+- Backend guarantees:
+  - server infers context by tab/route: `aac -> AAC`, `aea -> AEU`;
+  - matrix must exist;
+  - compatible active norm is required for the current axis;
+  - if multiple compatible active norms exist, explicit `norma_id` is required;
+  - no fallback to the first active norm;
+  - full rollback on intermediate failure;
+  - CSRF-protected POST.
+- Persistence guarantees:
+  - creates legacy `atividades` row;
+  - creates `atividade_base`;
+  - creates `atividade_legacy_map`;
+  - creates initial `atividade_versao` with `status='ativa'`;
+  - when `Adicionar à matriz atual` is checked, also creates:
+    - `matrizes_atividades_itens`;
+    - `matriz_atividade_versao_item`.
+- Contract preserved:
+  - matrix remains the practical flow for scoped creation;
+  - matrix name is used only as contextual UI label;
+  - matrix name is not written into `codigo_normativo`;
+  - `codigo_normativo` remains the norm/regulation code;
+  - no schema or migration change;
+  - no `database.db` edit in this closeout;
+  - no D7.5D menu/card behavior was implemented.
+- Focused validation:
+  - `python -m pytest tests/test_admin_matrizes.py tests/test_admin_matrizes_csrf_ui.py tests/test_admin_matriz_versao_link.py tests/test_admin_matrix_new_activity.py -q --tb=short`
+  - result: `28 passed`.
+- New focused test file:
+  - `tests/test_admin_matrix_new_activity.py`.
+- Next authorized phase:
+  - `D7.5D-PATCH-CARD-VERSION-MENU`.
+- D7.5D remains pending and must preserve:
+  - menu on the card;
+  - new version cloned from the card flow;
+  - relink only the current matrix;
+  - no in-place `UPDATE` of a version already used by older matrices.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -1135,7 +1182,8 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
 - `aedf936` - Record D7.3I apply copy validation
 - `b8ad2ae` - Record D7.3J live draft creation and stabilize tests
 - `b5aafa7` - Record D7.3K matrix link decision
-- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (current main HEAD)
+- `6a9bf2d` - Update CSRF inventory artifacts after D7 merge (pre-D7.5C main baseline)
+- `bc8a4f6` - Add matrix-scoped activity creation
 
 ## Current Risks And Limits
 
@@ -1240,3 +1288,8 @@ Executor: Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execut
 - Sensitive data, real databases, production actions, security work, backfill or cutover, and critical decisions must not be delegated to a low-cost agent without final audit.
 - Every phase must leave a report, evidence, tests or justification, risks, and a clear next step.
 - `PROJECT_STATE.md` and `AGENT_HANDOFF.md` must be updated after an important phase closeout, agent or chat handoff, structural change, or relevant risk change.
+- Next recommended phase after this closeout:
+  - `D7.5D-PATCH-CARD-VERSION-MENU`;
+  - clone a new `atividade_versao` from the card flow;
+  - relink only the current matrix;
+  - never mutate in place a version already used by older matrices.
