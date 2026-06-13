@@ -431,6 +431,28 @@
       padding:12px 20px 20px;
       border-top:1px solid var(--border);
     }
+    .card-version-menu-btn{
+      flex-shrink:0;
+      margin-left:auto;
+      width:24px;
+      height:24px;
+      align-self:center;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border:1px solid transparent;
+      border-radius:var(--radius);
+      background:transparent;
+      color:var(--text-secondary);
+      font-size:16px;
+      line-height:1;
+      cursor:pointer;
+      padding:0;
+    }
+    .card-version-menu-btn:hover{
+      background:var(--border-strong);
+      color:var(--text-primary);
+    }
     @media (max-width: 1040px){
       .matriz-transfer-layout{
         --matriz-transfer-panel-height: auto;
@@ -718,6 +740,9 @@
                   <span class="matriz-transfer-item-title">{{ item.nome }}</span>
                   <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
                 </span>
+                {% if not readonly and card_version_menu_data is defined and item.id|string in card_version_menu_data %}
+                  <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Ações da versão" title="Criar nova versão">&#x22EE;</button>
+                {% endif %}
               </label>
             {% endfor %}
           </div>
@@ -875,6 +900,77 @@
             <button class="btn" type="button" data-close-new-activity-modal>Cancelar</button>
             <button class="btn primary" type="submit" {% if new_activity_modal.submit_disabled %}disabled{% endif %}>
               <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Criar atividade</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not readonly and card_version_menu_data is defined and card_version_menu_data %}
+    <div
+      id="matriz-version-modal"
+      class="matriz-modal-overlay"
+      hidden
+    >
+      <div class="matriz-modal-card" role="dialog" aria-modal="true" aria-labelledby="matriz-version-modal-title">
+        <div class="matriz-modal-header">
+          <div>
+            <h3 class="matriz-modal-title" id="matriz-version-modal-title">Criar nova versão</h3>
+            <p class="matriz-modal-subtitle">Selecione a norma/regulamento para a nova versão desta atividade nesta matriz.</p>
+          </div>
+          <button class="matriz-modal-close" type="button" data-close-version-modal aria-label="Fechar">
+            <i class="lucide" data-lucide="x"></i>
+          </button>
+        </div>
+        <form
+          id="matriz-version-form"
+          method="post"
+          class="matriz-modal-form"
+          action=""
+          autocomplete="off"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="active_tab" value="{{ active_tab }}">
+          <div class="matriz-modal-body">
+            <div class="matriz-modal-field">
+              <span class="matriz-modal-label">Atividade</span>
+              <div class="matriz-modal-chip">
+                <i class="lucide" data-lucide="clipboard-list"></i>
+                <span id="version-modal-activity-name">—</span>
+              </div>
+            </div>
+            <div class="matriz-modal-field">
+              <span class="matriz-modal-label">Versão atual vinculada (código normativo)</span>
+              <div class="matriz-modal-chip">
+                <i class="lucide" data-lucide="tag"></i>
+                <span id="version-modal-current-version">—</span>
+              </div>
+            </div>
+            <div class="matriz-modal-field">
+              <span class="matriz-modal-label">Contexto</span>
+              <div class="matriz-modal-chip">
+                <i class="lucide" data-lucide="git-branch-plus"></i>
+                <span>Versão nesta matriz: {{ matriz.nome }}</span>
+              </div>
+            </div>
+            <div class="matriz-modal-field" id="version-modal-norma-field">
+              <label class="matriz-modal-label" for="version-modal-norma-select">Norma/regulamento para nova versão</label>
+              <div class="field-card">
+                <div class="field-chip"><i class="lucide" data-lucide="scroll-text"></i></div>
+                <select class="control" id="version-modal-norma-select" name="norma_id" required>
+                  <option value="">Selecione a norma</option>
+                </select>
+              </div>
+            </div>
+            <div id="version-modal-no-norma" class="flash flash-warning" role="alert" hidden>
+              A matriz não possui outra norma compatível com o eixo desta atividade.
+            </div>
+          </div>
+          <div class="matriz-modal-footer">
+            <button class="btn" type="button" data-close-version-modal>Cancelar</button>
+            <button class="btn primary" type="submit" id="version-modal-submit">
+              <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Criar versão e usar nesta matriz</span>
             </button>
           </div>
         </form>
@@ -1048,5 +1144,75 @@
     if (modal.dataset.open === '1') openModal();
   })();
 </script>
+{% if not readonly and card_version_menu_data %}
+<script>
+  (function(){
+    const versionModal = document.getElementById('matriz-version-modal');
+    if (!versionModal) return;
+
+    const versionMenuData = {{ card_version_menu_data | tojson }};
+    const form = document.getElementById('matriz-version-form');
+    const activityNameEl = document.getElementById('version-modal-activity-name');
+    const currentVersionEl = document.getElementById('version-modal-current-version');
+    const normaSelect = document.getElementById('version-modal-norma-select');
+    const noNormaEl = document.getElementById('version-modal-no-norma');
+    const normaField = document.getElementById('version-modal-norma-field');
+    const submitBtn = document.getElementById('version-modal-submit');
+
+    function openVersionModal(activityId) {
+      const data = versionMenuData[String(activityId)];
+      if (!data) return;
+
+      const card = document.querySelector('[data-activity-id="' + activityId + '"]');
+      const titleEl = card ? card.querySelector('.matriz-transfer-item-title') : null;
+      activityNameEl.textContent = titleEl ? titleEl.textContent.trim() : '—';
+      currentVersionEl.textContent = data.norma_codigo || '—';
+      form.action = data.form_action;
+
+      normaSelect.innerHTML = '<option value="">Selecione a norma</option>';
+      if (data.normas && data.normas.length > 0) {
+        data.normas.forEach(function(n) {
+          const opt = document.createElement('option');
+          opt.value = n.id;
+          opt.textContent = n.codigo + (n.nome ? ' • ' + n.nome : '');
+          normaSelect.appendChild(opt);
+        });
+        normaField.hidden = false;
+        noNormaEl.hidden = true;
+        submitBtn.disabled = false;
+      } else {
+        normaField.hidden = true;
+        noNormaEl.hidden = false;
+        submitBtn.disabled = true;
+      }
+
+      versionModal.hidden = false;
+      window.requestAnimationFrame(function(){ normaSelect.focus(); });
+    }
+
+    function closeVersionModal() {
+      versionModal.hidden = true;
+    }
+
+    document.querySelectorAll('[data-open-version-modal]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openVersionModal(btn.dataset.openVersionModal);
+      });
+    });
+
+    versionModal.querySelectorAll('[data-close-version-modal]').forEach(function(btn) {
+      btn.addEventListener('click', closeVersionModal);
+    });
+    versionModal.addEventListener('click', function(e) {
+      if (e.target === versionModal) closeVersionModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !versionModal.hidden) closeVersionModal();
+    });
+  })();
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}
