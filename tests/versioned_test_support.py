@@ -221,6 +221,14 @@ def seed_reference_versioned_dataset(conn) -> None:
     matrix10_version_ids = []
     matrix11_version_ids = []
 
+    # Tracks next numero_versao per base_id so explicit seeds match migration output.
+    _nv: dict[int, int] = {}
+
+    def _nv_next(b: int) -> int:
+        n = _nv.get(b, 0) + 1
+        _nv[b] = n
+        return n
+
     matrix10_base_ids = [2, 1] + list(range(3, 29))
     for version_id, base_id in zip(range(1, 29), matrix10_base_ids):
         limit_semestre, limite_total = _matrix10_limits(version_id)
@@ -239,6 +247,7 @@ def seed_reference_versioned_dataset(conn) -> None:
                 observacao_aluno,
                 observacao_admin,
                 None,
+                _nv_next(base_id),
                 "ativa",
             )
         )
@@ -261,6 +270,7 @@ def seed_reference_versioned_dataset(conn) -> None:
                 observacao_aluno,
                 observacao_admin,
                 None,
+                _nv_next(base_id),
                 "ativa",
             )
         )
@@ -283,6 +293,7 @@ def seed_reference_versioned_dataset(conn) -> None:
                 observacao_aluno,
                 observacao_admin,
                 None,
+                _nv_next(base_id),
                 "ativa",
             )
         )
@@ -293,8 +304,8 @@ def seed_reference_versioned_dataset(conn) -> None:
         INSERT INTO atividade_versao (
             id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
             ch_por_evento, limite_semestre, limite_total, observacao_aluno,
-            observacao_admin, documentos_json, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            observacao_admin, documentos_json, numero_versao, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         version_rows,
     )

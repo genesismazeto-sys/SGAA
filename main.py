@@ -1884,11 +1884,79 @@ def ensure_matriz_atividade_links_table(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_itens_atividade ON matrizes_atividades_itens(atividade_id)")
 
 
+def _needs_atividade_versao_migration(conn) -> bool:
+    """True if atividade_versao exists but still carries the old UNIQUE(base, norma) constraint."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='atividade_versao'"
+    ).fetchone()
+    if not row:
+        return False
+    schema_sql = row["sql"] or ""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(atividade_versao)").fetchall()}
+    return "numero_versao" not in cols or "UNIQUE(atividade_base_id, norma_id)" in schema_sql
+
+
+def _migrate_atividade_versao_to_numero_versao(conn) -> None:
+    """Recreates atividade_versao with numero_versao assigned via ROW_NUMBER() per base."""
+    conn.executescript("""
+        PRAGMA foreign_keys = OFF;
+        BEGIN;
+        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_insert;
+        DROP TRIGGER IF EXISTS trg_atividade_transicao_aac_para_aeu_update;
+        CREATE TABLE atividade_versao_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            atividade_base_id INTEGER NOT NULL,
+            norma_id INTEGER NOT NULL,
+            codigo_normativo TEXT NOT NULL,
+            eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
+            grupo TEXT,
+            ch_por_evento REAL,
+            limite_semestre REAL,
+            limite_total REAL,
+            observacao_aluno TEXT,
+            observacao_admin TEXT,
+            documentos_json TEXT,
+            vigencia_inicio TEXT,
+            vigencia_fim TEXT,
+            numero_versao INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
+            versao_anterior_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
+            FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
+            FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao_new(id) ON DELETE RESTRICT
+        );
+        INSERT INTO atividade_versao_new (
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
+            documentos_json, vigencia_inicio, vigencia_fim,
+            numero_versao, status, versao_anterior_id, created_at
+        )
+        SELECT
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno, observacao_admin,
+            documentos_json, vigencia_inicio, vigencia_fim,
+            CAST(ROW_NUMBER() OVER (PARTITION BY atividade_base_id ORDER BY id ASC) AS INTEGER),
+            status, versao_anterior_id, created_at
+        FROM atividade_versao;
+        DROP TABLE atividade_versao;
+        ALTER TABLE atividade_versao_new RENAME TO atividade_versao;
+        DELETE FROM sqlite_sequence WHERE name = 'atividade_versao';
+        INSERT INTO sqlite_sequence (name, seq)
+            VALUES ('atividade_versao', (SELECT COALESCE(MAX(id), 0) FROM atividade_versao));
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+    """)
+
+
 def ensure_atividade_versioning_schema(conn) -> None:
     """Garante schema aditivo para versionamento normativo de atividades.
 
     Importante: não altera fluxo operacional legado nesta fase.
     """
+    if _needs_atividade_versao_migration(conn):
+        _migrate_atividade_versao_to_numero_versao(conn)
+
     ensure_matriz_atividade_links_table(conn)
 
     conn.execute(
@@ -1935,13 +2003,13 @@ def ensure_atividade_versioning_schema(conn) -> None:
             documentos_json TEXT,
             vigencia_inicio TEXT,
             vigencia_fim TEXT,
+            numero_versao INTEGER NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
             versao_anterior_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
             FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
-            FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-            UNIQUE(atividade_base_id, norma_id)
+            FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT
         )
         """
     )
@@ -2133,6 +2201,11 @@ def ensure_atividade_versioning_schema(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_norma_atividade_eixo ON norma_atividade(eixo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_base ON atividade_versao(atividade_base_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_norma ON atividade_versao(norma_id)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_atividade_versao_base_num"
+        " ON atividade_versao(atividade_base_id, numero_versao)"
+        " WHERE numero_versao > 0"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_eixo ON atividade_versao(eixo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_status ON atividade_versao(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_transicao_from ON atividade_transicao(from_atividade_versao_id)")
@@ -2308,6 +2381,7 @@ def get_versoes_por_base(conn, base_id: int) -> list:
             av.observacao_admin,
             av.vigencia_inicio,
             av.vigencia_fim,
+            av.numero_versao,
             av.status,
             av.versao_anterior_id,
             av.created_at,
@@ -2321,16 +2395,7 @@ def get_versoes_por_base(conn, base_id: int) -> list:
           LEFT JOIN matriz_atividade_versao_item mavi ON mavi.atividade_versao_id = av.id
          WHERE av.atividade_base_id = ?
          GROUP BY av.id
-         ORDER BY
-            CASE av.status
-                WHEN 'ativa'          THEN 0
-                WHEN 'rascunho'       THEN 1
-                WHEN 'inativa'        THEN 2
-                WHEN 'substituida'    THEN 3
-                WHEN 'descontinuada'  THEN 4
-                ELSE 5
-            END ASC,
-            av.created_at DESC
+         ORDER BY av.numero_versao DESC
         """,
         (base_id,),
     ).fetchall()
@@ -2387,6 +2452,31 @@ def get_versoes_da_base_por_eixo(conn, base_id: int, eixo: str) -> list:
         """,
         (base_id, eixo),
     ).fetchall()
+
+
+def get_next_numero_versao(conn, base_id: int) -> int:
+    """Retorna o próximo numero_versao para uma atividade_base (MAX positivo + 1)."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(numero_versao), 0) + 1 AS next_num"
+        " FROM atividade_versao"
+        " WHERE atividade_base_id = ? AND numero_versao > 0",
+        (base_id,),
+    ).fetchone()
+    return row["next_num"] if row else 1
+
+
+def get_ultima_versao_ativa_por_base(conn, base_id: int):
+    """Retorna a versão ativa de maior numero_versao para uma atividade_base, ou None."""
+    return conn.execute(
+        """
+        SELECT *
+          FROM atividade_versao
+         WHERE atividade_base_id = ? AND status = 'ativa'
+         ORDER BY numero_versao DESC
+         LIMIT 1
+        """,
+        (base_id,),
+    ).fetchone()
 
 
 def get_atividade_versao_by_id(conn, versao_id: int):
@@ -12628,6 +12718,7 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
                 (matriz_id, atividade_id),
             )
 
+        next_num = get_next_numero_versao(conn, base_id)
         versao_cursor = conn.execute(
             """
             INSERT INTO atividade_versao (
@@ -12636,8 +12727,9 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
                 codigo_normativo,
                 eixo,
                 grupo,
+                numero_versao,
                 status
-            ) VALUES (?, ?, ?, ?, ?, 'ativa')
+            ) VALUES (?, ?, ?, ?, ?, ?, 'ativa')
             """,
             (
                 base_id,
@@ -12645,6 +12737,7 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
                 norma["codigo"],
                 norma["eixo"],
                 grupo,
+                next_num,
             ),
         )
         versao_id = versao_cursor.lastrowid
@@ -12665,8 +12758,8 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
             return _render_modal_error("Já existe atividade-base com este nome.")
         if "unique constraint failed: atividade_legacy_map.atividade_id_legacy" in error_message:
             return _render_modal_error("Falha ao mapear a atividade criada para a atividade-base.")
-        if "unique constraint failed: atividade_versao.atividade_base_id, atividade_versao.norma_id" in error_message:
-            return _render_modal_error("Já existe uma versão desta atividade para a norma selecionada.")
+        if "unique constraint failed: atividade_versao.atividade_base_id, atividade_versao.numero_versao" in error_message:
+            return _render_modal_error("Conflito ao atribuir número de versão. Tente novamente.")
         return _render_modal_error(f"Erro de integridade ao criar atividade: {exc}")
     except Exception as exc:
         conn.rollback()
@@ -12772,7 +12865,8 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
 
     try:
         existing = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
+            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?"
+            " ORDER BY numero_versao DESC LIMIT 1",
             (base_id, norma_id),
         ).fetchone()
 
@@ -12780,6 +12874,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
             target_versao_id = existing["id"]
             created_new = False
         else:
+            next_num = get_next_numero_versao(conn, base_id)
             versao_cursor = conn.execute(
                 """
                 INSERT INTO atividade_versao (
@@ -12794,9 +12889,10 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
                     observacao_aluno,
                     observacao_admin,
                     documentos_json,
+                    numero_versao,
                     status,
                     versao_anterior_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)
                 """,
                 (
                     base_id,
@@ -12810,6 +12906,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
                     current_versao["observacao_aluno"],
                     current_versao["observacao_admin"],
                     current_versao["documentos_json"],
+                    next_num,
                     current_versao_id,
                 ),
             )
@@ -12828,7 +12925,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         conn.rollback()
         error_msg = str(exc).lower()
         if "unique" in error_msg:
-            flash("Já existe uma versão desta atividade para a norma selecionada.", "info")
+            flash("Conflito ao criar nova versão. Tente novamente.", "info")
         else:
             flash(f"Erro de integridade ao criar versão: {exc}", "error")
     except Exception as exc:
@@ -13399,29 +13496,22 @@ def admin_catalogo_nova_versao(base_id: int):
             if prev["eixo"] != eixo:
                 return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
 
-        # duplicidade
-        existing = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
-            (base_id, norma_id),
-        ).fetchone()
-        if existing:
-            return _render_form("Já existe uma versão para esta atividade-base vinculada a esta norma.")
-
         try:
+            next_num = get_next_numero_versao(conn, base_id)
             conn.execute(
                 """
                 INSERT INTO atividade_versao (
                     atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
                     ch_por_evento, limite_semestre, limite_total,
                     observacao_aluno, observacao_admin,
-                    vigencia_inicio, vigencia_fim, status, versao_anterior_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
+                    vigencia_inicio, vigencia_fim, numero_versao, status, versao_anterior_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
                 """,
                 (
                     base_id, norma_id, codigo_normativo, eixo, grupo or None,
                     ch_por_evento, limite_semestre, limite_total,
                     observacao_aluno or None, observacao_admin or None,
-                    vigencia_inicio or None, vigencia_fim or None, versao_anterior_id,
+                    vigencia_inicio or None, vigencia_fim or None, next_num, versao_anterior_id,
                 ),
             )
             conn.commit()
@@ -13592,14 +13682,6 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
                 return _render_form("Versão anterior deve pertencer à mesma atividade-base.")
             if prev["eixo"] != eixo:
                 return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
-
-        # duplicidade (ignorando a própria versão sendo editada)
-        existing = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ? AND id <> ?",
-            (base_id, norma_id, versao_id),
-        ).fetchone()
-        if existing:
-            return _render_form("Já existe uma versão para esta atividade-base vinculada a esta norma.")
 
         try:
             conn.execute(
