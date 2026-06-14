@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-13
-Closeout: D7.6D matrix version selection
-Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D7.6E latest active version default
+Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -86,8 +86,16 @@ Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.
   - POST valida `versao_id` pertencente à mesma `atividade_base`; rejeita cross-base e inexistentes.
   - `templates/admin_atividades.html` não alterado. Schema e `database.db` intocados.
   - Testes: `tests/test_admin_matriz_escolher_versao.py` 10/10; `tests/test_admin_matriz_nova_versao_card.py` 13/13; regressões 64/64.
-- Current branch: `main`. HEAD: `2f81179`.
-- `main` is 11 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- D7.6E is complete: novo vínculo matriz→atividade_base usa automaticamente a última versão ativa.
+  - Commit aceito: `e359047` — `Default matrix links to latest active activity versions`.
+  - `_ensure_default_versao_link` inserida em `_save_matriz_activity_links`: resolve `base_id` via `atividade_legacy_map`; verifica link existente; obtém última ativa via `get_ultima_versao_ativa_por_base`; cria link via `_set_versao_da_matriz_para_base`.
+  - Vínculo manual existente preservado: se `matriz_atividade_versao_item` já contém link para a base, nenhuma alteração.
+  - Caso sem versão ativa: nenhum link criado (documentado no T09).
+  - Matriz não cria `atividade_versao`: confirmado no T07.
+  - Admin → Atividades não alterado. Templates da matriz não alterados. Schema e `database.db` intocados.
+  - Testes: `tests/test_admin_matriz_latest_active_default.py` 9/9; regressões relacionadas 74/74.
+- Current branch: `main`. HEAD: `e359047`.
+- `main` is 13 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -744,6 +752,42 @@ Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.
 - Next phase authorized after this closeout:
   - `D7.6E` — garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão.
 
+## D7.6E-COMMIT-CLOSEOUT - Matrix Defaults to Latest Active Activity Version
+
+- Execution mode:
+  - focused feature closeout only;
+  - no new functionality beyond D7.6E;
+  - no push.
+- Functional commit:
+  - `e359047` — `Default matrix links to latest active activity versions`.
+- Delivered behavior:
+  - ao salvar lista de atividades da matriz (`_save_matriz_activity_links`), novo vínculo recebe automaticamente a última `atividade_versao` ativa da base;
+  - "última versão ativa" = `status='ativa'` com maior `numero_versao`;
+  - vínculo manual já existente em `matriz_atividade_versao_item` é preservado sem alteração;
+  - atividade sem entrada em `atividade_legacy_map`: nenhum link criado (no-op);
+  - base sem versão ativa: nenhum link criado (documentado e testado no T09).
+- Contract preserved:
+  - Admin → Atividades cria versão; Matriz escolhe versão existente;
+  - nenhum `INSERT INTO atividade_versao` no fluxo modificado;
+  - `templates/admin_atividades.html` não alterado;
+  - `templates/admin_matriz_form.html` não alterado nesta fase;
+  - schema e `database.db` não alterados;
+  - `codigo_normativo` não é badge ou identificador principal;
+  - push não realizado.
+- Validation:
+  - focused pytest (novo):
+    - `python -m pytest tests/test_admin_matriz_latest_active_default.py -q --tb=short`
+    - result: `9 passed`.
+  - regression suite (7 files):
+    - `python -m pytest tests/test_admin_matriz_escolher_versao.py tests/test_admin_matriz_nova_versao_card.py tests/test_atividade_versao_numero.py tests/test_admin_atividades_version_menu.py tests/test_matriz_versao_contract.py tests/test_admin_matriz_versao_link.py tests/test_admin_matrix_new_activity.py -q --tb=short`
+    - result: `74 passed`.
+- Files touched in the functional commit:
+  - `main.py` (M — +26 linhas: `_ensure_default_versao_link` + loop em `_save_matriz_activity_links`)
+  - `tests/test_admin_matriz_latest_active_default.py` (A — novo, 341 linhas, T01–T09)
+- Next recommended step:
+  - gate de revisão / fechamento consolidado D7.6 antes de push;
+  - não iniciar nova implementação sem autorização explícita.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -767,6 +811,7 @@ Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.
 - `62aed4b` - Add activity version menu to admin activities
 - `ed706c1` - Record D7.6C activity version menu closeout
 - `2f81179` - Make matrix choose operational activity versions
+- `e359047` - Default matrix links to latest active activity versions
 
 ## Risks To Keep In View
 
@@ -791,12 +836,14 @@ Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.
 
 ## Recommended Next Step
 
-- `D7.6E` — Garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão.
+- Gate de revisão / fechamento consolidado D7.6 antes de qualquer push.
+- D7.6E está completa: novo vínculo usa última versão ativa por padrão; vínculo manual preservado.
 - D7.6D está completa: card mostra `vN`, modal lista versões, POST relinka sem criar versão.
 - Contrato permanente estabelecido: Admin → Atividades cria versão; Matriz escolhe versão.
 - `codigo_normativo` é metadado secundário; não usar como badge ou identificador operacional.
+- Não reintroduzir criação de versão pela matriz.
 - Não alterar schema sem nova auditoria explícita.
-- Não fazer push.
+- Não fazer push sem gate final aprovado.
 
 ## Instructions For The Next Agent
 
@@ -841,15 +888,21 @@ Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.
   - POST valida `versao_id` pertencente à mesma `atividade_base`; rejeita cross-base e inexistentes.
   - `templates/admin_atividades.html` não alterado. Schema e `database.db` intocados.
   - `tests/test_admin_matriz_escolher_versao.py` (novo, 10 testes) e `tests/test_admin_matriz_nova_versao_card.py` (atualizado, 13 testes) aceitos.
-- Contrato permanente pós-D7.6D:
+- D7.6E is complete (commit `e359047`):
+  - Novo vínculo matriz→atividade_base usa automaticamente a última versão ativa.
+  - `_ensure_default_versao_link`: resolve `base_id`, verifica link existente, obtém última ativa, cria link via `_set_versao_da_matriz_para_base`.
+  - Vínculo manual existente preservado (no-op se link já existe para a base).
+  - Caso sem versão ativa: nenhum link criado.
+  - `main.py` (M) e `tests/test_admin_matriz_latest_active_default.py` (A, 9 testes) aceitos.
+  - Regressões 74/74 passed.
+- Contrato permanente pós-D7.6:
   - Admin → Atividades cria versão; Matriz escolhe versão existente.
+  - Novo vínculo usa última versão ativa por padrão; escolha manual é respeitada.
   - Card da matriz mostra `vN`; `codigo_normativo` é metadado secundário.
   - Não reintroduzir criação de versão pela matriz como fluxo principal.
   - Não usar `AAC-rev5`/`AAC-rev6` como badge principal.
-- D7.6E is the next authorized feature scope:
-  - garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão;
-  - do not alter schema without a new explicit audit;
-  - do not implement D7.6E alongside any other major feature.
+  - Não alterar schema sem nova auditoria.
+  - Não fazer push sem gate final.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
 - No next agent should activate, matrix-link, remap legacy scope, or perform any additional live apply without a new explicit authorization phase and real operational need.
