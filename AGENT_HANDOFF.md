@@ -117,8 +117,8 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - Testes aceitos: focados A 52/52; focados B 38/38; suíte lotes (batchSize=20) 522/0.
   - Artifacts CSRF restaurados antes do commit.
   - `database.db` não alterado.
-- Current branch: `main`. HEAD: `99f4659` — `Show operational version numbers in admin version UI`.
-- `main` is 4 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- Current branch: `main`. HEAD: `c30c8b7` — `Record D7.7C version visibility closeout`.
+- `main` is 2 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -982,7 +982,7 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 
 - D7.7C3 — verificação final pré-push e push, se explicitamente autorizado.
 - D7.7C1 aceita: commit `99f4659`, 522 passed, 0 failed.
-- origin/main...main: 0 4. Push não realizado. Push proibido sem ordem explícita.
+- origin/main...main: 0 2. Push não realizado. Push proibido sem ordem explícita.
 - Não reabrir D7.7B1 sem novo bug concreto.
 - Não reabrir D7.7C1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
