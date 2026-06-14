@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-14
-Closeout: D7.7C1 operational version numbers in admin version UI
-Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.7C4 post-push documentation sync
+Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1392,6 +1392,61 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - menu hover-only de Admin → Atividades permanece como possível polish futuro.
 - Próxima etapa recomendada: D7.7C3 — verificação final e push.
 
+### D7.7C3 - final verify and push
+
+- Approved.
+- Push D7.7C executed with sucesso.
+- Baseline publicado em origin/main:
+  - `5c6859b` — `Fix D7.7C handoff current state`.
+- Estado pós-push:
+  - `origin/main...main = 0 0`;
+  - HEAD local e remoto alinhados em `5c6859b`;
+  - working tree limpo;
+  - `git diff --check` limpo;
+  - `git ls-remote origin main` confirmou `5c6859b459dfc5b39192985b9ba6e7957dc67b72` em `refs/heads/main`.
+- Testes focados finais:
+  - Lote A (`test_admin_version_visibility_ui.py`, `test_admin_activity_version_catalog_readonly.py`, `test_admin_activity_version_catalog_version_form.py`, `test_admin_matriz_versao_link.py`): 62 passed.
+  - Lote B (`test_admin_matriz_escolher_versao.py`, `test_admin_matriz_latest_active_default.py`): 28 passed.
+  - Total: 90 passed, 0 failed.
+- Push `a157502..5c6859b main -> main`:
+  - fast-forward limpo;
+  - sem force, sem amend, sem rebase.
+- Commits publicados no escopo D7.7C:
+  - `99f4659` — `Show operational version numbers in admin version UI` (D7.7C1 funcional);
+  - `c30c8b7` — `Record D7.7C version visibility closeout` (D7.7C2 docs);
+  - `5c6859b` — `Fix D7.7C handoff current state` (D7.7C2-R2 docs fix).
+- Nenhuma alteração de código, schema, template, tool ou `database.db` no push D7.7C3.
+- `database.db` permanece não versionado (`git ls-files database.db` vazio).
+- Riscos residuais:
+  - AGENT_HANDOFF.md permaneceu referenciando HEAD `c30c8b7` e `0 2` até este closeout docs-only;
+  - o HEAD real pós-push é `5c6859b`;
+  - este descompasso é resolvido por D7.7C4, não por outro commit de "fix handoff current HEAD".
+- Próxima etapa recomendada:
+  - D7.7C4 — pós-push documentation sync (docs-only, apenas `PROJECT_STATE.md` e `AGENT_HANDOFF.md`);
+  - ou encerrar D7.7 e abrir nova macrofase.
+
+### D7.7C4 - post-push documentation sync
+
+- Accepted.
+- Escopo: docs-only harmonização pós-push. Apenas `PROJECT_STATE.md` e `AGENT_HANDOFF.md` alterados.
+- Não houve alteração funcional, de schema, de `database.db`, de main.py, de templates, de tests ou de tools.
+- Baseline funcional publicado permanece `5c6859b`.
+- Commit docs-only:
+  - mensagem: `Record D7.7C post-push documentation sync`;
+  - novo HEAD documental criado após o push, sem reabrir nenhum escopo funcional.
+- Push docs-only:
+  - `5c6859b..<novo HEAD> main -> main`;
+  - fast-forward limpo, sem force.
+- Estado pós-push D7.7C4:
+  - `origin/main...main = 0 0`;
+  - `git ls-remote origin main` aponta para o novo HEAD criado por este docs-only;
+  - working tree limpo.
+- Nota explícita: o AGENT_HANDOFF.md registra `5c6859b` como baseline publicado e `0 0` como estado pós-push. Não criar novo commit de "fix handoff current HEAD" para perseguir o hash do próprio commit docs-only — o baseline funcional publicado permanece `5c6859b`.
+- Próxima decisão fica a cargo do arquiteto:
+  - encerrar D7.7;
+  - abrir D7.7D read-only audit de polish restante (UX template, menu hover-only, alerta de vínculo legado inválido);
+  - ou abrir nova macrofase.
+
 ### D7.6G2 - full suite remediation
 
 - D7.6G2 aprovada.
@@ -1464,6 +1519,8 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - `01aaa0f` - Fix D7.6G handoff current HEAD
 - `d53d9cd` - Harden matrix version selection validity
 - `99f4659` - Show operational version numbers in admin version UI
+- `c30c8b7` - Record D7.7C version visibility closeout
+- `5c6859b` - Fix D7.7C handoff current state
 
 ## Current Risks And Limits
 
@@ -1610,5 +1667,9 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - D7.7C1 is complete: `vN` agora exibido no catálogo de versões, nos formulários e na tela de versões da matriz. Commit `99f4659` aceito. 522 passed, 0 failed.
   - `codigo_normativo` permanece metadado normativo em todas as telas.
   - Backend D7.7B intocado.
-  - Não fazer push sem ordem explícita.
-  - Próxima etapa: D7.7C3 — verificação final e push.
+- D7.7C3 published D7.7C to origin/main at `5c6859b`. 90/90 focused tests passed before push. No code/schema/DB changes in the push.
+- D7.7C4 recorded the post-push doc sync (docs-only). Baseline functional published remains `5c6859b`.
+  - Próxima etapa é decisão do arquiteto:
+    - encerrar D7.7;
+    - ou abrir D7.7D read-only polish audit;
+    - ou abrir nova macrofase.
