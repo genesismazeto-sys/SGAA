@@ -1,7 +1,7 @@
 # Agent Handoff
 
 Last updated: 2026-06-14
-Closeout: D7.7B1 matrix version validity hardening
+Closeout: D7.7C1 operational version numbers in admin version UI
 Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
@@ -110,8 +110,15 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - Testes aceitos: focados 28/28; regressão D7.6 (7 arquivos) 84/84; suíte completa 512/0.
   - Artifacts CSRF restaurados no cleanup R1; não entraram no commit.
   - `database.db` não alterado.
-- Current branch: `main`. HEAD: `c312a69` — `Record D7.7B matrix version validity closeout`.
-- `main` is 2 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- D7.7C1 is complete: `vN` agora exibido no catálogo de versões, nos formulários de criação/edição e na tela de versões da matriz.
+  - Commit aceito: `99f4659` — `Show operational version numbers in admin version UI`.
+  - Escopo: `admin_catalogo_versao_detalhe.html`, `admin_catalogo_versao_form.html`, `admin_matriz_versoes.html`, `main.py`, `tests/test_admin_version_visibility_ui.py`.
+  - `codigo_normativo` permanece metadado normativo; backend D7.7B intocado.
+  - Testes aceitos: focados A 52/52; focados B 38/38; suíte lotes (batchSize=20) 522/0.
+  - Artifacts CSRF restaurados antes do commit.
+  - `database.db` não alterado.
+- Current branch: `main`. HEAD: `99f4659` — `Show operational version numbers in admin version UI`.
+- `main` is 4 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -878,7 +885,45 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - `main.py` (M)
   - `tests/test_admin_matriz_escolher_versao.py` (M — +5 testes T11–T15, seed atualizado)
   - `tests/test_admin_matriz_latest_active_default.py` (M — +4 testes T10–T13, seed atualizado com `matriz_norma`)
-- Next authorized step: D7.7B3 — verificação final pré-push e push, se explicitamente autorizado.
+- Next authorized step: D7.7C3 — verificação final pré-push e push.
+
+## D7.7C1-COMMIT-CLOSEOUT - Operational Version Numbers In Admin Version UI
+
+- Execution mode:
+  - visual/template patch only;
+  - no schema altered;
+  - no backend validity logic altered;
+  - no push.
+- Functional commit:
+  - `99f4659` — `Show operational version numbers in admin version UI`.
+- Delivered behavior:
+  - `admin_catalogo_versao_detalhe.html`: exibe `vN` como rótulo visual da versão; `codigo_normativo` permanece visível como metadado normativo abaixo do rótulo.
+  - `admin_catalogo_versao_form.html` (edição): mostra a versão operacional que está sendo editada (`vN`).
+  - `admin_catalogo_versao_form.html` (nova versão): mostra a próxima `vN` prevista.
+  - `admin_matriz_versoes.html`: exibe `vN` na coluna de versão atual e nas opções do select de definição.
+  - `main.py`: ajustes de contexto para expor `numero_versao` nas rotas acima.
+- Contract preserved:
+  - `codigo_normativo` permanece metadado normativo em todas as telas; não substituído por `vN`.
+  - Backend de validade D7.7B (`get_card_version_menu_data`, `admin_matriz_nova_versao_card`, `_ensure_default_versao_link`, `_save_matriz_activity_links`) intocado.
+  - `UNIQUE(atividade_base_id, numero_versao)` intacta.
+  - Schema e `database.db` não alterados.
+  - Push não realizado.
+- Validation:
+  - focados A (`readonly`, `version_form`, `matriz_link`): 52 passed.
+  - focados B (`escolher_versao`, `latest_active_default`, `version_visibility_ui`): 38 passed.
+  - suíte completa em lotes: batchSize=20, 66 arquivos, 4 lotes — 522 passed, 0 failed, 0 errors.
+  - Artifacts CSRF restaurados via `git restore` antes do commit.
+  - `git diff --check`: silencioso.
+- Files touched in the functional commit:
+  - `main.py` (M)
+  - `templates/admin_catalogo_versao_detalhe.html` (M)
+  - `templates/admin_catalogo_versao_form.html` (M)
+  - `templates/admin_matriz_versoes.html` (M)
+  - `tests/test_admin_version_visibility_ui.py` (A — novo)
+- Residual risks:
+  - warning LF→CRLF no Windows (comportamento git padrão, sem impacto funcional).
+  - menu hover-only de Admin → Atividades permanece como possível polish futuro.
+- Next authorized step: D7.7C3 — verificação final pré-push e push, se explicitamente autorizado.
 
 ## Recent Commits
 
@@ -910,6 +955,7 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - `d72f985` - Record D7.6G full suite remediation closeout
 - `01aaa0f` - Fix D7.6G handoff current HEAD
 - `d53d9cd` - Harden matrix version selection validity
+- `99f4659` - Show operational version numbers in admin version UI
 
 ## Risks To Keep In View
 
@@ -934,12 +980,11 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 
 ## Recommended Next Step
 
-- D7.7B3 — verificação final pré-push e push, se explicitamente autorizado.
-- D7.7B1 está funcionalmente completo, documentalmente registrado e com suíte verde (512/0).
-- D7.7B1 aceita: commit `d53d9cd`, 512 passed, 0 failed.
-- origin/main...main: 0 2. Push não realizado. Push proibido sem ordem explícita.
-- Alternativa: D7.7C — UX/template polish (alertas no modal quando vínculo legado inválido deixa sem opções elegíveis) antes ou depois do push.
+- D7.7C3 — verificação final pré-push e push, se explicitamente autorizado.
+- D7.7C1 aceita: commit `99f4659`, 522 passed, 0 failed.
+- origin/main...main: 0 4. Push não realizado. Push proibido sem ordem explícita.
 - Não reabrir D7.7B1 sem novo bug concreto.
+- Não reabrir D7.7C1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
 - Não ignorar a exceção de escopo de artifacts CSRF documentada em D7.6G2.
 
@@ -1002,7 +1047,12 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - `_ensure_default_versao_link` usa query inline com JOIN em `matriz_norma`; sem fallback para norma fora da matriz.
   - `_save_matriz_activity_links` remove vínculos explícitos órfãos scoped por `activity_type` do tab corrente.
   - Não reabrir D7.7B1 sem novo bug concreto.
-  - Não alterar templates desta fase — UX de alerta quando modal fica sem opções elegíveis é escopo D7.7C.
+- D7.7C1 is complete (commit `99f4659`): `vN` agora exibido no catálogo de versões (`admin_catalogo_versao_detalhe.html`), nos formulários de criação/edição (`admin_catalogo_versao_form.html`) e na tela de versões da matriz (`admin_matriz_versoes.html`).
+  - `codigo_normativo` permanece metadado normativo em todas as telas; não foi substituído por `vN`.
+  - Backend D7.7B intocado: `get_card_version_menu_data`, `_ensure_default_versao_link`, `_save_matriz_activity_links` e `admin_matriz_nova_versao_card` inalterados.
+  - Novo teste `tests/test_admin_version_visibility_ui.py` aceito.
+  - Suíte completa em lotes: 522 passed, 0 failed.
+  - Não reabrir D7.7C1 sem novo bug concreto.
 - Contrato permanente pós-D7.7B1:
   - Admin → Atividades cria versão; Matriz escolhe versão existente (apenas ativas, norma na matriz).
   - Novo vínculo usa última versão ativa dentro de `matriz_norma` por padrão; escolha manual é respeitada.

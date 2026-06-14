@@ -1,7 +1,7 @@
 # Project State
 
 Last updated: 2026-06-14
-Closeout: D7.7B1 matrix version validity hardening
+Closeout: D7.7C1 operational version numbers in admin version UI
 Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
@@ -1363,6 +1363,35 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - Risco AEA cross-tab por bases compartilhadas entre tipos: baixo pelo invariante do schema, aceito como conhecido.
 - Próxima etapa recomendada: D7.7B3 — verificação final pré-push e push; ou D7.7C — UX/template polish após publicação.
 
+### D7.7C1 - operational version numbers in admin version UI
+
+- Aprovada funcionalmente.
+- Commit aceito: `99f4659` — `Show operational version numbers in admin version UI`.
+- Escopo entregue:
+  - catálogo de versões (`admin_catalogo_versao_detalhe.html`) exibe `vN` como identificador visual da versão.
+  - `codigo_normativo` permanece visível como metadado normativo; semântica não alterada.
+  - formulário de edição (`admin_catalogo_versao_form.html`) mostra a versão operacional que está sendo editada.
+  - formulário de nova versão (`admin_catalogo_versao_form.html`) mostra a próxima `vN` prevista.
+  - tela "Versões" da matriz (`admin_matriz_versoes.html`) mostra `vN` na versão atual e nas opções disponíveis.
+- Arquivos alterados:
+  - `main.py`
+  - `templates/admin_catalogo_versao_detalhe.html`
+  - `templates/admin_catalogo_versao_form.html`
+  - `templates/admin_matriz_versoes.html`
+  - `tests/test_admin_version_visibility_ui.py` (novo)
+- Backend de validade D7.7B não foi alterado.
+- Testes aceitos:
+  - focados A (`readonly`, `version_form`, `matriz_link`): 52 passed.
+  - focados B (`escolher_versao`, `latest_active_default`, `version_visibility_ui`): 38 passed.
+  - suíte completa em lotes (batchSize=20, 66 arquivos, 4 lotes): 522 passed, 0 failed, 0 errors.
+- Artifacts CSRF (`tests/_artifacts/csrf_inventory_shadow_*.json`) gerados pela suíte foram restaurados e não entraram no commit.
+- `database.db` permaneceu não versionado; sem alteração.
+- Riscos residuais:
+  - warning LF→CRLF no Windows (comportamento git padrão, sem impacto funcional).
+  - riscos de ambiguidade vN/código normativo reduzidos nesta tela.
+  - menu hover-only de Admin → Atividades permanece como possível polish futuro.
+- Próxima etapa recomendada: D7.7C3 — verificação final e push.
+
 ### D7.6G2 - full suite remediation
 
 - D7.6G2 aprovada.
@@ -1434,6 +1463,7 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - `d72f985` - Record D7.6G full suite remediation closeout
 - `01aaa0f` - Fix D7.6G handoff current HEAD
 - `d53d9cd` - Harden matrix version selection validity
+- `99f4659` - Show operational version numbers in admin version UI
 
 ## Current Risks And Limits
 
@@ -1539,7 +1569,9 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - D7.6G2 concluída (commit `bdd5ddc`): suíte completa corrigida após introdução de `UNIQUE(atividade_base_id, numero_versao)` pelo D7.6B2; 503 passed, 0 failed; exceção de escopo aceita para artifacts CSRF deterministicamente gerados.
 - D7.7A auditoria pós-push confirmou quatro riscos reais de persistência/resolução; transferidos como escopo da D7.7B1.
 - D7.7B1 concluída (commit `d53d9cd`): modal filtra apenas versões ativas com norma na matriz; POST rejeita versão inativa ou fora de `matriz_norma`; default respeita `matriz_norma`; `_save_matriz_activity_links` limpa vínculos órfãos; 512 passed, 0 failed.
+- D7.7C1 concluída (commit `99f4659`): `vN` exibido no catálogo de versões, nos formulários de criação/edição e na tela de versões da matriz; `codigo_normativo` permanece metadado normativo; backend D7.7B intocado; 522 passed, 0 failed.
 - UX/template ainda não mostra alerta quando vínculo legado inválido deixa o modal sem opções elegíveis (templates fora do escopo D7.7B1).
+- Menu hover-only de Admin → Atividades permanece como possível polish futuro.
 - Risco AEA cross-tab por bases compartilhadas entre tipos: baixo, aceito como conhecido.
 
 ## Permanent Working Directives
@@ -1574,4 +1606,9 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - Não fazer push sem ordem explícita.
   - Não ignorar que artifacts CSRF entraram como exceção de escopo documentada em D7.6G2.
   - Não reabrir D7.7B1 sem novo bug concreto; a limpeza de órfãos é scoped por tab.
-- D7.7B1 está funcionalmente completo e documentalmente registrado. Próxima etapa recomendada: D7.7B3 — verificação final pré-push e push, se autorizado; ou D7.7C — UX/template polish se preferível antes de publicar.
+- D7.7B1 está funcionalmente completo e documentalmente registrado.
+- D7.7C1 is complete: `vN` agora exibido no catálogo de versões, nos formulários e na tela de versões da matriz. Commit `99f4659` aceito. 522 passed, 0 failed.
+  - `codigo_normativo` permanece metadado normativo em todas as telas.
+  - Backend D7.7B intocado.
+  - Não fazer push sem ordem explícita.
+  - Próxima etapa: D7.7C3 — verificação final e push.
