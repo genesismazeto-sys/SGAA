@@ -50,6 +50,9 @@ def _seed_d76e(conn) -> dict:
     """
     curso_id = conn.execute("SELECT id FROM cursos LIMIT 1").fetchone()["id"]
     norma_id = conn.execute("SELECT id FROM norma_atividade LIMIT 1").fetchone()["id"]
+    norma_out_id = conn.execute(
+        "SELECT id FROM norma_atividade WHERE id != ? LIMIT 1", (norma_id,)
+    ).fetchone()["id"]
 
     # Matriz vazia para testes de default
     matriz_id = conn.execute(
@@ -60,6 +63,10 @@ def _seed_d76e(conn) -> dict:
         """,
         (curso_id, "Matriz D7.6E", "D76E-test", "ativa", 100, 50),
     ).lastrowid
+    conn.execute(
+        "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
+        (matriz_id, norma_id),
+    )
 
     def _new_atividade(nome: str) -> int:
         return conn.execute(
@@ -124,14 +131,31 @@ def _seed_d76e(conn) -> dict:
     _map(ativ_d, base_d)
     versao_d1 = _versao(base_d, 1, "inativa")
 
+    # base_E: v1(ativa, norma_out) apenas → sem link (norma não está na matriz)
+    ativ_e = _new_atividade("Atividade E D7.7B1")
+    base_e = _new_base("Base E D7.7B1")
+    _map(ativ_e, base_e)
+    versao_e1 = _versao(base_e, 1, "ativa", norma_out_id)
+
+    # base_F: v1(ativa, norma_in), v2(ativa, norma_out) → default usa v1 (norma_out excluída)
+    ativ_f = _new_atividade("Atividade F D7.7B1")
+    base_f = _new_base("Base F D7.7B1")
+    _map(ativ_f, base_f)
+    versao_f1 = _versao(base_f, 1, "ativa", norma_id)
+    versao_f2 = _versao(base_f, 2, "ativa", norma_out_id)
+
     conn.commit()
 
     return {
         "matriz_id": matriz_id,
+        "norma_id": norma_id,
+        "norma_out_id": norma_out_id,
         "ativ_a": ativ_a, "base_a": base_a, "versao_a1": versao_a1, "versao_a2": versao_a2,
         "ativ_b": ativ_b, "base_b": base_b, "versao_b1": versao_b1, "versao_b2": versao_b2, "versao_b3": versao_b3,
         "ativ_c": ativ_c, "base_c": base_c, "versao_c1": versao_c1, "versao_c2": versao_c2, "versao_c3": versao_c3,
         "ativ_d": ativ_d, "base_d": base_d, "versao_d1": versao_d1,
+        "ativ_e": ativ_e, "base_e": base_e, "versao_e1": versao_e1,
+        "ativ_f": ativ_f, "base_f": base_f, "versao_f1": versao_f1, "versao_f2": versao_f2,
     }
 
 
@@ -339,3 +363,77 @@ def test_no_active_versao_no_link_created(env):
     _save_activities(client, seed["matriz_id"], [seed["ativ_d"]])
 
     assert _get_versao_link(seed["matriz_id"], seed["base_d"]) is None
+
+
+# ---------------------------------------------------------------------------
+# T10 — D7.7B1: default usa última ativa dentro das normas da matriz, não absoluta
+# ---------------------------------------------------------------------------
+
+def test_default_uses_latest_active_within_matrix_normas(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    # base_f: v1(ativa, norma_in) e v2(ativa, norma_out)
+    # A última ativa absoluta seria v2, mas v2 tem norma fora da matriz
+    _save_activities(client, seed["matriz_id"], [seed["ativ_f"]])
+
+    assert _get_versao_link(seed["matriz_id"], seed["base_f"]) == seed["versao_f1"]
+
+
+# ---------------------------------------------------------------------------
+# T11 — D7.7B1: sem versão ativa com norma na matriz → nenhum link criado
+# ---------------------------------------------------------------------------
+
+def test_no_link_when_only_active_outside_matrix_norma(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    # base_e: v1(ativa, norma_out) — norma não está em matriz_norma
+    _save_activities(client, seed["matriz_id"], [seed["ativ_e"]])
+
+    assert _get_versao_link(seed["matriz_id"], seed["base_e"]) is None
+
+
+# ---------------------------------------------------------------------------
+# T12 — D7.7B1: remover atividade da lista limpa vínculo de versão órfão
+# ---------------------------------------------------------------------------
+
+def test_save_without_activity_removes_orphan_versao_link(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    # Primeiro: adiciona ativ_a → cria link para versao_a2
+    _save_activities(client, seed["matriz_id"], [seed["ativ_a"]])
+    assert _get_versao_link(seed["matriz_id"], seed["base_a"]) == seed["versao_a2"]
+
+    # Segundo: salva lista sem ativ_a → link órfão deve ser removido
+    _save_activities(client, seed["matriz_id"], [])
+    assert _get_versao_link(seed["matriz_id"], seed["base_a"]) is None
+
+
+# ---------------------------------------------------------------------------
+# T13 — D7.7B1: salvar lista mantendo atividade preserva vínculo manual
+# ---------------------------------------------------------------------------
+
+def test_save_with_activity_preserves_manual_versao_link(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    # Adiciona ativ_a → auto-link para versao_a2
+    _save_activities(client, seed["matriz_id"], [seed["ativ_a"]])
+    assert _get_versao_link(seed["matriz_id"], seed["base_a"]) == seed["versao_a2"]
+
+    # Admin escolhe manualmente versao_a1
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        main._set_versao_da_matriz_para_base(conn, seed["matriz_id"], seed["base_a"], seed["versao_a1"])
+        conn.commit()
+    assert _get_versao_link(seed["matriz_id"], seed["base_a"]) == seed["versao_a1"]
+
+    # Re-salva com ativ_a ainda na lista → vínculo manual deve ser preservado
+    _save_activities(client, seed["matriz_id"], [seed["ativ_a"]])
+    assert _get_versao_link(seed["matriz_id"], seed["base_a"]) == seed["versao_a1"]

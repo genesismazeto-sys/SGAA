@@ -2808,12 +2808,14 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
         current_versao_id = row["versao_id"]
         versoes_rows = conn.execute(
             """
-            SELECT id, numero_versao, status, codigo_normativo
-              FROM atividade_versao
-             WHERE atividade_base_id = ?
-             ORDER BY numero_versao DESC
+            SELECT av.id, av.numero_versao, av.status, av.codigo_normativo
+              FROM atividade_versao av
+              JOIN matriz_norma mn ON mn.norma_id = av.norma_id AND mn.matriz_id = ?
+             WHERE av.atividade_base_id = ?
+               AND av.status = 'ativa'
+             ORDER BY av.numero_versao DESC
             """,
-            (row["base_id"],),
+            (matriz_id, row["base_id"]),
         ).fetchall()
         versoes = [
             {
@@ -12534,7 +12536,18 @@ def _ensure_default_versao_link(conn, matriz_id: int, activity_id: int) -> None:
     base_id = row["atividade_base_id"]
     if get_vinculo_versao_da_matriz(conn, matriz_id, base_id):
         return
-    latest = get_ultima_versao_ativa_por_base(conn, base_id)
+    latest = conn.execute(
+        """
+        SELECT av.id
+          FROM atividade_versao av
+          JOIN matriz_norma mn ON mn.norma_id = av.norma_id AND mn.matriz_id = ?
+         WHERE av.atividade_base_id = ?
+           AND av.status = 'ativa'
+         ORDER BY av.numero_versao DESC
+         LIMIT 1
+        """,
+        (matriz_id, base_id),
+    ).fetchone()
     if not latest:
         return
     _set_versao_da_matriz_para_base(conn, matriz_id, base_id, latest["id"])
@@ -12577,6 +12590,47 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
         )
         for activity_id in valid_ids:
             _ensure_default_versao_link(conn, matriz_id, activity_id)
+
+    selected_base_ids: list[int] = []
+    for activity_id in valid_ids:
+        base_row = conn.execute(
+            "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = ?",
+            (activity_id,),
+        ).fetchone()
+        if base_row:
+            selected_base_ids.append(base_row["atividade_base_id"])
+
+    if selected_base_ids:
+        placeholders_b = ", ".join("?" for _ in selected_base_ids)
+        conn.execute(
+            f"""
+            DELETE FROM matriz_atividade_versao_item
+             WHERE matriz_id = ?
+               AND atividade_versao_id IN (
+                   SELECT av.id FROM atividade_versao av
+                    JOIN atividade_legacy_map alm ON alm.atividade_base_id = av.atividade_base_id
+                    JOIN atividades a ON a.id = alm.atividade_id_legacy
+                   WHERE COALESCE(a.tipo_atividade, 'Acadêmica Complementar') = ?
+                     AND av.atividade_base_id NOT IN ({placeholders_b})
+               )
+            """,
+            [matriz_id, activity_type] + selected_base_ids,
+        )
+    else:
+        conn.execute(
+            """
+            DELETE FROM matriz_atividade_versao_item
+             WHERE matriz_id = ?
+               AND atividade_versao_id IN (
+                   SELECT av.id FROM atividade_versao av
+                    JOIN atividade_legacy_map alm ON alm.atividade_base_id = av.atividade_base_id
+                    JOIN atividades a ON a.id = alm.atividade_id_legacy
+                   WHERE COALESCE(a.tipo_atividade, 'Acadêmica Complementar') = ?
+               )
+            """,
+            (matriz_id, activity_type),
+        )
+
     conn.commit()
     return True
 
@@ -12946,7 +13000,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     versao_id = int(versao_id_raw)
 
     target_versao = conn.execute(
-        "SELECT id, atividade_base_id, numero_versao FROM atividade_versao WHERE id = ?",
+        "SELECT id, atividade_base_id, numero_versao, status, norma_id FROM atividade_versao WHERE id = ?",
         (versao_id,),
     ).fetchone()
     if not target_versao:
@@ -12954,6 +13008,15 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         return _redirect_matrix()
     if target_versao["atividade_base_id"] != base_id:
         flash("A versão selecionada não pertence a esta atividade.", "error")
+        return _redirect_matrix()
+    if target_versao["status"] != "ativa":
+        flash("Apenas versões ativas podem ser selecionadas para esta matriz.", "error")
+        return _redirect_matrix()
+    if not conn.execute(
+        "SELECT 1 FROM matriz_norma WHERE matriz_id = ? AND norma_id = ?",
+        (matriz_id, target_versao["norma_id"]),
+    ).fetchone():
+        flash("A norma desta versão não está vinculada à matriz.", "error")
         return _redirect_matrix()
 
     vinculo = get_vinculo_versao_da_matriz(conn, matriz_id, base_id)

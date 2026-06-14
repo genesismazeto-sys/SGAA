@@ -125,6 +125,29 @@ def _seed_d76d(conn) -> dict:
         (base_b_id, norma_1_id, "AAC-B1", "AAC", "Outro grupo", 2.0, 10.0, 40.0, 1, "ativa"),
     ).lastrowid
 
+    # Versão inativa na base_a (D7.7B1: deve ser excluída do modal e rejeitada no POST)
+    versao_inactive_id = conn.execute(
+        """
+        INSERT INTO atividade_versao
+            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+             ch_por_evento, limite_semestre, limite_total, numero_versao, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (base_a_id, norma_1_id, "AAC-rev5-inactive", "AAC", "1 - Congresso", 2.0, 20.0, 60.0, 4, "inativa"),
+    ).lastrowid
+
+    # Norma fora da matriz (id=2 = AAC-rev6, não adicionada a matriz_norma)
+    norma_out_id = 2
+    versao_norma_out_id = conn.execute(
+        """
+        INSERT INTO atividade_versao
+            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+             ch_por_evento, limite_semestre, limite_total, numero_versao, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (base_a_id, norma_out_id, "AAC-rev6-out", "AAC", "1 - Congresso", 2.0, 20.0, 60.0, 5, "ativa"),
+    ).lastrowid
+
     conn.commit()
 
     return {
@@ -136,6 +159,9 @@ def _seed_d76d(conn) -> dict:
         "versao_2_id": versao_2_id,
         "versao_3_id": versao_3_id,
         "versao_b1_id": versao_b1_id,
+        "versao_inactive_id": versao_inactive_id,
+        "norma_out_id": norma_out_id,
+        "versao_norma_out_id": versao_norma_out_id,
     }
 
 
@@ -400,3 +426,110 @@ def test_card_version_menu_data_excludes_unlinked_activity(env):
 
     # Activity not linked to any versão in this matrix → not included
     assert str(other_atividade["id"]) not in result
+
+
+# ---------------------------------------------------------------------------
+# T11 — D7.7B1: modal não oferece versão inativa
+# ---------------------------------------------------------------------------
+
+def test_modal_excludes_inactive_versions(env):
+    seed = env["seed"]
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        result = main.get_card_version_menu_data(
+            conn, seed["matriz_id"], [seed["atividade_id"]]
+        )
+
+    entry = result[str(seed["atividade_id"])]
+    versao_ids = {v["id"] for v in entry["versoes"]}
+
+    assert seed["versao_inactive_id"] not in versao_ids
+    # Eligible versions (ativas + norma in matrix) are v1, v2, v3
+    assert len(entry["versoes"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# T12 — D7.7B1: modal não oferece versão cuja norma não pertence à matriz
+# ---------------------------------------------------------------------------
+
+def test_modal_excludes_versions_norma_not_in_matrix(env):
+    seed = env["seed"]
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        result = main.get_card_version_menu_data(
+            conn, seed["matriz_id"], [seed["atividade_id"]]
+        )
+
+    entry = result[str(seed["atividade_id"])]
+    versao_ids = {v["id"] for v in entry["versoes"]}
+
+    assert seed["versao_norma_out_id"] not in versao_ids
+    assert len(entry["versoes"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# T13 — D7.7B1: POST rejeita versão inativa, link permanece inalterado
+# ---------------------------------------------------------------------------
+
+def test_post_rejects_inactive_version(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    resp = _escolher(client, seed["matriz_id"], seed["atividade_id"], seed["versao_inactive_id"])
+    assert resp.status_code in (302, 303)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_id"],),
+        ).fetchone()
+
+    assert link["atividade_versao_id"] == seed["versao_1_id"]
+
+
+# ---------------------------------------------------------------------------
+# T14 — D7.7B1: POST rejeita versão ativa cuja norma está fora da matriz
+# ---------------------------------------------------------------------------
+
+def test_post_rejects_active_version_norma_outside_matrix(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    resp = _escolher(client, seed["matriz_id"], seed["atividade_id"], seed["versao_norma_out_id"])
+    assert resp.status_code in (302, 303)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_id"],),
+        ).fetchone()
+
+    assert link["atividade_versao_id"] == seed["versao_1_id"]
+
+
+# ---------------------------------------------------------------------------
+# T15 — D7.7B1: POST válido relinka versão ativa com norma permitida
+# ---------------------------------------------------------------------------
+
+def test_post_accepts_valid_active_version_norma_in_matrix(env):
+    client = env["client"]
+    seed = env["seed"]
+    _login(client)
+
+    resp = _escolher(client, seed["matriz_id"], seed["atividade_id"], seed["versao_2_id"])
+    assert resp.status_code in (302, 303)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_id"],),
+        ).fetchone()
+
+    assert link["atividade_versao_id"] == seed["versao_2_id"]
