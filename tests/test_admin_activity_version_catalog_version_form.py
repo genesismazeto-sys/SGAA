@@ -218,7 +218,7 @@ def test_post_nova_versao_inactive_norma_rejected(client):
 
 
 # ---------------------------------------------------------------------------
-# 6. POST duplicidade base+norma rejeita
+# 6. POST mesma norma para mesma base cria segunda versão (D7.6B2 removeu UNIQUE(base,norma))
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_duplicate_rejected(client):
@@ -227,8 +227,8 @@ def test_post_nova_versao_duplicate_rejected(client):
     _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
     before = _count_atividade_versao(client)
     r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
-    assert r.status_code == 200
-    assert _count_atividade_versao(client) == before
+    assert r.status_code == 302
+    assert _count_atividade_versao(client) == before + 1
 
 
 # ---------------------------------------------------------------------------

@@ -78,6 +78,12 @@ SPECIFIC_REGRESSION_TESTS = {
     "/admin/importar_requisicoes": [
         "tests/test_csrf_admin_flows.py::test_admin_importar_requisicoes_page_and_post_require_csrf",
     ],
+    "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao": [
+        "tests/test_admin_matriz_nova_versao_card.py::test_post_requires_csrf",
+    ],
+    "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>": [
+        "tests/test_admin_matrix_new_activity.py::test_modal_form_contains_csrf_and_post_requires_it",
+    ],
     "/admin/meus_dados": [
         "tests/test_csrf_admin_flows.py::test_admin_meus_dados_password_change_requires_and_accepts_csrf",
     ],
@@ -758,8 +764,8 @@ def _setup_isolated_csrf_clients(tmp_path: Path):
         conn.execute(
             """
             INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+            ) VALUES (?, ?, ?, ?, ?, ?, 2)
             """,
             (base_id, norma_lnk_id, cod_norma_lnk, "AAC", "1 - Grupo Inventory Link", "ativa"),
         )

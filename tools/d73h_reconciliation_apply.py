@@ -646,7 +646,7 @@ def apply_create_draft(
         plan["resolved_norms"],
         base_id=base_id,
     )
-    for code in TARGET_NORMA_CODES:
+    for idx, code in enumerate(TARGET_NORMA_CODES, start=1):
         payload = expected_versions[code]
         version_cursor = conn.execute(
             """
@@ -664,9 +664,10 @@ def apply_create_draft(
                 documentos_json,
                 vigencia_inicio,
                 vigencia_fim,
+                numero_versao,
                 status,
                 versao_anterior_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', NULL)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', NULL)
             """,
             (
                 payload["atividade_base_id"],
@@ -682,6 +683,7 @@ def apply_create_draft(
                 payload["documentos_json"],
                 payload["vigencia_inicio"],
                 payload["vigencia_fim"],
+                idx,
             ),
         )
         created_version_ids.append(int(version_cursor.lastrowid))

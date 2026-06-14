@@ -407,11 +407,15 @@ def _insert_norma_e_versao(
         " VALUES (?, ?, 'rev1', ?, 'ativa') RETURNING id",
         (codigo, eixo, f"Norma {codigo}"),
     ).fetchone()["id"]
+    next_num = conn.execute(
+        "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+        (base_id,),
+    ).fetchone()[0]
     versao_id = conn.execute(
         "INSERT INTO atividade_versao"
-        " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-        " VALUES (?, ?, ?, ?, '1 - SUB', ?) RETURNING id",
-        (base_id, norma_id, codigo, eixo, status),
+        " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao)"
+        " VALUES (?, ?, ?, ?, '1 - SUB', ?, ?) RETURNING id",
+        (base_id, norma_id, codigo, eixo, status, next_num),
     ).fetchone()["id"]
     return norma_id, versao_id
 

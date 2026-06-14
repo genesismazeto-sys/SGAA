@@ -146,13 +146,17 @@ def _insert_versao(
 ) -> int:
     with main.app.app_context():
         conn = main.get_db_connection()
+        next_num = conn.execute(
+            "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+            (atividade_base_id,),
+        ).fetchone()[0]
         cur = conn.execute(
             """
             INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status),
+            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, next_num),
         )
         versao_id = cur.lastrowid
         conn.commit()

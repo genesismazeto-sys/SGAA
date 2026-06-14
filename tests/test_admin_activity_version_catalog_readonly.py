@@ -113,11 +113,15 @@ def _seed_base_and_norma(
         if existing_versao:
             versao_id = existing_versao["id"]
         else:
+            next_num = conn.execute(
+                "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+                (base_id,),
+            ).fetchone()[0]
             conn.execute(
                 """
                 INSERT INTO atividade_versao
-                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     base_id,
@@ -126,6 +130,7 @@ def _seed_base_and_norma(
                     norma_eixo,
                     versao_grupo,
                     versao_status,
+                    next_num,
                 ),
             )
             conn.commit()

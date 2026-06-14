@@ -335,14 +335,18 @@ def test_resolver_reports_missing_map_and_ambiguous_candidates(diagnostic_databa
             """,
             (matriz_id, norma_id),
         )
+        next_num_amb = conn.execute(
+            "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+            (base_id,),
+        ).fetchone()[0]
         conn.execute(
             """
             INSERT INTO atividade_versao
             (
                 atividade_base_id, norma_id, codigo_normativo, eixo,
-                observacao_aluno, observacao_admin, status
+                observacao_aluno, observacao_admin, status, numero_versao
             )
-            VALUES (?, ?, ?, 'AAC', ?, ?, 'ativa')
+            VALUES (?, ?, ?, 'AAC', ?, ?, 'ativa', ?)
             """,
             (
                 base_id,
@@ -350,6 +354,7 @@ def test_resolver_reports_missing_map_and_ambiguous_candidates(diagnostic_databa
                 novo_codigo,
                 "Candidata ambígua aluno",
                 "Candidata ambígua admin",
+                next_num_amb,
             ),
         )
         nova_versao_id = conn.execute(
@@ -458,14 +463,18 @@ def test_resolver_reports_matrix_without_norma_and_version_inactive(diagnostic_d
             "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = 1"
         ).fetchone()["atividade_base_id"]
 
+        next_num_inat = conn.execute(
+            "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+            (base_id,),
+        ).fetchone()[0]
         conn.execute(
             """
             INSERT INTO atividade_versao
             (
                 atividade_base_id, norma_id, codigo_normativo, eixo,
-                observacao_aluno, observacao_admin, status
+                observacao_aluno, observacao_admin, status, numero_versao
             )
-            VALUES (?, ?, ?, 'AAC', ?, ?, 'inativa')
+            VALUES (?, ?, ?, 'AAC', ?, ?, 'inativa', ?)
             """,
             (
                 base_id,
@@ -473,6 +482,7 @@ def test_resolver_reports_matrix_without_norma_and_version_inactive(diagnostic_d
                 novo_codigo,
                 "Versão inativa aluno",
                 "Versão inativa admin",
+                next_num_inat,
             ),
         )
         versao_inativa_id = conn.execute(

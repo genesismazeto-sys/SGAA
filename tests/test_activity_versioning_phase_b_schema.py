@@ -105,13 +105,17 @@ def _insert_atividade_versao(
     status: str = "ativa",
     versao_anterior_id: int | None = None,
 ) -> int:
+    next_num = conn.execute(
+        "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+        (atividade_base_id,),
+    ).fetchone()[0]
     return conn.execute(
         """
         INSERT INTO atividade_versao (
-            atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, versao_anterior_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, versao_anterior_id, numero_versao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, versao_anterior_id),
+        (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, versao_anterior_id, next_num),
     ).lastrowid
 
 
@@ -171,16 +175,16 @@ def test_phase_b_allows_normas_and_versions_with_constraints(tmp_path):
             conn.execute(
                 """
                 INSERT INTO atividade_versao (
-                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-                ) VALUES (?, ?, ?, ?, ?, 'ativa')
+                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+                ) VALUES (?, ?, ?, ?, ?, 'ativa', 1)
                 """,
                 (base_id, norma_ids["AAC-rev5"], "AAC-rev5", "AAC", "1 - Grupo teste"),
             )
             conn.execute(
                 """
                 INSERT INTO atividade_versao (
-                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-                ) VALUES (?, ?, ?, ?, ?, 'ativa')
+                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+                ) VALUES (?, ?, ?, ?, ?, 'ativa', 2)
                 """,
                 (base_id, norma_ids["AAC-rev6"], "AAC-rev6", "AAC", "1 - Grupo teste"),
             )
@@ -221,16 +225,16 @@ def test_phase_b_requires_justification_for_aac_para_aeu_transition(tmp_path):
             from_id = conn.execute(
                 """
                 INSERT INTO atividade_versao (
-                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-                ) VALUES (?, ?, ?, ?, ?, 'ativa')
+                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+                ) VALUES (?, ?, ?, ?, ?, 'ativa', 1)
                 """,
                 (base_id, norma_ids["AAC-rev5"], "AAC-rev5", "AAC", "2 - Extensão antiga"),
             ).lastrowid
             to_id = conn.execute(
                 """
                 INSERT INTO atividade_versao (
-                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-                ) VALUES (?, ?, ?, ?, ?, 'ativa')
+                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
+                ) VALUES (?, ?, ?, ?, ?, 'ativa', 2)
                 """,
                 (base_id, norma_ids["AEU-rev1"], "AEU-rev1", "AEU", "0 - Extensão universitária"),
             ).lastrowid

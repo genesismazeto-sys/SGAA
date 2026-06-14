@@ -165,20 +165,24 @@ def _insert_versao(
 ) -> int:
     with main.app.app_context():
         conn = main.get_db_connection()
+        next_num = conn.execute(
+            "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
+            (atividade_base_id,),
+        ).fetchone()[0]
         cur = conn.execute(
             """
             INSERT INTO atividade_versao (
                 atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status,
                 ch_por_evento, limite_semestre, limite_total,
                 observacao_aluno, observacao_admin,
-                vigencia_inicio, vigencia_fim, versao_anterior_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                vigencia_inicio, vigencia_fim, versao_anterior_id, numero_versao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status,
                 ch_por_evento, limite_semestre, limite_total,
                 observacao_aluno, observacao_admin,
-                vigencia_inicio, vigencia_fim, versao_anterior_id,
+                vigencia_inicio, vigencia_fim, versao_anterior_id, next_num,
             ),
         )
         versao_id = cur.lastrowid
@@ -461,11 +465,11 @@ def test_post_editar_versao_duplicate_rejected_but_self_allowed(client):
     versao_b = _get_versao(client, versao_b_id)
     assert versao_b["grupo"] == "Grupo B Editado"
 
-    # 7b: editar B trocando para a norma já usada por A deve ser rejeitado
+    # 7b: editar B trocando para a norma já usada por A agora é permitido (D7.6B2 removeu UNIQUE(base,norma))
     r_dup = _post_editar_versao(client, seed["base_id"], versao_b_id, seed["norma_ativa_id"])
-    assert r_dup.status_code == 200
+    assert r_dup.status_code == 302
     versao_b_after = _get_versao(client, versao_b_id)
-    assert versao_b_after["norma_id"] == norma_b_id, "norma_id de B não deve ter sido trocada para a duplicada"
+    assert versao_b_after["norma_id"] == seed["norma_ativa_id"], "norma_id de B deve ter sido atualizada"
 
 
 # ---------------------------------------------------------------------------
