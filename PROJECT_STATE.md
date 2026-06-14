@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-13
-Closeout: D7.6C activity version menu
-Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.6D matrix version selection
+Executor: Claude Sonnet 4.6 (D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1257,6 +1257,43 @@ Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7
   - Push não realizado.
 - Próxima fase: `D7.6D` — Matriz escolhe versão e card mostra vN.
 
+### D7.6D - matrix chooses operational activity version
+
+- Implementada e aceita.
+- Commit: `2f81179` — `Make matrix choose operational activity versions`
+- Escopo entregue:
+  - Fluxo da matriz alterado de "criar versão por norma" para "escolher versão existente".
+  - Card da matriz agora exibe badge `vN` baseado em `atividade_versao.numero_versao`.
+  - `codigo_normativo` permanece metadado secundário (visível no modal como info), nunca como badge principal.
+  - Modal de versão reformulado: lista versões existentes da mesma `atividade_base` em ordem decrescente de `numero_versao`; versão atual aparece pré-selecionada (`is_current: true`); usuário escolhe via radio buttons.
+  - POST de escolha relinka apenas a matriz atual via `_set_versao_da_matriz_para_base`; não insere em `atividade_versao`.
+  - POST valida que `versao_id` pertence à mesma `atividade_base` antes de relinkar.
+  - POST rejeita `versao_id` de base diferente, `versao_id` inexistente e `versao_id` ausente.
+- Helpers alterados em `main.py`:
+  - `get_card_version_menu_data`: agora retorna `numero_versao` e lista `versoes` (não mais `normas`).
+  - `get_vinculo_versao_da_matriz`: agora inclui `av.numero_versao` no SELECT.
+  - Rota `admin_matriz_nova_versao_card`: não cria mais `atividade_versao`; apenas valida e relinka.
+- Garantias preservadas:
+  - `templates/admin_atividades.html` não foi alterado.
+  - Schema e `database.db` não foram alterados.
+  - `norma_id` e `codigo_normativo` permanecem `NOT NULL`.
+  - `UNIQUE(atividade_base_id, numero_versao)` intacta.
+  - Outras matrizes não são afetadas pelo relink.
+  - CSRF obrigatório no POST.
+  - Rollback total em erro intermediário.
+  - Push não realizado.
+- Testes aceitos:
+  - `tests/test_admin_matriz_escolher_versao.py`: 10/10 passed (novo, T01–T10).
+  - `tests/test_admin_matriz_nova_versao_card.py`: 13/13 passed (atualizado para semântica D7.6D).
+  - Regressões relacionadas (6 arquivos): 64/64 passed.
+- Arquivos alterados no commit:
+  - `main.py` (M)
+  - `templates/admin_matriz_form.html` (M)
+  - `tests/test_admin_matriz_escolher_versao.py` (A — novo)
+  - `tests/test_admin_matriz_nova_versao_card.py` (M — atualizado)
+- Próxima fase recomendada:
+  - `D7.6E` — garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -1298,6 +1335,7 @@ Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7
 - `6b1579a` - D7.6B2-R2: harden numero_versao schema — full unique index + pos triggers
 - `62aed4b` - Add activity version menu to admin activities
 - `ed706c1` - Record D7.6C activity version menu closeout
+- `2f81179` - Make matrix choose operational activity versions
 
 ## Current Risks And Limits
 
@@ -1398,7 +1436,8 @@ Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7
   - `norma_id` e `codigo_normativo` permanecem `NOT NULL`.
   - `database.db` pós-D7.6B2: 544.768 bytes, SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
 - D7.6C concluída (commit `62aed4b`): menu ⋮ de versões na tela `/admin/atividades` entregue.
-- D7.6D permanece pendente. Não implementar sem nova autorização.
+- D7.6D concluída (commit `2f81179`): matriz escolhe/relinka versão operacional existente; card mostra vN; matrix não cria atividade_versao.
+- D7.6E permanece pendente: garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão.
 
 ## Permanent Working Directives
 
@@ -1413,8 +1452,12 @@ Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7
 - D7.5D-PATCH-CARD-VERSION-MENU is complete (functional commit `0dbd2b1`).
 - D7.6B2 is complete: `numero_versao` operacional entregue, schema endurecido, testes validados.
 - D7.6C is complete: menu ⋮ de versões na tela `/admin/atividades` entregue (commit `62aed4b`).
-- Próxima fase técnica autorizada: `D7.6D` — Matriz escolhe versão e card mostra vN.
+- D7.6D is complete: matriz escolhe/relinka versão operacional existente; card mostra vN (commit `2f81179`).
+  - Matriz não cria `atividade_versao`; apenas escolhe entre as existentes.
+  - Card exibe `vN` via `numero_versao`; `codigo_normativo` é metadado secundário.
+  - `templates/admin_atividades.html` não foi alterado em D7.6D.
+  - Schema e `database.db` não foram alterados em D7.6D.
+- Próxima fase técnica autorizada: `D7.6E` — garantir que nova matriz / atividade adicionada usa a última versão ativa por padrão.
+  - Não reintroduzir criação de versão pela matriz como fluxo principal.
   - Não alterar schema sem nova auditoria.
-  - Não misturar criação de versão pela matriz como fluxo principal.
-  - Não usar `codigo_normativo` como badge ou identificador principal de versão.
-  - Não implementar funcionalidades além do escopo de D7.6D.
+  - Não usar `codigo_normativo` como badge principal.
