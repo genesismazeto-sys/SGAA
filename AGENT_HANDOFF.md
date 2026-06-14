@@ -1,8 +1,8 @@
 # Agent Handoff
 
-Last updated: 2026-06-13
-Closeout: D7.6E latest active version default
-Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Last updated: 2026-06-14
+Closeout: D7.6G2 full suite remediation
+Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -94,8 +94,18 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
   - Matriz não cria `atividade_versao`: confirmado no T07.
   - Admin → Atividades não alterado. Templates da matriz não alterados. Schema e `database.db` intocados.
   - Testes: `tests/test_admin_matriz_latest_active_default.py` 9/9; regressões relacionadas 74/74.
-- Current branch: `main`. HEAD: `e359047`.
-- `main` is 13 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- D7.6G2 is complete: suíte completa remediada após introdução de `UNIQUE(atividade_base_id, numero_versao)` pelo D7.6B2.
+  - Commit aceito: `bdd5ddc` — `Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint`.
+  - Testes aceitos: 503 passed, 4 warnings, 0 failed.
+  - Seeds legados em 7 arquivos de teste corrigidos com `COALESCE(MAX(numero_versao), 0) + 1`.
+  - `tools/d73h_reconciliation_apply.py` corrigido com `enumerate(TARGET_NORMA_CODES, start=1)`.
+  - Asserts de catálogo atualizados para refletir remoção intencional de `UNIQUE(base,norma)`.
+  - Inventário CSRF: rotas D7.6C/D adicionadas a `SPECIFIC_REGRESSION_TESTS`.
+  - Exceção de escopo aceita: `tests/_artifacts/csrf_inventory_shadow_off.json` e `csrf_inventory_shadow_on.json` — artifacts deterministicamente gerados; nenhum `blocked_real_risk`; `high_risk_routes=0`.
+  - `main.py` e templates: não alterados em D7.6G2.
+  - `database.db` não alterado: SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`, 544768 bytes.
+- Current branch: `main`. HEAD: `bdd5ddc`.
+- `main` is 15 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -788,6 +798,47 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
   - gate de revisão / fechamento consolidado D7.6 antes de push;
   - não iniciar nova implementação sem autorização explícita.
 
+## D7.6G2-COMMIT-CLOSEOUT - Full Suite Remediation
+
+- Execution mode:
+  - full suite remediation only;
+  - no new functionality;
+  - no push.
+- Functional commit:
+  - `bdd5ddc` — `Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint`.
+- Root cause: `UNIQUE(atividade_base_id, numero_versao)` introduzido pelo D7.6B2 causou 52 falhas em seeds de teste que inseriam múltiplas `atividade_versao` para a mesma base sem `numero_versao` distinto.
+- Corrections applied:
+  - Seeds legados (7 arquivos): `COALESCE(MAX(numero_versao), 0) + 1` para calcular próximo `numero_versao` sem invocar `main.py`.
+  - `tools/d73h_reconciliation_apply.py`: `enumerate(TARGET_NORMA_CODES, start=1)` → AAC-rev5 `numero_versao=1`, AAC-rev6 `numero_versao=2` por base.
+  - `test_post_nova_versao_duplicate_rejected` e `test_post_editar_versao_duplicate_rejected_but_self_allowed` (7b): asserts atualizados para refletir que `UNIQUE(base,norma)` foi intencionalmente removida em D7.6B2; ambos os asserts preservados (valores ajustados).
+  - `SPECIFIC_REGRESSION_TESTS` em `test_csrf_inventory_audit.py`: rotas D7.6C (`/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao`) e D7.6D (`/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>`) adicionadas apontando para testes de regressão CSRF já existentes e aprovados.
+- Scope exception:
+  - `tests/_artifacts/csrf_inventory_shadow_off.json` e `tests/_artifacts/csrf_inventory_shadow_on.json` incluídos no commit `bdd5ddc`.
+  - Justificativa: artifacts gerados deterministicamente; 2 novas rotas recebem `ok_specific_regression_test`; `total_mutating_routes` 76→78; `ok_specific_regression_test` 1→3; `high_risk_routes=0`; nenhum status existente rebaixado; churn cosmético em `/admin/mensagens/<message_key>/reset` (entradas `msg_*`).
+- Contract preserved:
+  - `UNIQUE(atividade_base_id, numero_versao)` mantida.
+  - `UNIQUE(atividade_base_id, norma_id)` não restaurada.
+  - `main.py` não alterado.
+  - Templates não alterados.
+  - Schema e `database.db` não alterados.
+  - Push não realizado.
+- Validation:
+  - full suite: `python -m pytest -q --tb=short`
+  - result: `503 passed, 4 warnings, 0 failed`.
+- Files touched in commit `bdd5ddc`:
+  - `tests/test_activity_versioning_phase_b_schema.py` (M)
+  - `tests/test_activity_versioning_resolver.py` (M)
+  - `tests/test_admin_activity_version_catalog_readonly.py` (M)
+  - `tests/test_admin_activity_version_catalog_version_activate.py` (M)
+  - `tests/test_admin_activity_version_catalog_version_edit.py` (M)
+  - `tests/test_admin_activity_version_catalog_version_form.py` (M)
+  - `tests/test_admin_activity_version_catalog_version_lifecycle.py` (M)
+  - `tests/test_csrf_inventory_audit.py` (M)
+  - `tests/_artifacts/csrf_inventory_shadow_off.json` (M — scope exception)
+  - `tests/_artifacts/csrf_inventory_shadow_on.json` (M — scope exception)
+  - `tools/d73h_reconciliation_apply.py` (M)
+- Next authorized step: D7.6H — verificação final pré-push e push, se autorizado.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -811,7 +862,10 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
 - `62aed4b` - Add activity version menu to admin activities
 - `ed706c1` - Record D7.6C activity version menu closeout
 - `2f81179` - Make matrix choose operational activity versions
+- `79e11a2` - Record D7.6D matrix version selection closeout
 - `e359047` - Default matrix links to latest active activity versions
+- `088da75` - Record D7.6E latest active version default closeout
+- `bdd5ddc` - Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint
 
 ## Risks To Keep In View
 
@@ -836,14 +890,12 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
 
 ## Recommended Next Step
 
-- Gate de revisão / fechamento consolidado D7.6 antes de qualquer push.
-- D7.6E está completa: novo vínculo usa última versão ativa por padrão; vínculo manual preservado.
-- D7.6D está completa: card mostra `vN`, modal lista versões, POST relinka sem criar versão.
-- Contrato permanente estabelecido: Admin → Atividades cria versão; Matriz escolhe versão.
-- `codigo_normativo` é metadado secundário; não usar como badge ou identificador operacional.
-- Não reintroduzir criação de versão pela matriz.
-- Não alterar schema sem nova auditoria explícita.
-- Não fazer push sem gate final aprovado.
+- D7.6H — verificação final pré-push e push, se explicitamente autorizado.
+- D7.6 está funcionalmente completo, documentalmente registrado e com suíte verde (503/0).
+- D7.6G2 aceita: commit `bdd5ddc`, 503 passed, 0 failed, exceção de escopo CSRF documentada.
+- origin/main...main: 0 15. Push não realizado. Push proibido sem ordem explícita.
+- Não reabrir D7.6 sem novo bug concreto.
+- Não ignorar a exceção de escopo de artifacts CSRF — está documentada e aceita.
 
 ## Instructions For The Next Agent
 
@@ -895,14 +947,18 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
   - Caso sem versão ativa: nenhum link criado.
   - `main.py` (M) e `tests/test_admin_matriz_latest_active_default.py` (A, 9 testes) aceitos.
   - Regressões 74/74 passed.
+- D7.6G2 is complete (commit `bdd5ddc`): suíte completa 503/0 verde; exceção de escopo aceita para artifacts CSRF deterministicamente gerados.
+  - Não reabrir D7.6G2 — todas as 52 falhas corrigidas e auditadas em D7.6G2-R1 e R2.
+  - Artifacts CSRF (`tests/_artifacts/csrf_inventory_shadow_off.json`, `csrf_inventory_shadow_on.json`) entram como exceção de escopo documentada; `blocked_real_risk=0`; `high_risk_routes=0`.
 - Contrato permanente pós-D7.6:
   - Admin → Atividades cria versão; Matriz escolhe versão existente.
   - Novo vínculo usa última versão ativa por padrão; escolha manual é respeitada.
-  - Card da matriz mostra `vN`; `codigo_normativo` é metadado secundário.
+  - Card da matriz mostra `vN`; `codigo_normativo` é metadado normativo, não badge principal.
+  - `UNIQUE(atividade_base_id, numero_versao)` ativa; `UNIQUE(atividade_base_id, norma_id)` removida — não restaurar.
+  - Todos os INSERTs em `atividade_versao` devem fornecer `numero_versao` via `get_next_numero_versao` ou equivalente.
   - Não reintroduzir criação de versão pela matriz como fluxo principal.
-  - Não usar `AAC-rev5`/`AAC-rev6` como badge principal.
   - Não alterar schema sem nova auditoria.
-  - Não fazer push sem gate final.
+  - Não fazer push sem ordem explícita.
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
 - No next agent should activate, matrix-link, remap legacy scope, or perform any additional live apply without a new explicit authorization phase and real operational need.

@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-13
-Closeout: D7.6E latest active version default
-Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Last updated: 2026-06-14
+Closeout: D7.6G2 full suite remediation
+Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1328,6 +1328,28 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
   - Nova matriz / novo vínculo usa última versão ativa por padrão (D7.6E).
   - `codigo_normativo` permanece metadado normativo, não identificador operacional.
 
+### D7.6G2 - full suite remediation
+
+- D7.6G2 aprovada.
+- Commit aceito: `bdd5ddc` — `Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint`
+- Suíte completa: 503 passed, 0 failed.
+- Correções aplicadas:
+  - Seeds legados em 7 arquivos de teste: adicionado cálculo de `numero_versao` via `COALESCE(MAX(numero_versao), 0) + 1` para garantir unicidade no `UNIQUE(atividade_base_id, numero_versao)`.
+  - `tools/d73h_reconciliation_apply.py`: loop alterado para `enumerate(TARGET_NORMA_CODES, start=1)` atribuindo `numero_versao=idx` (AAC-rev5 → 1, AAC-rev6 → 2) por base.
+  - Asserts de catálogo (`test_post_nova_versao_duplicate_rejected`, `test_post_editar_versao_duplicate_rejected_but_self_allowed`): valores esperados atualizados para refletir a remoção intencional de `UNIQUE(atividade_base_id, norma_id)` pelo D7.6B2. Ambos os asserts preservados (apenas valores ajustados).
+  - Inventário CSRF (`test_csrf_inventory_audit.py`): rotas D7.6C e D7.6D adicionadas a `SPECIFIC_REGRESSION_TESTS` apontando para testes de regressão CSRF já existentes.
+- Exceção de escopo aceita: `tests/_artifacts/csrf_inventory_shadow_off.json` e `tests/_artifacts/csrf_inventory_shadow_on.json` incluídos no commit `bdd5ddc`.
+  - Justificativa: artifacts gerados deterministicamente pelo teste CSRF a cada execução; alterações refletem adição das rotas D7.6C/D com status `ok_specific_regression_test`; nenhuma rota classificada como `blocked_real_risk`; nenhum status existente rebaixado; `high_risk_routes=0` preservado; churn adicional em `/admin/mensagens/<message_key>/reset` é cosmético (entradas `msg_*`, sem impacto em segurança).
+- `database.db`: não alterado. SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`, 544768 bytes — inalterado antes e depois de todos os ciclos de teste.
+- `main.py` e templates: não alterados em D7.6G2.
+- Estado D7.6 consolidado (pós-G2):
+  - Admin → Atividades cria versão com `numero_versao` único por base.
+  - Matriz escolhe versão existente via modal (D7.6D); não cria `atividade_versao`.
+  - Card da matriz exibe `vN` via `numero_versao`; `codigo_normativo` é metadado normativo, não badge principal.
+  - Novo vínculo matriz→atividade_base usa automaticamente a última versão ativa por padrão (D7.6E); vínculo manual existente preservado.
+  - `UNIQUE(atividade_base_id, numero_versao)` ativa; `UNIQUE(atividade_base_id, norma_id)` removida (D7.6B2).
+  - Suíte completa 503 passed, 0 failed — verde.
+
 ## Relevant Commits
 
 - `483f069` - Add controlled versioned snapshot write for requests
@@ -1370,7 +1392,10 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
 - `62aed4b` - Add activity version menu to admin activities
 - `ed706c1` - Record D7.6C activity version menu closeout
 - `2f81179` - Make matrix choose operational activity versions
+- `79e11a2` - Record D7.6D matrix version selection closeout
 - `e359047` - Default matrix links to latest active activity versions
+- `088da75` - Record D7.6E latest active version default closeout
+- `bdd5ddc` - Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint
 
 ## Current Risks And Limits
 
@@ -1473,6 +1498,7 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
 - D7.6C concluída (commit `62aed4b`): menu ⋮ de versões na tela `/admin/atividades` entregue.
 - D7.6D concluída (commit `2f81179`): matriz escolhe/relinka versão operacional existente; card mostra vN; matrix não cria atividade_versao.
 - D7.6E concluída (commit `e359047`): novo vínculo matriz→atividade_base usa automaticamente a última versão ativa; vínculo manual existente preservado; nenhum INSERT em atividade_versao.
+- D7.6G2 concluída (commit `bdd5ddc`): suíte completa corrigida após introdução de `UNIQUE(atividade_base_id, numero_versao)` pelo D7.6B2; 503 passed, 0 failed; exceção de escopo aceita para artifacts CSRF deterministicamente gerados.
 
 ## Permanent Working Directives
 
@@ -1498,8 +1524,10 @@ Executor: Claude Sonnet 4.6 (D7.6E latest active version default + docs closeout
   - Matriz não cria `atividade_versao`.
   - `templates/admin_atividades.html`, `admin_matriz_form.html` não alterados em D7.6E.
   - Schema e `database.db` não alterados em D7.6E.
-- D7.6 está funcionalmente completo. Próximo passo recomendado: gate de revisão / fechamento consolidado antes de push.
+- D7.6G2 is complete: suíte completa 503/0 verde após remediação de seeds, script D7.3H e asserts de catálogo para `UNIQUE(atividade_base_id, numero_versao)`. Commit `bdd5ddc` aceito.
+- D7.6 está funcionalmente completo, documentalmente registrado e com suíte verde. Próxima etapa recomendada: D7.6H — verificação final pré-push e push, se autorizado.
   - Não reintroduzir criação de versão pela matriz como fluxo principal.
   - Não alterar schema sem nova auditoria.
   - Não usar `codigo_normativo` como badge principal.
-  - Não fazer push sem gate final.
+  - Não fazer push sem ordem explícita.
+  - Não ignorar que artifacts CSRF entraram como exceção de escopo documentada em D7.6G2.
