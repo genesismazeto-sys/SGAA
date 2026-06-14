@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-13
-Closeout: D7.6B2 activity version schema closeout
-Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.6C activity version menu
+Executor: Claude Sonnet 4.6 (D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1221,7 +1221,41 @@ Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B
   - D7 regression suite (4 files): 45/45 passed.
 - Backup before R2: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`, 544.768 bytes,
   SHA256 `92627DED44C9094E74F01DA5718C995CD3FDD5AC467EF79298541A75B777CD8C`.
-- Matrix visual adjustment not yet done; D7.6C and D7.6D remain pending.
+- Matrix visual adjustment not yet done; D7.6C complete; D7.6D remains pending.
+
+### D7.6C - activity version menu on admin activities list
+
+- Implementada e aceita.
+- Commit: `62aed4b` — `Add activity version menu to admin activities`
+- Closeout docs: `ed706c1` — `Record D7.6C activity version menu closeout`
+- Escopo entregue:
+  - Menu ⋮ exposto no hover/floating bar da tela `/admin/atividades`.
+  - Menu contém três ações:
+    - **Editar atividade** — navega para a rota existente de edição.
+    - **Criar nova versão** — navega para `/admin/catalogo-versoes/<base_id>/nova-versao`.
+    - **Ver versões** — navega para `/admin/catalogo-versoes/<base_id>`.
+  - Ações "Criar nova versão" e "Ver versões" ficam `disabled` quando a atividade não possui `base_id` mapeado.
+- Como `base_id` é obtido:
+  - Subquery correlated na query principal de `/admin/atividades`:
+    ```sql
+    (SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = id) AS base_id
+    ```
+  - Atividades sem mapeamento retornam `NULL`; template usa `a.base_id or ''` → `data-base-id=""`.
+- Arquivos alterados:
+  - `main.py` (+6/-1): subquery `base_id` na query de `admin_atividades`.
+  - `templates/admin_atividades.html` (+80/-7): `data-base-id` nos cards; botão ⋮ e dropdown `ativ-more-menu`.
+  - `tests/test_admin_atividades_version_menu.py` (+233/0): 9 testes novos.
+- Testes aceitos:
+  - `tests/test_admin_atividades_version_menu.py`: 9/9 passed.
+  - Regressões relacionadas (5 arquivos): 57/57 passed.
+- Garantias preservadas:
+  - Nenhum template da matriz alterado (`admin_matriz_form.html`, `admin_matriz_versoes.html`).
+  - Schema e `database.db` não alterados.
+  - `codigo_normativo` não exposto como badge operacional na lista de atividades.
+  - `UNIQUE(atividade_base_id, norma_id)` não reintroduzida.
+  - `numero_versao` via `get_next_numero_versao` preservado para criações futuras.
+  - Push não realizado.
+- Próxima fase: `D7.6D` — Matriz escolhe versão e card mostra vN.
 
 ## Relevant Commits
 
@@ -1262,6 +1296,8 @@ Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B
 - `1ca00a3` - Add operational activity version numbers
 - `5184143` - D7.6B2-R1: fix numero_versao DEFAULT 0 -> DEFAULT 1 in atividade_versao
 - `6b1579a` - D7.6B2-R2: harden numero_versao schema — full unique index + pos triggers
+- `62aed4b` - Add activity version menu to admin activities
+- `ed706c1` - Record D7.6C activity version menu closeout
 
 ## Current Risks And Limits
 
@@ -1361,7 +1397,8 @@ Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B
   - `codigo_normativo` permanece metadado normativo, não badge operacional.
   - `norma_id` e `codigo_normativo` permanecem `NOT NULL`.
   - `database.db` pós-D7.6B2: 544.768 bytes, SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
-- D7.6C e D7.6D permanecem pendentes. Não implementar sem nova autorização.
+- D7.6C concluída (commit `62aed4b`): menu ⋮ de versões na tela `/admin/atividades` entregue.
+- D7.6D permanece pendente. Não implementar sem nova autorização.
 
 ## Permanent Working Directives
 
@@ -1375,9 +1412,9 @@ Executor: Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B
 - `PROJECT_STATE.md` and `AGENT_HANDOFF.md` must be updated after an important phase closeout, agent or chat handoff, structural change, or relevant risk change.
 - D7.5D-PATCH-CARD-VERSION-MENU is complete (functional commit `0dbd2b1`).
 - D7.6B2 is complete: `numero_versao` operacional entregue, schema endurecido, testes validados.
-- Próxima fase técnica autorizada: `D7.6C` — Admin → Atividades cria nova versão operacional.
-  - Não criar versão pela matriz como fluxo principal.
-  - Não usar `codigo_normativo` como badge ou identificador principal de versão.
+- D7.6C is complete: menu ⋮ de versões na tela `/admin/atividades` entregue (commit `62aed4b`).
+- Próxima fase técnica autorizada: `D7.6D` — Matriz escolhe versão e card mostra vN.
   - Não alterar schema sem nova auditoria.
-  - Não misturar UI da matriz com UI de atividades.
-  - Não implementar D7.6D junto com D7.6C.
+  - Não misturar criação de versão pela matriz como fluxo principal.
+  - Não usar `codigo_normativo` como badge ou identificador principal de versão.
+  - Não implementar funcionalidades além do escopo de D7.6D.
