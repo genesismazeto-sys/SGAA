@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-14
-Closeout: D7.6G2 full suite remediation
-Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D7.7B1 matrix version validity hardening
+Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -104,8 +104,14 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
   - Exceção de escopo aceita: `tests/_artifacts/csrf_inventory_shadow_off.json` e `csrf_inventory_shadow_on.json` — artifacts deterministicamente gerados; nenhum `blocked_real_risk`; `high_risk_routes=0`.
   - `main.py` e templates: não alterados em D7.6G2.
   - `database.db` não alterado: SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`, 544768 bytes.
-- Current branch: `main`. HEAD: `d72f985` — `Record D7.6G full suite remediation closeout`.
-- `main` is 16 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- D7.7A aceita como auditoria read-only pós-push. Nenhum arquivo alterado. Quatro riscos confirmados e transferidos para D7.7B1.
+- D7.7B1 is complete: validação de versões no modal, POST e default agora respeitam `status='ativa'` e `matriz_norma`; vínculos explícitos órfãos removidos ao salvar lista.
+  - Commit aceito: `d53d9cd` — `Harden matrix version selection validity`.
+  - Testes aceitos: focados 28/28; regressão D7.6 (7 arquivos) 84/84; suíte completa 512/0.
+  - Artifacts CSRF restaurados no cleanup R1; não entraram no commit.
+  - `database.db` não alterado.
+- Current branch: `main`. HEAD: `d53d9cd` — `Harden matrix version selection validity`.
+- `main` is 1 commit ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -839,6 +845,41 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
   - `tools/d73h_reconciliation_apply.py` (M)
 - Next authorized step: D7.6H — verificação final pré-push e push, se autorizado.
 
+## D7.7B1-COMMIT-CLOSEOUT - Matrix Version Validity Hardening
+
+- Execution mode:
+  - focused backend patch only;
+  - no templates altered;
+  - no schema altered;
+  - no push.
+- Functional commit:
+  - `d53d9cd` — `Harden matrix version selection validity`.
+- Delivered behavior:
+  - `get_card_version_menu_data`: `versoes` list now filtered to `status='ativa'` + `norma_id IN matriz_norma`; inativas, rascunho, descontinuadas, substituídas e versões de norma fora da matriz excluídas do modal.
+  - `admin_matriz_nova_versao_card`: dois guards adicionados após validação de `atividade_base_id`: (1) `status != 'ativa'` → flash + redirect; (2) `norma_id` ausente de `matriz_norma` → flash + redirect; nenhum efeito colateral em caso de rejeição.
+  - `_ensure_default_versao_link`: substituiu `get_ultima_versao_ativa_por_base` por query inline com JOIN em `matriz_norma`, `ORDER BY numero_versao DESC LIMIT 1`; se não houver versão ativa com norma na matriz, retorna sem criar link.
+  - `_save_matriz_activity_links`: após `_ensure_default_versao_link`, coleta `selected_base_ids` das atividades válidas do tab corrente; emite DELETE scoped por `activity_type` para remover vínculos de bases não mais selecionadas; preserva vínculos do outro tab; preserva vínculo manual quando a base continua selecionada.
+- Tests updated:
+  - `tests/test_admin_matriz_escolher_versao.py`: seed atualizado com `versao_inactive_id` (status=`inativa`) e `versao_norma_out_id` (norma_id=2, fora de `matriz_norma`); 5 novos testes T11–T15.
+  - `tests/test_admin_matriz_latest_active_default.py`: seed atualizado com `INSERT INTO matriz_norma` + `norma_out_id` + `base_e/ativ_e/versao_e1` + `base_f/ativ_f/versao_f1/versao_f2`; 4 novos testes T10–T13.
+- Contract preserved:
+  - Admin → Atividades continua criando versão; Matriz continua apenas escolhendo/relinkando versão existente.
+  - Matriz não cria `atividade_versao`.
+  - Card da matriz continua mostrando `vN`.
+  - Escolha manual válida continua preservada (no-op em `_ensure_default_versao_link` quando link já existe).
+  - `codigo_normativo` continua metadado normativo, não badge principal.
+  - `database.db` não alterado; push não realizado.
+- Validation:
+  - focused: `python -m pytest tests/test_admin_matriz_escolher_versao.py tests/test_admin_matriz_latest_active_default.py -q --tb=short` → 28 passed.
+  - regression D7.6 (7 files): 84 passed.
+  - full suite: 512 passed, 0 failed.
+  - `git diff --check`: clean (apenas warnings CRLF, sem erros).
+- Files touched in commit `d53d9cd`:
+  - `main.py` (M)
+  - `tests/test_admin_matriz_escolher_versao.py` (M — +5 testes T11–T15, seed atualizado)
+  - `tests/test_admin_matriz_latest_active_default.py` (M — +4 testes T10–T13, seed atualizado com `matriz_norma`)
+- Next authorized step: D7.7B3 — verificação final pré-push e push, se explicitamente autorizado.
+
 ## Recent Commits
 
 - `95cb897` - Add admin transition history for activity versions
@@ -866,6 +907,9 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
 - `e359047` - Default matrix links to latest active activity versions
 - `088da75` - Record D7.6E latest active version default closeout
 - `bdd5ddc` - Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint
+- `d72f985` - Record D7.6G full suite remediation closeout
+- `01aaa0f` - Fix D7.6G handoff current HEAD
+- `d53d9cd` - Harden matrix version selection validity
 
 ## Risks To Keep In View
 
@@ -890,12 +934,14 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
 
 ## Recommended Next Step
 
-- D7.6H — verificação final pré-push e push, se explicitamente autorizado.
-- D7.6 está funcionalmente completo, documentalmente registrado e com suíte verde (503/0).
-- D7.6G2 aceita: commit `bdd5ddc`, 503 passed, 0 failed, exceção de escopo CSRF documentada.
-- origin/main...main: 0 15. Push não realizado. Push proibido sem ordem explícita.
+- D7.7B3 — verificação final pré-push e push, se explicitamente autorizado.
+- D7.7B1 está funcionalmente completo, documentalmente registrado e com suíte verde (512/0).
+- D7.7B1 aceita: commit `d53d9cd`, 512 passed, 0 failed.
+- origin/main...main: 0 1. Push não realizado. Push proibido sem ordem explícita.
+- Alternativa: D7.7C — UX/template polish (alertas no modal quando vínculo legado inválido deixa sem opções elegíveis) antes ou depois do push.
+- Não reabrir D7.7B1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
-- Não ignorar a exceção de escopo de artifacts CSRF — está documentada e aceita.
+- Não ignorar a exceção de escopo de artifacts CSRF documentada em D7.6G2.
 
 ## Instructions For The Next Agent
 
@@ -950,9 +996,16 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
 - D7.6G2 is complete (commit `bdd5ddc`): suíte completa 503/0 verde; exceção de escopo aceita para artifacts CSRF deterministicamente gerados.
   - Não reabrir D7.6G2 — todas as 52 falhas corrigidas e auditadas em D7.6G2-R1 e R2.
   - Artifacts CSRF (`tests/_artifacts/csrf_inventory_shadow_off.json`, `csrf_inventory_shadow_on.json`) entram como exceção de escopo documentada; `blocked_real_risk=0`; `high_risk_routes=0`.
-- Contrato permanente pós-D7.6:
-  - Admin → Atividades cria versão; Matriz escolhe versão existente.
-  - Novo vínculo usa última versão ativa por padrão; escolha manual é respeitada.
+- D7.7B1 is complete (commit `d53d9cd`): modal, POST e default de versão agora respeitam `status='ativa'` e `matriz_norma`; `_save_matriz_activity_links` limpa vínculos explícitos órfãos; 512 passed, 0 failed.
+  - `get_card_version_menu_data` filtra `versoes` por `ativa + norma_id IN matriz_norma`.
+  - `admin_matriz_nova_versao_card` rejeita versão não ativa ou com norma fora de `matriz_norma`.
+  - `_ensure_default_versao_link` usa query inline com JOIN em `matriz_norma`; sem fallback para norma fora da matriz.
+  - `_save_matriz_activity_links` remove vínculos explícitos órfãos scoped por `activity_type` do tab corrente.
+  - Não reabrir D7.7B1 sem novo bug concreto.
+  - Não alterar templates desta fase — UX de alerta quando modal fica sem opções elegíveis é escopo D7.7C.
+- Contrato permanente pós-D7.7B1:
+  - Admin → Atividades cria versão; Matriz escolhe versão existente (apenas ativas, norma na matriz).
+  - Novo vínculo usa última versão ativa dentro de `matriz_norma` por padrão; escolha manual é respeitada.
   - Card da matriz mostra `vN`; `codigo_normativo` é metadado normativo, não badge principal.
   - `UNIQUE(atividade_base_id, numero_versao)` ativa; `UNIQUE(atividade_base_id, norma_id)` removida — não restaurar.
   - Todos os INSERTs em `atividade_versao` devem fornecer `numero_versao` via `get_next_numero_versao` ou equivalente.

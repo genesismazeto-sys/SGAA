@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-14
-Closeout: D7.6G2 full suite remediation
-Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D7.7B1 matrix version validity hardening
+Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1328,6 +1328,41 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
   - Nova matriz / novo vínculo usa última versão ativa por padrão (D7.6E).
   - `codigo_normativo` permanece metadado normativo, não identificador operacional.
 
+### D7.7A - runtime/UX post-push audit
+
+- Aceita como auditoria read-only de runtime e UX pós-push.
+- Nenhum código, template, teste, schema ou `database.db` alterado durante D7.7A.
+- Problemas confirmados e transferidos como escopo da D7.7B1:
+  - `get_card_version_menu_data` listava versões inativas/rascunho/descontinuadas/substituídas e versões cuja norma não pertence à matriz.
+  - `admin_matriz_nova_versao_card` aceitava versão inválida (validava apenas mesma `atividade_base`, não `status` nem `norma_id` em `matriz_norma`).
+  - `_ensure_default_versao_link` usava última versão ativa da base sem filtrar pela norma da matriz.
+  - `_save_matriz_activity_links` removia `matrizes_atividades_itens` mas não limpava vínculos explícitos órfãos em `matriz_atividade_versao_item`.
+
+### D7.7B1 - matrix version validity hardening
+
+- Implementada e aceita.
+- Commit aceito: `d53d9cd` — `Harden matrix version selection validity`.
+- Escopo entregue:
+  - `get_card_version_menu_data` agora lista apenas versões com `status='ativa'` cujo `norma_id` está em `matriz_norma` para a matriz; versões inativas, rascunho, descontinuadas, substituídas e de norma fora da matriz são excluídas do modal.
+  - `admin_matriz_nova_versao_card` rejeita versões com `status != 'ativa'` ou cujo `norma_id` não está em `matriz_norma`; retorna flash + redirect sem alterar `matriz_atividade_versao_item`.
+  - `_ensure_default_versao_link` usa query filtrada por `matriz_norma` para selecionar a última versão ativa cuja norma pertence à matriz (ORDER BY `numero_versao DESC LIMIT 1`); se não existir versão válida nas normas da matriz, nenhum link é criado.
+  - `_save_matriz_activity_links` remove de `matriz_atividade_versao_item` os vínculos da matriz cujo `atividade_base_id` não está mais entre as bases selecionadas para o tab corrente; preserva vínculo manual quando a base continua selecionada; preserva vínculos do outro tab (AEA quando salvando AAC e vice-versa).
+- Arquivos alterados:
+  - `main.py`
+  - `tests/test_admin_matriz_escolher_versao.py`
+  - `tests/test_admin_matriz_latest_active_default.py`
+- Testes aceitos:
+  - focados: 28 passed (15 em `test_admin_matriz_escolher_versao.py` T01–T15, 13 em `test_admin_matriz_latest_active_default.py` T01–T13).
+  - regressão D7.6 relacionada (7 arquivos): 84 passed.
+  - suíte completa: 512 passed, 0 failed.
+- Artifacts CSRF (`tests/_artifacts/csrf_inventory_shadow_*.json`) gerados pela suíte foram restaurados no cleanup R1 e não entraram no commit.
+- `database.db` não alterado.
+- Riscos residuais:
+  - UX/template ainda não mostra alerta quando vínculo legado inválido deixa o modal sem opções elegíveis (template fora do escopo D7.7B1).
+  - Catálogo/telas ainda podem expor `vN` com mais clareza (D7.7C).
+  - Risco AEA cross-tab por bases compartilhadas entre tipos: baixo pelo invariante do schema, aceito como conhecido.
+- Próxima etapa recomendada: D7.7B3 — verificação final pré-push e push; ou D7.7C — UX/template polish após publicação.
+
 ### D7.6G2 - full suite remediation
 
 - D7.6G2 aprovada.
@@ -1396,6 +1431,9 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
 - `e359047` - Default matrix links to latest active activity versions
 - `088da75` - Record D7.6E latest active version default closeout
 - `bdd5ddc` - Fix legacy seeds and scripts for D7.6B2 UNIQUE(base,numero_versao) constraint
+- `d72f985` - Record D7.6G full suite remediation closeout
+- `01aaa0f` - Fix D7.6G handoff current HEAD
+- `d53d9cd` - Harden matrix version selection validity
 
 ## Current Risks And Limits
 
@@ -1499,6 +1537,10 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
 - D7.6D concluída (commit `2f81179`): matriz escolhe/relinka versão operacional existente; card mostra vN; matrix não cria atividade_versao.
 - D7.6E concluída (commit `e359047`): novo vínculo matriz→atividade_base usa automaticamente a última versão ativa; vínculo manual existente preservado; nenhum INSERT em atividade_versao.
 - D7.6G2 concluída (commit `bdd5ddc`): suíte completa corrigida após introdução de `UNIQUE(atividade_base_id, numero_versao)` pelo D7.6B2; 503 passed, 0 failed; exceção de escopo aceita para artifacts CSRF deterministicamente gerados.
+- D7.7A auditoria pós-push confirmou quatro riscos reais de persistência/resolução; transferidos como escopo da D7.7B1.
+- D7.7B1 concluída (commit `d53d9cd`): modal filtra apenas versões ativas com norma na matriz; POST rejeita versão inativa ou fora de `matriz_norma`; default respeita `matriz_norma`; `_save_matriz_activity_links` limpa vínculos órfãos; 512 passed, 0 failed.
+- UX/template ainda não mostra alerta quando vínculo legado inválido deixa o modal sem opções elegíveis (templates fora do escopo D7.7B1).
+- Risco AEA cross-tab por bases compartilhadas entre tipos: baixo, aceito como conhecido.
 
 ## Permanent Working Directives
 
@@ -1525,9 +1567,11 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
   - `templates/admin_atividades.html`, `admin_matriz_form.html` não alterados em D7.6E.
   - Schema e `database.db` não alterados em D7.6E.
 - D7.6G2 is complete: suíte completa 503/0 verde após remediação de seeds, script D7.3H e asserts de catálogo para `UNIQUE(atividade_base_id, numero_versao)`. Commit `bdd5ddc` aceito.
-- D7.6 está funcionalmente completo, documentalmente registrado e com suíte verde. Próxima etapa recomendada: D7.6H — verificação final pré-push e push, se autorizado.
+- D7.7B1 is complete: modal, POST e default de versão agora respeitam `status='ativa'` e `matriz_norma`; `_save_matriz_activity_links` limpa vínculos explícitos órfãos. Commit `d53d9cd` aceito. 512 passed, 0 failed.
   - Não reintroduzir criação de versão pela matriz como fluxo principal.
   - Não alterar schema sem nova auditoria.
   - Não usar `codigo_normativo` como badge principal.
   - Não fazer push sem ordem explícita.
   - Não ignorar que artifacts CSRF entraram como exceção de escopo documentada em D7.6G2.
+  - Não reabrir D7.7B1 sem novo bug concreto; a limpeza de órfãos é scoped por tab.
+- D7.7B1 está funcionalmente completo e documentalmente registrado. Próxima etapa recomendada: D7.7B3 — verificação final pré-push e push, se autorizado; ou D7.7C — UX/template polish se preferível antes de publicar.
