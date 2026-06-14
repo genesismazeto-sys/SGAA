@@ -12516,6 +12516,30 @@ def _matriz_payload_from_request(conn):
     }, None
 
 
+def _ensure_default_versao_link(conn, matriz_id: int, activity_id: int) -> None:
+    """
+    Create a default matrix→versao link for activity_id if none exists yet.
+    Uses the latest active versao of the activity's base. No-op when:
+    - activity has no legacy map entry
+    - the base has no active versao
+    - a link already exists (manual choice preserved)
+    Does not commit — caller's responsibility.
+    """
+    row = conn.execute(
+        "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = ?",
+        (activity_id,),
+    ).fetchone()
+    if not row:
+        return
+    base_id = row["atividade_base_id"]
+    if get_vinculo_versao_da_matriz(conn, matriz_id, base_id):
+        return
+    latest = get_ultima_versao_ativa_por_base(conn, base_id)
+    if not latest:
+        return
+    _set_versao_da_matriz_para_base(conn, matriz_id, base_id, latest["id"])
+
+
 def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
     activity_type = _matriz_activity_type_for_tab(active_tab)
     if not activity_type:
@@ -12551,6 +12575,8 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
             "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
             [(matriz_id, activity_id) for activity_id in valid_ids],
         )
+        for activity_id in valid_ids:
+            _ensure_default_versao_link(conn, matriz_id, activity_id)
     conn.commit()
     return True
 
