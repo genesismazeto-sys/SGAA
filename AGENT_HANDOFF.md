@@ -104,8 +104,8 @@ Executor: Claude Sonnet 4.6 (D7.6G2 full suite remediation + docs closeout; D7.6
   - Exceção de escopo aceita: `tests/_artifacts/csrf_inventory_shadow_off.json` e `csrf_inventory_shadow_on.json` — artifacts deterministicamente gerados; nenhum `blocked_real_risk`; `high_risk_routes=0`.
   - `main.py` e templates: não alterados em D7.6G2.
   - `database.db` não alterado: SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`, 544768 bytes.
-- Current branch: `main`. HEAD: `bdd5ddc`.
-- `main` is 15 commits ahead of `origin/main`. Working tree clean. Push não realizado.
+- Current branch: `main`. HEAD: `d72f985` — `Record D7.6G full suite remediation closeout`.
+- `main` is 16 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
