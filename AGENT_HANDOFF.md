@@ -110,8 +110,8 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
   - Testes aceitos: focados 28/28; regressão D7.6 (7 arquivos) 84/84; suíte completa 512/0.
   - Artifacts CSRF restaurados no cleanup R1; não entraram no commit.
   - `database.db` não alterado.
-- Current branch: `main`. HEAD: `d53d9cd` — `Harden matrix version selection validity`.
-- `main` is 1 commit ahead of `origin/main`. Working tree clean. Push não realizado.
+- Current branch: `main`. HEAD: `c312a69` — `Record D7.7B matrix version validity closeout`.
+- `main` is 2 commits ahead of `origin/main`. Working tree clean. Push não realizado.
 - No broad real importation into `database.db` has been performed; only the
   narrow D7.3J controlled `CREATE_DRAFT` live apply.
 - `database.db` current state (post-D7.6B2):
@@ -937,7 +937,7 @@ Executor: Claude Sonnet 4.6 (D7.7B1 matrix version validity hardening + docs clo
 - D7.7B3 — verificação final pré-push e push, se explicitamente autorizado.
 - D7.7B1 está funcionalmente completo, documentalmente registrado e com suíte verde (512/0).
 - D7.7B1 aceita: commit `d53d9cd`, 512 passed, 0 failed.
-- origin/main...main: 0 1. Push não realizado. Push proibido sem ordem explícita.
+- origin/main...main: 0 2. Push não realizado. Push proibido sem ordem explícita.
 - Alternativa: D7.7C — UX/template polish (alertas no modal quando vínculo legado inválido deixa sem opções elegíveis) antes ou depois do push.
 - Não reabrir D7.7B1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
