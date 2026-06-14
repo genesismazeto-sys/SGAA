@@ -65,7 +65,7 @@
     }
     .versao-card{
       display:grid;
-      grid-template-columns: 180px 60px 1fr 90px 90px 90px 110px 80px 250px;
+      grid-template-columns: 44px 180px 60px 1fr 90px 90px 90px 110px 80px 250px;
       align-items:center;
       column-gap:12px;
       padding:10px 14px;
@@ -73,6 +73,17 @@
       border-radius:var(--radius);
       background:var(--surface);
       font-size:13px;
+    }
+    .vc-version{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:700;
+      background:var(--accent-subtle,#e8f0fe);
+      color:var(--accent,#1a56db);
+      letter-spacing:.02em;
+      white-space:nowrap;
     }
     .versao-card.header-row{
       background:var(--surface-2, #f8fafc);
@@ -307,6 +318,7 @@
   <div class="versoes-grid">
     <!-- Cabeçalho -->
     <div class="versao-card header-row">
+      <span>Versão</span>
       <span>Código normativo</span>
       <span>Eixo</span>
       <span>Norma</span>
@@ -321,6 +333,7 @@
     {% for v in versoes %}
       {% set status_key = (v.status or 'rascunho')|lower %}
       <div class="versao-card">
+        <span><span class="vc-version">v{{ v.numero_versao if v.numero_versao else '?' }}</span></span>
         <span class="vc-code">{{ v.codigo_normativo or '-' }}</span>
         <span>{{ v.eixo or '-' }}</span>
         <span title="{{ v.norma_nome or '' }}">
@@ -404,7 +417,7 @@
                   {% if substituicao_options %}
                     <option value="">Destino</option>
                     {% for candidato in substituicao_options %}
-                      <option value="{{ candidato.id }}">{{ candidato.codigo_normativo }} - {{ candidato.eixo }}</option>
+                      <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} — {{ candidato.codigo_normativo }} ({{ candidato.eixo }})</option>
                     {% endfor %}
                   {% else %}
                     <option value="">Sem candidata válida</option>

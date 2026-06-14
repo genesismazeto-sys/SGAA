@@ -127,7 +127,7 @@
           {% if item.vinculo %}
             <span class="mv-versao-atual">
               <i class="lucide" data-lucide="check-circle-2"></i>
-              {{ item.vinculo.codigo_normativo }} ({{ item.vinculo.eixo }})
+              {% if item.vinculo.numero_versao %}v{{ item.vinculo.numero_versao }} — {% endif %}{{ item.vinculo.codigo_normativo }} ({{ item.vinculo.eixo }})
             </span>
           {% else %}
             <span class="mv-sem-vinculo">Sem vínculo</span>
@@ -145,7 +145,7 @@
                 {% for v in item.versoes_disponiveis %}
                   <option value="{{ v.id }}"
                     {{ 'selected' if item.vinculo and item.vinculo.atividade_versao_id == v.id else '' }}>
-                    {{ v.codigo_normativo }} ({{ v.eixo }})
+                    {% if v.numero_versao %}v{{ v.numero_versao }} — {% endif %}{{ v.codigo_normativo }} ({{ v.eixo }})
                   </option>
                 {% endfor %}
               </select>

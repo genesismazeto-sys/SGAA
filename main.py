@@ -2523,7 +2523,7 @@ def get_versoes_da_base_por_eixo(conn, base_id: int, eixo: str) -> list:
     """
     return conn.execute(
         """
-        SELECT id, codigo_normativo, eixo, status, created_at
+        SELECT id, codigo_normativo, eixo, status, numero_versao, created_at
           FROM atividade_versao
          WHERE atividade_base_id = ? AND eixo = ?
          ORDER BY created_at DESC
@@ -2690,6 +2690,7 @@ def get_versoes_ativas_por_base_na_matriz(conn, matriz_id: int, base_id: int) ->
             av.codigo_normativo,
             av.eixo,
             av.status,
+            av.numero_versao,
             n.id      AS norma_id,
             n.codigo  AS norma_codigo
           FROM atividade_versao av
@@ -13312,6 +13313,7 @@ def admin_catalogo_versao_detalhe(base_id: int):
                 "id": destino["id"],
                 "codigo_normativo": destino["codigo_normativo"],
                 "eixo": destino["eixo"],
+                "numero_versao": destino["numero_versao"],
             }
             for destino in versoes
             if destino["id"] != origem_id
@@ -13511,8 +13513,9 @@ def admin_catalogo_nova_versao(base_id: int):
         + get_versoes_da_base_por_eixo(conn, base_id, "AEU")
     )
 
+    next_num = get_next_numero_versao(conn, base_id)
     form_action = url_for("admin_catalogo_nova_versao", base_id=base_id)
-    form_title = "Nova versão"
+    form_title = f"Nova versão (será v{next_num})"
     submit_label = "Criar versão em rascunho"
 
     if request.method == "POST":
@@ -13690,7 +13693,8 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     ]
 
     form_action = url_for("admin_catalogo_editar_versao", base_id=base_id, versao_id=versao_id)
-    form_title = f"Editar versão — {versao['codigo_normativo']}"
+    _num = versao["numero_versao"]
+    form_title = f"Editar versão v{_num}" if _num else f"Editar versão — {versao['codigo_normativo']}"
     submit_label = "Salvar alterações"
 
     def _display_number(value):

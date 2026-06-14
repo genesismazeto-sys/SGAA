@@ -151,7 +151,7 @@
           {% for v in versoes_anteriores %}
             <option value="{{ v.id }}"
                     {% if versao_anterior_id|string == v.id|string %}selected{% endif %}>
-              {{ v.id }} — {{ v.codigo_normativo }} ({{ v.eixo }})
+              v{{ v.numero_versao if v.numero_versao else '?' }} — {{ v.codigo_normativo }} ({{ v.eixo }})
             </option>
           {% endfor %}
         </select>
