@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-14
-Closeout: D7.7C4 post-push documentation sync
-Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D8.0B baseline suite and database backup
+Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1669,7 +1669,40 @@ Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc
   - Backend D7.7B intocado.
 - D7.7C3 published D7.7C to origin/main at `5c6859b`. 90/90 focused tests passed before push. No code/schema/DB changes in the push.
 - D7.7C4 recorded the post-push doc sync (docs-only). Baseline functional published remains `5c6859b`.
-  - Próxima etapa é decisão do arquiteto:
-    - encerrar D7.7;
-    - ou abrir D7.7D read-only polish audit;
-    - ou abrir nova macrofase.
+- D8.0A is complete: read-only audit pós-D7 aprovada; baseline D8 autorizado.
+- D8.0B is complete: 522 passed, 0 failed; backup verificado em
+  `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`;
+  SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
+  - Não iniciar D8.1 sem plano read-only aprovado.
+  - Não ligar flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` sem backup novo.
+  - Não alterar deferimento admin sem teste específico.
+  - Não alterar `database.db` sem autorização explícita.
+
+### D8.0 - Baseline pós-D7 / Macrofase aluno-requisições versionadas
+
+- D8.0A (read-only audit) confirmou:
+  - D7 fechado e publicado; origin/main...main = 0 0; HEAD = `3cb28c8`.
+  - 10 pontos corretos, 5 problemas documentados, 5 lacunas de teste, 5 riscos de UX,
+    5 riscos de backend, 2 riscos de dados live.
+  - Fluxo do aluno 100% legacy; `aluno_nova_requisicao` não chama snapshot writer;
+    `observacao_aluno` existe mas nenhuma tela do aluno a exibe.
+  - Recomendação aprovada: D8.0B como gate antes de D8.1.
+- D8.0B (baseline suite + backup) executada em `3cb28c8`:
+  - Suíte: `python -m pytest tests/ -q --tb=short` — execução única (sem OOM).
+  - Resultado: **522 passed, 0 failed, 0 errors, 4 warnings** em 470.91s (7m50s).
+  - Warnings: DeprecationWarning openpyxl `datetime.utcnow()` — não são falhas.
+  - Artifacts CSRF (`csrf_inventory_shadow_off.json`, `csrf_inventory_shadow_on.json`)
+    gerados deterministicamente pela suíte e restaurados ao estado HEAD após o run;
+    não commitados.
+  - `database.db` pós-D8.0B:
+    - Caminho: `D:\OneDrive\Programação\SGAA_clean_baseline\database.db`
+    - Tamanho: 544.768 bytes
+    - SHA256: `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`
+    - Não versionado (git ls-files vazio).
+  - Backup criado (fora do worktree, não versionado):
+    - Caminho: `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`
+    - Tamanho: 544.768 bytes
+    - SHA256: `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`
+    - Hash idêntico ao original confirmado; backup não entrou no Git.
+  - Estado D8 baseline: D7 fechado; suíte verde (522/0); backup verificado.
+  - Próxima etapa: D8.1A — READONLY-ALUNO-REQUISICOES-VERSIONED-CUTOVER-PLAN.

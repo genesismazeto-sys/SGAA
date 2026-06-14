@@ -1,8 +1,8 @@
 # Agent Handoff
 
 Last updated: 2026-06-14
-Closeout: D7.7C4 post-push documentation sync
-Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D8.0B baseline suite and database backup
+Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
@@ -982,19 +982,28 @@ Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc
 
 - D7.7C3 — final verify and push — executed successfully. Baseline published at `5c6859b`.
 - D7.7C4 — post-push documentation sync — docs-only; baseline functional published remains `5c6859b`.
-- origin/main...main: 0 0. Working tree clean. No force, no amend, no rebase.
-- D7.7C1 aceita: commit `99f4659`, 522 passed, 0 failed.
-- Testes focados finais pré-push: 90/90 passed (62 Lote A + 28 Lote B).
-- Nota explícita: não criar novo "fix handoff current HEAD" para perseguir o hash do próprio commit docs-only D7.7C4. O baseline funcional publicado permanece `5c6859b`.
-- Próxima etapa recomendada: decisão do arquiteto entre:
-  - encerrar D7.7;
-  - D7.7D read-only audit de polish restante (UX template, alerta de vínculo legado inválido, menu hover-only Admin → Atividades);
-  - ou nova macrofase.
+- D8.0A — read-only audit pós-D7 — aprovada; baseline D8 autorizado.
+- D8.0B — baseline suite + backup — concluída (docs-only commit, ver abaixo).
+  - Suíte: 522 passed, 0 failed, 4 warnings em 470.91s — execução única, sem OOM.
+  - Artifacts CSRF restaurados ao estado HEAD; não commitados.
+  - `database.db`: 544.768 bytes, SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
+  - Backup verificado: `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`
+    SHA256 idêntico; não versionado; não entrou no Git.
+  - HEAD base: `3cb28c8`. origin/main...main: 0 0.
+- Próxima etapa recomendada: **D8.1A — READONLY-ALUNO-REQUISICOES-VERSIONED-CUTOVER-PLAN**.
+  - Planejar (somente leitura) como conectar `aluno_nova_requisicao` ao snapshot writer.
+  - Avaliar cutover da flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` para o fluxo do aluno.
+  - Mapear telas do aluno que precisarão exibir versão operacional (`vN`, `observacao_aluno`).
+  - Definir testes mínimos: `tests/test_aluno_requisicao_versionada.py`.
 - Não reabrir D7.7B1 sem novo bug concreto.
 - Não reabrir D7.7C1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
 - Não ignorar a exceção de escopo de artifacts CSRF documentada em D7.6G2.
 - Não reabrir D7.7C3 — push já executado e validado.
+- Não iniciar D8.1 sem plano read-only aprovado.
+- Não ligar flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` sem novo backup do live.
+- Não alterar deferimento admin sem teste específico.
+- Não alterar `database.db` sem autorização explícita.
 
 ## Instructions For The Next Agent
 
@@ -1073,17 +1082,16 @@ Executor: Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc
 - Runtime `NRM-RT*` items remain outside fixture reconciliation.
 - Never overwrite versions already used in matrix or versioned requests.
 - No next agent should activate, matrix-link, remap legacy scope, or perform any additional live apply without a new explicit authorization phase and real operational need.
-- Continuous prohibited scope remains:
-  - `main` branch;
-  - matriz operacional;
-  - aluno;
-  - cálculo;
-  - deferimento;
-  - snapshot writer;
-  - schema/migration;
-  - backfill/cutover;
-  - fallback silencioso;
-  - `resolver_versao_por_matriz`;
-  - `resolver_versao_por_aluno`;
-  - `resolver_versao`;
-  - `maybe_write_versioned_requisicao_snapshot`.
+- Continuous prohibited scope (D7 — não desfazer sem nova fase explícita):
+  - alterar contratos publicados da Matriz → Versões;
+  - alterar `resolver_versao_por_matriz` / `resolver_versao_por_aluno` / `resolver_versao`;
+  - alterar schema ou rodar migrations sem nova fase;
+  - executar backfill/cutover sem autorização;
+  - introduzir fallback silencioso;
+  - fazer push sem ordem explícita.
+- D8.1A quando autorizada: escopo permitido será leitura e planejamento do fluxo
+  `aluno_nova_requisicao` → snapshot writer → telas do aluno.
+  Não executar nenhum write sem nova fase D8.1B explícita.
+- `database.db` baseline D8: 544.768 bytes,
+  SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
+  Backup em `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`.
