@@ -1,13 +1,15 @@
 """
-Testes focados — D7.5D-PATCH-CARD-VERSION-MENU
+Testes focados — D7.6D-MATRIX-CHOOSES-OPERATIONAL-VERSION
 Rota: POST /admin/matrizes/<id>/atividades/<id>/nova-versao
 
-Contrato verificado:
-  - UI: botão ⋮ no painel direito; modal com select de norma
-  - Backend: criar OU reusar atividade_versao; relinkar apenas matriz atual
-  - UNIQUE(atividade_base_id, norma_id): nunca duplicar
-  - versao_anterior_id aponta para versão substituída
-  - Matrizes antigas preservadas
+Contrato verificado (D7.6D):
+  - UI: botão ⋮ no painel direito; modal lista versões existentes (vN)
+  - UI: card mostra badge vN baseado em numero_versao, não codigo_normativo
+  - Backend: SOMENTE relinkar para atividade_versao existente; nunca criar
+  - Rejeita versao_id de base diferente
+  - Rejeita versao_id inexistente
+  - Rejeita versao_id ausente
+  - Apenas a matriz atual é revinculada; outras matrizes preservadas
   - Rollback total em erro intermediário
   - CSRF obrigatório
 """
@@ -92,11 +94,23 @@ def _seed_d75d_scenario(conn) -> dict:
         INSERT INTO atividade_versao
             (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
              ch_por_evento, limite_semestre, limite_total, observacao_aluno,
-             observacao_admin, documentos_json, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             observacao_admin, documentos_json, numero_versao, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (base_id, norma_1_id, "AAC-rev5", "AAC", "7 - Piloto D75D",
-         2.0, 20.0, 60.0, "Obs aluno piloto", "Obs admin piloto", None, "ativa"),
+         2.0, 20.0, 60.0, "Obs aluno piloto", "Obs admin piloto", None, 1, "ativa"),
+    ).lastrowid
+
+    versao_2_id = conn.execute(
+        """
+        INSERT INTO atividade_versao
+            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+             ch_por_evento, limite_semestre, limite_total, observacao_aluno,
+             observacao_admin, documentos_json, numero_versao, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (base_id, norma_2_id, "AAC-rev6", "AAC", "7 - Piloto D75D",
+         2.0, 20.0, 60.0, "Obs aluno piloto", "Obs admin piloto", None, 2, "ativa"),
     ).lastrowid
 
     conn.execute("INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)", (matriz_test_id, atividade_id))
@@ -113,6 +127,7 @@ def _seed_d75d_scenario(conn) -> dict:
         "atividade_id": atividade_id,
         "base_id": base_id,
         "versao_1_id": versao_1_id,
+        "versao_2_id": versao_2_id,
         "norma_1_id": norma_1_id,
         "norma_2_id": norma_2_id,
         "norma_3_id": norma_3_id,
@@ -162,10 +177,10 @@ def _login_admin(client):
         sess["user_name"] = "Administrador"
 
 
-def _post_nova_versao(client, matriz_id, atividade_id, norma_id, active_tab="aac"):
+def _post_escolher_versao(client, matriz_id, atividade_id, versao_id, active_tab="aac"):
     return client.post(
         f"/admin/matrizes/{matriz_id}/atividades/{atividade_id}/nova-versao",
-        data={"active_tab": active_tab, "norma_id": str(norma_id)},
+        data={"active_tab": active_tab, "versao_id": str(versao_id)},
         follow_redirects=False,
     )
 
@@ -187,7 +202,7 @@ def test_get_renders_version_menu_button_in_right_panel(d75d_env):
 
 
 # ---------------------------------------------------------------------------
-# T02 — UI: modal HTML está presente na página
+# T02 — UI: modal HTML de escolha de versão está presente na página
 # ---------------------------------------------------------------------------
 
 def test_get_version_modal_present_in_page(d75d_env):
@@ -200,14 +215,15 @@ def test_get_version_modal_present_in_page(d75d_env):
 
     html = resp.get_data(as_text=True)
     assert 'id="matriz-version-modal"' in html
-    assert 'id="version-modal-norma-select"' in html
+    assert 'id="version-modal-versoes-list"' in html
+    assert 'Escolher versão' in html
 
 
 # ---------------------------------------------------------------------------
-# T03 — UI: JSON versionMenuData contém opção norma_2 para a atividade
+# T03 — UI: JSON versionMenuData contém numero_versao e lista de versões
 # ---------------------------------------------------------------------------
 
-def test_get_version_menu_data_json_has_norma_options(d75d_env):
+def test_get_version_menu_data_json_has_versoes(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
@@ -216,16 +232,17 @@ def test_get_version_menu_data_json_has_norma_options(d75d_env):
     assert resp.status_code == 200
 
     html = resp.get_data(as_text=True)
-    # JSON block with the activity key and the alternative norma
+    # JSON block includes the activity key and numero_versao
     assert f'"{seed["atividade_id"]}"' in html or f"'{seed['atividade_id']}'" in html
-    assert '"AAC-rev6"' in html
+    assert '"numero_versao"' in html
+    assert '"versoes"' in html
 
 
 # ---------------------------------------------------------------------------
-# T04 — POST happy path: nova versão criada e vinculada à matriz atual
+# T04 — POST happy path: relinka para versao_2 sem criar nova atividade_versao
 # ---------------------------------------------------------------------------
 
-def test_post_creates_new_versao_and_relinks_matrix(d75d_env):
+def test_post_relinks_to_existing_versao(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
@@ -234,125 +251,7 @@ def test_post_creates_new_versao_and_relinks_matrix(d75d_env):
         conn = main.get_db_connection()
         count_before = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
 
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_2_id"])
-    assert resp.status_code in (302, 303)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        count_after = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
-        assert count_after == count_before + 1
-
-        new_versao = conn.execute(
-            "SELECT * FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
-            (seed["base_id"], seed["norma_2_id"]),
-        ).fetchone()
-        assert new_versao is not None
-        assert new_versao["status"] == "ativa"
-
-        link = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
-            (seed["matriz_test_id"],),
-        ).fetchone()
-        assert link is not None
-        assert link["norma_id"] == seed["norma_2_id"]
-
-
-# ---------------------------------------------------------------------------
-# T05 — POST: campos copiados da versão atual; versao_anterior_id correto
-# ---------------------------------------------------------------------------
-
-def test_post_new_versao_has_correct_fields_and_versao_anterior_id(d75d_env):
-    client = d75d_env["client"]
-    seed = d75d_env["d75d_seed"]
-    _login_admin(client)
-
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_2_id"])
-    assert resp.status_code in (302, 303)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        new_versao = conn.execute(
-            "SELECT * FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
-            (seed["base_id"], seed["norma_2_id"]),
-        ).fetchone()
-        assert new_versao is not None
-
-        # Campos copiados da versao_1
-        assert new_versao["eixo"] == "AAC"
-        assert new_versao["grupo"] == "7 - Piloto D75D"
-        assert new_versao["ch_por_evento"] == 2.0
-        assert new_versao["limite_semestre"] == 20.0
-        assert new_versao["limite_total"] == 60.0
-        assert new_versao["observacao_aluno"] == "Obs aluno piloto"
-        assert new_versao["observacao_admin"] == "Obs admin piloto"
-
-        # codigo_normativo = código da nova norma, não da antiga
-        assert new_versao["codigo_normativo"] == "AAC-rev6"
-
-        # versao_anterior_id aponta para versao_1
-        assert new_versao["versao_anterior_id"] == seed["versao_1_id"]
-
-
-# ---------------------------------------------------------------------------
-# T06 — POST: apenas a matriz atual é revinculada; matriz antiga preservada
-# ---------------------------------------------------------------------------
-
-def test_post_relinks_only_current_matrix(d75d_env):
-    client = d75d_env["client"]
-    seed = d75d_env["d75d_seed"]
-    _login_admin(client)
-
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_2_id"])
-    assert resp.status_code in (302, 303)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-
-        # matriz_test agora tem versao para norma_2
-        link_test = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
-            (seed["matriz_test_id"],),
-        ).fetchone()
-        assert link_test["norma_id"] == seed["norma_2_id"]
-
-        # matriz_old ainda aponta para versao_1 (norma_1)
-        link_old = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
-            (seed["matriz_old_id"],),
-        ).fetchone()
-        assert link_old["norma_id"] == seed["norma_1_id"]
-
-
-# ---------------------------------------------------------------------------
-# T07 — POST: se versão (base, norma_2) já existe, reusa sem duplicar
-# ---------------------------------------------------------------------------
-
-def test_post_reuses_existing_versao_without_duplicate(d75d_env):
-    client = d75d_env["client"]
-    seed = d75d_env["d75d_seed"]
-    _login_admin(client)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        preexisting_id = conn.execute(
-            """
-            INSERT INTO atividade_versao
-                (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (seed["base_id"], seed["norma_2_id"], "AAC-rev6", "AAC", "7 - Pre-existing",
-             main.get_next_numero_versao(conn, seed["base_id"]), "ativa"),
-        ).lastrowid
-        conn.commit()
-        count_before = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
-
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_2_id"])
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["versao_2_id"])
     assert resp.status_code in (302, 303)
 
     with main.app.app_context():
@@ -364,112 +263,65 @@ def test_post_reuses_existing_versao_without_duplicate(d75d_env):
             "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
             (seed["matriz_test_id"],),
         ).fetchone()
-        assert link["atividade_versao_id"] == preexisting_id
+        assert link is not None
+        assert link["atividade_versao_id"] == seed["versao_2_id"]
 
 
 # ---------------------------------------------------------------------------
-# T08 — POST: rejeita norma não presente em matriz_norma da matriz
+# T05 — UI: card exibe badge vN baseado em numero_versao, não codigo_normativo
 # ---------------------------------------------------------------------------
 
-def test_post_rejects_norma_not_in_matriz_norma(d75d_env):
+def test_get_card_shows_version_badge(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
 
-    # Cria norma AAC fora do escopo da matriz (não adicionada em matriz_norma)
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        orphan_norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            ("AAC-orphan", "AAC", "orphan", "Norma fora do escopo", "ativa"),
-        ).lastrowid
-        conn.commit()
+    resp = client.get(f"/admin/editar_matriz/{seed['matriz_test_id']}?tab=aac")
+    assert resp.status_code == 200
 
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], orphan_norma_id)
-    assert resp.status_code in (302, 303)
-
-    # Link da matriz deve continuar na norma_1
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        link = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
-            (seed["matriz_test_id"],),
-        ).fetchone()
-        assert link["norma_id"] == seed["norma_1_id"]
+    html = resp.get_data(as_text=True)
+    # Card must show vN badge
+    assert 'class="version-badge"' in html
+    assert '>v1<' in html or '>v2<' in html
+    # codigo_normativo must NOT be the primary badge identifier
+    assert 'class="version-badge"' in html
 
 
 # ---------------------------------------------------------------------------
-# T09 — POST: rejeita norma inativa
+# T06 — POST: apenas a matriz atual é revinculada; matriz_old preservada
 # ---------------------------------------------------------------------------
 
-def test_post_rejects_inactive_norma(d75d_env):
+def test_post_relinks_only_current_matrix(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
 
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        inactive_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            ("AAC-inativa", "AAC", "rev-inativa", "Norma inativa", "inativa"),
-        ).lastrowid
-        conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)", (seed["matriz_test_id"], inactive_id))
-        conn.commit()
-
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], inactive_id)
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["versao_2_id"])
     assert resp.status_code in (302, 303)
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        link = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
+
+        # matriz_test agora aponta para versao_2
+        link_test = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
             (seed["matriz_test_id"],),
         ).fetchone()
-        assert link["norma_id"] == seed["norma_1_id"]
+        assert link_test["atividade_versao_id"] == seed["versao_2_id"]
 
-
-# ---------------------------------------------------------------------------
-# T10 — POST: rejeita norma com eixo incompatível (AEU para atividade AAC)
-# ---------------------------------------------------------------------------
-
-def test_post_rejects_wrong_eixo_norma(d75d_env):
-    client = d75d_env["client"]
-    seed = d75d_env["d75d_seed"]
-    _login_admin(client)
-
-    # Adiciona norma AEU ao escopo da matriz para passar a validação de norma_in_matriz
-    # mas falhar na validação de eixo
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        conn.execute(
-            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
-            (seed["matriz_test_id"], seed["norma_3_id"]),
-        )
-        conn.commit()
-
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_3_id"])
-    assert resp.status_code in (302, 303)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        link = conn.execute(
-            "SELECT av.norma_id FROM matriz_atividade_versao_item mavi"
-            " JOIN atividade_versao av ON av.id = mavi.atividade_versao_id"
-            " WHERE mavi.matriz_id = ?",
-            (seed["matriz_test_id"],),
+        # matriz_old ainda aponta para versao_1
+        link_old = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_old_id"],),
         ).fetchone()
-        assert link["norma_id"] == seed["norma_1_id"]
+        assert link_old["atividade_versao_id"] == seed["versao_1_id"]
 
 
 # ---------------------------------------------------------------------------
-# T11 — POST: rejeita norma igual à atual (flash info, sem escrita)
+# T07 — POST: mesma versão já vinculada retorna info, sem escrita
 # ---------------------------------------------------------------------------
 
-def test_post_rejects_same_norma_as_current(d75d_env):
+def test_post_same_versao_returns_info_no_change(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
@@ -478,20 +330,86 @@ def test_post_rejects_same_norma_as_current(d75d_env):
         conn = main.get_db_connection()
         count_before = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
 
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_1_id"])
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["versao_1_id"])
     assert resp.status_code in (302, 303)
 
     with main.app.app_context():
         conn = main.get_db_connection()
         count_after = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
-        assert count_after == count_before
+        assert count_after == count_before  # nenhuma nova versão criada
+
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_test_id"],),
+        ).fetchone()
+        assert link["atividade_versao_id"] == seed["versao_1_id"]  # sem mudança
 
 
 # ---------------------------------------------------------------------------
-# T12 — POST: rejeita norma_id ausente ou inválido
+# T08 — POST: rejeita versao_id de base diferente (cross-base relink proibido)
 # ---------------------------------------------------------------------------
 
-def test_post_rejects_missing_norma_id(d75d_env):
+def test_post_rejects_versao_from_wrong_base(d75d_env):
+    client = d75d_env["client"]
+    seed = d75d_env["d75d_seed"]
+    _login_admin(client)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        # Cria uma base diferente e uma versão para ela
+        other_base_id = conn.execute(
+            "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
+            ("Outra Base", "Base diferente", "ativo"),
+        ).lastrowid
+        other_versao_id = conn.execute(
+            """
+            INSERT INTO atividade_versao
+                (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, numero_versao, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (other_base_id, seed["norma_1_id"], "AAC-other", "AAC", "Outro grupo", 1, "ativa"),
+        ).lastrowid
+        conn.commit()
+
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], other_versao_id)
+    assert resp.status_code in (302, 303)
+
+    # Link deve continuar em versao_1
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_test_id"],),
+        ).fetchone()
+        assert link["atividade_versao_id"] == seed["versao_1_id"]
+
+
+# ---------------------------------------------------------------------------
+# T09 — POST: rejeita versao_id inexistente
+# ---------------------------------------------------------------------------
+
+def test_post_rejects_nonexistent_versao_id(d75d_env):
+    client = d75d_env["client"]
+    seed = d75d_env["d75d_seed"]
+    _login_admin(client)
+
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], 9999999)
+    assert resp.status_code in (302, 303)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_test_id"],),
+        ).fetchone()
+        assert link["atividade_versao_id"] == seed["versao_1_id"]
+
+
+# ---------------------------------------------------------------------------
+# T10 — POST: rejeita versao_id ausente ou inválido
+# ---------------------------------------------------------------------------
+
+def test_post_rejects_missing_versao_id(d75d_env):
     client = d75d_env["client"]
     seed = d75d_env["d75d_seed"]
     _login_admin(client)
@@ -500,7 +418,7 @@ def test_post_rejects_missing_norma_id(d75d_env):
         conn = main.get_db_connection()
         count_before = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
 
-    # Envia sem norma_id
+    # POST sem versao_id
     resp = client.post(
         f"/admin/matrizes/{seed['matriz_test_id']}/atividades/{seed['atividade_id']}/nova-versao",
         data={"active_tab": "aac"},
@@ -512,10 +430,15 @@ def test_post_rejects_missing_norma_id(d75d_env):
         conn = main.get_db_connection()
         count_after = conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"]
         assert count_after == count_before
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_test_id"],),
+        ).fetchone()
+        assert link["atividade_versao_id"] == seed["versao_1_id"]
 
 
 # ---------------------------------------------------------------------------
-# T13 — POST: rejeita atividade fora do escopo da matriz
+# T11 — POST: rejeita atividade fora do escopo da matriz
 # ---------------------------------------------------------------------------
 
 def test_post_rejects_activity_not_in_matrix_scope(d75d_env):
@@ -526,12 +449,11 @@ def test_post_rejects_activity_not_in_matrix_scope(d75d_env):
     # Atividade do seed de referência (id=1) NÃO está no matriz_test
     resp = client.post(
         f"/admin/matrizes/{seed['matriz_test_id']}/atividades/1/nova-versao",
-        data={"active_tab": "aac", "norma_id": str(seed["norma_2_id"])},
+        data={"active_tab": "aac", "versao_id": str(seed["versao_2_id"])},
         follow_redirects=False,
     )
     assert resp.status_code in (302, 303)
 
-    # A atividade de referência não deve ter uma nova versão criada no matriz_test
     with main.app.app_context():
         conn = main.get_db_connection()
         links_for_test_matrix = conn.execute(
@@ -543,7 +465,7 @@ def test_post_rejects_activity_not_in_matrix_scope(d75d_env):
 
 
 # ---------------------------------------------------------------------------
-# T14 — POST: rollback total quando _set_versao_da_matriz_para_base levanta erro
+# T12 — POST: rollback total quando _set_versao_da_matriz_para_base levanta erro
 # ---------------------------------------------------------------------------
 
 def test_post_rolls_back_on_link_error(d75d_env, monkeypatch):
@@ -564,7 +486,7 @@ def test_post_rolls_back_on_link_error(d75d_env, monkeypatch):
 
     monkeypatch.setattr(main, "_set_versao_da_matriz_para_base", _broken_set)
 
-    resp = _post_nova_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["norma_2_id"])
+    resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["versao_2_id"])
     assert resp.status_code in (302, 303)
 
     with main.app.app_context():
@@ -575,12 +497,12 @@ def test_post_rolls_back_on_link_error(d75d_env, monkeypatch):
             (seed["matriz_test_id"],),
         ).fetchone()["atividade_versao_id"]
 
-    assert count_after == count_before  # INSERT revertido
+    assert count_after == count_before  # nenhuma nova versão criada
     assert link_after == link_before    # link inalterado
 
 
 # ---------------------------------------------------------------------------
-# T15 — POST: CSRF obrigatório
+# T13 — POST: CSRF obrigatório
 # ---------------------------------------------------------------------------
 
 def test_post_requires_csrf(d75d_env_csrf):
@@ -599,23 +521,23 @@ def test_post_requires_csrf(d75d_env_csrf):
     # Sem token: deve retornar 400
     no_token = client.post(
         f"/admin/matrizes/{seed['matriz_test_id']}/atividades/{seed['atividade_id']}/nova-versao",
-        data={"active_tab": "aac", "norma_id": str(seed["norma_2_id"])},
+        data={"active_tab": "aac", "versao_id": str(seed["versao_2_id"])},
         follow_redirects=False,
     )
     assert no_token.status_code == 400
 
-    # Com token: deve redirecionar (criação bem-sucedida)
+    # Com token: deve redirecionar e relinkar
     with_token = client.post(
         f"/admin/matrizes/{seed['matriz_test_id']}/atividades/{seed['atividade_id']}/nova-versao",
-        data={"active_tab": "aac", "norma_id": str(seed["norma_2_id"]), "csrf_token": csrf_token},
+        data={"active_tab": "aac", "versao_id": str(seed["versao_2_id"]), "csrf_token": csrf_token},
         follow_redirects=False,
     )
     assert with_token.status_code in (302, 303)
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        new_versao = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
-            (seed["base_id"], seed["norma_2_id"]),
+        link = conn.execute(
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            (seed["matriz_test_id"],),
         ).fetchone()
-    assert new_versao is not None
+    assert link["atividade_versao_id"] == seed["versao_2_id"]

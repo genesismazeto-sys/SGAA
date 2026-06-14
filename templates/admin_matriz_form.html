@@ -431,9 +431,23 @@
       padding:12px 20px 20px;
       border-top:1px solid var(--border);
     }
-    .card-version-menu-btn{
+    .version-badge{
       flex-shrink:0;
       margin-left:auto;
+      align-self:center;
+      font-size:11px;
+      font-weight:600;
+      line-height:1;
+      padding:2px 6px;
+      border-radius:var(--radius);
+      background:var(--accent-subtle,#e8f0fe);
+      color:var(--accent,#1a56db);
+      letter-spacing:.02em;
+      pointer-events:none;
+    }
+    .card-version-menu-btn{
+      flex-shrink:0;
+      margin-left:4px;
       width:24px;
       height:24px;
       align-self:center;
@@ -741,7 +755,8 @@
                   <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
                 </span>
                 {% if not readonly and card_version_menu_data is defined and item.id|string in card_version_menu_data %}
-                  <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Ações da versão" title="Criar nova versão">&#x22EE;</button>
+                  <span class="version-badge" aria-label="Versão {{ card_version_menu_data[item.id|string].numero_versao }}">v{{ card_version_menu_data[item.id|string].numero_versao }}</span>
+                  <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Escolher versão" title="Escolher versão">&#x22EE;</button>
                 {% endif %}
               </label>
             {% endfor %}
@@ -916,8 +931,8 @@
       <div class="matriz-modal-card" role="dialog" aria-modal="true" aria-labelledby="matriz-version-modal-title">
         <div class="matriz-modal-header">
           <div>
-            <h3 class="matriz-modal-title" id="matriz-version-modal-title">Criar nova versão</h3>
-            <p class="matriz-modal-subtitle">Selecione a norma/regulamento para a nova versão desta atividade nesta matriz.</p>
+            <h3 class="matriz-modal-title" id="matriz-version-modal-title">Escolher versão</h3>
+            <p class="matriz-modal-subtitle">Selecione a versão desta atividade para esta matriz.</p>
           </div>
           <button class="matriz-modal-close" type="button" data-close-version-modal aria-label="Fechar">
             <i class="lucide" data-lucide="x"></i>
@@ -940,37 +955,18 @@
                 <span id="version-modal-activity-name">—</span>
               </div>
             </div>
-            <div class="matriz-modal-field">
-              <span class="matriz-modal-label">Versão atual vinculada (código normativo)</span>
-              <div class="matriz-modal-chip">
-                <i class="lucide" data-lucide="tag"></i>
-                <span id="version-modal-current-version">—</span>
-              </div>
+            <div class="matriz-modal-field" id="version-modal-versoes-field">
+              <span class="matriz-modal-label">Versão disponível</span>
+              <div id="version-modal-versoes-list" role="radiogroup" aria-label="Versões disponíveis"></div>
             </div>
-            <div class="matriz-modal-field">
-              <span class="matriz-modal-label">Contexto</span>
-              <div class="matriz-modal-chip">
-                <i class="lucide" data-lucide="git-branch-plus"></i>
-                <span>Versão nesta matriz: {{ matriz.nome }}</span>
-              </div>
-            </div>
-            <div class="matriz-modal-field" id="version-modal-norma-field">
-              <label class="matriz-modal-label" for="version-modal-norma-select">Norma/regulamento para nova versão</label>
-              <div class="field-card">
-                <div class="field-chip"><i class="lucide" data-lucide="scroll-text"></i></div>
-                <select class="control" id="version-modal-norma-select" name="norma_id" required>
-                  <option value="">Selecione a norma</option>
-                </select>
-              </div>
-            </div>
-            <div id="version-modal-no-norma" class="flash flash-warning" role="alert" hidden>
-              A matriz não possui outra norma compatível com o eixo desta atividade.
+            <div id="version-modal-no-versoes" class="flash flash-warning" role="alert" hidden>
+              Esta atividade não possui versões cadastradas.
             </div>
           </div>
           <div class="matriz-modal-footer">
             <button class="btn" type="button" data-close-version-modal>Cancelar</button>
             <button class="btn primary" type="submit" id="version-modal-submit">
-              <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Criar versão e usar nesta matriz</span>
+              <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Usar versão selecionada</span>
             </button>
           </div>
         </form>
@@ -1153,10 +1149,9 @@
     const versionMenuData = {{ card_version_menu_data | tojson }};
     const form = document.getElementById('matriz-version-form');
     const activityNameEl = document.getElementById('version-modal-activity-name');
-    const currentVersionEl = document.getElementById('version-modal-current-version');
-    const normaSelect = document.getElementById('version-modal-norma-select');
-    const noNormaEl = document.getElementById('version-modal-no-norma');
-    const normaField = document.getElementById('version-modal-norma-field');
+    const versoesList = document.getElementById('version-modal-versoes-list');
+    const versoesField = document.getElementById('version-modal-versoes-field');
+    const noVersoesEl = document.getElementById('version-modal-no-versoes');
     const submitBtn = document.getElementById('version-modal-submit');
 
     function openVersionModal(activityId) {
@@ -1166,28 +1161,53 @@
       const card = document.querySelector('[data-activity-id="' + activityId + '"]');
       const titleEl = card ? card.querySelector('.matriz-transfer-item-title') : null;
       activityNameEl.textContent = titleEl ? titleEl.textContent.trim() : '—';
-      currentVersionEl.textContent = data.norma_codigo || '—';
       form.action = data.form_action;
 
-      normaSelect.innerHTML = '<option value="">Selecione a norma</option>';
-      if (data.normas && data.normas.length > 0) {
-        data.normas.forEach(function(n) {
-          const opt = document.createElement('option');
-          opt.value = n.id;
-          opt.textContent = n.codigo + (n.nome ? ' • ' + n.nome : '');
-          normaSelect.appendChild(opt);
+      versoesList.innerHTML = '';
+      if (data.versoes && data.versoes.length > 0) {
+        data.versoes.forEach(function(v) {
+          const label = document.createElement('label');
+          label.className = 'matriz-modal-checkbox';
+          label.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 4px;cursor:pointer;';
+
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'versao_id';
+          radio.value = v.id;
+          radio.required = true;
+          if (v.is_current) {
+            radio.checked = true;
+          }
+
+          const badge = document.createElement('span');
+          badge.style.cssText = 'font-weight:600;min-width:2.5em;';
+          badge.textContent = 'v' + v.numero_versao;
+
+          const meta = document.createElement('span');
+          meta.style.cssText = 'color:var(--text-secondary);font-size:13px;';
+          const parts = [];
+          if (v.codigo_normativo) parts.push(v.codigo_normativo);
+          if (v.status && v.status !== 'ativa') parts.push(v.status);
+          if (v.is_current) parts.push('atual');
+          meta.textContent = parts.join(' • ');
+
+          label.appendChild(radio);
+          label.appendChild(badge);
+          label.appendChild(meta);
+          versoesList.appendChild(label);
         });
-        normaField.hidden = false;
-        noNormaEl.hidden = true;
+        versoesField.hidden = false;
+        noVersoesEl.hidden = true;
         submitBtn.disabled = false;
       } else {
-        normaField.hidden = true;
-        noNormaEl.hidden = false;
+        versoesField.hidden = true;
+        noVersoesEl.hidden = false;
         submitBtn.disabled = true;
       }
 
       versionModal.hidden = false;
-      window.requestAnimationFrame(function(){ normaSelect.focus(); });
+      const firstRadio = versoesList.querySelector('input[type=radio]');
+      if (firstRadio) window.requestAnimationFrame(function(){ firstRadio.focus(); });
     }
 
     function closeVersionModal() {

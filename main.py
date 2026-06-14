@@ -2716,6 +2716,7 @@ def get_vinculo_versao_da_matriz(conn, matriz_id: int, base_id: int):
             mavi.id                AS item_id,
             mavi.atividade_versao_id,
             av.codigo_normativo,
+            av.numero_versao,
             av.eixo,
             av.status              AS versao_status,
             av.atividade_base_id
@@ -2774,10 +2775,9 @@ def _remover_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int) -> i
 def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict:
     """
     Para cada atividade legada vinculada à matriz, retorna a versão atual vinculada
-    e as normas disponíveis para nova versão (ativas, eixo compatível, excluindo a
-    norma atual). Retorna dict str(legacy_id) → {base_id, versao_id, norma_id,
-    norma_codigo, eixo, normas}. Atividades sem mapa de legado ou sem vínculo de
-    versão na matriz não são incluídas.
+    e todas as versões disponíveis da mesma base (para escolha/relink).
+    Retorna dict str(legacy_id) → {base_id, versao_id, numero_versao, eixo, versoes}.
+    Atividades sem mapa de legado ou sem vínculo de versão na matriz não são incluídas.
     Estritamente read-only.
     """
     if not activity_ids:
@@ -2789,8 +2789,7 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
             mai.atividade_id      AS legacy_id,
             alm.atividade_base_id AS base_id,
             av.id                 AS versao_id,
-            av.norma_id,
-            av.codigo_normativo,
+            av.numero_versao,
             av.eixo
           FROM matrizes_atividades_itens mai
           JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
@@ -2806,25 +2805,32 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
 
     result = {}
     for row in rows:
-        normas = conn.execute(
+        current_versao_id = row["versao_id"]
+        versoes_rows = conn.execute(
             """
-            SELECT n.id, n.codigo, n.nome
-              FROM norma_atividade n
-              JOIN matriz_norma mn ON mn.norma_id = n.id AND mn.matriz_id = ?
-             WHERE n.eixo = ?
-               AND n.status = 'ativa'
-               AND n.id != ?
-             ORDER BY LOWER(n.codigo), n.id
+            SELECT id, numero_versao, status, codigo_normativo
+              FROM atividade_versao
+             WHERE atividade_base_id = ?
+             ORDER BY numero_versao DESC
             """,
-            (matriz_id, row["eixo"], row["norma_id"]),
+            (row["base_id"],),
         ).fetchall()
+        versoes = [
+            {
+                "id": v["id"],
+                "numero_versao": v["numero_versao"],
+                "status": v["status"],
+                "codigo_normativo": v["codigo_normativo"] or "",
+                "is_current": v["id"] == current_versao_id,
+            }
+            for v in versoes_rows
+        ]
         result[str(row["legacy_id"])] = {
             "base_id": row["base_id"],
-            "versao_id": row["versao_id"],
-            "norma_id": row["norma_id"],
-            "norma_codigo": row["codigo_normativo"],
+            "versao_id": current_versao_id,
+            "numero_versao": row["numero_versao"],
             "eixo": row["eixo"],
-            "normas": [{"id": n["id"], "codigo": n["codigo"], "nome": n["nome"] or ""} for n in normas],
+            "versoes": versoes,
         }
     return result
 
@@ -12863,17 +12869,15 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
 @admin_required
 def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     """
-    Cria ou resolve uma nova versão da atividade para esta matriz.
+    Relinka a matriz para uma versão operacional existente da atividade.
 
     Fluxo:
-      A. Resolve versão atual: matriz_id + atividade_id → base_id → versão vinculada.
-      B. Valida norma alvo: ativa, eixo compatível, em matriz_norma desta matriz.
-      C. Cria ou reusa versão alvo: SELECT por (base_id, norma_id);
-         se não existe → INSERT copiando campos da versão atual com versao_anterior_id;
-         se existe → reusa sem UPDATE.
-      D. Relinka somente a matriz atual via _set_versao_da_matriz_para_base.
+      A. Resolve atividade_base: atividade_id → base_id.
+      B. Valida versao_id: deve existir, pertencer à mesma base_id.
+      C. Relinka somente a matriz atual via _set_versao_da_matriz_para_base.
 
-    Não altera: matrizes antigas, outras matrizes, requisições, transições, versão antiga.
+    Não cria atividade_versao — apenas escolhe entre as existentes.
+    Não altera: outras matrizes, requisições, transições.
     CSRF obrigatório. Rollback total em erro intermediário.
     """
     conn = get_db_connection()
@@ -12909,110 +12913,41 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         flash("A atividade não está vinculada a esta matriz.", "error")
         return _redirect_matrix()
 
+    versao_id_raw = (request.form.get("versao_id") or "").strip()
+    if not versao_id_raw or not versao_id_raw.isdigit():
+        flash("Selecione uma versão existente.", "error")
+        return _redirect_matrix()
+    versao_id = int(versao_id_raw)
+
+    target_versao = conn.execute(
+        "SELECT id, atividade_base_id, numero_versao FROM atividade_versao WHERE id = ?",
+        (versao_id,),
+    ).fetchone()
+    if not target_versao:
+        flash("Versão não encontrada.", "error")
+        return _redirect_matrix()
+    if target_versao["atividade_base_id"] != base_id:
+        flash("A versão selecionada não pertence a esta atividade.", "error")
+        return _redirect_matrix()
+
     vinculo = get_vinculo_versao_da_matriz(conn, matriz_id, base_id)
-    if not vinculo:
-        flash("Esta atividade não possui versão vinculada a esta matriz.", "error")
-        return _redirect_matrix()
-    current_versao_id = vinculo["atividade_versao_id"]
-    current_versao = get_atividade_versao_by_id(conn, current_versao_id)
-
-    norma_id_raw = (request.form.get("norma_id") or "").strip()
-    if not norma_id_raw or not norma_id_raw.isdigit():
-        flash("Selecione uma norma/regulamento para criar a nova versão.", "error")
-        return _redirect_matrix()
-    norma_id = int(norma_id_raw)
-
-    if norma_id == current_versao["norma_id"]:
-        flash("Esta atividade já usa a norma selecionada nesta matriz.", "info")
-        return _redirect_matrix()
-
-    norma = get_norma_by_id(conn, norma_id)
-    if not norma:
-        flash("Norma não encontrada.", "error")
-        return _redirect_matrix()
-    if norma["status"] != "ativa":
-        flash("A norma selecionada não está ativa.", "error")
-        return _redirect_matrix()
-    if norma["eixo"] != current_versao["eixo"]:
-        flash("A norma selecionada não é compatível com o eixo desta atividade.", "error")
-        return _redirect_matrix()
-
-    norma_in_matriz = conn.execute(
-        "SELECT 1 FROM matriz_norma WHERE matriz_id = ? AND norma_id = ?",
-        (matriz_id, norma_id),
-    ).fetchone() is not None
-    if not norma_in_matriz:
-        flash("A norma selecionada não está permitida nesta matriz.", "error")
+    if vinculo and vinculo["atividade_versao_id"] == versao_id:
+        flash("Esta versão já está vinculada a esta matriz.", "info")
         return _redirect_matrix()
 
     try:
-        existing = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?"
-            " ORDER BY numero_versao DESC LIMIT 1",
-            (base_id, norma_id),
-        ).fetchone()
-
-        if existing:
-            target_versao_id = existing["id"]
-            created_new = False
-        else:
-            next_num = get_next_numero_versao(conn, base_id)
-            versao_cursor = conn.execute(
-                """
-                INSERT INTO atividade_versao (
-                    atividade_base_id,
-                    norma_id,
-                    codigo_normativo,
-                    eixo,
-                    grupo,
-                    ch_por_evento,
-                    limite_semestre,
-                    limite_total,
-                    observacao_aluno,
-                    observacao_admin,
-                    documentos_json,
-                    numero_versao,
-                    status,
-                    versao_anterior_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativa', ?)
-                """,
-                (
-                    base_id,
-                    norma_id,
-                    norma["codigo"],
-                    norma["eixo"],
-                    current_versao["grupo"],
-                    current_versao["ch_por_evento"],
-                    current_versao["limite_semestre"],
-                    current_versao["limite_total"],
-                    current_versao["observacao_aluno"],
-                    current_versao["observacao_admin"],
-                    current_versao["documentos_json"],
-                    next_num,
-                    current_versao_id,
-                ),
-            )
-            target_versao_id = versao_cursor.lastrowid
-            created_new = True
-
-        _set_versao_da_matriz_para_base(conn, matriz_id, base_id, target_versao_id)
+        _set_versao_da_matriz_para_base(conn, matriz_id, base_id, versao_id)
         conn.commit()
-
-        if created_new:
-            flash("Nova versão criada e vinculada a esta matriz.", "success")
-        else:
-            flash("Versão existente vinculada a esta matriz.", "success")
-
+        flash(
+            f"v{target_versao['numero_versao']} selecionada para esta matriz.",
+            "success",
+        )
     except sqlite3.IntegrityError as exc:
         conn.rollback()
-        error_msg = str(exc).lower()
-        if "unique" in error_msg:
-            flash("Conflito ao criar nova versão. Tente novamente.", "info")
-        else:
-            flash(f"Erro de integridade ao criar versão: {exc}", "error")
+        flash(f"Erro de integridade ao escolher versão: {exc}", "error")
     except Exception as exc:
         conn.rollback()
-        flash(f"Erro ao criar versão: {exc}", "error")
+        flash(f"Erro ao escolher versão: {exc}", "error")
 
     return _redirect_matrix()
 
