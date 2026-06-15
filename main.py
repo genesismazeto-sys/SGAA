@@ -5318,6 +5318,103 @@ def aluno_arquivos():
     return render_template('aluno_arquivos.html', arquivos=arquivos)
 
 # ===================== Rotas Aluno: Minhas Requisições =====================
+
+def _coerce_aluno_snapshot_scalar(value):
+    """Converte um campo escalar do payload do snapshot em string segura.
+
+    Aceita apenas tipos escalares (str/int/float); qualquer outro tipo
+    (dict/list/tuple/set) é descartado para evitar vazamento de estrutura
+    complexa para o template do aluno. Strings vazias viram None.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, tuple, set)):
+        return None
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    return value
+
+
+def _build_aluno_requisicao_snapshot_display(
+    *,
+    atividade_versao_id,
+    codigo_normativo_snapshot,
+    regra_snapshot_json,
+    versao_row,
+):
+    """Extrai um payload read-only de snapshot para o template do aluno.
+
+    Retorna None quando não houver snapshot registrado. Quando o payload
+    JSON for inválido, faz fallback silencioso usando apenas os campos
+    disponíveis no banco, sem nunca lançar exceção.
+    """
+    has_atividade_versao_id = atividade_versao_id not in (None, "")
+    has_codigo_normativo = bool(str(codigo_normativo_snapshot or "").strip())
+    if not has_atividade_versao_id and not has_codigo_normativo:
+        return None
+
+    display = {
+        "snapshot_versionado_presente": True,
+        "snapshot_vn": None,
+        "snapshot_codigo": None,
+        "snapshot_eixo": None,
+        "snapshot_grupo": None,
+        "snapshot_written_at": None,
+        "snapshot_flow_origin": None,
+    }
+
+    if versao_row is not None:
+        numero_versao = versao_row.get("numero_versao") if isinstance(versao_row, dict) else None
+        if numero_versao is not None:
+            try:
+                display["snapshot_vn"] = int(numero_versao)
+            except (TypeError, ValueError):
+                display["snapshot_vn"] = None
+        display["snapshot_codigo"] = _coerce_aluno_snapshot_scalar(
+            versao_row.get("codigo_normativo") if isinstance(versao_row, dict) else None
+        )
+        display["snapshot_eixo"] = _coerce_aluno_snapshot_scalar(
+            versao_row.get("eixo") if isinstance(versao_row, dict) else None
+        )
+        display["snapshot_grupo"] = _coerce_aluno_snapshot_scalar(
+            versao_row.get("grupo") if isinstance(versao_row, dict) else None
+        )
+
+    parsed = None
+    if regra_snapshot_json is not None:
+        try:
+            candidate = json.loads(str(regra_snapshot_json))
+            if isinstance(candidate, dict):
+                parsed = candidate
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = None
+
+    if parsed is not None:
+        for key, target in (
+            ("snapshot_codigo", "codigo_normativo"),
+            ("snapshot_eixo", "eixo"),
+            ("snapshot_grupo", "grupo"),
+            ("snapshot_written_at", "snapshot_written_at"),
+            ("snapshot_flow_origin", "flow_origin"),
+        ):
+            if display[key] is None:
+                display[key] = _coerce_aluno_snapshot_scalar(parsed.get(target))
+        payload_vn = parsed.get("atividade_versao_numero")
+        if display["snapshot_vn"] is None and payload_vn is not None:
+            try:
+                display["snapshot_vn"] = int(payload_vn)
+            except (TypeError, ValueError):
+                pass
+
+    if display["snapshot_codigo"] is None and has_codigo_normativo:
+        display["snapshot_codigo"] = _coerce_aluno_snapshot_scalar(
+            codigo_normativo_snapshot
+        )
+
+    return display
+
+
 @aluno_runtime_route("/aluno/requisicoes")
 @aluno_required
 def aluno_minhas_requisicoes():
@@ -5344,11 +5441,16 @@ def aluno_minhas_requisicoes():
     # Blocos SQL claros
     select_cols = (
         "SELECT r.id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
-        "a.nome AS atividade_nome, a.tipo_atividade, a.grupo AS grupo "
+        "r.atividade_versao_id, r.codigo_normativo_snapshot, r.regra_snapshot_json, "
+        "a.nome AS atividade_nome, a.tipo_atividade, a.grupo AS grupo, "
+        "av.numero_versao AS av_numero_versao, "
+        "av.codigo_normativo AS av_codigo_normativo, "
+        "av.eixo AS av_eixo, av.grupo AS av_grupo "
     )
     base_from = (
         "FROM requisicoes r "
         "JOIN atividades a ON a.id = r.atividade_id "
+        "LEFT JOIN atividade_versao av ON av.id = r.atividade_versao_id "
         "WHERE r.aluno_id = ?"
     )
     params: list[object] = [aluno_id]
@@ -5387,17 +5489,34 @@ def aluno_minhas_requisicoes():
         exec_params += [per_page, offset]
 
     rows = conn.execute(query, exec_params).fetchall()
-    requisicoes = [{
-        'id': r['id'],
-        'data_evento': r['data_evento'],
-        'data_processamento': r['data_processamento'],
-        'horas_solicitadas': r['horas_solicitadas'],
-        'horas_deferidas': r['horas_deferidas'],
-        'status': r['status'],
-        'atividade_nome': r['atividade_nome'],
-        'tipo_atividade': r['tipo_atividade'],
-        'grupo': r['grupo']
-    } for r in rows]
+    requisicoes = []
+    for r in rows:
+        versao_row = None
+        if r['av_numero_versao'] is not None or r['av_codigo_normativo'] is not None:
+            versao_row = {
+                'numero_versao': r['av_numero_versao'],
+                'codigo_normativo': r['av_codigo_normativo'],
+                'eixo': r['av_eixo'],
+                'grupo': r['av_grupo'],
+            }
+        snapshot_display = _build_aluno_requisicao_snapshot_display(
+            atividade_versao_id=r['atividade_versao_id'],
+            codigo_normativo_snapshot=r['codigo_normativo_snapshot'],
+            regra_snapshot_json=r['regra_snapshot_json'],
+            versao_row=versao_row,
+        )
+        requisicoes.append({
+            'id': r['id'],
+            'data_evento': r['data_evento'],
+            'data_processamento': r['data_processamento'],
+            'horas_solicitadas': r['horas_solicitadas'],
+            'horas_deferidas': r['horas_deferidas'],
+            'status': r['status'],
+            'atividade_nome': r['atividade_nome'],
+            'tipo_atividade': r['tipo_atividade'],
+            'grupo': r['grupo'],
+            'snapshot': snapshot_display,
+        })
 
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
     return render_template('aluno_minhas_requisicoes.html', requisicoes=requisicoes, page=page, per_page=per_page, total=total, total_pages=total_pages)
@@ -5572,9 +5691,15 @@ def aluno_requisicao_detalhe(req_id: int):
 
     row = conn.execute(
         """
-        SELECT r.*, a.nome AS atividade_nome, a.tipo_atividade, a.grupo
+        SELECT r.*,
+               a.nome AS atividade_nome, a.tipo_atividade, a.grupo,
+               av.numero_versao AS av_numero_versao,
+               av.codigo_normativo AS av_codigo_normativo,
+               av.eixo AS av_eixo,
+               av.grupo AS av_grupo
           FROM requisicoes r
           JOIN atividades a ON a.id = r.atividade_id
+          LEFT JOIN atividade_versao av ON av.id = r.atividade_versao_id
          WHERE r.id = ? AND r.aluno_id = ?
         """,
         (req_id, aluno_id)
@@ -5582,6 +5707,21 @@ def aluno_requisicao_detalhe(req_id: int):
     if not row:
         flash("Requisição não encontrada.", "error")
         return redirect(url_for('aluno_minhas_requisicoes'))
+
+    versao_row = None
+    if row['av_numero_versao'] is not None or row['av_codigo_normativo'] is not None:
+        versao_row = {
+            'numero_versao': row['av_numero_versao'],
+            'codigo_normativo': row['av_codigo_normativo'],
+            'eixo': row['av_eixo'],
+            'grupo': row['av_grupo'],
+        }
+    snapshot_display = _build_aluno_requisicao_snapshot_display(
+        atividade_versao_id=row['atividade_versao_id'] if 'atividade_versao_id' in row.keys() else None,
+        codigo_normativo_snapshot=row['codigo_normativo_snapshot'] if 'codigo_normativo_snapshot' in row.keys() else None,
+        regra_snapshot_json=row['regra_snapshot_json'] if 'regra_snapshot_json' in row.keys() else None,
+        versao_row=versao_row,
+    )
 
     detalhe = {
         'id': row['id'],
@@ -5597,7 +5737,8 @@ def aluno_requisicao_detalhe(req_id: int):
         'arquivo_comprovante': row['arquivo_comprovante'],
         'data_processamento': row['data_processamento'],
         # Campo opcional (pode ser NULL em registros antigos)
-        'nome_evento': row['nome_evento'] if 'nome_evento' in row.keys() else None
+        'nome_evento': row['nome_evento'] if 'nome_evento' in row.keys() else None,
+        'snapshot': snapshot_display,
     }
     # Modo edição somente leitura a partir do sticky button (abre o mesmo form de nova requisição, preenchido e bloqueado)
     edit_flag = (request.args.get('edit') or '').strip().lower() in {'1','true','yes','y'}

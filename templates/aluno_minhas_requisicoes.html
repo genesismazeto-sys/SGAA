@@ -285,7 +285,17 @@
           {% set gnum = (graw.split(' - ')[0]|trim) if ' - ' in graw else graw|trim %}
           <div class="cell center ellipsis">{{ gnum or '—' }}</div>
           <!-- Atividade (sem link) -->
-          <div class="cell left ellipsis">{{ r.atividade_nome }}</div>
+          <div class="cell left ellipsis">
+            <span>{{ r.atividade_nome }}</span>
+            {% if r.snapshot and r.snapshot.snapshot_versionado_presente %}
+              {% set snap = r.snapshot %}
+              {% set vn_text = ('v' ~ snap.snapshot_vn) if snap.snapshot_vn else 'Versão' %}
+              {% set cn_text = snap.snapshot_codigo or '' %}
+              {% set tooltip_text = 'Versão normativa registrada: ' ~ (vn_text ~ (' · ' ~ cn_text) if cn_text else vn_text) %}
+              <span class="aluno-snapshot-chip" title="{{ tooltip_text }}" aria-label="{{ tooltip_text }}"
+                    style="display:inline-flex; align-items:center; margin-left:6px; padding:0 6px; height:16px; min-height:16px; font-size:11px; line-height:1; white-space:nowrap; border:1px solid var(--border-strong); border-radius:999px; background:var(--surface); color:var(--text-secondary);">{{ vn_text }}</span>
+            {% endif %}
+          </div>
           <!-- Horas solicitadas -->
           <div class="cell center">{{ r.horas_solicitadas }}</div>
           <!-- Horas deferidas (0 se nulas) -->

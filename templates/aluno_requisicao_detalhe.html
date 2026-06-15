@@ -13,9 +13,41 @@
     <div class="item"><div class="label">Solicitação</div><div class="value">{{ r.data_solicitacao }}</div></div>
     <div class="item"><div class="label">Status</div><div class="value">{{ r.status }}</div></div>
   <div class="item"><div class="label">Solicitadas (h)</div><div class="value">{{ r.horas_solicitadas }}</div></div>
-  <div class="item"><div class="label">Deferidas (h)</div><div class="value">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div></div>
+    <div class="item"><div class="label">Deferidas (h)</div><div class="value">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div></div>
   </div>
 </div>
+
+{% if r.snapshot and r.snapshot.snapshot_versionado_presente %}
+<div class="card" style="margin-bottom:16px; border-left: 3px solid var(--btn-primary, #0369a1);">
+  <div class="content-block-header">Versão normativa registrada</div>
+  <div class="content-block-body" style="flex-direction:column; gap:6px;">
+    {% set snap = r.snapshot %}
+    {% set vn_part = ('v' ~ snap.snapshot_vn) if snap.snapshot_vn else '' %}
+    {% set cn_part = snap.snapshot_codigo or '' %}
+    {% set label_versao = vn_part %}
+    {% if vn_part and cn_part %}
+      {% set label_versao = vn_part ~ ' · ' ~ cn_part %}
+    {% elif cn_part %}
+      {% set label_versao = cn_part %}
+    {% endif %}
+    {% if label_versao %}
+      <div><strong>Versão:</strong> {{ label_versao }}</div>
+    {% endif %}
+    {% if snap.snapshot_eixo %}
+      <div><strong>Eixo:</strong> {{ snap.snapshot_eixo }}</div>
+    {% endif %}
+    {% if snap.snapshot_grupo %}
+      <div><strong>Grupo:</strong> {{ snap.snapshot_grupo }}</div>
+    {% endif %}
+    {% if snap.snapshot_written_at %}
+      <div><strong>Registrado em:</strong> {{ snap.snapshot_written_at }}</div>
+    {% endif %}
+    {% if snap.snapshot_flow_origin %}
+      <div class="help">Origem do registro: {{ snap.snapshot_flow_origin }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="content-block-header">Comprovantes e Observações</div>
