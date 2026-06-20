@@ -1677,6 +1677,13 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
   - Não ligar flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` sem backup novo.
   - Não alterar deferimento admin sem teste específico.
   - Não alterar `database.db` sem autorização explícita.
+- D8.1B is complete: display read-only do snapshot versionado entregue para
+  o aluno (lista e detalhe). Commit `1b34b55` aceito. 6 passed (D8.1B) + 32
+  passed (regressão dirigida) + 528 passed (suíte completa), 0 failed, 0 errors.
+  - Não ligar flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` sem nova fase explícita.
+  - Não recalcular snapshot em edição do aluno.
+  - Não alterar deferimento admin sem plano próprio.
+  - Não alterar `database.db` sem autorização explícita.
 
 ### D8.0 - Baseline pós-D7 / Macrofase aluno-requisições versionadas
 
@@ -1706,3 +1713,46 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
     - Hash idêntico ao original confirmado; backup não entrou no Git.
   - Estado D8 baseline: D7 fechado; suíte verde (522/0); backup verificado.
   - Próxima etapa: D8.1A — READONLY-ALUNO-REQUISICOES-VERSIONED-CUTOVER-PLAN.
+
+### D8.1 - Display read-only de snapshot versionado para o aluno
+
+- D8.1A aprovada como plano read-only do cutover aluno/requisições versionadas
+  (somente leitura e planejamento; nenhum write autorizado nesta etapa).
+- D8.1B aprovada funcionalmente.
+  - Commit aceito: `1b34b55` — `Show versioned snapshot metadata to students`.
+  - Escopo entregue:
+    - `app/views/aluno.py` expõe metadados read-only do snapshot versionado
+      (`atividade_versao_id`, `codigo_normativo_snapshot`, `regra_snapshot_json`,
+      join com `atividade_versao`) nas rotas reais do aluno
+      (`aluno_minhas_requisicoes`, `aluno_requisicao_detalhe`).
+    - `main.py` mantém paridade nas rotas legacy (ativas apenas quando
+      `USE_ALUNO_BLUEPRINT=False`; hoje `True`, blueprint é a rota real).
+    - `templates/aluno_requisicao_detalhe.html` mostra bloco
+      "Versão normativa registrada" quando há snapshot.
+    - `templates/aluno_minhas_requisicoes.html` mostra chip `vN` quando há snapshot.
+    - `tests/test_aluno_requisicao_versioned_readonly.py` cobre 6 cenários
+      (T01–T06: flag ON com bloco completo, flag OFF sem bloco, chip na lista,
+      JSON inválido sem 500, turma sem matriz/writer no-op, edição não regenera snapshot).
+  - Contrato preservado:
+    - `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` permanece OFF por padrão;
+    - `SGAA_VERSIONED_RESOLVER_SHADOW_READ` permanece OFF;
+    - edição pelo aluno não recalcula snapshot;
+    - admin/deferimento/resolver/schema/`database.db` não foram alterados.
+  - Validação aceita:
+    - testes focados D8.1B: `tests/test_aluno_requisicao_versioned_readonly.py` — 6 passed;
+    - regressão dirigida (`test_release_requisicoes_flow`, `test_matriz_versao_contract`,
+      `test_activity_versioning_shadow_read`, `test_admin_requisicao_process_ui`,
+      `test_admin_requisicao_create`): 32 passed;
+    - suíte completa: `python -m pytest tests/ -q --tb=short` — 528 passed, 0 failed,
+      0 errors, 4 warnings em 447.70s — execução única, sem OOM.
+  - `database.db`:
+    - não versionado (`git ls-files database.db` vazio);
+    - SHA256 antes/depois inalterado:
+      `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`;
+    - tamanho: 544.768 bytes.
+  - Ressalva processual: o commit `1b34b55` já existia localmente antes da
+    validação desta sessão (implementado em sessão anterior); backup
+    pré-implementação específico da D8.1B não foi criado. A ressalva é aceita
+    porque o backup D8.0B já existe, o banco não foi alterado por nenhuma
+    etapa desta trilha, e a validação confirmou hash idêntico antes/depois.
+  - Próxima etapa recomendada: D8.1D — final verify and push.

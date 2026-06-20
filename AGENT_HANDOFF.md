@@ -1,11 +1,28 @@
 # Agent Handoff
 
-Last updated: 2026-06-14
-Closeout: D8.0B baseline suite and database backup
-Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Last updated: 2026-06-20
+Closeout: D8.1B student snapshot display closeout (docs-only D8.1C)
+Executor: Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
+- D8.1B funcionalmente fechada, docs em fechamento (D8.1C, docs-only).
+  - HEAD atual esperado: `1b34b55` — `Show versioned snapshot metadata to students`.
+  - `origin/main...main`: `0 1` antes do commit docs (commit local não enviado).
+  - Push: não realizado.
+  - Contrato D8.1B:
+    - display read-only do snapshot versionado para aluno (lista e detalhe);
+    - sem write cutover (`SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` OFF por padrão);
+    - sem alteração de deferimento admin;
+    - sem alteração em resolver/schema/DB.
+  - Testes aceitos: 6 passed (D8.1B focados); 32 passed (regressão dirigida);
+    528 passed (suíte completa), 0 failed, 0 errors.
+  - Próxima etapa: D8.1D — verificação final e push, após este closeout.
+  - O que NÃO fazer:
+    - não ligar flag de write sem nova fase explícita;
+    - não recalcular snapshot em edição do aluno;
+    - não alterar deferimento admin sem plano próprio;
+    - não alterar `database.db` sem autorização explícita.
 - D7.3D dry-run importer implemented, audited, and committed.
 - D7.3E-RO1 read-only fixture vs real database convergence diagnostic accepted.
 - D7.3F-PLAN read-only reconciliation matrix accepted and its architectural decisions are now closed.
@@ -995,6 +1012,14 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
   - Avaliar cutover da flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` para o fluxo do aluno.
   - Mapear telas do aluno que precisarão exibir versão operacional (`vN`, `observacao_aluno`).
   - Definir testes mínimos: `tests/test_aluno_requisicao_versionada.py`.
+- D8.1B — display read-only do snapshot versionado para o aluno — aprovada
+  funcionalmente. Commit `1b34b55` aceito.
+  - 6 passed (D8.1B) + 32 passed (regressão dirigida) + 528 passed (suíte completa), 0 failed, 0 errors.
+  - `database.db`: 544.768 bytes, SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6` — inalterado.
+  - Ressalva aceita: commit já existia localmente antes da validação; backup
+    específico não foi criado pois o backup D8.0B já cobre o estado do banco,
+    que permaneceu com hash idêntico.
+- Próxima etapa recomendada: **D8.1D — final verify and push**.
 - Não reabrir D7.7B1 sem novo bug concreto.
 - Não reabrir D7.7C1 sem novo bug concreto.
 - Não reabrir D7.6 sem novo bug concreto.
@@ -1004,6 +1029,9 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
 - Não ligar flag `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` sem novo backup do live.
 - Não alterar deferimento admin sem teste específico.
 - Não alterar `database.db` sem autorização explícita.
+- Não reabrir D8.1B sem novo bug concreto.
+- Não ligar flag de write (`SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE`) sem nova fase explícita.
+- Não recalcular snapshot em edição do aluno.
 
 ## Instructions For The Next Agent
 
