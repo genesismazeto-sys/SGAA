@@ -1,8 +1,8 @@
 # Project State
 
-Last updated: 2026-06-14
-Closeout: D8.0B baseline suite and database backup
-Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Last updated: 2026-06-20
+Closeout: D8.2B student edit snapshot contract closeout (docs-only)
+Executor: Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1684,6 +1684,27 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
   - Não recalcular snapshot em edição do aluno.
   - Não alterar deferimento admin sem plano próprio.
   - Não alterar `database.db` sem autorização explícita.
+- D8.2A is complete: plano read-only de cutover de escrita aprovado
+  (READONLY-WRITE-CUTOVER-RISK-PLAN); nenhuma flag ligada, nenhum código
+  alterado nesta fase.
+- D8.2B is complete: contrato de edição do aluno após snapshot versionado
+  implementado e aceito. Commit `d06a02d` — `Block activity changes after
+  student snapshot write`. 12 passed (D8.2B/D8.1B focados) + 32 passed
+  (regressão dirigida) + 534 passed (suíte completa), 0 failed, 0 errors.
+  - Aluno não pode trocar `atividade_id` quando a requisição já tem snapshot
+    versionado (`atividade_versao_id` ou `codigo_normativo_snapshot` ou
+    `regra_snapshot_json` presentes).
+  - Demais campos (nome do evento, horas, data, observação, anexos) seguem
+    editáveis.
+  - Requisições sem snapshot preservam troca de atividade legada.
+  - Snapshot não é recalculado nem limpo na edição.
+  - `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` e
+    `SGAA_VERSIONED_RESOLVER_SHADOW_READ` permanecem OFF por padrão; `.env`
+    não foi alterado.
+  - Writer/resolver/admin/deferimento/schema/`database.db` não foram
+    alterados.
+  - Não fazer push sem ordem explícita.
+  - Não reabrir D8.2B sem novo bug concreto.
 
 ### D8.0 - Baseline pós-D7 / Macrofase aluno-requisições versionadas
 
@@ -1756,3 +1777,67 @@ Executor: Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + back
     porque o backup D8.0B já existe, o banco não foi alterado por nenhuma
     etapa desta trilha, e a validação confirmou hash idêntico antes/depois.
   - Próxima etapa recomendada: D8.1D — final verify and push.
+
+### D8.2 - Contrato de edição do aluno após snapshot versionado / risco de cutover de escrita
+
+- D8.2A aprovada como plano read-only de cutover de escrita
+  (READONLY-WRITE-CUTOVER-RISK-PLAN).
+  - Somente leitura e planejamento; nenhuma flag ligada; nenhum código
+    alterado.
+  - Risco primário identificado: edição do aluno após snapshot já gravado
+    poderia trocar `atividade_id` sem recalcular nem invalidar o snapshot,
+    gerando divergência entre o que foi exibido ao aluno e o que valeria
+    depois. Esse risco foi tratado como bloqueador para qualquer cutover real
+    de `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE`.
+  - Relatório de 15 seções entregue, sem nenhuma escrita real.
+- D8.2B aprovada funcionalmente.
+  - Commit aceito: `d06a02d` — `Block activity changes after student snapshot write`.
+  - Escopo entregue:
+    - `app/views/aluno.py` bloqueia troca de atividade pelo aluno quando a
+      requisição já possui snapshot versionado;
+    - edição de demais campos (nome do evento, horas, data, observação,
+      anexos) permanece permitida;
+    - requisições sem snapshot preservam comportamento legado de troca de
+      atividade (mantida a validação de matriz já existente);
+    - snapshot não é recalculado em edição;
+    - snapshot não é limpo em edição;
+    - `docs/d8_2_write_cutover_ops.md` registra o contrato e o plano de smoke
+      futuro (não executado).
+  - Contrato preservado:
+    - `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` permanece OFF por padrão;
+    - `SGAA_VERSIONED_RESOLVER_SHADOW_READ` permanece OFF;
+    - `.env` não foi alterado;
+    - writer/resolver/admin/deferimento/schema/`database.db` não foram
+      alterados.
+  - Validação aceita:
+    - `tests/test_aluno_requisicao_versioned_readonly.py`: 12 passed
+      (6 D8.1B + 6 D8.2B, T01–T06);
+    - regressão dirigida (`test_release_requisicoes_flow`,
+      `test_matriz_versao_contract`, `test_activity_versioning_shadow_read`,
+      `test_admin_requisicao_process_ui`, `test_admin_requisicao_create`):
+      32 passed;
+    - suíte completa: `python -m pytest tests/ -q --tb=short` — 534 passed,
+      0 failed, 0 errors, 4 warnings, execução única, sem OOM;
+    - artifacts CSRF (`tests/_artifacts/csrf_inventory_shadow_off.json`,
+      `csrf_inventory_shadow_on.json`) restaurados ao estado HEAD após a
+      suíte; não entraram no commit;
+    - `git diff --check`: limpo (apenas aviso benigno de normalização
+      LF→CRLF).
+  - `database.db`:
+    - não versionado (`git ls-files database.db` vazio);
+    - SHA256 antes/depois inalterado:
+      `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`;
+    - tamanho: 544.768 bytes.
+  - Riscos residuais:
+    - admin ainda pode editar a atividade de uma requisição com snapshot por
+      design, fora do escopo D8.2B — divergência potencial fica registrada
+      para uma fase futura se o write cutover avançar;
+    - `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` segue OFF, então o guard hoje
+      só protege as requisições já carimbadas (smoke D6.4) ou requisições
+      futuras após um cutover real;
+    - duplicação blueprint/legacy em `aluno.py`/`main.py` deve ser observada
+      em um refactor futuro, fora do escopo desta fase.
+  - Próxima etapa recomendada:
+    - D8.2C — final verify and push dos commits locais D8.2B + closeout;
+    - depois, nova fase explícita de smoke em cópia do banco antes de
+      qualquer cutover real de `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE`.
