@@ -479,3 +479,314 @@ def test_aluno_edit_trocando_atividade_id_nao_regenera_snapshot(
     detail_html = detail.get_data(as_text=True)
     assert "Versão normativa registrada" in detail_html
     assert original_codigo in detail_html
+
+
+# ===========================================================================
+# D8.2B — Contrato de edição do aluno após snapshot versionado.
+#
+# Regra: se a requisição já possui snapshot versionado (qualquer um de
+# `atividade_versao_id` / `codigo_normativo_snapshot` / `regra_snapshot_json`),
+# o aluno NÃO pode trocar a atividade. O snapshot não é recalculado nem limpo;
+# é um registro imutável do momento da criação. Demais edições continuam
+# permitidas. Requisições SEM snapshot preservam a troca de atividade legada,
+# mantida a validação de atividade permitida pela matriz.
+#
+# A flag SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE só é ligada dentro de cada
+# teste, via monkeypatch; nunca no ambiente do workspace.
+# ===========================================================================
+
+_GUARD_MESSAGE = "Esta solicitação já possui versão normativa registrada"
+
+
+def _create_versioned_pending(client, seed, *, atividade_id="1"):
+    """Cria via aluno_create (WRITE ON) e devolve (nome_evento, req carimbada)."""
+    event_name = f"D82B base {uuid.uuid4().hex[:8]}"
+    resp = client.post(
+        "/aluno/nova-requisicao",
+        data={
+            "atividade_id": atividade_id,
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "4",
+            "observacao": "d82b base",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303)
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    return event_name, req
+
+
+def _row_by_id(req_id: int, columns: str):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        return conn.execute(
+            f"SELECT {columns} FROM requisicoes WHERE id = ?",
+            (req_id,),
+        ).fetchone()
+
+
+# ---------------------------------------------------------------------------
+# T01 — snapshot presente: trocar atividade_id é bloqueado (rejeição atômica).
+# ---------------------------------------------------------------------------
+
+def test_d82b_t01_edit_change_activity_blocked_when_snapshot_present(
+    versioned_env, monkeypatch
+):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    event_name, req = _create_versioned_pending(client, seed)
+    assert req["atividade_id"] == 1
+    assert req["atividade_versao_id"] is not None
+    assert req["codigo_normativo_snapshot"] is not None
+    original_versao_id = req["atividade_versao_id"]
+    original_codigo = req["codigo_normativo_snapshot"]
+    original_json = req["regra_snapshot_json"]
+
+    # Tenta trocar a atividade (1 -> 2; ambas permitidas na matriz da T11).
+    edit = client.post(
+        f"/aluno/requisicoes/{req['id']}?edit=1",
+        data={
+            "atividade_id": "2",
+            "nome_evento": event_name + " tentativa de troca",
+            "horas_solicitadas": "6",
+            "data_evento": "2026-05-25",
+            "observacao": "tentativa de troca t01",
+        },
+        follow_redirects=True,
+    )
+    assert edit.status_code == 200
+    # Comportamento de rejeição é observável via flash renderizado.
+    assert _GUARD_MESSAGE in edit.get_data(as_text=True)
+
+    # Estado no banco: atividade e snapshot inalterados; rejeição atômica
+    # (nenhum outro campo do POST foi aplicado).
+    after = _row_by_id(
+        req["id"],
+        "atividade_id, atividade_versao_id, codigo_normativo_snapshot, "
+        "regra_snapshot_json, nome_evento, horas_solicitadas, status",
+    )
+    assert after["atividade_id"] == 1
+    assert after["atividade_versao_id"] == original_versao_id
+    assert after["codigo_normativo_snapshot"] == original_codigo
+    assert after["regra_snapshot_json"] == original_json
+    assert after["nome_evento"] == event_name
+    assert float(after["horas_solicitadas"]) == 4.0
+    assert after["status"] == "Pendente"
+
+
+# ---------------------------------------------------------------------------
+# T02 — snapshot presente: edições não estruturais continuam permitidas.
+# ---------------------------------------------------------------------------
+
+def test_d82b_t02_edit_nonstructural_fields_allowed_with_snapshot_present(
+    versioned_env, monkeypatch
+):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    event_name, req = _create_versioned_pending(client, seed)
+    original_versao_id = req["atividade_versao_id"]
+    original_codigo = req["codigo_normativo_snapshot"]
+    original_json = req["regra_snapshot_json"]
+    assert original_versao_id is not None
+
+    new_name = event_name + " editado"
+    edit = client.post(
+        f"/aluno/requisicoes/{req['id']}?edit=1",
+        data={
+            "atividade_id": "1",  # mesma atividade
+            "nome_evento": new_name,
+            "horas_solicitadas": "9",
+            "data_evento": "2026-06-01",
+            "observacao": "obs editada t02",
+        },
+        follow_redirects=False,
+    )
+    assert edit.status_code in (302, 303)
+
+    after = _row_by_id(
+        req["id"],
+        "atividade_id, atividade_versao_id, codigo_normativo_snapshot, "
+        "regra_snapshot_json, nome_evento, horas_solicitadas, observacao, data_evento",
+    )
+    # Campos não estruturais atualizados.
+    assert after["nome_evento"] == new_name
+    assert float(after["horas_solicitadas"]) == 9.0
+    assert after["observacao"] == "obs editada t02"
+    assert str(after["data_evento"]).startswith("2026-06-01")
+    # Atividade e snapshot preservados.
+    assert after["atividade_id"] == 1
+    assert after["atividade_versao_id"] == original_versao_id
+    assert after["codigo_normativo_snapshot"] == original_codigo
+    assert after["regra_snapshot_json"] == original_json
+
+
+# ---------------------------------------------------------------------------
+# T03 — sem snapshot: troca de atividade continua permitida (legado).
+# ---------------------------------------------------------------------------
+
+def test_d82b_t03_edit_change_activity_allowed_when_no_snapshot(
+    versioned_env, monkeypatch
+):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
+
+    legacy_name = f"D82B legado {uuid.uuid4().hex[:8]}"
+    req_id = _create_pending_requisicao_legada(seed["aluno_id"], 1, nome_evento=legacy_name)
+
+    before = _row_by_id(
+        req_id,
+        "atividade_id, atividade_versao_id, codigo_normativo_snapshot, regra_snapshot_json",
+    )
+    assert before["atividade_id"] == 1
+    assert before["atividade_versao_id"] is None
+    assert before["codigo_normativo_snapshot"] is None
+    assert before["regra_snapshot_json"] is None
+
+    # Troca 1 -> 2 (ambas permitidas na matriz da T11) deve ser aceita.
+    edit = client.post(
+        f"/aluno/requisicoes/{req_id}?edit=1",
+        data={
+            "atividade_id": "2",
+            "nome_evento": legacy_name,
+            "horas_solicitadas": "4",
+            "data_evento": "2026-05-24",
+            "observacao": "troca legada permitida",
+        },
+        follow_redirects=False,
+    )
+    assert edit.status_code in (302, 303)
+
+    after = _row_by_id(req_id, "atividade_id, atividade_versao_id")
+    assert after["atividade_id"] == 2
+    assert after["atividade_versao_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# T04 — aluno_create com WRITE ON e resolvedor não-resolvido: cria sem snapshot,
+#        não bloqueia, GET detalhe não quebra.
+# ---------------------------------------------------------------------------
+
+def test_d82b_t04_aluno_create_write_on_unresolved_creates_without_snapshot(
+    versioned_env, monkeypatch
+):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    # Força status não-resolvido no resolvedor consumido pelo writer (patch de
+    # teste; não altera o código de produção do resolver/writer).
+    def _fake_resolver(conn, **kwargs):
+        return main._resolver_result(
+            "version_inactive",
+            reason="forçado não-resolvido para T04",
+        )
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", _fake_resolver)
+
+    event_name = f"D82B T04 {uuid.uuid4().hex[:8]}"
+    resp = client.post(
+        "/aluno/nova-requisicao",
+        data={
+            "atividade_id": "1",
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "3",
+            "observacao": "t04 unresolved",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303)  # criação não é bloqueada
+
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    assert req["atividade_versao_id"] is None
+    assert req["codigo_normativo_snapshot"] is None
+    assert req["regra_snapshot_json"] is None
+
+    detail = client.get(f"/aluno/requisicoes/{req['id']}")
+    assert detail.status_code == 200
+    assert "Versão normativa registrada" not in detail.get_data(as_text=True)
+
+
+# ---------------------------------------------------------------------------
+# T05 — exceção no resolvedor não bloqueia a criação (writer engole e segue).
+# ---------------------------------------------------------------------------
+
+def test_d82b_t05_writer_exception_does_not_block_creation(
+    versioned_env, monkeypatch
+):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    def _boom_resolver(conn, **kwargs):
+        raise RuntimeError("falha simulada no resolvedor (T05)")
+
+    monkeypatch.setattr(main, "resolver_versao_por_aluno", _boom_resolver)
+
+    event_name = f"D82B T05 {uuid.uuid4().hex[:8]}"
+    resp = client.post(
+        "/aluno/nova-requisicao",
+        data={
+            "atividade_id": "1",
+            "nome_evento": event_name,
+            "data_evento": "2026-05-24",
+            "horas_solicitadas": "2",
+            "observacao": "t05 boom",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303)  # não bloqueia e não 500
+
+    req = _fetch_req(seed["aluno_id"], event_name)
+    assert req is not None
+    assert req["atividade_versao_id"] is None
+    assert req["codigo_normativo_snapshot"] is None
+
+    detail = client.get(f"/aluno/requisicoes/{req['id']}")
+    assert detail.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# T06 — regressão D8.1B: detalhe mostra bloco e lista mostra chip vN.
+# ---------------------------------------------------------------------------
+
+def test_d82b_t06_regression_display_block_and_chip(versioned_env, monkeypatch):
+    env = versioned_env
+    client = env["client"]
+    seed = _seed_aluno_em_t11()
+    _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
+    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
+
+    _event_name, req = _create_versioned_pending(client, seed)
+    assert req["atividade_versao_id"] is not None
+
+    detail = client.get(f"/aluno/requisicoes/{req['id']}")
+    assert detail.status_code == 200
+    assert "Versão normativa registrada" in detail.get_data(as_text=True)
+
+    lista = client.get("/aluno/requisicoes")
+    assert lista.status_code == 200
+    assert 'class="aluno-snapshot-chip"' in lista.get_data(as_text=True)

@@ -1848,7 +1848,9 @@ def aluno_requisicao_detalhe(req_id: int):
 
     if request.method == "POST" and not delete_flag:
         rec = conn.execute(
-            "SELECT status, arquivo_comprovante, data_processamento, atividade_id FROM requisicoes WHERE id=? AND aluno_id=?",
+            "SELECT status, arquivo_comprovante, data_processamento, atividade_id, "
+            "atividade_versao_id, codigo_normativo_snapshot, regra_snapshot_json "
+            "FROM requisicoes WHERE id=? AND aluno_id=?",
             (req_id, aluno_id),
         ).fetchone()
         if not rec:
@@ -1867,6 +1869,32 @@ def aluno_requisicao_detalhe(req_id: int):
         data_evento_raw = request.form.get("data_evento")
         observacao = request.form.get("observacao")
         atividade_id_new = request.form.get("atividade_id")
+
+        # D8.2B — contrato de edição após snapshot versionado.
+        # Quando a requisição já tem um snapshot versionado registrado no
+        # momento da criação, o aluno NÃO pode trocar a atividade. O snapshot é
+        # um registro imutável do momento da criação: a edição não o recalcula
+        # nem o limpa. As demais edições (nome do evento, horas, data,
+        # observação, anexos) seguem permitidas normalmente. Requisições sem
+        # snapshot preservam o comportamento legado de troca de atividade,
+        # mantendo a validação de atividade permitida pela matriz.
+        snapshot_versionado_presente = (
+            (rec["atividade_versao_id"] is not None and str(rec["atividade_versao_id"]).strip() != "")
+            or (str(rec["codigo_normativo_snapshot"] or "").strip() != "")
+            or (str(rec["regra_snapshot_json"] or "").strip() != "")
+        )
+        if (
+            snapshot_versionado_presente
+            and atividade_id_new
+            and atividade_id_new.isdigit()
+            and int(atividade_id_new) != rec["atividade_id"]
+        ):
+            flash(
+                "Esta solicitação já possui versão normativa registrada. "
+                "Para trocar a atividade, crie uma nova solicitação.",
+                "error",
+            )
+            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
 
         try:
             horas_solicitadas = (
