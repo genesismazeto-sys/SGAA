@@ -1,12 +1,38 @@
 # Agent Handoff
 
 Last updated: 2026-06-20
-Closeout: D8.2B student edit snapshot contract closeout (docs-only D8.2B-CLOSEOUT)
-Executor: Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D8.3B copy-db write-flag smoke result closeout (docs-only)
+Executor: Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
-- D8.2B funcionalmente fechada; docs em fechamento (D8.2B-CLOSEOUT, docs-only).
+- D8.3A funcionalmente fechada; docs em fechamento (D8.3B, docs-only).
+  - Smoke executado inteiramente em cópia física isolada de `database.db`;
+    `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=1` ligada somente no processo
+    isolado do smoke; live nunca foi escrito.
+  - Caso válido: PASS (`id=58`, `atividade_versao_id=2`,
+    `codigo_normativo_snapshot=AAC-rev6`, `regra_snapshot_json` coerente).
+  - Guard de edição: PASS (troca de atividade bloqueada de forma atômica).
+  - Caso skip: PASS (`id=59`, snapshot `NULL`, sem 500).
+  - `database.db` live: SHA256 antes/depois idêntico,
+    `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`,
+    544.768 bytes; não versionado.
+  - Backup: `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.3A-live-baseline-20260620-205155.db`.
+  - Cópia de trabalho: `D:\OneDrive\Programação\SGAA_database_backups\database.D8.3A-smoke-working-20260620-205155.db`.
+  - Sem alteração de código, sem commit, sem push na D8.3A.
+  - Relatório completo: `docs/d8_3_copy_db_write_flag_smoke_result.md`.
+  - Cutover real continua **NÃO** autorizado.
+  - Próxima etapa: D8.3C — final verify and push do closeout documental;
+    depois, D8.4A — plano/ativação local controlada da flag, somente com
+    autorização explícita.
+  - O que NÃO fazer:
+    - não ligar a flag em ambiente live;
+    - não alterar `.env`;
+    - não substituir `database.db` pela cópia do smoke;
+    - não iniciar cutover real;
+    - não criar novo fix de handoff apenas para perseguir o hash deste
+      closeout docs-only.
+- D8.2B funcionalmente fechada (closeout anterior, ver histórico).
   - Commit funcional aceito: `d06a02d` — `Block activity changes after student snapshot write`.
   - `origin/main...main` antes do closeout: `0 1`.
   - Push: não realizado.
@@ -1131,4 +1157,23 @@ Executor: Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B stu
   Não executar nenhum write sem nova fase D8.1B explícita.
 - `database.db` baseline D8: 544.768 bytes,
   SHA256 `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`.
+- D8.3A — COPY-DB-WRITE-FLAG-SMOKE — executada e aprovada (docs em
+  `docs/d8_3_copy_db_write_flag_smoke_result.md`).
+  - HEAD esperado antes do closeout: `27e6f23`.
+  - `origin/main...main` antes: `0 0`.
+  - Resultado do smoke:
+    - WRITE ON em cópia isolada passou (caso válido, guard de edição e caso
+      skip todos aprovados);
+    - live `database.db` inalterado (SHA256 idêntico antes/depois,
+      `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`);
+    - sem alteração de código, sem commit, sem push na D8.3A.
+  - O que NÃO fazer:
+    - não ligar a flag em ambiente live;
+    - não alterar `.env`;
+    - não substituir `database.db` pela cópia do smoke;
+    - não iniciar cutover real;
+    - não criar novo fix de handoff só para perseguir o hash deste closeout
+      docs-only.
+  - Próxima etapa: D8.3C — final verify and push do closeout documental;
+    depois, D8.4A apenas se houver autorização explícita.
   Backup em `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`.
