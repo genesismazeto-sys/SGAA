@@ -1,12 +1,62 @@
 # Agent Handoff
 
 Last updated: 2026-06-20
-Closeout: D8.3B copy-db write-flag smoke result closeout (docs-only)
-Executor: Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D8.4B local write-flag-on smoke result closeout (docs-only)
+Executor: Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
-- D8.3A funcionalmente fechada; docs em fechamento (D8.3B, docs-only).
+- D8.4A funcionalmente fechada; docs em fechamento (D8.4B, docs-only).
+  - Smoke executado diretamente contra o `database.db` local live (não
+    uma cópia), com backup fresco verificado criado antes de qualquer
+    escrita; `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=1` ligada somente
+    no processo Python isolado do smoke; `.env` não foi criado/alterado.
+  - Caso válido: PASS (`id=57`, `nome_evento=D8.4A_SMOKE_LOCAL_WRITE_FLAG_ON`,
+    `atividade_versao_id=2`, `codigo_normativo_snapshot=AAC-rev6`,
+    `regra_snapshot_json` coerente, `schema_version=d6.4.0-v1`).
+  - Guard de edição: PASS (troca de `atividade_id` bloqueada de forma
+    atômica; mensagem de bloqueio visível na resposta).
+  - Caso skip: **não exercitado no live** por decisão deliberada (sem
+    candidato natural seguro; preferência por não criar curso/turma
+    artificial no live); já validado em cópia isolada na D8.3A.
+  - Contagens de `requisicoes`: `41`→`42` (delta exato `+1` em
+    `atividade_versao_id`/`codigo_normativo_snapshot`/`regra_snapshot_json`);
+    mutação confirmada restrita à tabela `requisicoes`.
+  - `database.db` live: SHA256 antes
+    `CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`,
+    SHA256 depois
+    `0A00BCC9779A5DBD57447BA72EC51C90D9FF981DEC046F581F4C67D61A2574CD`
+    (mudança esperada pela linha smoke), 544.768 bytes antes/depois; não
+    versionado.
+  - Backup: `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.4A-local-write-flag-on-20260620-212052.db`
+    — hash idêntico ao live antes da escrita; permanece intacto após o
+    smoke.
+  - Script do smoke fora do repo:
+    `D:\OneDrive\Programação\SGAA_database_backups\d8_4a_smoke.py`.
+  - Ambiente auxiliar: `.venv` do projeto estava quebrado (Python 3.13
+    removido da máquina); criado venv Python 3.11 descartável fora do
+    repo (`SGAA_database_backups\d84a_runtime_venv`) só para executar o
+    smoke; nenhum arquivo do repositório foi alterado por isso.
+  - Requisição smoke `id=57` permanece no `database.db` live como
+    evidência; mantida até decisão explícita de fase própria de
+    cleanup/restauração.
+  - Sem alteração de código, schema, template ou teste; sem commit; sem
+    push na D8.4A.
+  - Relatório completo: `docs/d8_4_local_write_flag_on_smoke_result.md`.
+  - Cutover real continua **NÃO** autorizado.
+  - Próxima etapa: D8.4C — final verify and push do closeout documental;
+    depois, decisão explícita entre manter `id=57` como evidência, abrir
+    fase própria de cleanup/restauração, ou planejar ativação controlada
+    mais ampla.
+  - O que NÃO fazer:
+    - não remover a requisição `id=57` sem fase própria;
+    - não restaurar o backup sem fase própria;
+    - não ligar a flag de forma permanente;
+    - não alterar `.env`;
+    - não iniciar cutover real;
+    - não criar novo fix de handoff apenas para perseguir o hash deste
+      closeout docs-only.
+- D8.3A funcionalmente fechada (closeout anterior, ver histórico).
   - Smoke executado inteiramente em cópia física isolada de `database.db`;
     `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=1` ligada somente no processo
     isolado do smoke; live nunca foi escrito.
