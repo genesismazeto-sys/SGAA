@@ -1,8 +1,8 @@
 # Project State
 
 Last updated: 2026-06-20
-Closeout: D8.4B local write-flag-on smoke result closeout (docs-only)
-Executor: Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Closeout: D8.5C cleanup of id=57 closeout (docs-only)
+Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 
@@ -1932,3 +1932,44 @@ Executor: Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B 
   - depois, decisão explícita entre manter `id=57` como evidência, abrir
     fase própria de cleanup/restauração, ou planejar ativação controlada
     mais ampla.
+
+### D8.5 - Limpeza controlada da requisição smoke D8.4A (id=57)
+
+- D8.5A (READONLY-POST-SMOKE-LIVE-ARTIFACT-AND-RUNTIME-DECISION) executada
+  e aprovada; auditoria read-only do `database.db` live, do backup D8.4A e
+  dos artefatos externos confirmou zero dependentes de `id=57` em
+  `requisicao_arquivos`/`requisicao_alerta_receipts` e recomendou limpeza
+  controlada (Option B) como única próxima fase.
+- D8.5B (CONTROLLED-CLEANUP-D8.4A-SMOKE-REQUISITION) executada e aprovada.
+  - Backup fresco criado antes do delete:
+    `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.5B-cleanup-id57-20260620-231236.db`
+    — hash idêntico ao live antes da escrita.
+  - Auditoria pré-delete: total `requisicoes=42`, snapshots `14/14/14`,
+    `id=57` confirmado com `nome_evento=D8.4A_SMOKE_LOCAL_WRITE_FLAG_ON`,
+    `0` anexos e `0` alerta receipts dependentes.
+  - Delete controlado em transação explícita `BEGIN`/`COMMIT`, com rowcount
+    guards: `0` linhas em `requisicao_arquivos`, `0` em
+    `requisicao_alerta_receipts`, exatamente `1` em `requisicoes`.
+  - Validação pós-delete: total `requisicoes=41`, snapshots `13/13/13`,
+    `id=57` ausente, `requisicao_arquivos` total `4` preservado,
+    `requisicao_alerta_receipts` total `38` preservado, `0` dependentes.
+  - `PRAGMA foreign_key_check` vazio — integridade referencial confirmada.
+  - `database.db` live:
+    - SHA256 antes: `0A00BCC9779A5DBD57447BA72EC51C90D9FF981DEC046F581F4C67D61A2574CD`;
+    - SHA256 depois: `1CA32F61553433E740E2B60B5428C56BC287ABB271ABB96680DD1320D17C5C80`;
+    - tamanho antes/depois: 544.768 bytes; sem `VACUUM`.
+  - Nota sobre hash: o hash pós-delete não retorna ao valor pré-D8.4A
+    porque o SQLite não compacta páginas liberadas sem `VACUUM`; o critério
+    aceito foi integridade lógica (contagens e FK check), não o hash do
+    arquivo.
+  - Backup D8.5B e backup D8.4A
+    (`CF9FBF5C36900AA7E01DB150051BD81B2E4822764E946CBC188B0A91CBB635E6`)
+    permanecem íntegros.
+  - Sem alteração de código, schema, template ou teste; sem commit; sem
+    push na D8.5B; sem `VACUUM`; sem restauração de backup.
+  - `.venv` do projeto continua quebrado — risco de tooling separado, fora
+    do escopo desta fase.
+  - Cutover real continua **NÃO** autorizado por este resultado.
+  - Relatório completo: `docs/d8_5_cleanup_id57_result.md`.
+- Próxima etapa:
+  - D8.5D — final verify and push do closeout documental.

@@ -1,11 +1,36 @@
 # Agent Handoff
 
 Last updated: 2026-06-20
-Closeout: D8.4B local write-flag-on smoke result closeout (docs-only)
-Executor: Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
+Closeout: D8.5C cleanup of id=57 closeout (docs-only)
+Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
 
+- D8.5B aprovada; D8.5C em fechamento documental.
+  - HEAD esperado antes do closeout: `7a67c7e`.
+  - `origin/main...main` antes: `0 0`.
+  - Resultado: requisição smoke `id=57` removida do `database.db` live;
+    contagens de `requisicoes` de volta a `41` (snapshots `13`/`13`/`13`);
+    `PRAGMA foreign_key_check` vazio; backups D8.5B e D8.4A preservados e
+    íntegros; `database.db` continua não rastreado; sem `VACUUM` executado.
+  - Backup D8.5B: `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.5B-cleanup-id57-20260620-231236.db`.
+  - `database.db` live: SHA256 antes
+    `0A00BCC9779A5DBD57447BA72EC51C90D9FF981DEC046F581F4C67D61A2574CD`,
+    SHA256 depois
+    `1CA32F61553433E740E2B60B5428C56BC287ABB271ABB96680DD1320D17C5C80`
+    (hash não retorna ao pré-D8.4A — esperado, pois SQLite não compacta
+    páginas liberadas sem `VACUUM`; critério aceito foi integridade lógica).
+  - Relatório completo: `docs/d8_5_cleanup_id57_result.md`.
+  - Cutover real continua **NÃO** autorizado.
+  - Próxima etapa: D8.5D — final verify and push do closeout documental.
+  - O que NÃO fazer:
+    - não restaurar backup sem fase própria;
+    - não executar `VACUUM` sem fase própria;
+    - não ligar a flag de forma permanente;
+    - não alterar `.env`;
+    - não iniciar cutover real;
+    - não criar novo fix de handoff apenas para perseguir o hash deste
+      closeout docs-only.
 - D8.4A funcionalmente fechada; docs em fechamento (D8.4B, docs-only).
   - Smoke executado diretamente contra o `database.db` local live (não
     uma cópia), com backup fresco verificado criado antes de qualquer
