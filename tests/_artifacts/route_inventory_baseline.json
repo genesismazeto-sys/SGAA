@@ -1,0 +1,952 @@
+{
+  "generated_from": "main.app.url_map",
+  "routes": [
+    {
+      "endpoint": "index",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/"
+    },
+    {
+      "endpoint": "admin_acesso",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/acesso"
+    },
+    {
+      "endpoint": "admin_acesso_deletar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/<int:usuario_id>/deletar"
+    },
+    {
+      "endpoint": "admin_acesso_resetar_senha",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/<int:usuario_id>/resetar-senha"
+    },
+    {
+      "endpoint": "admin_acesso_definir_senha",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/definir-senha"
+    },
+    {
+      "endpoint": "admin_acesso_salvar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/salvar"
+    },
+    {
+      "endpoint": "admin_acesso_salvar_senhas_default",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/senhas-default"
+    },
+    {
+      "endpoint": "admin_adicionar_aluno",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/adicionar_aluno"
+    },
+    {
+      "endpoint": "admin_adicionar_atividade",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/adicionar_atividade"
+    },
+    {
+      "endpoint": "admin_adicionar_matriz",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/adicionar_matriz"
+    },
+    {
+      "endpoint": "admin_adicionar_turma",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/adicionar_turma"
+    },
+    {
+      "endpoint": "admin_alertas",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/alertas"
+    },
+    {
+      "endpoint": "admin_alternar_alerta",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/alertas/<int:alerta_id>/alternar"
+    },
+    {
+      "endpoint": "admin_deletar_alerta",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/alertas/<int:alerta_id>/deletar"
+    },
+    {
+      "endpoint": "admin_salvar_alerta",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/alertas/salvar"
+    },
+    {
+      "endpoint": "admin_alterar_status_alunos",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/alterar_status_alunos"
+    },
+    {
+      "endpoint": "admin_alunos",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/alunos"
+    },
+    {
+      "endpoint": "admin_api_aluno_requisicao_scope",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/api/aluno/<int:aluno_id>/requisicao-scope"
+    },
+    {
+      "endpoint": "presets.get_presets",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/api/presets"
+    },
+    {
+      "endpoint": "presets.post_presets",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/api/presets"
+    },
+    {
+      "endpoint": "admin_api_requisicao",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/api/requisicao/<int:req_id>"
+    },
+    {
+      "endpoint": "admin_arquivos",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/arquivos"
+    },
+    {
+      "endpoint": "admin_deletar_arquivo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/arquivos/<int:arquivo_id>/deletar"
+    },
+    {
+      "endpoint": "admin_editar_arquivo",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/arquivos/<int:arquivo_id>/editar"
+    },
+    {
+      "endpoint": "admin_visualizar_arquivo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/arquivos/<int:arquivo_id>/visualizar"
+    },
+    {
+      "endpoint": "admin_adicionar_arquivo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/arquivos/adicionar"
+    },
+    {
+      "endpoint": "admin_atividades",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/atividades"
+    },
+    {
+      "endpoint": "admin_atividades_academicas",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/atividades/academicas"
+    },
+    {
+      "endpoint": "admin_atividades_extensao",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/atividades/extensao"
+    },
+    {
+      "endpoint": "admin_atividades_importar_confirmar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/atividades/importar/confirmar"
+    },
+    {
+      "endpoint": "admin_atividades_importar_preview",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/atividades/importar/preview"
+    },
+    {
+      "endpoint": "admin_backup_cloud_folder",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/backup/cloud-folder/<provider>"
+    },
+    {
+      "endpoint": "admin_backup_cloud_folders",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/backup/cloud-folders/<provider>"
+    },
+    {
+      "endpoint": "admin_backup_google_connect",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/backup/google/connect"
+    },
+    {
+      "endpoint": "admin_backup_google_upload",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/backup/google/upload"
+    },
+    {
+      "endpoint": "admin_backup_onedrive_connect",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/backup/onedrive/connect"
+    },
+    {
+      "endpoint": "admin_backup_onedrive_upload",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/backup/onedrive/upload"
+    },
+    {
+      "endpoint": "admin_banco_dados",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/banco-dados"
+    },
+    {
+      "endpoint": "admin_banco_dados_backup",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/backup"
+    },
+    {
+      "endpoint": "admin_banco_dados_configuracoes",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/configuracoes"
+    },
+    {
+      "endpoint": "admin_banco_dados_download",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/banco-dados/download"
+    },
+    {
+      "endpoint": "admin_banco_dados_drive_settings",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/drive-settings"
+    },
+    {
+      "endpoint": "admin_banco_dados_excluir",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/excluir"
+    },
+    {
+      "endpoint": "admin_banco_dados_oauth_disconnect",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/oauth/disconnect"
+    },
+    {
+      "endpoint": "admin_banco_dados_oauth_start",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/banco-dados/oauth/start"
+    },
+    {
+      "endpoint": "admin_banco_dados_restaurar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/restaurar"
+    },
+    {
+      "endpoint": "admin_banco_dados_restaurar_upload",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/restaurar/upload"
+    },
+    {
+      "endpoint": "admin_banco_dados_retencao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/banco-dados/retencao"
+    },
+    {
+      "endpoint": "admin_catalogo_versoes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/catalogo-versoes"
+    },
+    {
+      "endpoint": "admin_catalogo_versao_detalhe",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>"
+    },
+    {
+      "endpoint": "admin_catalogo_nova_versao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/nova-versao"
+    },
+    {
+      "endpoint": "admin_catalogo_ativar_versao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/ativar"
+    },
+    {
+      "endpoint": "admin_catalogo_descontinuar_versao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/descontinuar"
+    },
+    {
+      "endpoint": "admin_catalogo_editar_versao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar"
+    },
+    {
+      "endpoint": "admin_catalogo_inativar_versao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/inativar"
+    },
+    {
+      "endpoint": "admin_catalogo_substituir_versao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir"
+    },
+    {
+      "endpoint": "admin_catalogo_nova_base",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/nova-base"
+    },
+    {
+      "endpoint": "admin_configuracoes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/configuracoes"
+    },
+    {
+      "endpoint": "admin_configuracoes_horas_padrao_salvar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/configuracoes/horas-padrao"
+    },
+    {
+      "endpoint": "admin_configuracoes_prazo_adequacao_salvar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/configuracoes/prazo-adequacao"
+    },
+    {
+      "endpoint": "admin_configuracoes_tempo_resposta_salvar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/configuracoes/tempo-resposta"
+    },
+    {
+      "endpoint": "admin_configuracoes_tempo_resposta_resetar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/configuracoes/tempo-resposta/reset"
+    },
+    {
+      "endpoint": "admin_cursos",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/cursos"
+    },
+    {
+      "endpoint": "admin_detalhes_curso",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/cursos/<int:curso_id>"
+    },
+    {
+      "endpoint": "admin_editar_curso",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/cursos/<int:curso_id>/editar"
+    },
+    {
+      "endpoint": "admin_visualizar_curso",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/cursos/<int:curso_id>/visualizar"
+    },
+    {
+      "endpoint": "admin_adicionar_curso",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/cursos/adicionar"
+    },
+    {
+      "endpoint": "admin_dashboard",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/dashboard"
+    },
+    {
+      "endpoint": "admin_deletar_aluno",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/deletar_aluno/<int:usuario_id>"
+    },
+    {
+      "endpoint": "admin_deletar_atividade",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/deletar_atividade/<int:atividade_id>"
+    },
+    {
+      "endpoint": "admin_deletar_curso",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/deletar_curso/<int:curso_id>"
+    },
+    {
+      "endpoint": "admin_deletar_turma",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/deletar_turma/<int:turma_id>"
+    },
+    {
+      "endpoint": "admin_demo_clientes_form_pack",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/demo/clientes-form-pack"
+    },
+    {
+      "endpoint": "admin_diagnostico_atividades_versionadas",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/diagnostico/atividades-versionadas"
+    },
+    {
+      "endpoint": "admin_diagnostico_atividades_versionadas_view",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/diagnostico/atividades-versionadas/view"
+    },
+    {
+      "endpoint": "admin_diagnostico_versioned_shadow_reads",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/diagnostico/versioned-shadow-reads"
+    },
+    {
+      "endpoint": "admin_editar_aluno",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/editar_aluno/<int:usuario_id>"
+    },
+    {
+      "endpoint": "admin_editar_atividade",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/editar_atividade/<int:atividade_id>"
+    },
+    {
+      "endpoint": "admin_editar_matriz",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/editar_matriz/<int:matriz_id>"
+    },
+    {
+      "endpoint": "admin_editar_turma",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/editar_turma/<int:turma_id>"
+    },
+    {
+      "endpoint": "admin_grupos_excluir",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/grupos/excluir"
+    },
+    {
+      "endpoint": "admin_grupos_renomear",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/grupos/renomear"
+    },
+    {
+      "endpoint": "admin_importar_requisicoes",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/importar_requisicoes"
+    },
+    {
+      "endpoint": "admin_mapeamento_legado",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/mapeamento-legado"
+    },
+    {
+      "endpoint": "admin_matrizes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/matrizes"
+    },
+    {
+      "endpoint": "admin_matriz_nova_versao_card",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao"
+    },
+    {
+      "endpoint": "admin_matriz_nova_atividade",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>"
+    },
+    {
+      "endpoint": "admin_excluir_matriz",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/excluir"
+    },
+    {
+      "endpoint": "admin_matriz_versoes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/versoes"
+    },
+    {
+      "endpoint": "admin_matriz_versoes_definir",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/versoes/definir"
+    },
+    {
+      "endpoint": "admin_matriz_versoes_remover",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/<int:matriz_id>/versoes/remover"
+    },
+    {
+      "endpoint": "admin_excluir_matrizes",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/matrizes/excluir"
+    },
+    {
+      "endpoint": "admin_mensagens",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/mensagens"
+    },
+    {
+      "endpoint": "admin_mensagens_resetar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/mensagens/<message_key>/reset"
+    },
+    {
+      "endpoint": "admin_mensagens_salvar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/mensagens/salvar"
+    },
+    {
+      "endpoint": "admin_meus_dados",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/meus_dados"
+    },
+    {
+      "endpoint": "admin_normas_atividade",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/normas-atividade"
+    },
+    {
+      "endpoint": "admin_norma_nova",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/normas-atividade/nova"
+    },
+    {
+      "endpoint": "admin_processar_requisicao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/processar_requisicao/<int:req_id>"
+    },
+    {
+      "endpoint": "admin_reportes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/reportes"
+    },
+    {
+      "endpoint": "admin_reportes_deletar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/reportes/<int:reporte_id>/deletar"
+    },
+    {
+      "endpoint": "admin_reportes_atualizar_status",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/reportes/<int:reporte_id>/status"
+    },
+    {
+      "endpoint": "admin_detalhes_requisicao",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/requisicao/<int:req_id>"
+    },
+    {
+      "endpoint": "admin_requisicoes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/requisicoes"
+    },
+    {
+      "endpoint": "admin_editar_requisicao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/<int:req_id>/editar"
+    },
+    {
+      "endpoint": "admin_excluir_requisicao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/<int:req_id>/excluir"
+    },
+    {
+      "endpoint": "admin_nova_requisicao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/nova"
+    },
+    {
+      "endpoint": "admin_detalhes_turma",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/turma/<int:turma_id>"
+    },
+    {
+      "endpoint": "admin_turmas",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/turmas"
+    },
+    {
+      "endpoint": "admin_turmas_importar",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/admin/turmas/importar"
+    },
+    {
+      "endpoint": "aluno.aluno_arquivos",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/arquivos"
+    },
+    {
+      "endpoint": "aluno.aluno_baixar_arquivo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/arquivos/download/<int:arquivo_id>"
+    },
+    {
+      "endpoint": "aluno.aluno_visualizar_arquivo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/arquivos/ver/<int:arquivo_id>"
+    },
+    {
+      "endpoint": "aluno.aluno_dashboard",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/dashboard"
+    },
+    {
+      "endpoint": "aluno.aluno_meus_dados",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/aluno/meus_dados"
+    },
+    {
+      "endpoint": "aluno.aluno_nova_requisicao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/aluno/nova-requisicao"
+    },
+    {
+      "endpoint": "aluno.aluno_nova_requisicao",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/aluno/nova_requisicao"
+    },
+    {
+      "endpoint": "aluno.aluno_progresso",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/progresso"
+    },
+    {
+      "endpoint": "aluno.aluno_reportar",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/aluno/reportar"
+    },
+    {
+      "endpoint": "aluno.aluno_minhas_requisicoes",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/requisicoes"
+    },
+    {
+      "endpoint": "aluno.aluno_requisicao_detalhe",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/aluno/requisicoes/<int:req_id>"
+    },
+    {
+      "endpoint": "auth_callback",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/auth/callback"
+    },
+    {
+      "endpoint": "csrf_token_refresh",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/csrf-token"
+    },
+    {
+      "endpoint": "favicon",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/favicon.ico"
+    },
+    {
+      "endpoint": "google_callback",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/google/callback"
+    },
+    {
+      "endpoint": "health",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/health"
+    },
+    {
+      "endpoint": "login",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/login"
+    },
+    {
+      "endpoint": "logout",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/logout"
+    },
+    {
+      "endpoint": "onedrive_callback",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/onedrive/callback"
+    },
+    {
+      "endpoint": "static",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/static/<path:filename>"
+    },
+    {
+      "endpoint": "uploaded_file",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/uploads/<path:filename>"
+    }
+  ],
+  "schema_version": 1
+}

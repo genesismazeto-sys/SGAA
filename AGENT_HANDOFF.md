@@ -1,6 +1,17 @@
 # Agent Handoff
 
-Last updated: 2026-06-20
+## REF-0B — route contract and RBAC debt characterization (2026-07-16)
+
+- State: completed locally on `refactor/architecture-safety-net` at `340fc7c`; no production code, UI, database, schema, environment, or dependency file changed.
+- Files read: `main.py`, `app/auth.py`, `tests/conftest.py`, existing CSRF/release tests, `PROJECT_STATE.md`, and this handoff.
+- Files changed: `tests/test_route_inventory_snapshot.py`, `tests/test_rbac_requirement_coverage.py`, `tests/_artifacts/route_inventory_baseline.json`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `PROJECT_STATE.md`, and this handoff.
+- Contract: `tests/test_route_inventory_snapshot.py` derives a deterministic snapshot from `main.app.url_map` (excluding automatic `HEAD` and `OPTIONS`) and compares it read-only in normal runs. Deliberate refresh requires `SGAA_UPDATE_ROUTE_INVENTORY_BASELINE=1`.
+- RBAC debt: `tests/test_rbac_requirement_coverage.py` begins independently from URL paths `/admin` and `/admin/...`, then calls `get_admin_permission_requirement(endpoint, method)`. The current baseline has `24` unmapped route/method combinations; the full exact list, technical reason, and `null` current requirement are in `tests/_artifacts/rbac_unmapped_routes_baseline.json`. “Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política.” Deliberate refresh requires `SGAA_UPDATE_RBAC_DEBT_BASELINE=1`.
+- Validation: pre-flight focused baseline `8 passed`; new contract tests `3 passed`; required regression baseline `42 passed`. The two new tests were rerun normally after baseline generation and did not rewrite either artifact.
+- Risks: RBAC debt remains uncorrected by design; route URL and endpoint changes now require deliberate baseline review. No route modularization is authorized.
+- Exact next step: `REF-0T`; do not remediate RBAC here. A future corrective phase must reduce the baseline intentionally toward the mandatory empty target.
+
+Last updated: 2026-07-16
 Closeout: D8.5C cleanup of id=57 closeout (docs-only)
 Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
