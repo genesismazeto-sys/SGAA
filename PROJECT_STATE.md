@@ -2,14 +2,17 @@
 
 ## REF-0 refactor safety net
 
-- REF-0A completed: the refactor branch was created without application changes.
-- REF-0ENV completed: local `.venv` was rebuilt with Python `3.11.15`; the focused baseline passed `42` tests.
+- Current branch: `refactor/architecture-safety-net`; current HEAD before REF-0DOC: `e111cd5`; `origin/main...HEAD = 0 4`; no push has been performed.
+- REF-0A accepted: the refactor branch was created without application changes.
+- REF-0ENV accepted: local `.venv` was rebuilt with Python `3.11.15`; the focused baseline passed `42` tests.
+- Accepted phase chain: REF-0B at `f2b1cfc`; REF-0T at `c440297`; REF-0TF at `722b7a7`; REF-0TF-A at `e111cd5`.
 - Independent architecture review completed on branch `refactor/architecture-safety-net` at `340fc7c` (`Add app mapping for refactor planning`).
-- URL rules and endpoint names are frozen by `tests/_artifacts/route_inventory_baseline.json`, generated from `main.app.url_map`; normal test execution only compares the contract and never rewrites it.
+- URL rules and endpoint names are frozen by `tests/_artifacts/route_inventory_baseline.json`, generated from `main.app.url_map`: `131` routes, `130` endpoints, and `160` business methods. Normal test execution only compares the contract and never rewrites it.
 - RBAC policy debt is characterized by `tests/_artifacts/rbac_unmapped_routes_baseline.json`: `24` current `/admin` URL/endpoint/method combinations return no granular requirement from `get_admin_permission_requirement`.
 - “Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política.”
-- Route modularization remains prohibited until the route and RBAC safety-net phases are explicitly completed and accepted.
-- Next phase: `REF-0T`.
+- Current isolated full-suite baseline: `538` collected, `521` passed, `17` failed. All `17` remaining failures belong exclusively to D73H historical verification.
+- Next authorized phase: `REF-0TF-B — D73H Historical Verification Isolation`. It has not started.
+- RBAC correction and route modularization remain prohibited. REF-0TF-B does not authorize either action.
 
 ### REF-0T — isolated full-suite baseline (2026-07-16)
 

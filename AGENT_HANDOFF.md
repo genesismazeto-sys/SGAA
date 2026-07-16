@@ -1,15 +1,25 @@
 # Agent Handoff
 
+## Current operational handoff — REF-0DOC (2026-07-16)
+
+- Current branch: `refactor/architecture-safety-net`; current HEAD before the REF-0DOC documentation commit: `e111cd5`; `origin/main...HEAD = 0 4`; working tree clean; no push performed.
+- Last accepted phase: REF-0TF-A. Last accepted commit: `e111cd5` (`Harden aluno progress calendar test contract`).
+- Current isolated test baseline: `538` collected, `521` passed, `17` failed. All `17` remaining failures are exclusively in `tests/test_d73h_reconciliation_apply.py` because the isolated worktree deliberately has no root `database.db`; those tests depend on unavailable historical data and are not yet hermetic.
+- Exact next authorized phase: `REF-0TF-B — D73H Historical Verification Isolation`. REF-0TF-B has not started.
+- Files the next agent must read first: `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `tools/d73h_reconciliation_apply.py`, and `normative_fixtures/d73c_normative_fixture.yaml`.
+- Prohibited actions: do not open, copy, or alter the live `database.db` or untracked historical backups; do not alter production code, routes, endpoints, UI, schema, environment, or dependencies; do not correct RBAC; do not modularize; do not push.
+- Recommended IAexec routing for REF-0TF-B: DeepSeek Pro, test-only implementation mode, high reasoning effort, with real filesystem and Git access through OpenCode. GPT-5.6 alternative: GPT-5.6 Terra with High reasoning effort; escalate to GPT-5.6 Sol High only if sanitized-fixture design or historical-data safety cannot be resolved from repository evidence.
+
 ## REF-0B — route contract and RBAC debt characterization (2026-07-16)
 
-- State: completed locally on `refactor/architecture-safety-net` at `340fc7c`; no production code, UI, database, schema, environment, or dependency file changed.
+- Starting state: `refactor/architecture-safety-net` at `340fc7c`; REF-0B was accepted at `f2b1cfc`; no production code, UI, database, schema, environment, or dependency file changed.
 - Files read: `main.py`, `app/auth.py`, `tests/conftest.py`, existing CSRF/release tests, `PROJECT_STATE.md`, and this handoff.
 - Files changed: `tests/test_route_inventory_snapshot.py`, `tests/test_rbac_requirement_coverage.py`, `tests/_artifacts/route_inventory_baseline.json`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `PROJECT_STATE.md`, and this handoff.
 - Contract: `tests/test_route_inventory_snapshot.py` derives a deterministic snapshot from `main.app.url_map` (excluding automatic `HEAD` and `OPTIONS`) and compares it read-only in normal runs. Deliberate refresh requires `SGAA_UPDATE_ROUTE_INVENTORY_BASELINE=1`.
 - RBAC debt: `tests/test_rbac_requirement_coverage.py` begins independently from URL paths `/admin` and `/admin/...`, then calls `get_admin_permission_requirement(endpoint, method)`. The current baseline has `24` unmapped route/method combinations; the full exact list, technical reason, and `null` current requirement are in `tests/_artifacts/rbac_unmapped_routes_baseline.json`. “Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política.” Deliberate refresh requires `SGAA_UPDATE_RBAC_DEBT_BASELINE=1`.
 - Validation: pre-flight focused baseline `8 passed`; new contract tests `3 passed`; required regression baseline `42 passed`. The two new tests were rerun normally after baseline generation and did not rewrite either artifact.
 - Risks: RBAC debt remains uncorrected by design; route URL and endpoint changes now require deliberate baseline review. No route modularization is authorized.
-- Exact next step: `REF-0T`; do not remediate RBAC here. A future corrective phase must reduce the baseline intentionally toward the mandatory empty target.
+- Historical next step at REF-0B closeout: `REF-0T`, subsequently accepted at `c440297`. RBAC remediation was not authorized by that transition.
 
 ## REF-0T — test isolation audit and full-suite baseline (2026-07-16)
 
@@ -30,7 +40,7 @@
 - Files read: progress test/fixture and `app/views/aluno.py`; D73H test, tool, YAML fixture, database/runtime setup, canonical state, and relevant Git history (`dea3de5`, `ecdc9f5`, `b8ad2ae`).
 - Cluster A: classification C+B. The fixture's 2026-09-10 event is now in the current 2026/2 semester. `date.today()` is the explicit production gate; three fresh runs identically observed `['2025/2', '2026/1', '2026/2']`. The test expectation is stale; no product regression is evidenced.
 - Cluster B: classification G+D+E. All 17 nodes fail at the same absent root source. A worktree-only database initialized by `main.init_db()` retained SHA-256 `6D82B8ED4B0EAB9678FAFB9B84CC4B0CD82B7140A2B20D1B4E60EE053389CA12` across plan mode, then failed on missing historical `AAC-rev5`. D73H is historical live-operation verification, not clean-clone regression coverage.
-- Exact next authorized phases: `REF-0TF-A — Progress Calendar Contract Hardening`, then `REF-0TF-B — D73H Historical Verification Isolation`. Neither phase may touch RBAC, production refactoring, UI, the live database, or untracked historical backups without distinct authorization.
+- Historical authorized sequence at REF-0TF closeout: `REF-0TF-A — Progress Calendar Contract Hardening`, then `REF-0TF-B — D73H Historical Verification Isolation`. REF-0TF-A is now accepted at `e111cd5`; REF-0TF-B has not started. Neither phase authorizes RBAC, production refactoring, UI changes, live database access, or use of untracked historical backups.
 - Risks: do not freeze production time while fixing the calendar test; do not turn private historical data into a fixture. RBAC correction and modularization remain prohibited.
 
 ## REF-0TF-A — progress calendar contract hardening (2026-07-16)
