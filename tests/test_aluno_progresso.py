@@ -1,6 +1,8 @@
+import datetime as stdlib_datetime
 import os
 import sqlite3
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +11,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 from app import db as app_db_module
+from app.views import aluno as aluno_views
 import main
 
 
@@ -57,6 +60,24 @@ def _open_test_db():
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     return conn
+
+
+def _set_aluno_progresso_reference_date(monkeypatch, reference_date: stdlib_datetime.date) -> None:
+    """Control only the date provider imported by the progress view module."""
+    class ProgressReferenceDate(stdlib_datetime.date):
+        @classmethod
+        def today(cls):
+            return reference_date
+
+    monkeypatch.setattr(
+        aluno_views,
+        "datetime",
+        SimpleNamespace(
+            date=ProgressReferenceDate,
+            datetime=stdlib_datetime.datetime,
+            timedelta=stdlib_datetime.timedelta,
+        ),
+    )
 
 
 def _create_progress_context(conn, *, email: str, matricula: str, matriz_nome: str, turma_numero: int, aluno_nome: str):
@@ -159,7 +180,7 @@ def _insert_requisicao(
     )
 
 
-def test_aluno_progresso_renderiza_catalogo_e_agrega_semestres(client):
+def test_aluno_progresso_excludes_semestre_after_reference_date(client, monkeypatch):
     atividade_aac = "Palestras Progresso Automatizado"
     atividade_ext = "Projeto Extensão Progresso Automatizado"
     atividade_uso = "Monitoria Legado Progresso Automatizado"
@@ -337,6 +358,7 @@ def test_aluno_progresso_renderiza_catalogo_e_agrega_semestres(client):
     finally:
         conn.close()
 
+    _set_aluno_progresso_reference_date(monkeypatch, stdlib_datetime.date(2026, 6, 30))
     _login_aluno(client, usuario_id, "Aluno Progresso")
 
     response_json = client.get("/aluno/progresso?format=json")
@@ -344,6 +366,7 @@ def test_aluno_progresso_renderiza_catalogo_e_agrega_semestres(client):
     payload = response_json.get_json()
     assert payload is not None
     assert payload["semestres"] == ["2025/2", "2026/1"]
+    assert "2026/2" not in payload["semestres"], "2026/2 must remain future before 2026-07-01"
     assert payload["has_extensao_na_matriz"] is True
 
     atividades = {item["nome"]: item for item in payload["atividades"]}
@@ -410,6 +433,49 @@ def test_aluno_progresso_renderiza_catalogo_e_agrega_semestres(client):
     assert 'value="extensao" selected' in html_ext
     assert atividade_ext in html_ext
     assert atividade_aac not in html_ext
+
+
+def test_aluno_progresso_includes_semestre_when_reference_date_reaches_boundary(client, monkeypatch):
+    conn = _open_test_db()
+    try:
+        context = _create_progress_context(
+            conn,
+            email="aluno.progresso.boundary@teste.local",
+            matricula="MAT-PROGRESSO-BOUNDARY-001",
+            matriz_nome="Matriz Progresso Boundary",
+            turma_numero=96,
+            aluno_nome="Aluno Progresso Boundary",
+        )
+        atividade_id = _insert_atividade(
+            conn,
+            grupo="1 - Grupo Boundary",
+            nome="Atividade Progresso Boundary",
+            tipo_atividade="Acadêmica Complementar",
+        )
+        _link_atividade_na_matriz(conn, context["matriz_id"], atividade_id)
+        for data_evento, horas in (("2025-11-12", 6), ("2026-03-18", 4), ("2026-09-10", 5)):
+            _insert_requisicao(
+                conn,
+                aluno_id=context["aluno_id"],
+                atividade_id=atividade_id,
+                data_solicitacao=f"{data_evento} 10:00:00",
+                data_evento=data_evento,
+                horas_solicitadas=horas,
+                status="Deferida",
+                nome_evento=f"Evento {data_evento}",
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    _set_aluno_progresso_reference_date(monkeypatch, stdlib_datetime.date(2026, 7, 1))
+    _login_aluno(client, context["usuario_id"], "Aluno Progresso Boundary")
+
+    payload = client.get("/aluno/progresso?format=json").get_json()
+    assert payload is not None
+    assert payload["semestres"] == ["2025/2", "2026/1", "2026/2"], "2026/2 becomes eligible on 2026-07-01"
+    atividade = payload["atividades"][0]
+    assert atividade["semestres"] == {"2025/2": 6.0, "2026/1": 4.0, "2026/2": 5.0}
 
 
 def test_aluno_progresso_com_somente_aac(client):

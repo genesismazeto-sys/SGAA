@@ -29,6 +29,15 @@
 - Required remediation phases: `REF-0TF-A — Progress Calendar Contract Hardening` and `REF-0TF-B — D73H Historical Verification Isolation`.
 - RBAC correction and modularization remain prohibited. `REF-0C-A` remains **NO-GO** until the architect authorizes and accepts both remediation phases.
 
+### REF-0TF-A — progress calendar contract hardening (2026-07-16)
+
+- Starting state: `refactor/architecture-safety-net` at `722b7a7`, clean worktree, `origin/main...HEAD = 0 3`.
+- Test-only change: `tests/test_aluno_progresso.py` now replaces only the module-local `app.views.aluno.datetime` binding. It proves that `2026/2` is excluded on reference date `2026-06-30` and included with its hours on `2026-07-01`; no application clock or source behavior changed.
+- Focused boundary nodes passed in three consecutive runs (`2 passed` each); the whole file passed (`4 passed`).
+- Detached temporary worktree `C:\Users\klebe\AppData\Local\Temp\sgaa-ref-0tf-a-validation` collected `538` tests and ran the full suite: `521 passed`, `17 failed`, `234.13s`. The 17 failures are exactly the known D73H nodes, all blocked by absent worktree-local `database.db`; no additional regression occurred.
+- The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
+- Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
+
 Last updated: 2026-07-16
 Closeout: D8.5C cleanup of id=57 closeout (docs-only)
 Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
