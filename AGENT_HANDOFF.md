@@ -2,15 +2,22 @@
 
 ## Current operational handoff — REF-0C-A closeout (2026-07-17)
 
-### REF-0C-A-R1 correction (current)
-- Completed locally; pending ChatGPT supervisor review.
-- Branch `refactor/architecture-safety-net`; HEAD `64d3d1214b87095edb65127839089f25b5237fc8`; `origin/main...HEAD = 0 7`.
-- Corrected confidence: HIGH 21, MEDIUM 3, LOW 0. R20 is HIGH-confidence `matrizes`/`edit`; its local `readonly` value is a separate enforcement/cleanup issue.
-- R22-R24 diagnostic access policy remains unresolved. `atividades`/`view` permits all admin roles; `banco_dados`/`view` permits only `admin_total`; the intermediate policy requires an override, new resource, new scope, or endpoint-specific rule.
-- No RBAC implementation or modularization is authorized; no later phase is authorized.
-- Exact next action: ChatGPT supervisor review of REF-0C-A-R1.
+### REF-0C-A / REF-0C-A-R1 (CLOSED / ACCEPTED)
+- REF-0C-A / REF-0C-A-R1 is **CLOSED / ACCEPTED** after ChatGPT supervisor review.
+- Accepted diagnosis HEAD: `f977fd6` (`Document normative RBAC policy matrix diagnosis`).
+- Branch `refactor/architecture-safety-net`; HEAD `f977fd6`; `origin/main...HEAD = 0 7`; working tree clean.
+- Accepted matrix confidence counts: HIGH 21, MEDIUM 3, LOW 0.
+- R22-R24 remain unresolved normative diagnostic-policy decisions. No policy has been selected for these routes.
+- No RBAC implementation has started.
+- Modularization remains prohibited.
+- The next authorized technical phase is **REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests**.
+- REF-0C-B1 is explicitly limited to the 21 HIGH-confidence route-method combinations (R1–R19, R21).
+- R22, R23, and R24 are explicitly excluded from implementation until their diagnostic access policy is approved.
+- For R20, only the central `matrizes`/`edit` RBAC mapping and its tests are authorized. Changing or removing the local `readonly` behavior is not authorized in this closeout.
+- Do not claim that R22–R24 have a selected policy.
+- Do not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.
 
-- Current branch: `refactor/architecture-safety-net`; `HEAD` `9b47c37`; `origin/main...HEAD = 0 6`; working tree clean, staging empty, no untracked files; no push performed.
+- Current branch: `refactor/architecture-safety-net`; `HEAD` `f977fd6`; `origin/main...HEAD = 0 7`; working tree clean, staging empty, no untracked files; no push performed.
 - Last accepted commit: `9b47c37` (`Record D73H historical verification isolation and pytest interface` — REF-0TF-B).
 - Standard suite hermetic: `538` discovered, `17` D73H deselected, `521` selected and passed. REF-0C-A did not modify, add, or run any test.
 - Phase classification: `STOP` — normative diagnosis only. No RBAC implementation, no production code change, no test change, no schema/DB/UI/config/dependency change.
@@ -1329,19 +1336,27 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
     depois, D8.4A apenas se houver autorização explícita.
   Backup em `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`.
 
-## REF-0C-A — RBAC policy matrix diagnosis
+## REF-0C-A — RBAC policy matrix diagnosis (CLOSED / ACCEPTED)
 
-### Recommended Next Step
-- **ChatGPT supervisor must inspect the repository and return APPROVED, CHANGES REQUIRED, or BLOCKED.**
-- If APPROVED, the next authorized phase is `REF-0C-B — RBAC implementation planning` or an equivalent follow-on phase.
-- REF-0C-B would scope which routes receive RBAC enforcement in the first implementation increment, define the extended `get_admin_permission_requirement`, and plan the template guard replacements.
+- REF-0C-A / REF-0C-A-R1 is **CLOSED / ACCEPTED** at accepted diagnosis HEAD `f977fd6`.
+- Accepted matrix counts: HIGH 21, MEDIUM 3, LOW 0.
+- R22-R24 remain unresolved normative diagnostic-policy decisions. No policy has been selected for these routes.
+- No RBAC implementation has started. Modularization remains prohibited.
 
-### Instructions For The Next Agent (REF-0C-B or equivalent)
+### Next Authorized Phase: REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests
+
+- Explicitly limited to the 21 HIGH-confidence route-method combinations (R1–R19, R21).
+- R22, R23, and R24 are explicitly excluded from implementation until their diagnostic access policy is approved.
+- For R20, only the central `matrizes`/`edit` RBAC mapping and its tests are authorized. Changing or removing the local `readonly` behavior is not authorized.
+- Do not claim that R22–R24 have a selected policy.
+- Do not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.
+
+### Instructions For The Next Agent (REF-0C-B1)
 - Read `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` as the primary input.
-- The 24-row matrix in the diagnosis document defines the normative target: each route–method pair must return a specific `resource:scope` tuple from `get_admin_permission_requirement`.
-- The 4 MEDIUM-confidence routes (R10, R11, R12, R20) require explicit product decision before implementation. Do not proceed with those routes until the resource ambiguity or scope is resolved.
-- The diagnosis identifies 8 pre-existing `current_user.tipo_usuario == 'admin'` checks in templates and 12 in route handlers that must be replaced by granular `has_permission` calls. Do not perform this replacement in REF-0C-B; it belongs in a later implementation phase.
+- The 21 HIGH-confidence routes in the diagnosis document define the normative target: each route–method pair must return a specific `resource:scope` tuple from `get_admin_permission_requirement`.
+- The 3 MEDIUM-confidence routes (R22, R23, R24) require explicit diagnostic access-policy decision before implementation. Do not proceed with those routes in REF-0C-B1.
 - Do not modify `rbac_unmapped_routes_baseline.json` — it characterizes preexisting debt and its target state is empty list. Do not regenerate or delete it without explicit authorization.
 - Do not modify `route_inventory_baseline.json` — it is the frozen URL->endpoint contract.
 - The D8.x trail (student-facing versioned snapshot display, write flag smoke, cleanup) remains independent and can proceed in parallel if separately authorized.
 - RBAC correction and route modularization remain prohibited in all phases without explicit authorization.
+- This closeout does not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.

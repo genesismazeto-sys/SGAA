@@ -13,7 +13,7 @@
 - "Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política."
 - Current isolated full-suite baseline: `538` collected, `17` deselected, `521` selected and passed. Standard suite is now hermetic.
 - REF-0TF-B accepted at `9b47c37`.
-- REF-0C-A completed locally and pending ChatGPT supervisor review.
+- REF-0C-A / REF-0C-A-R1 CLOSED and ACCEPTED at accepted diagnosis HEAD `f977fd6`.
 - RBAC correction and route modularization remain prohibited.
 
 ### REF-0T — isolated full-suite baseline (2026-07-16)
@@ -2020,35 +2020,16 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 ### REF-0 refactor safety net (continued)
 
 #### REF-0C-A - RBAC policy matrix diagnosis for 24 unmapped /admin routes
-- REF-0C-A-R1 corrected the diagnosis documentation only. Completed locally and pending ChatGPT supervisor review.
-- Current branch: `refactor/architecture-safety-net`; `HEAD` `64d3d1214b87095edb65127839089f25b5237fc8`; `origin/main...HEAD = 0 7`; working tree clean before the correction.
-- Corrected confidence counts: HIGH 21, MEDIUM 3, LOW 0. R20 is `matrizes`/`edit` with HIGH confidence; its unused local `readonly` value is a separate enforcement/cleanup issue.
-- R22-R24 diagnostic access policy is unresolved. Existing alternatives are `atividades`, `banco_dados`, or approved diagnostic-specific vocabulary; `banco_dados`/`view` allows only `admin_total` under current defaults.
-- No RBAC implementation is authorized. Modularization remains prohibited. No later phase is authorized.
-- Next action: ChatGPT supervisor review of REF-0C-A-R1.
-- Implemented as a comprehensive normative diagnosis (docs only). No production, test, schema, UI, database, dependency, or configuration change was made.
-- Current branch: `refactor/architecture-safety-net`; `HEAD` `9b47c37`; `origin/main...HEAD = 0 6`; clean working tree, empty staging, no untracked files.
-- Diagnosis deliverable: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` — 24-row normative policy matrix.
-- Superseded by REF-0C-A-R1: confidence breakdown is 21 HIGH, 3 MEDIUM, 0 LOW.
-  - **HIGH** (20 routes): concrete resource–scope tuples can be assigned without further diagnostics because the endpoint name, URL pattern, and HTML-method semantics directly map to one of the 15 recognized RBAC resources and one of the 4 scopes.
-  - **MEDIUM** (4 routes):
-    - `R10` `DELETE /admin/requisicoes/<id>/arquivo/<arquivo_id>` — diagnostics resource is ambiguous between `requisicoes` and `arquivos`; explicit decision required.
-    - `R11` `DELETE /admin/mensagens/<message_key>/reset` — diagnostics resource is either `mensagens` or `sistema_config`; explicit decision required.
-    - `R12` `DELETE /admin/turmas/matriculados/<matricula_id>` — diagnostics resource is either `matriculas` or `turmas`; explicit decision required.
-    - `R20` `GET  /admin/requisicoes-pendentes` — endpoint name suggests `readonly` scope, but the service supports both `pendentes_admin` (dispatch) and `admin_requisicoes` (readonly review); the normatively mapped `admin_requisicoes:readonly` is safe, but a future decision may upgrade to `read` if dispatch semantics are required.
-- Unresolved decisions (blocking RBAC implementation but not the policy matrix diagnosis):
-  - **Resource authority limitation**: `get_admin_permission_requirement` currently returns a single `resource:scope` tuple. The RBAC vocabulary has 15 resources; the diagnosis maps routes to these resources. Implementation may need to extend the check to support multiple requirements per route or a secondary fallback check. This is an implementation concern, not a diagnosis gap.
-  - **Template‑driven access control**: several routes toggle visibility of form buttons, delete links, and action columns based on `current_user.tipo_usuario == 'admin'` rather than granular permission checks. RBAC implementation would need to replace each explicit `current_user.tipo_usuario` comparison with the corresponding granular check. These are pre‑identified remediation sites, not gaps in the policy matrix.
-  - **R20 readonly enforcement gap**: `GET /admin/requisicoes-pendentes` is mapped to `admin_requisicoes:readonly`, but the endpoint name and the service's `pendentes_admin` dispatch suggest a potential need for `read` scope for dispatch operations. The diagnosis records the policy as `readonly` and flags the gap for explicit product decision before RBAC implementation.
-  - **Missing test plan**: no automated test validates that all 24 routes return the expected granular requirement after RBAC implementation. The REF-0C-A diagnosis recommends a parameterized test matrix covering all 24 route–method combinations with the expected resource–scope tuple.
-  - **RBAC extension risk for R2, R8, R13, R18 (informational-only GET)**: these four routes are `GET` requests that serve essentially informational or form‑rendering pages. The diagnosis maps them to `readonly`, which is consistent with their semantics. If RBAC implementation chooses to allow anonymous access for informational pages, the policy should be explicitly overridden in `get_admin_permission_requirement` rather than left to the default result. The diagnosis records this as a risk.
-- All 24 handler functions were inspected in `main.py` (lines 9619–14305). Each handler's documentation, SQL queries, template context, and authorization guards (`@admin_required`, `@login_required`) were verified to match the diagnosis.
-- Prohibitions explicitly recorded in the diagnosis:
-  - Do not implement RBAC changes directly from this diagnosis — REF-0C-A is `STOP`; a subsequent implementation phase (REF-0C-B or equivalent) must be explicitly authorized and scoped.
-  - Do not change `main.py`, `app/auth.py`, tests, schemas, UI, database, dependencies, or configurations.
-  - Do not treat the `MEDIUM` routes as resolved — each requires an explicit decision before RBAC implementation.
-- Dynamic route-map enumeration was executed against `main.app.url_map` to confirm exactly 24 unmapped routes matching the baseline. No discrepancy was found.
-- Baseline JSON artifact (`tests/_artifacts/rbac_unmapped_routes_baseline.json`) was not modified, regenerated, or touched in any way.
-- Standard full-suite test isolation: pre-flight confirmed `538` discovered, `17` D73H deselected, `521` selected and passed. No tests were modified, added, or run during REF-0C-A.
-- Next step: ChatGPT supervisor must inspect the repository and return APPROVED, CHANGES REQUIRED, or BLOCKED. If APPROVED, the next authorized phase is REF-0C-B (RBAC implementation planning) or an equivalent follow-on phase.
-- RBAC correction and route modularization remain prohibited in this phase.
+- REF-0C-A / REF-0C-A-R1 is **CLOSED / ACCEPTED**.
+- Accepted diagnosis HEAD: `f977fd6` (`Document normative RBAC policy matrix diagnosis`).
+- Current branch: `refactor/architecture-safety-net`; `HEAD` `f977fd6`; `origin/main...HEAD = 0 7`; working tree clean.
+- Accepted matrix confidence counts: HIGH 21, MEDIUM 3, LOW 0.
+- R22, R23, R24 remain unresolved normative diagnostic-policy decisions. No policy has been selected for these routes.
+- No RBAC implementation has started.
+- Modularization remains prohibited.
+- The next authorized technical phase is **REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests**.
+- REF-0C-B1 is explicitly limited to the 21 HIGH-confidence route-method combinations (R1–R19, R21).
+- R22, R23, and R24 are explicitly excluded from implementation until their diagnostic access policy is approved.
+- For R20, only the central `matrizes`/`edit` RBAC mapping and its tests are authorized. Changing or removing the local `readonly` behavior is not authorized in this closeout.
+- Do not claim that R22–R24 have a selected policy.
+- Do not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.

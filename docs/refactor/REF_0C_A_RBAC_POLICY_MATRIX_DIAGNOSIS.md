@@ -1025,6 +1025,59 @@ These are classified as MEDIUM confidence because the resource choice is ambiguo
 
 **Classification: D — REDUNDANT LOCAL AUTHORIZATION.** A granular RBAC mapping would make the local check genuinely redundant. The local check should either be made effective or removed after RBAC is in place.
 
+---
+
+## 13. Closeout — Supervisor Acceptance of REF-0C-A
+
+### 13.1 Status
+
+| Item | Value |
+|------|-------|
+| Phase | REF-0C-A / REF-0C-A-R1 |
+| **Status** | **CLOSED / ACCEPTED** |
+| Accepted diagnosis HEAD | `f977fd6` |
+| Accepted matrix HIGH count | 21 |
+| Accepted matrix MEDIUM count | 3 |
+| Accepted matrix LOW count | 0 |
+| RBAC implementation started | No |
+| Modularization | Remains prohibited |
+
+### 13.2 Unresolved Normative Diagnostic-Policy Decisions
+
+The following routes retain unresolved diagnostic-policy status (no policy selected):
+
+- **R22** — `GET /admin/diagnostico/atividades-versionadas` — diagnostic access policy unresolved
+- **R23** — `GET /admin/diagnostico/atividades-versionadas/view` — diagnostic access policy unresolved
+- **R24** — `GET /admin/diagnostico/versioned-shadow-reads` — diagnostic access policy unresolved
+
+These three routes remain excluded from implementation until their diagnostic access policy is approved.
+
+### 13.3 Next Authorized Technical Phase
+
+**REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests**
+
+Scope is explicitly limited to the 21 HIGH-confidence route-method combinations from Section 9 (R1–R19, R21). The following constraints apply:
+
+1. **Only HIGH-confidence routes**: Implementation is limited to the 21 routes with HIGH confidence in Section 9. R20 is authorized only for the central `matrizes`/`edit` RBAC mapping and its tests.
+2. **R20 scope limitation**: For R20, authorize only the central `matrizes`/`edit` RBAC mapping and its tests. Do not change or remove the local `readonly` behavior in this closeout.
+3. **R22–R24 excluded**: R22, R23, and R24 are explicitly excluded from implementation. No policy has been selected for these routes.
+4. **No fail-closed global enforcement**: This phase does not authorize fail-closed global enforcement of `get_admin_permission_requirement`.
+5. **No UI changes**: Template-level access control modifications are not authorized.
+6. **No schema or database changes**: Schema migrations and database modifications are not authorized.
+7. **No modularization**: Route modularization remains prohibited.
+
+### 13.4 Accepted Diagnosis Commit
+
+The normative RBAC policy matrix diagnosis recorded in this document at commit `f977fd6` (`Document normative RBAC policy matrix diagnosis`) is accepted as the authoritative policy reference. The diagnosis HEAD is `f977fd6`.
+
+### 13.5 Matrix Confidence Counts
+
+| Confidence | Count | Routes |
+|------------|-------|--------|
+| **HIGH** | 21 | R1–R19, R21 |
+| **MEDIUM** | 3 | R22, R23, R24 |
+| **LOW** | 0 | — |
+
 ## 13. Routes with No Granular Compensation
 
 All 24 routes currently depend solely on `@admin_required`. None perform a granular permission check that would compensate for a missing `get_admin_permission_requirement` entry:
