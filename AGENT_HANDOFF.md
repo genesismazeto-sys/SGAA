@@ -1,21 +1,38 @@
 # Agent Handoff
 
-## Current operational handoff — REF-0TF-B closeout (2026-07-16)
+## Current operational handoff — REF-0C-A closeout (2026-07-17)
 
-- Current branch: `refactor/architecture-safety-net`; REF-0TF-B started at `d8dab45`; `origin/main...HEAD = 0 6`; working tree was clean with empty staging and no untracked files at pre-flight; no push performed.
-- Last accepted phase: REF-0TF-A. Last accepted commit: `e111cd5` (`Harden aluno progress calendar test contract`). REF-0TF-B is locally validated and awaiting final acceptance.
-- Standard suite is now hermetic: `538` discovered, `17` `d73h_historical` tests deselected by default, `521` selected and passed. Zero failures, zero errors, zero skips, zero xfail, zero xpass.
-- Historical lane requires `--run-d73h-historical`, `--d73h-source-db PATH`, `--d73h-source-backup PATH`. Missing/invalid options fail closed with clear usage errors.
-- Positive historical lane was NOT RUN in REF-0TF-B — sanitized artifacts are unavailable and real artifacts are prohibited.
-- Files read: `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `tools/d73h_reconciliation_apply.py`, `normative_fixtures/d73c_normative_fixture.yaml`, `docs/refactor/REF_0TF_A_PROGRESS_CALENDAR_CONTRACT.md`.
-- Files changed: `pytest.ini`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `docs/refactor/REF_0TF_B_D73H_HISTORICAL_VERIFICATION_ISOLATION.md`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`.
-- Exact root cause: module-level `REAL_DB_PATH`, `PRE_APPLY_BACKUP_PATH`, `_resolve_pre_apply_source()` with backup glob fallback and repository-root `database.db` fallback.
-- Exact pytest interface: `d73h_historical` marker; `--run-d73h-historical`, `--d73h-source-db`, `--d73h-source-backup` options; `d73h_sources` fixture for validated paths.
-- Validation in disposable worktree: D73H collection `1/18 (17 deselected)`; D73H execution `1 passed, 17 deselected`; missing-options and invalid-path negatives each fail once during collection with a usage error and no test execution; full collection `538/17/521`; full suite `521 passed, 17 deselected`.
-- Remaining risk: the historical lane still requires separately approved sanitized artifacts for positive execution. No real database or backup was accessed.
-- Positive historical lane not run.
-- Exact next action: **Codex must inspect the actual repository and return APPROVED, CHANGES REQUIRED, or BLOCKED.**
-- No subsequent phase is authorized. RBAC correction, route modularization, and production refactoring remain prohibited.
+### REF-0C-A-R1 correction (current)
+- Completed locally; pending ChatGPT supervisor review.
+- Branch `refactor/architecture-safety-net`; HEAD `64d3d1214b87095edb65127839089f25b5237fc8`; `origin/main...HEAD = 0 7`.
+- Corrected confidence: HIGH 21, MEDIUM 3, LOW 0. R20 is HIGH-confidence `matrizes`/`edit`; its local `readonly` value is a separate enforcement/cleanup issue.
+- R22-R24 diagnostic access policy remains unresolved. `atividades`/`view` permits all admin roles; `banco_dados`/`view` permits only `admin_total`; the intermediate policy requires an override, new resource, new scope, or endpoint-specific rule.
+- No RBAC implementation or modularization is authorized; no later phase is authorized.
+- Exact next action: ChatGPT supervisor review of REF-0C-A-R1.
+
+- Current branch: `refactor/architecture-safety-net`; `HEAD` `9b47c37`; `origin/main...HEAD = 0 6`; working tree clean, staging empty, no untracked files; no push performed.
+- Last accepted commit: `9b47c37` (`Record D73H historical verification isolation and pytest interface` — REF-0TF-B).
+- Standard suite hermetic: `538` discovered, `17` D73H deselected, `521` selected and passed. REF-0C-A did not modify, add, or run any test.
+- Phase classification: `STOP` — normative diagnosis only. No RBAC implementation, no production code change, no test change, no schema/DB/UI/config/dependency change.
+- Files read: `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `main.py` (lines 9619–14305, all 24 handler functions), `app/auth.py`, `app/__init__.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_route_inventory_snapshot.py`, `tests/test_rbac_requirement_coverage.py`, `docs/refactor/REF_0B_ROUTE_CONTRACT_AND_RBAC_DEBT_CHARACTERIZATION.md`, `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md`, `docs/refactor/REF_0TF_A_PROGRESS_CALENDAR_CONTRACT.md`, `docs/refactor/REF_0TF_B_D73H_HISTORICAL_VERIFICATION_ISOLATION.md`, `.gitignore`, `pytest.ini`.
+- Files changed: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` (created — main deliverable, 24-row matrix), `PROJECT_STATE.md` (REF-0C-A section added), `AGENT_HANDOFF.md` (this section).
+- Baseline reconciliation: confirmed exactly 24 unmapped routes match `rbac_unmapped_routes_baseline.json`. No artifact was modified or regenerated.
+- Superseded by REF-0C-A-R1: 21 HIGH-confidence recommendations, 3 MEDIUM, 0 LOW; R22-R24 require the unresolved diagnostic access-policy decision.
+- Unresolved decisions for RBAC implementation (not gaps in the diagnosis):
+  - R10 diagnostics resource: `requisicoes` vs `arquivos`
+  - R11 diagnostics resource: `mensagens` vs `sistema_config`
+  - R12 diagnostics resource: `matriculas` vs `turmas`
+  - R20 readonly enforcement gap: `readonly` vs `read` for dispatch semantics
+  - Resource authority limitation: `get_admin_permission_requirement` returns single tuple; implementation may need multi-requirement support
+  - Template-driven access control: pre-identified remediation sites
+  - Missing test plan for RBAC verification
+  - Informational GET risk for R2, R8, R13, R18
+- Prohibitions:
+  - No RBAC implementation in this phase (REF-0C-A is STOP)
+  - No changes to `main.py`, `app/auth.py`, tests, schemas, UI, DB, deps, or configs
+  - No baseline artifact regeneration or modification
+- Exact next action: **ChatGPT supervisor must inspect the repository and return APPROVED, CHANGES REQUIRED, or BLOCKED.** If APPROVED, the next authorized phase is REF-0C-B (RBAC implementation planning) or equivalent.
+- RBAC correction and route modularization remain prohibited.
 
 ## REF-0B — route contract and RBAC debt characterization (2026-07-16)
 
@@ -1311,3 +1328,20 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
   - Próxima etapa: D8.3C — final verify and push do closeout documental;
     depois, D8.4A apenas se houver autorização explícita.
   Backup em `D:\OneDrive\Programação\SGAA_database_backups\database.pre-D8.0B-baseline-20260614-140824.db`.
+
+## REF-0C-A — RBAC policy matrix diagnosis
+
+### Recommended Next Step
+- **ChatGPT supervisor must inspect the repository and return APPROVED, CHANGES REQUIRED, or BLOCKED.**
+- If APPROVED, the next authorized phase is `REF-0C-B — RBAC implementation planning` or an equivalent follow-on phase.
+- REF-0C-B would scope which routes receive RBAC enforcement in the first implementation increment, define the extended `get_admin_permission_requirement`, and plan the template guard replacements.
+
+### Instructions For The Next Agent (REF-0C-B or equivalent)
+- Read `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` as the primary input.
+- The 24-row matrix in the diagnosis document defines the normative target: each route–method pair must return a specific `resource:scope` tuple from `get_admin_permission_requirement`.
+- The 4 MEDIUM-confidence routes (R10, R11, R12, R20) require explicit product decision before implementation. Do not proceed with those routes until the resource ambiguity or scope is resolved.
+- The diagnosis identifies 8 pre-existing `current_user.tipo_usuario == 'admin'` checks in templates and 12 in route handlers that must be replaced by granular `has_permission` calls. Do not perform this replacement in REF-0C-B; it belongs in a later implementation phase.
+- Do not modify `rbac_unmapped_routes_baseline.json` — it characterizes preexisting debt and its target state is empty list. Do not regenerate or delete it without explicit authorization.
+- Do not modify `route_inventory_baseline.json` — it is the frozen URL->endpoint contract.
+- The D8.x trail (student-facing versioned snapshot display, write flag smoke, cleanup) remains independent and can proceed in parallel if separately authorized.
+- RBAC correction and route modularization remain prohibited in all phases without explicit authorization.
