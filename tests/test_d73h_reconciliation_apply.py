@@ -8,14 +8,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "tools" / "d73h_reconciliation_apply.py"
 FIXTURE_PATH = ROOT / "normative_fixtures" / "d73c_normative_fixture.yaml"
-REAL_DB_PATH = ROOT / "database.db"
-PRE_APPLY_BACKUP_PATH = ROOT / "backups" / "database.pre-d73j-live-apply-20260612-165031.db"
 TARGET_ACTIVITY_NAME = "Visitas técnicas ou cursos coordenados pelos professores"
 
 
@@ -103,28 +102,13 @@ def _remove_target_from_copy(path: Path) -> None:
         conn.commit()
 
 
-def _resolve_pre_apply_source() -> tuple[Path, bool]:
-    if PRE_APPLY_BACKUP_PATH.exists():
-        return PRE_APPLY_BACKUP_PATH, False
-    candidates = sorted((ROOT / "backups").glob("database.pre-d73j-live-apply-*.db"))
-    if candidates:
-        return candidates[-1], False
-    return REAL_DB_PATH, True
-
-
-def _prepare_copy_and_backup(tmp_path: Path, source_path: Path | None = None) -> tuple[Path, Path]:
-    if source_path is None:
-        source, requires_rewind = _resolve_pre_apply_source()
-    else:
-        source = source_path
-        requires_rewind = False
+def _prepare_copy_and_backup(tmp_path: Path, source_db: Path, source_backup: Path) -> tuple[Path, Path]:
     db_copy = tmp_path / "apply_target.sqlite3"
     backup = tmp_path / "apply_backup.sqlite3"
-    shutil.copy2(source, db_copy)
-    shutil.copy2(source, backup)
-    if requires_rewind:
-        _remove_target_from_copy(db_copy)
-        _remove_target_from_copy(backup)
+    shutil.copy2(source_db, db_copy)
+    shutil.copy2(source_backup, backup)
+    _remove_target_from_copy(db_copy)
+    _remove_target_from_copy(backup)
     return db_copy, backup
 
 
@@ -168,26 +152,29 @@ def _run_apply(db_copy: Path, backup: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _prepare_post_apply_copy_and_backup(tmp_path: Path) -> tuple[Path, Path, dict[str, object]]:
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+def _prepare_post_apply_copy_and_backup(tmp_path: Path, source_db: Path, source_backup: Path) -> tuple[Path, Path, dict[str, object]]:
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, source_db, source_backup)
     result = _run_apply(db_copy, backup)
     assert result.returncode == 0, result.stderr
     return db_copy, backup, json.loads(result.stdout)
 
 
-def test_plan_mode_does_not_alter_live_database_signature():
-    before_signature = _database_signature(REAL_DB_PATH)
+@pytest.mark.d73h_historical
+def test_plan_mode_does_not_alter_live_database_signature(d73h_sources):
+    source_path = d73h_sources["source_db"]
+    before_signature = _database_signature(source_path)
 
-    result = _run_cli("--db-copy", REAL_DB_PATH, "--plan")
+    result = _run_cli("--db-copy", source_path, "--plan")
 
     assert result.returncode == 0, result.stderr
     assert "Status: ok" in result.stdout
-    after_signature = _database_signature(REAL_DB_PATH)
+    after_signature = _database_signature(source_path)
     assert after_signature == before_signature
 
 
-def test_plan_mode_json_reports_one_base_and_two_versions_planned(tmp_path):
-    db_copy, _backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_plan_mode_json_reports_one_base_and_two_versions_planned(tmp_path, d73h_sources):
+    db_copy, _backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli("--db-copy", db_copy, "--plan", "--report", "json")
 
@@ -205,8 +192,9 @@ def test_plan_mode_json_reports_one_base_and_two_versions_planned(tmp_path):
     assert tables.count("atividade_versao") == 2
 
 
-def test_plan_mode_json_reports_already_exists_on_controlled_post_apply_copy(tmp_path):
-    db_copy, _backup, _first_report = _prepare_post_apply_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_plan_mode_json_reports_already_exists_on_controlled_post_apply_copy(tmp_path, d73h_sources):
+    db_copy, _backup, _first_report = _prepare_post_apply_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli("--db-copy", db_copy, "--plan", "--report", "json")
 
@@ -222,8 +210,9 @@ def test_plan_mode_json_reports_already_exists_on_controlled_post_apply_copy(tmp
     assert report["planned_actions"] == []
 
 
-def test_apply_refuses_without_backup_confirmed(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_refuses_without_backup_confirmed(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli(
         "--db-copy",
@@ -238,8 +227,9 @@ def test_apply_refuses_without_backup_confirmed(tmp_path):
     assert "--backup-confirmed" in result.stderr
 
 
-def test_apply_refuses_without_backup_path(tmp_path):
-    db_copy, _backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_refuses_without_backup_path(tmp_path, d73h_sources):
+    db_copy, _backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli(
         "--db-copy",
@@ -253,8 +243,9 @@ def test_apply_refuses_without_backup_path(tmp_path):
     assert "--backup-path" in result.stderr
 
 
-def test_apply_refuses_without_allow_create_flag(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_refuses_without_allow_create_flag(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli(
         "--db-copy",
@@ -269,24 +260,22 @@ def test_apply_refuses_without_allow_create_flag(tmp_path):
     assert "--allow-create-visitas-professores" in result.stderr
 
 
-def test_apply_refuses_live_db_and_forbidden_database_db_basename(tmp_path):
-    live_backup = tmp_path / "live_backup.sqlite3"
-    shutil.copy2(REAL_DB_PATH, live_backup)
+@pytest.mark.d73h_historical
+def test_apply_refuses_live_db_and_forbidden_database_db_basename(tmp_path, d73h_sources):
+    from tools.d73h_reconciliation_apply import connect_apply_copy, GuardRailError
 
-    live_result = _run_cli(
-        "--db-copy",
-        REAL_DB_PATH,
-        "--apply",
-        "--backup-path",
-        live_backup,
-        "--backup-confirmed",
-        "--allow-create-visitas-professores",
-    )
+    source_db = d73h_sources["source_db"]
+    source_backup = d73h_sources["source_backup"]
+
+    tmp_db = tmp_path / "test.sqlite3"
+    shutil.copy2(source_db, tmp_db)
+    with pytest.raises(GuardRailError, match="live database"):
+        connect_apply_copy(tmp_db, live_db_path=tmp_db)
 
     forbidden_copy = tmp_path / "database.db"
     forbidden_backup = tmp_path / "backup.sqlite3"
-    shutil.copy2(REAL_DB_PATH, forbidden_copy)
-    shutil.copy2(REAL_DB_PATH, forbidden_backup)
+    shutil.copy2(source_db, forbidden_copy)
+    shutil.copy2(source_backup, forbidden_backup)
     forbidden_result = _run_cli(
         "--db-copy",
         forbidden_copy,
@@ -297,14 +286,13 @@ def test_apply_refuses_live_db_and_forbidden_database_db_basename(tmp_path):
         "--allow-create-visitas-professores",
     )
 
-    assert live_result.returncode != 0
-    assert "live database" in live_result.stderr or "basename 'database.db'" in live_result.stderr
     assert forbidden_result.returncode != 0
     assert "basename 'database.db'" in forbidden_result.stderr
 
 
-def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_created_ids(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_created_ids(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_apply(db_copy, backup)
 
@@ -347,8 +335,9 @@ def test_apply_on_copy_creates_exactly_one_base_and_two_versions_and_reports_cre
         assert {row["eixo"] for row in version_rows} == {"AAC"}
 
 
-def test_apply_does_not_alter_norma_atividade(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_does_not_alter_norma_atividade(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
     before_count = _table_count(db_copy, "norma_atividade")
 
     result = _run_apply(db_copy, backup)
@@ -359,8 +348,9 @@ def test_apply_does_not_alter_norma_atividade(tmp_path):
     assert _table_count(db_copy, "norma_atividade") == before_count
 
 
-def test_apply_does_not_alter_atividade_transicao(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_does_not_alter_atividade_transicao(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
     before_count = _table_count(db_copy, "atividade_transicao")
 
     result = _run_apply(db_copy, backup)
@@ -371,8 +361,9 @@ def test_apply_does_not_alter_atividade_transicao(tmp_path):
     assert _table_count(db_copy, "atividade_transicao") == before_count
 
 
-def test_apply_does_not_alter_matriz_atividade_versao_item(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_does_not_alter_matriz_atividade_versao_item(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
     before_count = _table_count(db_copy, "matriz_atividade_versao_item")
 
     result = _run_apply(db_copy, backup)
@@ -383,8 +374,9 @@ def test_apply_does_not_alter_matriz_atividade_versao_item(tmp_path):
     assert _table_count(db_copy, "matriz_atividade_versao_item") == before_count
 
 
-def test_apply_does_not_alter_requisicoes(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_does_not_alter_requisicoes(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
     before_count = _table_count(db_copy, "requisicoes")
 
     result = _run_apply(db_copy, backup)
@@ -395,8 +387,9 @@ def test_apply_does_not_alter_requisicoes(tmp_path):
     assert _table_count(db_copy, "requisicoes") == before_count
 
 
-def test_apply_does_not_touch_runtime_nrm_rt_items(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_does_not_touch_runtime_nrm_rt_items(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
     before_runtime = _runtime_snapshot(db_copy)
 
     result = _run_apply(db_copy, backup)
@@ -406,8 +399,9 @@ def test_apply_does_not_touch_runtime_nrm_rt_items(tmp_path):
     assert after_runtime == before_runtime
 
 
-def test_apply_json_report_contains_created_ids_and_final_counts(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_json_report_contains_created_ids_and_final_counts(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_apply(db_copy, backup)
 
@@ -421,8 +415,9 @@ def test_apply_json_report_contains_created_ids_and_final_counts(tmp_path):
     assert len(report["created_ids"]["atividade_versao"]) == 2
 
 
-def test_apply_is_idempotent_on_same_copy(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_is_idempotent_on_same_copy(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     first_result = _run_apply(db_copy, backup)
     second_result = _run_apply(db_copy, backup)
@@ -440,8 +435,9 @@ def test_apply_is_idempotent_on_same_copy(tmp_path):
     }
 
 
-def test_apply_fails_if_existing_target_base_is_conflicting(tmp_path):
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+@pytest.mark.d73h_historical
+def test_apply_fails_if_existing_target_base_is_conflicting(tmp_path, d73h_sources):
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     with _connect(db_copy) as conn:
         conn.execute(
@@ -462,7 +458,8 @@ def test_apply_fails_if_existing_target_base_is_conflicting(tmp_path):
     assert "conflicting" in result.stderr.lower() or "partial" in result.stderr.lower()
 
 
-def test_apply_fails_if_fixture_is_missing_target_activity(tmp_path):
+@pytest.mark.d73h_historical
+def test_apply_fails_if_fixture_is_missing_target_activity(tmp_path, d73h_sources):
     broken_fixture = tmp_path / "broken_fixture.yaml"
     data = yaml.safe_load(FIXTURE_PATH.read_text(encoding="utf-8"))
     data["atividades"] = [
@@ -472,7 +469,7 @@ def test_apply_fails_if_fixture_is_missing_target_activity(tmp_path):
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
-    db_copy, backup = _prepare_copy_and_backup(tmp_path)
+    db_copy, backup = _prepare_copy_and_backup(tmp_path, d73h_sources["source_db"], d73h_sources["source_backup"])
 
     result = _run_cli(
         "--db-copy",
@@ -489,8 +486,9 @@ def test_apply_fails_if_fixture_is_missing_target_activity(tmp_path):
     assert "VISITAS_TECNICAS_PROFESSORES" in result.stderr
 
 
-def test_cli_refuses_unknown_force_flag_as_out_of_scope_operation():
-    result = _run_cli("--db-copy", REAL_DB_PATH, "--plan", "--force")
+def test_cli_refuses_unknown_force_flag_as_out_of_scope_operation(tmp_path):
+    dummy_path = tmp_path / "dummy.sqlite3"
+    result = _run_cli("--db-copy", dummy_path, "--plan", "--force")
 
     assert result.returncode != 0
     assert "unrecognized arguments: --force" in result.stderr

@@ -2,17 +2,17 @@
 
 ## REF-0 refactor safety net
 
-- Current branch: `refactor/architecture-safety-net`; current HEAD before REF-0DOC: `e111cd5`; `origin/main...HEAD = 0 4`; no push has been performed.
+- Current branch: `refactor/architecture-safety-net`; REF-0TF-B started at `d8dab45`; its implementation is locally validated and awaiting final acceptance; `origin/main...HEAD = 0 6`; no push has been performed.
 - REF-0A accepted: the refactor branch was created without application changes.
 - REF-0ENV accepted: local `.venv` was rebuilt with Python `3.11.15`; the focused baseline passed `42` tests.
 - Accepted phase chain: REF-0B at `f2b1cfc`; REF-0T at `c440297`; REF-0TF at `722b7a7`; REF-0TF-A at `e111cd5`.
 - Independent architecture review completed on branch `refactor/architecture-safety-net` at `340fc7c` (`Add app mapping for refactor planning`).
 - URL rules and endpoint names are frozen by `tests/_artifacts/route_inventory_baseline.json`, generated from `main.app.url_map`: `131` routes, `130` endpoints, and `160` business methods. Normal test execution only compares the contract and never rewrites it.
 - RBAC policy debt is characterized by `tests/_artifacts/rbac_unmapped_routes_baseline.json`: `24` current `/admin` URL/endpoint/method combinations return no granular requirement from `get_admin_permission_requirement`.
-- “Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política.”
-- Current isolated full-suite baseline: `538` collected, `521` passed, `17` failed. All `17` remaining failures belong exclusively to D73H historical verification.
-- Next authorized phase: `REF-0TF-B — D73H Historical Verification Isolation`. It has not started.
-- RBAC correction and route modularization remain prohibited. REF-0TF-B does not authorize either action.
+- "Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política."
+- Current isolated full-suite baseline: `538` collected, `17` deselected, `521` selected and passed. Standard suite is now hermetic.
+- REF-0TF-B implemented and locally validated in detached worktree, pending Codex repository review.
+- RBAC correction and route modularization remain prohibited.
 
 ### REF-0T — isolated full-suite baseline (2026-07-16)
 

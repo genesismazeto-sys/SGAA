@@ -1,14 +1,21 @@
 # Agent Handoff
 
-## Current operational handoff — REF-0DOC (2026-07-16)
+## Current operational handoff — REF-0TF-B closeout (2026-07-16)
 
-- Current branch: `refactor/architecture-safety-net`; current HEAD before the REF-0DOC documentation commit: `e111cd5`; `origin/main...HEAD = 0 4`; working tree clean; no push performed.
-- Last accepted phase: REF-0TF-A. Last accepted commit: `e111cd5` (`Harden aluno progress calendar test contract`).
-- Current isolated test baseline: `538` collected, `521` passed, `17` failed. All `17` remaining failures are exclusively in `tests/test_d73h_reconciliation_apply.py` because the isolated worktree deliberately has no root `database.db`; those tests depend on unavailable historical data and are not yet hermetic.
-- Exact next authorized phase: `REF-0TF-B — D73H Historical Verification Isolation`. REF-0TF-B has not started.
-- Files the next agent must read first: `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `tools/d73h_reconciliation_apply.py`, and `normative_fixtures/d73c_normative_fixture.yaml`.
-- Prohibited actions: do not open, copy, or alter the live `database.db` or untracked historical backups; do not alter production code, routes, endpoints, UI, schema, environment, or dependencies; do not correct RBAC; do not modularize; do not push.
-- Recommended IAexec routing for REF-0TF-B: DeepSeek Pro, test-only implementation mode, high reasoning effort, with real filesystem and Git access through OpenCode. GPT-5.6 alternative: GPT-5.6 Terra with High reasoning effort; escalate to GPT-5.6 Sol High only if sanitized-fixture design or historical-data safety cannot be resolved from repository evidence.
+- Current branch: `refactor/architecture-safety-net`; REF-0TF-B started at `d8dab45`; `origin/main...HEAD = 0 6`; working tree was clean with empty staging and no untracked files at pre-flight; no push performed.
+- Last accepted phase: REF-0TF-A. Last accepted commit: `e111cd5` (`Harden aluno progress calendar test contract`). REF-0TF-B is locally validated and awaiting final acceptance.
+- Standard suite is now hermetic: `538` discovered, `17` `d73h_historical` tests deselected by default, `521` selected and passed. Zero failures, zero errors, zero skips, zero xfail, zero xpass.
+- Historical lane requires `--run-d73h-historical`, `--d73h-source-db PATH`, `--d73h-source-backup PATH`. Missing/invalid options fail closed with clear usage errors.
+- Positive historical lane was NOT RUN in REF-0TF-B — sanitized artifacts are unavailable and real artifacts are prohibited.
+- Files read: `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `tools/d73h_reconciliation_apply.py`, `normative_fixtures/d73c_normative_fixture.yaml`, `docs/refactor/REF_0TF_A_PROGRESS_CALENDAR_CONTRACT.md`.
+- Files changed: `pytest.ini`, `tests/conftest.py`, `tests/test_d73h_reconciliation_apply.py`, `docs/refactor/REF_0TF_B_D73H_HISTORICAL_VERIFICATION_ISOLATION.md`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`.
+- Exact root cause: module-level `REAL_DB_PATH`, `PRE_APPLY_BACKUP_PATH`, `_resolve_pre_apply_source()` with backup glob fallback and repository-root `database.db` fallback.
+- Exact pytest interface: `d73h_historical` marker; `--run-d73h-historical`, `--d73h-source-db`, `--d73h-source-backup` options; `d73h_sources` fixture for validated paths.
+- Validation in disposable worktree: D73H collection `1/18 (17 deselected)`; D73H execution `1 passed, 17 deselected`; missing-options and invalid-path negatives each fail once during collection with a usage error and no test execution; full collection `538/17/521`; full suite `521 passed, 17 deselected`.
+- Remaining risk: the historical lane still requires separately approved sanitized artifacts for positive execution. No real database or backup was accessed.
+- Positive historical lane not run.
+- Exact next action: **Codex must inspect the actual repository and return APPROVED, CHANGES REQUIRED, or BLOCKED.**
+- No subsequent phase is authorized. RBAC correction, route modularization, and production refactoring remain prohibited.
 
 ## REF-0B — route contract and RBAC debt characterization (2026-07-16)
 
