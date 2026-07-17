@@ -467,7 +467,7 @@ def append_text_contains_condition(conditions: list[str], params: list, sql_expr
     params.append(f"%{value.lower()}%")
 
 
-def ensure_usuario_access_schema(conn) -> None:
+def _ensure_usuario_access_schema_impl(conn) -> None:
     cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
     if "nivel_acesso" not in cols:
         try:
@@ -527,6 +527,25 @@ def ensure_usuario_access_schema(conn) -> None:
     # o e-mail "admin@ej.edu.br" a admin_total a cada execução.
     # A promoção por e-mail era um vetor de elevação de privilégios
     # (atacante criar conta com esse e-mail ? admin total).
+
+
+def ensure_usuario_access_schema(conn) -> None:
+    """Ensure the access schema without finalizing a caller-owned transaction.
+
+    The implementation uses idempotent DML which opens a sqlite transaction
+    even when it changes no rows.  This savepoint is owned by this helper:
+    releasing it commits helper work only on a clean connection; if a caller
+    already owns a transaction, that outer transaction remains active.
+    """
+    conn.execute("SAVEPOINT ensure_usuario_access_schema")
+    try:
+        _ensure_usuario_access_schema_impl(conn)
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT ensure_usuario_access_schema")
+        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
+        raise
+    else:
+        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
 
 
 DEFAULT_RESPONSE_GOAL_DAYS = 10
