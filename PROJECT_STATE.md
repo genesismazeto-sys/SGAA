@@ -1,4 +1,20 @@
-### REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
+## Current authoritative state — REF-0C-C-B1-R1 (2026-07-18)
+
+- Branch `refactor/architecture-safety-net`; reviewed B1 implementation base
+  `fb90cc1`; lineage `020cd7f` -> `9453aa2` -> `fb90cc1`; divergence before R1
+  is `origin/main...HEAD = 0 18`; no push.
+- REF-0C-C-A is **CLOSED / ACCEPTED**. REF-0C-C-B1 is implemented and locally
+  validated, pending ChatGPT supervisor review. The authorized R1 correction is
+  limited to containing normal audit-logger failures in production shadow mode and
+  adding a request-level regression; it does not activate production enforcement.
+- The pre-R1 full hermetic baseline is `600 passed`, `17` D73H tests deselected.
+  Testing/development missing configuration remains a hard configuration failure;
+  production remains shadow-only; no permanent allow-open switch exists; R20 is
+  unchanged. R1 focused validation is `99 passed`, exit 0; full detached-worktree
+  validation is `601 passed`, with `17` D73H tests deselected, exit 0. Next action
+  is ChatGPT supervisor review after validation.
+
+### Historical REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
 
 - REF-0C-C-A is CLOSED / ACCEPTED at `020cd7f` (documentation closeout commit follows it). REF-0C-C-B1 is implemented locally and pending ChatGPT supervisor review.
 - Boundary: Flask-resolved `/admin` rule, plus exact external governed GET callbacks `auth_callback`, `google_callback`, and `onedrive_callback`; a governed normalized pair must have exactly one requirement or approved exemption. Exemption registry is empty.

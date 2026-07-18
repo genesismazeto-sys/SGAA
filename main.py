@@ -5268,14 +5268,20 @@ def _admin_access_denied_response(resource: str, required_scope: str):
 
 def _audit_missing_admin_authorization_configuration(classification: dict[str, object]) -> None:
     """Production-only shadow evidence; never include request payload or secrets."""
-    logger.error(
-        "event=admin_rbac_missing_configuration endpoint=%s method=%s rule=%s "
-        "access_level=%s rollout_mode=production_shadow",
-        classification.get("endpoint"),
-        classification.get("method"),
-        classification.get("rule"),
-        session.get("access_level"),
-    )
+    try:
+        logger.error(
+            "event=admin_rbac_missing_configuration endpoint=%s method=%s rule=%s "
+            "access_level=%s rollout_mode=production_shadow",
+            classification.get("endpoint"),
+            classification.get("method"),
+            classification.get("rule"),
+            session.get("access_level"),
+        )
+    except Exception:
+        # Shadow auditing must never turn a missing-policy observation into a
+        # production request failure.  Do not recurse into logging or expose
+        # request data through another fallback channel.
+        return
 
 
 @app.before_request

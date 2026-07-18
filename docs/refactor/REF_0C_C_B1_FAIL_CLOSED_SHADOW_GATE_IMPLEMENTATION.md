@@ -119,3 +119,28 @@ There is no production hard denial for missing mapping, no permanent allow-open
 flag, no broad exemption, no RBAC policy change, no R20 change, and no UI,
 database, schema, dependency, or modularization change. REF-0C-C-B1 is
 implemented locally and pending ChatGPT supervisor review.
+
+## R1 shadow-audit failure safety correction
+
+Review found that the original production shadow helper allowed a normal
+`logger.error` backend exception to escape and fail the request. R1 contains that
+normal `Exception` locally in `_audit_missing_admin_authorization_configuration`.
+It does not catch `BaseException`, does not re-raise, and deliberately performs no
+recursive logger call, print, traceback output, or alternate fallback. The original
+safe event payload is unchanged.
+
+`test_production_shadow_logger_failure_does_not_block_request_or_load_context`
+registers and removes a temporary unmapped `/admin` rule at the URL-map layer,
+then makes a real Flask request in canonical production-shadow configuration while
+the exact `logger.error` call raises. It proves the handler still returns 200, the
+logger is attempted exactly once, no fallback/recursive logger call occurs, and
+the access-context loader, database connection helper, and access-schema helper
+are not invoked. The test also suppresses unrelated snapshot work so no database
+or filesystem operation is available on this characterization path.
+
+Focused R1 validation selected 99 tests across C-B1, RBAC coverage/B1/B2, P0, and
+login/logout/404/405/security coverage: `99 passed`, exit 0. The full hermetic
+suite in a fresh detached worktree selected 601 tests: `601 passed`, with 17 D73H
+tests deselected, exit 0. This is a +1 selected-test delta from the pre-R1
+600-pass baseline, exactly the new logger-failure regression. Production remains
+shadow-only, and the status remains pending ChatGPT supervisor review.

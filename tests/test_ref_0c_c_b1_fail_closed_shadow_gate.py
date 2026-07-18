@@ -221,6 +221,58 @@ def test_production_shadow_audits_once_without_denying_or_loading_context(monkey
         assert forbidden not in serialized.lower()
 
 
+def test_production_shadow_logger_failure_does_not_block_request_or_load_context(monkeypatch):
+    endpoint = "admin_shadow_audit_logger_failure_regression"
+    path = "/admin/shadow-audit-logger-failure-regression"
+    rule = Rule(path, endpoint=endpoint, methods={"GET"})
+    logger_attempts = []
+
+    def failing_logger(*_args, **_kwargs):
+        logger_attempts.append(True)
+        raise RuntimeError("test logger backend unavailable")
+
+    def unexpected_access(*_args, **_kwargs):
+        pytest.fail("production shadow classification loaded access context or database state")
+
+    monkeypatch.setattr(main.logger, "error", failing_logger)
+    monkeypatch.setattr(main, "_get_current_admin_access_context", unexpected_access)
+    monkeypatch.setattr(main, "get_db_connection", unexpected_access)
+    monkeypatch.setattr(main, "ensure_usuario_access_schema", unexpected_access)
+    monkeypatch.setattr(
+        main,
+        "_maybe_sync_database_snapshot",
+        lambda **_kwargs: {"ok": True, "skipped": True},
+    )
+    monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
+    monkeypatch.setitem(main.app.config, "APP_ENV", "production")
+    monkeypatch.setitem(main.app.config, "TESTING", False)
+    monkeypatch.setitem(main.app.config, "DEBUG", False)
+
+    # Flask disallows add_url_rule after the first request, so this deliberately
+    # registers a test-only rule at the URL-map layer and removes it afterwards.
+    # It still traverses Flask's actual request routing and before_request hook.
+    main.app.url_map.add(rule)
+    main.app.view_functions[endpoint] = lambda: ("shadow request continued", 200)
+    try:
+        client = main.app.test_client()
+        with client.session_transaction() as value:
+            value.clear()
+            value["user_id"] = 999999
+            value["user_type"] = "admin"
+            value["access_level"] = "admin_total"
+
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert response.get_data(as_text=True) == "shadow request continued"
+        assert logger_attempts == [True]
+    finally:
+        main.app.view_functions.pop(endpoint, None)
+        main.app.url_map._rules.remove(rule)
+        main.app.url_map._rules_by_endpoint.pop(endpoint, None)
+        main.app.url_map.update()
+
+
 def test_existing_mapped_browser_ajax_and_actor_contracts_are_preserved(env):
     client = env["client"]
     _login(client, "consultivo")

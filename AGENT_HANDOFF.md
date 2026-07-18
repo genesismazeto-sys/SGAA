@@ -1,15 +1,24 @@
 # Agent Handoff
 
-## Current authoritative state — REF-0C-B2-C
+## Current authoritative state — REF-0C-C-B1-R1
 
-REF-0C-B2-A and REF-0C-B2 are **CLOSED / ACCEPTED**. The accepted chain is
-`a9d375d` → `ed1803f` → `c9e1843`; current HEAD is `c9e1843`, with R22/R23 at
-`atividades/view`, R24 at `banco_dados/view`, zero baseline debt, and `577 passed`
-with `17` D73H tests deselected. R20 and global fail-closed behavior are unchanged.
-Historical operational sections below describe their earlier phase-time states and
-are not current instructions. Next candidate: `REF-0C-C-A — FAIL-CLOSED
-AUTHORIZATION GATE DIAGNOSIS`, NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION;
-next action is a read-only diagnosis order from the ChatGPT supervisor.
+- Branch: `refactor/architecture-safety-net`. Reviewed B1 implementation base:
+  `fb90cc1`; accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1`.
+  Divergence before this correction is `origin/main...HEAD = 0 18`; no push.
+- REF-0C-C-A is **CLOSED / ACCEPTED**. REF-0C-C-B1 is implemented and locally
+  validated but remains **pending ChatGPT supervisor review**.
+- The authorized R1 correction hardens production shadow-audit logger failure
+  handling and adds a request-level regression. Production remains shadow-only;
+  testing/development missing configuration remains a hard configuration failure.
+  Production hard enforcement and permanent allow-open switches remain prohibited.
+- Before R1, the hermetic baseline was `600 passed`, with `17` D73H tests
+  deselected. R20 is unchanged. No UI, JavaScript, schema, database, dependency,
+  or modularization work is authorized.
+- Current correction status: implementation complete; required focused validation
+  is `99 passed`, exit 0; detached-worktree full validation is `601 passed`, with
+  `17` D73H tests deselected, exit 0. The next action is ChatGPT supervisor
+  review. Older
+  phase-time summaries below are historical, not current instructions.
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 
