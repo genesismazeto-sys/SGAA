@@ -1,18 +1,20 @@
-## Current authoritative state — REF-0C-C-B1-R1 (2026-07-18)
+## Current authoritative state — REF-0C-C-B1 closeout (2026-07-18)
 
-- Branch `refactor/architecture-safety-net`; reviewed B1 implementation base
-  `fb90cc1`; lineage `020cd7f` -> `9453aa2` -> `fb90cc1`; divergence before R1
-  is `origin/main...HEAD = 0 18`; no push.
-- REF-0C-C-A is **CLOSED / ACCEPTED**. REF-0C-C-B1 is implemented and locally
-  validated, pending ChatGPT supervisor review. The authorized R1 correction is
-  limited to containing normal audit-logger failures in production shadow mode and
-  adding a request-level regression; it does not activate production enforcement.
-- The pre-R1 full hermetic baseline is `600 passed`, `17` D73H tests deselected.
-  Testing/development missing configuration remains a hard configuration failure;
-  production remains shadow-only; no permanent allow-open switch exists; R20 is
-  unchanged. R1 focused validation is `99 passed`, exit 0; full detached-worktree
-  validation is `601 passed`, with `17` D73H tests deselected, exit 0. Next action
-  is ChatGPT supervisor review after validation.
+- Branch `refactor/architecture-safety-net`; accepted technical HEAD `39f7732`.
+  Accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1` -> `39f7732`.
+  Divergence before this documentary closeout is `origin/main...HEAD = 0 19`; no
+  push has been performed.
+- **REF-0C-C-A, REF-0C-C-B1, and REF-0C-C-B1-R1 are CLOSED / ACCEPTED.** B1-R1
+  contains the bounded logger-failure safety correction and its request-level
+  regression; no other authorization policy changed.
+- Full hermetic baseline: `601 passed`, `17` D73H tests deselected. Missing
+  configuration remains a hard configuration failure in testing/development.
+  Production remains shadow-only: no production hard enforcement and no permanent
+  allow-open switch exist. A normal audit-logger failure cannot interrupt the
+  production request, but can lose that single shadow-audit event.
+- R20 remains unchanged. No UI, JavaScript, schema, database, dependency, or
+  modularization work is authorized. No later phase is authorized; the next action
+  requires a new supervisor/user direction.
 
 ### Historical REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
 

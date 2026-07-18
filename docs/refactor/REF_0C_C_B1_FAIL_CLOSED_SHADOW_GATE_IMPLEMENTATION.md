@@ -118,7 +118,8 @@ after evidence collection.
 There is no production hard denial for missing mapping, no permanent allow-open
 flag, no broad exemption, no RBAC policy change, no R20 change, and no UI,
 database, schema, dependency, or modularization change. REF-0C-C-B1 is
-implemented locally and pending ChatGPT supervisor review.
+accepted at technical correction commit `39f7732` (`Harden REF-0C-C-B1 shadow
+audit failure handling`).
 
 ## R1 shadow-audit failure safety correction
 
@@ -143,4 +144,18 @@ login/logout/404/405/security coverage: `99 passed`, exit 0. The full hermetic
 suite in a fresh detached worktree selected 601 tests: `601 passed`, with 17 D73H
 tests deselected, exit 0. This is a +1 selected-test delta from the pre-R1
 600-pass baseline, exactly the new logger-failure regression. Production remains
-shadow-only, and the status remains pending ChatGPT supervisor review.
+shadow-only, and the status is CLOSED / ACCEPTED.
+
+## Supervisor acceptance closeout
+
+The supervisor accepted REF-0C-C-A (`9453aa2`), REF-0C-C-B1 (`fb90cc1`), and
+REF-0C-C-B1-R1 (`39f7732`). The accepted technical lineage is
+`020cd7f` -> `9453aa2` -> `fb90cc1` -> `39f7732`; the divergence before this
+documentary closeout is `origin/main...HEAD = 0 19`, with no push.
+
+The accepted production mode remains shadow-only. Testing/development missing
+configuration remains a hard configuration failure; production hard enforcement
+is not active, and no permanent allow-open switch exists. The R1 containment means
+a normal logging backend failure cannot interrupt the request or trigger recursive
+fallback logging. The residual operational risk is loss of that one safe
+shadow-audit event. R20 remains unchanged, and no later phase is authorized.

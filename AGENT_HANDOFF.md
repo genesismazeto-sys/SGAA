@@ -1,24 +1,22 @@
 # Agent Handoff
 
-## Current authoritative state — REF-0C-C-B1-R1
+## Current authoritative state — REF-0C-C-B1 closeout
 
-- Branch: `refactor/architecture-safety-net`. Reviewed B1 implementation base:
-  `fb90cc1`; accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1`.
-  Divergence before this correction is `origin/main...HEAD = 0 18`; no push.
-- REF-0C-C-A is **CLOSED / ACCEPTED**. REF-0C-C-B1 is implemented and locally
-  validated but remains **pending ChatGPT supervisor review**.
-- The authorized R1 correction hardens production shadow-audit logger failure
-  handling and adds a request-level regression. Production remains shadow-only;
-  testing/development missing configuration remains a hard configuration failure.
-  Production hard enforcement and permanent allow-open switches remain prohibited.
-- Before R1, the hermetic baseline was `600 passed`, with `17` D73H tests
-  deselected. R20 is unchanged. No UI, JavaScript, schema, database, dependency,
-  or modularization work is authorized.
-- Current correction status: implementation complete; required focused validation
-  is `99 passed`, exit 0; detached-worktree full validation is `601 passed`, with
-  `17` D73H tests deselected, exit 0. The next action is ChatGPT supervisor
-  review. Older
-  phase-time summaries below are historical, not current instructions.
+- Branch: `refactor/architecture-safety-net`; accepted technical HEAD `39f7732`.
+  Accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1` -> `39f7732`.
+  Divergence before this documentary closeout is `origin/main...HEAD = 0 19`; no
+  push has been performed.
+- **REF-0C-C-A, REF-0C-C-B1, and REF-0C-C-B1-R1 are CLOSED / ACCEPTED.** The
+  accepted B1-R1 correction keeps production shadow-only, makes logger backend
+  failures non-fatal to the request, and adds a request-level regression.
+- Full hermetic baseline: `601 passed`, `17` D73H tests deselected. Missing
+  configuration remains a hard failure in testing/development. No production hard
+  enforcement or permanent allow-open switch is active. A logger failure can lose
+  one shadow-audit event, but cannot interrupt the production request.
+- R20 is unchanged. No UI, JavaScript, schema, database, dependency, or
+  modularization work is authorized. No later phase is authorized; a new
+  supervisor/user direction is required. Older phase-time summaries below are
+  historical, not current instructions.
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 
