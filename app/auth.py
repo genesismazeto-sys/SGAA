@@ -211,11 +211,84 @@ def _permission(resource: str, scope: str) -> tuple[str, str]:
     return resource, scope
 
 
+class AdminAuthorizationConfigurationError(RuntimeError):
+    """A resolved governed request has no unambiguous RBAC configuration."""
+
+
+# Accepted REF-0C-C-A boundary: these three callbacks are administrative
+# integration endpoints even though their rules are intentionally outside /admin.
+# The map is method-specific so an endpoint-name similarity never expands scope.
+NON_ADMIN_RBAC_GOVERNED_ENDPOINTS = {
+    "auth_callback": frozenset({"GET"}),
+    "google_callback": frozenset({"GET"}),
+    "onedrive_callback": frozenset({"GET"}),
+}
+
+# REF-0C-C-A accepted that there are no explicit admin exemptions at present.
+# Future entries must be literal (endpoint, normalized_method) keys with reviewed
+# reason/current-protection/test metadata; wildcard and prefix entries are invalid.
+APPROVED_ADMIN_RBAC_EXEMPTIONS: dict[tuple[str, str], dict[str, str]] = {}
+
+
+def normalize_admin_permission_method(method: str | None, rule_methods=None) -> str:
+    """Normalize RBAC method matching; HEAD inherits GET only when GET is allowed."""
+    normalized = str(method or "GET").upper().strip()
+    allowed = {str(value).upper() for value in (rule_methods or ())}
+    if normalized == "HEAD" and "GET" in allowed:
+        return "GET"
+    return normalized
+
+
+def classify_governed_admin_request(
+    endpoint: str | None,
+    url_rule,
+    method: str | None,
+) -> dict[str, object]:
+    """Classify a resolved request without loading a database access context.
+
+    ``url_rule`` is intentionally duck-typed for isolated tests.  The classifier
+    relies on Flask's resolved rule, never raw request-path substring guesses.
+    """
+    rule_text = getattr(url_rule, "rule", None)
+    rule_methods = getattr(url_rule, "methods", None)
+    normalized_method = normalize_admin_permission_method(method, rule_methods)
+    base = {
+        "endpoint": endpoint,
+        "rule": rule_text,
+        "method": normalized_method,
+        "requirement": None,
+        "exemption": None,
+    }
+    if not endpoint or not rule_text:
+        return {**base, "governed": False, "kind": "outside_boundary"}
+
+    # Flask-generated OPTIONS has no handler execution to authorize.  Explicit
+    # OPTIONS handlers do not set this flag and remain subject to the XOR rule.
+    if str(method or "").upper().strip() == "OPTIONS" and bool(
+        getattr(url_rule, "provide_automatic_options", False)
+    ):
+        return {**base, "governed": False, "kind": "automatic_options"}
+
+    is_admin_rule = rule_text == "/admin" or rule_text.startswith("/admin/")
+    is_external_governed = normalized_method in NON_ADMIN_RBAC_GOVERNED_ENDPOINTS.get(
+        endpoint, frozenset()
+    )
+    if not (is_admin_rule or is_external_governed):
+        return {**base, "governed": False, "kind": "outside_boundary"}
+
+    requirement = get_admin_permission_requirement(endpoint, normalized_method)
+    exemption = APPROVED_ADMIN_RBAC_EXEMPTIONS.get((endpoint, normalized_method))
+    result = {**base, "governed": True, "requirement": requirement, "exemption": exemption}
+    if bool(requirement) == bool(exemption):
+        return {**result, "kind": "invalid_configuration" if requirement else "missing_configuration"}
+    return {**result, "kind": "requirement" if requirement else "exemption"}
+
+
 def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") -> tuple[str, str] | None:
     if not endpoint:
         return None
 
-    method_norm = str(method or "GET").upper().strip()
+    method_norm = normalize_admin_permission_method(method, {"GET", "HEAD"})
 
     if endpoint == "auth_callback":
         return _permission("banco_dados", "edit")

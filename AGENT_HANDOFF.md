@@ -1460,3 +1460,12 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - Approved design: resolved `/admin` rule boundary plus exact non-prefix governed callbacks `auth_callback`, `google_callback`, and `onedrive_callback`; requirement XOR approved endpoint+method exemption; HEAD inherits GET; automatic OPTIONS is framework-exempt; endpoint-None, 404, and 405 remain Flask behavior.
 - Staged rollout is approved: REF-0C-C-B1 implements the hybrid registry, production shadow audit, and hard testing/development configuration failure only. Production hard enforcement remains prohibited and no permanent allow-open switch is authorized.
 - R20 remains unchanged. UI, schema, database, dependency, and modularization work remain prohibited. Next action after B1: ChatGPT supervisor review.
+
+## REF-0C-C-B1 — Hybrid boundary and shadow gate (2026-07-18)
+
+- REF-0C-C-A is CLOSED / ACCEPTED; diagnosis `020cd7f`, closeout commit `9453aa2`. REF-0C-C-B1 is implemented locally, pending ChatGPT supervisor review.
+- Changed implementation scope: `app/auth.py`, `main.py`, `tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py`, B1 implementation document, PROJECT_STATE, and this handoff only. Existing tests/baselines were not weakened or regenerated.
+- Classifier: resolved `/admin` rule or exact GET callback registry (`auth_callback`, `google_callback`, `onedrive_callback`); requirement XOR exemption. No exemptions exist. HEAD→GET; automatic OPTIONS exempt; explicit OPTIONS mapped/exempt; endpoint-None/404/405 remain Flask behavior.
+- Runtime: testing/development missing configuration raises a distinct error before access-context/database load. Production emits one safe event (`endpoint`, normalized method, rule template, existing access level, rollout mode) and continues current behavior; no production hard denial and no permanent allow-open flag.
+- Focused new test result: `23 passed in 11.47s`, exit 0; combined required focused set: `81 passed`, exit 0. Fresh detached worktree `C:\Users\klebe\AppData\Local\Temp\sgaa-ref-0c-c-b1-full-validation` full hermetic suite: `600 passed, 17 deselected in 427.00s`, exit 0 (`+23` selected tests); temporary worktree/output removed.
+- R20, UI, schema/database, dependency, and modularization remain prohibited. Next action: ChatGPT supervisor review. Recommended review/correction model: Claude Opus High (GPT-5.6 Sol High alternative).

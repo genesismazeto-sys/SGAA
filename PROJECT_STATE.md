@@ -1,3 +1,12 @@
+### REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
+
+- REF-0C-C-A is CLOSED / ACCEPTED at `020cd7f` (documentation closeout commit follows it). REF-0C-C-B1 is implemented locally and pending ChatGPT supervisor review.
+- Boundary: Flask-resolved `/admin` rule, plus exact external governed GET callbacks `auth_callback`, `google_callback`, and `onedrive_callback`; a governed normalized pair must have exactly one requirement or approved exemption. Exemption registry is empty.
+- HEAD inherits GET; automatic OPTIONS remains framework-exempt; explicit OPTIONS must map/exempt; endpoint-None/404/405 preserve Flask behavior.
+- Missing governed configuration raises `AdminAuthorizationConfigurationError` in testing/development. Production only emits one safe shadow audit event and continues current request behavior; production hard enforcement and permanent allow-open switches are not active.
+- R20 is unchanged. No UI, schema, database, dependency, or modularization work occurred. Focused C-B1 test: `23 passed`; full detached hermetic suite: `600 passed`, `17 deselected` (`+23` selected tests over the accepted baseline).
+- Exact next action after validation: ChatGPT supervisor review; no later phase is authorized.
+
 ### REF-0C-C-A fail-closed authorization gate diagnosis (2026-07-18)
 
 - **CLOSED / ACCEPTED** at diagnosis commit `020cd7f` (`Document fail-closed authorization gate diagnosis`); closeout is recorded in the successor documentation commit. Diagnosis: `docs/refactor/REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md`.
