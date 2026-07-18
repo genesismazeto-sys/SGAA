@@ -1441,3 +1441,15 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - Debt baseline: zero remaining route-method combinations. Suite: `577 passed`, `17` D73H deselected. R20 readonly unchanged; no global fail-closed gate.
 - Prohibitions: no main.py, app/auth.py, tests, baseline, R20, UI, schema, database, dependency, or modularization changes; no push.
 - Next candidate: `REF-0C-C-A — FAIL-CLOSED AUTHORIZATION GATE DIAGNOSIS`, **NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION**. Next action: ChatGPT supervisor issuance of a read-only REF-0C-C-A diagnosis order.
+## REF-0C-C-A — Fail-Closed Authorization Gate Diagnosis (2026-07-18)
+
+- Branch / starting HEAD: `refactor/architecture-safety-net` / `042288a`; accepted predecessor chain is `a9d375d → ed1803f → c9e1843 → 042288a`.
+- Status: completed locally, documentation-only, **pending ChatGPT supervisor review**. Changed files: `docs/refactor/REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md`, `PROJECT_STATE.md`, and this file only.
+- Complete reads: canonical state/handoff, auth, coverage/B1/B2/conftest/baseline/pytest config, and REF-0C-A/B1-P0/B2-A/B2 documents. Relevant routing, blueprints, hooks, core/aluno views, presets API, errors, static/upload/health behavior inspected.
+- Dynamic route inventory: 131 rules, 130 endpoints, 160 business combinations; 109 `/admin` endpoints / 131 `/admin` combinations, all explicitly mapped; unmapped baseline empty. Three non-prefix administrative callbacks (`auth_callback`, `google_callback`, `onedrive_callback`) map to `banco_dados/edit`.
+- Recommendation: Option E hybrid. Govern resolved `/admin` rules plus the exact external callback registry. Normalize HEAD to GET; exempt automatic OPTIONS only; require mapping XOR approved endpoint+method exemption. No explicit admin exemptions exist now. Preserve endpoint-None, 404, and 405 framework behavior.
+- Missing governed mapping recommendation: production generic browser 403 / AJAX JSON 403 configuration error with safe structured event; development/test dedicated configuration failure. Existing mapped scope transport and anonymous/aluno decorator behavior stay unchanged.
+- Risks: endpoint rename, newly permitted method, shared handler, dynamic/late blueprint registration, HEAD/OPTIONS, AJAX expectation, stale inventory, and B1-P0 transaction hygiene. Rollout is characterization → registry → bounded shadow → dev/test hard failure → production; preferred rollback is release rollback, not permanent allow-open switch.
+- Read-only validation: coverage+B1+B1-P0 `40 passed`; B2 `18 passed`; combined `58 passed`, all exit 0. No real database or production log access.
+- Prohibitions remain: no REF-0C-C implementation, R20 cleanup, UI/schema/database/dependency/modularization work, baseline changes, push, or runtime bypass.
+- Next action: ChatGPT supervisor review and user architectural decision on boundary, production transport, observability owner, rollback policy, and late-registration contract. Recommended later implementation model/effort: Claude Sonnet, High (or GPT-5.6 Sol, High) after explicit authorization.
