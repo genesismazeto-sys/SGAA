@@ -1,5 +1,30 @@
 # Agent Handoff
 
+## Current operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
+
+### REF-0C-B2-A — Diagnostic Access Policy and R20 Defense-in-Depth Decision Package (READ-ONLY / DOCUMENTATION-ONLY / LOCALLY COMPLETE / PENDING CHATGPT SUPERVISOR REVIEW)
+- Project `SGAA-EJ`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
+- Starting HEAD `5fb4276` (`Refresh PROJECT_STATE after REF-0C-B1 acceptance`); before this closeout `origin/main...HEAD = 0 11`; `932c6d7` is an ancestor with exactly one commit after it; clean working tree, empty staging, zero untracked files, no push.
+- Accepted phase chain: REF-0B `f2b1cfc` → REF-0T `c440297` → REF-0TF `722b7a7` → REF-0TF-A `e111cd5` → REF-0TF-B `9b47c37` → REF-0C-A diagnosis `f977fd6` → REF-0C-A closeout `c8acd07` (CLOSED/ACCEPTED) → REF-0C-B1-P0 `92b25d2` (CLOSED/ACCEPTED) → REF-0C-B1 `932c6d7` (CLOSED/ACCEPTED) → REF-0C-B1 state refresh `5fb4276`.
+- Status: **read-only architectural policy analysis and documentation-only closeout — no RBAC implementation.** Deliverable created: `docs/refactor/REF_0C_B2_A_DIAGNOSTIC_ACCESS_POLICY_DECISION.md`.
+- Files read completely: `PROJECT_STATE.md` (REF-0 section), `AGENT_HANDOFF.md` (REF-0C section), `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md`, `docs/refactor/REF_0C_B1_P0_ACCESS_CONTEXT_TRANSACTION_HYGIENE.md`, `app/auth.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py`.
+- Files inspected partially: `main.py` — `_load_admin_access_context`/`_get_current_admin_access_context`/`_admin_can`, `_admin_access_denied_response`/`enforce_admin_access_control`/`_is_ajax_request`, the R22/R23/R24 handlers and their data-source + log-source helpers, and R20 `admin_matriz_nova_atividade` with `readonly` computation. Real `database.db` and real production log contents were not accessed.
+- Files changed (this closeout only): `docs/refactor/REF_0C_B2_A_DIAGNOSTIC_ACCESS_POLICY_DECISION.md` (new), `PROJECT_STATE.md`, `AGENT_HANDOFF.md`.
+- Policy recommendations (NOT implemented):
+  - R22 → `atividades`/`view` → {admin_total, administrativo, consultivo} (set A; unchanged vs current). Confidence MEDIUM-HIGH.
+  - R23 → `atividades`/`view` → {admin_total, administrativo, consultivo}; must equal R22 (identical data/call-graph). Confidence MEDIUM-HIGH.
+  - R24 → `banco_dados`/`view` → {admin_total} only (set C; deliberately revokes administrativo+consultivo; exposes FS paths/env value/exception tracebacks/identifiers → security-sensitive; no UI link). Confidence MEDIUM-HIGH.
+  - R20 local `readonly` → keep unchanged this phase (central `matrizes`/`edit` gate already enforces before handler body; `readonly` is inert on this route); later prefer Option C (remove) or D (rename). Not modified.
+- Alternatives rejected: `banco_dados`/`view` for R22/R23 (needlessly revokes consultivo/administrativo read of curricular data); `atividades`/`view` for R24 (exposes resolver internals/paths/env broadly); endpoint-specific/role-name logic for any (brittle, invisible to the actor-matrix tests, drift); Option B for R20 (duplicate-authz drift risk).
+- Effective actor sets representable by the model: A = all admins (non-restricted resource / `view`); B = admin_total+administrativo (non-restricted / `edit`, or a new `diagnosticos` resource at `view` — clean form needs new vocabulary); C = admin_total only (security-restricted resource). Set D (admin_total+consultivo, administrativo denied) is NOT role-level representable without a per-user override or new vocabulary. New vocabulary (`diagnosticos` resource) is required only if set B is demanded for a diagnostic.
+- Repository-vs-documentation note (not a BLOCKED condition): R22/R23 do not read `alunos`/`requisicoes` (the accepted REF-0C-A R22 row over-listed them); no student PII is exposed. Refines an analysis field only; conflicts with no accepted state/decision.
+- Unresolved decisions (owned by ChatGPT supervisor + user): D2′ resource for R22/R23; D3′ resource for R24 and whether administrativo needs it (set B → new vocabulary); accept/reject the R24 tightening; D-consistency (R22 must equal R23 — recommended yes); D1′ R20 remove vs rename; and whether/when REF-0C-B2 implementation is authorized.
+- Risks: R22-R24 remain granularly unprotected (fail-open to any admin) until a policy is implemented; choosing `banco_dados` for R24 is a conscious behavioral tightening; a new `diagnosticos` resource, if chosen, touches the access-management UI and the RBAC test matrix.
+- Prohibitions still in force: no `app/auth.py`/`main.py`/test/baseline/template/JS change; no R22-R24 mapping; no R20 behavior change; no profile-scope change; no new resource; no global fail-closed gate; no schema/DB/dependency change; no modularization; no push.
+- Exact next action: ChatGPT supervisor review of the decision package and the user's normative decision; then, only if authorized, REF-0C-B2 implementation. Do not begin REF-0C-B2 implementation, REF-0C-C, UI, schema, database, or modularization work.
+- Recommended model/effort for the later implementation phase: Claude Sonnet, medium (mechanical mapping + tests once the policy is chosen); escalate to Opus/High only if the user requires the new `diagnosticos` vocabulary or an endpoint-specific rule.
+- No ChatGPT acceptance is claimed for REF-0C-B2-A.
+
 ## Current operational handoff — REF-0C-B1 implementation (2026-07-17)
 
 ### REF-0C-B1-P0 — Admin access-context transaction hygiene (IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW)
