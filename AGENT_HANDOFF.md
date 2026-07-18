@@ -1,6 +1,17 @@
 # Agent Handoff
 
-## Current operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
+## Current authoritative state — REF-0C-B2-C
+
+REF-0C-B2-A and REF-0C-B2 are **CLOSED / ACCEPTED**. The accepted chain is
+`a9d375d` → `ed1803f` → `c9e1843`; current HEAD is `c9e1843`, with R22/R23 at
+`atividades/view`, R24 at `banco_dados/view`, zero baseline debt, and `577 passed`
+with `17` D73H tests deselected. R20 and global fail-closed behavior are unchanged.
+Historical operational sections below describe their earlier phase-time states and
+are not current instructions. Next candidate: `REF-0C-C-A — FAIL-CLOSED
+AUTHORIZATION GATE DIAGNOSIS`, NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION;
+next action is a read-only diagnosis order from the ChatGPT supervisor.
+
+## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 
 ### REF-0C-B2-A — Diagnostic Access Policy and R20 Defense-in-Depth Decision Package (READ-ONLY / DOCUMENTATION-ONLY / LOCALLY COMPLETE / PENDING CHATGPT SUPERVISOR REVIEW)
 - Project `SGAA-EJ`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
@@ -1423,3 +1434,10 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - Full detached-worktree validation for REF-0C-B2: `577 passed`, `17` D73H deselected, zero failures/errors/skips/xfails/xpasses, exit `0`; selected-test delta `+15`. The temporary worktree is to be removed after evidence closeout. Next action: ChatGPT supervisor review; do not claim acceptance or begin R20/REF-0C-C.
 - REF-0C-B2 implementation commit: current `HEAD` (`Implement REF-0C-B2 diagnostic RBAC mappings`); decision closeout commit: `ed1803f` (`Close REF-0C-B2-A after supervisor decision`).
 - Worktree cleanup exception: its Git registration was removed, but environment policy blocked deletion of the empty temporary directory `C:\Users\klebe\AppData\Local\Temp\sgaa-ref-0c-b2-full-validation`; no production data was copied there. A local user may delete it.
+## REF-0C-B2-C — supervisor acceptance (CLOSED / ACCEPTED)
+
+- Accepted phase chain: `a9d375d` → `ed1803f` → `c9e1843`; current technical HEAD `c9e1843`; divergence before this closeout `0 14`.
+- Policies: R22/R23 GET → `atividades`/`view` → `admin_total`, `administrativo`, `consultivo`; R24 GET → `banco_dados`/`view` → `admin_total` only; aluno/anonymous retain outer authentication denial.
+- Debt baseline: zero remaining route-method combinations. Suite: `577 passed`, `17` D73H deselected. R20 readonly unchanged; no global fail-closed gate.
+- Prohibitions: no main.py, app/auth.py, tests, baseline, R20, UI, schema, database, dependency, or modularization changes; no push.
+- Next candidate: `REF-0C-C-A — FAIL-CLOSED AUTHORIZATION GATE DIAGNOSIS`, **NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION**. Next action: ChatGPT supervisor issuance of a read-only REF-0C-C-A diagnosis order.

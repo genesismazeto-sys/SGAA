@@ -71,5 +71,6 @@ to its committed state. Its Git worktree registration was removed. The empty
 temporary directory remained at `C:\Users\klebe\AppData\Local\Temp\sgaa-ref-0c-b2-full-validation`
 because the environment denied its final recursive deletion; it contains no Git
 worktree registration or production data and may be removed by the local user.
-REF-0C-B2 is implemented and locally validated, **pending ChatGPT supervisor review**.
-REF-0C-C and R20 cleanup remain unresolved and unauthorized.
+REF-0C-B2 is **CLOSED / ACCEPTED** by supervisor decision. REF-0C-C-A remains
+**NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION**; R20 cleanup remains
+unauthorized.

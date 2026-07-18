@@ -788,3 +788,7 @@ and the user's normative decision.
 > anonymous retain the outer `@admin_required` login contract. REF-0C-B2 is
 > authorized only for R22–R24; REF-0C-C remains unauthorized. R20 `readonly`
 > remains unchanged and must not receive duplicate handler authorization.
+
+> **REF-0C-B2 acceptance (2026-07-18): CLOSED / ACCEPTED.** The approved
+> implementation is recorded at accepted HEAD `c9e1843`. No later implementation
+> phase is authorized by this closeout.

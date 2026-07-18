@@ -1,11 +1,14 @@
-### REF-0C-B2-A supervisor decision closeout (2026-07-18)
+### REF-0C-B2-C supervisor acceptance closeout (2026-07-18)
 
-- **CLOSED / ACCEPTED** at decision commit `a9d375d` (`Document diagnostic RBAC and R20 policy options`).
-- REF-0C-B2 is authorized only for R22–R24: R22 GET and R23 GET → `atividades`/`view` → {`admin_total`, `administrativo`, `consultivo`}; R24 GET → `banco_dados`/`view` → {`admin_total`} only. Aluno and anonymous remain covered by `@admin_required`.
-- R22/R23 must remain identical. R24 intentionally denies `administrativo` and `consultivo` because its output can include paths, environment values, tracebacks, and operational identifiers.
-- R20 local `readonly` remains unchanged; the central `matrizes`/`edit` gate is authoritative. No R20 behavior/UI change or duplicate handler authorization is authorized.
-- REF-0C-C, global fail-closed enforcement, UI, schema, database, and modularization remain unauthorized. At this closeout, R22–R24 are still unmapped and REF-0C-B2 is not complete.
-- Factual correction to accepted REF-0C-A: R22/R23 and helpers do not query `alunos` or `requisicoes`; no policy conclusion changed. The duplicate diagnosis section number was corrected.
+- **REF-0C-B2-A: CLOSED / ACCEPTED** at `ed1803f`; **REF-0C-B2: CLOSED / ACCEPTED** at accepted implementation HEAD `c9e1843`.
+- Current branch: `refactor/architecture-safety-net`; current divergence before this closeout: `origin/main...HEAD = 0 14`; no push.
+- R22 GET and R23 GET → `atividades`/`view` → {`admin_total`, `administrativo`, `consultivo`}; R24 GET → `banco_dados`/`view` → {`admin_total`} only. Aluno and anonymous remain covered by `@admin_required`.
+- RBAC debt baseline contains zero remaining route-method combinations. Full hermetic suite: `577 passed`, `17` D73H deselected.
+- R20 local `readonly` remains unchanged; no global fail-closed gate, UI, schema, database, dependency, or modularization change occurred.
+- Next candidate only: `REF-0C-C-A — FAIL-CLOSED AUTHORIZATION GATE DIAGNOSIS`, **NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION**. Next action: ChatGPT supervisor issuance of a read-only REF-0C-C-A diagnosis order.
+
+The historical REF-0C-A/B1 entries below retain their original phase-time facts;
+the REF-0C-B2-C block above is the current authoritative state.
 
 # Project State
 
@@ -64,7 +67,7 @@
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-18 (REF-0C-B2-A diagnostic access-policy decision package — local, pending supervisor review)
+Last updated: 2026-07-18 (REF-0C-B2-C supervisor acceptance closeout; current state is recorded at the top)
 Closeout: D8.5C cleanup of id=57 closeout (docs-only)
 Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
