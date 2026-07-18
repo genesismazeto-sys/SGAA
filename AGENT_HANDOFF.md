@@ -1,6 +1,33 @@
 # Agent Handoff
 
-## Current operational handoff — REF-0C-A closeout (2026-07-17)
+## Current operational handoff — REF-0C-B1 implementation (2026-07-17)
+
+### REF-0C-B1-P0 — Admin access-context transaction hygiene (IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW)
+- Commit: `92b25d2` (`Fix admin access-context transaction hygiene`), directly after accepted `c8acd07`. The REF-0C-B1 mapping work follows in a separate commit and contains no `main.py` transaction patch.
+- Exact root cause: authorization-context loading calls `ensure_usuario_access_schema()` on the Flask request's shared SQLite connection. Its `INSERT OR IGNORE` defaults and normalization `UPDATE`s open an implicit write transaction, including on no-op calls. That dangling transaction blocked `PRAGMA foreign_keys` during the affected lazy `atividades` rebuild and could hold a write lock.
+- Final ownership mechanism: the helper owns a named savepoint. `RELEASE` persists helper schema/bootstrap work on a clean connection; within an existing outer transaction it releases only the nested savepoint. The caller remains responsible for the outer commit or rollback. The global authorization gate now performs neither operation.
+- Focused temporary-database evidence: `5 passed` — clean access context is transaction-neutral, bootstrap state persists, caller-owned work remains uncommitted and rollbackable by its owner, repeated loads are idempotent, a mapped rebuild route completes without lock/FK DDL failure, and mapped allow/deny behavior is unchanged. Contract: `docs/refactor/REF_0C_B1_P0_ACCESS_CONTEXT_TRANSACTION_HYGIENE.md`.
+- Status: locally validated, pending ChatGPT supervisor review; no real database, schema design, migration, UI, dependency, or policy change.
+
+### REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests (IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW)
+- Project `SGAA-EJ`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
+- Initial HEAD `c8acd07` (REF-0C-A closeout). Final lineage has exactly two unpushed commits after it: P0 `92b25d2` and the following REF-0C-B1 mapping commit. Expected `origin/main...HEAD = 0 10` after final verification.
+- Accepted phase chain: REF-0B `f2b1cfc` → REF-0T `c440297` → REF-0TF `722b7a7` → REF-0TF-A `e111cd5` → REF-0TF-B `9b47c37` → REF-0C-A diagnosis `f977fd6` → REF-0C-A closeout `c8acd07` (CLOSED/ACCEPTED) → REF-0C-B1-P0 → REF-0C-B1 (both pending review).
+- Scope executed exactly per the REF-0C-B1 order: the 21 HIGH-confidence route-method policies R1-R21 mapped in `get_admin_permission_requirement`. R20 received the central `matrizes`/`edit` mapping only; its local `readonly` behavior was NOT changed. R22-R24 were NOT mapped.
+- Mapping groups: `atividades`/`view` = R1-R4; `atividades`/`edit` = R5-R16; `matrizes`/`view` = R17; `matrizes`/`edit` = R18, R19, R20, R21.
+- Prerequisite relationship: REF-0C-B1-P0 corrects transaction ownership at the access-schema helper source. This mapping commit has no `main.py` transaction patch; the global gate neither commits nor rolls back request work.
+- Debt baseline `tests/_artifacts/rbac_unmapped_routes_baseline.json` regenerated with the documented `SGAA_UPDATE_RBAC_DEBT_BASELINE=1` command → now exactly R22, R23, R24. Zero change to R22-R24.
+- Existing tests fixed under supervisor Option A: `tests/test_admin_matriz_versao_link.py` and `tests/test_admin_activity_version_catalog_version_lifecycle.py` login helpers changed from the non-existent `user_id=999999` to the real bootstrap `admin_total` (`user_id=1`). All existing assertions preserved.
+- New tests: `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (36 tests): requirement mapping for all 21 routes, R22-R24 remain unmapped, actor matrix (admin_total/administrativo/consultivo), HTTP allow/deny, denial redirect to `admin_dashboard`, anonymous→login, and no-mutation invariants for a denied POST per domain group.
+- Full hermetic suite: `562 passed`, `17` D73H deselected, `0` failures/errors/skips/xfails/xpasses (`pytest -q`, 528.92s). This is `+5` selected tests relative to the earlier `557`, exactly the P0-focused tests.
+- Files in the RBAC commit: `app/auth.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_admin_matriz_versao_link.py`, `tests/test_admin_activity_version_catalog_version_lifecycle.py`, `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (new), and these canonical records. `main.py` is P0-only.
+- `user_id=999999` inventory: exactly two affected successful-admin login assignments were changed to bootstrap `admin_total` (`user_id=1`) in `_login_admin` of `tests/test_admin_matriz_versao_link.py` and `tests/test_admin_activity_version_catalog_version_lifecycle.py`. Their two retained mentions are explanatory comments. All other `999999`/`9999999` occurrences in tests are retained negative-authentication or missing-resource inputs.
+- Working tree otherwise clean; `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` (randomized non-deterministic churn from `test_csrf_inventory_audit.py`) reverted and excluded.
+- Unresolved decisions still owned by the supervisor: R22-R24 diagnostic access policy (D2/D3/D4); whether to enforce or remove R20's local `readonly` (D1); whether to adopt a fail-closed global gate (REF-0C-C).
+- Known risks/debts: R22-R24 remain granularly unprotected admin routes; P0 and B1 remain pending supervisor review.
+- Prohibited actions still in force: R22-R24 policy implementation, fail-closed global enforcement, R20 `readonly` change/removal, UI/schema/database/dependency changes, route modularization, and push.
+- Exact next action: ChatGPT supervisor review and acceptance of REF-0C-B1-P0 and REF-0C-B1. Do not begin REF-0C-B2 or REF-0C-C without an explicit order.
+- Recommended model/effort for the review-driven follow-up: Claude Sonnet, medium; escalate to Opus/High only if the supervisor requires architectural changes to the gate correction.
 
 ### REF-0C-A / REF-0C-A-R1 (CLOSED / ACCEPTED)
 - REF-0C-A / REF-0C-A-R1 is **CLOSED / ACCEPTED** after ChatGPT supervisor review.

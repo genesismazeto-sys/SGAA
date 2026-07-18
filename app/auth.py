@@ -363,6 +363,38 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     if endpoint in {"admin_excluir_matrizes", "admin_excluir_matriz"}:
         return _permission("matrizes", "full")
 
+    # REF-0C-B1 — Strongly Supported RBAC Mappings (21 HIGH-confidence routes, R1-R21).
+    # Accepted diagnosis: docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md (HEAD f977fd6).
+    # R22-R24 (admin_diagnostico_*) are intentionally EXCLUDED pending decision D4 and must
+    # remain unmapped (return None) until their diagnostic access policy is approved.
+    if endpoint in {
+        "admin_catalogo_versoes",          # R1  GET  /admin/catalogo-versoes
+        "admin_catalogo_versao_detalhe",   # R2  GET  /admin/catalogo-versoes/<base_id>
+        "admin_normas_atividade",          # R3  GET  /admin/normas-atividade
+        "admin_mapeamento_legado",         # R4  GET  /admin/mapeamento-legado
+    }:
+        return _permission("atividades", "view")
+    if endpoint in {
+        "admin_catalogo_nova_base",        # R5/R6   GET+POST /admin/catalogo-versoes/nova-base
+        "admin_norma_nova",                # R7/R8   GET+POST /admin/normas-atividade/nova
+        "admin_catalogo_nova_versao",      # R9/R10  GET+POST /admin/catalogo-versoes/<base_id>/nova-versao
+        "admin_catalogo_editar_versao",    # R11/R12 GET+POST /admin/catalogo-versoes/<base_id>/versoes/<versao_id>/editar
+        "admin_catalogo_ativar_versao",    # R13 POST .../ativar
+        "admin_catalogo_inativar_versao",  # R14 POST .../inativar
+        "admin_catalogo_descontinuar_versao",  # R15 POST .../descontinuar
+        "admin_catalogo_substituir_versao",    # R16 POST .../substituir
+    }:
+        return _permission("atividades", "edit")
+    if endpoint == "admin_matriz_versoes":  # R17 GET /admin/matrizes/<matriz_id>/versoes
+        return _permission("matrizes", "view")
+    if endpoint in {
+        "admin_matriz_versoes_definir",    # R18 POST /admin/matrizes/<matriz_id>/versoes/definir
+        "admin_matriz_versoes_remover",    # R19 POST /admin/matrizes/<matriz_id>/versoes/remover
+        "admin_matriz_nova_atividade",     # R20 POST /admin/matrizes/<matriz_id>/atividades/nova/<active_tab>
+        "admin_matriz_nova_versao_card",   # R21 POST /admin/matrizes/<matriz_id>/atividades/<atividade_id>/nova-versao
+    }:
+        return _permission("matrizes", "edit")
+
     return None
 
 

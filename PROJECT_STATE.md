@@ -9,12 +9,13 @@
 - REF-0TF-B accepted at `9b47c37`. D73H historical verification is isolated behind `--run-d73h-historical` marker; standard suite is hermetic.
 - Independent architecture review completed on branch `refactor/architecture-safety-net` at `340fc7c` (`Add app mapping for refactor planning`).
 - URL rules and endpoint names are frozen by `tests/_artifacts/route_inventory_baseline.json`, generated from `main.app.url_map`: `131` routes, `130` endpoints, and `160` business methods. Normal test execution only compares the contract and never rewrites it.
-- RBAC policy debt is characterized by `tests/_artifacts/rbac_unmapped_routes_baseline.json`: `24` current `/admin` URL/endpoint/method combinations return no granular requirement from `get_admin_permission_requirement`.
+- RBAC policy debt is characterized by `tests/_artifacts/rbac_unmapped_routes_baseline.json`. After REF-0C-B1 this baseline lists `3` remaining `/admin` combinations (R22-R24 diagnostics) with no granular requirement; the `21` HIGH-confidence routes (R1-R21) are now mapped.
 - "Este baseline caracteriza dívida preexistente. O estado-alvo obrigatório é lista vazia. A existência do baseline não autoriza novas rotas sem política."
 - Current isolated full-suite baseline: `538` collected, `17` deselected, `521` selected and passed. Standard suite is now hermetic.
 - REF-0TF-B accepted at `9b47c37`.
 - REF-0C-A / REF-0C-A-R1 CLOSED and ACCEPTED at accepted diagnosis HEAD `f977fd6`.
-- RBAC correction and route modularization remain prohibited.
+- REF-0C-B1 IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW: the 21 HIGH-confidence route-method policies (R1-R21) are mapped in `get_admin_permission_requirement`; R22-R24 remain unmapped. Full hermetic suite `557` passed, `17` deselected.
+- Route modularization remains prohibited. R22-R24 policy, fail-closed global enforcement, and R20 `readonly` local behavior remain out of scope.
 
 ### REF-0T — isolated full-suite baseline (2026-07-16)
 
@@ -2033,3 +2034,31 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - For R20, only the central `matrizes`/`edit` RBAC mapping and its tests are authorized. Changing or removing the local `readonly` behavior is not authorized in this closeout.
 - Do not claim that R22–R24 have a selected policy.
 - Do not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.
+
+#### REF-0C-B1-P0 - Admin access-context transaction hygiene (IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW)
+- Prerequisite commit: `92b25d2` (`Fix admin access-context transaction hygiene`). The following REF-0C-B1 mapping commit is intentionally separate; it contains no `main.py` transaction patch.
+- Root cause: `_get_current_admin_access_context()` calls `_load_admin_access_context()` on the shared request connection, which calls `ensure_usuario_access_schema()`. Its idempotent `INSERT OR IGNORE` and normalization `UPDATE` statements open SQLite's implicit write transaction even when no data changes. The dangling transaction prevented the later lazy `atividades` rebuild from changing `PRAGMA foreign_keys` and could hold a write lock.
+- Correction: `ensure_usuario_access_schema()` owns a named savepoint. On a clean connection, `RELEASE SAVEPOINT` persists required bootstrap/schema state and leaves no transaction open. In a pre-existing caller transaction, it releases only its nested savepoint and does not commit or roll back the caller's work. The global gate no longer commits or rolls back transactions.
+- Focused isolated tests (temporary databases only): `5 passed`; they prove clean-connection neutrality and persistence, caller-transaction preservation, repeated idempotence, a mapped lazy-rebuild route with no lock/FK DDL failure, and unchanged allow/deny results. Technical contract: `docs/refactor/REF_0C_B1_P0_ACCESS_CONTEXT_TRANSACTION_HYGIENE.md`.
+- No schema design, migration, authorization-policy, UI, dependency, or real-database change. P0 remains pending supervisor review.
+
+#### REF-0C-B1 - Strongly Supported RBAC Mappings and Denial Tests (IMPLEMENTED / LOCALLY VALIDATED / PENDING CHATGPT SUPERVISOR REVIEW)
+- Scope executed: the 21 HIGH-confidence route-method policies (R1-R21) from the accepted diagnosis Section 9 (HEAD `f977fd6`). R22-R24 were **not** mapped and remain unmapped debt.
+- Central mapping added to `get_admin_permission_requirement` (`app/auth.py`):
+  - `atividades`/`view`: R1 `admin_catalogo_versoes`, R2 `admin_catalogo_versao_detalhe`, R3 `admin_normas_atividade`, R4 `admin_mapeamento_legado`.
+  - `atividades`/`edit`: R5/R6 `admin_catalogo_nova_base`, R7/R8 `admin_norma_nova`, R9/R10 `admin_catalogo_nova_versao`, R11/R12 `admin_catalogo_editar_versao`, R13 `admin_catalogo_ativar_versao`, R14 `admin_catalogo_inativar_versao`, R15 `admin_catalogo_descontinuar_versao`, R16 `admin_catalogo_substituir_versao`.
+  - `matrizes`/`view`: R17 `admin_matriz_versoes`.
+  - `matrizes`/`edit`: R18 `admin_matriz_versoes_definir`, R19 `admin_matriz_versoes_remover`, R20 `admin_matriz_nova_atividade` (central mapping only), R21 `admin_matriz_nova_versao_card`.
+- Resulting actor matrix (documented defaults): `admin_total` and `administrativo` allowed on all 21; `consultivo` allowed on `view` routes (R1-R4, R17) and denied on `edit` routes (R5-R16, R18-R21); anonymous/aluno denied. Denial contract: non-AJAX redirect to `admin_dashboard`; no target-table mutation on a denied POST.
+- Prerequisite relationship: REF-0C-B1-P0 fixes access-context transaction ownership at the helper source. This RBAC commit contains no `main.py` transaction patch; the authorization gate only evaluates permissions and does not commit or roll back request work.
+- Debt baseline regenerated via the documented `SGAA_UPDATE_RBAC_DEBT_BASELINE=1` command: `tests/_artifacts/rbac_unmapped_routes_baseline.json` now lists exactly the 3 R22-R24 diagnostic routes. Zero change to R22-R24 policy.
+- Existing-test adjustment (authorized under supervisor Option A): two versioning suites logged in as the non-existent admin `user_id=999999`, which passed only while these routes were unmapped; once mapped, a non-resolvable admin is correctly denied. Their login helpers now authenticate as the real bootstrap `admin_total` (`user_id=1`); all existing assertions preserved. Files: `tests/test_admin_matriz_versao_link.py`, `tests/test_admin_activity_version_catalog_version_lifecycle.py`.
+- New tests: `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (36 tests) covering the 21-route requirement mapping, R22-R24-remain-unmapped, the actor matrix at the permission layer, HTTP allow/deny paths, the denial redirect contract, and no-mutation invariants for a denied POST per domain group.
+- Full hermetic suite: `562 passed`, `17` D73H deselected, `0` failures/errors/skips/xfails/xpasses (`pytest -q`, 528.92s). The selected-test delta versus the earlier `557` is `+5`, exactly the dedicated P0 transaction tests.
+- No-mutation invariants validated: a denied `consultivo` POST to `admin_catalogo_nova_base` leaves `atividade_base` unchanged; a denied POST to `admin_matriz_versoes_definir` leaves `matriz_atividade_versao_item` (matriz_id=1) unchanged.
+- Out of scope / still prohibited: R22-R24 policy selection, fail-closed global enforcement, R20 local `readonly` enforcement or removal, UI changes, schema/database changes, dependency changes, route modularization, and any push.
+- Files in the RBAC commit: `app/auth.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_admin_matriz_versao_link.py`, `tests/test_admin_activity_version_catalog_version_lifecycle.py`, `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (new), and these canonical records. `main.py` belongs only to P0.
+- Authentication-helper inventory: all `999999` occurrences in the affected two versioning suites were inspected. Exactly two were successful-admin login assignments and were changed to the real bootstrap `admin_total` (`user_id=1`): `tests/test_admin_matriz_versao_link.py::_login_admin` and `tests/test_admin_activity_version_catalog_version_lifecycle.py::_login_admin`. The two retained textual references are explanatory comments. Other `999999`/`9999999` values elsewhere in the test suite are missing-resource or negative-authentication inputs and were retained.
+- Known non-REF-0C-B1 churn: `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` are rewritten with randomized message keys by `test_csrf_inventory_audit.py` on every full-suite run; reverted and excluded from the REF-0C-B1 commit.
+- Exact next action: ChatGPT supervisor review of REF-0C-B1-P0 and REF-0C-B1. No later phase is authorized.
+- Recommended model/effort for supervisor-directed follow-up: Claude Sonnet, medium (documentation/acceptance) or per the next issued order.

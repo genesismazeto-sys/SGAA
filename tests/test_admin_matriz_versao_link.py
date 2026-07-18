@@ -46,7 +46,10 @@ def versioned_env(tmp_path):
 
 def _login_admin(client):
     with client.session_transaction() as sess:
-        sess["user_id"] = 999999
+        # REF-0C-B1: authenticate as the real bootstrap admin_total (id=1). The
+        # prior non-existent id 999999 passed only while these routes were unmapped;
+        # once RBAC-mapped, a non-resolvable admin is (correctly) denied at the gate.
+        sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Admin Link Test"
 
