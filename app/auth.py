@@ -395,6 +395,16 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     }:
         return _permission("matrizes", "edit")
 
+    # REF-0C-B2 — supervisor-approved diagnostic mappings. These are explicit
+    # GET-only requirements; unmatched methods and endpoints remain unmapped.
+    if method_norm == "GET" and endpoint in {
+        "admin_diagnostico_atividades_versionadas",       # R22
+        "admin_diagnostico_atividades_versionadas_view",  # R23
+    }:
+        return _permission("atividades", "view")
+    if method_norm == "GET" and endpoint == "admin_diagnostico_versioned_shadow_reads":  # R24
+        return _permission("banco_dados", "view")
+
     return None
 
 

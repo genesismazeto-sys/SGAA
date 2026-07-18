@@ -9,12 +9,12 @@ diagnosis HEAD ``f977fd6``):
   - ``matrizes``/``view``   : R17
   - ``matrizes``/``edit``   : R18-R21 (R20 = central mapping only)
 
-R22-R24 (``admin_diagnostico_*``) are EXPLICITLY EXCLUDED pending decision D4 and
-must remain unmapped (``get_admin_permission_requirement`` returns ``None``).
+R22-R24 are deliberately outside this B1 regression file; their approved mappings
+and actor tests are owned by ``test_ref_0c_b2_diagnostic_rbac.py``.
 
 Coverage:
   1. Central requirement mapping — every one of the 21 route-method pairs returns
-     its accepted ``(resource, scope)`` tuple, and R22-R24 stay unmapped.
+     its accepted ``(resource, scope)`` tuple.
   2. Actor matrix — ``admin_total`` / ``administrativo`` / ``consultivo`` resolve
      the intended allow/deny at the permission layer for both resources × scopes.
   3. Denial contract — a denied role (``consultivo`` on an ``edit`` route) is
@@ -74,14 +74,6 @@ HIGH_CONFIDENCE_POLICIES = {
     ("admin_matriz_nova_versao_card", "POST"): ("matrizes", "edit"),
 }
 
-# R22-R24 — excluded from REF-0C-B1, must remain unmapped pending decision D4.
-EXCLUDED_DIAGNOSTIC_ENDPOINTS = [
-    "admin_diagnostico_atividades_versionadas",
-    "admin_diagnostico_atividades_versionadas_view",
-    "admin_diagnostico_versioned_shadow_reads",
-]
-
-
 # ---------------------------------------------------------------------------
 # Part 1 — Central requirement mapping (pure function; no app context needed)
 # ---------------------------------------------------------------------------
@@ -99,12 +91,6 @@ def test_high_confidence_policy_count_is_exactly_21():
 def test_high_confidence_requirement_mapping(key, expected):
     endpoint, method = key
     assert main.get_admin_permission_requirement(endpoint, method) == expected
-
-
-@pytest.mark.parametrize("endpoint", EXCLUDED_DIAGNOSTIC_ENDPOINTS)
-def test_excluded_diagnostic_routes_remain_unmapped(endpoint):
-    # R22-R24 must NOT receive any policy in REF-0C-B1.
-    assert main.get_admin_permission_requirement(endpoint, "GET") is None
 
 
 # ---------------------------------------------------------------------------

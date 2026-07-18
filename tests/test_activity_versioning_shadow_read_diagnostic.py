@@ -36,6 +36,11 @@ def _set_admin_session(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+    # Prime the generic successful-admin session before read-only snapshots. The
+    # central RBAC gate reloads idempotent access context on its first mapped
+    # request, which may persist fixture-local context maintenance.
+    response = client.get("/admin/dashboard")
+    assert response.status_code == 200
 
 
 def _set_aluno_session(client):
