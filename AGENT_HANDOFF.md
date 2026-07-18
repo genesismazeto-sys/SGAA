@@ -1453,3 +1453,10 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - Read-only validation: coverage+B1+B1-P0 `40 passed`; B2 `18 passed`; combined `58 passed`, all exit 0. No real database or production log access.
 - Prohibitions remain: no REF-0C-C implementation, R20 cleanup, UI/schema/database/dependency/modularization work, baseline changes, push, or runtime bypass.
 - Next action: ChatGPT supervisor review and user architectural decision on boundary, production transport, observability owner, rollback policy, and late-registration contract. Recommended later implementation model/effort: Claude Sonnet, High (or GPT-5.6 Sol, High) after explicit authorization.
+
+## REF-0C-C-A supervisor acceptance closeout (2026-07-18)
+
+- REF-0C-C-A is **CLOSED / ACCEPTED**. Accepted diagnosis commit: `020cd7f` (`Document fail-closed authorization gate diagnosis`).
+- Approved design: resolved `/admin` rule boundary plus exact non-prefix governed callbacks `auth_callback`, `google_callback`, and `onedrive_callback`; requirement XOR approved endpoint+method exemption; HEAD inherits GET; automatic OPTIONS is framework-exempt; endpoint-None, 404, and 405 remain Flask behavior.
+- Staged rollout is approved: REF-0C-C-B1 implements the hybrid registry, production shadow audit, and hard testing/development configuration failure only. Production hard enforcement remains prohibited and no permanent allow-open switch is authorized.
+- R20 remains unchanged. UI, schema, database, dependency, and modularization work remain prohibited. Next action after B1: ChatGPT supervisor review.

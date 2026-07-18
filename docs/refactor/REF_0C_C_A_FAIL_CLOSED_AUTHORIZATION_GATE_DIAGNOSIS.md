@@ -437,3 +437,15 @@ gate was changed. This phase changes documentation only. Fail-closed behavior is
 **not active**, and no subsequent implementation phase is authorized. The exact
 next action is ChatGPT supervisor review followed by the user's architectural
 decision.
+
+> **Supervisor decision closeout (2026-07-18): CLOSED / ACCEPTED.** Diagnosis
+> commit: `020cd7f` (`Document fail-closed authorization gate diagnosis`). The
+> approved architecture is the hybrid boundary described above: resolved `/admin`
+> rule or one of `auth_callback`, `google_callback`, and `onedrive_callback`; a
+> governed normalized pair has exactly one requirement or approved endpoint-method
+> exemption; HEAD inherits GET; automatic OPTIONS is framework-exempt; and
+> endpoint-None/404/405 preserve Flask behavior. Production hard enforcement is
+> not authorized here. Only `REF-0C-C-B1` (boundary registry, production shadow
+> audit, and development/testing hard failure) is authorized; R20, modularization,
+> UI, schema, database, and dependency work remain prohibited. The next action
+> after B1 is ChatGPT supervisor review.

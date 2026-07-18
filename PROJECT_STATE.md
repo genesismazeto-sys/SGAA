@@ -1,13 +1,13 @@
 ### REF-0C-C-A fail-closed authorization gate diagnosis (2026-07-18)
 
-- Completed locally on `refactor/architecture-safety-net`, starting HEAD `042288a`; **pending ChatGPT supervisor review**. Diagnosis: `docs/refactor/REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md`.
+- **CLOSED / ACCEPTED** at diagnosis commit `020cd7f` (`Document fail-closed authorization gate diagnosis`); closeout is recorded in the successor documentation commit. Diagnosis: `docs/refactor/REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md`.
 - Dynamic live inventory: 131 rules, 130 endpoints, 160 business route-method combinations. All 131 `/admin` combinations have explicit requirements; the unmapped `/admin` baseline remains empty. Three non-`/admin` OAuth callbacks are also centrally governed (`banco_dados/edit`).
 - Recommended design only: hybrid fail-closed boundary—resolved `/admin` rule classification plus a precise registry for `auth_callback`, `google_callback`, and `onedrive_callback`; governed normalized method must have exactly one requirement or approved exemption. No explicit admin exemptions exist today.
 - Proposed method policy: HEAD inherits GET; framework-generated OPTIONS is exempt; explicit OPTIONS must map or be precisely exempt; 404/405 and endpoint-None remain framework behavior.
 - Missing governed mapping: production generic 403 (browser) / JSON 403 configuration error (AJAX), distinct internal observability; development/test should expose a configuration failure. Existing mapped scope denial and anonymous/aluno login behavior remain unchanged.
 - Recommended rollout: characterization → registry contract → bounded shadow/canary → hard test/dev enforcement → production enforcement; rollback by verified deployment rollback, not a permanent allow-open switch.
-- Focused read-only validation: 58 passed (coverage, B1, B2, B1-P0). No fail-closed implementation, observability implementation, or subsequent phase is authorized.
-- Unresolved decisions: approve boundary/callback registry, production configuration-error transport, observability ownership, rollback mechanism, and late blueprint-registration policy. Exact next action: ChatGPT supervisor review and user architectural decision.
+- The supervisor approved the hybrid boundary, callback registry, staged rollout, and production shadow-before-enforcement direction. Production hard enforcement remains unauthorized. R20 remains unchanged; no UI, schema, database, dependency, or modularization work is authorized.
+- Only REF-0C-C-B1 is authorized next: boundary registry, production shadow audit, and testing/development hard configuration failure. After B1, exact next action is ChatGPT supervisor review.
 
 ### REF-0C-B2-C supervisor acceptance closeout (2026-07-18)
 
