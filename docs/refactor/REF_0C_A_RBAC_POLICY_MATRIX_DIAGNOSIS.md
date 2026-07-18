@@ -836,7 +836,7 @@ No divergence detected. Reconciliation passes.
 | Source | `main.py:9619-9663` |
 | Operation | JSON diagnostic endpoint returning versioned activity model for a turma/matriz |
 | Type | Diagnostic (read-only) |
-| Tables read | `atividades`, `atividade_base`, `atividade_versao`, `atividade_legacy_map`, `matrizes_atividades`, `matrizes_atividades_itens`, `matriz_atividade_versao_item`, `matriz_norma`, `turmas`, `alunos`, `requisicoes` |
+| Tables read | `atividades`, `atividade_base`, `atividade_versao`, `atividade_legacy_map`, `matrizes_atividades`, `matrizes_atividades_itens`, `matriz_atividade_versao_item`, `matriz_norma`, `turmas` |
 | Tables mutated | None |
 | Filesystem | None |
 | Auth | `@admin_required` |
@@ -1078,7 +1078,7 @@ The normative RBAC policy matrix diagnosis recorded in this document at commit `
 | **MEDIUM** | 3 | R22, R23, R24 |
 | **LOW** | 0 | — |
 
-## 13. Routes with No Granular Compensation
+## 14. Routes with No Granular Compensation
 
 All 24 routes currently depend solely on `@admin_required`. None perform a granular permission check that would compensate for a missing `get_admin_permission_requirement` entry:
 
@@ -1090,7 +1090,7 @@ Exception: R20 computes `_admin_can()` but does not enforce it on POST (see sect
 
 **Classification for all 24: E — CURRENTLY UNPROTECTED GRANULARLY.**
 
-## 14. Required Denial Behavior
+## 15. Required Denial Behavior
 
 For all 24 routes when a denied role (e.g., consultivo on a POST mutation) accesses the route:
 
@@ -1101,7 +1101,7 @@ For all 24 routes when a denied role (e.g., consultivo on a POST mutation) acces
 
 This matches the existing project-standard denial behavior from `main.py:5232-5245`.
 
-## 15. Required No-Mutation Invariants
+## 16. Required No-Mutation Invariants
 
 For every mutating route (POST), when access is denied:
 
@@ -1122,7 +1122,7 @@ For every mutating route (POST), when access is denied:
 
 No filesystem artifacts are created by any of these routes. The invariants apply to an isolated test database with fixture-controlled database state; no real institutional `database.db` access is permitted.
 
-## 16. Existing Test Coverage
+## 17. Existing Test Coverage
 
 | Route | Tests | Coverage |
 |-------|-------|----------|
@@ -1145,7 +1145,7 @@ No filesystem artifacts are created by any of these routes. The invariants apply
 
 All existing tests use a hardcoded admin user (`user_id=1` or `999999`) with implicit `admin_total` access level. **No test exercises consultivo, administrativo, or scope-denial paths.**
 
-## 17. Missing Test Plan
+## 18. Missing Test Plan
 
 The following test gaps must be filled in REF-0C-B1:
 
@@ -1163,7 +1163,7 @@ The following test gaps must be filled in REF-0C-B1:
 
 4. **UI visibility tests**: templates do not render action buttons for denied roles
 
-## 18. Implementation Risks
+## 19. Implementation Risks
 
 1. **Resource vocabulary mismatch**: If `banco_dados`/`view` is chosen for R22-R23, consultivo would lose access to diagnostics they currently have. This is a behavioral change and must be approved.
 
@@ -1173,7 +1173,7 @@ The following test gaps must be filled in REF-0C-B1:
 
 4. **No new resource vocabulary**: The analysis demonstrates that all 24 routes can be mapped using existing `atividades` and `matrizes` resources. This avoids the need for new resource/scopes but requires accepting the semantic stretch on R22-R24.
 
-## 19. Recommended Phase Decomposition
+## 20. Recommended Phase Decomposition
 
 ### REF-0C-B1 — Strongly Supported RBAC Mappings (HIGH confidence)
 
@@ -1201,7 +1201,7 @@ Audit that no route exists without an explicit `get_admin_permission_requirement
 
 Formalize the actor matrix (who can do what) and immutability-after-denial tests for all admin routes.
 
-## 20. REF-0C-A-R1 Superseding Corrections
+## 21. REF-0C-A-R1 Superseding Corrections
 
 This section supersedes any earlier conflicting statement in this document.
 
@@ -1211,8 +1211,14 @@ This section supersedes any earlier conflicting statement in this document.
 - Diagnostic vocabulary remains an explicit choice among `atividades`, `banco_dados`, or a new diagnostic-specific vocabulary if approved. No R22-R24 test may prescribe consultivo access before D4.
 - The denial source is `main.py:5232-5245`. Denied-mutation checks use an isolated test database and fixture-controlled state, never the real institutional `database.db`.
 
-## 21. Confirmation of Non-Implementation
+## 22. Confirmation of Non-Implementation
 
 No policy was implemented during this phase. No production file, test file, schema, database, UI, or configuration was changed. Only the three authorized documentation files were created or modified.
 
 All 24 RBAC mappings are recommendations only. No mapping or authorization logic is active.
+> **REF-0C-B2-A factual erratum (2026-07-18):** linked to decision commit
+> `a9d375d` (`Document diagnostic RBAC and R20 policy options`). Static inspection
+> of R22/R23 and their called helpers proves they do not query `alunos` or
+> `requisicoes`; the R22 inventory below has been corrected and R23 remains “Same
+> as R22.” This is factual only and does not alter accepted REF-0C-A policy
+> conclusions or confidence classification.

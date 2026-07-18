@@ -1,3 +1,12 @@
+### REF-0C-B2-A supervisor decision closeout (2026-07-18)
+
+- **CLOSED / ACCEPTED** at decision commit `a9d375d` (`Document diagnostic RBAC and R20 policy options`).
+- REF-0C-B2 is authorized only for R22–R24: R22 GET and R23 GET → `atividades`/`view` → {`admin_total`, `administrativo`, `consultivo`}; R24 GET → `banco_dados`/`view` → {`admin_total`} only. Aluno and anonymous remain covered by `@admin_required`.
+- R22/R23 must remain identical. R24 intentionally denies `administrativo` and `consultivo` because its output can include paths, environment values, tracebacks, and operational identifiers.
+- R20 local `readonly` remains unchanged; the central `matrizes`/`edit` gate is authoritative. No R20 behavior/UI change or duplicate handler authorization is authorized.
+- REF-0C-C, global fail-closed enforcement, UI, schema, database, and modularization remain unauthorized. At this closeout, R22–R24 are still unmapped and REF-0C-B2 is not complete.
+- Factual correction to accepted REF-0C-A: R22/R23 and helpers do not query `alunos` or `requisicoes`; no policy conclusion changed. The duplicate diagnosis section number was corrected.
+
 # Project State
 
 ## REF-0 refactor safety net

@@ -780,3 +780,11 @@ are modified in the accompanying commit. All statements above are recommendation
 only; no authorization logic is active for R22–R24, and no later implementation
 phase is authorized by this document. The next action is ChatGPT supervisor review
 and the user's normative decision.
+> **Supervisor decision closeout (2026-07-18): CLOSED / ACCEPTED.** Decision commit:
+> `a9d375d` (`Document diagnostic RBAC and R20 policy options`). Approved policy:
+> R22 GET → `atividades`/`view`; R23 GET → `atividades`/`view` (identical to
+> R22); R24 GET → `banco_dados`/`view`. R22/R23 allow `admin_total`,
+> `administrativo`, and `consultivo`; R24 allows only `admin_total`. Aluno and
+> anonymous retain the outer `@admin_required` login contract. REF-0C-B2 is
+> authorized only for R22–R24; REF-0C-C remains unauthorized. R20 `readonly`
+> remains unchanged and must not receive duplicate handler authorization.

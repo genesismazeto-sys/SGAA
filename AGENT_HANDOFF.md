@@ -1412,3 +1412,10 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - The D8.x trail (student-facing versioned snapshot display, write flag smoke, cleanup) remains independent and can proceed in parallel if separately authorized.
 - RBAC correction and route modularization remain prohibited in all phases without explicit authorization.
 - This closeout does not authorize fail-closed global enforcement, UI changes, schema changes, database changes, or modularization.
+## REF-0C-B2-A — supervisor decision closeout (CLOSED / ACCEPTED)
+
+- Accepted decision commit: `a9d375d` (`Document diagnostic RBAC and R20 policy options`).
+- Authorized next scope is only REF-0C-B2 R22–R24: R22/R23 GET → `atividades`/`view` → `admin_total`, `administrativo`, `consultivo`; R24 GET → `banco_dados`/`view` → `admin_total` only. Aluno and anonymous remain denied by `@admin_required`.
+- R22 and R23 must resolve identically. R24's restriction intentionally protects paths, environment values, tracebacks, and operational identifiers from administrativo and consultivo.
+- R20 `readonly` remains unchanged; central `matrizes`/`edit` enforcement is authoritative. No R20 cleanup, global fail-closed gate, UI, schema, database, dependency, or modularization change is authorized.
+- REF-0C-C remains unauthorized. Implement and validate the bounded R22–R24 mappings, then request ChatGPT supervisor review; do not claim REF-0C-B2 accepted.
