@@ -1,33 +1,19 @@
 # Agent Handoff
 
-## Current authoritative state — Canonical governance and Phase-0 decision
+## Current authoritative state — CANONICAL GOVERNANCE FOUNDATION ACCEPTANCE CLOSEOUT
 
-- **Task:** SGAA-EJ CANONICAL GOVERNANCE FOUNDATION AND PHASE-0 DECISION R1.
-- **Starting HEAD:** `128b2ce` (`Close REF-0C-C-B1 after supervisor acceptance`).
-  Branch: `refactor/architecture-safety-net`. Worktree and index were clean.
-  Remote-tracking `origin/refactor/architecture-safety-net` at same commit;
-  divergence `0 0`. No push performed.
-- **Files created:** `docs/DOCUMENTATION_INDEX.md`,
-  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
-- **Files updated:** `PROJECT_STATE.md` (top authoritative block),
-  `AGENT_HANDOFF.md` (this top block),
-  `docs/mapeamento/05_avaliacao_refactor.md` (Fase 0 section).
+- **Task:** SGAA-EJ CANONICAL GOVERNANCE ACCEPTANCE CLOSEOUT R1.
+- **Accepted governance commit:** `ce90db579137d5cb0075c5f7a525c02062e982b0`,
+  subject `Establish canonical refactor governance after Phase 0 audit`.
+- **Branch:** `refactor/architecture-safety-net`. Published remote HEAD verified
+  by external technical supervisor.
 - **No technical implementation performed.** No source code, test, artifact,
   route, schema, UI, dependency, production enforcement, or R20 change.
-- **REF-0C-D formal decision: PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
-  Evidence gap: actor HTTP and denied-mutation coverage is representative
-  (R1-R24 sample), not route-complete for every governed admin business
-  route-method pair × every denied access level.
-- **REF-0C-D-R1 bounded remainder defined.** Test-only, fixture-controlled,
-  parametrized from canonical route inventory/classifier. Must prove allow/deny
-  at permission layer for every access level, prove each denied combination
-  returns the central browser/AJAX contract before handler execution, and prove
-  no fixture domain mutation.
-- **Macro Fase 0 decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
-  Two remainders: REF-0C-D-R1 and smoke-flow contract/evidence.
+- **Macro Fase 0 remains open** with exactly two bounded remainders:
+  REF-0C-D-R1 and smoke-flow contract/evidence.
 - **Next authorizable action: REF-0C-D-R1 only.** It is authorizable, not
-  authorized. Fase 1, production hard enforcement, and later phases remain
-  unauthorized.
+  authorized. No implementation is currently authorized.
+- Fase 1 and production hard enforcement remain prohibited.
 - **Canonical reading order:** `docs/DOCUMENTATION_INDEX.md` →
   `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
   `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → top block of

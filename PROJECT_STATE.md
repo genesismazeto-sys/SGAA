@@ -1,38 +1,26 @@
-## Current authoritative state — Canonical governance and Phase-0 decision (2026-07-22)
+## Current authoritative state — CANONICAL GOVERNANCE FOUNDATION ACCEPTANCE CLOSEOUT (2026-07-23)
 
 - Repository: `genesismazeto-sys/SGAA`; branch `refactor/architecture-safety-net`.
-- Published remote HEAD before this task: `128b2ce` (`Close REF-0C-C-B1 after
-  supervisor acceptance`). Accepted technical HEAD: `39f7732` (REF-0C-C-B1-R1
-  correction). No push has been performed in this task.
-- **REF-0C-D decision: PARTIALLY_SATISFIED_REMAINDER_REQUIRED.** Repository
-  evidence confirms complete route mapping and complete governed-boundary
-  classification, but actor HTTP and denied-mutation tests are representative
-  (R1-R24 sample), not route-complete for every governed admin business
-  route-method pair × every denied access level.
-- **REF-0C-D-R1 bounded remainder defined** — route-complete actor decision and
-  pre-handler denied-action immutability coverage. Test-only, fixture-controlled,
-  parametrized from canonical route inventory/classifier. Prohibits production
-  code, UI, schema, dependencies, production hard enforcement, R20 cleanup, and
-  route changes. REF-0C-D original scope is documented at
-  `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20 (future
-  test contract).
-- **Macro Fase 0 decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.** Two
-  remainders: REF-0C-D-R1 and smoke-flow contract/evidence (frozen manual smoke
-  list for admin login, aluno login, create requisicao, process requisicao,
-  backup).
-- Full hermetic baseline: `601 passed`, `17` D73H tests deselected. Missing
-  configuration remains a hard configuration failure in testing/development.
-  Production remains shadow-only: no production hard enforcement and no permanent
-  allow-open switch exist.
-- R20 remains unchanged. No UI, JavaScript, schema, database, dependency, or
-  modularization work is authorized.
-- **Next authorizable action: REF-0C-D-R1 only.** It is authorizable, not
-  authorized. Fase 1, production hard enforcement, and any later phase remain
-  unauthorized.
-- Documentation created: `docs/DOCUMENTATION_INDEX.md`,
-  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`. Updated:
-  `docs/mapeamento/05_avaliacao_refactor.md`, this top block, `AGENT_HANDOFF.md`
-  top block. No source, test, artifact, route, or production file was changed.
+- Accepted governance commit and published remote HEAD inspected by the external
+  technical supervisor: full `ce90db579137d5cb0075c5f7a525c02062e982b0`,
+  subject `Establish canonical refactor governance after Phase 0 audit`.
+- **Canonical governance foundation: CLOSED / ACCEPTED** after direct GitHub
+  inspection.
+- Exact five-document commit manifest:
+  - `docs/DOCUMENTATION_INDEX.md` — added
+  - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — added
+  - `docs/mapeamento/05_avaliacao_refactor.md` — modified
+  - `PROJECT_STATE.md` — modified
+  - `AGENT_HANDOFF.md` — modified
+- **No technical implementation performed.** No source code, test, artifact,
+  route, schema, UI, dependency, production enforcement, or R20 change.
+- **REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
+- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
+- Two bounded remainders: REF-0C-D-R1 and smoke-flow contract/evidence.
+- **REF-0C-D-R1 remains PLANNED / AUTHORIZABLE / NOT AUTHORIZED.**
+- Fase 1 and production hard enforcement remain unauthorized/prohibited.
+- **No implementation is currently authorized.**
+- Next action requires a new explicit supervisor order.
 - Canonical reading order: `docs/DOCUMENTATION_INDEX.md` →
   `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
   `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block →

@@ -30,6 +30,29 @@
 | Fase 5 | Backup/sync offloading | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 6 | `main.py` as entrypoint only | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 
+## Governance event — CANONICAL-GOV-R1
+
+**Objective:** Establish documentation index, architecture phase ledger,
+Phase-0 completion matrix and REF-0C-D decision.
+
+**Implementation/documentation commit:**
+`ce90db579137d5cb0075c5f7a525c02062e982b0`.
+
+**Status: CLOSED / ACCEPTED** after external supervisor direct GitHub inspection.
+
+**Tests not run:** documentation-only.
+
+**Evidence:** Exact five-document GitHub manifest:
+- `docs/DOCUMENTATION_INDEX.md` — added, ACCEPTED
+- `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — added, ACCEPTED
+- `docs/mapeamento/05_avaliacao_refactor.md` — modified, ACCEPTED
+- `PROJECT_STATE.md` — modified, ACCEPTED
+- `AGENT_HANDOFF.md` — modified, ACCEPTED
+
+**Residual state:** Phase 0 remains open with REF-0C-D-R1 and smoke-flow
+contract/evidence. REF-0C-D-R1, Fase 1, and production hard enforcement remain
+not authorized.
+
 ## REF-0C-D formal decision
 
 **Decision: B. PARTIALLY_SATISFIED_REMAINDER_REQUIRED**

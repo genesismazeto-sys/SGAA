@@ -41,16 +41,16 @@
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1.
 
-## Canonical current state (2026-07-22)
+## Canonical current state (2026-07-23)
 
 - Branch: `refactor/architecture-safety-net`
-- Published remote HEAD before this task: `128b2ce`
-- Accepted technical HEAD: `39f7732` (REF-0C-C-B1-R1 correction)
+- Accepted published governance HEAD: `ce90db579137d5cb0075c5f7a525c02062e982b0`
+- **Governance foundation: CLOSED / ACCEPTED** after external direct GitHub inspection
 - Full hermetic test suite: **601 passed**, 17 D73H deselected
 - Production: shadow-only (no hard enforcement)
-- RBAC unmapped admin routes: **0** (empty baseline)
-- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER**
-- Next authorizable action: **REF-0C-D-R1** (not authorized; authorizable)
+- **REF-0C-D: PARTIALLY_SATISFIED_REMAINDER_REQUIRED**
+- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (two bounded remainders: REF-0C-D-R1 and smoke-flow contract/evidence)
+- Next authorizable action: **REF-0C-D-R1** (authorizable, not authorized)
 - Fase 1 and production hard enforcement: **unauthorized**
 
 ## Master plan (Phase 0–6)
