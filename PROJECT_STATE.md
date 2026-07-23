@@ -1,47 +1,22 @@
-## Current authoritative state — REF-0C-D-R1 CLOSED / ACCEPTED (EXTERNAL SUPERVISOR ACCEPTANCE CLOSEOUT) (2026-07-23)
+## Current authoritative state — PHASE-0-R9A PYTEST RUNTIME ISOLATION LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW (2026-07-23)
 
-- Repository: `genesismazeto-sys/SGAA`; branch `refactor/architecture-safety-net`.
-- Accepted governance commit and published remote HEAD inspected by the external
-  technical supervisor: full `ce90db579137d5cb0075c5f7a525c02062e982b0`,
-  subject `Establish canonical refactor governance after Phase 0 audit`.
-- **Canonical governance foundation: CLOSED / ACCEPTED** after direct GitHub
-  inspection.
-- Exact five-document commit manifest:
-  - `docs/DOCUMENTATION_INDEX.md` — added
-  - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — added
-  - `docs/mapeamento/05_avaliacao_refactor.md` — modified
-  - `PROJECT_STATE.md` — modified
-  - `AGENT_HANDOFF.md` — modified
-- **Accepted governance commit scope:** no technical implementation was performed
-  in that governance-only commit. R7 changes only the authorized tests, CSRF
-  snapshots, and canonical evidence; no product code, route, schema, UI,
-  dependency, production enforcement, or R20 change.
-- **REF-0C-D-R1: CLOSED / ACCEPTED** (external supervisor acceptance recorded in this documentary closeout).
-- **REF-0C-D (route-complete actor matrix): SATISFIED.**
-- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
-- Exactly one bounded remainder remains: smoke-flow contract/evidence. Remaining smoke-flow list: admin login; aluno login; create requisicao; process requisicao; backup.
-- Fase 1 and production hard enforcement remain unauthorized/prohibited.
-- Production shadow-only remains in force.
-- D73H historical lane unchanged.
-- R20 unchanged.
-- Runtime-directory cleanup debt deferred.
-- **R7 test evidence:**
-  - CSRF inventory: normal mode is read-only for tracked snapshots; updates require `--update-csrf-snapshots`; deterministic mode is write-if-changed and idempotent; root cause was deterministic stale snapshots after three deterministic message entries (not random keys); `shadow_off` / `shadow_on` are byte-equal under current contract.
-  - Normal harness: 2 passed in 11.00s; update run 1: 2 passed in 11.06s (0 updated/1 unchanged each); update run 2: 2 passed in 11.60s (idempotent confirmed).
-  - REF-0C-D-R1 focused: 33 passed in 19.93s; related seven-module lane: 116 passed in 52.05s.
-  - Full suite: 634 passed, 17 deselected in 380.15s — 0 failed, 0 errors; no `--run-d73h-historical` used (0 D73H executed).
-  - Ten-path pre/post SHA-256 manifest: CHANGED_COUNT=0, staging empty, no new path.
-  - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both shadow_off and shadow_on.
-- Technical commit identity: subject `Make CSRF snapshot validation hermetic` (commit `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`).
-- Acceptance closeout commit: this acceptance closeout commit, subject `Record acceptance of REF-0C-D-R1`. Resolve final SHA with `git rev-parse HEAD` after commit.
-- **Next authorizable action: PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.**
-- Canonical reading order: `docs/DOCUMENTATION_INDEX.md` →
-  `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
-  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block →
-  `AGENT_HANDOFF.md` → phase contracts in dependency order
-  (REF-0TF → REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
-  REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1). No standalone contract
-  exists for REF-0A, REF-0ENV, REF-0B, REF-0T, REF-0C-A-R1, or REF-0C-D.
+- Repository: `genesismazeto-sys/SGAA`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
+- Starting HEAD/upstream: `06786f2a2353894554c982f41e29d35d5d5cadee`, divergence `0/0`, clean worktree/index, zero untracked paths.
+- Commit subject: `Isolate pytest runtime from workspace directories`; this commit carries the technical and documentary R9A closeout. Resolve final SHA after commit; no self-referential follow-up commit.
+- Status: **R9A IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW.**
+- Root cause: session start/finish cleanup deleted preexisting root runtime directories and used `shutil.rmtree(..., ignore_errors=True)`, while database, uploads, documents, backups, logs, shadow logs, and pytest cache did not share a single provably owned session root.
+- Corrected invariant: pytest creates one unique system-temp `PYTEST_RUNTIME_ROOT` before application import, routes every applicable `APP_*` runtime path and pytest cache beneath it, checks canonical root manifests, proves marker/token/path ownership, removes only that root, and surfaces mandatory teardown failures.
+- Production compatibility: non-empty `APP_UPLOAD_FOLDER` and `APP_LOG_DIR` are honored; unset values keep the existing repository-root defaults. `main.py` no longer overwrites the factory upload path. No schema, DB, route, UI, dependency, R20, hard-enforcement, or D73H historical behavior changed.
+- Authorized manifest: `app/__init__.py`, `main.py`, `tests/conftest.py`, `tests/test_pytest_runtime_isolation.py`, `AGENT_HANDOFF.md`, `PROJECT_STATE.md`, `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
+- Agents/models: IAsup `openai-codex/gpt-5.6-sol`; implementation `opencode-go/deepseek-v4-flash` session `ses_06eed9eebffecp7qkYbjPpaSeL` via `FALLBACK_FREE_BUDGET_EXHAUSTED`; corrections `opencode-go/deepseek-v4-pro` session `ses_06edc602effeWZ997yHcw9TVwY`; independent review `opencode-go/deepseek-v4-pro` session `ses_06eac821fffejIIeNNMy11xiQY`, PASS with no logic/security findings. IAsup applied the final two-line correction after two executor quality failures.
+- Validation: AST 4/4; focused `15 passed`/0 skipped; collection `649/666` with 17 D73H deselected; directed regressions `23 passed`; full suite `649 passed, 17 deselected in 441.22s`; static scan clean; `git diff --check` clean.
+- Canonical preservation: accepted lane manifests for `database.db`, `uploads`, `documentos_alunos`, `backups`, `logs`, `.pytest_cache`, and temp-root sets were byte/hash/mtime-identical before/after. `database.db` stayed 544,768 bytes, SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
+- Forensic cleanup: 22 task-owned failed-run temp roots were removed under exact path/timestamp/direct-parent gates. Three older temp roots were left untouched because this task could not prove their provenance.
+- The five Phase-0 smoke flows were **not** implemented or run in R9A.
+- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER:** exactly one remainder remains — smoke-flow contract/evidence for admin login, aluno login, create requisicao, process requisicao, and backup.
+- Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H and R20 remain unchanged.
+- Exact next action after push: external supervisor review of the R9A commit. Smoke-flow work resumes only after acceptance.
+- Canonical reading order remains `docs/DOCUMENTATION_INDEX.md` → `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` → `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block → `AGENT_HANDOFF.md` → phase contracts.
 
 ### Historical REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
 

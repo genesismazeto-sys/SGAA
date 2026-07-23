@@ -1,55 +1,36 @@
 # Agent Handoff
 
-## Current state — REF-0C-D-R1 CLOSED / ACCEPTED (EXTERNAL SUPERVISOR ACCEPTANCE CLOSEOUT)
+## Current state — PHASE-0-R9A PYTEST RUNTIME ISOLATION LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW
 
-- **Task:** REF-0C-D-R1 — Route-complete actor decision and pre-handler denied-action immutability coverage.
+- **Task:** R9A — remove the destructive pytest workspace-cleanup gate before Phase-0 smoke execution.
 - **Project:** SGAA-EJ; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
-- **Technical commit identity:** subject `Make CSRF snapshot validation hermetic`; technical commit `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`.
-- **Acceptance closeout commit:** this acceptance closeout commit, subject `Record acceptance of REF-0C-D-R1`. Resolve final SHA with `git rev-parse HEAD` after commit.
-- **Ten-path authorized manifest (from REF-0C-D-R1 technical commit):**
-  - `AGENT_HANDOFF.md` — UPDATED
-  - `PROJECT_STATE.md` — UPDATED
-  - `docs/DOCUMENTATION_INDEX.md` — UPDATED
-  - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — UPDATED
-  - `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` — NEW
-  - `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` — NEW
-  - `tests/conftest.py` — UPDATED
-  - `tests/test_csrf_inventory_audit.py` — UPDATED
-  - `tests/_artifacts/csrf_inventory_shadow_off.json` — UPDATED
-  - `tests/_artifacts/csrf_inventory_shadow_on.json` — UPDATED
-- **Pre-commit validation gate:** index empty before selective staging; no new path.
-- **No implementation performed on production code, UI, schema, database, dependencies, R20, or routes.**
-- **No external service accessed.** Only `tmp_path` isolated SQLite databases.
-- **REF-0C-D-R1 scope executed:**
-  - `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` — route-complete actor matrix, browser/AJAX denial contracts, URL roundtrip with kwargs, type-safe fingerprint, per-request sentinel, profile digests, filesystem isolation, logging handler isolation.
-  - `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` — standalone contract with derivation, counts, converter strategy, contracts, and residual risks.
-- **Canonical counts (all mechanically re-derived):**
-  - 131 baseline rules; 160 baseline business route-method combinations
-  - 134 governed requirement combinations; 0 exemptions, 0 missing/invalid
-  - 402 actor cross-product = 263 allowed + 139 denied (admin_total 134/0, administrativo 98/36, consultivo 31/103)
-  - 53 governed dynamic route+endpoint+method combinations across 43 distinct governed dynamic rules
-  - 3 external governed callbacks (auth_callback, google_callback, onedrive_callback)
-- **CSRF inventory mode:** Normal pytest CSRF inventory is read-only for tracked snapshots — compares observed content to canonical with useful diff. Updates require explicit `--update-csrf-snapshots`. Deterministic update mode is write-if-changed; repeated execution is idempotent. Root cause of stale snapshots: deterministic CSRF snapshots became stale after three deterministic message entries (not random keys). `shadow_off` / `shadow_on` are byte-equal under current contract.
-- **R7 test evidence:**
-  - Normal harness: `2 passed in 11.00s`
-  - Update run 1: `2 passed in 11.06s` — reported `0 updated` / `1 unchanged` for each snapshot
-  - Update run 2: `2 passed in 11.60s` — confirmed idempotent
-  - REF-0C-D-R1 focused: `33 passed in 19.93s`
-  - Related seven-module lane: `116 passed in 52.05s`
-  - Full suite: `634 passed, 17 deselected in 380.15s` — `0 failed`, `0 errors`
-  - No `--run-d73h-historical` used; 17 D73H tests deselected, 0 executed
-  - Ten-path pre/post SHA-256 manifest: `CHANGED_COUNT=0`, staging empty, no new path
-  - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both `shadow_off` and `shadow_on`
-- **Runtime-directory cleanup:** explicitly deferred; not modified.
-- **Status:** CLOSED / ACCEPTED (external supervisor acceptance recorded in this documentary closeout).
-- **REF-0C-D (remaining gap): SATISFIED.**
-- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** — exactly one bounded remainder: smoke-flow contract/evidence. Remaining smoke-flow list: admin login; aluno login; create requisicao; process requisicao; backup.
-- **Fase 1 and production hard enforcement remain unauthorized.**
-- **Production shadow-only remains in force.**
-- **D73H historical lane unchanged.**
-- **R20 unchanged.**
-- **Runtime-directory cleanup debt deferred.**
-- **Next authorizable action: PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.**
+- **Starting HEAD/upstream:** `06786f2a2353894554c982f41e29d35d5d5cadee`; divergence `0/0`; clean worktree/index and zero untracked paths.
+- **Commit identity:** subject `Isolate pytest runtime from workspace directories`; this commit contains the technical and documentary closeout. Resolve its final SHA with `git rev-parse HEAD` after commit; do not create a follow-up commit merely to embed its own SHA.
+- **Mode/agents:** OpenAI Codex `openai-codex/gpt-5.6-sol` supervised. IAexec implementation used `opencode-go/deepseek-v4-flash` session `ses_06eed9eebffecp7qkYbjPpaSeL` through `FALLBACK_FREE_BUDGET_EXHAUSTED`; two bounded corrections used `opencode-go/deepseek-v4-pro` session `ses_06edc602effeWZ997yHcw9TVwY`. The final two-line correction was applied by IAsup after two executor quality failures. Independent read-only review used a fresh `opencode-go/deepseek-v4-pro` session `ses_06eac821fffejIIeNNMy11xiQY`; verdict `passed=true`, no security concerns or logic errors. Luna review route failed at the provider and was not used as evidence.
+- **Root cause:** `tests/conftest.py::_cleanup_root_output_artifacts()` ran at session start/finish, deleted preexisting root `backups/`, `uploads/`, and `documentos_alunos/`, and hid `shutil.rmtree` failures with `ignore_errors=True`. Database, uploads, documents, backups, application logs, the shadow-read log, and pytest cache were not all owned by one session runtime root.
+- **Implemented contract:**
+  - one unique system-temp `PYTEST_RUNTIME_ROOT` is created before application import;
+  - `APP_DATABASE`, `APP_UPLOAD_FOLDER`, `APP_DOCUMENTOS_ALUNOS_FOLDER`, local/cloud backup paths, `APP_LOG_DIR`, and pytest cache are routed under that root;
+  - `create_app()` honors non-empty `APP_UPLOAD_FOLDER`/`APP_LOG_DIR`; unset values preserve repository-root production defaults;
+  - `main.py` no longer overwrites factory `UPLOAD_FOLDER`, and both application/shadow log paths honor `APP_LOG_DIR`;
+  - cleanup rejects symlink roots/markers, requires direct system-temp parent, exact prefix, exact marker filename/content token, removes only the owned root, and surfaces every mandatory teardown failure;
+  - canonical root manifests for `database.db`, `uploads`, `documentos_alunos`, `backups`, `logs`, and `.pytest_cache` are checked at session finish.
+- **Files read:** `app/__init__.py`, `main.py`, `tests/conftest.py`, `.gitignore`, `pytest.ini`, the four canonical documents, relevant existing backup/application tests, and current Git diff/state.
+- **Eight-path authorized manifest:** `app/__init__.py`, `main.py`, `tests/conftest.py`, `tests/test_pytest_runtime_isolation.py`, `AGENT_HANDOFF.md`, `PROJECT_STATE.md`, `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
+- **Commands/gates:** AST parse of all four technical files passed; `git diff --check` passed; static scan found no shell injection, `eval`/`exec`, pickle, SQL formatting, or credential leak. Deterministic marker-token strings were reviewed as test data, not secrets.
+- **Test evidence:**
+  - focused runtime-isolation module: `15 passed in 20.40s`, zero skipped;
+  - collection: `649/666 tests collected`, `17 deselected` D73H, `6.76s`;
+  - backup/app/backend/requisition regressions: `23 passed in 23.20s`;
+  - full hermetic suite: `649 passed, 17 deselected in 441.22s`; no D73H historical execution;
+  - independent pre-commit review: PASS, no blocking findings;
+  - pre/post byte/hash/mtime manifests and temp-root sets were identical after every accepted gate; `database.db` remained 544,768 bytes at SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
+- **Forensic temp cleanup:** 22 task-owned leaked roots from failed implementation/correction runs were removed only after exact path, timestamp window, and direct-parent provenance checks. Three older `sgaa_pytest_runtime_*` roots predated this task window and remain untouched due missing provenance.
+- **Scope not executed:** none of the five Phase-0 smoke flows was implemented or run; no schema, migration, dependency, UI, route, R20, production hard-enforcement, D73H historical, or database change.
+- **Status:** R9A IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW. Runtime-directory cleanup debt is locally satisfied but not externally accepted yet.
+- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER:** exactly one bounded remainder remains — smoke-flow contract/evidence for admin login, aluno login, create requisicao, process requisicao, and backup.
+- **Fase 1 remains unauthorized; production remains shadow-only.**
+- **Exact next action after push:** external supervisor review of this R9A commit. Only after acceptance may the five Phase-0 smoke-flow contracts/evidence resume.
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 

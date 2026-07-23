@@ -3708,8 +3708,10 @@ def is_versioned_requisicao_snapshot_write_enabled() -> bool:
 
 
 def _versioned_shadow_read_dedicated_log_path() -> str:
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(app_dir, "logs", "versioned_shadow_reads.log")
+    log_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "logs"
+    )
+    return os.path.join(log_dir, "versioned_shadow_reads.log")
 
 
 def _serialize_shadow_read_log_value(value) -> str:
@@ -4582,7 +4584,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 _log_fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 try:
-    logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    logs_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
     os.makedirs(logs_dir, exist_ok=True)
     log_path = os.path.join(logs_dir, "app.log")
     # Evita conflito de rotação no Windows: se der erro, cai para StreamHandler
@@ -4619,9 +4621,7 @@ def aluno_url(endpoint: str, **values):
 # Config via ambiente (com defaults seguros)
 # `app.secret_key`, cookies de sessão, lifetime e flags CSRF já são aplicados
 # centralmente em `app/__init__.py::create_app`. Não sobrescreva aqui.
-app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 Compress(app)
 # Garante recarregamento de templates em dev
 app.config["TEMPLATES_AUTO_RELOAD"] = not app.config.get("IS_PRODUCTION", False)

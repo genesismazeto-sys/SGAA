@@ -47,7 +47,9 @@
 - Accepted published governance HEAD: `ce90db579137d5cb0075c5f7a525c02062e982b0`
 - **Governance foundation: CLOSED / ACCEPTED** after external direct GitHub inspection
 - **REF-0C-D-R1 technical commit:** `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`, subject `Make CSRF snapshot validation hermetic`
-- Full hermetic test suite: **634 passed, 17 deselected, 0 failed, 0 errors in 380.15s** — accepted
+- **PHASE-0-R9A pytest runtime isolation:** implemented and locally validated in the commit with subject `Isolate pytest runtime from workspace directories`; pending external supervisor review after push
+- R9A full hermetic test suite: **649 passed, 17 deselected, 0 failed, 0 errors in 441.22s**; focused 15/15 and directed regressions 23/23
+- R9A invariant: canonical `database.db`, uploads, documents, backups, logs, `.pytest_cache`, and temp-root sets were identical before/after every accepted validation lane
 - Production: shadow-only (no hard enforcement)
 - **REF-0C-D-R1: CLOSED / ACCEPTED** (external supervisor acceptance recorded)
 - **REF-0C-D (remaining gap): SATISFIED**
@@ -57,8 +59,9 @@
 - Production shadow-only: **in force**
 - D73H historical lane: **unchanged**
 - R20: **unchanged**
-- Runtime-directory cleanup debt: **deferred**
-- Next authorizable action: **PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE**
+- Runtime-directory cleanup debt: **locally satisfied by R9A; pending external acceptance**
+- The five smoke flows were not implemented or executed in R9A
+- Next action: **external supervisor review of the pushed R9A commit**; Phase-0 smoke-flow contract/evidence resumes only after acceptance
 
 ## Master plan (Phase 0–6)
 
@@ -118,7 +121,8 @@ The original REF-0C-D scope was documented in
 | B2 diagnostic RBAC | `tests/test_ref_0c_b2_diagnostic_rbac.py` (18 tests) | SATISFIED |
 | C-B1 shadow gate | `tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py` (23 tests pre-R1, plus R1 regression test) | SATISFIED |
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
-| Hermetic full suite | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | ACCEPTED |
+| R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | LOCALLY VALIDATED / PENDING EXTERNAL REVIEW |
+| Hermetic full suite | 649 passed, 17 deselected, 0 failed, 0 errors in 441.22s | LOCALLY VALIDATED (R9A) |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | PARTIALLY_SATISFIED |
 
 ## Architecture mapping snapshots (`docs/mapeamento/`)

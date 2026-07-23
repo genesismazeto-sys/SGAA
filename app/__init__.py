@@ -110,7 +110,10 @@ def create_app(
     if not documentos_alunos_folder:
         documentos_alunos_folder = os.path.join(project_root, "documentos_alunos")
 
-    app.config["UPLOAD_FOLDER"] = os.path.join(project_root, "uploads")
+    upload_folder = (os.getenv("APP_UPLOAD_FOLDER") or "").strip()
+    if not upload_folder:
+        upload_folder = os.path.join(project_root, "uploads")
+    app.config["UPLOAD_FOLDER"] = upload_folder
     app.config["DOCUMENTOS_ALUNOS_FOLDER"] = os.path.abspath(documentos_alunos_folder)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
     app.config["BACKUP_RESTORE_MAX_CONTENT_LENGTH"] = int(
@@ -257,7 +260,7 @@ def create_app(
     logger.setLevel(logging.INFO)
     log_fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     try:
-        logs_dir = os.path.join(project_root, "logs")
+        logs_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(project_root, "logs")
         os.makedirs(logs_dir, exist_ok=True)
         log_path = os.path.join(logs_dir, "app.log")
         if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
