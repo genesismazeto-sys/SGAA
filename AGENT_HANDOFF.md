@@ -1,22 +1,40 @@
 # Agent Handoff
 
-## Current authoritative state — REF-0C-C-B1 closeout
+## Current authoritative state — Canonical governance and Phase-0 decision
 
-- Branch: `refactor/architecture-safety-net`; accepted technical HEAD `39f7732`.
-  Accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1` -> `39f7732`.
-  Divergence before this documentary closeout is `origin/main...HEAD = 0 19`; no
-  push has been performed.
-- **REF-0C-C-A, REF-0C-C-B1, and REF-0C-C-B1-R1 are CLOSED / ACCEPTED.** The
-  accepted B1-R1 correction keeps production shadow-only, makes logger backend
-  failures non-fatal to the request, and adds a request-level regression.
-- Full hermetic baseline: `601 passed`, `17` D73H tests deselected. Missing
-  configuration remains a hard failure in testing/development. No production hard
-  enforcement or permanent allow-open switch is active. A logger failure can lose
-  one shadow-audit event, but cannot interrupt the production request.
-- R20 is unchanged. No UI, JavaScript, schema, database, dependency, or
-  modularization work is authorized. No later phase is authorized; a new
-  supervisor/user direction is required. Older phase-time summaries below are
-  historical, not current instructions.
+- **Task:** SGAA-EJ CANONICAL GOVERNANCE FOUNDATION AND PHASE-0 DECISION R1.
+- **Starting HEAD:** `128b2ce` (`Close REF-0C-C-B1 after supervisor acceptance`).
+  Branch: `refactor/architecture-safety-net`. Worktree and index were clean.
+  Remote-tracking `origin/refactor/architecture-safety-net` at same commit;
+  divergence `0 0`. No push performed.
+- **Files created:** `docs/DOCUMENTATION_INDEX.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
+- **Files updated:** `PROJECT_STATE.md` (top authoritative block),
+  `AGENT_HANDOFF.md` (this top block),
+  `docs/mapeamento/05_avaliacao_refactor.md` (Fase 0 section).
+- **No technical implementation performed.** No source code, test, artifact,
+  route, schema, UI, dependency, production enforcement, or R20 change.
+- **REF-0C-D formal decision: PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
+  Evidence gap: actor HTTP and denied-mutation coverage is representative
+  (R1-R24 sample), not route-complete for every governed admin business
+  route-method pair × every denied access level.
+- **REF-0C-D-R1 bounded remainder defined.** Test-only, fixture-controlled,
+  parametrized from canonical route inventory/classifier. Must prove allow/deny
+  at permission layer for every access level, prove each denied combination
+  returns the central browser/AJAX contract before handler execution, and prove
+  no fixture domain mutation.
+- **Macro Fase 0 decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
+  Two remainders: REF-0C-D-R1 and smoke-flow contract/evidence.
+- **Next authorizable action: REF-0C-D-R1 only.** It is authorizable, not
+  authorized. Fase 1, production hard enforcement, and later phases remain
+  unauthorized.
+- **Canonical reading order:** `docs/DOCUMENTATION_INDEX.md` →
+  `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → top block of
+  `PROJECT_STATE.md` → this handoff → phase contracts in dependency order:
+  REF-0TF → REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
+  REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1. No standalone
+  REF-0C-D contract exists.
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 

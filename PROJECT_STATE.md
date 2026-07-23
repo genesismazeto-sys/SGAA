@@ -1,20 +1,45 @@
-## Current authoritative state — REF-0C-C-B1 closeout (2026-07-18)
+## Current authoritative state — Canonical governance and Phase-0 decision (2026-07-22)
 
-- Branch `refactor/architecture-safety-net`; accepted technical HEAD `39f7732`.
-  Accepted lineage: `020cd7f` -> `9453aa2` -> `fb90cc1` -> `39f7732`.
-  Divergence before this documentary closeout is `origin/main...HEAD = 0 19`; no
-  push has been performed.
-- **REF-0C-C-A, REF-0C-C-B1, and REF-0C-C-B1-R1 are CLOSED / ACCEPTED.** B1-R1
-  contains the bounded logger-failure safety correction and its request-level
-  regression; no other authorization policy changed.
+- Repository: `genesismazeto-sys/SGAA`; branch `refactor/architecture-safety-net`.
+- Published remote HEAD before this task: `128b2ce` (`Close REF-0C-C-B1 after
+  supervisor acceptance`). Accepted technical HEAD: `39f7732` (REF-0C-C-B1-R1
+  correction). No push has been performed in this task.
+- **REF-0C-D decision: PARTIALLY_SATISFIED_REMAINDER_REQUIRED.** Repository
+  evidence confirms complete route mapping and complete governed-boundary
+  classification, but actor HTTP and denied-mutation tests are representative
+  (R1-R24 sample), not route-complete for every governed admin business
+  route-method pair × every denied access level.
+- **REF-0C-D-R1 bounded remainder defined** — route-complete actor decision and
+  pre-handler denied-action immutability coverage. Test-only, fixture-controlled,
+  parametrized from canonical route inventory/classifier. Prohibits production
+  code, UI, schema, dependencies, production hard enforcement, R20 cleanup, and
+  route changes. REF-0C-D original scope is documented at
+  `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20 (future
+  test contract).
+- **Macro Fase 0 decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.** Two
+  remainders: REF-0C-D-R1 and smoke-flow contract/evidence (frozen manual smoke
+  list for admin login, aluno login, create requisicao, process requisicao,
+  backup).
 - Full hermetic baseline: `601 passed`, `17` D73H tests deselected. Missing
   configuration remains a hard configuration failure in testing/development.
   Production remains shadow-only: no production hard enforcement and no permanent
-  allow-open switch exist. A normal audit-logger failure cannot interrupt the
-  production request, but can lose that single shadow-audit event.
+  allow-open switch exist.
 - R20 remains unchanged. No UI, JavaScript, schema, database, dependency, or
-  modularization work is authorized. No later phase is authorized; the next action
-  requires a new supervisor/user direction.
+  modularization work is authorized.
+- **Next authorizable action: REF-0C-D-R1 only.** It is authorizable, not
+  authorized. Fase 1, production hard enforcement, and any later phase remain
+  unauthorized.
+- Documentation created: `docs/DOCUMENTATION_INDEX.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`. Updated:
+  `docs/mapeamento/05_avaliacao_refactor.md`, this top block, `AGENT_HANDOFF.md`
+  top block. No source, test, artifact, route, or production file was changed.
+- Canonical reading order: `docs/DOCUMENTATION_INDEX.md` →
+  `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block →
+  `AGENT_HANDOFF.md` → phase contracts in dependency order
+  (REF-0TF → REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
+  REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1). No standalone contract
+  exists for REF-0A, REF-0ENV, REF-0B, REF-0T, REF-0C-A-R1, or REF-0C-D.
 
 ### Historical REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
 
@@ -45,8 +70,9 @@
 - R20 local `readonly` remains unchanged; no global fail-closed gate, UI, schema, database, dependency, or modularization change occurred.
 - Next candidate only: `REF-0C-C-A — FAIL-CLOSED AUTHORIZATION GATE DIAGNOSIS`, **NOT STARTED / NOT YET AUTHORIZED FOR IMPLEMENTATION**. Next action: ChatGPT supervisor issuance of a read-only REF-0C-C-A diagnosis order.
 
-The historical REF-0C-A/B1 entries below retain their original phase-time facts;
-the REF-0C-B2-C block above is the current authoritative state.
+The historical REF-0C-A/B1 entries below retain their original phase-time facts.
+The REF-0C-B2-C block above was the authoritative state as of its phase closeout;
+it is historical and superseded by the current top block.
 
 # Project State
 

@@ -72,12 +72,55 @@ mais perigosa possível.
 
 > Trabalhar sempre em branch a partir de `clean-baseline`, com `pytest` verde.
 
-### Fase 0 — Rede de segurança (1–2 dias) ✅ pré-requisito
-- [ ] Teste de **inventário de rotas** (snapshot do `url_map`).
-- [ ] Teste de **cobertura RBAC** (toda rota admin tem permissão exigida).
-- [ ] Garantir que `pytest` roda limpo e rápido; documentar como rodar.
-- [ ] Congelar uma lista de **smoke flows** manuais (login admin, login aluno,
-      criar requisição, processar, backup) — `tools/smoke_test*.py` já ajudam.
+### Macro Fase 0 — Rede de segurança — fechamento aberto com resíduos delimitados
+
+**Status: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (2026-07-22)
+
+#### Phase-0 completion matrix
+
+| Requirement | Canonical source | Implemented by phase | Commit | Test/evidence | Status |
+|---|---|---|---|---|---|
+| Stable route inventory | `tests/test_route_inventory_snapshot.py` + `tests/_artifacts/route_inventory_baseline.json` | REF-0B | `f2b1cfc` | 131 rules, 130 endpoints, 160 business methods; read-only comparison | SATISFIED |
+| RBAC coverage | `tests/test_rbac_requirement_coverage.py` + `tests/_artifacts/rbac_unmapped_routes_baseline.json` | REF-0B | `f2b1cfc` | 0 unmapped admin routes; dynamic enumeration from `main.app.url_map` | SATISFIED |
+| Unmapped-route detection | Same RBAC coverage test; dynamic from `main.app.url_map` | REF-0B | `f2b1cfc` | Filters `/admin` paths, calls `get_admin_permission_requirement` | SATISFIED |
+| Actor/access-level matrix | `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py`, `tests/test_ref_0c_b2_diagnostic_rbac.py` | REF-0C-B1, REF-0C-B2 | `932c6d7`, `c9e1843` | B1: 36 tests covering R1-R21 actor matrix; B2: 18 tests covering R22-R24. Routes per (resource,scope) group are representative, not route-complete. | PARTIALLY_SATISFIED |
+| Denied-action immutability | Same B1 + B2 test files | REF-0C-B1, REF-0C-B2 | `932c6d7`, `c9e1843` | B1: `test_denied_post_atividades_edit_is_immutable`, `test_denied_post_matrizes_edit_is_immutable`; B2: domain-state equality checks. Representative per domain group, not route-complete. | PARTIALLY_SATISFIED |
+| Access-context isolation | `tests/test_ref_0c_b1_p0_access_context_transactions.py` | REF-0C-B1-P0 | `92b25d2` | 5 tests: transaction-neutral, idempotent, no lock/FK failure on rebuild | SATISFIED |
+| Deterministic hermetic suite | Full `pytest` suite with D73H deselected | REF-0TF-B, REF-0C-B1-P0 through REF-0C-C-B1-R1 | `9b47c37`, cumulative | 601 passed, 17 deselected; no failures/errors/skips/xfails/xpasses | SATISFIED |
+| D73H historical isolation | `--run-d73h-historical` marker, `pytest.ini` | REF-0TF-B | `9b47c37` | 17 tests deselected by default; CLI options for historical lane; optional lane still needs sanitized artifacts | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
+| Testing/development fail-closed | `AdminAuthorizationConfigurationError` in `app/auth.py`, `enforce_admin_access_control` | REF-0C-C-B1 | `fb90cc1` | `test_ref_0c_c_b1_fail_closed_shadow_gate.py` raises hard error in non-production | SATISFIED |
+| Production shadow audit | `_audit_missing_admin_authorization_configuration` in `main.py` | REF-0C-C-B1, REF-0C-C-B1-R1 | `fb90cc1`, `39f7732` | Safe shadow event; logger failure caught locally, does not block request; one event can be lost on logger failure | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
+| Smoke-flow requirements | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | REF-0B onward (tools exist) | Cumulative | Tools exist but no frozen manual smoke-flow list defined in repository | PARTIALLY_SATISFIED |
+| Production hard enforcement | N/A (not a Phase-0 completion criterion) | N/A | N/A | Production remains shadow-only; no permanent allow-open switch | NOT_APPLICABLE |
+| R20 status | Central `matrizes`/`edit` mapping in `get_admin_permission_requirement` | REF-0C-B1 (central mapping); local `readonly` unchanged | `932c6d7` | Central gate enforces; local `readonly` is inert; cleanup unauthorized | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
+
+#### Formal REF-0C-D decision
+
+**Decision: B. PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
+
+Repository evidence confirms complete route mapping and complete governed-boundary classification, but actor HTTP and denied-mutation tests are representative (R1-R24 sample), not route-complete for every governed admin business route-method pair × every denied access level.
+
+**Missing invariant:** Route-complete actor decision and pre-handler denied-action immutability coverage over every current governed admin business route-method pair and every denied admin access level derived from the canonical resource/scope model.
+
+**Affected set (exact by rule):** Every governed admin business route-method pair from `tests/_artifacts/route_inventory_baseline.json` where `classify_governed_admin_request(..., method)["governed"]` is True and `get_admin_permission_requirement(endpoint, method)` returns a non-None `(resource, scope)`, crossed with admin access levels `admin_total`, `administrativo`, `consultivo` whose effective scope does not satisfy the requirement, **excluding** only combinations already directly covered by accepted HTTP denial tests. Anonymous and aluno outer-auth behavior is already accepted but is not the missing invariant — the gap is admin-level actor matrix completeness.
+
+**Required tests:** Test-only, fixture-controlled, parametrized from canonical route inventory/classifier, proving expected allow/deny at the permission layer for every access level, proving each denied combination returns the central browser/AJAX contract before handler execution, and proving no fixture domain mutation.
+
+**Proposed phase:** REF-0C-D-R1. Prohibited: production code, UI, schema, dependencies, production hard enforcement, R20 cleanup, route changes, and Fases 1–6.
+
+#### Macro Fase 0 decision
+
+**Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
+
+Two bounded remainders:
+1. **REF-0C-D-R1** — route-complete actor and immutability coverage (see above). Authorizable, not authorized.
+2. **Smoke-flow contract/evidence** — frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, backup. Not yet defined or proven in the repository.
+
+The remainder smoke-flow requirement does not block REF-0C-D-R1. They are independent.
+
+#### Next authorizable action
+
+**REF-0C-D-R1 only.** It is authorizable, not authorized. Fase 1 and production hard enforcement remain unauthorized. Fases 1–6 (target architecture) are preserved as originally defined below but remain unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py).
