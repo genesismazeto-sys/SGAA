@@ -1,6 +1,7 @@
 import ast
-import io
+import difflib
 import inspect
+import io
 import json
 import os
 import re
@@ -18,6 +19,7 @@ if BASE not in sys.path:
 
 from app import db as app_db_module
 import main
+from utils.messages import message_key_for_default
 
 
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -1148,11 +1150,25 @@ def _build_csrf_inventory(tmp_path: Path) -> dict:
 
 
 @pytest.mark.parametrize("shadow_read_flag", [None, "1"])
-def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(tmp_path, monkeypatch, shadow_read_flag):
+def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, tmp_path, monkeypatch, shadow_read_flag):
     if shadow_read_flag is None:
         monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
     else:
         monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
+
+    update_snapshots = request.config.getoption("--update-csrf-snapshots", default=False)
+
+    artifacts_dir = Path(BASE) / "tests" / "_artifacts"
+    suffix = "shadow_on" if shadow_read_flag else "shadow_off"
+    canonical_path = artifacts_dir / f"csrf_inventory_{suffix}.json"
+
+    if not update_snapshots and not canonical_path.exists():
+        raise AssertionError(
+            f"Canonical snapshot missing, run with --update-csrf-snapshots to create: "
+            f"{canonical_path}"
+        )
+    can_before_stat = canonical_path.stat() if canonical_path.exists() else None
+    can_before_bytes = canonical_path.read_bytes() if canonical_path.exists() else None
 
     report = _build_csrf_inventory(tmp_path)
     rows = report["rows"]
@@ -1161,13 +1177,72 @@ def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(tmp_path,
     assert rows, "Inventario CSRF vazio"
     assert set(summary["status_counts"]).issubset(ALLOWED_STATUSES)
 
-    artifacts_dir = Path(BASE) / "tests" / "_artifacts"
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-    suffix = "shadow_on" if shadow_read_flag else "shadow_off"
-    report_path = artifacts_dir / f"csrf_inventory_{suffix}.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    observed_json = json.dumps(report, ensure_ascii=False, indent=2)
+    if can_before_bytes is None:
+        snapshot_newline = os.linesep
+    elif bytes((13, 10)) in can_before_bytes:
+        snapshot_newline = chr(13) + chr(10)
+    else:
+        snapshot_newline = chr(10)
+    observed_snapshot_json = observed_json.replace(chr(10), snapshot_newline)
+    observed_bytes = observed_snapshot_json.encode("utf-8")
 
-    print(f"CSRF inventory report: {report_path}")
+    if update_snapshots:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        new_bytes = observed_bytes
+        if can_before_bytes == new_bytes:
+            print(f"CSRF inventory snapshot unchanged (identical bytes): {canonical_path}")
+            updated_count = 0
+            unchanged_count = 1
+        else:
+            canonical_path.write_bytes(new_bytes)
+            can_after_bytes = canonical_path.read_bytes()
+            assert can_after_bytes == new_bytes, (
+                f"Byte-idempotency failure: written bytes differ for {canonical_path}"
+            )
+            print(f"CSRF inventory snapshot updated: {canonical_path}")
+            updated_count = 1
+            unchanged_count = 0
+        assert updated_count + unchanged_count == 1
+        print(
+            f"Update summary for {suffix}: "
+            f"{updated_count} updated, {unchanged_count} unchanged"
+        )
+    else:
+        tmp_report_path = tmp_path / f"csrf_inventory_{suffix}.json"
+        tmp_report_path.write_bytes(observed_bytes)
+
+        if can_before_bytes is not None:
+            canonical_json = can_before_bytes.decode("utf-8")
+            if observed_snapshot_json != canonical_json:
+                diff = list(
+                    difflib.unified_diff(
+                        canonical_json.splitlines(keepends=True),
+                        observed_snapshot_json.splitlines(keepends=True),
+                        fromfile=str(canonical_path),
+                        tofile=str(tmp_report_path),
+                    )
+                )
+                diff_text = "".join(diff)
+                raise AssertionError(
+                    f"CSRF inventory snapshot mismatch for {suffix}:\n{diff_text}"
+                )
+
+        can_after_stat = canonical_path.stat()
+        can_after_bytes = canonical_path.read_bytes()
+        assert can_before_stat is not None, f"Canonical snapshot missing: {canonical_path}"
+        assert can_before_stat.st_mtime_ns == can_after_stat.st_mtime_ns, (
+            f"Canonical snapshot mtime changed: {canonical_path}"
+        )
+        assert can_before_stat.st_size == can_after_stat.st_size, (
+            f"Canonical snapshot size changed: {canonical_path}"
+        )
+        assert can_before_bytes == can_after_bytes, (
+            f"Canonical snapshot content changed: {canonical_path}"
+        )
+
+        print(f"CSRF inventory observed written to: {tmp_report_path}")
+
     print(json.dumps(summary, ensure_ascii=True))
     for row in rows:
         print(
@@ -1197,4 +1272,24 @@ def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(tmp_path,
             ],
             ensure_ascii=True,
         )
+    )
+
+    assert (
+        message_key_for_default(
+            "Apenas versões ativas podem ser selecionadas para esta matriz."
+        )
+        == "msg_ea6b5b4169b5a6d6"
+    )
+    assert (
+        message_key_for_default(
+            "A norma desta versão não está vinculada à matriz."
+        )
+        == "msg_fb42c99933531b0e"
+    )
+    assert (
+        message_key_for_default(
+            "Esta solicitação já possui versão normativa registrada. "
+            "Para trocar a atividade, crie uma nova solicitação."
+        )
+        == "msg_ee9900f9eb19b308"
     )

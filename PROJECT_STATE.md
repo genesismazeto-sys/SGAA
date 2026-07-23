@@ -1,4 +1,4 @@
-## Current authoritative state — CANONICAL GOVERNANCE FOUNDATION ACCEPTANCE CLOSEOUT (2026-07-23)
+## Current authoritative state — REF-0C-D-R1 LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW (2026-07-23)
 
 - Repository: `genesismazeto-sys/SGAA`; branch `refactor/architecture-safety-net`.
 - Accepted governance commit and published remote HEAD inspected by the external
@@ -12,15 +12,23 @@
   - `docs/mapeamento/05_avaliacao_refactor.md` — modified
   - `PROJECT_STATE.md` — modified
   - `AGENT_HANDOFF.md` — modified
-- **No technical implementation performed.** No source code, test, artifact,
-  route, schema, UI, dependency, production enforcement, or R20 change.
-- **REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
+- **Accepted governance commit scope:** no technical implementation was performed
+  in that governance-only commit. R7 changes only the authorized tests, CSRF
+  snapshots, and canonical evidence; no product code, route, schema, UI,
+  dependency, production enforcement, or R20 change.
+- **REF-0C-D-R1: IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW.**
+- **REF-0C-D (remaining gap of route-complete actor matrix): PARTIALLY_SATISFIED_REMAINDER_REQUIRED (not satisfied).**
 - **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
-- Two bounded remainders: REF-0C-D-R1 and smoke-flow contract/evidence.
-- **REF-0C-D-R1 remains PLANNED / AUTHORIZABLE / NOT AUTHORIZED.**
+- Exactly two bounded remainders remain: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence.
 - Fase 1 and production hard enforcement remain unauthorized/prohibited.
-- **No implementation is currently authorized.**
-- Next action requires a new explicit supervisor order.
+- **R7 test evidence:**
+  - CSRF inventory: normal mode is read-only for tracked snapshots; updates require `--update-csrf-snapshots`; deterministic mode is write-if-changed and idempotent; root cause was deterministic stale snapshots after three deterministic message entries (not random keys); `shadow_off` / `shadow_on` are byte-equal under current contract.
+  - Normal harness: 2 passed in 11.00s; update run 1: 2 passed in 11.06s (0 updated/1 unchanged each); update run 2: 2 passed in 11.60s (idempotent confirmed).
+  - REF-0C-D-R1 focused: 33 passed in 19.93s; related seven-module lane: 116 passed in 52.05s.
+  - Full suite: 634 passed, 17 deselected in 380.15s — 0 failed, 0 errors; no `--run-d73h-historical` used (0 D73H executed).
+  - Ten-path pre/post SHA-256 manifest: CHANGED_COUNT=0, staging empty, no new path.
+  - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both shadow_off and shadow_on.
+- **R7 closeout sequence:** controlled selective commit/push; after publication, the next step is external supervisor review only.
 - Canonical reading order: `docs/DOCUMENTATION_INDEX.md` →
   `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
   `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block →
@@ -2134,7 +2142,7 @@ Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled
 - Out of scope / still prohibited: R22-R24 policy selection, fail-closed global enforcement, R20 local `readonly` enforcement or removal, UI changes, schema/database changes, dependency changes, route modularization, and any push.
 - Files in the RBAC commit: `app/auth.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_admin_matriz_versao_link.py`, `tests/test_admin_activity_version_catalog_version_lifecycle.py`, `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (new), and these canonical records. `main.py` belongs only to P0.
 - Authentication-helper inventory: all `999999` occurrences in the affected two versioning suites were inspected. Exactly two were successful-admin login assignments and were changed to the real bootstrap `admin_total` (`user_id=1`): `tests/test_admin_matriz_versao_link.py::_login_admin` and `tests/test_admin_activity_version_catalog_version_lifecycle.py::_login_admin`. The two retained textual references are explanatory comments. Other `999999`/`9999999` values elsewhere in the test suite are missing-resource or negative-authentication inputs and were retained.
-- Known non-REF-0C-B1 churn: `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` are rewritten with randomized message keys by `test_csrf_inventory_audit.py` on every full-suite run; reverted and excluded from the REF-0C-B1 commit.
+- Historical non-REF-0C-B1 churn: `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` were previously rewritten by `test_csrf_inventory_audit.py`; R6/R7 established that the root cause was deterministic stale snapshots after three deterministic message entries, not randomized keys. Normal mode is now read-only; the artifacts had been reverted and excluded from the historical REF-0C-B1 commit.
 - No subsequent implementation phase is automatically authorized. Exact next action: ChatGPT/user normative decision on R22-R24 diagnostic access policy, R20 local readonly enforcement or cleanup, and whether/when REF-0C-B2 may be authorized. Do not begin REF-0C-B2 or REF-0C-C.
 - REF-0C-B2 implemented and locally validated, pending ChatGPT supervisor review: R22/R23 GET → `atividades`/`view` ({admin_total, administrativo, consultivo}); R24 GET → `banco_dados`/`view` ({admin_total}). The debt baseline dynamically rebuilds to zero entries. R20 `readonly` is unchanged; no global fail-closed gate or later phase is authorized. Full-suite detached-worktree evidence is pending final closeout.
 - REF-0C-B2 full detached-worktree suite: `577 passed`, `17` D73H deselected, zero failures/errors/skips/xfails/xpasses, exit `0`; selected-test delta `+15` (18 B2 tests less 3 obsolete B1 unmapped assertions). REF-0C-B2 remains pending ChatGPT supervisor review.

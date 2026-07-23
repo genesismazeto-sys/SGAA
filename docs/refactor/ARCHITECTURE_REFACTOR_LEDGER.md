@@ -21,8 +21,8 @@
 | REF-0C-C-B1 | Hybrid boundary, shadow audit, test/dev hard failure | CLOSED / ACCEPTED | `fb90cc1` | `128b2ce` | 600 passed, 17 deselected (23 C-B1 tests) | `docs/refactor/REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | Logger failure can lose one shadow audit event |
 | REF-0C-C-B1-R1 | Shadow audit logger failure safety correction | CLOSED / ACCEPTED | `39f7732` | `128b2ce` | 601 passed, 17 deselected (+1 R1 regression over C-B1) | `docs/refactor/REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | Residual: one lost shadow event acceptable |
 | REF-0C-D | Formalize actor matrix and immutability-after-denial tests for all admin routes | **PARTIALLY_SATISFIED_REMAINDER_REQUIRED** | N/A (documentation + decision only) | N/A | N/A (decision only; tests not implemented) | Original scope: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20. No standalone contract. | Actor HTTP and denied-mutation coverage is representative (R1-R24 sample), not route-complete for every governed admin business route-method pair × every denied access level |
-| REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **PLANNED / NOT AUTHORIZED** | N/A | N/A | N/A | TBD (future phase contract) | Must be test-only, fixture-controlled, parametrized from canonical route inventory/classifier; must not change production code, UI, schema, dependencies, or routes |
-| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed | **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** | See individual REF-0* rows | See individual REF-0* rows | 601 passed, 17 deselected | `docs/mapeamento/05_avaliacao_refactor.md` | Two bounded remainders: REF-0C-D-R1 and smoke-flow contract/evidence |
+| REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW** | `ccb1b926a0a612dae9f7b253231c285dd97a2a32` (starting); subject `Make CSRF snapshot validation hermetic` (this commit) | N/A (external acceptance pending) | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s; focused 33 passed in 19.93s | `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | Test-only; external acceptance pending; scope expansion or production change requires hard-stop |
+| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed | **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** | See individual REF-0* rows | See individual REF-0* rows | See individual REF-0* rows; full suite 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | `docs/mapeamento/05_avaliacao_refactor.md` | Exactly two bounded remainders: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -70,16 +70,18 @@ The verified gap: REF-0C-D requires formalized actor matrix and immutability-aft
 
 **Bounded proposed phase:** REF-0C-D-R1. Tests must be test-only, fixture-controlled, parametrized from the canonical route inventory and classifier, prove expected allow/deny at the permission layer for every access level, prove each denied combination returns the central browser/AJAX contract before handler execution, and prove no fixture domain mutation. Prohibited: production code, UI, schema, dependencies, production hard enforcement, R20 cleanup, route changes, and Fases 1–6.
 
+**REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED** pending external acceptance of REF-0C-D-R1.
+
 ## Macro Fase 0 formal decision
 
 **Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER**
 
-Two bounded remainders recorded:
-1. **REF-0C-D-R1** — route-complete actor and immutability coverage (see above)
+Exactly two bounded remainders recorded:
+1. **REF-0C-D-R1** — route-complete actor and immutability coverage, pending external acceptance (not satisfied until accepted)
 2. **Smoke-flow contract/evidence** — a frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, and backup is required by the Phase-0 master plan but not yet defined or proven in the repository
 
 The remainder smoke-flow requirement does not block REF-0C-D-R1. They are independent.
 
 ## Next authorizable action
 
-**REF-0C-D-R1 only.** It is authorizable, not authorized. Fase 1 and production hard enforcement remain unauthorized.
+**REF-0C-D-R1 now implemented and pending external supervisor acceptance.** Fase 1 and production hard enforcement remain unauthorized. Smoke-flow contract/evidence remains a bounded remainder of Macro Fase 0. **REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED** (not satisfied by REF-0C-D-R1 until external acceptance).

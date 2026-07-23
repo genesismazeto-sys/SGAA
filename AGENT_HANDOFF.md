@@ -1,26 +1,51 @@
 # Agent Handoff
 
-## Current authoritative state — CANONICAL GOVERNANCE FOUNDATION ACCEPTANCE CLOSEOUT
+## Current state — REF-0C-D-R1 IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW
 
-- **Task:** SGAA-EJ CANONICAL GOVERNANCE ACCEPTANCE CLOSEOUT R1.
-- **Accepted governance commit:** `ce90db579137d5cb0075c5f7a525c02062e982b0`,
-  subject `Establish canonical refactor governance after Phase 0 audit`.
-- **Branch:** `refactor/architecture-safety-net`. Published remote HEAD verified
-  by external technical supervisor.
-- **No technical implementation performed.** No source code, test, artifact,
-  route, schema, UI, dependency, production enforcement, or R20 change.
-- **Macro Fase 0 remains open** with exactly two bounded remainders:
-  REF-0C-D-R1 and smoke-flow contract/evidence.
-- **Next authorizable action: REF-0C-D-R1 only.** It is authorizable, not
-  authorized. No implementation is currently authorized.
-- Fase 1 and production hard enforcement remain prohibited.
-- **Canonical reading order:** `docs/DOCUMENTATION_INDEX.md` →
-  `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
-  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → top block of
-  `PROJECT_STATE.md` → this handoff → phase contracts in dependency order:
-  REF-0TF → REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
-  REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1. No standalone
-  REF-0C-D contract exists.
+- **Task:** REF-0C-D-R1 — Route-complete actor decision and pre-handler denied-action immutability coverage.
+- **Project:** SGAA-EJ; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
+- **Starting HEAD:** `ccb1b926a0a612dae9f7b253231c285dd97a2a32` (`Record supervisor acceptance of canonical governance foundation`).
+- **Ten-path authorized manifest:**
+  - `AGENT_HANDOFF.md` — UPDATED
+  - `PROJECT_STATE.md` — UPDATED
+  - `docs/DOCUMENTATION_INDEX.md` — UPDATED
+  - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — UPDATED
+  - `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` — NEW
+  - `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` — NEW
+  - `tests/conftest.py` — UPDATED
+  - `tests/test_csrf_inventory_audit.py` — UPDATED
+  - `tests/_artifacts/csrf_inventory_shadow_off.json` — UPDATED
+  - `tests/_artifacts/csrf_inventory_shadow_on.json` — UPDATED
+- **Pre-commit validation gate:** index empty before selective staging; no new path.
+- **No implementation performed on production code, UI, schema, database, dependencies, R20, or routes.**
+- **No external service accessed.** Only `tmp_path` isolated SQLite databases.
+- **REF-0C-D-R1 scope executed:**
+  - `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` — route-complete actor matrix, browser/AJAX denial contracts, URL roundtrip with kwargs, type-safe fingerprint, per-request sentinel, profile digests, filesystem isolation, logging handler isolation.
+  - `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` — standalone contract with derivation, counts, converter strategy, contracts, and residual risks.
+- **Canonical counts (all mechanically re-derived):**
+  - 131 baseline rules; 160 baseline business route-method combinations
+  - 134 governed requirement combinations; 0 exemptions, 0 missing/invalid
+  - 402 actor cross-product = 263 allowed + 139 denied (admin_total 134/0, administrativo 98/36, consultivo 31/103)
+  - 53 governed dynamic route+endpoint+method combinations across 43 distinct governed dynamic rules
+  - 3 external governed callbacks (auth_callback, google_callback, onedrive_callback)
+- **CSRF inventory mode:** Normal pytest CSRF inventory is read-only for tracked snapshots — compares observed content to canonical with useful diff. Updates require explicit `--update-csrf-snapshots`. Deterministic update mode is write-if-changed; repeated execution is idempotent. Root cause of stale snapshots: deterministic CSRF snapshots became stale after three deterministic message entries (not random keys). `shadow_off` / `shadow_on` are byte-equal under current contract.
+- **R7 test evidence:**
+  - Normal harness: `2 passed in 11.00s`
+  - Update run 1: `2 passed in 11.06s` — reported `0 updated` / `1 unchanged` for each snapshot
+  - Update run 2: `2 passed in 11.60s` — confirmed idempotent
+  - REF-0C-D-R1 focused: `33 passed in 19.93s`
+  - Related seven-module lane: `116 passed in 52.05s`
+  - Full suite: `634 passed, 17 deselected in 380.15s` — `0 failed`, `0 errors`
+  - No `--run-d73h-historical` used; 17 D73H tests deselected, 0 executed
+  - Ten-path pre/post SHA-256 manifest: `CHANGED_COUNT=0`, staging empty, no new path
+  - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both `shadow_off` and `shadow_on`
+- **Runtime-directory cleanup:** explicitly deferred; not modified.
+- **Implementation commit identity:** subject `Make CSRF snapshot validation hermetic` (this commit); external acceptance pending.
+- **Status:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW.
+- **REF-0C-D (remaining gap): PARTIALLY_SATISFIED_REMAINDER_REQUIRED (not satisfied).**
+- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** — exactly two bounded remainders: (1) REF-0C-D-R1 pending external acceptance, (2) smoke-flow contract/evidence.
+- **Fase 1 and production hard enforcement remain unauthorized.**
+- **R7 closeout sequence:** controlled selective commit/push; after publication, the next step is external supervisor review only.
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 
@@ -69,7 +94,7 @@
 - Full hermetic suite: `562 passed`, `17` D73H deselected, `0` failures/errors/skips/xfails/xpasses (`pytest -q`, 528.92s). This is `+5` selected tests relative to the earlier `557`, exactly the P0-focused tests.
 - Files in the RBAC commit: `app/auth.py`, `tests/_artifacts/rbac_unmapped_routes_baseline.json`, `tests/test_admin_matriz_versao_link.py`, `tests/test_admin_activity_version_catalog_version_lifecycle.py`, `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py` (new), and these canonical records. `main.py` is P0-only.
 - `user_id=999999` inventory: exactly two affected successful-admin login assignments were changed to bootstrap `admin_total` (`user_id=1`) in `_login_admin` of `tests/test_admin_matriz_versao_link.py` and `tests/test_admin_activity_version_catalog_version_lifecycle.py`. Their two retained mentions are explanatory comments. All other `999999`/`9999999` occurrences in tests are retained negative-authentication or missing-resource inputs.
-- Working tree otherwise clean; `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` (randomized non-deterministic churn from `test_csrf_inventory_audit.py`) reverted and excluded.
+- Working tree otherwise clean; `tests/_artifacts/csrf_inventory_shadow_{on,off}.json` (previously described as randomized churn; corrected by R6/R7 — churn was deterministic stale snapshots after three deterministic message entries; normal mode is now read-only) reverted and excluded.
 - Unresolved decisions still owned by the supervisor: R22-R24 diagnostic access policy (D2/D3/D4); whether to enforce or remove R20's local `readonly` (D1); whether to adopt a fail-closed global gate (REF-0C-C).
 - Known risks/debts: R22-R24 remain granularly unprotected admin routes; P0 and B1 remain pending supervisor review.
 - Prohibited actions still in force: R22-R24 policy implementation, fail-closed global enforcement, R20 `readonly` change/removal, UI/schema/database/dependency changes, route modularization, and push.

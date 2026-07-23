@@ -58,6 +58,13 @@ def pytest_addoption(parser):
         default=None,
         help="Path to a sanitized D73H historical source backup (must exist and not be inside the repository backups directory)",
     )
+    csrf_group = parser.getgroup("csrf-snapshots")
+    csrf_group.addoption(
+        "--update-csrf-snapshots",
+        action="store_true",
+        default=False,
+        help="Update CSRF inventory canonical snapshots (shadow_off / shadow_on)",
+    )
 
 
 def pytest_collection_modifyitems(config, items):

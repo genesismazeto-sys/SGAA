@@ -39,18 +39,19 @@
 6. `AGENT_HANDOFF.md` — current operational handoff.
 7. All `docs/refactor/REF_*.md` files in dependency order: REF-0TF →
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
-   REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1.
+   REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1.
 
 ## Canonical current state (2026-07-23)
 
 - Branch: `refactor/architecture-safety-net`
 - Accepted published governance HEAD: `ce90db579137d5cb0075c5f7a525c02062e982b0`
 - **Governance foundation: CLOSED / ACCEPTED** after external direct GitHub inspection
-- Full hermetic test suite: **601 passed**, 17 D73H deselected
+- Full hermetic test suite: **634 passed, 17 deselected, 0 failed, 0 errors in 380.15s** — locally validated pending external review
 - Production: shadow-only (no hard enforcement)
-- **REF-0C-D: PARTIALLY_SATISFIED_REMAINDER_REQUIRED**
-- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (two bounded remainders: REF-0C-D-R1 and smoke-flow contract/evidence)
-- Next authorizable action: **REF-0C-D-R1** (authorizable, not authorized)
+- **REF-0C-D-R1: IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW**
+- **REF-0C-D (remaining gap): PARTIALLY_SATISFIED_REMAINDER_REQUIRED** (not satisfied)
+- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (exactly two bounded remainders: REF-0C-D-R1 pending acceptance, and smoke-flow contract/evidence)
+- R7 closeout sequence: **controlled selective commit/push; after publication, external supervisor review only**
 - Fase 1 and production hard enforcement: **unauthorized**
 
 ## Master plan (Phase 0–6)
@@ -59,7 +60,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 
 - **Macro Fase 0 — Safety net (rede de segurança)**: route inventory, RBAC
   coverage, hermetic suite, smoke flows, actor matrix, fail-closed design.
-  **Open — two bounded remainders remain.**
+  **Open — exactly two bounded remainders remain: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence.**
 - **Fase 1 — Safe cleanup**: dead code, lixo, headers.
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
@@ -67,7 +68,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Fase 1 is **not authorized**. Only REF-0C-D-R1 is the next authorizable action.
+Fase 1 is **not authorized**. REF-0C-D-R1 is locally validated and pending external acceptance; no subsequent phase is authorized.
 
 ## Ledger
 
@@ -87,16 +88,18 @@ table of every phase.
 | `REF_0C_B2_DIAGNOSTIC_RBAC_IMPLEMENTATION.md` | REF-0C-B2 | R22-R24 implementation |
 | `REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md` | REF-0C-C-A | Fail-closed gate design |
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
+| `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
-REF-0C-A-R1, REF-0C-D. See the ledger and `PROJECT_STATE.md` historical blocks.
+REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.
 
 ## Phase contracts
 
 Each existing `REF_*` document in `docs/refactor/` is a phase contract for that
-phase. No standalone contract exists for REF-0C-D; its original scope is
-documented in `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section
-20 (future test contract).
+phase. A standalone contract now exists for REF-0C-D-R1:
+`docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md`.
+The original REF-0C-D scope was documented in
+`docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20.
 
 ## Supporting evidence
 
@@ -108,7 +111,8 @@ documented in `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section
 | P0 transaction hygiene | `tests/test_ref_0c_b1_p0_access_context_transactions.py` (5 tests) | SATISFIED |
 | B2 diagnostic RBAC | `tests/test_ref_0c_b2_diagnostic_rbac.py` (18 tests) | SATISFIED |
 | C-B1 shadow gate | `tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py` (23 tests pre-R1, plus R1 regression test) | SATISFIED |
-| Hermetic full suite | `601 passed`, `17` D73H deselected | SATISFIED |
+| D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW |
+| Hermetic full suite | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | LOCALLY VALIDATED — pending external review |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | PARTIALLY_SATISFIED |
 
 ## Architecture mapping snapshots (`docs/mapeamento/`)
