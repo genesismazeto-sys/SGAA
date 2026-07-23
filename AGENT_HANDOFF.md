@@ -1,11 +1,12 @@
 # Agent Handoff
 
-## Current state — REF-0C-D-R1 IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW
+## Current state — REF-0C-D-R1 CLOSED / ACCEPTED (EXTERNAL SUPERVISOR ACCEPTANCE CLOSEOUT)
 
 - **Task:** REF-0C-D-R1 — Route-complete actor decision and pre-handler denied-action immutability coverage.
 - **Project:** SGAA-EJ; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
-- **Starting HEAD:** `ccb1b926a0a612dae9f7b253231c285dd97a2a32` (`Record supervisor acceptance of canonical governance foundation`).
-- **Ten-path authorized manifest:**
+- **Technical commit identity:** subject `Make CSRF snapshot validation hermetic`; technical commit `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`.
+- **Acceptance closeout commit:** this acceptance closeout commit, subject `Record acceptance of REF-0C-D-R1`. Resolve final SHA with `git rev-parse HEAD` after commit.
+- **Ten-path authorized manifest (from REF-0C-D-R1 technical commit):**
   - `AGENT_HANDOFF.md` — UPDATED
   - `PROJECT_STATE.md` — UPDATED
   - `docs/DOCUMENTATION_INDEX.md` — UPDATED
@@ -40,12 +41,15 @@
   - Ten-path pre/post SHA-256 manifest: `CHANGED_COUNT=0`, staging empty, no new path
   - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both `shadow_off` and `shadow_on`
 - **Runtime-directory cleanup:** explicitly deferred; not modified.
-- **Implementation commit identity:** subject `Make CSRF snapshot validation hermetic` (this commit); external acceptance pending.
-- **Status:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW.
-- **REF-0C-D (remaining gap): PARTIALLY_SATISFIED_REMAINDER_REQUIRED (not satisfied).**
-- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** — exactly two bounded remainders: (1) REF-0C-D-R1 pending external acceptance, (2) smoke-flow contract/evidence.
+- **Status:** CLOSED / ACCEPTED (external supervisor acceptance recorded in this documentary closeout).
+- **REF-0C-D (remaining gap): SATISFIED.**
+- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** — exactly one bounded remainder: smoke-flow contract/evidence. Remaining smoke-flow list: admin login; aluno login; create requisicao; process requisicao; backup.
 - **Fase 1 and production hard enforcement remain unauthorized.**
-- **R7 closeout sequence:** controlled selective commit/push; after publication, the next step is external supervisor review only.
+- **Production shadow-only remains in force.**
+- **D73H historical lane unchanged.**
+- **R20 unchanged.**
+- **Runtime-directory cleanup debt deferred.**
+- **Next authorizable action: PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.**
 
 ## Historical operational handoff — REF-0C-B2-A diagnostic access-policy decision (2026-07-18)
 

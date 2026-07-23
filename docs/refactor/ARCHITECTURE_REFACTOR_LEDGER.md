@@ -20,9 +20,9 @@
 | REF-0C-C-A | Fail-closed authorization gate diagnosis | CLOSED / ACCEPTED | `020cd7f` | `9453aa2` | 577 passed, 17 deselected | `docs/refactor/REF_0C_C_A_FAIL_CLOSED_AUTHORIZATION_GATE_DIAGNOSIS.md` | Production hard enforcement not authorized |
 | REF-0C-C-B1 | Hybrid boundary, shadow audit, test/dev hard failure | CLOSED / ACCEPTED | `fb90cc1` | `128b2ce` | 600 passed, 17 deselected (23 C-B1 tests) | `docs/refactor/REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | Logger failure can lose one shadow audit event |
 | REF-0C-C-B1-R1 | Shadow audit logger failure safety correction | CLOSED / ACCEPTED | `39f7732` | `128b2ce` | 601 passed, 17 deselected (+1 R1 regression over C-B1) | `docs/refactor/REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | Residual: one lost shadow event acceptable |
-| REF-0C-D | Formalize actor matrix and immutability-after-denial tests for all admin routes | **PARTIALLY_SATISFIED_REMAINDER_REQUIRED** | N/A (documentation + decision only) | N/A | N/A (decision only; tests not implemented) | Original scope: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20. No standalone contract. | Actor HTTP and denied-mutation coverage is representative (R1-R24 sample), not route-complete for every governed admin business route-method pair × every denied access level |
-| REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW** | `ccb1b926a0a612dae9f7b253231c285dd97a2a32` (starting); subject `Make CSRF snapshot validation hermetic` (this commit) | N/A (external acceptance pending) | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s; focused 33 passed in 19.93s | `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | Test-only; external acceptance pending; scope expansion or production change requires hard-stop |
-| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed | **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** | See individual REF-0* rows | See individual REF-0* rows | See individual REF-0* rows; full suite 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | `docs/mapeamento/05_avaliacao_refactor.md` | Exactly two bounded remainders: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence |
+| REF-0C-D | Formalize actor matrix and immutability-after-denial tests for all admin routes | **SATISFIED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f` (REF-0C-D-R1 technical commit) | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors; focused 33 passed | Original scope: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20. Satisfied by REF-0C-D-R1. | None |
+| REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **CLOSED / ACCEPTED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`; subject `Make CSRF snapshot validation hermetic` | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s; focused 33 passed in 19.93s | `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | None; test-only, no production change |
+| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed | **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** | See individual REF-0* rows | See individual REF-0* rows | See individual REF-0* rows; full suite 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | `docs/mapeamento/05_avaliacao_refactor.md` | Exactly one bounded remainder: smoke-flow contract/evidence (admin login; aluno login; create requisicao; process requisicao; backup) |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -55,33 +55,32 @@ not authorized.
 
 ## REF-0C-D formal decision
 
-**Decision: B. PARTIALLY_SATISFIED_REMAINDER_REQUIRED**
+**Decision: SATISFIED**
 
-Repository evidence confirms:
+REF-0C-D-R1 closed the route-complete gap: test-only, fixture-controlled, parametrized actor matrix and immutability-after-denial coverage was implemented from canonical route inventory/classifier. After external acceptance, **REF-0C-D is SATISFIED**.
+
+Repository evidence (for audit trail):
 - Complete route mapping (`test_route_inventory_snapshot.py`)
 - Complete governed-boundary classification (`test_ref_0c_c_b1_fail_closed_shadow_gate.py` + `classify_governed_admin_request`)
-- Actor HTTP and denied-mutation tests are **representative** for R1-R24, not **route-complete** for every governed admin business route-method pair
+- Actor HTTP and denied-mutation tests were **representative** for R1-R24 before REF-0C-D-R1, not **route-complete** for every governed admin business route-method pair
 
-The verified gap: REF-0C-D requires formalized actor matrix and immutability-after-denial tests for **all** admin routes. Current B1/B2 tests cover representative routes per (resource, scope) group but do not parametrically prove allow/deny for every route-method-actor combination.
+The original gap (closed by REF-0C-D-R1): REF-0C-D required formalized actor matrix and immutability-after-denial tests for **all** admin routes. B1/B2 tests covered representative routes per (resource, scope) group but did not parametrically prove allow/deny for every route-method-actor combination.
 
-**Missing invariant:** Route-complete actor decision and pre-handler denied-action immutability coverage over every current governed admin business route-method pair and every denied admin access level derived from the canonical resource/scope model.
+**Closed invariant:** Route-complete actor decision and pre-handler denied-action immutability coverage over every current governed admin business route-method pair and every denied admin access level derived from the canonical resource/scope model.
 
-**Affected set (exact by rule):** Every governed admin business route-method pair from `tests/_artifacts/route_inventory_baseline.json` where `classify_governed_admin_request(..., method)["governed"]` is True and `get_admin_permission_requirement(endpoint, method)` returns a non-None `(resource, scope)`, crossed with admin access levels `admin_total`, `administrativo`, `consultivo` whose effective scope does not satisfy the requirement, **excluding** only combinations already directly covered by accepted HTTP denial tests. Anonymous and aluno outer-auth behavior is already accepted but is not the missing invariant — the gap is admin-level actor matrix completeness, not outer-auth boundary.
+**Affected set** (now covered): Every governed admin business route-method pair from `tests/_artifacts/route_inventory_baseline.json` where `classify_governed_admin_request(..., method)["governed"]` is True and `get_admin_permission_requirement(endpoint, method)` returns a non-None `(resource, scope)`, crossed with admin access levels `admin_total`, `administrativo`, `consultivo` whose effective scope does not satisfy the requirement, **excluding** only combinations already directly covered by accepted HTTP denial tests. Anonymous and aluno outer-auth behavior is already accepted but is not the missing invariant — the gap was admin-level actor matrix completeness, not outer-auth boundary.
 
-**Bounded proposed phase:** REF-0C-D-R1. Tests must be test-only, fixture-controlled, parametrized from the canonical route inventory and classifier, prove expected allow/deny at the permission layer for every access level, prove each denied combination returns the central browser/AJAX contract before handler execution, and prove no fixture domain mutation. Prohibited: production code, UI, schema, dependencies, production hard enforcement, R20 cleanup, route changes, and Fases 1–6.
-
-**REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED** pending external acceptance of REF-0C-D-R1.
+**Closed by:** REF-0C-D-R1. Tests were test-only, fixture-controlled, parametrized from the canonical route inventory and classifier, proving expected allow/deny at the permission layer for every access level, proving each denied combination returns the central browser/AJAX contract before handler execution, and proving no fixture domain mutation. Prohibited: production code, UI, schema, dependencies, production hard enforcement, R20 cleanup, route changes, and Fases 1–6.
 
 ## Macro Fase 0 formal decision
 
 **Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER**
 
-Exactly two bounded remainders recorded:
-1. **REF-0C-D-R1** — route-complete actor and immutability coverage, pending external acceptance (not satisfied until accepted)
-2. **Smoke-flow contract/evidence** — a frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, and backup is required by the Phase-0 master plan but not yet defined or proven in the repository
+Exactly one bounded remainder recorded:
+1. **Smoke-flow contract/evidence** — a frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, and backup is required by the Phase-0 master plan but not yet defined or proven in the repository
 
 The remainder smoke-flow requirement does not block REF-0C-D-R1. They are independent.
 
 ## Next authorizable action
 
-**REF-0C-D-R1 now implemented and pending external supervisor acceptance.** Fase 1 and production hard enforcement remain unauthorized. Smoke-flow contract/evidence remains a bounded remainder of Macro Fase 0. **REF-0C-D remains PARTIALLY_SATISFIED_REMAINDER_REQUIRED** (not satisfied by REF-0C-D-R1 until external acceptance).
+**PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.** REF-0C-D-R1 is CLOSED / ACCEPTED; REF-0C-D is SATISFIED. Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H historical lane unchanged. R20 unchanged. Runtime-directory cleanup debt deferred.

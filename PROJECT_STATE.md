@@ -1,4 +1,4 @@
-## Current authoritative state — REF-0C-D-R1 LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW (2026-07-23)
+## Current authoritative state — REF-0C-D-R1 CLOSED / ACCEPTED (EXTERNAL SUPERVISOR ACCEPTANCE CLOSEOUT) (2026-07-23)
 
 - Repository: `genesismazeto-sys/SGAA`; branch `refactor/architecture-safety-net`.
 - Accepted governance commit and published remote HEAD inspected by the external
@@ -16,11 +16,15 @@
   in that governance-only commit. R7 changes only the authorized tests, CSRF
   snapshots, and canonical evidence; no product code, route, schema, UI,
   dependency, production enforcement, or R20 change.
-- **REF-0C-D-R1: IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW.**
-- **REF-0C-D (remaining gap of route-complete actor matrix): PARTIALLY_SATISFIED_REMAINDER_REQUIRED (not satisfied).**
+- **REF-0C-D-R1: CLOSED / ACCEPTED** (external supervisor acceptance recorded in this documentary closeout).
+- **REF-0C-D (route-complete actor matrix): SATISFIED.**
 - **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
-- Exactly two bounded remainders remain: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence.
+- Exactly one bounded remainder remains: smoke-flow contract/evidence. Remaining smoke-flow list: admin login; aluno login; create requisicao; process requisicao; backup.
 - Fase 1 and production hard enforcement remain unauthorized/prohibited.
+- Production shadow-only remains in force.
+- D73H historical lane unchanged.
+- R20 unchanged.
+- Runtime-directory cleanup debt deferred.
 - **R7 test evidence:**
   - CSRF inventory: normal mode is read-only for tracked snapshots; updates require `--update-csrf-snapshots`; deterministic mode is write-if-changed and idempotent; root cause was deterministic stale snapshots after three deterministic message entries (not random keys); `shadow_off` / `shadow_on` are byte-equal under current contract.
   - Normal harness: 2 passed in 11.00s; update run 1: 2 passed in 11.06s (0 updated/1 unchanged each); update run 2: 2 passed in 11.60s (idempotent confirmed).
@@ -28,7 +32,9 @@
   - Full suite: 634 passed, 17 deselected in 380.15s — 0 failed, 0 errors; no `--run-d73h-historical` used (0 D73H executed).
   - Ten-path pre/post SHA-256 manifest: CHANGED_COUNT=0, staging empty, no new path.
   - Final snapshot SHA-256: `a916aec979f258e7fc6cc29365345ed2b8c38a834aa5f85526530b379862db67` for both shadow_off and shadow_on.
-- **R7 closeout sequence:** controlled selective commit/push; after publication, the next step is external supervisor review only.
+- Technical commit identity: subject `Make CSRF snapshot validation hermetic` (commit `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`).
+- Acceptance closeout commit: this acceptance closeout commit, subject `Record acceptance of REF-0C-D-R1`. Resolve final SHA with `git rev-parse HEAD` after commit.
+- **Next authorizable action: PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.**
 - Canonical reading order: `docs/DOCUMENTATION_INDEX.md` →
   `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` →
   `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block →

@@ -83,8 +83,8 @@ mais perigosa possível.
 | Stable route inventory | `tests/test_route_inventory_snapshot.py` + `tests/_artifacts/route_inventory_baseline.json` | REF-0B | `f2b1cfc` | 131 rules, 130 endpoints, 160 business methods; read-only comparison | SATISFIED |
 | RBAC coverage | `tests/test_rbac_requirement_coverage.py` + `tests/_artifacts/rbac_unmapped_routes_baseline.json` | REF-0B | `f2b1cfc` | 0 unmapped admin routes; dynamic enumeration from `main.app.url_map` | SATISFIED |
 | Unmapped-route detection | Same RBAC coverage test; dynamic from `main.app.url_map` | REF-0B | `f2b1cfc` | Filters `/admin` paths, calls `get_admin_permission_requirement` | SATISFIED |
-| Actor/access-level matrix | `tests/test_ref_0c_b1_rbac_high_confidence_mappings.py`, `tests/test_ref_0c_b2_diagnostic_rbac.py` | REF-0C-B1, REF-0C-B2 | `932c6d7`, `c9e1843` | B1: 36 tests covering R1-R21 actor matrix; B2: 18 tests covering R22-R24. Routes per (resource,scope) group are representative, not route-complete. | PARTIALLY_SATISFIED |
-| Denied-action immutability | Same B1 + B2 test files | REF-0C-B1, REF-0C-B2 | `932c6d7`, `c9e1843` | B1: `test_denied_post_atividades_edit_is_immutable`, `test_denied_post_matrizes_edit_is_immutable`; B2: domain-state equality checks. Representative per domain group, not route-complete. | PARTIALLY_SATISFIED |
+| Actor/access-level matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` (plus existing B1/B2 coverage) | REF-0C-D-R1 (closure via route-complete parametrization) | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f` | 402 actor cross-product = 263 allowed + 139 denied; 134 governed requirement combinations; 0 exemptions | SATISFIED |
+| Denied-action immutability | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` (closure via route-complete pre-handler denial) | REF-0C-D-R1 (closure via route-complete parametrization) | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f` | Browser/AJAX denial contract, URL roundtrip, type-safe fingerprint, per-request sentinel, profile digests, no mutation | SATISFIED |
 | Access-context isolation | `tests/test_ref_0c_b1_p0_access_context_transactions.py` | REF-0C-B1-P0 | `92b25d2` | 5 tests: transaction-neutral, idempotent, no lock/FK failure on rebuild | SATISFIED |
 | Deterministic hermetic suite | Full `pytest` suite with D73H deselected | REF-0TF-B, REF-0C-B1-P0 through REF-0C-C-B1-R1 | `9b47c37`, cumulative | 601 passed, 17 deselected; no failures/errors/skips/xfails/xpasses | SATISFIED |
 | D73H historical isolation | `--run-d73h-historical` marker, `pytest.ini` | REF-0TF-B | `9b47c37` | 17 tests deselected by default; CLI options for historical lane; optional lane still needs sanitized artifacts | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
@@ -96,31 +96,22 @@ mais perigosa possível.
 
 #### Formal REF-0C-D decision
 
-**Decision: B. PARTIALLY_SATISFIED_REMAINDER_REQUIRED.**
+**Decision: SATISFIED.**
 
-Repository evidence confirms complete route mapping and complete governed-boundary classification, but actor HTTP and denied-mutation tests are representative (R1-R24 sample), not route-complete for every governed admin business route-method pair × every denied access level.
+The original gap — route-complete actor decision and pre-handler denied-action immutability coverage over every current governed admin business route-method pair and every denied admin access level — was closed by REF-0C-D-R1. REF-0C-D-R1 implemented test-only, fixture-controlled, parametrized coverage from the canonical route inventory and classifier, proving expected allow/deny at the permission layer for every access level, proving each denied combination returns the central browser/AJAX contract before handler execution, and proving no fixture domain mutation.
 
-**Missing invariant:** Route-complete actor decision and pre-handler denied-action immutability coverage over every current governed admin business route-method pair and every denied admin access level derived from the canonical resource/scope model.
-
-**Affected set (exact by rule):** Every governed admin business route-method pair from `tests/_artifacts/route_inventory_baseline.json` where `classify_governed_admin_request(..., method)["governed"]` is True and `get_admin_permission_requirement(endpoint, method)` returns a non-None `(resource, scope)`, crossed with admin access levels `admin_total`, `administrativo`, `consultivo` whose effective scope does not satisfy the requirement, **excluding** only combinations already directly covered by accepted HTTP denial tests. Anonymous and aluno outer-auth behavior is already accepted but is not the missing invariant — the gap is admin-level actor matrix completeness.
-
-**Required tests:** Test-only, fixture-controlled, parametrized from canonical route inventory/classifier, proving expected allow/deny at the permission layer for every access level, proving each denied combination returns the central browser/AJAX contract before handler execution, and proving no fixture domain mutation.
-
-**Proposed phase:** REF-0C-D-R1. Prohibited: production code, UI, schema, dependencies, production hard enforcement, R20 cleanup, route changes, and Fases 1–6.
+**REF-0C-D is SATISFIED** after external acceptance of REF-0C-D-R1 (CLOSED / ACCEPTED).
 
 #### Macro Fase 0 decision
 
 **Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
 
-Two bounded remainders:
-1. **REF-0C-D-R1** — route-complete actor and immutability coverage (see above). Authorizable, not authorized.
-2. **Smoke-flow contract/evidence** — frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, backup. Not yet defined or proven in the repository.
-
-The remainder smoke-flow requirement does not block REF-0C-D-R1. They are independent.
+One bounded remainder:
+1. **Smoke-flow contract/evidence** — frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, backup. Not yet defined or proven in the repository.
 
 #### Next authorizable action
 
-**REF-0C-D-R1 only.** It is authorizable, not authorized. Fase 1 and production hard enforcement remain unauthorized. Fases 1–6 (target architecture) are preserved as originally defined below but remain unauthorized.
+**PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.** REF-0C-D-R1 is CLOSED / ACCEPTED; REF-0C-D is SATISFIED. Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H historical lane unchanged. R20 unchanged. Runtime-directory cleanup debt deferred. Fases 1–6 (target architecture) are preserved as originally defined below but remain unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py).

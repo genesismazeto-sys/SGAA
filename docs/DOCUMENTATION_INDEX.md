@@ -46,13 +46,19 @@
 - Branch: `refactor/architecture-safety-net`
 - Accepted published governance HEAD: `ce90db579137d5cb0075c5f7a525c02062e982b0`
 - **Governance foundation: CLOSED / ACCEPTED** after external direct GitHub inspection
-- Full hermetic test suite: **634 passed, 17 deselected, 0 failed, 0 errors in 380.15s** — locally validated pending external review
+- **REF-0C-D-R1 technical commit:** `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`, subject `Make CSRF snapshot validation hermetic`
+- Full hermetic test suite: **634 passed, 17 deselected, 0 failed, 0 errors in 380.15s** — accepted
 - Production: shadow-only (no hard enforcement)
-- **REF-0C-D-R1: IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW**
-- **REF-0C-D (remaining gap): PARTIALLY_SATISFIED_REMAINDER_REQUIRED** (not satisfied)
-- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (exactly two bounded remainders: REF-0C-D-R1 pending acceptance, and smoke-flow contract/evidence)
-- R7 closeout sequence: **controlled selective commit/push; after publication, external supervisor review only**
+- **REF-0C-D-R1: CLOSED / ACCEPTED** (external supervisor acceptance recorded)
+- **REF-0C-D (remaining gap): SATISFIED**
+- Macro Fase 0: **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (exactly one bounded remainder: smoke-flow contract/evidence)
+- Smoke-flow list: admin login; aluno login; create requisicao; process requisicao; backup
 - Fase 1 and production hard enforcement: **unauthorized**
+- Production shadow-only: **in force**
+- D73H historical lane: **unchanged**
+- R20: **unchanged**
+- Runtime-directory cleanup debt: **deferred**
+- Next authorizable action: **PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE**
 
 ## Master plan (Phase 0–6)
 
@@ -60,7 +66,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 
 - **Macro Fase 0 — Safety net (rede de segurança)**: route inventory, RBAC
   coverage, hermetic suite, smoke flows, actor matrix, fail-closed design.
-  **Open — exactly two bounded remainders remain: REF-0C-D-R1 pending external acceptance, and smoke-flow contract/evidence.**
+  **Open — exactly one bounded remainder: smoke-flow contract/evidence (admin login; aluno login; create requisicao; process requisicao; backup).**
 - **Fase 1 — Safe cleanup**: dead code, lixo, headers.
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
@@ -68,7 +74,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Fase 1 is **not authorized**. REF-0C-D-R1 is locally validated and pending external acceptance; no subsequent phase is authorized.
+Fase 1 is **not authorized**. REF-0C-D-R1 is CLOSED / ACCEPTED. No subsequent phase beyond Phase-0 smoke-flow contract/evidence is authorized.
 
 ## Ledger
 
@@ -111,8 +117,8 @@ The original REF-0C-D scope was documented in
 | P0 transaction hygiene | `tests/test_ref_0c_b1_p0_access_context_transactions.py` (5 tests) | SATISFIED |
 | B2 diagnostic RBAC | `tests/test_ref_0c_b2_diagnostic_rbac.py` (18 tests) | SATISFIED |
 | C-B1 shadow gate | `tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py` (23 tests pre-R1, plus R1 regression test) | SATISFIED |
-| D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL SUPERVISOR REVIEW |
-| Hermetic full suite | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | LOCALLY VALIDATED — pending external review |
+| D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
+| Hermetic full suite | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s | ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | PARTIALLY_SATISFIED |
 
 ## Architecture mapping snapshots (`docs/mapeamento/`)
