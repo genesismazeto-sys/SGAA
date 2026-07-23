@@ -30,9 +30,6 @@ python .\main.py
 
 A aplicação inicializa o banco automaticamente (init_db) ao subir.
 
-Login padrão (se o banco estiver vazio):
-- E-mail: admin@ej.edu.br
-- Senha: admin123
 
 Rotas úteis:
 - /health → status do app (200 ok)
