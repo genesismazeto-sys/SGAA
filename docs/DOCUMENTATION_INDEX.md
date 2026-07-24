@@ -42,24 +42,27 @@
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
 
-## Canonical current state (2026-07-23)
+## Canonical current state (2026-07-24)
 
 - Branch: `refactor/architecture-safety-net`
-- Starting HEAD: `c978ed7471e60f78151608cccafe95f21527553b`
-- **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED (externally accepted)
-- **PHASE-0-R9 smoke-flow contract and evidence:** IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL ACCEPTANCE
+- Accepted technical commit: `df24639faa4b18d5aad429940a82982b4beeab98` — `Add Phase 0 smoke-flow contract and evidence`
+- **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
+- **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
 - R9 evidence: `tests/test_phase_0_smoke_flows.py` (new, 5 tests); contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md`
-- R9 accepted full hermetic test suite: **654 passed, 17 deselected in 298.82s (0:04:58)**, exit 0; smoke 5/5
-- R9 invariant: canonical `database.db`, uploads, documents, backups, logs, `.pytest_cache`, and temp-root sets unchanged; R9-R2 aggregate invariant hash `e3d10dc0e8d782ab73acedd6737f285e37b4e21691218049ad8dc654f1ff3331` (includes five frozen dirty files, canonical database/root manifests, three preexisting temp-root manifests/set, Git status, and empty staging; not the final seven-path Git manifest)
+- Accepted full hermetic test suite: **654 passed, 17 deselected, 0 failures, 0 errors**
 - Production: shadow-only (no hard enforcement)
 - **REF-0C-D-R1: CLOSED / ACCEPTED**
 - **REF-0C-D: SATISFIED**
-- Macro Fase 0: **LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE** — the final bounded remainder (smoke-flow contract/evidence) is now defined and proven
-- Fase 1 and production hard enforcement: **unauthorized**
-- Production shadow-only: **in force**
+- **Macro Fase 0: CLOSED / ACCEPTED** — all Phase-0 safety-net requirements satisfied
+- **Accepted evidence:** route inventory; RBAC coverage; actor x route x method matrix; denied-action immutability; fail-closed development/shadow production contract; hermetic pytest runtime; hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654 passed, 17 D73H deselected, 0 failures, 0 errors.
+- **Next authorizable phase: PHASE 1 — SAFE CLEANUP** (not started). Intended scope: dead code, obsolete files, unused imports, stale headers/comments, and safe removal of demonstrably unreferenced artifacts.
+- Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
+- Next technical action after R10: read-only Phase-1 inventory and deletion-candidate diagnosis only.
+- Production shadow-only: **in force**; production hard enforcement: **unauthorized**
 - D73H historical lane: **unchanged**
 - R20: **unchanged**
-- Next action: **external supervisor review only**
+- **R10 is docs-only acceptance closeout; its eventual commit identity is resolved through Git history.**
+- **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
 
 ## Master plan (Phase 0–6)
 
@@ -67,15 +70,15 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 
 - **Macro Fase 0 — Safety net (rede de segurança)**: route inventory, RBAC
   coverage, hermetic suite, smoke flows, actor matrix, fail-closed design.
-  **Locally satisfied — smoke-flow contract/evidence defined and proven. Awaiting external acceptance.**
-- **Fase 1 — Safe cleanup**: dead code, lixo, headers.
+  **CLOSED / ACCEPTED — all requirements satisfied.**
+- **Fase 1 — Safe cleanup**: dead code, lixo, headers. **Next authorizable phase (not started).**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Fase 1 is **not authorized**. No subsequent phase is authorized.
+Phase 1 is the next authorizable phase and has **not started**. Its implementation requires **separate authorization** after the read-only Phase-1 inventory and deletion-candidate diagnosis. Phases 2–6 remain **unauthorized**.
 
 ## Ledger
 
@@ -121,8 +124,8 @@ The original REF-0C-D scope was documented in
 | C-B1 shadow gate | `tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py` (23 tests pre-R1, plus R1 regression test) | SATISFIED |
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
-| R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | LOCALLY VALIDATED / PENDING EXTERNAL ACCEPTANCE |
-| Hermetic full suite (R9) | 654 passed, 17 deselected in 298.82s, exit 0, 0 failed, 0 errors, D73H executed 0 | LOCALLY VALIDATED (R9-R2) |
+| R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
+| Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 
 ## Architecture mapping snapshots (`docs/mapeamento/`)

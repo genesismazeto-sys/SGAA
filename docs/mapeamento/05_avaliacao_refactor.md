@@ -72,9 +72,9 @@ mais perigosa possível.
 
 > Trabalhar sempre em branch a partir de `clean-baseline`, com `pytest` verde.
 
-### Macro Fase 0 — Rede de segurança — localmente satisfeita, aguardando aceitação externa
+### Macro Fase 0 — Rede de segurança — CLOSED / ACCEPTED
 
-**Status: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE** (2026-07-23)
+**Status: CLOSED / ACCEPTED** (2026-07-24). All Phase-0 safety-net requirements satisfied via external supervisor acceptance of technical commit `df24639faa4b18d5aad429940a82982b4beeab98`.
 
 #### Phase-0 completion matrix
 
@@ -105,26 +105,29 @@ The original gap — route-complete actor decision and pre-handler denied-action
 
 #### Macro Fase 0 decision
 
-**Decision: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE.**
+**Decision: CLOSED / ACCEPTED.**
 
-The final bounded remainder — smoke-flow contract/evidence — is now defined in
-`tests/test_phase_0_smoke_flows.py` and proven by `654 passed, 17 deselected in
-298.82s`, exit 0, D73H executed 0. No further Phase-0 work remains locally.
-
-All prior Phase-0 requirements (route inventory, RBAC coverage, hermetic suite,
-actor matrix, fail-closed design, runtime isolation, smoke flows) are locally
-satisfied. Phase 0 must not be claimed as CLOSED or ACCEPTED before external
-supervisor acceptance.
+All Phase-0 safety-net requirements are satisfied. The smoke-flow contract/evidence
+was accepted by the external supervisor at technical commit
+`df24639faa4b18d5aad429940a82982b4beeab98`. Accepted evidence: route inventory;
+RBAC coverage; actor x route x method matrix; denied-action immutability;
+fail-closed development/shadow production contract; hermetic pytest runtime;
+hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654
+passed, 17 D73H deselected, 0 failures, 0 errors. R10 documents this acceptance
+closeout. **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
 
 #### Next authorizable action
 
-**EXTERNAL SUPERVISOR REVIEW OF THE R9 COMMIT ONLY.** R9A is CLOSED / ACCEPTED.
-R9 (smoke-flow contract/evidence) is IMPLEMENTED / LOCALLY VALIDATED / PENDING
-EXTERNAL ACCEPTANCE. Fase 1
-and production hard enforcement remain unauthorized. Production shadow-only
-remains in force. D73H historical lane (17 deselected, 0 executed) and R20 are
-unchanged. Fases 1–6 (target architecture) are preserved as originally defined
-below but remain unauthorized.
+**PHASE 1 — SAFE CLEANUP (not started).** Intended scope: dead code, obsolete files,
+unused imports, stale headers/comments, and safe removal of demonstrably unreferenced
+artifacts. Explicitly prohibited without separate authorization: route extraction;
+blueprint restructuring; database consolidation; behavior changes; schema/migrations;
+RBAC; UI; dependencies; production hard enforcement. Next technical action after R10:
+read-only Phase-1 inventory and deletion-candidate diagnosis only.
+
+Production shadow-only remains in force; production hard enforcement unauthorized.
+D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
+preserved as originally defined below but unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py).

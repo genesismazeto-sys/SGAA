@@ -1,21 +1,35 @@
-## Current authoritative state — PHASE-0-R9 SMOKE FLOW CONTRACT AND EVIDENCE LOCALLY SATISFIED / PENDING EXTERNAL ACCEPTANCE (2026-07-23)
+## Current authoritative state — PHASE-0-R10 DOCS-ONLY EXTERNAL ACCEPTANCE CLOSEOUT — CLOSED / ACCEPTED (2026-07-24)
+
+- **R10 is a documentation-only acceptance closeout.** Macro Phase 0 is CLOSED / ACCEPTED.
+- **Accepted technical commit:** `df24639faa4b18d5aad429940a82982b4beeab98` — `Add Phase 0 smoke-flow contract and evidence`.
+- **Accepted evidence:** route inventory; RBAC coverage; actor x route x method matrix; denied-action immutability; fail-closed development/shadow production contract; hermetic pytest runtime; hermetic CSRF snapshots; five fixture-controlled smoke flows (admin login, aluno login, create requisicao sem anexo, process requisicao, local backup); full suite 654 passed, 17 D73H deselected, 0 failures, 0 errors.
+- **PHASE-0-R9 (smoke-flow contract and evidence):** CLOSED / ACCEPTED.
+- **PHASE-0-R9A (pytest runtime isolation):** CLOSED / ACCEPTED.
+- **Macro Phase 0: CLOSED / ACCEPTED.** All Phase-0 safety-net requirements satisfied.
+- All detailed R9 implementation facts (eight fixes, test evidence, invariant hash) are preserved in the historical block below.
+- **Next authorizable phase: PHASE 1 — SAFE CLEANUP** (not started).
+  - **Intended scope:** dead code, obsolete files, unused imports, stale headers/comments, and safe removal of demonstrably unreferenced artifacts.
+  - **Explicitly prohibited without separate authorization:** route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
+  - **Next technical action after R10:** read-only Phase-1 inventory and deletion-candidate diagnosis only.
+- **Preserved in R10:** production shadow-only in force; production hard enforcement unauthorized; R20 unchanged; D73H historical lane unchanged; no schema/migration/UI/business-rule change.
+- **R10 is a docs-only acceptance closeout; its eventual commit identity is resolved through Git history.**
+- **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
+- Canonical reading order remains `docs/DOCUMENTATION_INDEX.md` → `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` → `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block → `AGENT_HANDOFF.md` → phase contracts.
+
+### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
 - Repository: `genesismazeto-sys/SGAA`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
 - Starting HEAD: `c978ed7471e60f78151608cccafe95f21527553b`; parent unchanged; index/staging empty. R9 initial worktree: only untracked `tests/test_phase_0_smoke_flows.py`. R9-R2 initial accepted partial worktree: three tracked doc modifications plus untracked contract/test. Before selective staging, the documentary-completion worktree manifest comprised exactly seven paths.
 - Previous phase **R9A (pytest runtime isolation):** CLOSED / ACCEPTED externally.
-- This phase **R9 (smoke-flow contract and evidence):** IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL ACCEPTANCE.
+- This phase **R9 (smoke-flow contract and evidence):** CLOSED / ACCEPTED via R10 docs-only closeout.
 - Evidence file: `tests/test_phase_0_smoke_flows.py` (new, 485 lines, 5 tests).
 - Contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` (new).
 - Five flows proven: admin login, aluno login, create requisicao sem anexo, process requisicao, local backup. All fixture-controlled, hermetic, under unique `PYTEST_RUNTIME_ROOT` subroot, with `relative_to` containment, explicit `admin_id`, filesystem inventory SHA-256 assertions, empty `call_log` for 7 backup sinks, `follow_redirects=False` + 302/303 + Location assertion, and snapshot `id`/`nome` marker verification.
 - Test evidence:
   - smoke module: `5 passed in 5.99s`;
-  - accepted R9-R2 full hermetic suite (`pytest -q --tb=short`): `654 passed, 17 deselected in 298.82s (0:04:58)`, exit 0, 0 failed, 0 errors, D73H executed 0 (no separate smoke duration);
+  - accepted full hermetic suite (`pytest -q --tb=short`): `654 passed, 17 deselected in 298.82s (0:04:58)`, exit 0, 0 failed, 0 errors, D73H executed 0 (no separate smoke duration);
   - R9-R2 aggregate invariant hash before AND after: `e3d10dc0e8d782ab73acedd6737f285e37b4e21691218049ad8dc654f1ff3331` (includes the five frozen dirty files, canonical `database.db`/root manifests, all three preexisting temp-root manifests/set, Git status, and empty staging; it is not the final seven-path Git manifest);
   - `database.db` unchanged: 544768 bytes, SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
-- **Macro Phase 0: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE.** The final bounded remainder (smoke-flow contract/evidence) is now defined and proven. No further Phase-0 work remains locally.
-- Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H and R20 remain unchanged.
-- Exact next action after push: external supervisor review only.
-- Canonical reading order remains `docs/DOCUMENTATION_INDEX.md` → `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` → `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block → `AGENT_HANDOFF.md` → phase contracts.
 
 ### Historical — R9A pytest runtime isolation (CLOSED / ACCEPTED)
 
@@ -114,9 +128,9 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-23 (R9 smoke-flow contract and evidence; Macro Phase 0 LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE)
-Closeout: D8.5C cleanup of id=57 closeout (docs-only)
-Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
+Last updated: 2026-07-24 (R10 docs-only external acceptance closeout; Macro Phase 0 CLOSED / ACCEPTED)
+Closeout: R10 docs-only acceptance closeout
+Executor: deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
 

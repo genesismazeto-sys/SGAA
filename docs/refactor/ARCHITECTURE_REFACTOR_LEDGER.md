@@ -23,9 +23,9 @@
 | REF-0C-D | Formalize actor matrix and immutability-after-denial tests for all admin routes | **SATISFIED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f` (REF-0C-D-R1 technical commit) | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors; focused 33 passed | Original scope: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20. Satisfied by REF-0C-D-R1. | None |
 | REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **CLOSED / ACCEPTED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`; subject `Make CSRF snapshot validation hermetic` | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s; focused 33 passed in 19.93s | `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | None; test-only, no production change |
 | PHASE-0-R9A | Isolate every pytest runtime output from preexisting workspace directories before smoke execution | **CLOSED / ACCEPTED** | Isolate pytest runtime from workspace directories | Same commit | Focused 15 passed; collection 649/666 with 17 D73H deselected; regressions 23 passed; full suite 649 passed, 17 deselected in 441.22s; canonical manifests unchanged | No standalone contract; `tests/test_pytest_runtime_isolation.py`, `PROJECT_STATE.md`, and this ledger are canonical evidence | Pytest private `_inicache` compatibility; three older temp roots left untouched due unproven provenance |
-| PHASE-0-R9 | Implement five fixture-controlled hermetic smoke flows (admin login, aluno login, create requisicao, process requisicao, local backup) | **IMPLEMENTED / LOCALLY VALIDATED** | `c978ed7` (parent); new file `tests/test_phase_0_smoke_flows.py` | Evidence is owned by `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` and `tests/test_phase_0_smoke_flows.py`. Commit identity is resolved through Git history; no self-referential follow-up commit is required. | Smoke 5 passed in 5.99s; full suite 654 passed, 17 deselected in 298.82s, exit 0; R9-R2 aggregate invariant hash e3d10dc (includes five frozen dirty files, canonical database/root manifests, three preexisting temp-root manifests/set, Git status, empty staging); database.db 544768 bytes SHA-256 a3a55e... unchanged | `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | Smoke flows depend on stable routes; fixture patches app.config/module globals |
-| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed, smoke flows | **LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE** | See individual rows | See individual rows | 654 passed, 17 deselected in 298.82s; all Phase-0 requirements met locally | `docs/mapeamento/05_avaliacao_refactor.md` | No further Phase-0 work remains locally. Final bounded remainder (smoke flows) defined and proven. Awaiting external supervisor acceptance. |
-| Fase 1 | Safe cleanup: dead code, lixo, headers | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
+| PHASE-0-R9 | Implement five fixture-controlled hermetic smoke flows (admin login, aluno login, create requisicao, process requisicao, local backup) | **CLOSED / ACCEPTED** | `df24639faa4b18d5aad429940a82982b4beeab98` | Accepted via R10 docs-only external acceptance closeout; closeout records evidence and transition | Smoke 5 passed in 5.99s; full suite 654 passed, 17 deselected in 298.82s, exit 0, 0 failures, 0 errors; R9-R2 aggregate invariant hash e3d10dc; database.db 544768 bytes SHA-256 a3a55e... unchanged | `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | None residual; all Phase-0 requirements satisfied |
+| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed, smoke flows | **CLOSED / ACCEPTED** | `df24639faa4b18d5aad429940a82982b4beeab98` | R10 docs-only acceptance closeout | 654 passed, 17 deselected, 0 failures, 0 errors; all Phase-0 requirements satisfied and externally accepted | `docs/mapeamento/05_avaliacao_refactor.md` | None. Macro Phase 0 is canonically CLOSED / ACCEPTED. |
+| Fase 1 | Safe cleanup: dead code, lixo, headers | AUTHORIZABLE / NOT STARTED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Next authorizable phase. Read-only Phase-1 inventory and deletion-candidate diagnosis is the only authorized next technical action. Implementation requires separate authorization after the read-only inventory. |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -76,23 +76,27 @@ The original gap (closed by REF-0C-D-R1): REF-0C-D required formalized actor mat
 
 ## Macro Fase 0 formal decision
 
-**Decision: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE**
+**Decision: CLOSED / ACCEPTED**
 
-The final bounded remainder — smoke-flow contract/evidence — is now defined in
-`tests/test_phase_0_smoke_flows.py` and proven by `654 passed, 17 deselected in
-298.82s`, exit 0, D73H executed 0 (smoke 5 passed in 5.99s). No further Phase-0 work remains locally.
-
-All prior Phase-0 requirements (route inventory, RBAC coverage, hermetic suite,
-actor matrix, fail-closed design, runtime isolation, smoke flows) are locally
-satisfied. Phase 0 must not be claimed as CLOSED or ACCEPTED before external
-supervisor acceptance.
+All Phase-0 safety-net requirements are satisfied. The smoke-flow contract/evidence
+was accepted by the external supervisor at technical commit
+`df24639faa4b18d5aad429940a82982b4beeab98`. Accepted evidence: route inventory;
+RBAC coverage; actor x route x method matrix; denied-action immutability;
+fail-closed development/shadow production contract; hermetic pytest runtime;
+hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654
+passed, 17 D73H deselected, 0 failures, 0 errors. R10 documents this acceptance
+closeout. R10 is a docs-only acceptance closeout; its eventual commit identity is
+resolved through Git history. **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
 
 ## Next authorizable action
 
-**EXTERNAL SUPERVISOR REVIEW OF THE R9 COMMIT ONLY.** R9A is CLOSED / ACCEPTED.
-R9 (smoke-flow contract/evidence) is IMPLEMENTED / LOCALLY VALIDATED / PENDING
-EXTERNAL ACCEPTANCE. Fase 1
-and production hard enforcement remain unauthorized. Production shadow-only
-remains in force. D73H historical lane (17 deselected, 0 executed) and R20 are
-unchanged. Do not claim a final commit SHA or successful push before they exist;
-no self-referential follow-up commit.
+**PHASE 1 — SAFE CLEANUP (not started).** Intended scope: dead code, obsolete files,
+unused imports, stale headers/comments, and safe removal of demonstrably unreferenced
+artifacts. Explicitly prohibited without separate authorization: route extraction;
+blueprint restructuring; database consolidation; behavior changes; schema/migrations;
+RBAC; UI; dependencies; production hard enforcement.
+
+Next technical action after R10: read-only Phase-1 inventory and deletion-candidate
+diagnosis only. Production shadow-only remains in force; production hard enforcement
+unauthorized. D73H historical lane unchanged; R20 unchanged. Do not claim a final
+commit SHA or successful push before they exist; no self-referential follow-up commit.
