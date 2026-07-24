@@ -1,22 +1,17 @@
 # Agent Handoff
 
-## Current state — PHASE-0-R10 DOCS-ONLY EXTERNAL ACCEPTANCE CLOSEOUT — CLOSED / ACCEPTED
+## Current state — PHASE-1-U1 LOCALLY VALIDATED CLOSEOUT — OPEN / IN PROGRESS
 
-- **R10** is a documentation-only acceptance closeout of the Phase-0 smoke-flow contract and evidence.
-- **Accepted technical commit:** `df24639faa4b18d5aad429940a82982b4beeab98` — `Add Phase 0 smoke-flow contract and evidence`.
-- **PHASE-0-R9 (smoke-flow contract and evidence):** CLOSED / ACCEPTED.
-- **Macro Phase 0:** CLOSED / ACCEPTED. All Phase-0 safety-net requirements satisfied.
-- **Accepted evidence:** route inventory; RBAC coverage; actor x route x method matrix; denied-action immutability; fail-closed development/shadow production contract; hermetic pytest runtime; hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654 passed, 17 D73H deselected, 0 failures, 0 errors.
-- **Production shadow-only:** in force. **Production hard enforcement:** unauthorized.
-- **D73H historical lane:** unchanged. **R20:** unchanged.
-- **No schema, migration, UI, business-rule, or dependency change in R10.**
-- **Next authorizable phase: PHASE 1 — SAFE CLEANUP** (not started).
-  - **Intended scope:** dead code, obsolete files, unused imports, stale headers/comments, and safe removal of demonstrably unreferenced artifacts.
-  - **Explicitly prohibited without separate authorization:** route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
-  - **Next technical action after R10:** read-only Phase-1 inventory and deletion-candidate diagnosis only.
-- **Preserved in R10:** production shadow-only in force; production hard enforcement unauthorized; R20 unchanged; D73H historical lane unchanged; no schema/migration/UI/business-rule change.
-- **R10 is a docs-only acceptance closeout.** Its eventual commit identity is resolved through Git history. Do not reference a guessed, pending, or self-referential SHA.
-- **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
+- **PHASE-1-U1** removes the accidental tracked VS Code workspace artifact `templates/src.code-workspace-1.code-workspace`.
+- **Pre-deletion blob:** 61 bytes, SHA-1 `bab1b7f616b360395e747dbbcd59ebadc307ad61`, SHA-256 `a7472c8a6a846ca567ab02d5e6aa284c13d0ee2358dd9eef578eae0268eb4048`.
+- **Coverage:** Zero consumers beyond documentation-only references. Zero Python, JavaScript, Jinja, runtime, test-name, tool, release, application-configuration, or workflow references.
+- **Scanner exclusion:** `utils/messages.py` `_iter_frontend_files()` scopes to `templates/**/*.html` and `static/js/**/*.js`; `.code-workspace` excluded.
+- **Validation evidence:** Full hermetic suite 654 passed, 17 deselected, 0 failed, 0 errors in 379.24s. Focused gate 7 passed in 18.95s. Previously failing nodes 2 passed in 12.66s. Aggregate invariant SHA-256 `e4bee85bc5ac15a0d3e32692cb788f634d781153da9bef63fc481e3a30042ac3` pre/post identical across all lanes. All static inventories and database manifest unchanged.
+- **Phase 1 status:** OPEN / IN PROGRESS. U1 scope exhausted. No other cleanup candidate accepted by U1.
+- **Deferred/dispositioned items:** `hashlib` comment remains deferred; `templates/admin_turmas-KRThinkpad.html` pending focused proof; `@aluno_runtime_route` pending focused proof; `database.pre-*.db` subject to data-custody decision; `Referrer-Policy` outside Phase 1.
+- **Fases 2–6:** Unauthorized. Production shadow-only in force; production hard enforcement unauthorized. R20 unchanged; D73H historical lane unchanged.
+- **Commit subject:** `Remove accidental VS Code workspace artifact`. Commit identity is resolved through Git history.
+- **Exact next action:** External supervisor review. Do not authorize U2.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 

@@ -118,23 +118,25 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 
 #### Next authorizable action
 
-**PHASE 1 — SAFE CLEANUP (not started).** Intended scope: dead code, obsolete files,
+**PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).** Unit U1 (remove accidental tracked
+VS Code workspace artifact) is validated. Intended scope: dead code, obsolete files,
 unused imports, stale headers/comments, and safe removal of demonstrably unreferenced
 artifacts. Explicitly prohibited without separate authorization: route extraction;
 blueprint restructuring; database consolidation; behavior changes; schema/migrations;
-RBAC; UI; dependencies; production hard enforcement. Next technical action after R10:
-read-only Phase-1 inventory and deletion-candidate diagnosis only.
+RBAC; UI; dependencies; production hard enforcement. Only U1 is authorized at this
+time; subsequent Phase-1 cleanup candidates require separate authorization.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
 preserved as originally defined below but unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
-- [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py).
-- [ ] Remover lixo: `templates/admin_turmas-KRThinkpad.html`,
-      `templates/src.code-workspace*`, snapshots `database.pre-*.db` (arquivar).
-- [ ] Unificar headers divergentes (`Referrer-Policy`).
-- [ ] Limpar comentário "hashlib" enganoso.
+- [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — pendente (requer focused proof).
+- [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1).
+- [ ] Remover `templates/admin_turmas-KRThinkpad.html` — pendente (requer focused proof).
+- [ ] Arquivar snapshots `database.pre-*.db` — pendente (requer decisão de data custody).
+- [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
+- [ ] Limpar comentário "hashlib" enganoso — adiado.
 
 ### Fase 2 — Extrair helpers compartilhados (quebrar o ciclo) (2–3 dias)
 Mover de `main.py` para módulos próprios em `app/`, **um por PR**:

@@ -121,9 +121,9 @@ possível reduz muito a complexidade do resolver.
 ### 🟢 7. Itens menores
 - Headers duplicados/divergentes entre os dois `after_request`.
 - Estado de rate-limit em memória (multi-worker).
-- `templates/admin_turmas-KRThinkpad.html` e `src.code-workspace*` (lixo de
-  template/workspace) — remover.
-- Snapshots `database.pre-*.db` na raiz — arquivar.
+- `templates/admin_turmas-KRThinkpad.html` — pendente de prova focada; nenhuma remoção aceita por PHASE-1-U1.
+- `templates/src.code-workspace-1.code-workspace` — removido por PHASE-1-U1.
+- Snapshots `database.pre-*.db` na raiz — sujeitos a decisão de custódia de dados.
 
 ## Pontos fortes da arquitetura (preservar no refactor)
 
