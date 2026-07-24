@@ -1,18 +1,35 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 PROOF COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
 - **Deleted artifact:** `templates/src.code-workspace-1.code-workspace` — 61 bytes, SHA-1 `bab1b7f616b360395e747dbbcd59ebadc307ad61`. It had no runtime, scanner, test, tool, or workflow consumer.
 - **Validation evidence:** Full hermetic suite 654 passed, 17 deselected, 0 failed, 0 errors, D73H executed 0. Focused gate 7 passed. Previously failing runtime-isolation nodes 2 passed. Staged-deletion validation was required because `tests/test_pytest_runtime_isolation.py` copies `git ls-files`.
 - **Database, historical snapshots, and runtime manifests:** Unchanged.
-- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED.
-- **Candidate:** `templates/admin_turmas-KRThinkpad.html` — tracked obsolete/machine-specific parallel template; introduced in baseline commit `dea3de5174c7ef277babce60aa4442fa51ba8718`; no subsequent modifying commit; zero literal runtime, Python, JavaScript, Jinja, test, tool, release, or workflow consumers; zero dynamic template-resolution path; active route renders `templates/admin_turmas.html`; candidate compiles but is never requested; scanner excludes names containing `krthinkpad`; effective scanner inputs 73 before and 73 after; message catalog 536 keys before and after; normalized catalog SHA-256 `ae40805d62b2bcde282a935666f8623277885043a421c89268ef5919dc6dc382` identical before and after; exact delta: 0 removed keys, 0 added keys, 0 removed usages, 0 added usages, 0 kinds changed, 0 default texts changed; no override or persistence impact; no database access required.
-- **Phase 1 status:** OPEN / IN PROGRESS. Never state Phase 1 complete or closed.
-- **Fases 2–6:** Unauthorized. Production shadow-only in force; production hard enforcement unauthorized. R20 unchanged; D73H historical lane unchanged.
-- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U2 implementation — deletion of `templates/admin_turmas-KRThinkpad.html` — awaiting a separate explicit order. Do not authorize any other cleanup candidate.
-- **Expected future U2 implementation manifest after R14:** D `templates/admin_turmas-KRThinkpad.html`, M `AGENT_HANDOFF.md`, M `PROJECT_STATE.md`, M `docs/mapeamento/04_arquitetura_e_modulos.md`, M `docs/mapeamento/05_avaliacao_refactor.md`, M `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`. `docs/DOCUMENTATION_INDEX.md` should not need another U2 update unless implementation materially changes index-level state.
+- **PHASE-1-U2:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW.
+- **Deleted path:** `templates/admin_turmas-KRThinkpad.html`.
+- **Git blob SHA-1:** 96ae069833834da2941ea127968157bc9420e2e0.
+- **Raw Git blob size:** 2114 bytes.
+- **Correct raw Git blob SHA-256:** 01f32a5d9ed96754158206e47338ddbf18f35d4841432a2ddda59c7fa90be77d.
+- **Correct normalized catalog SHA-256:** ae408075905e131490627b6a8e3bf262d74330d0ed9f7671fbc4b765fb52c7a4; 188681 normalized JSON bytes; 73 effective inputs; 536 catalog keys.
+- **Exact zero catalog delta:** removed keys 0, added keys 0, removed usages 0, added usages 0, changed kinds 0, changed default texts 0.
+- **Scanner exclusion:** remains via krthinkpad; candidate absent from effective inputs.
+- **Zero runtime/test/tool/release/config/workflow consumers:** zero dynamic selector, zero Jinja edges; active route renders admin_turmas.html.
+- **All 70 remaining tracked templates compiled:** active admin_turmas.html compiled.
+- **Runtime-isolation copy gate:** 2 passed in 11.56s, 0 failed/errors.
+- **Focused U2 lane:** 45 passed in 24.03s, no failures/errors/skips/deselections.
+- **Full hermetic suite:** 654 passed, 17 deselected in 351.62s, 0 failures/errors, D73H executed 0.
+- **Fresh physical invariant aggregate SHA-256:** a485690ddda0fcaf5a398e14a485dfe34611ee7f24c64444078acd1cd6879775 was identical before and after every lane; database.db, all nine database.pre-*.db snapshots, uploads/, documentos_alunos/, backups/, logs/, .pytest_cache, the three preexisting sgaa_pytest_runtime_* roots, Git staged deletion, empty unstaged diff, and zero untracked paths were preserved; no canonical database was opened or queried.
+- **The two previous literal mismatches** (raw blob identity order value and normalized catalog hash order value) were corrected order-data errors, not repository drift.
+- **U1 remains CLOSED / ACCEPTED.**
+- **Phase 1 remains OPEN / IN PROGRESS.**
+- **U2 is NOT externally accepted, NOT CLOSED / ACCEPTED.**
+- **No other cleanup candidate is authorized; PHASE-1-U3 is not authorized/not started.**
+- **Phases 2-6 remain unauthorized.**
+- **Production remains shadow-only; production hard enforcement remains unauthorized.**
+- **R20 and D73H remain unchanged.**
+- **Exact next action:** external supervisor review of U2 only.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 

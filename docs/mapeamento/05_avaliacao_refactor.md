@@ -120,8 +120,8 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 
 **PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
 - **PHASE-1-U1:** CLOSED / ACCEPTED at commit `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — removed `templates/src.code-workspace-1.code-workspace`. Full suite 654 passed, 17 deselected, 0 failed, 0 errors.
-- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED. Candidate `templates/admin_turmas-KRThinkpad.html` proven with zero consumers, zero catalog delta, zero scanner impact.
-- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U2 implementation — deletion of `templates/admin_turmas-KRThinkpad.html` — awaiting a separate explicit order. Do not authorize any other cleanup candidate.
+- **PHASE-1-U2:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW. Deleted path `templates/admin_turmas-KRThinkpad.html` proven with zero consumers, zero catalog delta, zero scanner impact.
+- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** external supervisor review of U2 only. Do not authorize any other cleanup candidate.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
@@ -131,7 +131,7 @@ preserved as originally defined below but unauthorized.
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — pendente (requer focused proof).
 - [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1, CLOSED / ACCEPTED).
-- [ ] Remover `templates/admin_turmas-KRThinkpad.html` — PHASE-1-U2 PROOF COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED; aguardando ordem explícita.
+- [x] Remover `templates/admin_turmas-KRThinkpad.html` — concluído (PHASE-1-U2, IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW).
 - [ ] Arquivar snapshots `database.pre-*.db` — pendente (requer decisão de data custody).
 - [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
 - [ ] Limpar comentário "hashlib" enganoso — adiado.
