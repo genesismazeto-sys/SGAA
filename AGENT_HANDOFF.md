@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — Phase 1 OPEN / IN PROGRESS
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — Phase 1 OPEN / IN PROGRESS
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -24,16 +24,26 @@
 - **Full hermetic suite:** 654 passed, 17 deselected in 351.62s, 0 failures/errors, D73H executed 0.
 - **Fresh physical invariant aggregate SHA-256:** a485690ddda0fcaf5a398e14a485dfe34611ee7f24c64444078acd1cd6879775 was identical before and after every lane; database.db, all nine database.pre-*.db snapshots, uploads/, documentos_alunos/, backups/, logs/, .pytest_cache, the three preexisting sgaa_pytest_runtime_* roots, Git staged deletion, empty unstaged diff, and zero untracked paths were preserved; no canonical database was opened or queried.
 - **The two previous literal mismatches** (raw blob identity order value and normalized catalog hash order value) were corrected order-data errors, not repository drift; only corrected values are preserved as active canon.
+- **PHASE-1-U3:** CLOSED / ACCEPTED.
+- **Accepted technical commit:** c4fd2dd1852011a0ec860493ed4cf53834584c42 — `Remove legacy aluno route bodies`.
+- **Removed symbols from main.py:** `_noop_route`; assignment to `aluno_runtime_route`; `aluno_arquivos`; `aluno_minhas_requisicoes`; `aluno_requisicao_detalhe`; `aluno_dashboard`; `aluno_nova_requisicao`; `aluno_meus_dados`.
+- **main.py delta:** 0 insertions, 756 deletions.
+- **Preserved compatibility boundary:** `USE_ALUNO_BLUEPRINT = True`; `app = create_app(register_aluno_blueprint=USE_ALUNO_BLUEPRINT)`; `aluno_url`; `_rebind_legacy_aluno_exports`; its invocation; all eight compatibility exports; all active implementations in `app/views/aluno.py`. Required eight exports: `aluno_dashboard`, `aluno_meus_dados`, `aluno_nova_requisicao`, `aluno_minhas_requisicoes`, `aluno_requisicao_detalhe`, `aluno_arquivos`, `aluno_visualizar_arquivo`, `aluno_baixar_arquivo`. All eight remain identical to their active `app.views.aluno` callables in object identity, name, module and signature.
+- **Route/URL acceptance:** total Flask rules 131; aluno bindings 11; routes removed 0; routes added 0; endpoint delta 0; method delta 0; host delta 0; subdomain delta 0; redirect delta 0; strict-slashes delta 0. Accepted URL neutrality for `/aluno/dashboard`, `/aluno/meus_dados`, `/aluno/nova_requisicao`, `/aluno/requisicoes`, `/aluno/requisicoes/17`, `/aluno/arquivos`, `/aluno/arquivos/ver/23`, `/aluno/arquivos/download/23`. For each relevant endpoint, `url_for("aluno.<name>") == main.aluno_url(name)`.
+- **Message-catalog acceptance:** catalog keys 536; removed keys 0; added keys 0; changed defaults 0; changed kinds 0; semantic usages removed exactly 23; semantic usages added 0; affected keys exactly 18; orphaned overrides 0. Removed-usage distribution: aluno_requisicao_detalhe 10; aluno_meus_dados 6; aluno_nova_requisicao 4; aluno_dashboard 2; aluno_minhas_requisicoes 1; aluno_arquivos 0. Every affected message key remains present through active code or another active source. Forensic relocation: 4 retained usages: -6 lines; 198 retained usages: -430 lines; 142 retained usages: -756 lines; 421 retained usages unchanged. Source-line relocation is not a behavioral change.
+- **CSRF snapshots:** both snapshots (`tests/_artifacts/csrf_inventory_shadow_off.json` and `tests/_artifacts/csrf_inventory_shadow_on.json`) regenerated through canonical `--update-csrf-snapshots` and adopted as one coherent pair. Raw SHA-256 for each: ab40107b840eabcc566f678662c813e33cccc0201adfdea7e37b3e37d8a23f8c. Mutable routes 78; endpoint identities 77; high-risk 0; blocked-risk 0; rendered templates 19; route records 78; form records 592; evidence records 628; route/status mappings unchanged; methods unchanged; decorators unchanged; token modes unchanged; test references unchanged; prohibited semantic deltas 0. Byte changes were ordering-only under normalized semantic comparison.
+- **Tests/invariants:** new `tests/test_aluno_compat_exports.py` with three tests: (1) legacy bodies and no-op registration absent; (2) main compatibility exports match active blueprint; (3) rebind idempotent and URLs stable. Compatibility-only recheck 3 passed. Focused lane 47 passed, 0 failed, 0 errors, 0 skips, 0 deselected. Full hermetic suite 657 passed, 17 deselected, 0 failed, 0 errors, D73H executed 0. Invariants: aggregate physical/Git hash unchanged around focused and full lanes; `database.db` unchanged; all nine `database.pre-*.db` snapshots unchanged; uploads unchanged; `documentos_alunos` unchanged; backups unchanged; logs unchanged; `.pytest_cache` unchanged; preexisting pytest runtime roots unchanged; no execution-owned runtime root survived; no canonical database opened or queried.
 - **U1 remains CLOSED / ACCEPTED.**
 - **Phase 1 remains OPEN / IN PROGRESS.**
-- **U2 is CLOSED / ACCEPTED.**
-- **No other Phase-1 cleanup unit is implemented or accepted. PHASE-1-U3 is NOT STARTED / REQUIRES SEPARATE ORDER.**
+- **U2 remains CLOSED / ACCEPTED.**
+- **U3 is CLOSED / ACCEPTED.**
+- **No additional Phase-1 cleanup unit is implemented or accepted.**
 - **Phases 2-6 remain unauthorized.**
 - **Production remains shadow-only; production hard enforcement remains unauthorized.**
 - **R20 and D73H remain unchanged.**
-- **Not authorized:** database snapshot deletion; Referrer-Policy changes; import cleanup; hashlib comment correction; Phase 2 work.
-- **Exact next action:** PHASE-1-U3 — focused read-only proof of the legacy/no-op aluno route bodies and `aluno_runtime_route`. U3 is NOT STARTED / REQUIRES SEPARATE ORDER and not authorized for mutation.
-- **PHASE-1-U3 future-proof scope:** determine all legacy aluno functions involved; rebind behavior at end of main.py; route and endpoint neutrality; message-catalog effects caused by `aluno_runtime_route` decorators; import and compatibility-export consumers; exact safe deletion boundary if any.
+- **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
+- **Preserved historical/superseded — pre-U3 wording:** statements that U3 was "NOT STARTED / REQUIRES SEPARATE ORDER", "awaiting separate implementation order", "awaiting original read-only proof", "awaiting external acceptance", or "only locally validated" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
+- **Exact next action:** PHASE-1-U4 — focused read-only residual source-hygiene proof. U4 is NOT STARTED; read-only only; requires a separate explicit order; not authorized for mutation. U4 scope limited to: (1) whether imports in main.py became unused specifically because of U3 deletions; (2) whether already-unused imports previously identified can be removed in the same bounded unit without behavioral impact; (3) whether the misleading hashlib import comment should be corrected only as part of that meaningful bounded cleanup; (4) exact static, test and import-time validation boundary. Explicitly do not authorize `database.pre-*.db` deletion/movement; Referrer-Policy changes; route extraction; blueprint restructuring; database consolidation; dependency changes; UI changes; Phase-2 work. If no meaningful import-cleanup boundary exists, future U4 proof must recommend deferring the isolated comment instead of creating a disproportionate standalone technical commit.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -202,8 +212,8 @@
 - The primary database and untracked historical backups were not opened, copied, or changed. The temporary worktree is disposable; its runtime artifacts do not belong to the primary worktree.
 - Decision: **GO for REF-0TF-B only.** Do not correct RBAC, modularize routes, alter production code, or use a live database/backup. REF-0TF-B must define a sanitized, versioned D73H fixture or an explicit separate invocation contract.
 
-Last updated: 2026-07-24 (R16 docs-only external acceptance closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; Phase 1 OPEN / IN PROGRESS)
-Closeout: R16 docs-only acceptance closeout
+Last updated: 2026-07-24 (R19 docs-only external acceptance closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; Phase 1 OPEN / IN PROGRESS)
+Closeout: R19 docs-only external acceptance closeout (PHASE-1-U3)
 Executor: deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State

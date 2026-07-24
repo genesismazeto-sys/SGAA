@@ -4,7 +4,7 @@
 
 ```
                        ┌─────────────────────────────┐
-                       │          main.py            │  15.494 linhas
+                       │          main.py            │  14.794 linhas (pós-U3)
                        │  • app = create_app()       │  • ~113 rotas
                        │  • regras de negócio        │  • helpers de schema
                        │  • versionamento/resolver   │  • backup/sync
@@ -42,7 +42,7 @@ e os módulos novos puxam de volta o miolo.
 
 | Módulo | Linhas | Responsabilidade | Saúde |
 |--------|-------:|------------------|-------|
-| `main.py` | 15.494 | Tudo: app, rotas admin, negócio, schema, versionamento, backup | 🔴 monólito |
+| `main.py` | 14.794 (pós-U3; pre-U3 15.550; U3 deletou 756 linhas de rotas legado aluno) | Tudo: app, rotas admin, negócio, schema, versionamento, backup | 🔴 monólito |
 | `app/__init__.py` | 434 | `create_app`, segurança, CSRF, headers, registro de rotas core | 🟢 bom |
 | `app/auth.py` | 477 | RBAC (níveis/recursos/escopos), decorators, rate limit | 🟢 bom |
 | `app/db.py` | 453 | Conexão + `init_db` (puxa helpers de main) | 🟡 ciclo |
@@ -82,7 +82,7 @@ deveriam ser módulos separados:
    contas cloud).
 9. **Rotas admin** (~113) — requisições, atividades, matrizes, alunos, turmas,
    cursos, arquivos, alertas, reportes, banco-dados, acesso, configurações.
-10. **Código morto do aluno** (`@aluno_runtime_route` no-op).
+10. **Código morto do aluno** — removido em PHASE-1-U3 (CLOSED / ACCEPTED, commit c4fd2dd, 756 linhas deletadas). As views legado `@aluno_runtime_route` no-op foram eliminadas; o blueprint ativo em `app/views/aluno.py` é a única fonte das rotas aluno. Oito exports de compatibilidade preservados em `main.py`.
 
 ## Dívidas técnicas (priorizadas)
 
@@ -100,10 +100,14 @@ A direção correta: helpers compartilhados descem para módulos de `app/`
 (`app/security.py`, `app/repositories/`, `app/services/`), e `main.py` deixa de
 ser fonte de helpers.
 
-### 🟡 3. Código morto do aluno
-~6 views `aluno_*` em `main.py` decoradas com `@aluno_runtime_route` (no-op
-porque `USE_ALUNO_BLUEPRINT=True`). Devem ser **removidas** (o blueprint já é a
-verdade). Antes de remover, confirmar que nada importa essas funções por nome.
+### 🟢 3. Código morto do aluno (RESOLVIDO — PHASE-1-U3 CLOSED / ACCEPTED)
+~6 views `aluno_*` em `main.py` decoradas com `@aluno_runtime_route` foram
+**removidas** em PHASE-1-U3 (commit c4fd2dd, 756 linhas deletadas). As oito
+funções de exportação de compatibilidade (`aluno_dashboard`, `aluno_meus_dados`,
+`aluno_nova_requisicao`, `aluno_minhas_requisicoes`, `aluno_requisicao_detalhe`,
+`aluno_arquivos`, `aluno_visualizar_arquivo`, `aluno_baixar_arquivo`) foram
+preservadas, redirecionando para as implementações ativas no blueprint
+`app/views/aluno.py`. Nenhuma rota, endpoint, URL ou assinatura foi alterada.
 
 ### 🟡 4. Migrações ad-hoc + `init_db` duplicado
 `init_db` existe em `main.py` e `app/db.py`; ALTERs em try/except. Convergir para
