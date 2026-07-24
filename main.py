@@ -6,7 +6,7 @@ import json
 import datetime
 import time
 import tempfile
-import hashlib  # Substituindo bcrypt por hashlib
+import hashlib  # Compatibilidade com hashes legados SHA-256 com salt
 import base64   # Para codificação/decodificação de salt
 import secrets  # Para geração segura de salt
 import openpyxl
@@ -15,12 +15,10 @@ from logging.handlers import RotatingFileHandler
 import traceback
 import re
 from datetime import date
-from functools import wraps
 from urllib.parse import urlsplit
-from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory, send_file, jsonify, g, abort, make_response, current_app
+from flask import render_template, request, redirect, url_for, session, send_from_directory, send_file, jsonify, g, abort, make_response, current_app
 import shutil
 from urllib.parse import urlparse
-from presets_api import bp_presets
 from flask_compress import Compress
 try:
     from dotenv import load_dotenv  # type: ignore[import-not-found]
