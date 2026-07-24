@@ -8,7 +8,7 @@
 
 **Sim, vale — mas com escopo cirúrgico, não um rewrite.** O app é maduro e
 seguro; o problema é **organização**, concentrada em um arquivo (`main.py`,
-15.494 linhas) e num **ciclo de dependências** que ficou pela metade. O objetivo
+14.792 linhas) e num **ciclo de dependências** que ficou pela metade. O objetivo
 do refactor é puramente estrutural: **quebrar o monólito em módulos coesos sem
 mudar comportamento**. Não há motivo para reescrever regras de negócio nem trocar
 o framework.
@@ -121,7 +121,9 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 **PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
 - **PHASE-1-U1:** CLOSED / ACCEPTED at commit `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — removed `templates/src.code-workspace-1.code-workspace`. Full suite 654 passed, 17 deselected, 0 failed, 0 errors.
 - **PHASE-1-U2:** CLOSED / ACCEPTED at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` — deleted `templates/admin_turmas-KRThinkpad.html`. Proven with zero consumers, zero catalog delta, zero scanner impact.
-- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U4 — focused read-only residual source-hygiene proof. U4 is NOT STARTED; read-only only; requires a separate explicit order; not authorized for mutation. U4 scope limited to: (1) whether imports in main.py became unused specifically because of U3 deletions; (2) whether already-unused imports previously identified can be removed in the same bounded unit without behavioral impact; (3) whether the misleading hashlib import comment should be corrected only as part of that meaningful bounded cleanup; (4) exact static, test and import-time validation boundary. If no meaningful import-cleanup boundary exists, future U4 proof must recommend deferring the isolated comment instead of creating a disproportionate standalone technical commit.
+- **PHASE-1-U3:** CLOSED / ACCEPTED at commit `c4fd2dd1852011a0ec860493ed4cf53834584c42` — removed legacy aluno route bodies; 0 insertions, 756 deletions; eight compatibility exports preserved.
+- **PHASE-1-U4:** CLOSED / ACCEPTED. U4 read-only proof: CLOSED / ACCEPTED. U4-B bounded implementation: CLOSED / ACCEPTED. Accepted technical commit `742b67c0623bdf41e292280a11a40d2fddad717c` — removed unused imports (wraps, Flask, bp_presets); corrected hashlib comment; main.py delta 2 insertions, 4 deletions; no behavioral change.
+- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U5 — read-only reconciliation and selection of the next bounded Phase-1 safe-cleanup candidate. U5 is NOT STARTED; read-only only; requires a separate explicit order; not authorized for mutation. Future proof selects from real repository state/plan without presuming database.pre-*.db deletion/movement, Referrer-Policy, route extraction, blueprint restructuring, database consolidation, dependencies, UI, or Phase 2. Do not imply implementation authorization.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
@@ -133,9 +135,9 @@ preserved as originally defined below but unauthorized.
 - [x] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — CLOSED / ACCEPTED (PHASE-1-U3, commit c4fd2dd; 0 inserções, 756 deleções; oito exports de compatibilidade preservados).
 - [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1, CLOSED / ACCEPTED).
 - [x] Remover `templates/admin_turmas-KRThinkpad.html` — concluído (PHASE-1-U2, CLOSED / ACCEPTED).
+- [x] Remover imports mortos (wraps, Flask, bp_presets) + corrigir comentário hashlib — CLOSED / ACCEPTED (PHASE-1-U4, commit 742b67c; 2 inserções, 4 deleções; sem mudança comportamental).
 - [ ] Arquivar snapshots `database.pre-*.db` — pendente (requer decisão de data custody).
 - [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
-- [ ] Limpar comentário "hashlib" enganoso — adiado.
 
 ### Fase 2 — Extrair helpers compartilhados (quebrar o ciclo) (2–3 dias)
 Mover de `main.py` para módulos próprios em `app/`, **um por PR**:

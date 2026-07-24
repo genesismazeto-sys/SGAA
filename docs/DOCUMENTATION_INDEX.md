@@ -45,7 +45,7 @@
 ## Canonical current state (2026-07-24)
 
 - Branch: `refactor/architecture-safety-net`
-- Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3)
+- Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
 - R9 evidence: `tests/test_phase_0_smoke_flows.py` (new, 5 tests); contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md`
@@ -58,8 +58,9 @@
 - **PHASE-1-U1: CLOSED / ACCEPTED** — removed `templates/src.code-workspace-1.code-workspace` at commit `68f52fb`.
 - **PHASE-1-U2: CLOSED / ACCEPTED** — deleted `templates/admin_turmas-KRThinkpad.html` at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`.
 - **PHASE-1-U3: CLOSED / ACCEPTED** — removed legacy aluno route bodies from main.py at commit `c4fd2dd1852011a0ec860493ed4cf53834584c42`; 0 insertions, 756 deletions; all eight compatibility exports preserved.
+- **PHASE-1-U4: CLOSED / ACCEPTED** — U4 read-only proof: CLOSED / ACCEPTED; U4-B bounded implementation: CLOSED / ACCEPTED. Removed unused imports from main.py (wraps, Flask, bp_presets) and corrected hashlib comment at commit `742b67c0623bdf41e292280a11a40d2fddad717c`; 2 insertions, 4 deletions; no behavioral change.
 - **Phase 1:** OPEN / IN PROGRESS.
-- **Exact next authorizable action:** PHASE-1-U4 — focused read-only residual source-hygiene proof. U4 is NOT STARTED; read-only only; requires a separate explicit order. Scope: (1) whether imports in main.py became unused specifically because of U3 deletions; (2) whether already-unused imports previously identified can be removed in the same bounded unit without behavioral impact; (3) whether the misleading hashlib import comment should be corrected only as part of that meaningful bounded cleanup; (4) exact static, test and import-time validation boundary. If no meaningful import-cleanup boundary exists, future U4 proof must recommend deferring the isolated comment instead of creating a disproportionate standalone technical commit.
+- **Exact next authorizable action:** PHASE-1-U5 — read-only reconciliation and selection of the next bounded Phase-1 safe-cleanup candidate. U5 is NOT STARTED; requires a separate explicit order; not authorized for mutation. Future proof selects from real repository state/plan without presuming database.pre-*.db deletion/movement, Referrer-Policy, route extraction, blueprint restructuring, database consolidation, dependencies, UI, or Phase 2. Do not imply implementation authorization.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
 - D73H historical lane: **unchanged**
@@ -78,13 +79,14 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   - **PHASE-1-U1 (accidental VS Code workspace artifact): CLOSED / ACCEPTED.**
   - **PHASE-1-U2 (KRThinkpad parallel template): CLOSED / ACCEPTED.**
   - **PHASE-1-U3 (legacy aluno routes and `aluno_runtime_route`): CLOSED / ACCEPTED.**
+  - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is OPEN / IN PROGRESS. U1, U2 and U3 are CLOSED / ACCEPTED. No additional Phase-1 cleanup unit is implemented or accepted. PHASE-1-U4 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
+Phase 1 is OPEN / IN PROGRESS. U1, U2, U3 and U4 are CLOSED / ACCEPTED. No later Phase-1 cleanup unit is implemented or accepted. PHASE-1-U5 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
 
 ## Ledger
 

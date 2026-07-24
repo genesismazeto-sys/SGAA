@@ -4,7 +4,7 @@
 
 ```
                        ┌─────────────────────────────┐
-                       │          main.py            │  14.794 linhas (pós-U3)
+                       │          main.py            │  14.792 linhas (pós-U4)
                        │  • app = create_app()       │  • ~113 rotas
                        │  • regras de negócio        │  • helpers de schema
                        │  • versionamento/resolver   │  • backup/sync
@@ -42,7 +42,7 @@ e os módulos novos puxam de volta o miolo.
 
 | Módulo | Linhas | Responsabilidade | Saúde |
 |--------|-------:|------------------|-------|
-| `main.py` | 14.794 (pós-U3; pre-U3 15.550; U3 deletou 756 linhas de rotas legado aluno) | Tudo: app, rotas admin, negócio, schema, versionamento, backup | 🔴 monólito |
+| `main.py` | 14.792 (pós-U4; pre-U4 14.794; U4 removeu 3 imports mortos + corrigiu comentário hashlib) | Tudo: app, rotas admin, negócio, schema, versionamento, backup | 🔴 monólito |
 | `app/__init__.py` | 434 | `create_app`, segurança, CSRF, headers, registro de rotas core | 🟢 bom |
 | `app/auth.py` | 477 | RBAC (níveis/recursos/escopos), decorators, rate limit | 🟢 bom |
 | `app/db.py` | 453 | Conexão + `init_db` (puxa helpers de main) | 🟡 ciclo |
@@ -100,7 +100,10 @@ A direção correta: helpers compartilhados descem para módulos de `app/`
 (`app/security.py`, `app/repositories/`, `app/services/`), e `main.py` deixa de
 ser fonte de helpers.
 
-### 🟢 3. Código morto do aluno (RESOLVIDO — PHASE-1-U3 CLOSED / ACCEPTED)
+### 🟢 3. Imports mortos e comentário hashlib (RESOLVIDO — PHASE-1-U4 CLOSED / ACCEPTED)
+Três imports preexistentes mortos removidos: `wraps` (functools), `Flask` (flask), `bp_presets` (presets_api). `hashlib` preservado; comentário corrigido para refletir compatibilidade com hashes SHA-256 salted legados. `msal` probe local preservado. Commit `742b67c`. Nenhuma rota, decorator, export, blueprint ou comportamento alterado.
+
+### 🟢 4. Código morto do aluno (RESOLVIDO — PHASE-1-U3 CLOSED / ACCEPTED)
 ~6 views `aluno_*` em `main.py` decoradas com `@aluno_runtime_route` foram
 **removidas** em PHASE-1-U3 (commit c4fd2dd, 756 linhas deletadas). As oito
 funções de exportação de compatibilidade (`aluno_dashboard`, `aluno_meus_dados`,
@@ -109,20 +112,20 @@ funções de exportação de compatibilidade (`aluno_dashboard`, `aluno_meus_dad
 preservadas, redirecionando para as implementações ativas no blueprint
 `app/views/aluno.py`. Nenhuma rota, endpoint, URL ou assinatura foi alterada.
 
-### 🟡 4. Migrações ad-hoc + `init_db` duplicado
+### 🟡 5. Migrações ad-hoc + `init_db` duplicado
 `init_db` existe em `main.py` e `app/db.py`; ALTERs em try/except. Convergir para
 `schema_migrations` (já existe a infra em `db_maintenance`).
 
-### 🟡 5. Sync de backup no `after_request`
+### 🟡 6. Sync de backup no `after_request`
 `_maybe_sync_database_snapshot` + retenção + upload nuvem rodam em **toda
 resposta** (`main.py:5208`). Custo de latência e acoplamento; deveria ser job
 agendado / fora do request. Crítico para serverless (ver [06](06_deploy_e_infraestrutura.md)).
 
-### 🟡 6. Dupla modelagem de atividades (legado + versionado)
+### 🟡 7. Dupla modelagem de atividades (legado + versionado)
 Concluir a migração `atividade_legacy_map` e aposentar `atividades` quando
 possível reduz muito a complexidade do resolver.
 
-### 🟢 7. Itens menores
+### 🟢 8. Itens menores
 - Headers duplicados/divergentes entre os dois `after_request`.
 - Estado de rate-limit em memória (multi-worker).
 - `templates/admin_turmas-KRThinkpad.html` — PHASE-1-U2 CLOSED / ACCEPTED. Template excluído e aceito externamente em 5932dff.
