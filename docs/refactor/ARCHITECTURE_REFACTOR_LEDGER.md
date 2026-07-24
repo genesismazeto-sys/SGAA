@@ -22,8 +22,9 @@
 | REF-0C-C-B1-R1 | Shadow audit logger failure safety correction | CLOSED / ACCEPTED | `39f7732` | `128b2ce` | 601 passed, 17 deselected (+1 R1 regression over C-B1) | `docs/refactor/REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | Residual: one lost shadow event acceptable |
 | REF-0C-D | Formalize actor matrix and immutability-after-denial tests for all admin routes | **SATISFIED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f` (REF-0C-D-R1 technical commit) | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors; focused 33 passed | Original scope: `docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md` section 20. Satisfied by REF-0C-D-R1. | None |
 | REF-0C-D-R1 | Route-complete actor decision and pre-handler denied-action immutability coverage | **CLOSED / ACCEPTED** | `fe0ce87a3838fd14691b3d7c006bfe6864b9371f`; subject `Make CSRF snapshot validation hermetic` | This acceptance closeout commit | 634 passed, 17 deselected, 0 failed, 0 errors in 380.15s; focused 33 passed in 19.93s | `docs/refactor/REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | None; test-only, no production change |
-| PHASE-0-R9A | Isolate every pytest runtime output from preexisting workspace directories before smoke execution | **LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW** | This commit; subject `Isolate pytest runtime from workspace directories` | Same commit | Focused 15 passed; collection 649/666 with 17 D73H deselected; regressions 23 passed; full suite 649 passed, 17 deselected in 441.22s; canonical manifests unchanged | No standalone contract; `tests/test_pytest_runtime_isolation.py`, `PROJECT_STATE.md`, and this ledger are canonical evidence | Pytest private `_inicache` compatibility; three older temp roots left untouched due unproven provenance; smoke flows not run |
-| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed | **PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** | See individual REF-0* rows | See individual REF-0* rows | See individual REF-0* rows; R9A full suite 649 passed, 17 deselected, 0 failed, 0 errors in 441.22s | `docs/mapeamento/05_avaliacao_refactor.md` | Exactly one bounded remainder: smoke-flow contract/evidence (admin login; aluno login; create requisicao; process requisicao; backup) |
+| PHASE-0-R9A | Isolate every pytest runtime output from preexisting workspace directories before smoke execution | **CLOSED / ACCEPTED** | Isolate pytest runtime from workspace directories | Same commit | Focused 15 passed; collection 649/666 with 17 D73H deselected; regressions 23 passed; full suite 649 passed, 17 deselected in 441.22s; canonical manifests unchanged | No standalone contract; `tests/test_pytest_runtime_isolation.py`, `PROJECT_STATE.md`, and this ledger are canonical evidence | Pytest private `_inicache` compatibility; three older temp roots left untouched due unproven provenance |
+| PHASE-0-R9 | Implement five fixture-controlled hermetic smoke flows (admin login, aluno login, create requisicao, process requisicao, local backup) | **IMPLEMENTED / LOCALLY VALIDATED** | `c978ed7` (parent); new file `tests/test_phase_0_smoke_flows.py` | Evidence is owned by `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` and `tests/test_phase_0_smoke_flows.py`. Commit identity is resolved through Git history; no self-referential follow-up commit is required. | Smoke 5 passed in 5.99s; full suite 654 passed, 17 deselected in 298.82s, exit 0; R9-R2 aggregate invariant hash e3d10dc (includes five frozen dirty files, canonical database/root manifests, three preexisting temp-root manifests/set, Git status, empty staging); database.db 544768 bytes SHA-256 a3a55e... unchanged | `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | Smoke flows depend on stable routes; fixture patches app.config/module globals |
+| Macro Fase 0 | Safety net: route inventory, RBAC coverage, hermetic suite, actor matrix, fail-closed, smoke flows | **LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE** | See individual rows | See individual rows | 654 passed, 17 deselected in 298.82s; all Phase-0 requirements met locally | `docs/mapeamento/05_avaliacao_refactor.md` | No further Phase-0 work remains locally. Final bounded remainder (smoke flows) defined and proven. Awaiting external supervisor acceptance. |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -75,13 +76,23 @@ The original gap (closed by REF-0C-D-R1): REF-0C-D required formalized actor mat
 
 ## Macro Fase 0 formal decision
 
-**Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER**
+**Decision: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE**
 
-Exactly one bounded remainder recorded:
-1. **Smoke-flow contract/evidence** — a frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, and backup is required by the Phase-0 master plan but not yet defined or proven in the repository
+The final bounded remainder — smoke-flow contract/evidence — is now defined in
+`tests/test_phase_0_smoke_flows.py` and proven by `654 passed, 17 deselected in
+298.82s`, exit 0, D73H executed 0 (smoke 5 passed in 5.99s). No further Phase-0 work remains locally.
 
-The remainder smoke-flow requirement does not block REF-0C-D-R1. They are independent.
+All prior Phase-0 requirements (route inventory, RBAC coverage, hermetic suite,
+actor matrix, fail-closed design, runtime isolation, smoke flows) are locally
+satisfied. Phase 0 must not be claimed as CLOSED or ACCEPTED before external
+supervisor acceptance.
 
 ## Next authorizable action
 
-**EXTERNAL SUPERVISOR REVIEW OF PHASE-0-R9A AFTER PUSH.** R9A is locally validated and removes the destructive pytest-runtime blocker, but is not externally accepted yet. After acceptance, resume **PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE**. REF-0C-D-R1 remains CLOSED / ACCEPTED; REF-0C-D remains SATISFIED. Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H historical lane and R20 are unchanged.
+**EXTERNAL SUPERVISOR REVIEW OF THE R9 COMMIT ONLY.** R9A is CLOSED / ACCEPTED.
+R9 (smoke-flow contract/evidence) is IMPLEMENTED / LOCALLY VALIDATED / PENDING
+EXTERNAL ACCEPTANCE. Fase 1
+and production hard enforcement remain unauthorized. Production shadow-only
+remains in force. D73H historical lane (17 deselected, 0 executed) and R20 are
+unchanged. Do not claim a final commit SHA or successful push before they exist;
+no self-referential follow-up commit.

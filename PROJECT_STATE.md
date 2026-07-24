@@ -1,22 +1,28 @@
-## Current authoritative state — PHASE-0-R9A PYTEST RUNTIME ISOLATION LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW (2026-07-23)
+## Current authoritative state — PHASE-0-R9 SMOKE FLOW CONTRACT AND EVIDENCE LOCALLY SATISFIED / PENDING EXTERNAL ACCEPTANCE (2026-07-23)
 
 - Repository: `genesismazeto-sys/SGAA`; workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`.
-- Starting HEAD/upstream: `06786f2a2353894554c982f41e29d35d5d5cadee`, divergence `0/0`, clean worktree/index, zero untracked paths.
-- Commit subject: `Isolate pytest runtime from workspace directories`; this commit carries the technical and documentary R9A closeout. Resolve final SHA after commit; no self-referential follow-up commit.
-- Status: **R9A IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL SUPERVISOR REVIEW.**
-- Root cause: session start/finish cleanup deleted preexisting root runtime directories and used `shutil.rmtree(..., ignore_errors=True)`, while database, uploads, documents, backups, logs, shadow logs, and pytest cache did not share a single provably owned session root.
-- Corrected invariant: pytest creates one unique system-temp `PYTEST_RUNTIME_ROOT` before application import, routes every applicable `APP_*` runtime path and pytest cache beneath it, checks canonical root manifests, proves marker/token/path ownership, removes only that root, and surfaces mandatory teardown failures.
-- Production compatibility: non-empty `APP_UPLOAD_FOLDER` and `APP_LOG_DIR` are honored; unset values keep the existing repository-root defaults. `main.py` no longer overwrites the factory upload path. No schema, DB, route, UI, dependency, R20, hard-enforcement, or D73H historical behavior changed.
-- Authorized manifest: `app/__init__.py`, `main.py`, `tests/conftest.py`, `tests/test_pytest_runtime_isolation.py`, `AGENT_HANDOFF.md`, `PROJECT_STATE.md`, `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
-- Agents/models: IAsup `openai-codex/gpt-5.6-sol`; implementation `opencode-go/deepseek-v4-flash` session `ses_06eed9eebffecp7qkYbjPpaSeL` via `FALLBACK_FREE_BUDGET_EXHAUSTED`; corrections `opencode-go/deepseek-v4-pro` session `ses_06edc602effeWZ997yHcw9TVwY`; independent review `opencode-go/deepseek-v4-pro` session `ses_06eac821fffejIIeNNMy11xiQY`, PASS with no logic/security findings. IAsup applied the final two-line correction after two executor quality failures.
-- Validation: AST 4/4; focused `15 passed`/0 skipped; collection `649/666` with 17 D73H deselected; directed regressions `23 passed`; full suite `649 passed, 17 deselected in 441.22s`; static scan clean; `git diff --check` clean.
-- Canonical preservation: accepted lane manifests for `database.db`, `uploads`, `documentos_alunos`, `backups`, `logs`, `.pytest_cache`, and temp-root sets were byte/hash/mtime-identical before/after. `database.db` stayed 544,768 bytes, SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
-- Forensic cleanup: 22 task-owned failed-run temp roots were removed under exact path/timestamp/direct-parent gates. Three older temp roots were left untouched because this task could not prove their provenance.
-- The five Phase-0 smoke flows were **not** implemented or run in R9A.
-- **Macro Fase 0 remains PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER:** exactly one remainder remains — smoke-flow contract/evidence for admin login, aluno login, create requisicao, process requisicao, and backup.
+- Starting HEAD: `c978ed7471e60f78151608cccafe95f21527553b`; parent unchanged; index/staging empty. R9 initial worktree: only untracked `tests/test_phase_0_smoke_flows.py`. R9-R2 initial accepted partial worktree: three tracked doc modifications plus untracked contract/test. Before selective staging, the documentary-completion worktree manifest comprised exactly seven paths.
+- Previous phase **R9A (pytest runtime isolation):** CLOSED / ACCEPTED externally.
+- This phase **R9 (smoke-flow contract and evidence):** IMPLEMENTED / LOCALLY VALIDATED / PENDING EXTERNAL ACCEPTANCE.
+- Evidence file: `tests/test_phase_0_smoke_flows.py` (new, 485 lines, 5 tests).
+- Contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` (new).
+- Five flows proven: admin login, aluno login, create requisicao sem anexo, process requisicao, local backup. All fixture-controlled, hermetic, under unique `PYTEST_RUNTIME_ROOT` subroot, with `relative_to` containment, explicit `admin_id`, filesystem inventory SHA-256 assertions, empty `call_log` for 7 backup sinks, `follow_redirects=False` + 302/303 + Location assertion, and snapshot `id`/`nome` marker verification.
+- Test evidence:
+  - smoke module: `5 passed in 5.99s`;
+  - accepted R9-R2 full hermetic suite (`pytest -q --tb=short`): `654 passed, 17 deselected in 298.82s (0:04:58)`, exit 0, 0 failed, 0 errors, D73H executed 0 (no separate smoke duration);
+  - R9-R2 aggregate invariant hash before AND after: `e3d10dc0e8d782ab73acedd6737f285e37b4e21691218049ad8dc654f1ff3331` (includes the five frozen dirty files, canonical `database.db`/root manifests, all three preexisting temp-root manifests/set, Git status, and empty staging; it is not the final seven-path Git manifest);
+  - `database.db` unchanged: 544768 bytes, SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
+- **Macro Phase 0: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE.** The final bounded remainder (smoke-flow contract/evidence) is now defined and proven. No further Phase-0 work remains locally.
 - Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H and R20 remain unchanged.
-- Exact next action after push: external supervisor review of the R9A commit. Smoke-flow work resumes only after acceptance.
+- Exact next action after push: external supervisor review only.
 - Canonical reading order remains `docs/DOCUMENTATION_INDEX.md` → `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` → `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block → `AGENT_HANDOFF.md` → phase contracts.
+
+### Historical — R9A pytest runtime isolation (CLOSED / ACCEPTED)
+
+- R9A was externally accepted. Status: CLOSED / ACCEPTED.
+- Root cause, invariant, production compatibility, agents, validation, and forensic cleanup remain as documented in the original R9A block below.
+- The five Phase-0 smoke flows were **not** implemented or run in R9A.
+- R9A full suite: `649 passed, 17 deselected in 441.22s`. `database.db` remained 544768 bytes at SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
 
 ### Historical REF-0C-C-B1 hybrid boundary and shadow gate (2026-07-18)
 
@@ -108,7 +114,7 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-18 (REF-0C-B2-C supervisor acceptance closeout; current state is recorded at the top)
+Last updated: 2026-07-23 (R9 smoke-flow contract and evidence; Macro Phase 0 LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE)
 Closeout: D8.5C cleanup of id=57 closeout (docs-only)
 Executor: Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 

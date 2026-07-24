@@ -72,9 +72,9 @@ mais perigosa possível.
 
 > Trabalhar sempre em branch a partir de `clean-baseline`, com `pytest` verde.
 
-### Macro Fase 0 — Rede de segurança — fechamento aberto com resíduos delimitados
+### Macro Fase 0 — Rede de segurança — localmente satisfeita, aguardando aceitação externa
 
-**Status: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER** (2026-07-22)
+**Status: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE** (2026-07-23)
 
 #### Phase-0 completion matrix
 
@@ -90,7 +90,8 @@ mais perigosa possível.
 | D73H historical isolation | `--run-d73h-historical` marker, `pytest.ini` | REF-0TF-B | `9b47c37` | 17 tests deselected by default; CLI options for historical lane; optional lane still needs sanitized artifacts | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
 | Testing/development fail-closed | `AdminAuthorizationConfigurationError` in `app/auth.py`, `enforce_admin_access_control` | REF-0C-C-B1 | `fb90cc1` | `test_ref_0c_c_b1_fail_closed_shadow_gate.py` raises hard error in non-production | SATISFIED |
 | Production shadow audit | `_audit_missing_admin_authorization_configuration` in `main.py` | REF-0C-C-B1, REF-0C-C-B1-R1 | `fb90cc1`, `39f7732` | Safe shadow event; logger failure caught locally, does not block request; one event can be lost on logger failure | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
-| Smoke-flow requirements | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | REF-0B onward (tools exist) | Cumulative | Tools exist but no frozen manual smoke-flow list defined in repository | PARTIALLY_SATISFIED |
+| Smoke-flow requirements (hermetic, fixture-controlled) | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | `c978ed7` (parent) | 5 passed; each flow exercises real routes, ephemeral SQLite, PYTEST_RUNTIME_ROOT subroot, relative_to containment, explicit admin_id, filesystem SHA-256 inventory, 7-sink call_log, 302/303 + Location, marker id+nome | SATISFIED |
+| Smoke tools (legacy) | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | REF-0B onward | Cumulative | Tools exist but superseded by hermetic R9 flows | SUPERSEDED_BY_R9 |
 | Production hard enforcement | N/A (not a Phase-0 completion criterion) | N/A | N/A | Production remains shadow-only; no permanent allow-open switch | NOT_APPLICABLE |
 | R20 status | Central `matrizes`/`edit` mapping in `get_admin_permission_requirement` | REF-0C-B1 (central mapping); local `readonly` unchanged | `932c6d7` | Central gate enforces; local `readonly` is inert; cleanup unauthorized | SATISFIED_WITH_ACCEPTED_RESIDUAL_RISK |
 
@@ -104,14 +105,26 @@ The original gap — route-complete actor decision and pre-handler denied-action
 
 #### Macro Fase 0 decision
 
-**Decision: PHASE_0_REMAINS_OPEN_WITH_BOUNDED_REMAINDER.**
+**Decision: LOCALLY SATISFIED / AWAITING EXTERNAL SUPERVISOR ACCEPTANCE.**
 
-One bounded remainder:
-1. **Smoke-flow contract/evidence** — frozen manual smoke-flow list for admin login, aluno login, create requisicao, process requisicao, backup. Not yet defined or proven in the repository.
+The final bounded remainder — smoke-flow contract/evidence — is now defined in
+`tests/test_phase_0_smoke_flows.py` and proven by `654 passed, 17 deselected in
+298.82s`, exit 0, D73H executed 0. No further Phase-0 work remains locally.
+
+All prior Phase-0 requirements (route inventory, RBAC coverage, hermetic suite,
+actor matrix, fail-closed design, runtime isolation, smoke flows) are locally
+satisfied. Phase 0 must not be claimed as CLOSED or ACCEPTED before external
+supervisor acceptance.
 
 #### Next authorizable action
 
-**PHASE-0 SMOKE-FLOW CONTRACT AND EVIDENCE.** REF-0C-D-R1 is CLOSED / ACCEPTED; REF-0C-D is SATISFIED. Fase 1 and production hard enforcement remain unauthorized. Production shadow-only remains in force. D73H historical lane unchanged. R20 unchanged. Runtime-directory cleanup debt deferred. Fases 1–6 (target architecture) are preserved as originally defined below but remain unauthorized.
+**EXTERNAL SUPERVISOR REVIEW OF THE R9 COMMIT ONLY.** R9A is CLOSED / ACCEPTED.
+R9 (smoke-flow contract/evidence) is IMPLEMENTED / LOCALLY VALIDATED / PENDING
+EXTERNAL ACCEPTANCE. Fase 1
+and production hard enforcement remain unauthorized. Production shadow-only
+remains in force. D73H historical lane (17 deselected, 0 executed) and R20 are
+unchanged. Fases 1–6 (target architecture) are preserved as originally defined
+below but remain unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py).
