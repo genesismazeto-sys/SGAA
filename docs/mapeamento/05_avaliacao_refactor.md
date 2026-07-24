@@ -120,18 +120,20 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 
 **PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
 - **PHASE-1-U1:** CLOSED / ACCEPTED at commit `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — removed `templates/src.code-workspace-1.code-workspace`. Full suite 654 passed, 17 deselected, 0 failed, 0 errors.
-- **PHASE-1-U2:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW. Deleted path `templates/admin_turmas-KRThinkpad.html` proven with zero consumers, zero catalog delta, zero scanner impact.
-- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** external supervisor review of U2 only. Do not authorize any other cleanup candidate.
+- **PHASE-1-U2:** CLOSED / ACCEPTED at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` — deleted `templates/admin_turmas-KRThinkpad.html`. Proven with zero consumers, zero catalog delta, zero scanner impact.
+- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U3 — focused read-only proof of the legacy/no-op aluno route bodies and `aluno_runtime_route`. U3 is NOT STARTED / REQUIRES SEPARATE ORDER and not authorized for mutation. Do not authorize any other cleanup candidate.
+- **PHASE-1-U3 future-proof scope:** determine all legacy aluno functions involved; rebind behavior at end of main.py; route and endpoint neutrality; message-catalog effects caused by `aluno_runtime_route` decorators; import and compatibility-export consumers; exact safe deletion boundary if any.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
+- **Not authorized:** database snapshot deletion; Referrer-Policy changes; import cleanup; hashlib comment correction; Phase 2 work.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
 preserved as originally defined below but unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
-- [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — pendente (requer focused proof).
+- [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — NOT STARTED (PHASE-1-U3, REQUIRES SEPARATE ORDER; focused read-only proof only; mutation not authorized without explicit order).
 - [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1, CLOSED / ACCEPTED).
-- [x] Remover `templates/admin_turmas-KRThinkpad.html` — concluído (PHASE-1-U2, IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW).
+- [x] Remover `templates/admin_turmas-KRThinkpad.html` — concluído (PHASE-1-U2, CLOSED / ACCEPTED).
 - [ ] Arquivar snapshots `database.pre-*.db` — pendente (requer decisão de data custody).
 - [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
 - [ ] Limpar comentário "hashlib" enganoso — adiado.

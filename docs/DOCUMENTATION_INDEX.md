@@ -45,7 +45,7 @@
 ## Canonical current state (2026-07-24)
 
 - Branch: `refactor/architecture-safety-net`
-- Accepted technical commit: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — `Remove accidental VS Code workspace artifact`
+- Accepted technical commit: `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` — `Remove obsolete machine-specific turma template`
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
 - R9 evidence: `tests/test_phase_0_smoke_flows.py` (new, 5 tests); contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md`
@@ -56,8 +56,9 @@
 - **Macro Fase 0: CLOSED / ACCEPTED** — all Phase-0 safety-net requirements satisfied
 - **Accepted evidence:** route inventory; RBAC coverage; actor x route x method matrix; denied-action immutability; fail-closed development/shadow production contract; hermetic pytest runtime; hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654 passed, 17 D73H deselected, 0 failures, 0 errors.
 - **PHASE-1-U1: CLOSED / ACCEPTED** — removed `templates/src.code-workspace-1.code-workspace` at commit `68f52fb`.
-- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED. Candidate `templates/admin_turmas-KRThinkpad.html` fully proven. U2 implementation requires a separate order.
+- **PHASE-1-U2: CLOSED / ACCEPTED** — deleted `templates/admin_turmas-KRThinkpad.html` at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`.
 - **Phase 1:** OPEN / IN PROGRESS.
+- **Exact next technical action:** PHASE-1-U3 — focused read-only proof of legacy/no-op aluno route bodies and `aluno_runtime_route`. REQUIRES SEPARATE ORDER. No mutation. Future-proof scope: determine all legacy aluno functions involved; rebind behavior at end of main.py; route and endpoint neutrality; message-catalog effects caused by `aluno_runtime_route` decorators; import and compatibility-export consumers; exact safe deletion boundary if any.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
 - D73H historical lane: **unchanged**
@@ -74,15 +75,15 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   **CLOSED / ACCEPTED — all requirements satisfied.**
 - **Fase 1 — Safe cleanup**: dead code, lixo, headers. **OPEN / IN PROGRESS.**
   - **PHASE-1-U1 (accidental VS Code workspace artifact): CLOSED / ACCEPTED.**
-  - **PHASE-1-U2 (KRThinkpad parallel template): proof complete and safe for implementation; implementation not started.**
-  - **U2 implementation requires a separate order.**
+  - **PHASE-1-U2 (KRThinkpad parallel template): CLOSED / ACCEPTED.**
+  - **PHASE-1-U3 (legacy aluno routes and `aluno_runtime_route`): NOT STARTED / REQUIRES SEPARATE ORDER.**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is OPEN / IN PROGRESS. Only U1 is CLOSED / ACCEPTED; U2 proof is complete and safe for implementation but requires a separate explicit deletion order. Phases 2–6 remain **unauthorized**.
+Phase 1 is OPEN / IN PROGRESS. Only U1 and U2 are CLOSED / ACCEPTED. No other Phase-1 cleanup unit is implemented or accepted. U3 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
 
 ## Ledger
 

@@ -1,11 +1,13 @@
-## Current authoritative state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW (2026-07-24)
+## Current authoritative state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — Phase 1 OPEN / IN PROGRESS (2026-07-24)
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
 - **Deleted artifact:** `templates/src.code-workspace-1.code-workspace` — 61 bytes, SHA-1 `bab1b7f616b360395e747dbbcd59ebadc307ad61`. It had no runtime, scanner, test, tool, or workflow consumer.
 - **Validation evidence:** Full hermetic suite 654 passed, 17 deselected, 0 failed, 0 errors, D73H executed 0. Focused gate 7 passed. Previously failing runtime-isolation nodes 2 passed. Staged-deletion validation was required because `tests/test_pytest_runtime_isolation.py` copies `git ls-files`.
 - **Database, historical snapshots, and runtime manifests:** Unchanged.
-- **PHASE-1-U2:** IMPLEMENTED / LOCALLY VALIDATED / AWAITING EXTERNAL REVIEW.
+- **PHASE-1-U2:** CLOSED / ACCEPTED.
+- **Accepted commit:** 5932dff2d6dbd63e4a1f52ffd649ea33577535d0 — `Remove obsolete machine-specific turma template`.
+- **Parent:** c90223190eb662747978c9ff5a4a50b8e7f62ed6 — `Record acceptance of Phase 1 U1`.
 - **Deleted path:** `templates/admin_turmas-KRThinkpad.html`.
 - **Git blob SHA-1:** 96ae069833834da2941ea127968157bc9420e2e0.
 - **Raw Git blob size:** 2114 bytes.
@@ -13,21 +15,23 @@
 - **Correct normalized catalog SHA-256:** ae408075905e131490627b6a8e3bf262d74330d0ed9f7671fbc4b765fb52c7a4; 188681 normalized JSON bytes; 73 effective inputs; 536 catalog keys.
 - **Exact zero catalog delta:** removed keys 0, added keys 0, removed usages 0, added usages 0, changed kinds 0, changed default texts 0.
 - **Scanner exclusion:** remains via krthinkpad; candidate absent from effective inputs.
-- **Zero runtime/test/tool/release/config/workflow consumers:** zero dynamic selector, zero Jinja edges; active route renders admin_turmas.html.
+- **Zero runtime consumers;** zero Python, JavaScript, Jinja, test, tool, release, configuration, or workflow consumers; zero dynamic template-resolution paths; active route continues to render `admin_turmas.html`; zero Jinja edges to the removed file; scanner excluded the candidate through `krthinkpad`.
 - **All 70 remaining tracked templates compiled:** active admin_turmas.html compiled.
 - **Runtime-isolation copy gate:** 2 passed in 11.56s, 0 failed/errors.
 - **Focused U2 lane:** 45 passed in 24.03s, no failures/errors/skips/deselections.
 - **Full hermetic suite:** 654 passed, 17 deselected in 351.62s, 0 failures/errors, D73H executed 0.
 - **Fresh physical invariant aggregate SHA-256:** a485690ddda0fcaf5a398e14a485dfe34611ee7f24c64444078acd1cd6879775 was identical before and after every lane; database.db, all nine database.pre-*.db snapshots, uploads/, documentos_alunos/, backups/, logs/, .pytest_cache, the three preexisting sgaa_pytest_runtime_* roots, Git staged deletion, empty unstaged diff, and zero untracked paths were preserved; no canonical database was opened or queried.
-- **The two previous literal mismatches** (raw blob identity order value and normalized catalog hash order value) were corrected order-data errors, not repository drift.
+- **The two previous literal mismatches** (raw blob identity order value and normalized catalog hash order value) were corrected order-data errors, not repository drift; only corrected values are preserved as active canon.
 - **U1 remains CLOSED / ACCEPTED.**
 - **Phase 1 remains OPEN / IN PROGRESS.**
-- **U2 is NOT externally accepted, NOT CLOSED / ACCEPTED.**
-- **No other cleanup candidate is authorized; PHASE-1-U3 is not authorized/not started.**
+- **U2 is CLOSED / ACCEPTED.**
+- **No other Phase-1 cleanup unit is implemented or accepted. PHASE-1-U3 is NOT STARTED / REQUIRES SEPARATE ORDER.**
 - **Phases 2-6 remain unauthorized.**
 - **Production remains shadow-only; production hard enforcement remains unauthorized.**
 - **R20 and D73H remain unchanged.**
-- **Exact next action:** external supervisor review of U2 only.
+- **Not authorized:** database snapshot deletion; Referrer-Policy changes; import cleanup; hashlib comment correction; Phase 2 work.
+- **Exact next action:** PHASE-1-U3 — focused read-only proof of the legacy/no-op aluno route bodies and `aluno_runtime_route`. U3 is NOT STARTED / REQUIRES SEPARATE ORDER and not authorized for mutation.
+- **PHASE-1-U3 future-proof scope:** determine all legacy aluno functions involved; rebind behavior at end of main.py; route and endpoint neutrality; message-catalog effects caused by `aluno_runtime_route` decorators; import and compatibility-export consumers; exact safe deletion boundary if any.
 - Preserved in historical blocks below: all Phase-0 and Macro Phase 0 closeout facts.
 - Canonical reading order remains `docs/DOCUMENTATION_INDEX.md` → `docs/mapeamento/README.md` → `docs/mapeamento/05_avaliacao_refactor.md` → `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` → this top block → `AGENT_HANDOFF.md` → phase contracts.
 
@@ -143,8 +147,8 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-24 (R10 docs-only external acceptance closeout; Macro Phase 0 CLOSED / ACCEPTED)
-Closeout: R10 docs-only acceptance closeout
+Last updated: 2026-07-24 (R16 docs-only external acceptance closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; Phase 1 OPEN / IN PROGRESS)
+Closeout: R16 docs-only acceptance closeout
 Executor: deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State
