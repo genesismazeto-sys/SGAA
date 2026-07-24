@@ -45,7 +45,7 @@
 ## Canonical current state (2026-07-24)
 
 - Branch: `refactor/architecture-safety-net`
-- Accepted technical commit: `df24639faa4b18d5aad429940a82982b4beeab98` — `Add Phase 0 smoke-flow contract and evidence`
+- Accepted technical commit: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — `Remove accidental VS Code workspace artifact`
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
 - R9 evidence: `tests/test_phase_0_smoke_flows.py` (new, 5 tests); contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md`
@@ -55,9 +55,10 @@
 - **REF-0C-D: SATISFIED**
 - **Macro Fase 0: CLOSED / ACCEPTED** — all Phase-0 safety-net requirements satisfied
 - **Accepted evidence:** route inventory; RBAC coverage; actor x route x method matrix; denied-action immutability; fail-closed development/shadow production contract; hermetic pytest runtime; hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654 passed, 17 D73H deselected, 0 failures, 0 errors.
-- **Next authorizable phase: PHASE 1 — SAFE CLEANUP** (not started). Intended scope: dead code, obsolete files, unused imports, stale headers/comments, and safe removal of demonstrably unreferenced artifacts.
+- **PHASE-1-U1: CLOSED / ACCEPTED** — removed `templates/src.code-workspace-1.code-workspace` at commit `68f52fb`.
+- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED. Candidate `templates/admin_turmas-KRThinkpad.html` fully proven. U2 implementation requires a separate order.
+- **Phase 1:** OPEN / IN PROGRESS.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
-- Next technical action after R10: read-only Phase-1 inventory and deletion-candidate diagnosis only.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
 - D73H historical lane: **unchanged**
 - R20: **unchanged**
@@ -71,14 +72,17 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Macro Fase 0 — Safety net (rede de segurança)**: route inventory, RBAC
   coverage, hermetic suite, smoke flows, actor matrix, fail-closed design.
   **CLOSED / ACCEPTED — all requirements satisfied.**
-- **Fase 1 — Safe cleanup**: dead code, lixo, headers. **Next authorizable phase (not started).**
+- **Fase 1 — Safe cleanup**: dead code, lixo, headers. **OPEN / IN PROGRESS.**
+  - **PHASE-1-U1 (accidental VS Code workspace artifact): CLOSED / ACCEPTED.**
+  - **PHASE-1-U2 (KRThinkpad parallel template): proof complete and safe for implementation; implementation not started.**
+  - **U2 implementation requires a separate order.**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is the next authorizable phase and has **not started**. Its implementation requires **separate authorization** after the read-only Phase-1 inventory and deletion-candidate diagnosis. Phases 2–6 remain **unauthorized**.
+Phase 1 is OPEN / IN PROGRESS. Only U1 is CLOSED / ACCEPTED; U2 proof is complete and safe for implementation but requires a separate explicit deletion order. Phases 2–6 remain **unauthorized**.
 
 ## Ledger
 

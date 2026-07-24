@@ -118,13 +118,11 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 
 #### Next authorizable action
 
-**PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).** Unit U1 (remove accidental tracked
-VS Code workspace artifact) is validated. Intended scope: dead code, obsolete files,
-unused imports, stale headers/comments, and safe removal of demonstrably unreferenced
-artifacts. Explicitly prohibited without separate authorization: route extraction;
-blueprint restructuring; database consolidation; behavior changes; schema/migrations;
-RBAC; UI; dependencies; production hard enforcement. Only U1 is authorized at this
-time; subsequent Phase-1 cleanup candidates require separate authorization.
+**PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
+- **PHASE-1-U1:** CLOSED / ACCEPTED at commit `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — removed `templates/src.code-workspace-1.code-workspace`. Full suite 654 passed, 17 deselected, 0 failed, 0 errors.
+- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED. Candidate `templates/admin_turmas-KRThinkpad.html` proven with zero consumers, zero catalog delta, zero scanner impact.
+- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U2 implementation — deletion of `templates/admin_turmas-KRThinkpad.html` — awaiting a separate explicit order. Do not authorize any other cleanup candidate.
+- Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
@@ -132,8 +130,8 @@ preserved as originally defined below but unauthorized.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [ ] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — pendente (requer focused proof).
-- [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1).
-- [ ] Remover `templates/admin_turmas-KRThinkpad.html` — pendente (requer focused proof).
+- [x] Remover `templates/src.code-workspace-1.code-workspace` — concluído (PHASE-1-U1, CLOSED / ACCEPTED).
+- [ ] Remover `templates/admin_turmas-KRThinkpad.html` — PHASE-1-U2 PROOF COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED; aguardando ordem explícita.
 - [ ] Arquivar snapshots `database.pre-*.db` — pendente (requer decisão de data custody).
 - [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
 - [ ] Limpar comentário "hashlib" enganoso — adiado.

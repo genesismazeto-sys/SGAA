@@ -121,9 +121,9 @@ possível reduz muito a complexidade do resolver.
 ### 🟢 7. Itens menores
 - Headers duplicados/divergentes entre os dois `after_request`.
 - Estado de rate-limit em memória (multi-worker).
-- `templates/admin_turmas-KRThinkpad.html` — pendente de prova focada; nenhuma remoção aceita por PHASE-1-U1.
-- `templates/src.code-workspace-1.code-workspace` — removido por PHASE-1-U1.
-- Snapshots `database.pre-*.db` na raiz — sujeitos a decisão de custódia de dados.
+- `templates/admin_turmas-KRThinkpad.html` — PHASE-1-U2 PROOF COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED. A próxima ação técnica é a exclusão deste template, aguardando ordem separada explícita.
+- `templates/src.code-workspace-1.code-workspace` — removido por PHASE-1-U1 (CLOSED / ACCEPTED).
+- Snapshots `database.pre-*.db` na raiz — sujeitos a decisão de custódia de dados. Nenhum outro candidato de limpeza está autorizado.
 
 ## Pontos fortes da arquitetura (preservar no refactor)
 

@@ -1,17 +1,18 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 LOCALLY VALIDATED CLOSEOUT — OPEN / IN PROGRESS
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 PROOF COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED
 
-- **PHASE-1-U1** removes the accidental tracked VS Code workspace artifact `templates/src.code-workspace-1.code-workspace`.
-- **Pre-deletion blob:** 61 bytes, SHA-1 `bab1b7f616b360395e747dbbcd59ebadc307ad61`, SHA-256 `a7472c8a6a846ca567ab02d5e6aa284c13d0ee2358dd9eef578eae0268eb4048`.
-- **Coverage:** Zero consumers beyond documentation-only references. Zero Python, JavaScript, Jinja, runtime, test-name, tool, release, application-configuration, or workflow references.
-- **Scanner exclusion:** `utils/messages.py` `_iter_frontend_files()` scopes to `templates/**/*.html` and `static/js/**/*.js`; `.code-workspace` excluded.
-- **Validation evidence:** Full hermetic suite 654 passed, 17 deselected, 0 failed, 0 errors in 379.24s. Focused gate 7 passed in 18.95s. Previously failing nodes 2 passed in 12.66s. Aggregate invariant SHA-256 `e4bee85bc5ac15a0d3e32692cb788f634d781153da9bef63fc481e3a30042ac3` pre/post identical across all lanes. All static inventories and database manifest unchanged.
-- **Phase 1 status:** OPEN / IN PROGRESS. U1 scope exhausted. No other cleanup candidate accepted by U1.
-- **Deferred/dispositioned items:** `hashlib` comment remains deferred; `templates/admin_turmas-KRThinkpad.html` pending focused proof; `@aluno_runtime_route` pending focused proof; `database.pre-*.db` subject to data-custody decision; `Referrer-Policy` outside Phase 1.
+- **PHASE-1-U1:** CLOSED / ACCEPTED.
+- **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
+- **Deleted artifact:** `templates/src.code-workspace-1.code-workspace` — 61 bytes, SHA-1 `bab1b7f616b360395e747dbbcd59ebadc307ad61`. It had no runtime, scanner, test, tool, or workflow consumer.
+- **Validation evidence:** Full hermetic suite 654 passed, 17 deselected, 0 failed, 0 errors, D73H executed 0. Focused gate 7 passed. Previously failing runtime-isolation nodes 2 passed. Staged-deletion validation was required because `tests/test_pytest_runtime_isolation.py` copies `git ls-files`.
+- **Database, historical snapshots, and runtime manifests:** Unchanged.
+- **PHASE-1-U2 proof:** COMPLETE / CONFIRMED SAFE FOR IMPLEMENTATION / IMPLEMENTATION NOT STARTED.
+- **Candidate:** `templates/admin_turmas-KRThinkpad.html` — tracked obsolete/machine-specific parallel template; introduced in baseline commit `dea3de5174c7ef277babce60aa4442fa51ba8718`; no subsequent modifying commit; zero literal runtime, Python, JavaScript, Jinja, test, tool, release, or workflow consumers; zero dynamic template-resolution path; active route renders `templates/admin_turmas.html`; candidate compiles but is never requested; scanner excludes names containing `krthinkpad`; effective scanner inputs 73 before and 73 after; message catalog 536 keys before and after; normalized catalog SHA-256 `ae40805d62b2bcde282a935666f8623277885043a421c89268ef5919dc6dc382` identical before and after; exact delta: 0 removed keys, 0 added keys, 0 removed usages, 0 added usages, 0 kinds changed, 0 default texts changed; no override or persistence impact; no database access required.
+- **Phase 1 status:** OPEN / IN PROGRESS. Never state Phase 1 complete or closed.
 - **Fases 2–6:** Unauthorized. Production shadow-only in force; production hard enforcement unauthorized. R20 unchanged; D73H historical lane unchanged.
-- **Commit subject:** `Remove accidental VS Code workspace artifact`. Commit identity is resolved through Git history.
-- **Exact next action:** External supervisor review. Do not authorize U2.
+- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U2 implementation — deletion of `templates/admin_turmas-KRThinkpad.html` — awaiting a separate explicit order. Do not authorize any other cleanup candidate.
+- **Expected future U2 implementation manifest after R14:** D `templates/admin_turmas-KRThinkpad.html`, M `AGENT_HANDOFF.md`, M `PROJECT_STATE.md`, M `docs/mapeamento/04_arquitetura_e_modulos.md`, M `docs/mapeamento/05_avaliacao_refactor.md`, M `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`. `docs/DOCUMENTATION_INDEX.md` should not need another U2 update unless implementation materially changes index-level state.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
