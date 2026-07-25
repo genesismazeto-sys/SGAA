@@ -22,10 +22,11 @@
    and PROJECT_STATE historical blocks.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
    — autonomous administrative/governance track for the 17 historical database
-   snapshot artifacts; R1 CLOSED / ACCEPTED and R2 CLOSED / ACCEPTED; policy approved;
-   canonical destination SELECTED as `D:\programas\SGAA_Historical_Custody`, not yet
-   provisioned; physical action NOT AUTHORIZED; does not integrate any architectural
-   implementation phase.
+   snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; policy approved; canonical
+   destination SELECTED as `D:\programas\SGAA_Historical_Custody`, not yet provisioned;
+   provisioning and copy contract APPROVED (layout, ACL, executor, manifest,
+   partial-failure policy, provisional Level 2 environment); **physical execution NOT
+   AUTHORIZED AT THIS TIME**; does not integrate any architectural implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
    substitute for the repository canon.
@@ -95,19 +96,38 @@
   Physical action: NOT AUTHORIZED. Copy / Move / Delete / Compress / SQLite open:
   NOT AUTHORIZED.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED.**
+  R3 was read-only. Phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
+  SUPERSEDED BY HUMAN APPROVAL of 25/07/2026.
+  Active classification: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
+  PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+  Approved: layout `artifacts\` / `manifests\` / `evidence\`; executor `KR-IDEAPAD\klebe`;
+  ACL with inheritance disabled, `Authenticated Users` and `BUILTIN\Users` removed,
+  `SYSTEM` and `Administrators` FullControl, executor Modify during provisioning and copy
+  then ReadAndExecute on `artifacts\`; copy-only contract with explicit 17-path list and
+  overwrite disabled; custody manifest JSON without credentials, SQLite content or PII;
+  partial residue preserved until explicit cleanup decision; provisional Level 2
+  environment `D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds.
+  R31 publication recovery in the same round: `59fa66bb5d73a04713524657bdc761def3d0b9c8`
+  published fast-forward; divergence 0/0; `main` unchanged.
+  Physical execution, move, delete, compress, SQLite open, restoration execution and
+  source removal: NOT AUTHORIZED.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
-copy-execution readiness contract.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application,
+copy of the 17 artifacts, manifest creation and integrity verification.
 
-R3 is NOT STARTED, requires a separate explicit order and is not authorized
-to create the destination or copy, move, delete, compress or open any artifact.
+R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
+withheld in the same human decision. R4 requires a separate explicit human order
+releasing physical execution; the recorded approval is not that order.
 
-Future R3 objectives: controlled creation of the directory; desired ACL; technical
-executor; manifest; exact copy commands; rollback and hard stops; disposable
-container; evidence required before requesting physical authorization. R3 is also
-read-only. Phase 2 remains
+R4 scope when released: create `D:\programas` and
+`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
+approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
+manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
+restoration execution and source removal remain prohibited. Phase 2 remains
 without authorized next action.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
@@ -137,7 +157,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1 and R2 are CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED (separate governance track, policy approved, canonical destination `D:\programas\SGAA_Historical_Custody`, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME (separate governance track, policy approved, canonical destination `D:\programas\SGAA_Historical_Custody`, contract approved but unexecuted, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -159,7 +179,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1 and R2 CLOSED / ACCEPTED, policy approved, destination SELECTED (`D:\programas\SGAA_Historical_Custody`) but not yet provisioned, physical action NOT AUTHORIZED |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; policy approved; destination SELECTED (`D:\programas\SGAA_Historical_Custody`) but not yet provisioned; provisioning and copy contract APPROVED and unexecuted; physical execution NOT AUTHORIZED AT THIS TIME |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

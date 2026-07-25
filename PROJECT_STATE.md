@@ -1,4 +1,4 @@
-## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED (2026-07-25)
+## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME (2026-07-25)
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -71,6 +71,54 @@
   Physical action: NOT AUTHORIZED. Copy: NOT AUTHORIZED. Move: NOT AUTHORIZED.
   Delete: NOT AUTHORIZED. Compress: NOT AUTHORIZED. SQLite open: NOT AUTHORIZED.
   Phase 2–6: UNAUTHORIZED.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED.**
+  R3 was read-only: nothing created, nothing copied, no ACL applied, no SQLite opened.
+  Phase-time classification `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
+  now SUPERSEDED BY HUMAN APPROVAL.
+  Active classification: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
+  PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+  Human approval date: 25/07/2026.
+  Approved layout: `artifacts\` (17 artifacts), `manifests\` (custody manifest JSON),
+  `evidence\` (copy and verification reports). Longest projected path 108 characters
+  against the 260 limit; `LongPathsEnabled = 0`.
+  Approved technical executor: `KR-IDEAPAD\klebe`
+  (SID `S-1-5-21-1500819853-3011909004-3032907821-1001`).
+  Approved ACL: inheritance disabled on the custodial directory; `Authenticated Users`
+  and `BUILTIN\Users` removed; `SYSTEM` and `Administrators` FullControl; executor
+  Modify during provisioning and copy; after verification, executor ReadAndExecute on
+  `artifacts\` and Modify on `manifests\` and `evidence\`. The ACL is mandatory because
+  `D:\` carries `ContainerInherit, ObjectInherit` ACEs granting `Authenticated Users`
+  effective modify rights; default inheritance would leave the custody writable and
+  deletable by any authenticated user. An ACL is not immutability.
+  Approved copy contract: copy-only; explicit list of the 17 paths; open glob prohibited;
+  overwrite prohibited; exact names preserved; `.db`/`.db-wal`/`.db-shm` preserved
+  jointly; stop at first error; no SQLite open; source never modified; mechanism
+  equivalent to `File.Copy(source, destination, overwrite: false)`.
+  Approved manifest: JSON with `manifest_version`, `created_at_utc`, `project`,
+  `source_workspace`, `destination_root`, `authorized_by`, `executed_by`,
+  `policy_commit`, `copy_contract_version`, `artifact_count`, `total_bytes`,
+  `artifacts[]`; no credentials, tokens, SQLite content, business data or PII.
+  Approved partial-failure policy: origin never modified; partial residue preserved
+  until an explicit cleanup decision; automatic cleanup and silent retry NOT AUTHORIZED.
+  Level 2 restoration environment: `CONTAINER_RUNTIME_NOT_AVAILABLE` observed read-only
+  (`docker` absent from PATH, no install path, service not installed). Approved
+  provisional alternative: controlled external directory `D:\tmp\sgaa_restore_<UTC>`,
+  disposable, binding only a copy derived from `artifacts\`; the source workspace must
+  never be mounted as restoration database; `artifacts\` must never be opened directly.
+  ISOLATED CONTAINER returns as preferred if a runtime is installed.
+  Source inventory revalidated read-only in R3: 17/17 present, 4,808,704 bytes,
+  9 `.db` + 4 `.db-wal` + 4 `.db-shm`, all SHA-256 identical to canon, all ignored and
+  untracked, 4 complete basename families plus 5 lone `.db`. Zero drift.
+  Destination revalidated read-only: neither `D:\programas` nor
+  `D:\programas\SGAA_Historical_Custody` exists; no resolution to `D:\Programação`;
+  outside every Git worktree, outside OneDrive, outside the pytest roots; zero conflicts.
+  **PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME — withheld in the same human decision
+  that approved the contract.** Move, delete, compress, SQLite open, restoration
+  execution, source removal and Phase 2–6 remain PROHIBITED.
+- **Preserved historical/superseded — pre-R3 wording:** statements that R3 was "NOT STARTED",
+  "requires a separate explicit order", that the provisioning and copy contract was undrafted
+  or pending, and the R3 phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`
+  are superseded by this closeout and preserved in historical blocks only as historical record.
 - **Preserved historical/superseded — pre-R2 wording:** statements that R2 was "NOT STARTED", that the specific canonical destination was "UNRESOLVED" or "NOT YET SELECTED", and the R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION` are superseded by this closeout and preserved in historical blocks only as historical record.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
 - **U4 read-only proof:** CLOSED / ACCEPTED.
@@ -129,16 +177,19 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
-copy-execution readiness contract.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application,
+copy of the 17 artifacts, manifest creation and integrity verification.
 
-R3 is NOT STARTED, requires a separate explicit order and is not authorized
-to create the destination or copy, move, delete, compress or open any artifact.
+R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
+withheld in the same human decision. R4 requires a separate explicit human order
+releasing physical execution; the recorded approval is not that order.
 
-Future R3 objectives: controlled creation of the directory; desired ACL; technical
-executor; manifest; exact copy commands; rollback and hard stops; disposable
-container; evidence required before requesting physical authorization. R3 is also
-read-only. Phase 2 remains without authorized next action.
+R4 scope when released: create `D:\programas` and
+`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
+approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
+manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
+restoration execution and source removal remain prohibited. Phase 2 remains without
+authorized next action.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 

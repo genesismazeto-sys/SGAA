@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PHYSICAL ACTION NOT AUTHORIZED
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -73,6 +73,45 @@
   Physical action: NOT AUTHORIZED. Copy: NOT AUTHORIZED. Move: NOT AUTHORIZED.
   Delete: NOT AUTHORIZED. Compress: NOT AUTHORIZED. SQLite open: NOT AUTHORIZED.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED.**
+  R3 was read-only: nothing created, nothing copied, no ACL applied, no SQLite opened,
+  no test executed, no `main.py` import.
+  Phase-time classification `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
+  SUPERSEDED BY HUMAN APPROVAL of 25/07/2026.
+  Active classification: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
+  PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+  R31 publication recovery preceded R3 in the same round: local commit
+  `59fa66bb5d73a04713524657bdc761def3d0b9c8` published fast-forward to
+  `origin/refactor/architecture-safety-net`; divergence 0/0; `main` unchanged at
+  `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
+  Approved layout: `artifacts\`, `manifests\`, `evidence\` under the custodial root.
+  Approved executor: `KR-IDEAPAD\klebe` (SID `S-1-5-21-1500819853-3011909004-3032907821-1001`).
+  Approved ACL: inheritance disabled; `Authenticated Users` and `BUILTIN\Users` removed;
+  `SYSTEM` and `Administrators` FullControl; executor Modify during provisioning and copy,
+  then ReadAndExecute on `artifacts\` and Modify on `manifests\` and `evidence\`.
+  Mandatory because `D:\` carries `ContainerInherit, ObjectInherit` ACEs granting
+  `Authenticated Users` effective modify; default inheritance would leave the custody
+  writable and deletable by any authenticated user. An ACL is not immutability.
+  Approved copy contract: copy-only; explicit 17-path list; glob prohibited; overwrite
+  prohibited; sidecars preserved jointly; stop at first error; no SQLite open; source
+  never modified; `File.Copy(source, destination, overwrite: false)` semantics.
+  Approved manifest JSON schema recorded in the custody document; no credentials, tokens,
+  SQLite content, business data or PII.
+  Approved partial-failure policy: origin never modified; partial residue preserved until
+  an explicit cleanup decision; automatic cleanup and silent retry NOT AUTHORIZED.
+  Level 2 restoration: `CONTAINER_RUNTIME_NOT_AVAILABLE` observed read-only; approved
+  provisional alternative `D:\tmp\sgaa_restore_<UTC>`, disposable, binding only a copy
+  derived from `artifacts\`; source workspace never mounted; `artifacts\` never opened
+  directly. ISOLATED CONTAINER returns as preferred if a runtime is installed.
+  R3 read-only evidence: inventory 17/17, 4,808,704 bytes, all SHA-256 identical to canon,
+  all ignored and untracked, 4 complete basename families plus 5 lone `.db`, zero drift;
+  destination absent, no resolution to `D:\Programação`, outside every Git worktree,
+  outside OneDrive, outside the pytest roots, zero conflicts; free space
+  497,651,490,816 bytes; longest projected path 108 characters with `LongPathsEnabled = 0`.
+  **PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME** — withheld in the same decision that
+  approved the contract. Move, delete, compress, SQLite open, restoration execution,
+  source removal and Phase 2–6 remain PROHIBITED.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
 - **U4 read-only proof:** CLOSED / ACCEPTED.
 - **U4-B bounded implementation:** CLOSED / ACCEPTED.
@@ -129,16 +168,20 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
-copy-execution readiness contract.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application,
+copy of the 17 artifacts, manifest creation and integrity verification.
 
-R3 is NOT STARTED, requires a separate explicit order and is not authorized
-to create the destination or copy, move, delete, compress or open any artifact.
+R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
+withheld in the same human decision. R4 requires a separate explicit human order
+releasing physical execution; the recorded approval is not that order and must never
+be read as one.
 
-Future R3 objectives: controlled creation of the directory; desired ACL; technical
-executor; manifest; exact copy commands; rollback and hard stops; disposable
-container; evidence required before requesting physical authorization. R3 is also
-read-only. Phase 2 remains without authorized next action.
+R4 scope when released: create `D:\programas` and
+`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
+approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
+manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
+restoration execution and source removal remain prohibited. Phase 2 remains without
+authorized next action.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -307,8 +350,8 @@ read-only. Phase 2 remains without authorized next action.
 - The primary database and untracked historical backups were not opened, copied, or changed. The temporary worktree is disposable; its runtime artifacts do not belong to the primary worktree.
 - Decision: **GO for REF-0TF-B only.** Do not correct RBAC, modularize routes, alter production code, or use a live database/backup. REF-0TF-B must define a sanitized, versioned D73H fixture or an explicit separate invocation contract.
 
-Last updated: 2026-07-25 (R31 docs-only selected-destination closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PHYSICAL ACTION NOT AUTHORIZED)
-Closeout: R31 docs-only selected-destination verification and closeout
+Last updated: 2026-07-25 (docs-only approved provisioning and copy contract closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME)
+Closeout: docs-only ratification of the approved R3 provisioning and copy contract; preceded in the same round by R31 publication recovery and the R3 read-only assessment
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State

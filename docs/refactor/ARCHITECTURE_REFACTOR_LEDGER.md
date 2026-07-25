@@ -32,7 +32,7 @@
 | PHASE-1-U5 | Remove stale diagnostic output | CLOSED / ACCEPTED | `8b55230314605dcf9295072c109f04bea59323c3`; subject `Remove stale diagnostic output` | R25 authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history | PHASE-1-U5: CLOSED/ACCEPTED; U5 read-only reconciliation: CLOSED/ACCEPTED; U5-B bounded implementation: CLOSED/ACCEPTED. Sole path tools/diag_out.txt; blob SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e; 11746 bytes; raw SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b; no functional consumer; focused gate 15 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated 0; protected databases and sidecars unchanged; no canonical database opened; publication incident BLOCKED_PUSH_TIMEOUT→PUBLICATION_COMPLETE | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U6 | Read-only Phase-1 completion assessment and residual-custody disposition boundary | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | R27 docs-only closeout; authorizing subject identity resolved through Git history | Read-only assessment; zero implementation, no tests, no technical commit; confirmed no other safe cleanup bounded candidate with material evidence | `docs/mapeamento/05_avaliacao_refactor.md` | None; U6 was read-only without physical mutation |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | CLOSED / ACCEPTED | U1 `68f52fb`, U2 `5932dff`, U3 `c4fd2dd`, U4 `742b67c`, U5 `8b55230` | R27 docs-only closeout | U1-U6 CLOSED / ACCEPTED; PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK; U6 confirmed no other safe cleanup bounded candidate with material evidence; Phase 1 leaves no partial technical implementation; snapshots not a mandatory technical closeout criterion; custody transferred without physical action to autonomous administrative track | `docs/mapeamento/05_avaliacao_refactor.md` | Residual: historical database snapshot custody transferred to separate governance track — OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED |
-| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED | N/A (no physical mutation authorized) | R31 docs-only selected-destination closeout | R1 CLOSED / ACCEPTED and R2 CLOSED / ACCEPTED. Custody policy: APPROVED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION — DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE. Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`. Destination status: SELECTED. Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED. Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:; logical separation, not independent-disk redundancy. Gates 0–6 ratified documentally, none executed. Physical action: NOT AUTHORIZED. Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED. Policy approved via R1; destination selected via R2. No mutation authorized. R3 next (read-only provisioning and copy-execution readiness) |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME | N/A (no physical mutation authorized) | docs-only approved provisioning and copy contract closeout | R1, R2 and R3 CLOSED / ACCEPTED. Custody policy: APPROVED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION — DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE. Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`. Destination status: SELECTED. Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED. Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:; logical separation, not independent-disk redundancy. Gates 0–6 ratified documentally, none executed. R3 read-only assessment completed and its contract APPROVED by human decision on 25/07/2026: layout `artifacts\`/`manifests\`/`evidence\`; executor `KR-IDEAPAD\klebe`; ACL with inheritance disabled and `Authenticated Users` plus `BUILTIN\Users` removed; copy-only with explicit 17-path list and overwrite disabled; custody manifest JSON without credentials, SQLite content or PII; partial residue preserved until explicit cleanup decision; provisional Level 2 environment `D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds. Physical execution: NOT AUTHORIZED AT THIS TIME. Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME. Policy approved via R1; destination selected via R2; contract approved via R3. No mutation authorized. R4 next (controlled provisioning, ACL, copy, manifest and verification), blocked on a separate explicit human order releasing physical execution |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -305,7 +305,7 @@ discussed in the future and is not part of R2.
 - Physical action, copy, move, delete, compress and SQLite open remain NOT AUTHORIZED.
 - Phase 2–6 remain NOT AUTHORIZED. Production shadow-only unchanged. R20/D73H unchanged.
 
-Exact next action:
+Exact next action (phase-time, superseded by the approved-contract closeout below):
 
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
 copy-execution readiness contract.
@@ -317,3 +317,105 @@ Future R3 objectives: controlled creation of the directory; desired ACL; technic
 executor; manifest; exact copy commands; rollback and hard stops; disposable container;
 evidence required before requesting physical authorization. R3 is also read-only.
 Phase 2 remains without authorized next action.
+
+## Governance event — R31 publication recovery and R3 read-only assessment
+
+**Objective:** publish the existing R31 commit, then produce the read-only provisioning
+and copy-execution readiness contract.
+
+**Objective type:** publication recovery + read-only contract assessment. No document
+was changed in that round.
+
+**Status: COMPLETE.**
+
+**Tests:** NOT RUN / PROHIBITED. `main.py` not imported. Application not executed.
+
+**Publication:** local commit `59fa66bb5d73a04713524657bdc761def3d0b9c8`
+(`Record selected historical custody destination`, parent
+`c8c093a14bc6afe932461c00ab6e00774a5d3ac2`, exactly seven documents) published to
+`origin/refactor/architecture-safety-net` by
+`git push --porcelain origin HEAD:refs/heads/refactor/architecture-safety-net`.
+Result `c8c093a..59fa66b`, fast-forward, exit 0, non-forced, not rejected. Post-push:
+local HEAD = upstream = live remote; divergence 0/0; `main` unchanged at
+`340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; worktree clean; index empty.
+Classification: PUBLICATION_COMPLETE. The earlier BLOCKED_PUSH_TIMEOUT incident recorded
+under U5 did not recur.
+
+**R3 read-only evidence:** inventory 17/17 — 9 `.db` + 4 `.db-wal` + 4 `.db-shm`,
+4,808,704 bytes, every SHA-256 identical to canon, 17/17 ignored, zero tracked, zero
+untracked-not-ignored, 4 complete basename families plus 5 lone `.db`; zero drift.
+Destination absent (`D:\programas` and `D:\programas\SGAA_Historical_Custody`), no
+resolution to `D:\Programação`, outside every Git worktree, outside OneDrive, outside the
+pytest roots (`testpaths = tests`), zero name conflicts. Volume `D:` NTFS Fixed, Disk 1
+SAMSUNG MZALQ512HBLU-00BL2 NVMe, free 497,651,490,816 bytes. Longest projected path 108
+characters with `LongPathsEnabled = 0`. `D:\` ACL read-only inspected: `ContainerInherit,
+ObjectInherit` ACEs grant `Authenticated Users` effective modify, which is why the Gate P2
+ACL is mandatory. `CONTAINER_RUNTIME_NOT_AVAILABLE`: `docker` absent from PATH, no install
+path present, `com.docker.service` not installed.
+
+**Zero mutation in that round:** no document changed, no commit created, no directory
+created, no file created, no write test, no ACL applied, no copy, no move, no compress,
+no delete, no SQLite opened, no manifest created, no pytest run.
+
+**Phase-time classification:** `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`
+— superseded by the human approval recorded in the event below.
+
+## Governance event — approved provisioning and copy contract
+
+**Objective:** record the human approval of the R3 provisioning and copy contract and
+close R3.
+
+**Objective type:** docs-only human ratification. No R-number was issued for this event
+by the authorizing order; it is identified by objective and by Git history.
+
+**Closeout identity:** authorized subject `Record approved provisioning and copy contract`;
+identity resolved through Git history.
+
+**Status: CLOSED / ACCEPTED.**
+
+**Tests:** NOT RUN / PROHIBITED.
+
+**Baseline/pre-closeout HEAD:** `59fa66bb5d73a04713524657bdc761def3d0b9c8`.
+
+**Exact seven-document manifest:**
+- `AGENT_HANDOFF.md`
+- `PROJECT_STATE.md`
+- `docs/DOCUMENTATION_INDEX.md`
+- `docs/mapeamento/03_banco_de_dados.md`
+- `docs/mapeamento/05_avaliacao_refactor.md`
+- `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
+- `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`
+
+**Binding human decisions (25/07/2026):**
+1. A future separate round is authorized to create `D:\programas` and
+   `D:\programas\SGAA_Historical_Custody`.
+2. Layout approved: `artifacts\`, `manifests\`, `evidence\`.
+3. ACL approved: inheritance disabled on the custodial directory; `Authenticated Users`
+   and `BUILTIN\Users` removed; `SYSTEM` and `Administrators` FullControl; executor Modify
+   during provisioning and copy; after verification, ReadAndExecute on `artifacts\` and
+   Modify on `manifests\` and `evidence\`.
+4. Authorized technical executor: `KR-IDEAPAD\klebe`.
+5. Custody manifest JSON authorized, without credentials, personal data, SQLite content or
+   business data.
+6. Partial-copy residue preserved until an explicit human decision. Cleanup and silent
+   retry NOT AUTHORIZED.
+7. Provisional Level 2 restoration alternative approved: controlled external directory
+   `D:\tmp\sgaa_restore_<UTC>` while no container runtime is available.
+8. A future separate round is authorized only to provision the directories, apply the ACL,
+   copy the 17 artifacts, create the manifest and verify count, sizes and SHA-256.
+
+**Explicitly withheld in the same decision: PHYSICAL EXECUTION.** Move, delete, compress,
+SQLite open, restoration execution, source removal and Phase 2–6 remain PROHIBITED.
+
+**Zero physical mutation, zero code/test/SQLite change.** Production shadow-only unchanged.
+R20/D73H unchanged.
+
+Exact next action:
+
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application, copy
+of the 17 artifacts, manifest creation and integrity verification.
+
+R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
+withheld. R4 requires a separate explicit human order releasing physical execution; the
+approval recorded here is not that order and must never be read as one. Phase 2 remains
+without authorized next action.

@@ -177,14 +177,39 @@ Estratégia **mista** (ponto de dívida técnica):
 > independente. Não é redundante, imutável, off-site, independente do disco de origem,
 > versionado nem protegido contra exclusão.
 > Contrato de cópia Gates 0–6 ratificado documentalmente; nenhum gate executado.
-> Ambiente de restauração descartável preferido: ISOLATED CONTAINER, montando apenas
-> uma cópia descartável derivada; preferência registrada, não execução.
-> Nenhuma ação física autorizada: copy, move, delete, compress e abertura SQLite
-> permanecem NOT AUTHORIZED.
-> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only
-> provisioning and copy-execution readiness contract. R3 is NOT STARTED, exige ordem
-> explícita separada e não está autorizado a criar o destino nem a copiar, mover,
-> excluir, comprimir ou abrir qualquer artefato. Fases 2–6 permanecem não autorizadas.
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED. R3 foi read-only e seu
+> contrato de provisionamento e cópia foi APROVADO por decisão humana em 25/07/2026.
+> Classificação ativa: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
+> PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+> Layout aprovado: `artifacts\` (os 17 artefatos), `manifests\` (manifesto de custódia
+> JSON), `evidence\` (relatórios de cópia e verificação).
+> Executor técnico aprovado: `KR-IDEAPAD\klebe`.
+> ACL aprovada: herança desabilitada; `Usuários autenticados` e `BUILTIN\Usuários`
+> removidos; `SYSTEM` e `Administradores` com FullControl; executor com Modify durante
+> provisionamento e cópia e, após a verificação, ReadAndExecute em `artifacts\` e Modify
+> em `manifests\` e `evidence\`. A ACL é obrigatória porque `D:\` possui ACEs
+> `ContainerInherit, ObjectInherit` que concedem modify efetivo a `Usuários autenticados`;
+> com herança padrão a custódia ficaria gravável e excluível por qualquer usuário
+> autenticado da máquina. ACL não é imutabilidade.
+> Contrato de cópia aprovado: copy-only; lista explícita dos 17 paths; glob proibido;
+> overwrite proibido; `.db`, `.db-wal` e `.db-shm` preservados conjuntamente; parada no
+> primeiro erro; nenhuma abertura SQLite; origem nunca modificada; semântica
+> `File.Copy(source, destination, overwrite: false)`.
+> Resíduo de cópia parcial: preservado até decisão humana explícita; limpeza automática e
+> retry silencioso NÃO AUTORIZADOS.
+> Ambiente de restauração Nível 2: `CONTAINER_RUNTIME_NOT_AVAILABLE` observado em leitura;
+> alternativa provisória aprovada `D:\tmp\sgaa_restore_<UTC>`, descartável, montando apenas
+> cópia derivada de `artifacts\`; o workspace de origem nunca é montado como banco de
+> restauração e `artifacts\` nunca é aberto diretamente. ISOLATED CONTAINER volta a ser
+> preferido se houver runtime instalado.
+> **Execução física NÃO AUTORIZADA neste momento** — retida na mesma decisão que aprovou o
+> contrato. Move, delete, compress, abertura SQLite, execução de restauração e remoção da
+> origem permanecem NOT AUTHORIZED.
+> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — provisionamento
+> controlado, aplicação da ACL, cópia dos 17 artefatos, criação do manifesto e verificação
+> de contagem, tamanhos e SHA-256. R4 is NOT STARTED e exige ordem humana explícita e
+> separada liberando a execução física; a aprovação registrada não é essa ordem.
+> Fases 2–6 permanecem não autorizadas.
 > Wording histórico/superado: "Destino específico: NOT YET SELECTED".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
 > completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.

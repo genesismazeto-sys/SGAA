@@ -133,14 +133,15 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
-**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED.**
+**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.**
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Transferred residual governance matter:
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY
-Status: R1 CLOSED / ACCEPTED (policy approved) and R2 CLOSED / ACCEPTED.
+Status: R1 CLOSED / ACCEPTED (policy approved), R2 CLOSED / ACCEPTED (destination selected)
+and R3 CLOSED / ACCEPTED (provisioning and copy contract approved).
 R30: DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION / SUPERSEDED BY HUMAN SELECTION.
 Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`.
 Destination status: SELECTED.
@@ -158,21 +159,39 @@ derived disposable copy; the source workspace must not be mounted as the restora
 database and the custodial artifact must not be opened directly. Preference only.
 Physical action, copy, move, delete, compress and SQLite open: NOT AUTHORIZED.
 No archival performed or authorized.
+R3 read-only assessment completed; its contract was APPROVED by human decision on
+25/07/2026 and remains UNEXECUTED. Approved: layout `artifacts\` / `manifests\` /
+`evidence\`; technical executor `KR-IDEAPAD\klebe`; ACL with inheritance disabled,
+`Authenticated Users` and `BUILTIN\Users` removed, `SYSTEM` and `Administrators`
+FullControl, executor Modify during provisioning and copy then ReadAndExecute on
+`artifacts\` and Modify on `manifests\` and `evidence\`; copy-only contract with an
+explicit 17-path list, glob and overwrite prohibited, sidecars preserved jointly, stop at
+first error, no SQLite open, source never modified; custody manifest JSON without
+credentials, personal data, SQLite content or business data; partial residue preserved
+until an explicit cleanup decision, with automatic cleanup and silent retry NOT AUTHORIZED;
+provisional Level 2 restoration in a controlled external directory
+`D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds.
+
+Physical execution was explicitly withheld in the same decision.
+
 Preserved historical / superseded wording: "specific destination UNRESOLVED";
-"NOT YET SELECTED"; "R2 is NOT STARTED".
+"NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; and the R3 phase-time state
+`COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
-copy-execution readiness contract.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application, copy
+of the 17 artifacts, manifest creation and integrity verification.
 
-R3 is NOT STARTED, requires a separate explicit order and is not authorized
-to create the destination or copy, move, delete, compress or open any artifact.
+R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
+withheld. R4 requires a separate explicit human order releasing physical execution; the
+recorded approval is not that order and must never be read as one.
 
-Future R3 objectives: controlled creation of the directory; desired ACL; technical
-executor; manifest; exact copy commands; rollback and hard stops; disposable
-container; evidence required before requesting physical authorization. R3 is also
-read-only. Phase 2 remains
+R4 scope when released: create `D:\programas` and
+`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the approved
+ACL; copy exactly 17 artifacts with overwrite disabled; create the custody manifest; verify
+count, sizes and SHA-256. Move, delete, compress, SQLite open, restoration execution and
+source removal remain prohibited. Phase 2 remains
 without authorized next action.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
