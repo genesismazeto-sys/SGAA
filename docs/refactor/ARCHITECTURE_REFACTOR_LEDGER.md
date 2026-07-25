@@ -30,14 +30,18 @@
 | PHASE-1-U3 | Remove legacy aluno route bodies | CLOSED / ACCEPTED | `c4fd2dd1852011a0ec860493ed4cf53834584c42`; subject `Remove legacy aluno route bodies` | R19 docs-only external acceptance closeout; documentary commit identity resolved through Git history | Removed symbols: _noop_route, aluno_runtime_route, aluno_arquivos, aluno_minhas_requisicoes, aluno_requisicao_detalhe, aluno_dashboard, aluno_nova_requisicao, aluno_meus_dados; main.py delta 0 insertions 756 deletions; 8 compatibility exports preserved; Flask rules 131 unchanged; catalog keys 536 unchanged; CSRF snapshots regenerated as coherent pair; focused lane 47 passed; full suite 657 passed 17 deselected 0 failed 0 errors; invariant aggregate unchanged | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U4 | Remove unused main imports + correct hashlib comment | CLOSED / ACCEPTED | `742b67c0623bdf41e292280a11a40d2fddad717c`; subject `Remove unused main imports` | R22 authorized subject `Record acceptance of Phase 1 U4`; documentary commit identity resolved through Git history | PHASE-1-U4: CLOSED/ACCEPTED; U4 read-only proof: CLOSED/ACCEPTED; U4-B bounded implementation: CLOSED/ACCEPTED. Removed imports: wraps (functools), Flask (flask), bp_presets (presets_api); hashlib preserved with corrected comment; msal probe preserved; main.py delta 2 insertions 4 deletions; AST confirmed only those 3 bindings removed; indirect consumers zero; import-time PASS; SQLite connections during import zero; test_aluno_compat_exports 3 passed; route inventory + RBAC coverage 3 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated: 0. R21 routing: flash_free→flash_normal; cause FALLBACK_FREE_EXECUTION_FAILURE; effective opencode-go/deepseek-v4-flash; session ses_0699201ebffep2uXFswB6iotIf; cost 0.000425292; fallback explicit | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U5 | Remove stale diagnostic output | CLOSED / ACCEPTED | `8b55230314605dcf9295072c109f04bea59323c3`; subject `Remove stale diagnostic output` | R25 authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history | PHASE-1-U5: CLOSED/ACCEPTED; U5 read-only reconciliation: CLOSED/ACCEPTED; U5-B bounded implementation: CLOSED/ACCEPTED. Sole path tools/diag_out.txt; blob SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e; 11746 bytes; raw SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b; no functional consumer; focused gate 15 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated 0; protected databases and sidecars unchanged; no canonical database opened; publication incident BLOCKED_PUSH_TIMEOUT→PUBLICATION_COMPLETE | `docs/mapeamento/05_avaliacao_refactor.md` | None |
-| Fase 1 | Safe cleanup: dead code, lixo, headers | OPEN / IN PROGRESS | N/A | N/A | U1 CLOSED / ACCEPTED; U2 CLOSED / ACCEPTED; U3 CLOSED / ACCEPTED; U4 CLOSED / ACCEPTED; U5 CLOSED / ACCEPTED; U6 NOT STARTED | `docs/mapeamento/05_avaliacao_refactor.md` | U1-U5 accepted; Phase 1 remains open due to unresolved snapshot custody decision |
+| PHASE-1-U6 | Read-only Phase-1 completion assessment and residual-custody disposition boundary | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | R27 docs-only closeout; authorizing subject identity resolved through Git history | Read-only assessment; zero implementation, no tests, no technical commit; confirmed no other safe cleanup bounded candidate with material evidence | `docs/mapeamento/05_avaliacao_refactor.md` | None; U6 was read-only without physical mutation |
+| Fase 1 | Safe cleanup: dead code, lixo, headers | CLOSED / ACCEPTED | U1 `68f52fb`, U2 `5932dff`, U3 `c4fd2dd`, U4 `742b67c`, U5 `8b55230` | R27 docs-only closeout | U1-U6 CLOSED / ACCEPTED; PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK; U6 confirmed no other safe cleanup bounded candidate with material evidence; Phase 1 leaves no partial technical implementation; snapshots not a mandatory technical closeout criterion; custody transferred without physical action to autonomous administrative track | `docs/mapeamento/05_avaliacao_refactor.md` | Residual: historical database snapshot custody transferred to separate governance track — OPEN / POLICY UNRESOLVED / NO MUTATION AUTHORIZED |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / CUSTODY_POLICY_UNRESOLVED | N/A (no physical mutation authorized) | N/A (policy unresolved) | Physical action: NOT AUTHORIZED. Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / POLICY UNRESOLVED / NO MUTATION AUTHORIZED. Custody policy unresolved: custodian, retention, canonical destination, restoration procedure, post-archive integrity verification pending explicit human decision |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 5 | Backup/sync offloading | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 6 | `main.py` as entrypoint only | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 
-## Governance event — CANONICAL-GOV-R1
+## Historical / superseded governance event — CANONICAL-GOV-R1
+
+Its phase-time states about Phase 0, REF-0C-D-R1 and Fase 1 are historical record superseded by current canon/R27.
 
 **Objective:** Establish documentation index, architecture phase ledger,
 Phase-0 completion matrix and REF-0C-D decision.
@@ -60,7 +64,9 @@ Phase-0 completion matrix and REF-0C-D decision.
 contract/evidence. REF-0C-D-R1, Fase 1, and production hard enforcement remain
 not authorized.
 
-## Governance event — R25
+## Historical / superseded governance event — R25
+
+Its Phase-1-OPEN and U6-NOT-STARTED residual states are phase-time history superseded by R27.
 
 **Objective:** Record acceptance of PHASE-1-U5 — remove stale diagnostic output (`tools/diag_out.txt`).
 
@@ -113,35 +119,37 @@ passed, 17 D73H deselected, 0 failures, 0 errors. R10 documents this acceptance
 closeout. R10 is a docs-only acceptance closeout; its eventual commit identity is
 resolved through Git history. **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
 
-## Next authorizable action
+## Authorized state
 
-**PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
+**Architecture refactor Phase 1: CLOSED / ACCEPTED.**
 - **PHASE-1-U1:** CLOSED / ACCEPTED at `68f52fb902c726cc79ff92955e58f95ac0b21cd7`.
 - **PHASE-1-U2:** CLOSED / ACCEPTED at `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`.
 - **PHASE-1-U3:** CLOSED / ACCEPTED at `c4fd2dd1852011a0ec860493ed4cf53834584c42`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED at `742b67c0623bdf41e292280a11a40d2fddad717c`. U4 read-only proof: CLOSED / ACCEPTED. U4-B bounded implementation: CLOSED / ACCEPTED.
 - **PHASE-1-U5:** CLOSED / ACCEPTED at `8b55230314605dcf9295072c109f04bea59323c3`. U5 read-only reconciliation: CLOSED / ACCEPTED. U5-B bounded implementation: CLOSED / ACCEPTED. Removed tools/diag_out.txt — stale diagnostic artifact, 11,746 bytes, no functional consumer.
-- **Phase 1 remains OPEN / IN PROGRESS.** Reason: all identified safe technical candidates were executed; remaining snapshots depend on custody decision; a separate formal assessment must decide whether Phase 1 can close with that matter transferred to governance/custody.
+- **PHASE-1-U6:** CLOSED / ACCEPTED. Read-only, no implementation, no tests, no technical commit.
+- **Classification: PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK.**
+  U6 confirmed no other safe cleanup bounded candidate has material evidence.
+  Phase 1 leaves no partial technical implementation.
+  Snapshots are not a mandatory technical closeout criterion.
+  Custody transferred without physical action to autonomous administrative track.
+
+**Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
+or any architectural implementation phase.
+See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
-disposition boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
+packet and human-authorization boundary.
 
-U6 is NOT STARTED, requires a separate explicit order and is not authorized
-for mutation.
+R1 is NOT STARTED, requires a separate explicit order and is not authorized
+for physical mutation.
 
-Future U6 objective: confirm no other implementable safe-cleanup remains;
-decide whether historical snapshots block Phase-1 close; separate cleanup
-from administrative custody; recommend one of: close with documented
-residual risk, keep open awaiting user decision, transfer snapshots to
-separate governance track, or identify a new candidate only with material
-evidence. Do not authorize Phase 2 by implication.
-
-database.pre-*.db and associated sidecars:
-CUSTODY_DECISION_REQUIRED
-
-No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
+Future R1 objectives (not decided now): retention alternatives; custodian;
+destination options; restoration requirements; integrity proof; request explicit human
+decision. Phase 2 remains without authorized next action.
 
 Explicitly prohibited without separate authorization: route extraction;
 blueprint restructuring; database consolidation; behavior changes; schema/migrations;
@@ -150,3 +158,42 @@ RBAC; UI; dependencies; production hard enforcement.
 Production shadow-only remains in force; production hard enforcement
 unauthorized. D73H historical lane unchanged; R20 unchanged. Do not claim a final
 commit SHA or successful push before they exist; no self-referential follow-up commit.
+
+## Governance event — R27
+
+**Objective:** Close PHASE-1-U6 and Phase 1; establish snapshot custody track.
+
+**Objective type:** docs-only phase closeout and governance-track establishment.
+
+**Closeout identity:** authorized subject `Close Phase 1 and establish snapshot custody track`; identity resolved through Git history.
+
+**Status: CLOSED / ACCEPTED.**
+
+**Tests:** NOT RUN / PROHIBITED.
+
+**Baseline/pre-closeout HEAD:** `8a895ce93bfc9e38a8ee29d28d24a715caf49ccc`.
+
+**Classification:** PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK.
+**Exact eight-document manifest:**
+- `AGENT_HANDOFF.md`
+- `PROJECT_STATE.md`
+- `docs/DOCUMENTATION_INDEX.md`
+- `docs/mapeamento/03_banco_de_dados.md`
+- `docs/mapeamento/04_arquitetura_e_modulos.md`
+- `docs/mapeamento/05_avaliacao_refactor.md`
+- `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
+- `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`
+
+**Zero code/test/SQLite mutation:** physical action NOT AUTHORIZED. Phase 2–6 NOT AUTHORIZED. Production shadow-only unchanged. R20/D73H unchanged.
+
+Exact next action:
+
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
+packet and human-authorization boundary.
+
+R1 is NOT STARTED, requires a separate explicit order and is not authorized
+for physical mutation.
+
+Future R1 objectives (not decided now): retention alternatives; custodian;
+destination options; restoration requirements; integrity proof; request explicit human
+decision. Phase 2 remains without authorized next action.

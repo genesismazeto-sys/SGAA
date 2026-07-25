@@ -160,9 +160,14 @@ Estratégia **mista** (ponto de dívida técnica):
    `schema_migrations` — abordagem **versionada e correta**, adotada mais
    recentemente. É para onde o resto deveria convergir.
 
-> Os arquivos `database.pre-*.db` na raiz são snapshots manuais tirados antes de
-> migrações antigas (D6/D7). Não são usados em runtime; poluem o repositório e
-> podem ser arquivados.
+> Os 17 artefatos `database.pre-*.db`, `database.pre-*.db-shm` e `database.pre-*.db-wal`
+> na raiz são snapshots manuais históricos (9 .db, 4 .db-shm, 4 .db-wal). Não são
+> usados em runtime; sua custódia é governada por trilha administrativa autônoma.
+> Estes 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py`
+> nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento
+> foi realizada ou autorizada.
+> Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
+> e política pendente. Nenhuma ação de arquivamento foi executada ou autorizada.
 
 ## Backup e sincronização
 

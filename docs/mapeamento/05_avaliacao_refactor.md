@@ -116,37 +116,45 @@ hermetic CSRF snapshots; five fixture-controlled smoke flows; full suite 654
 passed, 17 D73H deselected, 0 failures, 0 errors. R10 documents this acceptance
 closeout. **R10 contract status:** The pre-acceptance status text in Section 10 of the immutable R9 contract is a historical snapshot, superseded by this R10 current canon; the contract is not modified in R10.
 
-#### Next authorizable action
+#### Phase 1 — CLOSED / ACCEPTED
 
-**PHASE 1 — SAFE CLEANUP (OPEN / IN PROGRESS).**
+**Architecture refactor Phase 1: CLOSED / ACCEPTED.**
 - **PHASE-1-U1:** CLOSED / ACCEPTED at commit `68f52fb902c726cc79ff92955e58f95ac0b21cd7` — removed `templates/src.code-workspace-1.code-workspace`. Full suite 654 passed, 17 deselected, 0 failed, 0 errors.
 - **PHASE-1-U2:** CLOSED / ACCEPTED at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` — deleted `templates/admin_turmas-KRThinkpad.html`. Proven with zero consumers, zero catalog delta, zero scanner impact.
 - **PHASE-1-U3:** CLOSED / ACCEPTED at commit `c4fd2dd1852011a0ec860493ed4cf53834584c42` — removed legacy aluno route bodies; 0 insertions, 756 deletions; eight compatibility exports preserved.
 - **PHASE-1-U4:** CLOSED / ACCEPTED. U4 read-only proof: CLOSED / ACCEPTED. U4-B bounded implementation: CLOSED / ACCEPTED. Accepted technical commit `742b67c0623bdf41e292280a11a40d2fddad717c` — removed unused imports (wraps, Flask, bp_presets); corrected hashlib comment; main.py delta 2 insertions, 4 deletions; no behavioral change.
 - **PHASE-1-U5:** CLOSED / ACCEPTED. U5 read-only reconciliation: CLOSED / ACCEPTED. U5-B bounded implementation: CLOSED / ACCEPTED. Accepted technical commit `8b55230314605dcf9295072c109f04bea59323c3` — `Remove stale diagnostic output`. Removed tools/diag_out.txt — stale diagnostic artifact, 11,746 bytes, SHA-1 `45f5fc833364e9d2bc49132b4a0f6a0b045be74e`, SHA-256 `f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b`. No functional consumer.
-- **Phase 1 remains OPEN / IN PROGRESS.** Reason: all identified safe technical candidates were executed; remaining snapshots depend on custody decision; a separate formal assessment must decide whether Phase 1 can close with that matter transferred to governance/custody.
+- **PHASE-1-U6: CLOSED / ACCEPTED.** Read-only, no implementation, no tests, no technical commit.
+- **Classification: PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK.**
+  U6 confirmed no other safe cleanup bounded candidate has material evidence.
+  Phase 1 leaves no partial technical implementation.
+  Snapshots are not a mandatory technical closeout criterion.
+  Custody transferred without physical action to autonomous administrative track.
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
+**Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
+or any architectural implementation phase.
+See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+
+Transferred residual governance matter:
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY
+Status: CUSTODY_POLICY_UNRESOLVED
+No archival performed or authorized.
+
 Exact next action:
 
-PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
-disposition boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
+packet and human-authorization boundary.
 
-U6 is NOT STARTED, requires a separate explicit order and is not authorized
-for mutation.
+R1 is NOT STARTED, requires a separate explicit order and is not authorized
+for physical mutation.
 
-Future U6 objective: confirm no other implementable safe-cleanup remains;
-decide whether historical snapshots block Phase-1 close; separate cleanup
-from administrative custody; recommend one of: close with documented
-residual risk, keep open awaiting user decision, transfer snapshots to
-separate governance track, or identify a new candidate only with material
-evidence. Do not authorize Phase 2 by implication.
-
-database.pre-*.db and associated sidecars:
-CUSTODY_DECISION_REQUIRED
-
-No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
+Future R1 objectives (not decided in R27): present retention alternatives;
+identify custodian; define destination options; define restoration requirements;
+define integrity proof; request explicit human decision. Phase 2 remains
+without authorized next action.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
@@ -158,8 +166,11 @@ preserved as originally defined below but unauthorized.
 - [x] Remover `templates/admin_turmas-KRThinkpad.html` — concluído (PHASE-1-U2, CLOSED / ACCEPTED).
 - [x] Remover imports mortos (wraps, Flask, bp_presets) + corrigir comentário hashlib — CLOSED / ACCEPTED (PHASE-1-U4, commit 742b67c; 2 inserções, 4 deleções; sem mudança comportamental).
 - [x] Remover `tools/diag_out.txt` (artefato diagnóstico obsoleto) — CLOSED / ACCEPTED (PHASE-1-U5, commit 8b55230314605dcf9295072c109f04bea59323c3; 11.746 bytes; nenhum consumidor funcional).
-- [ ] Arquivar snapshots `database.pre-*.db` — CUSTODY_DECISION_REQUIRED (sem definição formal de custodiante, retenção, destino canônico, procedimento de restauração ou verificação de integridade pós-arquivo).
 - [ ] Unificar headers divergentes (`Referrer-Policy`) — fora do escopo da Fase 1.
+
+### Historical / superseded
+
+- [ ] Arquivar snapshots `database.pre-*.db` — historical / superseded Phase-1 checkbox; no archival performed or authorized; disposition moved to the autonomous custody track.
 
 ### Fase 2 — Extrair helpers compartilhados (quebrar o ciclo) (2–3 dias)
 Mover de `main.py` para módulos próprios em `app/`, **um por PR**:

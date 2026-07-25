@@ -20,14 +20,17 @@
    REF-0C-C-B1. No standalone contract exists for REF-0A, REF-0ENV, REF-0B,
    REF-0T, REF-0C-A-R1, or REF-0C-D; their scope is documented in the ledger
    and PROJECT_STATE historical blocks.
-7. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
+7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
+   — autonomous administrative/governance track for the 17 historical database
+   snapshot artifacts; does not integrate any architectural implementation phase.
+8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
    substitute for the repository canon.
-8. **Supporting evidence** — tests and artifacts under `tests/` (especially
+9. **Supporting evidence** — tests and artifacts under `tests/` (especially
    `tests/_artifacts/`) and tools under `tools/`.
-9. **Legacy / historical** — older blocks, superseded contracts, and historical
-   architecture snapshots preserved for audit trail; they do not govern current
-   work.
+10. **Legacy / historical** — older blocks, superseded contracts, and historical
+    architecture snapshots preserved for audit trail; they do not govern current
+    work.
 
 ## Mandatory reading order (first time on this branch)
 
@@ -36,12 +39,12 @@
 3. `docs/mapeamento/05_avaliacao_refactor.md` — master plan, Phase 0–6.
 4. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — phase ledger.
 5. `PROJECT_STATE.md` — canonical current state (top block).
-6. `AGENT_HANDOFF.md` — current operational handoff.
-7. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
+6. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
+7. `AGENT_HANDOFF.md` — current operational handoff.
+8. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
-
 ## Canonical current state (2026-07-25)
 
 - Branch: `refactor/architecture-safety-net`
@@ -60,28 +63,29 @@
 - **PHASE-1-U3: CLOSED / ACCEPTED** — removed legacy aluno route bodies from main.py at commit `c4fd2dd1852011a0ec860493ed4cf53834584c42`; 0 insertions, 756 deletions; all eight compatibility exports preserved.
 - **PHASE-1-U4: CLOSED / ACCEPTED** — U4 read-only proof: CLOSED / ACCEPTED; U4-B bounded implementation: CLOSED / ACCEPTED. Removed unused imports from main.py (wraps, Flask, bp_presets) and corrected hashlib comment at commit `742b67c0623bdf41e292280a11a40d2fddad717c`; 2 insertions, 4 deletions; no behavioral change.
 - **PHASE-1-U5: CLOSED / ACCEPTED** — U5 read-only reconciliation: CLOSED / ACCEPTED; U5-B bounded implementation: CLOSED / ACCEPTED. Removed stale diagnostic artifact `tools/diag_out.txt` (11,746 bytes, SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e, SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b) at commit `8b55230314605dcf9295072c109f04bea59323c3`. No functional consumer. Focused gate 15 passed; full suite 657 passed, 17 deselected, zero failures/errors; D73H executed zero; snapshots regenerated zero.
-- **Phase 1:** OPEN / IN PROGRESS.
-  Reason: all identified safe technical candidates were executed; remaining snapshots depend on custody decision; a separate formal assessment must decide whether Phase 1 can close with that matter transferred to governance/custody.
+- **PHASE-1-U6: CLOSED / ACCEPTED** — read-only Phase-1 completion assessment; zero implementation, no tests, no technical commit, no physical mutation.
+- **Phase 1: CLOSED / ACCEPTED.**
+  Classification: PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK.
+  U6 confirmed no other safe cleanup bounded candidate has material evidence.
+  Snapshots are not a mandatory technical closeout criterion.
+  Custody transferred without physical action to autonomous administrative track.
+- **Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+  Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
+  or any architectural implementation phase.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
-disposition boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
+packet and human-authorization boundary.
 
-U6 is NOT STARTED, requires a separate explicit order and is not authorized
-for mutation.
+R1 is NOT STARTED, requires a separate explicit order and is not authorized
+for physical mutation.
 
-Future U6 objective: confirm no other implementable safe-cleanup remains;
-decide whether historical snapshots block Phase-1 close; separate cleanup
-from administrative custody; recommend one of: close with documented
-residual risk, keep open awaiting user decision, transfer snapshots to
-separate governance track, or identify a new candidate only with material
-evidence. Do not authorize Phase 2 by implication.
-
-database.pre-*.db and associated sidecars:
-CUSTODY_DECISION_REQUIRED
-
-No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
+Future R1 objectives (not decided in R27): present retention alternatives;
+identify custodian; define destination options; define restoration requirements;
+define integrity proof; request explicit human decision. Phase 2 remains
+without authorized next action.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
@@ -97,19 +101,20 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Macro Fase 0 — Safety net (rede de segurança)**: route inventory, RBAC
   coverage, hermetic suite, smoke flows, actor matrix, fail-closed design.
   **CLOSED / ACCEPTED — all requirements satisfied.**
-- **Fase 1 — Safe cleanup**: dead code, lixo, headers. **OPEN / IN PROGRESS.**
+- **Fase 1 — Safe cleanup**: dead code, lixo, headers. **CLOSED / ACCEPTED.**
   - **PHASE-1-U1 (accidental VS Code workspace artifact): CLOSED / ACCEPTED.**
   - **PHASE-1-U2 (KRThinkpad parallel template): CLOSED / ACCEPTED.**
   - **PHASE-1-U3 (legacy aluno routes and `aluno_runtime_route`): CLOSED / ACCEPTED.**
   - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
   - **PHASE-1-U5 (stale diagnostic output): CLOSED / ACCEPTED.**
+  - **PHASE-1-U6 (Phase-1 completion assessment): CLOSED / ACCEPTED.**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is OPEN / IN PROGRESS. U1, U2, U3, U4 and U5 are CLOSED / ACCEPTED. No later Phase-1 cleanup unit is implemented or accepted. PHASE-1-U6 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. Historical snapshot custody is OPEN / CUSTODY_POLICY_UNRESOLVED (separate governance track, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -131,6 +136,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; policy unresolved |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.
