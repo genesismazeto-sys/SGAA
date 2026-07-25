@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / CUSTODY_POLICY_UNRESOLVED
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_UNRESOLVED
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -46,7 +46,10 @@
   Phase 1 leaves no partial technical implementation.
   Snapshots are not a mandatory technical closeout criterion.
   Custody transferred without physical action to autonomous administrative track.
-- **Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED.**
+  Custody policy: APPROVED.
+  Specific canonical destination: UNRESOLVED.
+  Physical action: NOT AUTHORIZED.
   Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
   or any architectural implementation phase.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
@@ -105,15 +108,16 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
-packet and human-authorization boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
+requirements and controlled-copy contract boundary.
 
-R1 is NOT STARTED, requires a separate explicit order and is not authorized
+R2 is NOT STARTED, requires a separate explicit order and is not authorized
 for physical mutation.
 
-Future R1 objectives (not decided now): retention alternatives; custodian;
-destination options; restoration requirements; integrity proof; request explicit human
-decision. Phase 2 remains without authorized next action.
+Future R2 objectives: define objective destination requirements; evaluate real
+available options; select specific destination by human decision; draft copy
+contract; define disposable restoration environment; define Level 2 and Level 3
+gates. R2 will not execute a copy. Phase 2 remains without authorized next action.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -282,8 +286,8 @@ decision. Phase 2 remains without authorized next action.
 - The primary database and untracked historical backups were not opened, copied, or changed. The temporary worktree is disposable; its runtime artifacts do not belong to the primary worktree.
 - Decision: **GO for REF-0TF-B only.** Do not correct RBAC, modularize routes, alter production code, or use a live database/backup. REF-0TF-B must define a sanitized, versioned D73H fixture or an explicit separate invocation contract.
 
-Last updated: 2026-07-25 (R27 docs-only closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; Historical snapshot custody OPEN / CUSTODY_POLICY_UNRESOLVED)
-Closeout: R27 docs-only Phase-1 closeout and custody-track establishment
+Last updated: 2026-07-25 (R29 docs-only human-policy-ratification; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / CANONICAL_DESTINATION_UNRESOLVED)
+Closeout: R29 docs-only human policy ratification
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State

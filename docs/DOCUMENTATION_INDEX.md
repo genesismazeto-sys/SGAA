@@ -22,7 +22,8 @@
    and PROJECT_STATE historical blocks.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
    — autonomous administrative/governance track for the 17 historical database
-   snapshot artifacts; does not integrate any architectural implementation phase.
+   snapshot artifacts; R1 CLOSED / ACCEPTED, policy approved, specific destination
+   pending; does not integrate any architectural implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
    substitute for the repository canon.
@@ -69,22 +70,26 @@
   U6 confirmed no other safe cleanup bounded candidate has material evidence.
   Snapshots are not a mandatory technical closeout criterion.
   Custody transferred without physical action to autonomous administrative track.
-- **Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED.**
+  Custody policy: APPROVED.
+  Specific canonical destination: UNRESOLVED.
+  Physical action: NOT AUTHORIZED.
   Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
   or any architectural implementation phase.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
-packet and human-authorization boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
+requirements and controlled-copy contract boundary.
 
-R1 is NOT STARTED, requires a separate explicit order and is not authorized
+R2 is NOT STARTED, requires a separate explicit order and is not authorized
 for physical mutation.
 
-Future R1 objectives (not decided in R27): present retention alternatives;
-identify custodian; define destination options; define restoration requirements;
-define integrity proof; request explicit human decision. Phase 2 remains
+Future R2 objectives: define objective destination requirements; evaluate real
+available options; select specific destination by human decision; draft copy
+contract; define disposable restoration environment; define Level 2 and Level 3
+gates. R2 will not execute a copy. Phase 2 remains
 without authorized next action.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
@@ -114,7 +119,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. Historical snapshot custody is OPEN / CUSTODY_POLICY_UNRESOLVED (separate governance track, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1 is CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_UNRESOLVED (separate governance track, policy approved, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -136,7 +141,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; policy unresolved |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1 CLOSED / ACCEPTED, policy approved, destination pending |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

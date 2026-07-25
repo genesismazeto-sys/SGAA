@@ -133,27 +133,28 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
-**Historical snapshot custody: OPEN / CUSTODY_POLICY_UNRESOLVED.**
+**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED.**
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Transferred residual governance matter:
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY
-Status: CUSTODY_POLICY_UNRESOLVED
+Status: R1 CLOSED / ACCEPTED (policy approved; specific destination UNRESOLVED).
 No archival performed or authorized.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
-packet and human-authorization boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
+requirements and controlled-copy contract boundary.
 
-R1 is NOT STARTED, requires a separate explicit order and is not authorized
+R2 is NOT STARTED, requires a separate explicit order and is not authorized
 for physical mutation.
 
-Future R1 objectives (not decided in R27): present retention alternatives;
-identify custodian; define destination options; define restoration requirements;
-define integrity proof; request explicit human decision. Phase 2 remains
+Future R2 objectives: define objective destination requirements; evaluate real
+available options; select specific destination by human decision; draft copy
+contract; define disposable restoration environment; define Level 2 and Level 3
+gates. R2 will not execute a copy. Phase 2 remains
 without authorized next action.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.

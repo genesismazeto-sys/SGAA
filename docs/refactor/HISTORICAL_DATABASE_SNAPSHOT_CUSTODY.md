@@ -1,22 +1,87 @@
 # HISTORICAL-DATABASE-SNAPSHOT-CUSTODY
 
-STATUS:
-OPEN / CUSTODY_POLICY_UNRESOLVED
+## Current status
 
-PHYSICAL ACTION:
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1:
+CLOSED / ACCEPTED
+
+Human decision date: 25/07/2026.
+
+Active classification:
+CANONICAL_DESTINATION_UNRESOLVED
+
+Historical / superseded classification:
+CUSTODY_POLICY_UNRESOLVED
+
+Custody policy:
+APPROVED
+
+Specific canonical destination:
+UNRESOLVED
+
+Physical action:
 NOT AUTHORIZED
 
+Custody model:
+SHARED
+
+Project owner:
+APPROVES
+
+Technical operator:
+EXECUTES ONLY EXPLICITLY AUTHORIZED ACTIONS
+
+Retention:
+INDEFINITE
+
+Destination class:
+EXTERNAL CANONICAL CUSTODY LOCATION
+
+Specific destination:
+NOT YET SELECTED
+
+Acceptance gate after future copy:
+RESTORE LEVEL 2 — SCHEMA AND METADATA
+
+Gate before any future source removal:
+RESTORE LEVEL 3 — OPERATIONAL RESTORATION
+Level 2 never authorizes source removal.
+
+Preservation requirement:
+Each set must preserve jointly: .db; .db-wal; .db-shm when present.
+
+Association by basename:
+INFERRED
+
+Operational SQLite association:
+NOT PROVEN
+No sidecar may be omitted because it is empty, repeated, or apparently inactive.
+
+First future physical action:
+COPY ONLY
+
+Move:
+NOT AUTHORIZED
+
+Delete:
+NOT AUTHORIZED
+
+Compress:
+NOT AUTHORIZED YET
+
+Source after copy:
+MUST REMAIN INTACT
+Future source removal requires validated copy, Level 3 restoration, separate human decision, and new explicit physical authorization.
+
+## Governance rules
+
 1. Esta é uma trilha administrativa/de governança autônoma. Não integra Phase 1, Phase 2 ou qualquer fase arquitetural de implementação.
-2. Governa exclusivamente futura decisão sobre preservação, retenção, arquivamento e eventual descarte dos snapshots históricos ignorados.
-3. Sua criação não move, copia, compacta ou abre arquivos SQLite; não valida schema; não autoriza restauração; não autoriza exclusão.
-4. Inventário preservado: 9 database.pre-*.db, 4 .db-wal, 4 .db-shm, total 17.
-5. Nomes, tamanhos e SHA-256 exatos conforme inventário abaixo.
-6. Para sidecars: associação inferida somente por basename; associação SQLite operacional não comprovada; preservar até decisão humana. Não inventar manifesto.
-7. Tracking: todos ignored, nenhum tracked, não protegidos pelo histórico Git; nenhuma alteração física por U1–U6 ou R27.
-8. Política pendente exatamente: custodiante; período de retenção; destino canônico; procedimento específico de restauração; verificação de integridade pós-arquivamento. Classificação CUSTODY_POLICY_UNRESOLVED.
-9. Qualquer ação física exige autorização humana explícita do responsável pelo projeto. IA futura não pode inferir autorização do fechamento da Phase 1, checkbox histórica, existência deste documento, ausência de consumidores runtime ou estado ignored.
-10. Próxima rodada só poderá preparar pacote read-only; não poderá arquivar.
-11. Hashes são identidade read-only, não manifesto nem validação de restauração.
+2. Governa exclusivamente a custódia dos 17 snapshots históricos ignorados.
+3. Nenhuma ação física está autorizada sem ordem humana explícita.
+4. O track permanece aberto apenas porque os seguintes itens estão pendentes: specific physical destination; controlled-copy contract; disposable restoration environment; separate human authorization to execute the copy.
+5. Qualquer ação física exige autorização humana explícita do responsável pelo projeto. IA futura não pode inferir autorização do fechamento da Phase 1, checkbox histórica, existência deste documento, ausência de consumidores runtime ou estado ignored.
+6. Hashes são identidade read-only, não manifesto nem validação de restauração.
+7. Os 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py` nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento foi realizada ou autorizada.
 
 ## Inventário read-only revalidado antes desta delegação
 
@@ -40,12 +105,13 @@ NOT AUTHORIZED
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1 — read-only custody policy decision
-packet and human-authorization boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
+requirements and controlled-copy contract boundary.
 
-R1 is NOT STARTED, requires a separate explicit order and is not authorized
+R2 is NOT STARTED, requires a separate explicit order and is not authorized
 for physical mutation.
 
-Future R1 objectives (not decided now): retention alternatives; custodian;
-destination options; restoration requirements; integrity proof; request explicit human
-decision. Phase 2 remains without authorized next action.
+Future R2 objectives: define objective destination requirements; evaluate real
+available options; select specific destination by human decision; draft copy
+contract; define disposable restoration environment; define Level 2 and Level 3
+gates. R2 will not execute a copy. Phase 2 remains without authorized next action.

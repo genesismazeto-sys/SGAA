@@ -166,8 +166,10 @@ Estratégia **mista** (ponto de dívida técnica):
 > Estes 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py`
 > nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento
 > foi realizada ou autorizada.
+> A custódia destes artefatos é regida pela política aprovada em R1 (HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED). Modelo de custódia: SHARED. Destino específico:
+> NOT YET SELECTED. Nenhuma ação física autorizada.
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
-> e política pendente. Nenhuma ação de arquivamento foi executada ou autorizada.
+> completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.
 
 ## Backup e sincronização
 
