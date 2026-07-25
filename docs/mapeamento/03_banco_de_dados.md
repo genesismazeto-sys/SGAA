@@ -166,8 +166,26 @@ Estratégia **mista** (ponto de dívida técnica):
 > Estes 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py`
 > nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento
 > foi realizada ou autorizada.
-> A custódia destes artefatos é regida pela política aprovada em R1 (HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED). Modelo de custódia: SHARED. Destino específico:
-> NOT YET SELECTED. Nenhuma ação física autorizada.
+> A custódia destes artefatos é regida pela política aprovada em R1 (HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED). Modelo de custódia: SHARED.
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2: CLOSED / ACCEPTED. Destino canônico
+> selecionado por decisão humana: `D:\programas\SGAA_Historical_Custody`.
+> Destination status: SELECTED. Provisioning status: SELECTED / PARENT PATH NOT YET
+> PROVISIONED — o diretório ainda não existe e sua criação não está autorizada.
+> Risco de domínio de armazenamento: o destino está fora do repositório e fora da
+> árvore OneDrive observada, mas permanece no mesmo domínio físico de armazenamento
+> D: do workspace de origem; isso oferece separação lógica, não redundância em disco
+> independente. Não é redundante, imutável, off-site, independente do disco de origem,
+> versionado nem protegido contra exclusão.
+> Contrato de cópia Gates 0–6 ratificado documentalmente; nenhum gate executado.
+> Ambiente de restauração descartável preferido: ISOLATED CONTAINER, montando apenas
+> uma cópia descartável derivada; preferência registrada, não execução.
+> Nenhuma ação física autorizada: copy, move, delete, compress e abertura SQLite
+> permanecem NOT AUTHORIZED.
+> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only
+> provisioning and copy-execution readiness contract. R3 is NOT STARTED, exige ordem
+> explícita separada e não está autorizado a criar o destino nem a copiar, mover,
+> excluir, comprimir ou abrir qualquer artefato. Fases 2–6 permanecem não autorizadas.
+> Wording histórico/superado: "Destino específico: NOT YET SELECTED".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
 > completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.
 

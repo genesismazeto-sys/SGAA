@@ -5,22 +5,59 @@
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1:
 CLOSED / ACCEPTED
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2:
+CLOSED / ACCEPTED
+
+R30:
+DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION /
+SUPERSEDED BY HUMAN SELECTION
+
 Human decision date: 25/07/2026.
 
 Active classification:
-CANONICAL_DESTINATION_UNRESOLVED
+CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED /
+PHYSICAL ACTION NOT AUTHORIZED
 
 Historical / superseded classification:
 CUSTODY_POLICY_UNRESOLVED
+CANONICAL_DESTINATION_UNRESOLVED
 
 Custody policy:
 APPROVED
 
-Specific canonical destination:
-UNRESOLVED
+Human-selected canonical destination:
+
+D:\programas\SGAA_Historical_Custody
+
+Destination:
+SELECTED
+
+Destination status:
+SELECTED
+
+Provisioning status:
+SELECTED / PARENT PATH NOT YET PROVISIONED
 
 Physical action:
 NOT AUTHORIZED
+
+Copy:
+NOT AUTHORIZED
+
+Move:
+NOT AUTHORIZED
+
+Delete:
+NOT AUTHORIZED
+
+Compress:
+NOT AUTHORIZED
+
+SQLite open:
+NOT AUTHORIZED
+
+Phase 2–6:
+UNAUTHORIZED
 
 Custody model:
 SHARED
@@ -35,10 +72,15 @@ Retention:
 INDEFINITE
 
 Destination class:
-EXTERNAL CANONICAL CUSTODY LOCATION
+EXTERNAL CANONICAL CUSTODY LOCATION —
+DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE
+
+Physical volume:
+SAME VOLUME AS SOURCE WORKSPACE — D:
 
 Specific destination:
-NOT YET SELECTED
+SELECTED — D:\programas\SGAA_Historical_Custody
+Historical / superseded wording: "NOT YET SELECTED".
 
 Acceptance gate after future copy:
 RESTORE LEVEL 2 — SCHEMA AND METADATA
@@ -73,6 +115,97 @@ Source after copy:
 MUST REMAIN INTACT
 Future source removal requires validated copy, Level 3 restoration, separate human decision, and new explicit physical authorization.
 
+## Gate A — read-only destination verification (R2 / R31)
+
+Verification was strictly read-only. No directory was created, no write test was
+performed, no temporary file was created, no ACL was altered.
+
+| Check | Result |
+|-------|--------|
+| `D:\programas` | DOES NOT EXIST |
+| `D:\programas\SGAA_Historical_Custody` | DOES NOT EXIST |
+| Absolute resolution | `D:\programas\SGAA_Historical_Custody` (literal; `programas`, not `Programação`) |
+| Volume | `D:` — NTFS, Fixed |
+| Physical disk | Disk 1 — SAMSUNG MZALQ512HBLU-00BL2, NVMe |
+| Free space | 497,651,699,712 bytes (~463.5 GiB) |
+| Required space | 4,808,704 bytes across 17 artifacts (~4.59 MiB) |
+| Inside any SGAA Git worktree | NO — the only SGAA worktree is `D:\OneDrive\Programação\SGAA_clean_baseline` |
+| Inside OneDrive | NO — OneDrive tree is `D:\OneDrive\...`; destination is a sibling top-level path |
+| Inside `SGAA_database_backups` | NO — that directory is `D:\OneDrive\Programação\SGAA_database_backups` |
+| Inside pytest roots | NO — `pytest.ini` declares `testpaths = tests`, rooted in the repository |
+| Files with the same 17 names present | NONE — path absent |
+| Conflicts | ZERO |
+| Apparent read ACL (`D:\`) | Readable; Authenticated Users: Modify, Synchronize; SYSTEM/Administrators: FullControl |
+| Longest projected path | `D:\programas\SGAA_Historical_Custody\database.pre-D6.4.0-target-readiness-2-20260531-101530.db-shm` — 98 characters, below the 260-character limit |
+| Reparse point / redirection on `D:\` | NONE observed |
+
+Provisioning status:
+SELECTED / PARENT PATH NOT YET PROVISIONED
+
+Neither `D:\programas` nor the custodial directory exists. This is not a blocker
+for the R2 documentary closeout, and it does not authorize automatic creation of
+either path.
+
+## Storage-domain risk
+
+Storage-domain risk:
+
+The selected destination is outside the repository and outside the observed
+OneDrive tree, but it remains on the same physical D: storage domain as the
+source workspace.
+
+This provides logical separation, not independent-disk redundancy.
+
+The destination must not be represented as redundant, immutable, off-site,
+independent of the source disk, protected by versioning, or protected against
+deletion. A second independent copy may be discussed in the future; it is not
+part of R2.
+
+## Controlled-copy contract — Gates 0–6
+
+No gate below was executed. All remain future work requiring separate explicit
+human authorization.
+
+**Gate 0 — authorization.** Destination ratified; separate human authorization to
+copy; executor identified; copy-only; no move, delete or compress.
+
+**Gate 1 — preflight.** Source 17/17; canonical hashes and sizes; destination
+accessible; sufficient space; zero conflicts; source and Git stable.
+
+**Gate 2 — copy.** Exactly 17 artifacts; names preserved; basename families
+preserved; no overwrite; source intact.
+
+**Gate 3 — integrity.** 17/17 at destination; identical sizes; identical SHA-256;
+dated manifest; hard stop on any divergence.
+
+**Gate 4 — Level 2 restoration.** On a disposable copy derived from the
+destination: SQLite validity; schema; essential tables; indexes; version and
+metadata; no production and no external services.
+
+**Gate 5 — preservation.** Source intact; destination intact; nothing discarded.
+
+**Gate 6 — eventual removal.** Only after Level 3, an accepted report, a new human
+decision, and an explicit physical order.
+
+## Disposable restoration environment
+
+Preferred disposable restoration environment:
+ISOLATED CONTAINER
+
+Mount rule:
+BIND ONLY A DERIVED DISPOSABLE COPY
+
+Source workspace:
+MUST NOT BE MOUNTED AS RESTORATION DATABASE
+
+Custodial artifact:
+MUST NOT BE OPENED DIRECTLY
+
+This is a recorded preference, not an execution. No container was created, no
+Docker runtime was verified, no volume was mounted, no image was built, and no
+database was opened. Operational feasibility of the container remains a separate
+future assessment.
+
 ## Governance rules
 
 1. Esta é uma trilha administrativa/de governança autônoma. Não integra Phase 1, Phase 2 ou qualquer fase arquitetural de implementação.
@@ -105,13 +238,18 @@ Future source removal requires validated copy, Level 3 restoration, separate hum
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
-requirements and controlled-copy contract boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
+copy-execution readiness contract.
 
-R2 is NOT STARTED, requires a separate explicit order and is not authorized
-for physical mutation.
+R3 is NOT STARTED, requires a separate explicit order and is not authorized
+to create the destination or copy, move, delete, compress or open any artifact.
 
-Future R2 objectives: define objective destination requirements; evaluate real
-available options; select specific destination by human decision; draft copy
-contract; define disposable restoration environment; define Level 2 and Level 3
-gates. R2 will not execute a copy. Phase 2 remains without authorized next action.
+Future R3 objectives: controlled creation of the directory; desired ACL; technical
+executor; manifest; exact copy commands; rollback and hard stops; disposable
+container; evidence required before requesting physical authorization. R3 is also
+read-only. Phase 2 remains without authorized next action.
+
+Preserved historical / superseded wording: statements that R2 was "NOT STARTED",
+that the specific destination was "UNRESOLVED" or "NOT YET SELECTED", and the
+R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION` are superseded by
+this closeout and preserved only as historical record.

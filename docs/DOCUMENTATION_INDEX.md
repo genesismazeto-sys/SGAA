@@ -22,8 +22,10 @@
    and PROJECT_STATE historical blocks.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
    — autonomous administrative/governance track for the 17 historical database
-   snapshot artifacts; R1 CLOSED / ACCEPTED, policy approved, specific destination
-   pending; does not integrate any architectural implementation phase.
+   snapshot artifacts; R1 CLOSED / ACCEPTED and R2 CLOSED / ACCEPTED; policy approved;
+   canonical destination SELECTED as `D:\programas\SGAA_Historical_Custody`, not yet
+   provisioned; physical action NOT AUTHORIZED; does not integrate any architectural
+   implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
    substitute for the repository canon.
@@ -72,24 +74,40 @@
   Custody transferred without physical action to autonomous administrative track.
 - **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED.**
   Custody policy: APPROVED.
-  Specific canonical destination: UNRESOLVED.
   Physical action: NOT AUTHORIZED.
   Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
   or any architectural implementation phase.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2: CLOSED / ACCEPTED.**
+  R30: DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION / SUPERSEDED BY HUMAN SELECTION.
+  Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`.
+  Destination status: SELECTED.
+  Destination class: DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE.
+  Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:.
+  Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED.
+  Storage-domain risk: outside the repository and outside the observed OneDrive tree,
+  but on the same physical D: storage domain as the source workspace — logical
+  separation, not independent-disk redundancy; not immutable, not off-site, not
+  versioned, not protected against deletion.
+  Controlled-copy contract Gates 0–6 ratified documentally; none executed.
+  Preferred disposable restoration environment: ISOLATED CONTAINER binding only a
+  derived disposable copy; preference only, nothing created or opened.
+  Physical action: NOT AUTHORIZED. Copy / Move / Delete / Compress / SQLite open:
+  NOT AUTHORIZED.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
-requirements and controlled-copy contract boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
+copy-execution readiness contract.
 
-R2 is NOT STARTED, requires a separate explicit order and is not authorized
-for physical mutation.
+R3 is NOT STARTED, requires a separate explicit order and is not authorized
+to create the destination or copy, move, delete, compress or open any artifact.
 
-Future R2 objectives: define objective destination requirements; evaluate real
-available options; select specific destination by human decision; draft copy
-contract; define disposable restoration environment; define Level 2 and Level 3
-gates. R2 will not execute a copy. Phase 2 remains
+Future R3 objectives: controlled creation of the directory; desired ACL; technical
+executor; manifest; exact copy commands; rollback and hard stops; disposable
+container; evidence required before requesting physical authorization. R3 is also
+read-only. Phase 2 remains
 without authorized next action.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
@@ -119,7 +137,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1 is CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_UNRESOLVED (separate governance track, policy approved, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1 and R2 are CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED (separate governance track, policy approved, canonical destination `D:\programas\SGAA_Historical_Custody`, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -141,7 +159,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1 CLOSED / ACCEPTED, policy approved, destination pending |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1 and R2 CLOSED / ACCEPTED, policy approved, destination SELECTED (`D:\programas\SGAA_Historical_Custody`) but not yet provisioned, physical action NOT AUTHORIZED |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

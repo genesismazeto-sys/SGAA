@@ -32,7 +32,7 @@
 | PHASE-1-U5 | Remove stale diagnostic output | CLOSED / ACCEPTED | `8b55230314605dcf9295072c109f04bea59323c3`; subject `Remove stale diagnostic output` | R25 authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history | PHASE-1-U5: CLOSED/ACCEPTED; U5 read-only reconciliation: CLOSED/ACCEPTED; U5-B bounded implementation: CLOSED/ACCEPTED. Sole path tools/diag_out.txt; blob SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e; 11746 bytes; raw SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b; no functional consumer; focused gate 15 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated 0; protected databases and sidecars unchanged; no canonical database opened; publication incident BLOCKED_PUSH_TIMEOUT→PUBLICATION_COMPLETE | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U6 | Read-only Phase-1 completion assessment and residual-custody disposition boundary | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | R27 docs-only closeout; authorizing subject identity resolved through Git history | Read-only assessment; zero implementation, no tests, no technical commit; confirmed no other safe cleanup bounded candidate with material evidence | `docs/mapeamento/05_avaliacao_refactor.md` | None; U6 was read-only without physical mutation |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | CLOSED / ACCEPTED | U1 `68f52fb`, U2 `5932dff`, U3 `c4fd2dd`, U4 `742b67c`, U5 `8b55230` | R27 docs-only closeout | U1-U6 CLOSED / ACCEPTED; PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK; U6 confirmed no other safe cleanup bounded candidate with material evidence; Phase 1 leaves no partial technical implementation; snapshots not a mandatory technical closeout criterion; custody transferred without physical action to autonomous administrative track | `docs/mapeamento/05_avaliacao_refactor.md` | Residual: historical database snapshot custody transferred to separate governance track — OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED |
-| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED | N/A (no physical mutation authorized) | R29 docs-only ratification | R1 CLOSED / ACCEPTED. Custody policy: APPROVED. Specific destination: UNRESOLVED. Physical action: NOT AUTHORIZED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION. Specific destination: NOT YET SELECTED. Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED. Policy approved via R1. No mutation authorized. Specific destination pending human decision. R2 next (read-only requirements) |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED | N/A (no physical mutation authorized) | R31 docs-only selected-destination closeout | R1 CLOSED / ACCEPTED and R2 CLOSED / ACCEPTED. Custody policy: APPROVED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION — DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE. Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`. Destination status: SELECTED. Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED. Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:; logical separation, not independent-disk redundancy. Gates 0–6 ratified documentally, none executed. Physical action: NOT AUTHORIZED. Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED. Policy approved via R1; destination selected via R2. No mutation authorized. R3 next (read-only provisioning and copy-execution readiness) |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -228,7 +228,7 @@ decision. Phase 2 remains without authorized next action.
 - Zero physical mutation, zero code/test/SQLite change.
 - Phase 2–6 remain NOT AUTHORIZED. Production shadow-only unchanged. R20/D73H unchanged.
 
-Exact next action:
+Exact next action (phase-time, superseded by R31):
 
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
 requirements and controlled-copy contract boundary.
@@ -240,3 +240,80 @@ Future R2 objectives: define objective destination requirements; evaluate real
 available options; select specific destination by human decision; draft copy
 contract; define disposable restoration environment; define Level 2 and Level 3
 gates. R2 will not execute a copy. Phase 2 remains without authorized next action.
+
+## Governance event — R31
+
+**Objective:** Record the human-selected historical custody destination; read-only
+destination verification and documentary closeout of HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2.
+
+**Objective type:** read-only destination verification + docs-only closeout.
+
+**Closeout identity:** authorized subject `Record selected historical custody destination`;
+identity resolved through Git history.
+
+**Status: CLOSED / ACCEPTED.**
+
+**Tests:** NOT RUN / PROHIBITED.
+
+**R30 (preceding read-only destination-options packet):** Read-only completed.
+Phase-time state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, now
+SUPERSEDED BY HUMAN SELECTION. Its statement that R2 was NOT STARTED is phase-time
+history superseded by this event.
+
+**Binding human decision:**
+
+Human-selected canonical destination:
+
+D:\programas\SGAA_Historical_Custody
+
+Destination: SELECTED. Destination class: DEDICATED DIRECTORY OUTSIDE REPOSITORY AND
+ONEDRIVE. Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:. Physical action:
+NOT AUTHORIZED.
+
+**Gate A — read-only destination verification (no creation, no write test, no ACL change):**
+- `D:\programas` — DOES NOT EXIST.
+- `D:\programas\SGAA_Historical_Custody` — DOES NOT EXIST.
+- Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED. Not a blocker for
+  the R2 documentary closeout and not an authorization to create anything.
+- Volume `D:` — NTFS, Fixed, Disk 1 (SAMSUNG MZALQ512HBLU-00BL2, NVMe).
+- Free space 497,651,699,712 bytes against 4,808,704 bytes required for the 17 artifacts.
+- Outside every SGAA Git worktree; outside the OneDrive tree; outside
+  `D:\OneDrive\Programação\SGAA_database_backups`; outside the pytest roots
+  (`pytest.ini` declares `testpaths = tests`).
+- Zero conflicting files bearing any of the 17 canonical names.
+- Apparent read ACL on `D:\` readable; longest projected path 98 characters.
+- Source inventory revalidated read-only: 17/17 artifacts present, sizes and SHA-256
+  identical to the canonical inventory.
+
+**Storage-domain risk:** the selected destination is outside the repository and outside
+the observed OneDrive tree, but it remains on the same physical D: storage domain as the
+source workspace. This provides logical separation, not independent-disk redundancy. The
+destination must not be represented as redundant, immutable, off-site, independent of the
+source disk, versioned, or protected against deletion. A second independent copy may be
+discussed in the future and is not part of R2.
+
+**R31 actions:**
+- R2 recorded as CLOSED / ACCEPTED; canonical destination recorded as SELECTED.
+- Controlled-copy contract Gates 0–6 preserved and ratified documentally; no gate executed.
+- Preferred disposable restoration environment recorded as ISOLATED CONTAINER binding only
+  a derived disposable copy; the source workspace must not be mounted as the restoration
+  database; the custodial artifact must not be opened directly. Preference only — no
+  container created, no Docker runtime verified, no volume mounted, no image built.
+- Historical / superseded classification extended with CANONICAL_DESTINATION_UNRESOLVED.
+- Zero physical mutation: no directory created, no copy, no move, no delete, no compress,
+  no SQLite database opened, zero code or test change.
+- Physical action, copy, move, delete, compress and SQLite open remain NOT AUTHORIZED.
+- Phase 2–6 remain NOT AUTHORIZED. Production shadow-only unchanged. R20/D73H unchanged.
+
+Exact next action:
+
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
+copy-execution readiness contract.
+
+R3 is NOT STARTED, requires a separate explicit order and is not authorized
+to create the destination or copy, move, delete, compress or open any artifact.
+
+Future R3 objectives: controlled creation of the directory; desired ACL; technical
+executor; manifest; exact copy commands; rollback and hard stops; disposable container;
+evidence required before requesting physical authorization. R3 is also read-only.
+Phase 2 remains without authorized next action.

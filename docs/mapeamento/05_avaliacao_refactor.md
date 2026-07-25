@@ -133,28 +133,46 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
-**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED.**
+**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION NOT YET PROVISIONED / PHYSICAL ACTION NOT AUTHORIZED.**
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Transferred residual governance matter:
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY
-Status: R1 CLOSED / ACCEPTED (policy approved; specific destination UNRESOLVED).
+Status: R1 CLOSED / ACCEPTED (policy approved) and R2 CLOSED / ACCEPTED.
+R30: DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION / SUPERSEDED BY HUMAN SELECTION.
+Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`.
+Destination status: SELECTED.
+Destination class: DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE.
+Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:.
+Provisioning status: SELECTED / PARENT PATH NOT YET PROVISIONED.
+Storage-domain risk: the destination is outside the repository and outside the
+observed OneDrive tree, but remains on the same physical D: storage domain as the
+source workspace. This provides logical separation, not independent-disk redundancy.
+It is not redundant, immutable, off-site, independent of the source disk, versioned,
+or protected against deletion.
+Controlled-copy contract Gates 0–6 ratified documentally; none executed.
+Preferred disposable restoration environment: ISOLATED CONTAINER binding only a
+derived disposable copy; the source workspace must not be mounted as the restoration
+database and the custodial artifact must not be opened directly. Preference only.
+Physical action, copy, move, delete, compress and SQLite open: NOT AUTHORIZED.
 No archival performed or authorized.
+Preserved historical / superseded wording: "specific destination UNRESOLVED";
+"NOT YET SELECTED"; "R2 is NOT STARTED".
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
-requirements and controlled-copy contract boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3 — read-only provisioning and
+copy-execution readiness contract.
 
-R2 is NOT STARTED, requires a separate explicit order and is not authorized
-for physical mutation.
+R3 is NOT STARTED, requires a separate explicit order and is not authorized
+to create the destination or copy, move, delete, compress or open any artifact.
 
-Future R2 objectives: define objective destination requirements; evaluate real
-available options; select specific destination by human decision; draft copy
-contract; define disposable restoration environment; define Level 2 and Level 3
-gates. R2 will not execute a copy. Phase 2 remains
+Future R3 objectives: controlled creation of the directory; desired ACL; technical
+executor; manifest; exact copy commands; rollback and hard stops; disposable
+container; evidence required before requesting physical authorization. R3 is also
+read-only. Phase 2 remains
 without authorized next action.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
