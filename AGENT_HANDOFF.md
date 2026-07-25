@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — Phase 1 OPEN / IN PROGRESS
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — Phase 1 OPEN / IN PROGRESS
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -34,9 +34,12 @@
 - **CSRF snapshots:** both snapshots (`tests/_artifacts/csrf_inventory_shadow_off.json` and `tests/_artifacts/csrf_inventory_shadow_on.json`) regenerated through canonical `--update-csrf-snapshots` and adopted as one coherent pair. Raw SHA-256 for each: ab40107b840eabcc566f678662c813e33cccc0201adfdea7e37b3e37d8a23f8c. Mutable routes 78; endpoint identities 77; high-risk 0; blocked-risk 0; rendered templates 19; route records 78; form records 592; evidence records 628; route/status mappings unchanged; methods unchanged; decorators unchanged; token modes unchanged; test references unchanged; prohibited semantic deltas 0. Byte changes were ordering-only under normalized semantic comparison.
 - **Tests/invariants:** new `tests/test_aluno_compat_exports.py` with three tests: (1) legacy bodies and no-op registration absent; (2) main compatibility exports match active blueprint; (3) rebind idempotent and URLs stable. Compatibility-only recheck 3 passed. Focused lane 47 passed, 0 failed, 0 errors, 0 skips, 0 deselected. Full hermetic suite 657 passed, 17 deselected, 0 failed, 0 errors, D73H executed 0. Invariants: aggregate physical/Git hash unchanged around focused and full lanes; `database.db` unchanged; all nine `database.pre-*.db` snapshots unchanged; uploads unchanged; `documentos_alunos` unchanged; backups unchanged; logs unchanged; `.pytest_cache` unchanged; preexisting pytest runtime roots unchanged; no execution-owned runtime root survived; no canonical database opened or queried.
 - **U1 remains CLOSED / ACCEPTED.**
-- **Phase 1 remains OPEN / IN PROGRESS.**
 - **U2 remains CLOSED / ACCEPTED.**
-- **U3 is CLOSED / ACCEPTED.**
+- **U3 remains CLOSED / ACCEPTED.**
+- **U4 remains CLOSED / ACCEPTED.**
+- **U5 is CLOSED / ACCEPTED.**
+- **Phase 1 remains OPEN / IN PROGRESS.**
+  Reason: all identified safe technical candidates were executed; the remaining snapshot matter depends on custody decision; a separate formal assessment is required to determine whether Phase 1 can close with that matter transferred to a governance/custody track.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
 - **U4 read-only proof:** CLOSED / ACCEPTED.
 - **U4-B bounded implementation:** CLOSED / ACCEPTED.
@@ -48,6 +51,43 @@
 - **Validation evidence:** AST confirmed only those three bindings removed; indirect consumers zero; hermetic import-time PASS; SQLite connections during import zero; `tests/test_aluno_compat_exports.py` 3 passed; route inventory plus RBAC coverage 3 passed; full suite 657 passed, 17 deselected, zero failed/errors; D73H executed zero; snapshots regenerated: zero; protected databases and roots unchanged.
 - **U3 made no import unused.** All three removed imports were preexisting dead bindings predating U3. The hashlib comment correction and local msal probe preservation were included in the same bounded unit.
 - **R21 routing:** original logical route flash_free; native fallback flash_normal; cause FALLBACK_FREE_EXECUTION_FAILURE; effective model opencode-go/deepseek-v4-flash; session ses_0699201ebffep2uXFswB6iotIf; cost 0.000425292; fallback explicit, not silent.
+- **PHASE-1-U5:** CLOSED / ACCEPTED.
+- **U5 read-only reconciliation:** CLOSED / ACCEPTED.
+- **U5-B bounded implementation:** CLOSED / ACCEPTED.
+- **Accepted technical commit:** 8b55230314605dcf9295072c109f04bea59323c3 — `Remove stale diagnostic output`.
+- **Sole technical path:** `tools/diag_out.txt`.
+- **Path nature:** tracked, passive, obsolete diagnostic artifact.
+- **Original Git blob SHA-1:** 45f5fc833364e9d2bc49132b4a0f6a0b045be74e.
+- **Original raw size:** 11,746 bytes.
+- **Raw SHA-256:** f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b.
+- **No functional consumer found; Git history preserves recovery.**
+- **No code, tests, database, or behavior changed.**
+- **Accepted technical evidence:**
+  - Staged deletion occurred before tests.
+  - `git ls-files` no longer included `tools/diag_out.txt` during the lanes.
+  - Focused isolation gate: 15 passed.
+  - Full suite: 657 passed, 17 deselected.
+  - Failures/errors: zero.
+  - D73H executed: zero.
+  - Snapshots regenerated: zero.
+  - Protected databases and sidecars unchanged.
+  - No canonical database opened.
+  - No R24 root survived.
+  - Publication incident: Initial publication: BLOCKED_PUSH_TIMEOUT; Recovery: PUBLICATION_COMPLETE.
+  - The timeout is not a technical patch failure.
+- **Nonconformities (recorded succinctly):**
+  - First lane used an interpreter without dependencies and was rejected.
+  - Unauthorized pip install attempts installed no packages.
+  - Unauthorized git hash-object -w attempt produced no object.
+  - First full-suite run timed out and was replaced by an approved complete execution.
+  - Initial push timed out.
+  - Recovery used foreground PTY without bypassing Git Credential Manager.
+  - None caused any additional repository change.
+  - None is an authorized precedent.
+database.pre-*.db and associated sidecars:
+CUSTODY_DECISION_REQUIRED
+
+No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
 - **No later Phase-1 cleanup unit is implemented or accepted.**
 - **Phases 2-6 remain unauthorized.**
 - **Production remains shadow-only; production hard enforcement remains unauthorized.**
@@ -55,7 +95,22 @@
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 - **Preserved historical/superseded — pre-U3 wording:** statements that U3 was "NOT STARTED / REQUIRES SEPARATE ORDER", "awaiting separate implementation order", "awaiting original read-only proof", "awaiting external acceptance", or "only locally validated" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 - **Preserved historical/superseded — pre-U4 wording:** statements that U4 was "NOT STARTED", "future read-only only", "awaiting diagnosis/implementation", "U4-B awaiting audit", "hashlib comment deferred", or "import cleanup not done" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
-- **Exact next action:** PHASE-1-U5 — read-only reconciliation and selection of the next bounded Phase-1 safe-cleanup candidate. U5 is NOT STARTED; requires a separate explicit order; not authorized for mutation. Future proof selects from real repository state/plan without presuming database.pre-*.db deletion/movement, Referrer-Policy, route extraction, blueprint restructuring, database consolidation, dependencies, UI, or Phase 2. Do not imply implementation authorization.
+- **Preserved historical/superseded — pre-U5 wording:** statements that U5 was "NOT STARTED", "requires separate order", "read-only only", "NOT STARTED / REQUIRES SEPARATE ORDER", or "not authorized for mutation" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
+
+Exact next action:
+
+PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
+disposition boundary.
+
+U6 is NOT STARTED, requires a separate explicit order and is not authorized
+for mutation.
+
+Future U6 objective: confirm no other implementable safe-cleanup remains;
+decide whether historical snapshots block Phase-1 close; separate cleanup
+from administrative custody; recommend one of: close with documented
+residual risk, keep open awaiting user decision, transfer snapshots to
+separate governance track, or identify a new candidate only with material
+evidence. Do not authorize Phase 2 by implication.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -224,8 +279,8 @@
 - The primary database and untracked historical backups were not opened, copied, or changed. The temporary worktree is disposable; its runtime artifacts do not belong to the primary worktree.
 - Decision: **GO for REF-0TF-B only.** Do not correct RBAC, modularize routes, alter production code, or use a live database/backup. REF-0TF-B must define a sanitized, versioned D73H fixture or an explicit separate invocation contract.
 
-Last updated: 2026-07-24 (U4 docs-only acceptance closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; Phase 1 OPEN / IN PROGRESS)
-Closeout: U4 docs-only acceptance closeout (PHASE-1-U4)
+Last updated: 2026-07-25 (U5 docs-only acceptance closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; Phase 1 OPEN / IN PROGRESS)
+Closeout: U5 docs-only acceptance closeout (PHASE-1-U5)
 Executor: deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State

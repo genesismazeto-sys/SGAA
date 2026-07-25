@@ -29,7 +29,8 @@
 | PHASE-1-U2 | Delete KRThinkpad parallel template | CLOSED / ACCEPTED | `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`; subject `Remove obsolete machine-specific turma template` | R16 authorized subject `Record acceptance of Phase 1 U2`; documentary commit identity resolved through Git history | Deleted path admin_turmas-KRThinkpad.html; blob SHA-1 96ae0698; 2114 bytes; raw SHA-256 01f32a5d; catalog SHA-256 ae408075; 0 key/usage delta; 73 inputs; 536 keys; runtime-isolation 2 passed; focused 45 passed; full 654 passed 17 deselected; invariant a485690d pre/post identical | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U3 | Remove legacy aluno route bodies | CLOSED / ACCEPTED | `c4fd2dd1852011a0ec860493ed4cf53834584c42`; subject `Remove legacy aluno route bodies` | R19 docs-only external acceptance closeout; documentary commit identity resolved through Git history | Removed symbols: _noop_route, aluno_runtime_route, aluno_arquivos, aluno_minhas_requisicoes, aluno_requisicao_detalhe, aluno_dashboard, aluno_nova_requisicao, aluno_meus_dados; main.py delta 0 insertions 756 deletions; 8 compatibility exports preserved; Flask rules 131 unchanged; catalog keys 536 unchanged; CSRF snapshots regenerated as coherent pair; focused lane 47 passed; full suite 657 passed 17 deselected 0 failed 0 errors; invariant aggregate unchanged | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U4 | Remove unused main imports + correct hashlib comment | CLOSED / ACCEPTED | `742b67c0623bdf41e292280a11a40d2fddad717c`; subject `Remove unused main imports` | R22 authorized subject `Record acceptance of Phase 1 U4`; documentary commit identity resolved through Git history | PHASE-1-U4: CLOSED/ACCEPTED; U4 read-only proof: CLOSED/ACCEPTED; U4-B bounded implementation: CLOSED/ACCEPTED. Removed imports: wraps (functools), Flask (flask), bp_presets (presets_api); hashlib preserved with corrected comment; msal probe preserved; main.py delta 2 insertions 4 deletions; AST confirmed only those 3 bindings removed; indirect consumers zero; import-time PASS; SQLite connections during import zero; test_aluno_compat_exports 3 passed; route inventory + RBAC coverage 3 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated: 0. R21 routing: flash_free→flash_normal; cause FALLBACK_FREE_EXECUTION_FAILURE; effective opencode-go/deepseek-v4-flash; session ses_0699201ebffep2uXFswB6iotIf; cost 0.000425292; fallback explicit | `docs/mapeamento/05_avaliacao_refactor.md` | None |
-| Fase 1 | Safe cleanup: dead code, lixo, headers | OPEN / IN PROGRESS | N/A | N/A | U1 CLOSED / ACCEPTED; U2 CLOSED / ACCEPTED; U3 CLOSED / ACCEPTED; U4 CLOSED / ACCEPTED; U5 NOT STARTED / REQUIRES SEPARATE ORDER | `docs/mapeamento/05_avaliacao_refactor.md` | U1, U2, U3 and U4 accepted; U5 read-only only; no other cleanup unit authorized |
+| PHASE-1-U5 | Remove stale diagnostic output | CLOSED / ACCEPTED | `8b55230314605dcf9295072c109f04bea59323c3`; subject `Remove stale diagnostic output` | R25 authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history | PHASE-1-U5: CLOSED/ACCEPTED; U5 read-only reconciliation: CLOSED/ACCEPTED; U5-B bounded implementation: CLOSED/ACCEPTED. Sole path tools/diag_out.txt; blob SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e; 11746 bytes; raw SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b; no functional consumer; focused gate 15 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated 0; protected databases and sidecars unchanged; no canonical database opened; publication incident BLOCKED_PUSH_TIMEOUT→PUBLICATION_COMPLETE | `docs/mapeamento/05_avaliacao_refactor.md` | None |
+| Fase 1 | Safe cleanup: dead code, lixo, headers | OPEN / IN PROGRESS | N/A | N/A | U1 CLOSED / ACCEPTED; U2 CLOSED / ACCEPTED; U3 CLOSED / ACCEPTED; U4 CLOSED / ACCEPTED; U5 CLOSED / ACCEPTED; U6 NOT STARTED | `docs/mapeamento/05_avaliacao_refactor.md` | U1-U5 accepted; Phase 1 remains open due to unresolved snapshot custody decision |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -58,6 +59,26 @@ Phase-0 completion matrix and REF-0C-D decision.
 **Residual state:** Phase 0 remains open with REF-0C-D-R1 and smoke-flow
 contract/evidence. REF-0C-D-R1, Fase 1, and production hard enforcement remain
 not authorized.
+
+## Governance event — R25
+
+**Objective:** Record acceptance of PHASE-1-U5 — remove stale diagnostic output (`tools/diag_out.txt`).
+
+**Objective type:** docs-only external acceptance closeout.
+
+**Closeout identity:** authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history.
+
+**Status: CLOSED / ACCEPTED.**
+
+**Tests:** NOT RUN (PROHIBITED); relied on pre-existing staging-lane evidence.
+
+**Accepted technical commit:** `8b55230314605dcf9295072c109f04bea59323c3` — `Remove stale diagnostic output`.
+
+**Evidence:** Removed `tools/diag_out.txt` (11,746 bytes, SHA-1 `45f5fc833364e9d2bc49132b4a0f6a0b045be74e`, SHA-256 `f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b`). Focused isolation gate: 15 passed. Full suite: 657 passed, 17 deselected, zero failures/errors. D73H executed zero. Snapshots regenerated zero. No code, tests, database, or behavior changed.
+
+**Files changed (this closeout only):** `AGENT_HANDOFF.md`, `PROJECT_STATE.md`, `docs/DOCUMENTATION_INDEX.md`, `docs/mapeamento/04_arquitetura_e_modulos.md`, `docs/mapeamento/05_avaliacao_refactor.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
+
+**Residual state:** Phase 1 remains OPEN / IN PROGRESS. Snapshot custody: CUSTODY_DECISION_REQUIRED. All identified safe technical candidates executed. Next authorized action: PHASE-1-U6 (NOT STARTED). Phases 2–6 remain unauthorized.
 
 ## REF-0C-D formal decision
 
@@ -99,7 +120,28 @@ resolved through Git history. **R10 contract status:** The pre-acceptance status
 - **PHASE-1-U2:** CLOSED / ACCEPTED at `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`.
 - **PHASE-1-U3:** CLOSED / ACCEPTED at `c4fd2dd1852011a0ec860493ed4cf53834584c42`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED at `742b67c0623bdf41e292280a11a40d2fddad717c`. U4 read-only proof: CLOSED / ACCEPTED. U4-B bounded implementation: CLOSED / ACCEPTED.
-- **EXACTLY ONE CURRENT NEXT TECHNICAL ACTION:** PHASE-1-U5 — read-only reconciliation and selection of the next bounded Phase-1 safe-cleanup candidate. U5 is NOT STARTED; read-only only; requires a separate explicit order; not authorized for mutation. Future proof selects from real repository state/plan without presuming database.pre-*.db deletion/movement, Referrer-Policy, route extraction, blueprint restructuring, database consolidation, dependencies, UI, or Phase 2. Do not imply implementation authorization. Explicitly do not authorize `database.pre-*.db` deletion/movement; Referrer-Policy changes; route extraction; blueprint restructuring; database consolidation; dependency changes; UI changes; Phase-2 work.
+- **PHASE-1-U5:** CLOSED / ACCEPTED at `8b55230314605dcf9295072c109f04bea59323c3`. U5 read-only reconciliation: CLOSED / ACCEPTED. U5-B bounded implementation: CLOSED / ACCEPTED. Removed tools/diag_out.txt — stale diagnostic artifact, 11,746 bytes, no functional consumer.
+- **Phase 1 remains OPEN / IN PROGRESS.** Reason: all identified safe technical candidates were executed; remaining snapshots depend on custody decision; a separate formal assessment must decide whether Phase 1 can close with that matter transferred to governance/custody.
+
+Exact next action:
+
+PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
+disposition boundary.
+
+U6 is NOT STARTED, requires a separate explicit order and is not authorized
+for mutation.
+
+Future U6 objective: confirm no other implementable safe-cleanup remains;
+decide whether historical snapshots block Phase-1 close; separate cleanup
+from administrative custody; recommend one of: close with documented
+residual risk, keep open awaiting user decision, transfer snapshots to
+separate governance track, or identify a new candidate only with material
+evidence. Do not authorize Phase 2 by implication.
+
+database.pre-*.db and associated sidecars:
+CUSTODY_DECISION_REQUIRED
+
+No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
 
 Explicitly prohibited without separate authorization: route extraction;
 blueprint restructuring; database consolidation; behavior changes; schema/migrations;

@@ -130,7 +130,11 @@ possível reduz muito a complexidade do resolver.
 - Estado de rate-limit em memória (multi-worker).
 - `templates/admin_turmas-KRThinkpad.html` — PHASE-1-U2 CLOSED / ACCEPTED. Template excluído e aceito externamente em 5932dff.
 - `templates/src.code-workspace-1.code-workspace` — removido por PHASE-1-U1 (CLOSED / ACCEPTED).
-- Snapshots `database.pre-*.db` na raiz — sujeitos a decisão de custódia de dados. Nenhum outro candidato de limpeza está autorizado.
+- `tools/diag_out.txt` — artefato diagnóstico obsoleto removido em PHASE-1-U5 (CLOSED / ACCEPTED). Commit `8b55230314605dcf9295072c109f04bea59323c3`, 11,746 bytes, SHA-1 `45f5fc833364e9d2bc49132b4a0f6a0b045be74e`, SHA-256 `f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b`. Nenhum consumidor funcional encontrado; Git preserva recuperação.
+database.pre-*.db and associated sidecars:
+CUSTODY_DECISION_REQUIRED
+
+No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
 
 ## Pontos fortes da arquitetura (preservar no refactor)
 

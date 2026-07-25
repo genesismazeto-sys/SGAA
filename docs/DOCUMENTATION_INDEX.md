@@ -42,10 +42,10 @@
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
 
-## Canonical current state (2026-07-24)
+## Canonical current state (2026-07-25)
 
 - Branch: `refactor/architecture-safety-net`
-- Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4)
+- Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
 - R9 evidence: `tests/test_phase_0_smoke_flows.py` (new, 5 tests); contract: `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md`
@@ -59,8 +59,30 @@
 - **PHASE-1-U2: CLOSED / ACCEPTED** — deleted `templates/admin_turmas-KRThinkpad.html` at commit `5932dff2d6dbd63e4a1f52ffd649ea33577535d0`.
 - **PHASE-1-U3: CLOSED / ACCEPTED** — removed legacy aluno route bodies from main.py at commit `c4fd2dd1852011a0ec860493ed4cf53834584c42`; 0 insertions, 756 deletions; all eight compatibility exports preserved.
 - **PHASE-1-U4: CLOSED / ACCEPTED** — U4 read-only proof: CLOSED / ACCEPTED; U4-B bounded implementation: CLOSED / ACCEPTED. Removed unused imports from main.py (wraps, Flask, bp_presets) and corrected hashlib comment at commit `742b67c0623bdf41e292280a11a40d2fddad717c`; 2 insertions, 4 deletions; no behavioral change.
+- **PHASE-1-U5: CLOSED / ACCEPTED** — U5 read-only reconciliation: CLOSED / ACCEPTED; U5-B bounded implementation: CLOSED / ACCEPTED. Removed stale diagnostic artifact `tools/diag_out.txt` (11,746 bytes, SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e, SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b) at commit `8b55230314605dcf9295072c109f04bea59323c3`. No functional consumer. Focused gate 15 passed; full suite 657 passed, 17 deselected, zero failures/errors; D73H executed zero; snapshots regenerated zero.
 - **Phase 1:** OPEN / IN PROGRESS.
-- **Exact next authorizable action:** PHASE-1-U5 — read-only reconciliation and selection of the next bounded Phase-1 safe-cleanup candidate. U5 is NOT STARTED; requires a separate explicit order; not authorized for mutation. Future proof selects from real repository state/plan without presuming database.pre-*.db deletion/movement, Referrer-Policy, route extraction, blueprint restructuring, database consolidation, dependencies, UI, or Phase 2. Do not imply implementation authorization.
+  Reason: all identified safe technical candidates were executed; remaining snapshots depend on custody decision; a separate formal assessment must decide whether Phase 1 can close with that matter transferred to governance/custody.
+
+Exact next action:
+
+PHASE-1-U6 — read-only Phase-1 completion assessment and residual-custody
+disposition boundary.
+
+U6 is NOT STARTED, requires a separate explicit order and is not authorized
+for mutation.
+
+Future U6 objective: confirm no other implementable safe-cleanup remains;
+decide whether historical snapshots block Phase-1 close; separate cleanup
+from administrative custody; recommend one of: close with documented
+residual risk, keep open awaiting user decision, transfer snapshots to
+separate governance track, or identify a new candidate only with material
+evidence. Do not authorize Phase 2 by implication.
+
+database.pre-*.db and associated sidecars:
+CUSTODY_DECISION_REQUIRED
+
+No formal definition exists yet for: custodian; retention; canonical destination; restoration procedure; post-archive integrity verification. Archival is not complete, authorized, or discarded. No snapshots or sidecars were mutated.
+
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
 - D73H historical lane: **unchanged**
@@ -80,13 +102,14 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   - **PHASE-1-U2 (KRThinkpad parallel template): CLOSED / ACCEPTED.**
   - **PHASE-1-U3 (legacy aluno routes and `aluno_runtime_route`): CLOSED / ACCEPTED.**
   - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
+  - **PHASE-1-U5 (stale diagnostic output): CLOSED / ACCEPTED.**
 - **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is OPEN / IN PROGRESS. U1, U2, U3 and U4 are CLOSED / ACCEPTED. No later Phase-1 cleanup unit is implemented or accepted. PHASE-1-U5 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
+Phase 1 is OPEN / IN PROGRESS. U1, U2, U3, U4 and U5 are CLOSED / ACCEPTED. No later Phase-1 cleanup unit is implemented or accepted. PHASE-1-U6 is NOT STARTED / REQUIRES SEPARATE ORDER. Phases 2–6 remain **unauthorized**.
 
 ## Ledger
 
