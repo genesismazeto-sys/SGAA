@@ -22,11 +22,11 @@
    and PROJECT_STATE historical blocks.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
    — autonomous administrative/governance track for the 17 historical database
-   snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; policy approved; canonical
-   destination SELECTED as `D:\programas\SGAA_Historical_Custody`, not yet provisioned;
-   provisioning and copy contract APPROVED (layout, ACL, executor, manifest,
-   partial-failure policy, provisional Level 2 environment); **physical execution NOT
-   AUTHORIZED AT THIS TIME**; does not integrate any architectural implementation phase.
+   snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED** — destination
+   `D:\programas\SGAA_Historical_Custody` PROVISIONED, 17 artifacts copied and verified
+   (4,808,704 bytes), custody manifest and evidence report written, source preserved,
+   SQLite never opened; residual parent-ACL exposure OPEN and security-complete custody
+   NOT YET CLAIMED; does not integrate any architectural implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
    substitute for the repository canon.
@@ -99,8 +99,8 @@
 - **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED.**
   R3 was read-only. Phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
   SUPERSEDED BY HUMAN APPROVAL of 25/07/2026.
-  Active classification: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
-  PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+  Phase-time classification, superseded by R4: PROVISIONING_AND_COPY_CONTRACT_APPROVED /
+  DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
   Approved: layout `artifacts\` / `manifests\` / `evidence\`; executor `KR-IDEAPAD\klebe`;
   ACL with inheritance disabled, `Authenticated Users` and `BUILTIN\Users` removed,
   `SYSTEM` and `Administrators` FullControl, executor Modify during provisioning and copy
@@ -113,21 +113,35 @@
   Physical execution, move, delete, compress, SQLite open, restoration execution and
   source removal: NOT AUTHORIZED.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4: EXECUTED / PHYSICAL PROVISIONING COMPLETE /
+  COPY COMPLETE / INTEGRITY VERIFIED / SOURCE PRESERVED.**
+  Pre-execution physical authorization: EVIDENCED. Authority: PROJECT OWNER. Scope: R4 ONLY.
+  Destination PROVISIONED: `artifacts\` 17 files / 4,808,704 bytes;
+  `manifests\custody-manifest-20260725T233026Z.json` (16,872 bytes, SHA-256
+  `8552c289…f0c3`); `evidence\r4-copy-and-verification-20260725T233315Z.md` (4,505 bytes,
+  SHA-256 `82494024…6d71`). Source aggregate SHA-256 `44ae5da3…3be3` unchanged.
+  Per-file destination SHA-256 = source = canon for all 17. SQLite NOT OPENED.
+  Restoration Level 2 and Level 3 NOT EXECUTED. Source removal NOT AUTHORIZED.
+  Operational nonconformities: DECLARED / CONTAINED / NO ARTIFACT INTEGRITY IMPACT /
+  NOT AN AUTHORIZED PRECEDENT — three occurrences recorded in the custody document.
+  Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN. Security-complete custody:
+  NOT YET CLAIMED. The R4 report's `DELETE_CHILD` claim is corrected: the inherited
+  `Authenticated Users` mask `0x1301BF` on `D:\programas` does not include
+  `FILE_DELETE_CHILD`.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application,
-copy of the 17 artifacts, manifest creation and integrity verification.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
+D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
 
-R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
-withheld in the same human decision. R4 requires a separate explicit human order
-releasing physical execution; the recorded approval is not that order.
+R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
+directory, any ACL, any artifact, any manifest or any evidence file.
 
-R4 scope when released: create `D:\programas` and
-`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
-approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
-manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
-restoration execution and source removal remain prohibited. Phase 2 remains
+R5 objectives: compute the relevant effective permissions on the parent; confirm or
+refute `FILE_DELETE_CHILD`; assess the impact on deletion and renaming of the custody
+root; propose minimal hardening options; assess the impact on other descendants of
+`D:\programas`; request a human decision; and remain entirely read-only. Phase 2 remains
 without authorized next action.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
@@ -157,7 +171,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME (separate governance track, policy approved, canonical destination `D:\programas\SGAA_Historical_Custody`, contract approved but unexecuted, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED and R4 is EXECUTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, residual parent-ACL exposure open, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -179,7 +193,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; policy approved; destination SELECTED (`D:\programas\SGAA_Historical_Custody`) but not yet provisioned; provisioning and copy contract APPROVED and unexecuted; physical execution NOT AUTHORIZED AT THIS TIME |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; R4 EXECUTED — destination `D:\programas\SGAA_Historical_Custody` provisioned, 17 artifacts copied and integrity-verified, manifest and evidence written, source preserved, SQLite never opened; residual parent-ACL exposure open; security-complete custody not yet claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

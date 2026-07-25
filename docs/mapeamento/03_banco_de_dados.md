@@ -179,8 +179,8 @@ Estratégia **mista** (ponto de dívida técnica):
 > Contrato de cópia Gates 0–6 ratificado documentalmente; nenhum gate executado.
 > HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3: CLOSED / ACCEPTED. R3 foi read-only e seu
 > contrato de provisionamento e cópia foi APROVADO por decisão humana em 25/07/2026.
-> Classificação ativa: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
-> PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+> Classificação de fase, superada pela R4: PROVISIONING_AND_COPY_CONTRACT_APPROVED /
+> DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
 > Layout aprovado: `artifacts\` (os 17 artefatos), `manifests\` (manifesto de custódia
 > JSON), `evidence\` (relatórios de cópia e verificação).
 > Executor técnico aprovado: `KR-IDEAPAD\klebe`.
@@ -202,14 +202,27 @@ Estratégia **mista** (ponto de dívida técnica):
 > cópia derivada de `artifacts\`; o workspace de origem nunca é montado como banco de
 > restauração e `artifacts\` nunca é aberto diretamente. ISOLATED CONTAINER volta a ser
 > preferido se houver runtime instalado.
-> **Execução física NÃO AUTORIZADA neste momento** — retida na mesma decisão que aprovou o
-> contrato. Move, delete, compress, abertura SQLite, execução de restauração e remoção da
-> origem permanecem NOT AUTHORIZED.
-> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — provisionamento
-> controlado, aplicação da ACL, cópia dos 17 artefatos, criação do manifesto e verificação
-> de contagem, tamanhos e SHA-256. R4 is NOT STARTED e exige ordem humana explícita e
-> separada liberando a execução física; a aprovação registrada não é essa ordem.
-> Fases 2–6 permanecem não autorizadas.
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4: **EXECUTADA** — provisionamento físico completo,
+> cópia completa, integridade verificada, origem preservada. Autorização física
+> pré-execução: EVIDENCIADA; autoridade: dono do projeto; escopo: somente R4.
+> Destino provisionado em `D:\programas\SGAA_Historical_Custody`, com `artifacts\`
+> (17 arquivos, 4.808.704 bytes), `manifests\custody-manifest-20260725T233026Z.json`
+> (16.872 bytes) e `evidence\r4-copy-and-verification-20260725T233315Z.md` (4.505 bytes).
+> SHA-256 por arquivo no destino = origem = cânone para os 17. Hash agregado da origem
+> `44ae5da3f368605ac2550cc65d70d2081d432977c48fad1f467884a65f2e3be3` inalterado antes e
+> depois da cópia. Os 17 artefatos originais permanecem na raiz do repositório, ignored,
+> untracked e fisicamente inalterados.
+> Nenhum banco foi aberto como SQLite em nenhum momento — apenas hash e cópia binária.
+> Restauração Nível 2 e Nível 3: NÃO EXECUTADAS. Remoção da origem: NÃO AUTORIZADA.
+> Não conformidades operacionais da R4: DECLARED / CONTAINED / NO ARTIFACT INTEGRITY
+> IMPACT / NOT AN AUTHORIZED PRECEDENT — três ocorrências registradas no documento de
+> custódia. A R4 não deve ser descrita como execução sem falhas.
+> Risco residual: exposição de ACL no diretório pai `D:\programas` ainda ABERTA; custódia
+> completa do ponto de vista de segurança AINDA NÃO declarada.
+> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — verificação read-only da
+> exposição do pai e pacote de decisão sobre endurecimento da ACL do pai. R5 is NOT STARTED
+> e não está autorizada a modificar `D:\programas`, o diretório custodial, qualquer ACL,
+> artefato, manifesto ou arquivo de evidência. Fases 2–6 permanecem não autorizadas.
 > Wording histórico/superado: "Destino específico: NOT YET SELECTED".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
 > completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.

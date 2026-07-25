@@ -11,6 +11,11 @@ CLOSED / ACCEPTED
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R3:
 CLOSED / ACCEPTED
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4:
+EXECUTED / PHYSICAL PROVISIONING COMPLETE /
+COPY COMPLETE / INTEGRITY VERIFIED /
+SOURCE PRESERVED
+
 R30:
 DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION /
 SUPERSEDED BY HUMAN SELECTION
@@ -19,6 +24,12 @@ Human decision dates: 25/07/2026 (custody policy, canonical destination,
 provisioning and copy contract).
 
 Active classification:
+CUSTODY_COPY_EXECUTED_AND_VERIFIED /
+DESTINATION PROVISIONED /
+SOURCE PRESERVED /
+SECURITY-COMPLETE CUSTODY: NOT YET CLAIMED
+
+Superseded phase-time classification:
 PROVISIONING_AND_COPY_CONTRACT_APPROVED /
 DESTINATION NOT YET PROVISIONED /
 PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME
@@ -283,6 +294,168 @@ sizes and SHA-256. Nothing else.
 **Withheld in the same decision:** physical execution. Also prohibited: move, delete,
 compress, SQLite open, restoration execution, source removal, and Phase 2–6.
 
+That withholding was lifted by a later, separate human authorization; see R4 below.
+
+## R4 — executed physical provisioning and copy
+
+```
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4:
+EXECUTED / PHYSICAL PROVISIONING COMPLETE /
+COPY COMPLETE / INTEGRITY VERIFIED /
+SOURCE PRESERVED
+
+Canonical destination:
+D:\programas\SGAA_Historical_Custody
+
+Destination:
+PROVISIONED
+
+Artifacts:
+17 / 4,808,704 bytes / VERIFIED
+
+Custody manifest:
+custody-manifest-20260725T233026Z.json
+
+Evidence report:
+r4-copy-and-verification-20260725T233315Z.md
+
+SQLite:
+NOT OPENED
+
+Restoration Level 2:
+NOT EXECUTED
+
+Restoration Level 3:
+NOT EXECUTED
+
+Source removal:
+NOT AUTHORIZED
+
+Phase 2–6:
+UNAUTHORIZED
+```
+
+**Pre-execution physical authorization.**
+
+```
+PRE-EXECUTION PHYSICAL AUTHORIZATION:
+EVIDENCED
+
+Authority:
+PROJECT OWNER
+
+Scope:
+R4 ONLY
+```
+
+The authorization was issued as an explicit human instruction in the Claude Code
+session, immediately before execution and before the point of no return. It enumerated
+ten authorized actions, named the technical executor and SID, required stopping at the
+first error or divergence, listed the standing prohibitions, and stated that it applied
+only to R4 and did not constitute permanent authorization. Its medium is the session
+record, not a repository file; this closeout is the durable repository record of it.
+
+**Gate results.** Gate 1 preflight PASS; Gate P1 provisioning PASS; Gate P2 ACL PASS;
+Gate 2 copy PASS; Gate 3 integrity PASS; Gate 5 preservation PASS.
+
+**Destination layout as built.**
+
+```
+D:\programas\SGAA_Historical_Custody\
+  artifacts\   17 files, 4,808,704 bytes, zero subdirectories
+  manifests\   custody-manifest-20260725T233026Z.json, 16,872 bytes
+  evidence\    r4-copy-and-verification-20260725T233315Z.md, 4,505 bytes
+```
+
+Manifest SHA-256:
+`8552c289acfa0067a24848b960383446ffb1b5663a324515bac9309a65a9f0c3`
+
+Evidence report SHA-256:
+`82494024c71d374e54b5ed1d2470d86c00738d345ece8179d76967c80ac56d71`
+
+Source aggregate SHA-256 before and after copy, unchanged:
+`44ae5da3f368605ac2550cc65d70d2081d432977c48fad1f467884a65f2e3be3`
+
+Per-file destination SHA-256 equals source equals canonical inventory for all 17
+artifacts. No unexpected file at the destination. The manifest and the evidence report
+live outside `artifacts\`. Source remains 17/17, ignored and untracked, physically
+unchanged.
+
+**Final ACL as built.**
+
+| Path | Protected | ACEs |
+|------|-----------|------|
+| `D:\programas` | No (inherits `D:\`) | Administrators FC; SYSTEM FC; Authenticated Users Modify; Users ReadAndExecute |
+| `…\SGAA_Historical_Custody` | Yes | SYSTEM FC; Administrators FC; executor Modify |
+| `…\artifacts` | Yes | SYSTEM FC; Administrators FC; executor ReadAndExecute |
+| `…\manifests` | No (inherits custody root) | SYSTEM FC; Administrators FC; executor Modify |
+| `…\evidence` | No (inherits custody root) | SYSTEM FC; Administrators FC; executor Modify |
+
+Custody root SDDL:
+`O:S-1-5-21-…-1001G:S-1-5-21-…-1001D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;S-1-5-21-…-1001)`
+
+`artifacts\` SDDL differs only in the executor mask, `0x1200a9` (ReadAndExecute).
+
+`Authenticated Users` and `BUILTIN\Users` are absent from the custody root and from
+`artifacts\`, as approved.
+
+**Operational nonconformities.**
+
+```
+DECLARED / CONTAINED / NO ARTIFACT INTEGRITY IMPACT /
+NOT AN AUTHORIZED PRECEDENT
+```
+
+1. `New-Item -LiteralPath` is incompatible with PowerShell 5.1; the failure occurred at
+   parameter binding, before any directory was created. Absence of residue was verified.
+   The mechanism was replaced by `[System.IO.Directory]::CreateDirectory`, which is
+   literal by definition.
+2. `Set-Acl` failed with `PrivilegeNotHeldException` (`SeSecurityPrivilege`) during the
+   post-verification ACL downgrade, because the cmdlet attempted to write the SACL. No
+   artifact was altered. The correction was localized: `DirectoryInfo.SetAccessControl`
+   with `AccessControlSections::Access`, writing the DACL exclusively.
+3. The first attempt to write the evidence report failed on shell quoting; no partial
+   file was created, the evidence directory was verified empty, and a second explicit
+   write completed.
+
+These are recorded as operational failures. R4 must not be described as a flawless
+execution.
+
+**Residual security risk — corrected measurement.**
+
+```
+Residual security risk:
+PARENT DIRECTORY ACL EXPOSURE OPEN
+
+Security-complete custody:
+NOT YET CLAIMED
+```
+
+The R4 execution report stated a `DELETE_CHILD` exposure on the parent. Direct
+measurement in this closeout does not support that specific claim and corrects it. The
+inherited `Authenticated Users` ACE on `D:\programas` carries mask `0x1301BF`, in which
+`FILE_DELETE_CHILD` (`0x40`) is **not** set. `WRITE_DAC` (`0x40000`) and `WRITE_OWNER`
+(`0x80000`) are also **not** set. Deleting or renaming the custody root therefore
+requires either `DELETE` on that object — which no non-privileged principal holds, since
+the custody root DACL is protected and omits them — or `FILE_DELETE_CHILD` on the
+parent, which is not granted.
+
+What remains genuinely open, and is the subject of R5:
+
+- `Authenticated Users` hold `ADD_FILE` (`0x2`) and `ADD_SUBDIRECTORY` (`0x4`) on
+  `D:\programas`, so any authenticated principal can create arbitrary content beside the
+  custody root in the same parent namespace.
+- `Authenticated Users` hold `DELETE` (`0x10000`) on `D:\programas` itself. The parent is
+  non-empty and its children are not deletable by them, so removal is blocked in
+  practice, but the right is present on the object.
+- The custody root is owned by the executor. An owner implicitly holds `READ_CONTROL`
+  and `WRITE_DAC`, so the executor can restore Modify on `artifacts\` at will, and
+  `Administrators` can take ownership. This is inherent to the approved model, not a
+  defect introduced by R4, and it is why an ACL is not immutability.
+
+No parent hardening was performed. It was outside the approved contract and outside the
+R4 authorization.
+
 ## Disposable restoration environment
 
 Preferred disposable restoration environment:
@@ -334,25 +507,23 @@ future assessment.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL
-application, copy of the 17 artifacts, manifest creation and integrity
-verification.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
+D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
 
-R4 is NOT STARTED. The contract it must follow is APPROVED, but physical execution
-was explicitly withheld. R4 requires a separate explicit human order releasing
-physical execution. The approval recorded here does not constitute that order and
-must never be read as one.
+R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
+directory, any ACL, any artifact, any manifest or any evidence file.
 
-R4 scope, when released: create `D:\programas` and
-`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
-approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
-manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
-restoration execution and source removal remain prohibited in R4. Phase 2 remains
-without authorized next action.
+R5 objectives: compute the relevant effective permissions on the parent; confirm or
+refute `FILE_DELETE_CHILD` — this closeout's direct measurement indicates it is NOT
+granted to `Authenticated Users`, and R5 must verify that independently; assess the
+impact on deletion and renaming of the custody root; propose minimal hardening options;
+assess the impact on other descendants of `D:\programas`; request a human decision;
+and remain entirely read-only.
 
-Preserved historical / superseded wording: statements that R2 or R3 were
+Preserved historical / superseded wording: statements that R2, R3 or R4 were
 "NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET SELECTED",
-that the provisioning and copy contract was undrafted or pending, the R30 state
-`DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, and the R3 phase-time state
-`COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION` are superseded by this
-closeout and preserved only as historical record.
+that the destination was "NOT YET PROVISIONED", that the provisioning and copy contract
+was undrafted or pending, that physical execution was "NOT AUTHORIZED AT THIS TIME", the
+R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, and the R3 phase-time
+state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION` are superseded by
+this closeout and preserved only as historical record.

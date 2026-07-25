@@ -133,7 +133,7 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
-**Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.**
+**Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED.**
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
@@ -172,26 +172,41 @@ until an explicit cleanup decision, with automatic cleanup and silent retry NOT 
 provisional Level 2 restoration in a controlled external directory
 `D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds.
 
-Physical execution was explicitly withheld in the same decision.
+Physical execution was withheld in that decision and released later by a separate explicit
+human authorization scoped to R4 only.
+
+R4 status: **EXECUTED / PHYSICAL PROVISIONING COMPLETE / COPY COMPLETE / INTEGRITY VERIFIED
+/ SOURCE PRESERVED.** Pre-execution physical authorization: EVIDENCED; authority: project
+owner; scope: R4 only. Destination `D:\programas\SGAA_Historical_Custody` provisioned with
+`artifacts\` (17 files, 4,808,704 bytes), `manifests\custody-manifest-20260725T233026Z.json`
+and `evidence\r4-copy-and-verification-20260725T233315Z.md`. Per-file destination SHA-256 =
+source = canon for all 17; source aggregate SHA-256
+`44ae5da3f368605ac2550cc65d70d2081d432977c48fad1f467884a65f2e3be3` unchanged. SQLite never
+opened. Restoration Level 2 and Level 3 not executed. Source removal not authorized.
+
+R4 operational nonconformities: DECLARED / CONTAINED / NO ARTIFACT INTEGRITY IMPACT / NOT AN
+AUTHORIZED PRECEDENT. R4 is not described as a flawless execution.
+
+Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN. Security-complete custody: NOT
+YET CLAIMED.
 
 Preserved historical / superseded wording: "specific destination UNRESOLVED";
-"NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; and the R3 phase-time state
-`COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`.
+"NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; "R4 is NOT STARTED";
+"DESTINATION NOT YET PROVISIONED"; "PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME"; and the
+R3 phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application, copy
-of the 17 artifacts, manifest creation and integrity verification.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
+D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
 
-R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
-withheld. R4 requires a separate explicit human order releasing physical execution; the
-recorded approval is not that order and must never be read as one.
+R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial directory,
+any ACL, any artifact, any manifest or any evidence file.
 
-R4 scope when released: create `D:\programas` and
-`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the approved
-ACL; copy exactly 17 artifacts with overwrite disabled; create the custody manifest; verify
-count, sizes and SHA-256. Move, delete, compress, SQLite open, restoration execution and
-source removal remain prohibited. Phase 2 remains
+R5 objectives: compute the relevant effective permissions on the parent; confirm or refute
+`FILE_DELETE_CHILD`; assess the impact on deletion and renaming of the custody root; propose
+minimal hardening options; assess the impact on other descendants of `D:\programas`; request
+a human decision; and remain entirely read-only. Phase 2 remains
 without authorized next action.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.

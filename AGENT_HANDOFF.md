@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -78,8 +78,8 @@
   no test executed, no `main.py` import.
   Phase-time classification `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
   SUPERSEDED BY HUMAN APPROVAL of 25/07/2026.
-  Active classification: PROVISIONING_AND_COPY_CONTRACT_APPROVED / DESTINATION NOT YET
-  PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
+  Phase-time classification, superseded by R4: PROVISIONING_AND_COPY_CONTRACT_APPROVED /
+  DESTINATION NOT YET PROVISIONED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME.
   R31 publication recovery preceded R3 in the same round: local commit
   `59fa66bb5d73a04713524657bdc761def3d0b9c8` published fast-forward to
   `origin/refactor/architecture-safety-net`; divergence 0/0; `main` unchanged at
@@ -108,9 +108,60 @@
   destination absent, no resolution to `D:\Programação`, outside every Git worktree,
   outside OneDrive, outside the pytest roots, zero conflicts; free space
   497,651,490,816 bytes; longest projected path 108 characters with `LongPathsEnabled = 0`.
-  **PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME** — withheld in the same decision that
-  approved the contract. Move, delete, compress, SQLite open, restoration execution,
-  source removal and Phase 2–6 remain PROHIBITED.
+  Phase-time only, superseded by R4: **PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME** —
+  withheld in the same decision that approved the contract, and released later by a separate
+  explicit authorization scoped to R4 only. Move, delete, compress, SQLite open, restoration
+  execution, source removal and Phase 2–6 remain PROHIBITED.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4: EXECUTED / PHYSICAL PROVISIONING COMPLETE /
+  COPY COMPLETE / INTEGRITY VERIFIED / SOURCE PRESERVED.**
+  Pre-execution physical authorization: EVIDENCED. Authority: PROJECT OWNER. Scope: R4 ONLY.
+  Explicit human instruction issued in the Claude Code session immediately before execution
+  and before the point of no return; enumerated ten authorized actions, named the executor
+  and SID, required a stop at the first error or divergence, restated the prohibitions and
+  declared itself non-permanent. Medium: session record, not a repository file; this closeout
+  is its durable repository record.
+  Destination `D:\programas\SGAA_Historical_Custody`: PROVISIONED.
+  `artifacts\` 17 files / 4,808,704 bytes / zero subdirectories.
+  `manifests\custody-manifest-20260725T233026Z.json` — 16,872 bytes, SHA-256
+  `8552c289acfa0067a24848b960383446ffb1b5663a324515bac9309a65a9f0c3`.
+  `evidence\r4-copy-and-verification-20260725T233315Z.md` — 4,505 bytes, SHA-256
+  `82494024c71d374e54b5ed1d2470d86c00738d345ece8179d76967c80ac56d71`.
+  Source aggregate SHA-256 unchanged before and after copy:
+  `44ae5da3f368605ac2550cc65d70d2081d432977c48fad1f467884a65f2e3be3`.
+  Per-file destination SHA-256 = source = canon for all 17; zero unexpected files at the
+  destination; manifest and evidence outside `artifacts\`; source remains 17/17, ignored,
+  untracked and physically unchanged.
+  Gates 1, P1, P2, 2, 3 and 5: all PASS.
+  Final ACL: custody root protected — SYSTEM FullControl, Administrators FullControl,
+  executor Modify; `artifacts\` protected — executor ReadAndExecute; `manifests\` and
+  `evidence\` inherit with executor Modify; `Authenticated Users` and `BUILTIN\Users` absent
+  from the custody root and from `artifacts\`.
+  SQLite: NOT OPENED. Restoration Level 2 and Level 3: NOT EXECUTED. Source removal: NOT
+  AUTHORIZED. Phase 2–6: UNAUTHORIZED.
+- **R4 operational nonconformities — DECLARED / CONTAINED / NO ARTIFACT INTEGRITY IMPACT /
+  NOT AN AUTHORIZED PRECEDENT:**
+  (1) `New-Item -LiteralPath` incompatible with PowerShell 5.1; failure before any creation;
+  residue absence verified; replaced by `[System.IO.Directory]::CreateDirectory`.
+  (2) `Set-Acl` failed with `PrivilegeNotHeldException` (`SeSecurityPrivilege`) on the
+  post-verification downgrade because it attempted to write the SACL; no artifact altered;
+  corrected by `DirectoryInfo.SetAccessControl` writing the DACL exclusively.
+  (3) First evidence-report write failed on shell quoting; no partial file created; directory
+  verified empty; second explicit write completed.
+  R4 must not be described as a flawless execution.
+- **Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN. Security-complete custody:
+  NOT YET CLAIMED.**
+  Correction of record: the R4 execution report asserted a `DELETE_CHILD` exposure on the
+  parent; direct measurement does not support that claim. The inherited `Authenticated Users`
+  ACE on `D:\programas` has mask `0x1301BF`, without `FILE_DELETE_CHILD` (`0x40`), without
+  `WRITE_DAC` and without `WRITE_OWNER`. Deleting or renaming the custody root would require
+  `DELETE` on that object — not held, since its DACL is protected and omits them — or
+  `FILE_DELETE_CHILD` on the parent, not granted. Still open: `ADD_FILE` and
+  `ADD_SUBDIRECTORY` on the parent allow arbitrary content beside the custody root; `DELETE`
+  on the parent object itself is held though blocked in practice; and the custody root owner
+  implicitly holds `WRITE_DAC`, so the executor can restore Modify on `artifacts\` and
+  `Administrators` can take ownership — inherent to the approved model, not an R4 defect.
+  No parent hardening was performed; it was outside both the contract and the authorization.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
 - **U4 read-only proof:** CLOSED / ACCEPTED.
@@ -168,20 +219,18 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R4 — controlled provisioning, ACL application,
-copy of the 17 artifacts, manifest creation and integrity verification.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
+D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
 
-R4 is NOT STARTED. Its contract is APPROVED, but physical execution was explicitly
-withheld in the same human decision. R4 requires a separate explicit human order
-releasing physical execution; the recorded approval is not that order and must never
-be read as one.
+R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
+directory, any ACL, any artifact, any manifest or any evidence file.
 
-R4 scope when released: create `D:\programas` and
-`D:\programas\SGAA_Historical_Custody\{artifacts,manifests,evidence}`; apply the
-approved ACL; copy exactly 17 artifacts with overwrite disabled; create the custody
-manifest; verify count, sizes and SHA-256. Move, delete, compress, SQLite open,
-restoration execution and source removal remain prohibited. Phase 2 remains without
-authorized next action.
+R5 objectives: compute the relevant effective permissions on the parent; confirm or
+refute `FILE_DELETE_CHILD`, measured in the R4 closeout as NOT granted to
+`Authenticated Users` and to be verified independently; assess the impact on deletion
+and renaming of the custody root; propose minimal hardening options; assess the impact
+on other descendants of `D:\programas`; request a human decision; and remain entirely
+read-only. Phase 2 remains without authorized next action.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -350,8 +399,8 @@ authorized next action.
 - The primary database and untracked historical backups were not opened, copied, or changed. The temporary worktree is disposable; its runtime artifacts do not belong to the primary worktree.
 - Decision: **GO for REF-0TF-B only.** Do not correct RBAC, modularize routes, alter production code, or use a live database/backup. REF-0TF-B must define a sanitized, versioned D73H fixture or an explicit separate invocation contract.
 
-Last updated: 2026-07-25 (docs-only approved provisioning and copy contract closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / CANONICAL_DESTINATION_SELECTED / PROVISIONING_AND_COPY_CONTRACT_APPROVED / PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME)
-Closeout: docs-only ratification of the approved R3 provisioning and copy contract; preceded in the same round by R31 publication recovery and the R3 read-only assessment
+Last updated: 2026-07-25 (R34 docs-only R4 execution closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; R4 EXECUTED; Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED)
+Closeout: R34 — read-only post-execution reconciliation of R4 and docs-only closeout
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + D8.2B-CLOSEOUT docs sync); Claude Sonnet 4.6 (D8.1B student-facing versioned snapshot read-only display + validation + D8.1C docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu + docs closeout; D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout; D7.5D patch implementation + visual R1 fix + commit closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit D7.3D-PATCH1-REVIEW)
 
 ## Current State
