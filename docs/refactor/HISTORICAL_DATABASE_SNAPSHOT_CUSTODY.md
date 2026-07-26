@@ -31,11 +31,35 @@ COMPLETE
 LEVEL2 EXECUTION CONTRACT:
 READY
 
-PHYSICAL LEVEL2 RESTORATION:
-NOT AUTHORIZED
-
 R7 DOCUMENTARY CLOSEOUT:
 COMMITTED AND PUBLISHED
+
+LEVEL 2 PHYSICAL RESTORATION (execution round R3):
+COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED
+
+LEVEL 2 RESTORE ROOT:
+D:\tmp\sgaa_restore_20260726T165550Z
+
+LEVEL 2 VALIDATOR OUTCOME:
+SQLITE_LEVEL2_CHECKS_PASS
+
+LEVEL 2 EVIDENCE:
+7/7 COMPLETE
+
+LEVEL 2 RESTORE ROOT DISPOSITION:
+PRESERVED UNTIL A SEPARATE EXPLICIT CLEANUP ORDER
+
+NEW SQLITE OPENING:
+NOT AUTHORIZED
+
+LEVEL 3 OPERATIONAL RESTORATION:
+NOT STARTED / NOT AUTHORIZED
+
+PHASE 2:
+NOT STARTED / UNAUTHORIZED
+
+Superseded phase-time wording (R7):
+"PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED"
 
 R6 EXECUTION CLASSIFICATION:
 POST-MUTATION HARD STOP
@@ -65,6 +89,8 @@ CUSTODY_COPY_EXECUTED_AND_VERIFIED /
 DESTINATION PROVISIONED /
 PARENT ACL HARDENING APPLIED AND VERIFIED /
 SOURCE PRESERVED /
+LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED /
+LEVEL 3 NOT EXECUTED /
 SECURITY-COMPLETE CUSTODY: NOT CLAIMED
 
 Superseded phase-time classification:
@@ -146,11 +172,13 @@ Specific destination:
 SELECTED — D:\programas\SGAA_Historical_Custody
 Historical / superseded wording: "NOT YET SELECTED".
 
-Acceptance gate after future copy:
-RESTORE LEVEL 2 — SCHEMA AND METADATA
+Acceptance gate after copy:
+RESTORE LEVEL 2 — SCHEMA AND METADATA — SATISFIED
+Executed in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, locally verified
+and supervisor accepted.
 
 Gate before any future source removal:
-RESTORE LEVEL 3 — OPERATIONAL RESTORATION
+RESTORE LEVEL 3 — OPERATIONAL RESTORATION — NOT STARTED / NOT AUTHORIZED
 Level 2 never authorizes source removal.
 
 Preservation requirement:
@@ -164,7 +192,11 @@ NOT PROVEN
 No sidecar may be omitted because it is empty, repeated, or apparently inactive.
 
 First future physical action:
-LEVEL 2 RESTORATION ONLY AFTER A LATER SEPARATE EXPLICIT HUMAN ORDER
+NONE AUTHORIZED. Level 2 is executed and accepted; every further physical action —
+including restore-root cleanup, any new SQLite opening, the fallback candidate and
+Level 3 — requires a later separate explicit human order.
+Historical / superseded wording: "LEVEL 2 RESTORATION ONLY AFTER A LATER SEPARATE
+EXPLICIT HUMAN ORDER".
 
 Move:
 NOT AUTHORIZED
@@ -844,14 +876,16 @@ Before any physical Level 2 execution, the operator must revalidate:
 
 ### Physical Level 2 status
 
-PHYSICAL LEVEL 2: NOT AUTHORIZED.
+Phase-time R7 status, now superseded: PHYSICAL LEVEL 2: NOT AUTHORIZED.
 
-This closeout creates no `D:\tmp` root, no `sealed\`, `working\` or `evidence\`
-directories, no ACL, no copy, no database open, no validator, no
+The R7 closeout itself created no `D:\tmp` root, no `sealed\`, `working\` or
+`evidence\` directories, no ACL, no copy, no database open, no validator, no
 recovery/checkpoint/migration, no fallback, no Level 3, no source/custody change,
-no Phase 2 and no restoration.
+no Phase 2 and no restoration. That remains a true statement about R7.
 
-The fallback candidate is not authorized without a separate explicit human order.
+Physical Level 2 was later authorized by a separate explicit human order and
+executed; see the Level 2 execution record below. The fallback candidate remains
+unauthorized without a separate explicit human order.
 
 ### Custody track status
 
@@ -872,6 +906,111 @@ Statements that R7 was "NOT STARTED", "not authorized", "requires a separate
 explicit order", that R7 had no objective defined, or wording that R7's contract
 was undrafted or pending are superseded by this closeout. Such claims in
 historical blocks below are preserved only as historical record.
+
+## Level 2 — executed physical restoration (execution round R3)
+
+```
+LEVEL 2 PHYSICAL RESTORATION:
+COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED
+```
+
+Physical Level 2 was executed under a separate explicit human physical order that
+resolved the previously unresolved timestamped root into one concrete literal path.
+This section is the durable repository record of the accepted outcome; the
+authoritative execution evidence lives in the restore root, outside Git.
+
+### Restore root and candidate
+
+```
+Restore root:  D:\tmp\sgaa_restore_20260726T165550Z
+Candidate:     database.pre-D7.6B2-R2-hardening-20260613-184709.db
+Size:          544768 bytes
+SHA-256:       92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c
+```
+
+The executed candidate is the R7 primary candidate. The fallback candidate was not
+used: fallback uses 0.
+
+Both `sealed\` and `working\` copies remain 544768 bytes at the same SHA-256.
+
+### Validation outcome
+
+```
+Validator outcome:            SQLITE_LEVEL2_CHECKS_PASS
+Integrity:                    PASS
+Schema:                       PASS
+Foreign-key violations:       0
+Business-data exposure:       0
+```
+
+### SQLite connection accounting
+
+```
+Source:    0
+Custody:   0
+Sealed:    0
+Working:   1
+Total:     1
+Fallback:  0
+```
+
+Only `working\` was opened, exactly once, by the qualified validator. Source,
+custody and `sealed\` were never opened. Post-open recovery was documentary only
+and performed 0 additional openings.
+
+### Evidence set — 7/7 complete
+
+1. `authorization.txt`
+2. `tool-hashes.txt`
+3. `preflight.json`
+4. `copy-hashes.json`
+5. `sqlite-result.json` — 43682 bytes, SHA-256
+   `71bb40e4056d49509445b20e9ed2e5c96638bc0c7c1fe206eb52d6a8d9516866`
+6. `postflight.json` — 2318 bytes, SHA-256
+   `e498af588bc300ce082fc6f7b1a06a4da4d07d3cd65e9a2b1819e76b43426176`
+7. `level2-report.md` — SHA-256
+   `efaa34bde310cbb17f4ef5b49a7d8841808a718c7b2e957e3eea25af94153622`
+
+### Restore-root ACLs
+
+| Path | Role |
+|------|------|
+| root | Modify |
+| `sealed\` | ReadAndExecute |
+| `working\` | ReadAndExecute |
+| `evidence\` | Modify |
+
+`D:\programas` retains the accepted protected three-ACE state, unchanged.
+
+### Custody and source state after Level 2
+
+Custody remains 17/17 artifacts and 4,808,704 bytes with missing 0, mismatch 0,
+extras 0, missing names 0 and candidate sidecars 0. The R8 register holds 11
+entries with digest
+`75c008107ca51219f58312dfa975cc88153cc0c594df0b5f3a21989548ca1023`. Package and
+qualification hashes are unchanged and matched the R3 execution contract. The
+source workspace artifacts remain intact, ignored and untracked. Level 2 does not
+authorize source removal and none occurred.
+
+### Preservation and boundaries carried forward
+
+- The restore root `D:\tmp\sgaa_restore_20260726T165550Z` and its `sealed\`,
+  `working\` and `evidence\` contents remain PRESERVED until a separate explicit
+  cleanup order. Automatic cleanup remains prohibited.
+- No new SQLite opening is authorized — of the restore root, the custody, the
+  source or any other artifact.
+- The fallback candidate remains unauthorized without a separate human decision.
+- Level 3 operational restoration: NOT STARTED / NOT AUTHORIZED.
+- Phase 2: NOT STARTED / UNAUTHORIZED.
+- Custody track remains OPEN; SECURITY-COMPLETE CUSTODY is NOT CLAIMED, because
+  Level 3 and independent redundancy remain absent.
+
+### Preserved historical/superseded — pre-Level-2 wording
+
+Statements that physical Level 2 was "NOT AUTHORIZED", "NOT EXECUTED", pending,
+blocked, or awaiting a separate explicit human order, and that the timestamped
+root `D:\tmp\sgaa_restore_<UTC>` was unresolved, are superseded by this record and
+preserved in the R1-R7 blocks only as historical phase-time record.
 
 ## Historical / superseded — R3 provisional disposable restoration environment
 
@@ -900,10 +1039,10 @@ future assessment.
 1. Esta é uma trilha administrativa/de governança autônoma. Não integra Phase 1, Phase 2 ou qualquer fase arquitetural de implementação.
 2. Governa exclusivamente a custódia dos 17 snapshots históricos ignorados.
 3. Nenhuma ação física está autorizada sem ordem humana explícita.
-4. O track permanece aberto porque Level 2 e Level 3 não foram executados, não há redundância independente e a origem permanece preservada.
+4. O track permanece aberto porque Level 3 não foi executado, não há redundância independente e a origem permanece preservada. Level 2 foi executado, verificado localmente e aceito pelo supervisor; isso não fecha o track. Wording histórico/superado: "Level 2 e Level 3 não foram executados".
 5. Qualquer ação física exige autorização humana explícita do responsável pelo projeto. IA futura não pode inferir autorização do fechamento da Phase 1, checkbox histórica, existência deste documento, ausência de consumidores runtime ou estado ignored.
 6. Hashes são identidade read-only, não manifesto nem validação de restauração.
-7. Os 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py` nem `app/services/backup_service.py`. Cópia e integridade custodial foram verificadas; restauração Level 2/3 e remoção da origem não foram executadas.
+7. Os 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py` nem `app/services/backup_service.py`. Cópia e integridade custodial foram verificadas; a restauração Level 2 foi executada e aceita sobre uma cópia derivada em `D:\tmp\sgaa_restore_20260726T165550Z`; a restauração Level 3 e a remoção da origem não foram executadas nem autorizadas.
 
 ## Inventário read-only revalidado antes desta delegação
 
@@ -927,11 +1066,16 @@ future assessment.
 
 Exact next action:
 
-A new separate explicit human physical Level 2 order restricted to the primary
-candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
-a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
+Supervisor review of this Level 2 acceptance record. No further custody action is
+authorized. Restore-root cleanup, any new SQLite opening, the fallback candidate,
+Level 3 and Phase 2 each require a new separate explicit human order.
 
-No physical order is issued by this closeout.
+No physical order is issued by this record.
+
+Historical / superseded next action: "a new separate explicit human physical
+Level 2 order restricted to the primary candidate and containing a concrete literal
+timestamped root matching `D:\tmp\sgaa_restore_<UTC>`" — satisfied by the executed
+and accepted Level 2 restoration in `D:\tmp\sgaa_restore_20260726T165550Z`.
 
 Preserved historical / superseded wording: statements that R2, R3, R4, R5, R6 or
 R7 were "NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET

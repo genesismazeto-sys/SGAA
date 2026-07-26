@@ -1,4 +1,4 @@
-## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -41,7 +41,7 @@
   Phase 1 leaves no partial technical implementation.
   Snapshots are not a mandatory technical closeout criterion.
   Custody transferred without physical action to autonomous administrative track.
-- **Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED.**
+- **Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED.**
   Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
   or any architectural implementation phase.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
@@ -198,7 +198,8 @@
 - **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.**
   - R7 READ-ONLY ASSESSMENT: COMPLETE.
   - LEVEL2 EXECUTION CONTRACT: READY.
-  - PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+  - PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED AT R7 TIME — superseded by the
+    accepted Level 2 execution recorded below.
   - R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED.
   Assessment/pre-closeout Git reference: HEAD 22a7ec6f41b72d68b234021c3b1daca0c9546db5.
   The R7 assessment round had no repository mutation, no physical restoration and no
@@ -218,14 +219,56 @@
   `sealed\`), `evidence\` (reports and logs). Open only `working\` with SQLite URI
   `mode=ro` plus `PRAGMA query_only=ON`. Stop immediately if open requires recovery
   or write. Record only `foreign_key_check` row count (no rowids or content).
-  Physical Level 2: NOT AUTHORIZED. Zero physical action in this closeout.
-  No physical order is issued by this closeout.
+  Physical Level 2 was not authorized at R7 time and the R7 closeout performed zero
+  physical action and issued no physical order. Physical Level 2 was later authorized
+  by a separate explicit human order and executed; see the Level 2 block below.
   Accepted preservation rule: no automatic cleanup, no fallback automatic;
   `sealed/`, `working/` and `evidence/` remain preserved until a later cleanup-specific
   order. Custody track remains OPEN. SECURITY-COMPLETE CUSTODY NOT CLAIMED.
   Historical blocks preserved append-only and explicitly superseded; no operational
   router telemetry written into repository docs.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **LEVEL 2 PHYSICAL RESTORATION (execution round R3): COMPLETE / LOCALLY VERIFIED /
+  SUPERVISOR ACCEPTED.**
+  Executed under a separate explicit human physical order that resolved the previously
+  unresolved timestamped root into one concrete literal path. This block is the durable
+  repository record; the execution evidence lives in the restore root, outside Git.
+  Restore root: `D:\tmp\sgaa_restore_20260726T165550Z`.
+  Candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db` — 544768 bytes,
+  SHA-256 `92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`. It is the
+  R7 primary candidate; the fallback was not used (fallback uses 0). Both `sealed\` and
+  `working\` copies remain 544768 bytes at that SHA-256.
+  Validator outcome: `SQLITE_LEVEL2_CHECKS_PASS` — integrity PASS, schema PASS,
+  foreign-key violations 0, business-data exposure 0.
+  SQLite connections: source 0, custody 0, sealed 0, working 1, total 1, fallback 0.
+  Only `working\` was opened, exactly once, by the qualified validator; post-open
+  recovery was documentary only and performed 0 additional openings.
+  Evidence 7/7 complete: `authorization.txt`, `tool-hashes.txt`, `preflight.json`,
+  `copy-hashes.json`, `sqlite-result.json` (43682 bytes, SHA-256
+  `71bb40e4056d49509445b20e9ed2e5c96638bc0c7c1fe206eb52d6a8d9516866`),
+  `postflight.json` (2318 bytes, SHA-256
+  `e498af588bc300ce082fc6f7b1a06a4da4d07d3cd65e9a2b1819e76b43426176`) and
+  `level2-report.md` (SHA-256
+  `efaa34bde310cbb17f4ef5b49a7d8841808a718c7b2e957e3eea25af94153622`).
+  Restore-root ACLs: root Modify; `sealed\` ReadAndExecute; `working\` ReadAndExecute;
+  `evidence\` Modify. `D:\programas` retains the accepted protected three-ACE state.
+  Custody after Level 2: 17/17 and 4,808,704 bytes; missing 0, mismatch 0, extras 0,
+  missing names 0, candidate sidecars 0. R8 register: 11 entries, digest
+  `75c008107ca51219f58312dfa975cc88153cc0c594df0b5f3a21989548ca1023`. Package and
+  qualification hashes unchanged and matched the R3 execution contract. Source artifacts
+  remain intact, ignored and untracked; Level 2 does not authorize source removal and
+  none occurred.
+  Carried-forward boundaries: the restore root and its `sealed\`, `working\` and
+  `evidence\` contents remain PRESERVED until a separate explicit cleanup order;
+  automatic cleanup remains prohibited; NO new SQLite opening is authorized; the
+  fallback candidate remains unauthorized without a separate human decision;
+  Level 3 NOT STARTED / NOT AUTHORIZED; Phase 2 NOT STARTED / UNAUTHORIZED;
+  custody track remains OPEN and SECURITY-COMPLETE CUSTODY is NOT CLAIMED.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **Preserved historical/superseded — pre-Level-2 wording:** statements that physical
+  Level 2 was "NOT AUTHORIZED", "NOT EXECUTED", pending or blocked, and that the
+  timestamped root `D:\tmp\sgaa_restore_<UTC>` was unresolved, are superseded by the
+  Level 2 block above and preserved in the R1-R7 blocks only as historical record.
 - **Preserved historical/superseded — pre-R4 wording:** statements that R4 was "NOT STARTED",
   that the destination was "NOT YET PROVISIONED", that physical execution was "NOT AUTHORIZED
   AT THIS TIME", and the classification `PROVISIONING_AND_COPY_CONTRACT_APPROVED` are
@@ -293,11 +336,16 @@
 
 Exact next action:
 
-A new separate explicit human physical Level 2 order restricted to the primary
-candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
-a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
+Supervisor review of the Level 2 acceptance record. No further custody action is
+authorized. Restore-root cleanup, any new SQLite opening, the fallback candidate,
+Level 3 and Phase 2 each require a new separate explicit human order.
 
-No physical order is issued by this closeout.
+No physical order is issued by this record.
+
+Historical / superseded next action: "a new separate explicit human physical Level 2
+order restricted to the primary candidate and containing a concrete literal timestamped
+root matching `D:\tmp\sgaa_restore_<UTC>`" — satisfied by the executed and accepted
+Level 2 restoration in `D:\tmp\sgaa_restore_20260726T165550Z`.
 
 ### Preserved historical/superseded — pre-R5 wording
 
@@ -417,8 +465,8 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-26 (R6 post-mutation reconciliation and docs-only closeout; R6 execution classification POST-MUTATION HARD STOP; target DACL applied and independently verified; Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED)
-Closeout: R6 read-only post-mutation reconciliation + docs-only closeout
+Last updated: 2026-07-26 (Level 2 acceptance record and canonical state sync; Level 2 physical restoration COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED in restore root `D:\tmp\sgaa_restore_20260726T165550Z`; validator SQLITE_LEVEL2_CHECKS_PASS; evidence 7/7; restore root preserved; no new SQLite opening authorized; Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED)
+Closeout: Level 2 acceptance record and canonical state sync (docs-only; zero physical action)
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State

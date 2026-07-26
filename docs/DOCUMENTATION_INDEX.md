@@ -29,6 +29,10 @@
     preserved, SQLite never opened; parent DACL target applied and independently verified;
     R6 remains classified POST-MUTATION HARD STOP;
     **R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED**;
+    **LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED**
+    in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, validator
+    SQLITE_LEVEL2_CHECKS_PASS, evidence 7/7, restore root preserved, no new SQLite
+    opening authorized; Level 3 NOT EXECUTED;
     security-complete custody NOT CLAIMED;
     does not integrate any architectural
     implementation phase.
@@ -158,21 +162,36 @@
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
 R7 READ-ONLY ASSESSMENT: COMPLETE.
 LEVEL2 EXECUTION CONTRACT: READY.
-PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED AT R7 TIME — superseded by the accepted
+Level 2 execution recorded below.
 R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
 `Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
 The assessment remained read-only; the published closeout changes exactly seven documents.
 
+LEVEL 2 PHYSICAL RESTORATION (execution round R3):
+COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED.
+Restore root `D:\tmp\sgaa_restore_20260726T165550Z`; candidate
+`database.pre-D7.6B2-R2-hardening-20260613-184709.db` (544768 bytes, SHA-256
+`92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`); validator outcome
+`SQLITE_LEVEL2_CHECKS_PASS` with integrity PASS, schema PASS, 0 foreign-key violations
+and 0 business-data exposure; SQLite connections source 0 / custody 0 / sealed 0 /
+working 1 / total 1 / fallback 0; evidence 7/7 complete. Custody unchanged at 17/17 and
+4,808,704 bytes; source preserved; no source removal.
+Restore root and its `sealed\`, `working\` and `evidence\` contents remain PRESERVED
+until a separate explicit cleanup order. NO new SQLite opening is authorized.
+Level 3 and Phase 2: NOT STARTED / NOT AUTHORIZED.
+
 Exact next action:
 
-A new separate explicit human physical Level 2 order restricted to the primary
-candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
-a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
+Supervisor review of the Level 2 acceptance record. No further custody action is
+authorized; restore-root cleanup, any new SQLite opening, the fallback candidate,
+Level 3 and Phase 2 each require a new separate explicit human order.
 
-No physical order is issued by this closeout.
+No physical order is issued by this record.
 
 Historical snapshot custody remains OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
 PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
+LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED /
 SECURITY-COMPLETE CUSTODY NOT CLAIMED.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
@@ -202,7 +221,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, Level 2 execution contract ready but physical restoration not authorized, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z` with validator SQLITE_LEVEL2_CHECKS_PASS and evidence 7/7, restore root preserved, no new SQLite opening authorized, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -224,7 +243,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; security-complete custody not claimed; Level 2 execution contract ready; physical restoration not authorized |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

@@ -239,25 +239,49 @@ Estratégia **mista** (ponto de dívida técnica):
 > HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
 > R7 READ-ONLY ASSESSMENT: COMPLETE.
 > LEVEL2 EXECUTION CONTRACT: READY.
-> PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+> PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED AT R7 TIME — superado pela execução
+> Level 2 aceita registrada abaixo.
 > R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
 > `Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
 > The assessment remained read-only; the published closeout changes exactly seven documents.
-> Primary future Level 2 candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
-> Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` (requires separate
-> human decision; never automatic).
-> Primary future environment: NATIVE WINDOWS. R3-era container preference is
-> historical/provisional; R7 selects NATIVE WINDOWS; no container fallback currently ready.
-> Physical Level 2: NOT AUTHORIZED.
+> Candidato Level 2 executado: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
+> Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` — NÃO utilizado
+> (fallback uses 0); exige decisão humana separada; nunca automático.
+> Ambiente: NATIVE WINDOWS. A preferência R3 por container é histórica/provisória.
+> RESTAURAÇÃO FÍSICA LEVEL 2 (rodada de execução R3):
+> **COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED.**
+> Executada sob ordem física humana explícita e separada, que resolveu a raiz
+> timestamped em um caminho literal concreto: `D:\tmp\sgaa_restore_20260726T165550Z`.
+> Candidato de 544768 bytes, SHA-256
+> `92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`; as cópias em
+> `sealed\` e `working\` conferem.
+> Resultado do validador `SQLITE_LEVEL2_CHECKS_PASS`: integridade PASS, schema PASS,
+> 0 violações de chave estrangeira, 0 exposição de dados de negócio.
+> Conexões SQLite: source 0, custody 0, sealed 0, working 1, total 1, fallback 0 —
+> apenas `working\` foi aberto, exatamente uma vez, pelo validador qualificado.
+> Evidência 7/7 completa, incluindo `sqlite-result.json` (43682 bytes, SHA-256
+> `71bb40e4…5866`), `postflight.json` (2318 bytes, SHA-256 `e498af58…6176`) e
+> `level2-report.md` (SHA-256 `efaa34bd…3622`).
+> ACLs da raiz de restauração: root Modify; `sealed\` e `working\` ReadAndExecute;
+> `evidence\` Modify. `D:\programas` mantém o estado protegido de três ACEs aceito.
+> Custódia inalterada: 17/17 e 4.808.704 bytes; registro R8 com 11 entradas e digest
+> `75c00810…1023`; hashes de pacote e qualificação inalterados. Origem preservada;
+> Level 2 nunca autoriza remoção da origem e nenhuma ocorreu.
+> A raiz de restauração e seus conteúdos `sealed\`, `working\` e `evidence\` permanecem
+> PRESERVADOS até uma ordem de limpeza explícita e separada; limpeza automática proibida.
+> NENHUMA nova abertura SQLite está autorizada.
+> Restauração Level 3: NÃO INICIADA / NÃO AUTORIZADA.
 > Estado: Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
 > PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
+> LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED /
 > SECURITY-COMPLETE CUSTODY NOT CLAIMED.
 > Wording histórico/superado: "Destino específico: NOT YET SELECTED"; "R5 NOT STARTED";
 > "R5 não está autorizada"; "exposição de ACL no diretório pai ainda ABERTA";
-> "R7 NOT STARTED"; "R7 não autorizada".
+> "R7 NOT STARTED"; "R7 não autorizada"; "Physical Level 2: NOT AUTHORIZED";
+> "Restauração Nível 2 e Nível 3: NÃO EXECUTADAS" (Nível 3 permanece não executado).
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
 > completo e política vigente. R7 closeout registra o contrato completo de execução Level 2.
-> Nenhuma ação física foi executada ou autorizada. Phases 2-6: UNAUTHORIZED.
+> Nenhuma outra ação física está autorizada. Phases 2-6: UNAUTHORIZED.
 
 ## Backup e sincronização
 

@@ -211,8 +211,10 @@ NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT.
 
 Residual security risks remain accepted: owner-inherent DACL authority; elevated
 Administrators FullControl; ACL is not immutability; source and destination share D:;
-no independent redundancy; Level 2/3 not executed; source removal prohibited.
+no independent redundancy; Level 3 not executed; source removal prohibited.
 Security-complete custody: NOT CLAIMED.
+Historical / superseded wording: "Level 2/3 not executed" — Level 2 is executed and
+accepted; Level 3 remains not executed.
 
 Preserved historical / superseded wording: "specific destination UNRESOLVED";
 "NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; "R4 is NOT STARTED";
@@ -224,22 +226,54 @@ Preserved historical / superseded wording: "specific destination UNRESOLVED";
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
 R7 READ-ONLY ASSESSMENT: COMPLETE.
 LEVEL2 EXECUTION CONTRACT: READY.
-PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED AT R7 TIME — superseded by the accepted
+Level 2 execution recorded below.
 R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
 `Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
 The assessment remained read-only; the published closeout changes exactly seven documents.
-Primary future Level 2 candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
-Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` (requires separate
-human decision; never automatic).
-Primary future environment: NATIVE WINDOWS. R3-era container preference is
-historical/provisional; R7 selects NATIVE WINDOWS; no container fallback currently ready.
+Level 2 candidate executed: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
+Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` — NOT used
+(fallback uses 0); requires separate human decision; never automatic.
+Environment: NATIVE WINDOWS. R3-era container preference is historical/provisional;
+R7 selected NATIVE WINDOWS and the executed Level 2 used it; no container fallback ready.
+
+LEVEL 2 PHYSICAL RESTORATION (execution round R3):
+**COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED.**
+Executed under a separate explicit human physical order that resolved the timestamped
+root into one concrete literal path: `D:\tmp\sgaa_restore_20260726T165550Z`.
+Candidate `database.pre-D7.6B2-R2-hardening-20260613-184709.db`, 544768 bytes, SHA-256
+`92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`; `sealed\` and
+`working\` copies both match.
+Validator outcome `SQLITE_LEVEL2_CHECKS_PASS`: integrity PASS, schema PASS, foreign-key
+violations 0, business-data exposure 0.
+SQLite connections: source 0, custody 0, sealed 0, working 1, total 1, fallback 0 — only
+`working\` was opened, exactly once, by the qualified validator.
+Evidence 7/7 complete, including `sqlite-result.json` (43682 bytes, SHA-256
+`71bb40e4…5866`), `postflight.json` (2318 bytes, SHA-256 `e498af58…6176`) and
+`level2-report.md` (SHA-256 `efaa34bd…3622`).
+Restore-root ACLs: root Modify; `sealed\` and `working\` ReadAndExecute; `evidence\`
+Modify. `D:\programas` retains the accepted protected three-ACE state.
+Custody unchanged: 17/17 and 4,808,704 bytes, missing 0, mismatch 0, extras 0. R8
+register: 11 entries, digest `75c00810…1023`. Package and qualification hashes unchanged.
+Source preserved; Level 2 never authorizes source removal and none occurred.
+Restore root and its `sealed\`, `working\` and `evidence\` contents remain PRESERVED
+until a separate explicit cleanup order; automatic cleanup prohibited.
+NO new SQLite opening is authorized.
+Level 3 operational restoration: NOT STARTED / NOT AUTHORIZED.
+Fase 2: NOT STARTED / UNAUTHORIZED.
+
 Exact next action:
 
-A new separate explicit human physical Level 2 order restricted to the primary
-candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
-a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
+Supervisor review of the Level 2 acceptance record. No further custody action is
+authorized; restore-root cleanup, any new SQLite opening, the fallback candidate,
+Level 3 and Fase 2 each require a new separate explicit human order.
 
-No physical order is issued by this closeout.
+No physical order is issued by this record.
+
+Historical / superseded next action: "a new separate explicit human physical Level 2
+order restricted to the primary candidate and containing a concrete literal timestamped
+root matching `D:\tmp\sgaa_restore_<UTC>`" — satisfied by the executed and accepted
+Level 2 restoration.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
