@@ -32,7 +32,8 @@
 | PHASE-1-U5 | Remove stale diagnostic output | CLOSED / ACCEPTED | `8b55230314605dcf9295072c109f04bea59323c3`; subject `Remove stale diagnostic output` | R25 authorized subject `Record acceptance of Phase 1 U5`; documentary commit identity resolved through Git history | PHASE-1-U5: CLOSED/ACCEPTED; U5 read-only reconciliation: CLOSED/ACCEPTED; U5-B bounded implementation: CLOSED/ACCEPTED. Sole path tools/diag_out.txt; blob SHA-1 45f5fc833364e9d2bc49132b4a0f6a0b045be74e; 11746 bytes; raw SHA-256 f5e027ea7748b4246f224545e399b9014f74a5536e867bbe47e0b65eafcc534b; no functional consumer; focused gate 15 passed; full suite 657 passed 17 deselected 0 failed 0 errors; D73H executed 0; snapshots regenerated 0; protected databases and sidecars unchanged; no canonical database opened; publication incident BLOCKED_PUSH_TIMEOUT→PUBLICATION_COMPLETE | `docs/mapeamento/05_avaliacao_refactor.md` | None |
 | PHASE-1-U6 | Read-only Phase-1 completion assessment and residual-custody disposition boundary | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | R27 docs-only closeout; authorizing subject identity resolved through Git history | Read-only assessment; zero implementation, no tests, no technical commit; confirmed no other safe cleanup bounded candidate with material evidence | `docs/mapeamento/05_avaliacao_refactor.md` | None; U6 was read-only without physical mutation |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | CLOSED / ACCEPTED | U1 `68f52fb`, U2 `5932dff`, U3 `c4fd2dd`, U4 `742b67c`, U5 `8b55230` | R27 docs-only closeout | U1-U6 CLOSED / ACCEPTED; PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK; U6 confirmed no other safe cleanup bounded candidate with material evidence; Phase 1 leaves no partial technical implementation; snapshots not a mandatory technical closeout criterion; custody transferred without physical action to autonomous administrative track | `docs/mapeamento/05_avaliacao_refactor.md` | Residual: historical database snapshot custody transferred to separate governance track — OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED |
-| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED | R4 physical execution (provisioning, ACL, copy, manifest, verification) — no repository code mutation | R34 docs-only R4 execution closeout | R1, R2 and R3 CLOSED / ACCEPTED; R4 EXECUTED. Custody policy: APPROVED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION — DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE. Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`. Destination status: SELECTED. Provisioning status: PROVISIONED via R4 (phase-time wording "SELECTED / PARENT PATH NOT YET PROVISIONED" superseded). Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:; logical separation, not independent-disk redundancy. Gates 0–6 ratified documentally; Gates 1, P1, P2, 2, 3 and 5 executed and passed in R4; Gate 4 (Level 2 restoration) and Gate 6 (eventual removal) NOT executed. R3 read-only assessment completed and its contract APPROVED by human decision on 25/07/2026: layout `artifacts\`/`manifests\`/`evidence\`; executor `KR-IDEAPAD\klebe`; ACL with inheritance disabled and `Authenticated Users` plus `BUILTIN\Users` removed; copy-only with explicit 17-path list and overwrite disabled; custody manifest JSON without credentials, SQLite content or PII; partial residue preserved until explicit cleanup decision; provisional Level 2 environment `D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds — not created, Level 2 never executed. Physical execution: PERFORMED IN R4 under a separate explicit human authorization scoped to R4 only (phase-time wording "NOT AUTHORIZED AT THIS TIME" superseded). Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED. Policy approved via R1; destination selected via R2; contract approved via R3; executed via R4 under a separate explicit human authorization scoped to R4 only. Destination provisioned; 17 artifacts copied and verified against canon; manifest and evidence written; source preserved; SQLite never opened. Residual: PARENT DIRECTORY ACL EXPOSURE OPEN — security-complete custody NOT YET CLAIMED. R5 next (read-only parent-ACL exposure verification and hardening decision packet) |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 | Read-only parent ACL assessment and hardening decision closeout | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | Authorized subject `Record approved R5 parent ACL hardening decision`; identity resolved through Git history | R5 read-only assessment: FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED. Pre-decision classification: PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION. Human decision: HARDENING POLICY APPROVED / STRICT HARDENING OPTION B SELECTED. Strict hardening for D:\programas approved: disable inheritance; remove Authenticated Users and BUILTIN\Users; SYSTEM + Administrators FullControl OI/CI; executor ReadAndExecute OI/CI. Target SDDL recorded as policy only, NOT applied. Current D:\programas SDDL remains inherited R4-era; custody-root ACL unchanged. No ACL or physical mutation occurred. Source and destination 17/17 intact, manifest and evidence unchanged. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Parent ACL hardening approved but not applied; R6 (physical application) NOT AUTHORIZED; security-complete custody not yet claimed |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED | R4 physical execution + R5 docs-only closeout — no repository code mutation | R34 docs-only R4 execution closeout; authorized subject `Record approved R5 parent ACL hardening decision`; identity resolved through Git history | R1, R2 and R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED. Custody policy: APPROVED. Custody model: SHARED. Retention: INDEFINITE. Destination class: EXTERNAL CANONICAL CUSTODY LOCATION — DEDICATED DIRECTORY OUTSIDE REPOSITORY AND ONEDRIVE. Human-selected canonical destination: `D:\programas\SGAA_Historical_Custody`. Destination status: SELECTED. Provisioning status: PROVISIONED via R4 (phase-time wording "SELECTED / PARENT PATH NOT YET PROVISIONED" superseded). Physical volume: SAME VOLUME AS SOURCE WORKSPACE — D:; logical separation, not independent-disk redundancy. Gates 0–6 ratified documentally; Gates 1, P1, P2, 2, 3 and 5 executed and passed in R4; Gate 4 (Level 2 restoration) and Gate 6 (eventual removal) NOT executed. R3 read-only assessment completed and its contract APPROVED by human decision on 25/07/2026: layout `artifacts\`/`manifests\`/`evidence\`; executor `KR-IDEAPAD\klebe`; ACL with inheritance disabled and `Authenticated Users` plus `BUILTIN\Users` removed; copy-only with explicit 17-path list and overwrite disabled; custody manifest JSON without credentials, SQLite content or PII; partial residue preserved until explicit cleanup decision; provisional Level 2 environment `D:\tmp\sgaa_restore_<UTC>` while `CONTAINER_RUNTIME_NOT_AVAILABLE` holds — not created, Level 2 never executed. Physical execution: PERFORMED IN R4 under a separate explicit human authorization scoped to R4 only (phase-time wording "NOT AUTHORIZED AT THIS TIME" superseded). Does not integrate Phase 1, Phase 2 or any architectural implementation phase. See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED. Policy approved via R1; destination selected via R2; contract approved via R3; executed via R4 under a separate explicit human authorization scoped to R4 only; parent ACL hardening policy approved via R5 (not applied). Destination provisioned; 17 artifacts copied and verified against canon; manifest and evidence written; source preserved; SQLite never opened. Residual: PARENT ACL HARDENING APPROVED NOT APPLIED — security-complete custody NOT YET CLAIMED. R6 next (controlled physical application and verification of approved DACL) |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -134,25 +135,32 @@ resolved through Git history. **R10 contract status:** The pre-acceptance status
   Snapshots are not a mandatory technical closeout criterion.
   Custody transferred without physical action to autonomous administrative track.
 
-**Historical snapshot custody: OPEN / CANONICAL_DESTINATION_UNRESOLVED.**
-R1: CLOSED / ACCEPTED. Custody policy: APPROVED. Specific destination: UNRESOLVED.
-Physical action: NOT AUTHORIZED.
+**Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED /
+SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE
+CUSTODY NOT YET CLAIMED.**
+R1: CLOSED / ACCEPTED. Custody policy: APPROVED.
+R2: CLOSED / ACCEPTED. Destination: SELECTED — `D:\programas\SGAA_Historical_Custody`.
+R3: CLOSED / ACCEPTED. Provisioning and copy contract approved.
+R4: EXECUTED. Physical provisioning, copy, integrity verification complete.
+R5: CLOSED / ACCEPTED. Parent ACL hardening policy approved (Option B strict), not applied.
+Physical action (additional copy/move/delete/compress/SQLite): NOT AUTHORIZED.
+Parent ACL hardening: NOT AUTHORIZED (requires separate explicit order for R6).
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2 — read-only canonical destination
-requirements and controlled-copy contract boundary.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
+verification of the approved strict D:\programas DACL.
 
-R2 is NOT STARTED, requires a separate explicit order and is not authorized
-for physical mutation.
+R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
+R6 requires a later separate explicit human order restricted to that round. Phase 2
+remains without authorized next action; Phases 2-6 remain unauthorized.
 
-Future R2 objectives: define objective destination requirements; evaluate real
-available options; select specific destination by human decision; draft copy
-contract; define disposable restoration environment; define Level 2 and Level 3
-gates. R2 will not execute a copy. Phase 2 remains without authorized next action.
+Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
+approved parent DACL is physically applied and verified in a separately authorized
+round.
 
 Explicitly prohibited without separate authorization: route extraction;
 blueprint restructuring; database consolidation; behavior changes; schema/migrations;
@@ -502,11 +510,20 @@ object itself, and owner-implicit `WRITE_DAC` over the custody root.
 overwritten, no ACL altered, no residue cleaned, no move or compress, no SQLite opened, no
 restoration executed, no external manifest or evidence file modified.
 
+**R5 supersession note:** The R5-phase-time statements above ("R5 is NOT STARTED", "not
+authorized to modify D:\programas", etc.) are historical phase-time record preserved in the
+R34 section. R5 was subsequently executed as a strict read-only ACL assessment and closed
+/ accepted via this closeout. See R5 row in the phase table and the custody document.
+
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
-D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
+verification of the approved strict D:\programas DACL.
 
-R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
-directory, any ACL, any artifact, any manifest or any evidence file. Phase 2 remains
-without authorized next action.
+R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
+R6 requires a later separate explicit human order restricted to that round. Phase 2
+remains without authorized next action; Phases 2-6 remain unauthorized.
+
+Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
+approved parent DACL is physically applied and verified in a separately authorized
+round.

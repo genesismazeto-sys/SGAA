@@ -187,27 +187,35 @@ opened. Restoration Level 2 and Level 3 not executed. Source removal not authori
 R4 operational nonconformities: DECLARED / CONTAINED / NO ARTIFACT INTEGRITY IMPACT / NOT AN
 AUTHORIZED PRECEDENT. R4 is not described as a flawless execution.
 
-Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN. Security-complete custody: NOT
-YET CLAIMED.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5: **CLOSED / ACCEPTED.** R5 was a strict read-only
+Windows ACL assessment and hardening decision closeout. No ACL or physical mutation occurred.
+`D:\programas` dedicated to custody; inherited Authenticated Users mask `0x001301BF` lacks
+`FILE_DELETE_CHILD`, `WRITE_DAC`, `WRITE_OWNER`. Human approved strict hardening (Option B):
+disable inheritance, remove Authenticated Users and BUILTIN\Users, SYSTEM + Administrators
+FullControl, executor ReadAndExecute. Target SDDL recorded as policy only, NOT applied.
+Current `D:\programas` SDDL remains inherited R4-era. Custody-root ACL unchanged.
+
+Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN (policy approved, not applied).
+Security-complete custody: NOT YET CLAIMED.
 
 Preserved historical / superseded wording: "specific destination UNRESOLVED";
 "NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; "R4 is NOT STARTED";
-"DESTINATION NOT YET PROVISIONED"; "PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME"; and the
-R3 phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`.
+"R5 is NOT STARTED"; "R5 não está autorizada"; "DESTINATION NOT YET PROVISIONED";
+"PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME"; the R3 phase-time state
+`COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`; and the R5 pre-decision state
+`PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
-D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and verification
+of the approved strict D:\programas DACL.
 
-R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial directory,
-any ACL, any artifact, any manifest or any evidence file.
+R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
+R6 requires a later separate explicit human order restricted to that round. Phase 2 remains
+without authorized next action; Phases 2-6 remain unauthorized.
 
-R5 objectives: compute the relevant effective permissions on the parent; confirm or refute
-`FILE_DELETE_CHILD`; assess the impact on deletion and renaming of the custody root; propose
-minimal hardening options; assess the impact on other descendants of `D:\programas`; request
-a human decision; and remain entirely read-only. Phase 2 remains
-without authorized next action.
+Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
+approved parent DACL is physically applied and verified in a separately authorized round.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain

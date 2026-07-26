@@ -1,4 +1,4 @@
-## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED (2026-07-25)
+## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED (2026-07-25)
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -154,23 +154,28 @@
   (3) The first evidence-report write failed on shell quoting; no partial file was created;
   the evidence directory was verified empty and a second explicit write completed.
   R4 must not be described as a flawless execution.
-- **Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN. Security-complete custody:
-  NOT YET CLAIMED.**
-  Correction of record: the R4 execution report asserted a `DELETE_CHILD` exposure on the
-  parent. Direct measurement in this closeout does not support that specific claim. The
-  inherited `Authenticated Users` ACE on `D:\programas` carries mask `0x1301BF`, in which
-  `FILE_DELETE_CHILD` (`0x40`), `WRITE_DAC` (`0x40000`) and `WRITE_OWNER` (`0x80000`) are NOT
-  set. Deleting or renaming the custody root would require `DELETE` on that object, which no
-  non-privileged principal holds because the custody root DACL is protected and omits them,
-  or `FILE_DELETE_CHILD` on the parent, which is not granted.
-  What remains genuinely open: `Authenticated Users` hold `ADD_FILE` and `ADD_SUBDIRECTORY`
-  on `D:\programas` and can create arbitrary content beside the custody root; they hold
-  `DELETE` on `D:\programas` itself, blocked in practice only because the parent is non-empty
-  and its children are not deletable by them; and the custody root is owned by the executor,
-  who as owner implicitly holds `WRITE_DAC` and can restore Modify on `artifacts\` at will,
-  while `Administrators` can take ownership. The last point is inherent to the approved model,
-  not a defect introduced by R4. No parent hardening was performed; it was outside both the
-  approved contract and the R4 authorization.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5: CLOSED / ACCEPTED.** R5 was a strict
+  read-only Windows ACL assessment followed by this documentary human-decision closeout.
+  No ACL or physical mutation occurred in R5 or this closeout.
+  - R5 read-only assessment result: `FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED`.
+  - Final R5 assessment classification (pre-decision):
+    `PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION`.
+  - Human decision: `HARDENING POLICY APPROVED / STRICT HARDENING OPTION B SELECTED`.
+  - `D:\programas` currently dedicated (only child `SGAA_Historical_Custody`);
+    human-declared exclusive to custody track. Distinct from `D:\Programação`;
+    no reparse points.
+  - Authenticated Users mask `0x001301BF` on `D:\programas`: lacks `FILE_DELETE_CHILD`,
+    `WRITE_DAC`, `WRITE_OWNER`; includes `DELETE`, `FILE_ADD_FILE`, `FILE_ADD_SUBDIRECTORY`.
+  - Cannot directly delete/rename custody root; can create siblings; parent-namespace
+    rename/recreation risk present (static analysis, no destructive test).
+  - Three independent representations confirmed `FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED`.
+  - Human-approved hardening: disable inheritance; SYSTEM + Administrators FullControl;
+    `KR-IDEAPAD\klebe` ReadAndExecute; remove Authenticated Users, BUILTIN\Users.
+  - Approved target SDDL recorded as policy only, NOT applied.
+  - Current `D:\programas` SDDL remains inherited R4-era; custody-root ACL unchanged;
+    all 17/17 artifacts, manifest and evidence unchanged; no SQLite, restoration, or
+    Phase 2-6 work.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **Preserved historical/superseded — pre-R4 wording:** statements that R4 was "NOT STARTED",
   that the destination was "NOT YET PROVISIONED", that physical execution was "NOT AUTHORIZED
   AT THIS TIME", and the classification `PROVISIONING_AND_COPY_CONTRACT_APPROVED` are
@@ -237,18 +242,22 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
-D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
+verification of the approved strict D:\programas DACL.
 
-R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
-directory, any ACL, any artifact, any manifest or any evidence file.
+R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
+R6 requires a later separate explicit human order restricted to that round. Phase 2
+remains without authorized next action; Phases 2-6 remain unauthorized.
 
-R5 objectives: compute the relevant effective permissions on the parent; confirm or
-refute `FILE_DELETE_CHILD`, which this closeout measured as NOT granted to
-`Authenticated Users` and which R5 must verify independently; assess the impact on
-deletion and renaming of the custody root; propose minimal hardening options; assess the
-impact on other descendants of `D:\programas`; request a human decision; and remain
-entirely read-only. Phase 2 remains without authorized next action.
+Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
+approved parent DACL is physically applied and verified in a separately authorized
+round.
+
+### Preserved historical/superseded — pre-R5 wording
+
+Statements that R5 was "NOT STARTED", "not authorized to modify D:\programas",
+or awaiting human decision are superseded by this closeout. Such claims in
+historical blocks below are preserved only as historical record.
 
 ### Historical — PHASE-0-R9 smoke-flow contract and evidence (CLOSED / ACCEPTED)
 
@@ -362,7 +371,7 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-25 (R34 docs-only R4 execution closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; R4 EXECUTED; Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED)
+Last updated: 2026-07-25 (R5 docs-only parent ACL hardening decision closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED)
 Closeout: R29 docs-only human policy ratification
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 

@@ -217,13 +217,20 @@ Estratégia **mista** (ponto de dívida técnica):
 > Não conformidades operacionais da R4: DECLARED / CONTAINED / NO ARTIFACT INTEGRITY
 > IMPACT / NOT AN AUTHORIZED PRECEDENT — três ocorrências registradas no documento de
 > custódia. A R4 não deve ser descrita como execução sem falhas.
-> Risco residual: exposição de ACL no diretório pai `D:\programas` ainda ABERTA; custódia
-> completa do ponto de vista de segurança AINDA NÃO declarada.
-> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — verificação read-only da
-> exposição do pai e pacote de decisão sobre endurecimento da ACL do pai. R5 is NOT STARTED
-> e não está autorizada a modificar `D:\programas`, o diretório custodial, qualquer ACL,
-> artefato, manifesto ou arquivo de evidência. Fases 2–6 permanecem não autorizadas.
-> Wording histórico/superado: "Destino específico: NOT YET SELECTED".
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5: **CLOSED / ACCEPTED** — avaliação read-only de
+> ACL do Windows (Option B strict hardening) aprovada por decisão humana; nenhuma mutação
+> de ACL ou física ocorreu. `D:\programas` dedicado exclusivamente à custódia; máscara
+> herdada `Authenticated Users` `0x001301BF` sem `FILE_DELETE_CHILD`, `WRITE_DAC`,
+> `WRITE_OWNER`. Endurecimento aprovado: desabilitar herança; SYSTEM + Administradores
+> FullControl; executor ReadAndExecute; remover Authenticated Users e BUILTIN\Users.
+> SDDL alvo registrado como política apenas, NÃO APLICADO. SDDL atual do `D:\programas`
+> permanece o herdado da era R4; ACL da raiz de custódia inalterada.
+> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — aplicação física
+> controlada da DACL aprovada (NÃO AUTORIZADA). Fases 2–6 permanecem não autorizadas.
+> Custódia permanece OPEN e SECURITY-COMPLETE CUSTODY NOT YET CLAIMED até que a DACL
+> do pai seja fisicamente aplicada e verificada em rodada separadamente autorizada.
+> Wording histórico/superado: "Destino específico: NOT YET SELECTED"; "R5 NOT STARTED";
+> "R5 não está autorizada"; "exposição de ACL no diretório pai ainda ABERTA".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
 > completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.
 

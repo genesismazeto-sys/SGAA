@@ -16,6 +16,19 @@ EXECUTED / PHYSICAL PROVISIONING COMPLETE /
 COPY COMPLETE / INTEGRITY VERIFIED /
 SOURCE PRESERVED
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5:
+CLOSED / ACCEPTED
+
+R5 assessment classification (final, pre-decision):
+PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION
+
+R5 read-only assessment result:
+FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED
+
+Human decision:
+HARDENING POLICY APPROVED / STRICT HARDENING OPTION B SELECTED /
+PHYSICAL APPLICATION NOT AUTHORIZED AT THIS TIME
+
 R30:
 DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION /
 SUPERSEDED BY HUMAN SELECTION
@@ -27,12 +40,14 @@ Active classification:
 CUSTODY_COPY_EXECUTED_AND_VERIFIED /
 DESTINATION PROVISIONED /
 SOURCE PRESERVED /
+PARENT ACL HARDENING POLICY APPROVED NOT APPLIED /
 SECURITY-COMPLETE CUSTODY: NOT YET CLAIMED
 
 Superseded phase-time classification:
 PROVISIONING_AND_COPY_CONTRACT_APPROVED /
 DESTINATION NOT YET PROVISIONED /
-PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME
+PHYSICAL EXECUTION NOT AUTHORIZED AT THIS TIME /
+R5 NOT STARTED / R5 AWAITING HUMAN DECISION
 
 R3 read-only phase-time classification, now superseded by human approval:
 COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION
@@ -56,12 +71,13 @@ Destination status:
 SELECTED
 
 Provisioning status:
-SELECTED / PARENT PATH NOT YET PROVISIONED
+DESTINATION PROVISIONED / PARENT DEDICATED TO CUSTODY TRACK /
+PARENT ACL HARDENING NOT APPLIED
 
-Physical action:
-NOT AUTHORIZED
+Physical action (general):
+NOT AUTHORIZED WITHOUT SEPARATE EXPLICIT ORDER
 
-Copy:
+Copy (additional):
 NOT AUTHORIZED
 
 Move:
@@ -75,6 +91,9 @@ NOT AUTHORIZED
 
 SQLite open:
 NOT AUTHORIZED
+
+Parent ACL hardening (R6):
+POLICY APPROVED / PHYSICAL APPLICATION NOT AUTHORIZED AT THIS TIME
 
 Phase 2–6:
 UNAUTHORIZED
@@ -456,6 +475,159 @@ What remains genuinely open, and is the subject of R5:
 No parent hardening was performed. It was outside the approved contract and outside the
 R4 authorization.
 
+## R5 — read-only parent ACL assessment and hardening decision closeout
+
+```
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5:
+CLOSED / ACCEPTED
+
+R5 read-only assessment result:
+FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED
+
+Final R5 assessment classification before human decision:
+PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION
+
+Human decision:
+HARDENING POLICY APPROVED / STRICT HARDENING OPTION B SELECTED
+
+Parent ACL hardening:
+PHYSICAL APPLICATION NOT AUTHORIZED AT THIS TIME
+```
+
+R5 was a strict read-only Windows ACL assessment followed by this documentary
+human-decision closeout. No ACL or physical mutation occurred in R5 or this
+closeout. No file was created, deleted, renamed, or written outside the seven
+authorized repository documents.
+
+### Verified findings
+
+The following findings were verified read-only from the current physical state
+of `D:\programas` and its parent `D:\`:
+
+1. **Physical dedication of `D:\programas`:** The directory currently contains
+   only the immediate child `SGAA_Historical_Custody`. It is physically dedicated
+   to this custody track. No workspace directory, no other custodial directory,
+   no unrelated content exists at `D:\programas`.
+
+2. **Human declaration:** `D:\programas` is human-declared exclusively dedicated
+   to the SGAA-EJ historical-custody track.
+
+3. **Literal directory distinction:** `D:\programas` and `D:\Programação` are
+   distinct literal directories on the same volume. No inspected path was a
+   reparse point, junction, symlink, or mount point.
+
+4. **Authenticated Users parent-object mask:** The inherited `Authenticated Users`
+   ACE on `D:\programas` carries applicable-object mask `0x001301BF`. It lacks
+   `FILE_DELETE_CHILD` (`0x00000040`), `WRITE_DAC` (`0x00040000`) and
+   `WRITE_OWNER` (`0x00080000`).
+
+5. **Included rights on `D:\programas`:** The same ACE includes `DELETE`
+   (`0x00010000`), `FILE_ADD_FILE` (`0x00000002`) and `FILE_ADD_SUBDIRECTORY`
+   (`0x00000004`).
+
+6. **Immediate custody-root protection:** A common `Authenticated Users` plus
+   `BUILTIN\Users` principal cannot directly delete or rename
+   `D:\programas\SGAA_Historical_Custody` because they have neither `DELETE`
+   on the protected custody root itself (the root DACL is protected and omits
+   them) nor `FILE_DELETE_CHILD` on the parent.
+
+7. **Namespace contamination risk:** The same principal can create sibling
+   files and directories beside the custody root (`FILE_ADD_FILE`,
+   `FILE_ADD_SUBDIRECTORY`). Furthermore, `DELETE` on `D:\programas` combined
+   with `FILE_ADD_SUBDIRECTORY` on `D:\` statically permits rename of the parent
+   and recreation of a replacement `D:\programas` namespace. No destructive test
+   was performed; this is a static analysis finding.
+
+8. **Token evaluation note:** The current non-elevated executor token has the
+   `Administrators` SID as deny-only. Nominal group membership was not treated
+   as an active allow SID. The executor/owner can alter the DACL at will through
+   `WRITE_DAC` ownership; elevated administrators retain full authority.
+
+9. **Independent confirmation:** `FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED`
+   resulted independently from three representations: SDDL decoding, raw mask
+   decoding, and `icacls` plus `Get-Acl`/.NET representation. All three agreed.
+
+### Human-approved hardening policy for `D:\programas`
+
+The human has approved the following strict ACL for `D:\programas`:
+
+- Directory is exclusive to SGAA-EJ historical custody.
+- Disable DACL inheritance.
+- `SYSTEM` — FullControl `0x001F01FF` OI/CI.
+- `BUILTIN\Administrators` — FullControl `0x001F01FF` OI/CI.
+- `KR-IDEAPAD\klebe` (SID
+  `S-1-5-21-1500819853-3011909004-3032907821-1001`) — ReadAndExecute
+  `0x001200A9` OI/CI.
+- Remove `Authenticated Users`.
+- Remove `BUILTIN\Users`.
+- Keep current owner `KR-IDEAPAD\klebe`.
+
+### Approved target SDDL (policy only — NOT applied)
+
+```
+O:S-1-5-21-1500819853-3011909004-3032907821-1001G:S-1-5-21-1500819853-3011909004-3032907821-1001D:P(A;OICI;0x001F01FF;;;SY)(A;OICI;0x001F01FF;;;BA)(A;OICI;0x001200A9;;;S-1-5-21-1500819853-3011909004-3032907821-1001)
+```
+
+This SDDL is the approved target. It is recorded as policy only. It has **not**
+been applied.
+
+### Accepted residuals
+
+The following residual risks are accepted as inherent to the approved model:
+
+- The owner (currently `KR-IDEAPAD\klebe`) can still alter the DACL through
+  implicit `WRITE_DAC`.
+- Elevated administrators retain authority (can take ownership, override
+  protection).
+- An ACL is not immutability.
+- Source and destination remain on the same physical `D:` volume; a single
+  disk failure would affect both.
+- No independent redundancy (off-site, second disk, or cloud copy) is created
+  by this policy.
+
+### Physical state (truthful current state)
+
+- **Current `D:\programas` SDDL:** Remains the inherited R4-era SDDL (inherits
+  from `D:\`). The strict target SDDL above is **NOT APPLIED**.
+- **Custody-root ACL:** Remains unchanged from R4.
+- **Source and destination:** 17/17 artifacts intact, 4,808,704 bytes each,
+  all per-file SHA-256 hashes matched (unchanged from R4 verification).
+- **Manifest:** 16,872 bytes, SHA-256
+  `8552c289acfa0067a24848b960383446ffb1b5663a324515bac9309a65a9f0c3` — unchanged.
+- **Evidence:** 4,505 bytes, SHA-256
+  `82494024c71d374e54b5ed1d2470d86c00738d345ece8179d76967c80ac56d71` — unchanged.
+- No SQLite was opened. No restoration, recopy, source removal, ACL change,
+  owner change, file/directory creation/deletion/rename, test, application, or
+  Phase 2-6 work occurred in R5 or this closeout.
+
+### Documentary closeout details
+
+- **Baseline/pre-closeout HEAD:**
+  `4a08d7407c4a0f6cf424718dc48cb8502088f790`
+- **Baseline subject:** `Record executed historical custody provisioning and copy`
+- **Exact seven-document manifest:**
+  - `AGENT_HANDOFF.md`
+  - `PROJECT_STATE.md`
+  - `docs/DOCUMENTATION_INDEX.md`
+  - `docs/mapeamento/03_banco_de_dados.md`
+  - `docs/mapeamento/05_avaliacao_refactor.md`
+  - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
+  - `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`
+- **Authorized commit subject:**
+  `Record approved R5 parent ACL hardening decision`
+- **Identity resolution:** Identity resolved through Git history; do not invent
+  future commit SHA or claim it already exists.
+- **Tests:** NOT RUN / PROHIBITED.
+
+### Supersession — R5 awaiting-decision wording
+
+All pre-closeout statements that R5 was "NOT STARTED" or
+"not authorized to modify D:\programas" (or similar awaiting-human-decision
+wording) in any of the seven documents are superseded by this closeout. Where
+such statements appear in historical phase-time blocks below this active
+section, they are preserved only as historical record of the pre-decision
+phase-time state and must not be mistaken for current state.
+
 ## Disposable restoration environment
 
 Preferred disposable restoration environment:
@@ -507,23 +679,23 @@ future assessment.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 — read-only verification of the
-D:\programas parent DELETE_CHILD exposure and parent-ACL hardening decision packet.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
+verification of the approved strict D:\programas DACL.
 
-R5 is NOT STARTED and is not authorized to modify D:\programas, the custodial
-directory, any ACL, any artifact, any manifest or any evidence file.
+R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
+R6 requires a later separate explicit human order restricted to that round. Phase 2
+remains without authorized next action; Phases 2-6 remain unauthorized.
 
-R5 objectives: compute the relevant effective permissions on the parent; confirm or
-refute `FILE_DELETE_CHILD` — this closeout's direct measurement indicates it is NOT
-granted to `Authenticated Users`, and R5 must verify that independently; assess the
-impact on deletion and renaming of the custody root; propose minimal hardening options;
-assess the impact on other descendants of `D:\programas`; request a human decision;
-and remain entirely read-only.
+Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
+approved parent DACL is physically applied and verified in a separately authorized
+round.
 
-Preserved historical / superseded wording: statements that R2, R3 or R4 were
+Preserved historical / superseded wording: statements that R2, R3, R4 or R5 were
 "NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET SELECTED",
 that the destination was "NOT YET PROVISIONED", that the provisioning and copy contract
 was undrafted or pending, that physical execution was "NOT AUTHORIZED AT THIS TIME", the
-R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, and the R3 phase-time
-state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION` are superseded by
-this closeout and preserved only as historical record.
+R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, the R3 phase-time
+state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`, and the R5
+pre-decision states `PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION` and
+"NOT STARTED" / awaiting-human-decision are superseded by this closeout and preserved
+only as historical record.
