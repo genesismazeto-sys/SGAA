@@ -217,23 +217,23 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
   - **PHASE-1-U5 (stale diagnostic output): CLOSED / ACCEPTED.**
   - **PHASE-1-U6 (Phase-1 completion assessment): CLOSED / ACCEPTED.**
-- **Fase 2 — Shared helpers**: **IN PROGRESS.** PHASE2-A, PHASE2-B and PHASE2-C are
-  CLOSED / ACCEPTED; accepted PHASE2-C commit is
-  `218d6949f63b0578ffd08507766fe5198b8f72b7`. PHASE2-D is IMPLEMENTED /
-  CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW.
-  The explicit ownership rule moves database/schema/repository dependencies to Phase 3,
-  versioning/view dependencies to Phase 4, and wiring/logging/routing dependencies to
-  their owning later phases. Zero runtime `app`→`main` back-references remains mandatory
-  before Phase 6 closes; Phase 2 is not declared closed here.
-- **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
+- **Fase 2 — Shared helpers**: **CLOSED / ACCEPTED.** PHASE2-A through PHASE2-D are
+  CLOSED / ACCEPTED. The explicit ownership rule moves database/schema/repository
+  dependencies to Phase 3, versioning/view dependencies to Phase 4, and wiring/logging/
+  routing dependencies to their owning later phases. Zero runtime `app`→`main`
+  back-references remains mandatory before Phase 6 closes.
+- **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A canonical database
+  connection ownership and PHASE 3-B assessment are CLOSED / ACCEPTED. PHASE 3-B1 reportes
+  schema-helper ownership extraction is IMPLEMENTED / LOCALLY VERIFIED / AWAITING
+  SUPERVISOR REVIEW. No later B unit is authorized by this state.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is authorized and IN PROGRESS; PHASE2-D awaits external review and does not
-authorize Phase 3. Phases 3–6 remain **unauthorized for execution**; the Phase 2 ownership
-decision only assigns their future responsibilities. R1, R2 and R3 are CLOSED / ACCEPTED,
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS only through the bounded PHASE 3-B1
+candidate described above; later Phase 3 units and Phases 4–6 remain **unauthorized for
+execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
 PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /

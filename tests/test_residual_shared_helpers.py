@@ -175,9 +175,10 @@ def test_direct_app_consumers_have_no_category_a_lazy_edges_and_e_keys_are_absen
     assert not (db_keys & EXPECTED_CATEGORY_A_LAZY_KEYS)
     assert not (aluno_keys & {"REPORTE_STATUS_OPTIONS", "save_upload", "app"})
     assert not (core_keys & {"ensure_usuario_access_schema", "ensure_usuario_profile_schema"})
+    assert "ensure_reportes_table" not in aluno_keys
+    assert "ensure_reportes_table" not in db_keys
 
     assert {
-        "ensure_reportes_table",
         "ensure_usuario_profile_schema",
         "maybe_run_versioned_resolver_shadow_read",
         "maybe_write_versioned_requisicao_snapshot",

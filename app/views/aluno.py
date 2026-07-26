@@ -23,6 +23,7 @@ from flask import (
 
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
 from app.auth import aluno_required
+from app.db_maintenance import ensure_reportes_table
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
@@ -45,7 +46,6 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
     import main  # type: ignore
 
     return {
-        "ensure_reportes_table": main.ensure_reportes_table,
         "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
         "get_admin_arquivo": main.get_admin_arquivo,
@@ -1164,8 +1164,6 @@ def aluno_baixar_arquivo(arquivo_id: int):
 @bp_aluno.route("/aluno/reportar", methods=["GET", "POST"])
 @aluno_required
 def aluno_reportar():
-    helpers = _get_main_helpers()
-    ensure_reportes_table = helpers["ensure_reportes_table"]
     screenshot_extensions = ALLOWED_REPORTE_SCREENSHOTS
     categoria_options = REPORTE_CATEGORY_OPTIONS
 

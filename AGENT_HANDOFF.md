@@ -1,11 +1,46 @@
 # Agent Handoff
 
-## Current state — PHASE 3-A CANONICAL DATABASE CONNECTION CONSOLIDATION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B1 REPORTES SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-A canonical database connection consolidation (2026-07-26)
+### Current operational handoff — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 2 is
-  CLOSED / ACCEPTED. No `init_db` or `ensure_*` consolidation was started.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-A and
+  PHASE 3-B assessment are CLOSED / ACCEPTED. Do not start B2 without a new order.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/remote
+  `fac0d7a58af226de43e4ac81d35daf8e3bd0aa05`, divergence 0/0, initially clean.
+- **Owner/compatibility:** `app/db_maintenance.py` solely defines
+  `ensure_reportes_table`; its body/signature/return are AST-identical to baseline.
+  `main.ensure_reportes_table` is the same object. `app/db.py` and
+  `app/views/aluno.py` import the owner directly.
+- **Edges:** each affected lazy map removed exactly `ensure_reportes_table`, added zero
+  keys, and changed no other lazy edge. `_init_db_impl` sequencing and the report route
+  continue calling the same function at the same behavioral points.
+- **SQL/transactions/migrations:** exact table SQL, columns, defaults, CHECK, foreign keys
+  and three indexes preserved; two executions idempotent; caller-owned transaction preserved;
+  no commit/rollback/savepoint. `SCHEMA_VERSION` and `SCHEMA_MIGRATIONS` unchanged.
+- **Tests:** helper lane 6 passed; reportes/aluno/ownership lane 45 passed; route/RBAC 3
+  passed; Git-aware isolation 15 passed; full hermetic suite 739 passed, 17 D73H deselected,
+  zero failures/errors in 375.17s.
+- **Invariants:** behavior/schema/migration/route/RBAC delta 0; routes 131; RBAC unmapped 0;
+  canonical SQLite opens 0; canonical SHA-256 remained
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; no WAL/SHM.
+- **Mode/review:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, medium. Read-only review used FREE session
+  `ses_05f8477c8ffeWiXUOM6m36kZXp`, cost 0, exit 0, no fallback, technical verdict
+  `passed=true`. The reviewer additionally ran read-only `git log --oneline -5` outside its
+  strict allowlist; compliance claim rejected, findings independently re-proven, no mutation.
+- **Manifest:** `app/db.py`, `app/db_maintenance.py`, `app/views/aluno.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `docs/DOCUMENTATION_INDEX.md`. Subject: `Extract reportes schema helper ownership`.
+- **Next action:** external supervisor review of PHASE 3-B1. B2, migrations, access, backup,
+  matrices, versioning, repository and final `init_db` cutover remain unauthorized.
+
+### Historical accepted operational handoff — PHASE 3-A canonical database connection consolidation (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED. PHASE 2 is CLOSED / ACCEPTED. No `init_db` or `ensure_*`
+  consolidation was started by PHASE 3-A.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/remote
   `7fc0629b4b4b40159a1eea6431402c9278fe3b40`, divergence 0/0, initially clean.
@@ -39,8 +74,8 @@
   was rejected and the canonical `.venv` runner was used. A first implementation removed
   the `init_db` pre-call; scope review caught it before closeout, restored the wrapper and
   re-ran all focused, isolation and full-suite evidence. No hard stop or residue remains.
-- **Next action:** external supervisor review of PHASE 3-A only. Do not begin `init_db`,
-  `ensure_*`, repository, schema or migration consolidation.
+- **Acceptance correction:** the former waiting-review next action is superseded by the
+  explicit PHASE 3-A CLOSED / ACCEPTED decision that authorized PHASE 3-B1.
 
 ### Historical phase-time handoff — PHASE2-D residual shared-helper closure (2026-07-26)
 

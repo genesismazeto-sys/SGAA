@@ -1,9 +1,67 @@
-## Current authoritative state — PHASE 3-A CANONICAL DATABASE CONNECTION CONSOLIDATION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE 3-B1 REPORTES SCHEMA-HELPER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE 3-A — canonical database connection consolidation (2026-07-26)
+### PHASE 3-B1 — reportes schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 2 is
-  CLOSED / ACCEPTED. No `init_db` or `ensure_*` consolidation was started.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-A and
+  the read-only PHASE 3-B ownership assessment are CLOSED / ACCEPTED. No later PHASE 3-B
+  unit is authorized by this record.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; starting HEAD/upstream/remote
+  `fac0d7a58af226de43e4ac81d35daf8e3bd0aa05`; divergence 0/0; clean worktree and index.
+- **Ownership:** `app/db_maintenance.py` is the sole defining owner of
+  `ensure_reportes_table`. The function body, signature and return annotation are
+  AST-identical to the accepted starting-HEAD definition formerly in `main.py`.
+- **SQL/transaction behavior:** the complete table definition, ten columns, defaults,
+  status CHECK, two foreign keys and all three indexes are unchanged. The owner still has
+  no commit, rollback or savepoint; an explicit caller transaction remains active after the
+  call and rollback removes the transactional DDL in the disposable proof database.
+- **Compatibility/consumers:** `main.py` imports the owner and preserves
+  `main.ensure_reportes_table is app.db_maintenance.ensure_reportes_table`. `app/db.py` and
+  `app/views/aluno.py` import the owner directly. The existing `_init_db_impl` call position
+  and report route behavior are unchanged.
+- **Lazy edges:** removed only `ensure_reportes_table` from
+  `app.db._get_main_db_helpers` and `app.views.aluno._get_main_helpers`, plus their local
+  retrievals. The now-unused route-level `_get_main_helpers()` call was removed. AST set
+  comparison proves each map removed exactly this one key, added zero keys and changed no
+  other edge.
+- **Migration invariants:** `SCHEMA_VERSION` and `SCHEMA_MIGRATIONS` are AST-identical to
+  baseline. No migration, `init_db` sequencing, access, backup, matrix, versioning,
+  repository, business, route, template or UI behavior changed.
+- **Validation:** expected RED was missing `app.db_maintenance.ensure_reportes_table`;
+  follow-up RED caught the stale route-level lazy call. Focused schema-helper tests 6 passed;
+  reportes/aluno/ownership lane 45 passed; route inventory and RBAC 3 passed; Git-aware
+  runtime-isolation 15 passed; full hermetic suite 739 passed, 17 D73H historical tests
+  deselected, zero failures/errors in 375.17s.
+- **Invariants:** behavior delta 0; routes 131→131; RBAC unmapped 0→0; schema definition
+  delta 0; migration delta 0; canonical database SQLite open count 0. `database.db` retained
+  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`
+  before/after every lane; no WAL/SHM. All SQLite schema tests used `:memory:` or disposable
+  pytest databases outside the repository.
+- **Execution:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, medium. Direct mutation minimized context export and revalidation risk for
+  this exact-body deterministic move. Independent read-only review used logical route
+  `flash_free`, effective `opencode/deepseek-v4-flash-free`, session
+  `ses_05f8477c8ffeWiXUOM6m36kZXp`, cost 0, exit 0, no fallback; verdict `passed=true` with
+  zero technical findings. Its strict allowlist-compliance claim is rejected because it
+  also ran read-only `git log --oneline -5`; no mutation/database/test action occurred and
+  every accepted finding was independently re-proven by IAsup.
+- **Exact manifest:** `app/db.py`, `app/db_maintenance.py`, `app/views/aluno.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `docs/DOCUMENTATION_INDEX.md`. Authorized subject
+  `Extract reportes schema helper ownership`; commit identity resolves through Git history.
+- **Boundaries/residue:** repository file mutation was crossed. No canonical database,
+  schema, data, migration, route, RBAC, production, custody, restore, service, commit or
+  publication boundary had been crossed when this state block was written. Temporary test
+  roots were uniquely owned, disposable and removed after each lane. No hard stop remains.
+- **Next action:** external supervisor review of PHASE 3-B1 only. Do not begin PHASE 3-B2 or
+  combine this unit with migrations, access, backup, matrices, versioning, repository or the
+  final `init_db` cutover.
+
+### Historical accepted technical evidence — PHASE 3-A canonical database connection consolidation (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED. PHASE 2 is CLOSED / ACCEPTED. No `init_db` or `ensure_*`
+  consolidation was started by PHASE 3-A.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD, upstream and remote
   `7fc0629b4b4b40159a1eea6431402c9278fe3b40`; divergence 0/0; clean worktree and index.
@@ -53,8 +111,8 @@
   attempt failed during collection before product execution because `flask_compress` was
   absent; canonical `.venv\Scripts\python.exe` was then proven and used. No hard stop or
   unauthorized physical residue remains.
-- **Next action:** external supervisor review of PHASE 3-A only. Do not begin `init_db`,
-  `ensure_*`, repository, schema or migration consolidation.
+- **Acceptance correction:** the former waiting-review next action is superseded by the
+  explicit PHASE 3-A CLOSED / ACCEPTED decision that authorized PHASE 3-B1.
 
 ### Historical phase-time evidence — PHASE2-D residual shared-helper closure batch (2026-07-26)
 

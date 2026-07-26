@@ -15,6 +15,30 @@ from urllib import request as urllib_request
 SCHEMA_VERSION = 1
 
 
+def ensure_reportes_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reportes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            categoria TEXT NOT NULL DEFAULT 'Bug na plataforma',
+            screenshot_filename TEXT,
+            status TEXT NOT NULL DEFAULT 'Novo' CHECK(status IN ('Novo', 'Em análise', 'Resolvido')),
+            criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+            atualizado_em TEXT NOT NULL DEFAULT (datetime('now')),
+            admin_id INTEGER,
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (admin_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reportes_aluno_id ON reportes(aluno_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reportes_status ON reportes(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reportes_criado_em ON reportes(criado_em)")
+
+
 _AUTO_SYNC_LOCK = threading.Lock()
 _AUTO_SYNC_STATE = {
     "last_signature": None,
