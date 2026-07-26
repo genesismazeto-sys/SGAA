@@ -164,8 +164,8 @@ Estratégia **mista** (ponto de dívida técnica):
 > na raiz são snapshots manuais históricos (9 .db, 4 .db-shm, 4 .db-wal). Não são
 > usados em runtime; sua custódia é governada por trilha administrativa autônoma.
 > Estes 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py`
-> nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento
-> foi realizada ou autorizada.
+> nem `app/services/backup_service.py`. A cópia custodial e sua integridade foram
+> verificadas em R4; restauração Level 2/3 e remoção da origem não foram executadas.
 > A custódia destes artefatos é regida pela política aprovada em R1 (HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R1: CLOSED / ACCEPTED). Modelo de custódia: SHARED.
 > HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R2: CLOSED / ACCEPTED. Destino canônico
 > selecionado por decisão humana: `D:\programas\SGAA_Historical_Custody`.
@@ -223,12 +223,27 @@ Estratégia **mista** (ponto de dívida técnica):
 > herdada `Authenticated Users` `0x001301BF` sem `FILE_DELETE_CHILD`, `WRITE_DAC`,
 > `WRITE_OWNER`. Endurecimento aprovado: desabilitar herança; SYSTEM + Administradores
 > FullControl; executor ReadAndExecute; remover Authenticated Users e BUILTIN\Users.
-> SDDL alvo registrado como política apenas, NÃO APLICADO. SDDL atual do `D:\programas`
-> permanece o herdado da era R4; ACL da raiz de custódia inalterada.
-> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — aplicação física
-> controlada da DACL aprovada (NÃO AUTORIZADA). Fases 2–6 permanecem não autorizadas.
-> Custódia permanece OPEN e SECURITY-COMPLETE CUSTODY NOT YET CLAIMED até que a DACL
-> do pai seja fisicamente aplicada e verificada em rodada separadamente autorizada.
+> Estado histórico de fase R5: SDDL alvo registrado como política apenas e então NÃO
+> APLICADO; `D:\programas` permanecia herdado da era R4; ACL custodial inalterada.
+> O closeout R6 abaixo substitui esse estado histórico.
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6:
+> **CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY**.
+> R6 execution classification: POST-MUTATION HARD STOP.
+> Physical DACL outcome: TARGET APPLIED / INDEPENDENTLY VERIFIED. `SetAccessControl`
+> calls: 1; Apply EXIT 1; `PropertyNotFoundStrict — property 'Value' not found` ocorreu
+> no POST-MUTATION VERIFICATION / SERIALIZATION PATH. Retry e rollback: NOT PERFORMED /
+> PROHIBITED. Owner/group preservados; pai protegido com três ACEs corretas; zero drift
+> nos descendentes; integridade 17/17. Não conformidade: DECLARED / CONTAINED /
+> NO DACL TARGET DEVIATION / NO ARTIFACT INTEGRITY IMPACT / NO RETRY /
+> NOT AN AUTHORIZED PRECEDENT.
+> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2
+> restoration readiness revalidation and bounded restoration-execution contract.
+> R7 is NOT STARTED; não autoriza abrir `artifacts\`, criar diretório de restauração,
+> copiar artefato, executar SQLite/aplicação, alterar ACL/origem ou restaurar. Qualquer
+> Level 2 físico exige ordem humana explícita posterior. Fases 2–6 não autorizadas.
+> Estado: Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
+> PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
+> SECURITY-COMPLETE CUSTODY NOT CLAIMED.
 > Wording histórico/superado: "Destino específico: NOT YET SELECTED"; "R5 NOT STARTED";
 > "R5 não está autorizada"; "exposição de ACL no diretório pai ainda ABERTA".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário

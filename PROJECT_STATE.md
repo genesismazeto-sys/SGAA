@@ -1,4 +1,4 @@
-## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED (2026-07-25)
+## Current authoritative state — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -171,10 +171,29 @@
   - Three independent representations confirmed `FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED`.
   - Human-approved hardening: disable inheritance; SYSTEM + Administrators FullControl;
     `KR-IDEAPAD\klebe` ReadAndExecute; remove Authenticated Users, BUILTIN\Users.
-  - Approved target SDDL recorded as policy only, NOT applied.
-  - Current `D:\programas` SDDL remains inherited R4-era; custody-root ACL unchanged;
+  - Preserved R5 phase-time target SDDL: policy only, then NOT applied.
+  - Preserved R5 phase-time state: `D:\programas` SDDL remained inherited R4-era;
+    custody-root ACL unchanged;
     all 17/17 artifacts, manifest and evidence unchanged; no SQLite, restoration, or
     Phase 2-6 work.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6: CLOSED / ACCEPTED WITH DECLARED
+  POST-MUTATION NONCONFORMITY.**
+  - R6 execution classification: `POST-MUTATION HARD STOP`.
+  - Physical DACL outcome: `TARGET APPLIED / INDEPENDENTLY VERIFIED`.
+  - `SetAccessControl` calls: 1. Apply process: EXIT 1.
+  - Error after mutation: `PropertyNotFoundStrict — property 'Value' not found` in the
+    POST-MUTATION VERIFICATION / SERIALIZATION PATH.
+  - Retry: NOT PERFORMED / PROHIBITED. Rollback: NOT PERFORMED / PROHIBITED.
+  - Parent DACL is protected and contains exactly the three approved Allow ACEs; owner
+    and group preserved; zero inherited or Deny ACEs; AU/BU/Everyone absent.
+  - Descendant ACLs have zero drift. Source and destination remain 17/17 and 4,808,704
+    bytes each with source = destination = manifest SHA-256 for all 17.
+  - Nonconformity: `DECLARED / CONTAINED / NO DACL TARGET DEVIATION /
+    NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT`.
+  - No new physical mutation, retry, rollback, SQLite open, restoration, source change,
+    external evidence mutation, application execution, test, or Phase 2-6 work occurred
+    in this documentary closeout.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **Preserved historical/superseded — pre-R4 wording:** statements that R4 was "NOT STARTED",
   that the destination was "NOT YET PROVISIONED", that physical execution was "NOT AUTHORIZED
@@ -242,16 +261,20 @@
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
-verification of the approved strict D:\programas DACL.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
+revalidation and bounded restoration-execution contract.
 
-R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
-R6 requires a later separate explicit human order restricted to that round. Phase 2
-remains without authorized next action; Phases 2-6 remain unauthorized.
+R7 is NOT STARTED. It does not authorize opening any custodial artifact directly,
+creating a restoration directory, copying an artifact, executing SQLite, running the
+application, altering an ACL, modifying the source, or performing a restoration. Any
+physical Level 2 restoration requires a later separate explicit human order. Phases 2-6
+remain unauthorized.
 
-Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
-approved parent DACL is physically applied and verified in a separately authorized
-round.
+R7 must revalidate container-runtime availability, the approved provisional
+`D:\tmp\sgaa_restore_<UTC>` alternative, exclusive use of a derived copy of
+`artifacts\`, the prohibition on opening `artifacts\` directly, objective Level 2
+criteria, cleanup only by its own order, and evidence required before any future source
+removal.
 
 ### Preserved historical/superseded — pre-R5 wording
 
@@ -371,8 +394,8 @@ it is historical and superseded by the current top block.
 - The principal workspace database, environment, templates, static assets, schema, and production code were not opened or changed. The worktree was disposable; no real database or backup was copied into it.
 - Decision: **GO for REF-0TF-B only.** D73H historical verification isolation is the next authorized remediation. RBAC correction and route modularization remain prohibited.
 
-Last updated: 2026-07-25 (R5 docs-only parent ACL hardening decision closeout; PHASE-1-U1 CLOSED / ACCEPTED; PHASE-1-U2 CLOSED / ACCEPTED; PHASE-1-U3 CLOSED / ACCEPTED; PHASE-1-U4 CLOSED / ACCEPTED; PHASE-1-U5 CLOSED / ACCEPTED; PHASE-1-U6 CLOSED / ACCEPTED; Phase 1 CLOSED / ACCEPTED; R1 CLOSED / ACCEPTED; R2 CLOSED / ACCEPTED; R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED)
-Closeout: R29 docs-only human policy ratification
+Last updated: 2026-07-26 (R6 post-mutation reconciliation and docs-only closeout; R6 execution classification POST-MUTATION HARD STOP; target DACL applied and independently verified; Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED)
+Closeout: R6 read-only post-mutation reconciliation + docs-only closeout
 Executor: R27 documentary execution (detailed routing telemetry retained outside the worktree); deepseek-v4-flash-free (R10 docs-only acceptance closeout); Claude Sonnet 4.6 (D8.5A read-only post-smoke audit + D8.5B controlled cleanup of id=57 + D8.5C docs-only closeout); Claude Sonnet 4.6 (D8.4A local write-flag-on supervised smoke + D8.4B docs-only closeout); Claude Sonnet 4.6 (D8.3A copy-db write-flag smoke + D8.3B docs-only closeout); Claude Sonnet 4.6 (D8.2A read-only write-cutover risk plan + D8.2B student-edit-snapshot contract hardening + docs closeout); Claude Sonnet 4.6 (D8.0A read-only audit + D8.0B baseline suite + backup); Claude Sonnet 4.6 (D7.7C3 final verify and push + D7.7C4 post-push doc sync; D7.7B1 matrix version validity hardening + docs closeout; D7.6G2 full suite remediation + docs closeout; D7.6E latest active version default + docs closeout; D7.6D matrix version selection + docs closeout; D7.6C activity version menu); Claude Sonnet 4.6 (D7.6B2 schema migration + R1 + R2 hardening + D7.6B3 docs closeout); Codex GPT-5 (D7.5C patch implementation + validation report + commit closeout); Claude Sonnet 4.6 (D7.4F read-only archive audit; D7.4G archive execution); Codex GPT-5 (D7.3K read-only diagnosis + docs closeout; D7.3J live apply + suite stabilization + docs closeout; D7.3I validation + docs closeout; D7.3H docs closeout); Claude Sonnet 4.6 (D7.3E closeout); Kimi K2.6 (audit); executor-PATCH1 (implementation); auditor-PATCH1-REVIEW
 
 ## Permanent State

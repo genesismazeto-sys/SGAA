@@ -22,11 +22,13 @@
    and PROJECT_STATE historical blocks.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
     — autonomous administrative/governance track for the 17 historical database
-    snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**
+    snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**;
+    **R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY**
     — destination `D:\programas\SGAA_Historical_Custody` PROVISIONED, 17 artifacts copied
     and verified (4,808,704 bytes), custody manifest and evidence report written, source
-    preserved, SQLite never opened; parent-ACL hardening policy approved but not applied;
-    security-complete custody NOT YET CLAIMED; does not integrate any architectural
+    preserved, SQLite never opened; parent DACL target applied and independently verified;
+    R6 remains classified POST-MUTATION HARD STOP; security-complete custody NOT CLAIMED;
+    does not integrate any architectural
     implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
    next executor; the top block is operationally canonical but is **not** a
@@ -50,7 +52,7 @@
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
-## Canonical current state (2026-07-25)
+## Canonical current state (2026-07-26)
 
 - Branch: `refactor/architecture-safety-net`
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
@@ -136,23 +138,35 @@
   inherited Authenticated Users mask `0x001301BF` lacks `FILE_DELETE_CHILD`, `WRITE_DAC`,
   `WRITE_OWNER`. Human approved strict hardening (Option B): disable inheritance, remove
   Authenticated Users and BUILTIN\Users, SYSTEM + Administrators FullControl,
-  executor ReadAndExecute. Target SDDL recorded as policy only, NOT applied.
-  Current `D:\programas` SDDL remains inherited R4-era. Custody-root ACL unchanged.
-  Next: R6 — controlled physical application of approved DACL (NOT AUTHORIZED).
+  executor ReadAndExecute. Preserved R5 phase-time state: target SDDL recorded as policy
+  only and then NOT applied; `D:\programas` remained inherited R4-era; custody-root ACL
+  unchanged. The R6 closeout immediately below supersedes this historical state.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6: CLOSED / ACCEPTED WITH DECLARED
+  POST-MUTATION NONCONFORMITY.**
+  R6 execution classification: POST-MUTATION HARD STOP. Physical DACL outcome:
+  TARGET APPLIED / INDEPENDENTLY VERIFIED. `SetAccessControl` calls: 1; Apply EXIT 1;
+  post-application `PropertyNotFoundStrict` in the verification/serialization path;
+  retry and rollback NOT PERFORMED / PROHIBITED. Parent DACL protected with the exact
+  three approved ACEs; owner/group preserved; descendants zero drift; integrity 17/17.
+  Nonconformity: DECLARED / CONTAINED / NO DACL TARGET DEVIATION /
+  NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
-verification of the approved strict D:\programas DACL.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
+revalidation and bounded restoration-execution contract.
 
-R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
-R6 requires a later separate explicit human order restricted to that round. Phase 2
-remains without authorized next action; Phases 2-6 remain unauthorized.
+R7 is NOT STARTED and authorizes no physical restoration action. It must not directly
+open `artifacts\`, create a restoration directory, copy an artifact, execute SQLite,
+run the application, alter an ACL, modify the source, or perform restoration. Any
+physical Level 2 restoration requires a later separate explicit human order. Phases 2-6
+remain unauthorized.
 
-Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
-approved parent DACL is physically applied and verified in a separately authorized
-round.
+Historical snapshot custody remains OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
+PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
+SECURITY-COMPLETE CUSTODY NOT CLAIMED.
 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - Production shadow-only: **in force**; production hard enforcement: **unauthorized**
@@ -181,7 +195,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED and R5 is CLOSED / ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / PARENT ACL HARDENING POLICY APPROVED NOT APPLIED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent ACL hardening policy approved but not applied, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, and R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -203,7 +217,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED — destination `D:\programas\SGAA_Historical_Custody` provisioned, 17 artifacts copied and integrity-verified, manifest and evidence written, source preserved, SQLite never opened; parent-ACL hardening policy approved but not applied; security-complete custody not yet claimed |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; security-complete custody not claimed; R7 not started |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

@@ -19,6 +19,15 @@ SOURCE PRESERVED
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5:
 CLOSED / ACCEPTED
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6:
+CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY
+
+R6 EXECUTION CLASSIFICATION:
+POST-MUTATION HARD STOP
+
+PHYSICAL DACL OUTCOME:
+TARGET APPLIED / INDEPENDENTLY VERIFIED
+
 R5 assessment classification (final, pre-decision):
 PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION
 
@@ -39,9 +48,9 @@ provisioning and copy contract).
 Active classification:
 CUSTODY_COPY_EXECUTED_AND_VERIFIED /
 DESTINATION PROVISIONED /
+PARENT ACL HARDENING APPLIED AND VERIFIED /
 SOURCE PRESERVED /
-PARENT ACL HARDENING POLICY APPROVED NOT APPLIED /
-SECURITY-COMPLETE CUSTODY: NOT YET CLAIMED
+SECURITY-COMPLETE CUSTODY: NOT CLAIMED
 
 Superseded phase-time classification:
 PROVISIONING_AND_COPY_CONTRACT_APPROVED /
@@ -72,7 +81,7 @@ SELECTED
 
 Provisioning status:
 DESTINATION PROVISIONED / PARENT DEDICATED TO CUSTODY TRACK /
-PARENT ACL HARDENING NOT APPLIED
+PARENT ACL HARDENING APPLIED AND VERIFIED
 
 Physical action (general):
 NOT AUTHORIZED WITHOUT SEPARATE EXPLICIT ORDER
@@ -93,7 +102,8 @@ SQLite open:
 NOT AUTHORIZED
 
 Parent ACL hardening (R6):
-POLICY APPROVED / PHYSICAL APPLICATION NOT AUTHORIZED AT THIS TIME
+APPLIED / EXTERNALLY VERIFIED /
+R6 POST-MUTATION HARD STOP
 
 Phase 2–6:
 UNAUTHORIZED
@@ -139,7 +149,7 @@ NOT PROVEN
 No sidecar may be omitted because it is empty, repeated, or apparently inactive.
 
 First future physical action:
-COPY ONLY
+LEVEL 2 RESTORATION ONLY AFTER A LATER SEPARATE EXPLICIT HUMAN ORDER
 
 Move:
 NOT AUTHORIZED
@@ -571,6 +581,10 @@ O:S-1-5-21-1500819853-3011909004-3032907821-1001G:S-1-5-21-1500819853-3011909004
 This SDDL is the approved target. It is recorded as policy only. It has **not**
 been applied.
 
+This paragraph is the preserved R5 phase-time state. It is superseded by the R6
+post-mutation reconciliation below: the approved target DACL was applied once and
+independently verified.
+
 ### Accepted residuals
 
 The following residual risks are accepted as inherent to the approved model:
@@ -628,6 +642,103 @@ such statements appear in historical phase-time blocks below this active
 section, they are preserved only as historical record of the pre-decision
 phase-time state and must not be mistaken for current state.
 
+## R6 — post-mutation reconciliation and documentary closeout
+
+```
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6:
+CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY
+
+R6 EXECUTION CLASSIFICATION:
+POST-MUTATION HARD STOP
+
+PHYSICAL DACL OUTCOME:
+TARGET APPLIED / INDEPENDENTLY VERIFIED
+
+SetAccessControl calls:
+1
+
+Apply process:
+EXIT 1
+
+Post-application error:
+PropertyNotFoundStrict — property 'Value' not found
+
+Failure location:
+POST-MUTATION VERIFICATION / SERIALIZATION PATH
+
+Retry:
+NOT PERFORMED / PROHIBITED
+
+Rollback:
+NOT PERFORMED / PROHIBITED
+```
+
+The error occurred after the one authorized DACL mutation. The script produced no
+successful Apply JSON, so the execution classification remains POST-MUTATION HARD STOP.
+Independent read-only verification proved that the approved target DACL is physically
+present; this closeout does not describe R6 as an execution without failures and does not
+authorize a second call.
+
+**Observed parent state.** `D:\programas` has protected access rules, owner and group
+`S-1-5-21-1500819853-3011909004-3032907821-1001`, exactly three explicit Allow ACEs,
+zero inherited ACEs and zero Deny ACEs:
+
+| Principal | Mask | Inheritance | Type |
+|-----------|------|-------------|------|
+| SYSTEM (`S-1-5-18`) | `0x001F01FF` | OI/CI | Allow |
+| BUILTIN\Administrators (`S-1-5-32-544`) | `0x001F01FF` | OI/CI | Allow |
+| executor (`S-1-5-21-1500819853-3011909004-3032907821-1001`) | `0x001200A9` | OI/CI | Allow |
+
+`Authenticated Users`, `BUILTIN\Users`, `Everyone`, inherited ACEs and Deny ACEs are
+absent. The executor ACE does not grant delete, create or write. Owner/group are
+unchanged. The owner nevertheless retains inherent authority to change the DACL, and
+elevated administrators retain FullControl.
+
+Observed parent SDDL:
+
+```
+O:S-1-5-21-1500819853-3011909004-3032907821-1001G:S-1-5-21-1500819853-3011909004-3032907821-1001D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;S-1-5-21-1500819853-3011909004-3032907821-1001)
+```
+
+**Preserved external evidence.** Read-only reconciliation confirmed:
+
+- `evidence\r6-parent-acl-hardening.ps1` — 5,830 bytes; SHA-256
+  `92B81095C9BC4CE8254A0CC279CD9A524AAC54305529318879BE91E86D4FB7E2`.
+- `evidence\r6-parent-acl-hardening-20260726T094257Z.md` — 12,529 bytes; SHA-256
+  `E5A9F4EC7FD7CA20B6537187198AE2657DB17421EF405B1436C95C6F3F814E85`.
+- `evidence\` contains exactly the R4 report, the preserved R6 script and the R6 report.
+- Manifest R4 — 16,872 bytes; SHA-256
+  `8552C289ACFA0067A24848B960383446FFB1B5663A324515BAC9309A65A9F0C3`.
+- Report R4 — 4,505 bytes; SHA-256
+  `82494024C71D374E54B5ED1D2470D86C00738D345ECE8179D76967C80AC56D71`.
+- Source and destination: 17/17, 4,808,704 bytes each; source SHA-256 equals
+  destination SHA-256 equals manifest for all 17.
+- SDDL of the custody root, `artifacts\`, `manifests\` and `evidence\`: zero drift.
+
+**Declared nonconformity.** `DECLARED / CONTAINED / NO DACL TARGET DEVIATION /
+NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT`.
+
+**Residual risks accepted.** The owner can still modify the DACL by inherent authority;
+elevated administrators retain FullControl; ACL does not constitute immutability; source
+and destination remain on physical volume D:; no independent redundancy exists; Levels 2
+and 3 were not executed; source removal remains prohibited. SECURITY-COMPLETE CUSTODY is
+not claimed.
+
+**Documentary closeout.** Baseline/pre-closeout HEAD
+`07fe0666eedbaa76395c278b4c0f798a0d3320ed`, subject
+`Record approved R5 parent ACL hardening decision`. Authorized subject:
+`Record verified R6 parent ACL hardening outcome`; identity resolved through Git history.
+Exactly seven repository documents changed. Tests/application/pytest: NOT RUN /
+PROHIBITED. No new physical mutation, ACL call, retry, rollback, SQLite open, restoration,
+source change, external-file creation or evidence modification occurred in this closeout.
+
+IAexec routing was consultative. FREE session `ses_06227b5d6ffe5s5DrFi4JTkxYE` used
+`opencode/deepseek-v4-flash-free`, exit 0 and cost 0, but delivered no final text and was
+rejected as unusable. Explicit normal complement session
+`ses_06226b324ffeHTsk45kMGIfguu` used `opencode-go/deepseek-v4-flash`, exit 0,
+`CONSULTATIVE_USABLE`; this was a task-level explicit fallback, not router-native fallback.
+Final acceptance is the IAsup deterministic decision.
+
 ## Disposable restoration environment
 
 Preferred disposable restoration environment:
@@ -652,10 +763,10 @@ future assessment.
 1. Esta é uma trilha administrativa/de governança autônoma. Não integra Phase 1, Phase 2 ou qualquer fase arquitetural de implementação.
 2. Governa exclusivamente a custódia dos 17 snapshots históricos ignorados.
 3. Nenhuma ação física está autorizada sem ordem humana explícita.
-4. O track permanece aberto apenas porque os seguintes itens estão pendentes: specific physical destination; controlled-copy contract; disposable restoration environment; separate human authorization to execute the copy.
+4. O track permanece aberto porque Level 2 e Level 3 não foram executados, não há redundância independente e a origem permanece preservada.
 5. Qualquer ação física exige autorização humana explícita do responsável pelo projeto. IA futura não pode inferir autorização do fechamento da Phase 1, checkbox histórica, existência deste documento, ausência de consumidores runtime ou estado ignored.
 6. Hashes são identidade read-only, não manifesto nem validação de restauração.
-7. Os 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py` nem `app/services/backup_service.py`. Nenhuma validação, restauração ou arquivamento foi realizada ou autorizada.
+7. Os 17 artefatos históricos NÃO são backups gerenciados por `app/db_maintenance.py` nem `app/services/backup_service.py`. Cópia e integridade custodial foram verificadas; restauração Level 2/3 e remoção da origem não foram executadas.
 
 ## Inventário read-only revalidado antes desta delegação
 
@@ -679,16 +790,19 @@ future assessment.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and
-verification of the approved strict D:\programas DACL.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
+revalidation and bounded restoration-execution contract.
 
-R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
-R6 requires a later separate explicit human order restricted to that round. Phase 2
-remains without authorized next action; Phases 2-6 remain unauthorized.
+R7 is NOT STARTED. R7 is not authorized to open any custodial artifact directly, create
+a restoration directory, copy an artifact, execute SQLite, run the application, alter
+an ACL, modify the source, or perform a restoration. Any physical Level 2 restoration
+requires a later separate explicit human order. Phases 2-6 remain unauthorized.
 
-Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
-approved parent DACL is physically applied and verified in a separately authorized
-round.
+R7 must revalidate container-runtime availability; the approved
+`D:\tmp\sgaa_restore_<UTC>` alternative; exclusive use of a derived copy of
+`artifacts\`; the prohibition on opening `artifacts\` directly; objective Level 2
+criteria; cleanup only under its own order; and evidence required before any future
+source removal.
 
 Preserved historical / superseded wording: statements that R2, R3, R4 or R5 were
 "NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET SELECTED",

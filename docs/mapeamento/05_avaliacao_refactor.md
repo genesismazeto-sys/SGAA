@@ -133,7 +133,9 @@ closeout. **R10 contract status:** The pre-acceptance status text in Section 10 
 - Explicitly prohibited without separate authorization: route extraction; blueprint restructuring; database consolidation; behavior changes; schema/migrations; RBAC; UI; dependencies; production hard enforcement.
 - **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
 
-**Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY EXECUTED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT YET CLAIMED.**
+**Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
+PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
+SECURITY-COMPLETE CUSTODY NOT CLAIMED.**
 Separate governance/administrative track. Does not integrate Phase 1, Phase 2,
 or any architectural implementation phase.
 See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
@@ -192,11 +194,25 @@ Windows ACL assessment and hardening decision closeout. No ACL or physical mutat
 `D:\programas` dedicated to custody; inherited Authenticated Users mask `0x001301BF` lacks
 `FILE_DELETE_CHILD`, `WRITE_DAC`, `WRITE_OWNER`. Human approved strict hardening (Option B):
 disable inheritance, remove Authenticated Users and BUILTIN\Users, SYSTEM + Administrators
-FullControl, executor ReadAndExecute. Target SDDL recorded as policy only, NOT applied.
-Current `D:\programas` SDDL remains inherited R4-era. Custody-root ACL unchanged.
+FullControl, executor ReadAndExecute. Preserved R5 phase-time state: target SDDL was
+policy only and NOT applied; `D:\programas` remained inherited R4-era; custody-root ACL
+was unchanged. The R6 closeout below supersedes this historical state.
 
-Residual security risk: PARENT DIRECTORY ACL EXPOSURE OPEN (policy approved, not applied).
-Security-complete custody: NOT YET CLAIMED.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6:
+**CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY.**
+R6 execution classification: POST-MUTATION HARD STOP.
+Physical DACL outcome: TARGET APPLIED / INDEPENDENTLY VERIFIED. One
+`SetAccessControl` call; Apply EXIT 1; post-application `PropertyNotFoundStrict` in
+the verification/serialization path. Retry and rollback NOT PERFORMED / PROHIBITED.
+The parent DACL is protected with exactly three approved Allow ACEs; owner/group are
+preserved; descendant ACLs have zero drift; artifact integrity remains 17/17.
+Nonconformity: DECLARED / CONTAINED / NO DACL TARGET DEVIATION /
+NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT.
+
+Residual security risks remain accepted: owner-inherent DACL authority; elevated
+Administrators FullControl; ACL is not immutability; source and destination share D:;
+no independent redundancy; Level 2/3 not executed; source removal prohibited.
+Security-complete custody: NOT CLAIMED.
 
 Preserved historical / superseded wording: "specific destination UNRESOLVED";
 "NOT YET SELECTED"; "R2 is NOT STARTED"; "R3 is NOT STARTED"; "R4 is NOT STARTED";
@@ -207,15 +223,18 @@ Preserved historical / superseded wording: "specific destination UNRESOLVED";
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 — controlled physical application and verification
-of the approved strict D:\programas DACL.
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
+revalidation and bounded restoration-execution contract.
 
-R6 is NOT STARTED. Its policy is approved, but physical application is NOT AUTHORIZED.
-R6 requires a later separate explicit human order restricted to that round. Phase 2 remains
-without authorized next action; Phases 2-6 remain unauthorized.
+R7 is NOT STARTED. It is not authorized to open any custodial artifact directly, create
+a restoration directory, copy an artifact, execute SQLite, run the application, alter
+an ACL, modify the source, or perform a restoration. Any physical Level 2 restoration
+requires a later separate explicit human order. Phases 2-6 remain unauthorized.
 
-Custody remains OPEN and SECURITY-COMPLETE CUSTODY remains NOT YET CLAIMED until the
-approved parent DACL is physically applied and verified in a separately authorized round.
+R7 must revalidate container-runtime availability, the approved provisional
+`D:\tmp\sgaa_restore_<UTC>` alternative, exclusive use of a derived copy from
+`artifacts\`, the prohibition on opening `artifacts\` directly, objective Level 2
+criteria, separately authorized cleanup, and evidence required before source removal.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
