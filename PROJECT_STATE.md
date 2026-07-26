@@ -1,63 +1,54 @@
-## Current authoritative state — PHASE2-B PAGINATION AND QUERY-HELPER EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE2-C PT-BR TEXT-HELPER EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B: CLOSED / ACCEPTED — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE2-B — pagination and query-helper extraction (2026-07-26)
+### PHASE2-C — PT-BR text-helper extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-A is
-  CLOSED / ACCEPTED at technical commit `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-B is
+  CLOSED / ACCEPTED at commit `1a0a690343462c23b8a30a1f0d6d8cb250027936`.
   Phase 2 as a whole is not claimed accepted or closed.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
-  `refactor/architecture-safety-net`; starting HEAD and upstream
-  `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`; divergence 0/0; clean worktree and index.
-- **Execution:** IAsup `openai-codex/gpt-5.6-sol`, profile `ia-sup-sgaa`, medium effort.
-  One read-only mapping consultation used logical route `flash_free`, effective
-  `opencode/deepseek-v4-flash-free`, with no fallback. IAsup rejected the proposed
-  one-module collapse and adjudicated the real two-module boundary. Implementation was
-  direct because the move was deterministic after reconciliation and a second exported
-  context would add supervision/revalidation cost without reducing risk.
-- **Selected boundary:** `app/web/pagination.py` owns `get_pagination` and
-  `wants_pagination`; `app/web/filters.py` owns `append_conditions_sql`,
-  `get_multi_query_values`, `get_text_query_value`, `get_int_multi_query_values`,
-  `get_number_range_query`, `get_date_range_query` and
-  `append_text_contains_condition`. All nine moved function bodies are AST-identical to
-  the starting-HEAD definitions. The two modules form one coherent request/query unit
-  while preserving the natural pagination/filter separation; no PT-BR normalization,
-  sorting or collation helper was moved or changed.
-- **Consumers reconciled:** fourteen `main.py` functions consume at least one shared
-  helper: `admin_cursos`, `_list_admin_arquivos_rows`, `admin_arquivos`,
-  `admin_requisicoes`, `admin_atividades`, `admin_atividades_academicas`,
-  `admin_atividades_extensao`, `admin_alunos`, `admin_turmas`,
-  `admin_detalhes_turma`, `admin_matrizes`, `admin_reportes`, `admin_alertas` and
-  `admin_acesso`. `app/views/aluno.py` consumes the shared modules directly in
-  `aluno_arquivos` and `aluno_minhas_requisicoes`.
-- **Compatibility/import edges:** `main.py` imports all nine shared callables, preserving
-  its real internal consumers and compatibility exports by object identity. Six obsolete
-  query-helper values were removed from `app/views/aluno.py::_get_main_helpers`; its lazy
-  `main` import and unrelated values remain. Shared modules import without importing
-  `main`; no other lazy edge was removed.
-- **Contract evidence:** new `tests/test_web_query_helpers.py`; RED failed as expected with
-  `ModuleNotFoundError: app.web`; GREEN 15 passed. Focused pagination/filter/import/route/
-  RBAC lane: 31 passed. Git-aware runtime-isolation gate: 15 passed.
-- **Full hermetic evidence:** 677 passed, 17 D73H historical tests deselected, zero failed,
-  zero errors in 273.67s. D73H artifacts were not supplied and the historical lane ran
-  zero tests.
+  `refactor/architecture-safety-net`; starting HEAD, upstream and remote
+  `1a0a690343462c23b8a30a1f0d6d8cb250027936`; divergence 0/0; clean worktree and index.
+- **Execution:** direct IAsup `openai-codex/gpt-5.6-sol`, profile `ia-sup-sgaa`, medium;
+  no IAexec delegation and no fallback. Incremental source/AST mapping was cheaper and
+  safer than exporting a three-function deterministic move after the prior consultation's
+  read-allowlist deviation.
+- **Selected boundary:** `app/text.py` owns `normalize_header`, `ptbr_text_sort_key` and
+  `ptbr_sqlite_collation`. All three moved bodies are AST-identical to the starting-HEAD
+  definitions. `format_date_ptbr`, date parsers, presentation/message helpers and every
+  other normalizer remain in place and unchanged.
+- **Consumers reconciled:** ten `main.py` functions consume the shared imports:
+  `resequence_turma_aluno_matriculas`, `_normalize_import_header_name`,
+  `_canonicalize_tipo_atividade`, `_canonicalize_tipo_limitacao`, `_parse_csv_boolean`,
+  `get_db_connection`, `admin_importar_requisicoes`, `admin_editar_turma`,
+  `admin_detalhes_turma` and `admin_turmas_importar`. The existing SQLite sorting test now
+  imports `ptbr_sqlite_collation` directly from `app.text`.
+- **Compatibility/import edges:** `main.py` imports all three callables, preserving its real
+  internal consumers and compatibility exports by object identity. No lazy `main` edge for
+  these symbols existed, so none was removed. `app.text` imports without loading `main`.
+  The old `main.py` `unidecode` import was removed only after AST evidence showed all four
+  loads belonged exclusively to the three moved functions.
+- **Behavior preserved:** transliteration, `lower` versus `casefold`, whitespace collapse,
+  `None`/empty/non-string coercion, empty-last Python sort-key tuple and collation returns
+  `-1`, `0` or `1` are unchanged. SQLite collation registration and query SQL are unchanged.
+- **Contract evidence:** new `tests/test_text_helpers.py`; RED failed as expected with
+  `ModuleNotFoundError: app.text`; focused helper/sorting GREEN 24 passed; expanded text/
+  import/turma/route/RBAC lane 37 passed; Git-aware runtime-isolation gate 15 passed.
+- **Full hermetic evidence:** 700 passed, 17 D73H historical tests deselected, zero failed,
+  zero errors in 347.43s. D73H artifacts were not supplied and ran zero tests.
 - **Invariants:** route inventory 131 before and after, route delta 0; unmapped RBAC
-  inventory 0 before and after, RBAC delta 0; behavior delta 0; schema/database mutation
-  0. Canonical `database.db` remained byte-identical at SHA-256
-  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` around every
-  lane. Staged candidate identity and Git status were unchanged around runtime-isolation
-  and full-suite execution. No canonical database, snapshot, custody or restore root was
-  opened or mutated.
-- **Exact technical manifest:** `app/views/aluno.py`, `app/web/__init__.py`,
-  `app/web/filters.py`, `app/web/pagination.py`, `main.py`,
-  `tests/test_web_query_helpers.py`. Canonical state files: `PROJECT_STATE.md`,
-  `AGENT_HANDOFF.md`. Authorized single-commit subject: `Extract pagination and query
-  filter helpers`; commit identity is resolved through Git history.
+  inventory 0 before and after, RBAC delta 0; behavior delta 0; schema/database mutation 0;
+  canonical database SQLite open count 0. `database.db` remained byte-identical at SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`. The only SQLite
+  collation test database was `:memory:`. Staged candidate identity and Git status remained
+  unchanged around runtime-isolation and full-suite execution.
+- **Exact technical manifest:** `app/text.py`, `main.py`,
+  `tests/test_admin_alunos_sorting.py`, `tests/test_text_helpers.py`. Canonical state files:
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. Authorized single-commit subject:
+  `Extract PT-BR text helpers`; commit identity is resolved through Git history.
 - **Boundaries and residue:** repository file mutation and selective staging were crossed;
-  no database, schema, dependency, external-service, production, custody or restore-root
-  mutation occurred. The read-only consultant inspected two repository files outside its
-  closed read allowlist; direct Git evidence proved zero resulting mutation, and its scope
-  claim was not accepted. No hard stop remains. After publication, external supervisor
-  review of PHASE2-B is the only next architecture action.
+  no database, schema, dependency, route, HTTP, authentication/RBAC, template/UI,
+  production, custody, snapshot or restore-root mutation occurred. No hard stop remains.
+  After publication, external supervisor review of PHASE2-C is the only next action.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -398,10 +389,10 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-B. Do not begin the PT-BR text-normalization,
-sorting/collation unit or any other Phase 2 unit before that review. No further custody
-action is authorized; restore-root cleanup, any new SQLite opening, the fallback candidate
-and Level 3 still require separate explicit human orders.
+External supervisor review of PHASE2-C. Do not begin another extraction or any other Phase 2
+unit before that review. No further custody action is authorized; restore-root cleanup, any
+new SQLite opening, the fallback candidate and Level 3 still require separate explicit
+human orders.
 
 No physical custody order is issued by this record.
 

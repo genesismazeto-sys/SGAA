@@ -35,6 +35,7 @@ from app.security.passwords import (
     hash_password,
     is_legacy_password_hash,
 )
+from app.text import normalize_header, ptbr_sqlite_collation, ptbr_text_sort_key
 from app.web.filters import (
     append_conditions_sql,
     append_text_contains_condition,
@@ -121,7 +122,6 @@ from services.oauth_config import (
     get_public_base_url as oauth_get_public_base_url,
 )
 from werkzeug.utils import secure_filename
-from unidecode import unidecode
 from werkzeug.exceptions import RequestEntityTooLarge
 from utils.messages import (
     flash,
@@ -144,28 +144,6 @@ def aluno_required(f):
     return _auth_aluno_required(f)
 
 # ===================== Utils =====================
-
-def normalize_header(text):
-    if not isinstance(text, str):
-        text = str(text)
-    text = unidecode(text)
-    return " ".join(text.lower().split())
-
-def ptbr_text_sort_key(text):
-    normalized = " ".join(unidecode(str(text or "")).casefold().split())
-    return (normalized == "", normalized)
-
-
-def ptbr_sqlite_collation(a, b):
-    """SQLite collation for accent-insensitive, case-insensitive PT-BR sorting."""
-    a_norm = " ".join(unidecode(str(a or "")).casefold().split())
-    b_norm = " ".join(unidecode(str(b or "")).casefold().split())
-    if a_norm < b_norm:
-        return -1
-    if a_norm > b_norm:
-        return 1
-    return 0
-
 
 def format_date_ptbr(value) -> str:
     if value is None:

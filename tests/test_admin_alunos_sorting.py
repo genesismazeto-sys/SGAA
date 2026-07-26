@@ -6,12 +6,12 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
-import main
+from app.text import ptbr_sqlite_collation
 
 
 def test_admin_alunos_sort_nome_is_accent_insensitive():
     conn = sqlite3.connect(":memory:")
-    conn.create_collation("PTBR_NOACCENT", main.ptbr_sqlite_collation)
+    conn.create_collation("PTBR_NOACCENT", ptbr_sqlite_collation)
     conn.execute("CREATE TABLE alunos_tmp (nome TEXT)")
     conn.executemany(
         "INSERT INTO alunos_tmp (nome) VALUES (?)",
