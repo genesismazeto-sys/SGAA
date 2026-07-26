@@ -221,20 +221,25 @@ Preserved historical / superseded wording: "specific destination UNRESOLVED";
 `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`; and the R5 pre-decision state
 `PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION`.
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
+R7 READ-ONLY ASSESSMENT: COMPLETE.
+LEVEL2 EXECUTION CONTRACT: READY.
+PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
+`Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
+The assessment remained read-only; the published closeout changes exactly seven documents.
+Primary future Level 2 candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
+Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` (requires separate
+human decision; never automatic).
+Primary future environment: NATIVE WINDOWS. R3-era container preference is
+historical/provisional; R7 selects NATIVE WINDOWS; no container fallback currently ready.
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
-revalidation and bounded restoration-execution contract.
+A new separate explicit human physical Level 2 order restricted to the primary
+candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
+a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
 
-R7 is NOT STARTED. It is not authorized to open any custodial artifact directly, create
-a restoration directory, copy an artifact, execute SQLite, run the application, alter
-an ACL, modify the source, or perform a restoration. Any physical Level 2 restoration
-requires a later separate explicit human order. Phases 2-6 remain unauthorized.
-
-R7 must revalidate container-runtime availability, the approved provisional
-`D:\tmp\sgaa_restore_<UTC>` alternative, exclusive use of a derived copy from
-`artifacts\`, the prohibition on opening `artifacts\` directly, objective Level 2
-criteria, separately authorized cleanup, and evidence required before source removal.
+No physical order is issued by this closeout.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
 D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain

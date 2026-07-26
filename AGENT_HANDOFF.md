@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -207,6 +207,37 @@
   - This documentary closeout performs zero new physical mutation and does not edit the
     preserved R6 script/report or R4 evidence.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
+- **HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.**
+  - R7 READ-ONLY ASSESSMENT: COMPLETE.
+  - LEVEL2 EXECUTION CONTRACT: READY.
+  - PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+  - R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED.
+  Assessment/pre-closeout Git reference: HEAD 22a7ec6f41b72d68b234021c3b1daca0c9546db5.
+  The R7 assessment round had no repository mutation, no physical restoration and no
+  technical commit. The seven-document closeout is committed and published under the
+  authorized subject `Record accepted R7 Level 2 restoration contract`; identity is
+  resolved through Git history. The closeout makes no physical order.
+  Primary Level 2 candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`
+  (SHA-256 `92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`).
+  Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db`
+  (SHA-256 `7ffb0c1ccc1bc3d60a86492bcda15f800af00dc84b6d9693ff5f4762680d55bf`);
+  requires separate human decision, never automatic.
+  Primary environment: NATIVE WINDOWS. R3-era container preference (ISOLATED CONTAINER)
+  is historical/provisional and superseded. No container fallback currently ready.
+  Unresolved timestamped root pattern: `D:\tmp\sgaa_restore_<UTC>` — requires a
+  concrete literal path in a later separate physical Level 2 order.
+  Approved layout: `sealed\` (custody copies only), `working\` (derives only from
+  `sealed\`), `evidence\` (reports and logs). Open only `working\` with SQLite URI
+  `mode=ro` plus `PRAGMA query_only=ON`. Stop immediately if open requires recovery
+  or write. Record only `foreign_key_check` row count (no rowids or content).
+  Physical Level 2: NOT AUTHORIZED. Zero physical action in this closeout.
+  No physical order is issued by this closeout.
+  Accepted preservation rule: no automatic cleanup, no fallback automatic;
+  `sealed/`, `working/` and `evidence/` remain preserved until a later cleanup-specific
+  order. Custody track remains OPEN. SECURITY-COMPLETE CUSTODY NOT CLAIMED.
+  Historical blocks preserved append-only and explicitly superseded; no operational
+  router telemetry written into repository docs.
+  See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
 - **U4 read-only proof:** CLOSED / ACCEPTED.
 - **U4-B bounded implementation:** CLOSED / ACCEPTED.
@@ -260,22 +291,22 @@
 - **Preserved historical/superseded — pre-U5 wording:** statements that U5 was "NOT STARTED", "requires separate order", "read-only only", "NOT STARTED / REQUIRES SEPARATE ORDER", or "not authorized for mutation" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 - **Preserved historical/superseded — pre-U6 wording:** statements that U6 was "NOT STARTED", "requires separate explicit order", or "not authorized for mutation" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 - **Preserved historical/superseded — pre-R2 wording:** statements that R2 was "NOT STARTED", that the specific canonical destination was "UNRESOLVED" or "NOT YET SELECTED", and the R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION` are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
+- **Preserved historical/superseded — pre-R7 wording:** statements that R7 was "NOT STARTED", "not authorized", "requires a separate explicit order", or that R7's contract was undrafted or pending are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
-revalidation and bounded restoration-execution contract.
+A new separate explicit human physical Level 2 order restricted to the primary
+candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
+a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
 
-R7 is NOT STARTED. R7 is not authorized to open a custodial artifact directly, create a
-restoration directory, copy an artifact, execute SQLite, run the application, alter an
-ACL, modify the source, or perform a restoration. Any physical Level 2 restoration
-requires a later separate explicit human order. Phases 2-6 remain unauthorized.
+No physical order is issued by this closeout.
 
-R7 must revalidate container-runtime availability, the approved provisional
-`D:\tmp\sgaa_restore_<UTC>` alternative, exclusive use of a derived copy of
-`artifacts\`, the prohibition on opening `artifacts\` directly, objective Level 2
-criteria, separately authorized cleanup, and evidence required before any future source
-removal.
+A note on the Level 2 environment: NATIVE WINDOWS is selected for R7. The R3-era
+container preference (ISOLATED CONTAINER) is historical/provisional and superseded
+by this R7 closeout. No container fallback is currently ready.
+
+Phases 2-6 remain unauthorized. Custody track remains open; security-complete
+custody not claimed.
 
 ### Preserved historical/superseded — pre-R5 wording
 

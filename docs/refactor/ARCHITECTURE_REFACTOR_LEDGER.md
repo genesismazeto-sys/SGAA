@@ -33,8 +33,9 @@
 | PHASE-1-U6 | Read-only Phase-1 completion assessment and residual-custody disposition boundary | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | R27 docs-only closeout; authorizing subject identity resolved through Git history | Read-only assessment; zero implementation, no tests, no technical commit; confirmed no other safe cleanup bounded candidate with material evidence | `docs/mapeamento/05_avaliacao_refactor.md` | None; U6 was read-only without physical mutation |
 | Fase 1 | Safe cleanup: dead code, lixo, headers | CLOSED / ACCEPTED | U1 `68f52fb`, U2 `5932dff`, U3 `c4fd2dd`, U4 `742b67c`, U5 `8b55230` | R27 docs-only closeout | U1-U6 CLOSED / ACCEPTED; PHASE1_CLOSABLE_WITH_SEPARATE_CUSTODY_TRACK; U6 confirmed no other safe cleanup bounded candidate with material evidence; Phase 1 leaves no partial technical implementation; snapshots not a mandatory technical closeout criterion; custody transferred without physical action to autonomous administrative track | `docs/mapeamento/05_avaliacao_refactor.md` | Residual: historical database snapshot custody transferred to separate governance track — OPEN / POLICY APPROVED / CANONICAL_DESTINATION_UNRESOLVED / PHYSICAL ACTION NOT AUTHORIZED |
 | HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R5 | Read-only parent ACL assessment and hardening decision closeout | CLOSED / ACCEPTED | N/A (read-only, no technical commit) | Authorized subject `Record approved R5 parent ACL hardening decision`; identity resolved through Git history | Preserved R5 phase-time state: FILE_DELETE_CHILD_NOT_GRANTED_CONFIRMED; strict Option B approved; target DACL policy only and then NOT applied; no physical mutation in R5. Superseded by R6 outcome below. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Historical R5 phase-time state; not current physical state |
-| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 | Parent DACL physical application, independent reconciliation and documentary closeout | CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY | Physical call external to Git; documentary commit subject `Record verified R6 parent ACL hardening outcome` | Explicit human authorization; IAsup deterministic closeout | R6 classification POST-MUTATION HARD STOP; target DACL APPLIED / INDEPENDENTLY VERIFIED; SetAccessControl calls 1; Apply EXIT 1; PropertyNotFoundStrict after mutation in verification/serialization path; retry/rollback prohibited and not performed; owner/group preserved; three approved ACEs; zero descendant drift; 17/17 integrity. Nonconformity DECLARED / CONTAINED / NO DACL TARGET DEVIATION / NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | R7 NOT STARTED; no physical Level 2 action authorized |
-| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED | R4 copy + R6 parent DACL hardening; no repository code mutation | R4-R6 closeouts; identity resolved through Git history | R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY. Destination `D:\programas\SGAA_Historical_Custody`; 17/17 and 4,808,704 bytes; parent target DACL independently verified; source preserved; SQLite never opened; Level 2/3 not executed; no independent redundancy. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | R7 read-only contract is next but NOT STARTED; any physical restoration requires later separate explicit human order; Phases 2-6 unauthorized |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6 | Parent DACL physical application, independent reconciliation and documentary closeout | CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY | Physical call external to Git; documentary commit subject `Record verified R6 parent ACL hardening outcome` | Explicit human authorization; IAsup deterministic closeout | R6 classification POST-MUTATION HARD STOP; target DACL APPLIED / INDEPENDENTLY VERIFIED; SetAccessControl calls 1; Apply EXIT 1; PropertyNotFoundStrict after mutation in verification/serialization path; retry/rollback prohibited and not performed; owner/group preserved; three approved ACEs; zero descendant drift; 17/17 integrity. Nonconformity DECLARED / CONTAINED / NO DACL TARGET DEVIATION / NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | R6 outcome remains authoritative historical antecedent; R7 supersedes only the prior R7-NOT-STARTED residual |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 | Read-only Level 2 restoration readiness assessment and restoration-execution contract | CLOSED / ACCEPTED | N/A (read-only assessment, no technical commit) | Authorized subject `Record accepted R7 Level 2 restoration contract`; identity resolved through Git history | R7 READ-ONLY ASSESSMENT: COMPLETE. LEVEL2 EXECUTION CONTRACT: READY. PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED. R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED. The assessment round had no repository mutation or physical restoration; the documentary closeout changes exactly seven documents. Primary Level 2 candidate: database.pre-D7.6B2-R2-hardening-20260613-184709.db (SHA-256 92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c). Fallback: database.pre-D7.6B-schema-migration-20260613-180525.db (SHA-256 7ffb0c1ccc1bc3d60a86492bcda15f800af00dc84b6d9693ff5f4762680d55bf; requires separate human decision). Primary environment: NATIVE WINDOWS. R3-era container preference superseded. No physical order is issued by this closeout. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Physical Level 2 not authorized; requires new separate explicit human order; no physical order issued by this closeout |
+| HISTORICAL-DATABASE-SNAPSHOT-CUSTODY | Administrative/governance track for 17 historical snapshot artifacts | OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED | R4 copy + R6 parent DACL hardening; no repository code mutation | R4-R7 documentary closeouts resolved through Git history | R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED. Destination `D:\programas\SGAA_Historical_Custody`; 17/17 and 4,808,704 bytes; parent target DACL independently verified; source preserved; SQLite never opened; Level 2/3 not executed; no independent redundancy. | `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Physical Level 2 not authorized; requires new separate explicit human order; Phases 2-6 unauthorized |
 | Fase 2 | Shared helpers extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized; requires explicit supervisor order |
 | Fase 3 | Data access consolidation | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
 | Fase 4 | Admin blueprint extraction | NOT AUTHORIZED | N/A | N/A | N/A | `docs/mapeamento/05_avaliacao_refactor.md` | Unauthorized |
@@ -154,16 +155,11 @@ See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
-revalidation and bounded restoration-execution contract.
+A new separate explicit human physical Level 2 order restricted to the primary
+candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
+a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
 
-R7 is NOT STARTED. It authorizes no direct artifact open, restoration directory, copy,
-SQLite, application, ACL/source change or restoration. Any physical Level 2 restoration
-requires a later separate explicit human order. Phases 2-6 remain unauthorized.
-
-R7 must revalidate container runtime, the `D:\tmp\sgaa_restore_<UTC>` alternative,
-derived-copy-only handling, objective Level 2 criteria, separately authorized cleanup,
-and evidence required before any future source removal.
+No physical order is issued by this closeout.
 
 Explicitly prohibited without separate authorization: route extraction;
 blueprint restructuring; database consolidation; behavior changes; schema/migrations;
@@ -450,7 +446,7 @@ at `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; worktree clean; index empty; zero
 
 **Zero physical action:** no directory created, no ACL applied, no copy, no SQLite opened.
 
-## Governance event — R34 R4 execution closeout
+## Historical / superseded governance event — R34 R4 execution closeout
 
 **Objective:** reconcile the executed R4 physical provisioning and copy against the
 repository canon and close it documentally.
@@ -518,7 +514,7 @@ authorized to modify D:\programas", etc.) are historical phase-time record prese
 R34 section. R5 was subsequently executed as a strict read-only ACL assessment and closed
 / accepted via this closeout. See R5 row in the phase table and the custody document.
 
-Exact next action:
+Historical phase-time next action, superseded by the current R7 closeout:
 
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
 revalidation and bounded restoration-execution contract.
@@ -532,7 +528,7 @@ R7 must revalidate container runtime, the `D:\tmp\sgaa_restore_<UTC>` alternativ
 derived-copy-only handling, objective Level 2 criteria, separately authorized cleanup,
 and evidence required before any future source removal.
 
-## Governance event — R6 post-mutation documentary closeout
+## Historical governance event — R6 post-mutation documentary closeout
 
 **Mode:** IAsup `openai-codex/gpt-5.6-sol`, MEDIUM, read-only reconciliation + docs-only
 closeout + selective commit/publication. IAexec FREE session

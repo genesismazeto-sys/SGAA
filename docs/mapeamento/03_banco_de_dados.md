@@ -236,18 +236,28 @@ Estratégia **mista** (ponto de dívida técnica):
 > nos descendentes; integridade 17/17. Não conformidade: DECLARED / CONTAINED /
 > NO DACL TARGET DEVIATION / NO ARTIFACT INTEGRITY IMPACT / NO RETRY /
 > NOT AN AUTHORIZED PRECEDENT.
-> Próxima ação canônica: HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2
-> restoration readiness revalidation and bounded restoration-execution contract.
-> R7 is NOT STARTED; não autoriza abrir `artifacts\`, criar diretório de restauração,
-> copiar artefato, executar SQLite/aplicação, alterar ACL/origem ou restaurar. Qualquer
-> Level 2 físico exige ordem humana explícita posterior. Fases 2–6 não autorizadas.
+> HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
+> R7 READ-ONLY ASSESSMENT: COMPLETE.
+> LEVEL2 EXECUTION CONTRACT: READY.
+> PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+> R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
+> `Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
+> The assessment remained read-only; the published closeout changes exactly seven documents.
+> Primary future Level 2 candidate: `database.pre-D7.6B2-R2-hardening-20260613-184709.db`.
+> Fallback: `database.pre-D7.6B-schema-migration-20260613-180525.db` (requires separate
+> human decision; never automatic).
+> Primary future environment: NATIVE WINDOWS. R3-era container preference is
+> historical/provisional; R7 selects NATIVE WINDOWS; no container fallback currently ready.
+> Physical Level 2: NOT AUTHORIZED.
 > Estado: Historical snapshot custody OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
 > PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
 > SECURITY-COMPLETE CUSTODY NOT CLAIMED.
 > Wording histórico/superado: "Destino específico: NOT YET SELECTED"; "R5 NOT STARTED";
-> "R5 não está autorizada"; "exposição de ACL no diretório pai ainda ABERTA".
+> "R5 não está autorizada"; "exposição de ACL no diretório pai ainda ABERTA";
+> "R7 NOT STARTED"; "R7 não autorizada".
 > Consulte `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` para o inventário
-> completo e política vigente. Nenhuma ação de arquivamento foi executada ou autorizada.
+> completo e política vigente. R7 closeout registra o contrato completo de execução Level 2.
+> Nenhuma ação física foi executada ou autorizada. Phases 2-6: UNAUTHORIZED.
 
 ## Backup e sincronização
 

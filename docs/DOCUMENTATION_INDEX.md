@@ -27,7 +27,9 @@
     — destination `D:\programas\SGAA_Historical_Custody` PROVISIONED, 17 artifacts copied
     and verified (4,808,704 bytes), custody manifest and evidence report written, source
     preserved, SQLite never opened; parent DACL target applied and independently verified;
-    R6 remains classified POST-MUTATION HARD STOP; security-complete custody NOT CLAIMED;
+    R6 remains classified POST-MUTATION HARD STOP;
+    **R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED**;
+    security-complete custody NOT CLAIMED;
     does not integrate any architectural
     implementation phase.
 8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
@@ -153,16 +155,21 @@
   NO ARTIFACT INTEGRITY IMPACT / NO RETRY / NOT AN AUTHORIZED PRECEDENT.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7: CLOSED / ACCEPTED.
+R7 READ-ONLY ASSESSMENT: COMPLETE.
+LEVEL2 EXECUTION CONTRACT: READY.
+PHYSICAL LEVEL2 RESTORATION: NOT AUTHORIZED.
+R7 DOCUMENTARY CLOSEOUT: COMMITTED AND PUBLISHED under the authorized subject
+`Record accepted R7 Level 2 restoration contract`; identity is resolved through Git history.
+The assessment remained read-only; the published closeout changes exactly seven documents.
+
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
-revalidation and bounded restoration-execution contract.
+A new separate explicit human physical Level 2 order restricted to the primary
+candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
+a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
 
-R7 is NOT STARTED and authorizes no physical restoration action. It must not directly
-open `artifacts\`, create a restoration directory, copy an artifact, execute SQLite,
-run the application, alter an ACL, modify the source, or perform restoration. Any
-physical Level 2 restoration requires a later separate explicit human order. Phases 2-6
-remain unauthorized.
+No physical order is issued by this closeout.
 
 Historical snapshot custody remains OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
 PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED /
@@ -195,7 +202,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, and R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, Level 2 execution contract ready but physical restoration not authorized, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 
@@ -217,7 +224,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; security-complete custody not claimed; R7 not started |
+| `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; security-complete custody not claimed; Level 2 execution contract ready; physical restoration not authorized |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
 REF-0C-A-R1. See the ledger and `PROJECT_STATE.md` historical blocks.

@@ -22,6 +22,21 @@ CLOSED / ACCEPTED
 HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R6:
 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY
 
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7:
+CLOSED / ACCEPTED
+
+R7 READ-ONLY ASSESSMENT:
+COMPLETE
+
+LEVEL2 EXECUTION CONTRACT:
+READY
+
+PHYSICAL LEVEL2 RESTORATION:
+NOT AUTHORIZED
+
+R7 DOCUMENTARY CLOSEOUT:
+COMMITTED AND PUBLISHED
+
 R6 EXECUTION CLASSIFICATION:
 POST-MUTATION HARD STOP
 
@@ -739,7 +754,126 @@ rejected as unusable. Explicit normal complement session
 `CONSULTATIVE_USABLE`; this was a task-level explicit fallback, not router-native fallback.
 Final acceptance is the IAsup deterministic decision.
 
-## Disposable restoration environment
+## R7 — read-only Level 2 restoration readiness assessment and restoration-execution contract
+
+```
+HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7:
+CLOSED / ACCEPTED
+
+R7 READ-ONLY ASSESSMENT:
+COMPLETE
+
+LEVEL2 EXECUTION CONTRACT:
+READY
+
+PHYSICAL LEVEL2 RESTORATION:
+NOT AUTHORIZED
+
+R7 DOCUMENTARY CLOSEOUT:
+COMMITTED AND PUBLISHED
+```
+
+The R7 assessment round was read-only and performed no repository mutation or physical
+restoration. The seven-document closeout is committed and published under the authorized
+subject `Record accepted R7 Level 2 restoration contract`; identity is resolved through
+Git history. No physical order is issued by this closeout.
+
+### Level 2 primary candidate
+
+Primary future Level 2 candidate:
+
+```
+database.pre-D7.6B2-R2-hardening-20260613-184709.db
+```
+
+SHA-256: `92627ded44c9094e74f01da5718c995cd3fdd5ac467ef79298541a75b777cd8c`
+
+Fallback Level 2 candidate:
+
+```
+database.pre-D7.6B-schema-migration-20260613-180525.db
+```
+
+SHA-256: `7ffb0c1ccc1bc3d60a86492bcda15f800af00dc84b6d9693ff5f4762680d55bf`
+
+The fallback requires another specific human decision; it must never be automatic.
+
+### Primary future environment
+
+NATIVE WINDOWS. The R3-era container preference (ISOLATED CONTAINER) is
+historical/provisional and is superseded by this R7 selection. No container
+fallback is currently ready.
+
+### Approved Level 2 restoration layout
+
+```
+D:\tmp\sgaa_restore_<UTC>\
+  sealed\     custody copies only
+  working\    derives only from sealed
+  evidence\   reports and logs
+```
+
+The root `D:\tmp\sgaa_restore_<UTC>` remains unresolved until a later physical
+authorization and must be one concrete literal timestamped path matching the
+pattern `D:\tmp\sgaa_restore_<UTC>`, where `<UTC>` is replaced by an actual UTC
+timestamp.
+
+### Contract boundaries
+
+- Custody copies: only to `sealed\`.
+- `working\` derives only from `sealed\`; never from custody, source or any other
+  origin.
+- Only `working\` may be opened. Source, custody and `sealed\` must never be
+  opened directly.
+- Zero glob, overwrite, move, delete or automatic cleanup.
+- Level 2 runs no `init_db`, no `ensure_*`, no migrations and no hardening.
+- No Flask, `main.py`, application, network, production or external services.
+- No business rows or personal data may be selected, emitted or exposed; schema
+  inventory and aggregate table row counts are permitted.
+- Level 2 never authorizes source removal.
+
+### Future execution revalidation requirements
+
+Before any physical Level 2 execution, the operator must revalidate:
+
+- Exact Python executable path, version and SHA-256.
+- Open `working\` initially with SQLite URI mode `mode=ro`.
+- Set and prove `PRAGMA query_only=ON`.
+- Stop immediately if open requires recovery or write.
+- Record only `foreign_key_check` row count; never record rowids or content.
+
+### Physical Level 2 status
+
+PHYSICAL LEVEL 2: NOT AUTHORIZED.
+
+This closeout creates no `D:\tmp` root, no `sealed\`, `working\` or `evidence\`
+directories, no ACL, no copy, no database open, no validator, no
+recovery/checkpoint/migration, no fallback, no Level 3, no source/custody change,
+no Phase 2 and no restoration.
+
+The fallback candidate is not authorized without a separate explicit human order.
+
+### Custody track status
+
+Custody track remains OPEN. SECURITY-COMPLETE CUSTODY NOT CLAIMED because
+Level 2, Level 3 and independent redundancy remain absent.
+
+### Accepted preservation rule
+
+No automatic cleanup, no fallback automatic. `sealed/`, `working/` and
+`evidence/` remain preserved until a later cleanup-specific order. Historical
+R1-R7 decision records remain explicitly superseded where applicable and are
+not deleted or compacted by this closeout. Operational router telemetry is kept
+outside repository documentation.
+
+### Preserved historical/superseded — pre-R7 wording
+
+Statements that R7 was "NOT STARTED", "not authorized", "requires a separate
+explicit order", that R7 had no objective defined, or wording that R7's contract
+was undrafted or pending are superseded by this closeout. Such claims in
+historical blocks below are preserved only as historical record.
+
+## Historical / superseded — R3 provisional disposable restoration environment
 
 Preferred disposable restoration environment:
 ISOLATED CONTAINER
@@ -753,10 +887,13 @@ MUST NOT BE MOUNTED AS RESTORATION DATABASE
 Custodial artifact:
 MUST NOT BE OPENED DIRECTLY
 
-This is a recorded preference, not an execution. No container was created, no
+This is a recorded R3-era preference, not an execution. No container was created, no
 Docker runtime was verified, no volume was mounted, no image was built, and no
 database was opened. Operational feasibility of the container remains a separate
 future assessment.
+
+**Current R7 authority: NATIVE WINDOWS. This R3 provisional block is historical
+/ superseded; no container fallback is currently ready.**
 
 ## Governance rules
 
@@ -790,26 +927,19 @@ future assessment.
 
 Exact next action:
 
-HISTORICAL-DATABASE-SNAPSHOT-CUSTODY-R7 — read-only Level 2 restoration readiness
-revalidation and bounded restoration-execution contract.
+A new separate explicit human physical Level 2 order restricted to the primary
+candidate (`database.pre-D7.6B2-R2-hardening-20260613-184709.db`) and containing
+a concrete literal timestamped root matching `D:\tmp\sgaa_restore_<UTC>`.
 
-R7 is NOT STARTED. R7 is not authorized to open any custodial artifact directly, create
-a restoration directory, copy an artifact, execute SQLite, run the application, alter
-an ACL, modify the source, or perform a restoration. Any physical Level 2 restoration
-requires a later separate explicit human order. Phases 2-6 remain unauthorized.
+No physical order is issued by this closeout.
 
-R7 must revalidate container-runtime availability; the approved
-`D:\tmp\sgaa_restore_<UTC>` alternative; exclusive use of a derived copy of
-`artifacts\`; the prohibition on opening `artifacts\` directly; objective Level 2
-criteria; cleanup only under its own order; and evidence required before any future
-source removal.
-
-Preserved historical / superseded wording: statements that R2, R3, R4 or R5 were
-"NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET SELECTED",
-that the destination was "NOT YET PROVISIONED", that the provisioning and copy contract
-was undrafted or pending, that physical execution was "NOT AUTHORIZED AT THIS TIME", the
-R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`, the R3 phase-time
-state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`, and the R5
-pre-decision states `PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION` and
-"NOT STARTED" / awaiting-human-decision are superseded by this closeout and preserved
-only as historical record.
+Preserved historical / superseded wording: statements that R2, R3, R4, R5, R6 or
+R7 were "NOT STARTED", that the specific destination was "UNRESOLVED" or "NOT YET
+SELECTED", that the destination was "NOT YET PROVISIONED", that the provisioning and
+copy contract was undrafted or pending, that physical execution was "NOT AUTHORIZED
+AT THIS TIME", the R30 state `DESTINATION_OPTIONS_READY_AWAITING_HUMAN_SELECTION`,
+the R3 phase-time state `COPY_EXECUTION_CONTRACT_READY_AWAITING_HUMAN_AUTHORIZATION`,
+the R5 pre-decision states `PARENT_ACL_HARDENING_RECOMMENDED_AWAITING_HUMAN_DECISION`
+and "NOT STARTED" / awaiting-human-decision, and any pre-R7 wording that R7 was
+"NOT STARTED", "not authorized", or awaiting a separate explicit order are superseded
+by this closeout and preserved only as historical record.
