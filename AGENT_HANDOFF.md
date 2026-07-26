@@ -1,6 +1,43 @@
 # Agent Handoff
 
-## Current state — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE2-A FIRST SHARED-HELPER EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+
+### Current operational handoff — PHASE2-A first shared-helper extraction (2026-07-26)
+
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. No acceptance
+  or Phase 2 closeout is claimed.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream
+  `cc188d38e2fad03422fc8d1eab1a29dd9f045931`, divergence 0/0, initially clean.
+- **Mode/model:** direct IAsup `openai-codex/gpt-5.6-sol`, medium; no delegation or fallback.
+  Direct execution kept the coupled boundary/import/test/Git-aware adjudication in one
+  context and avoided redundant executor export and revalidation.
+- **Selected unit:** password hashing/checking. Exact public API:
+  `hash_password`, `is_legacy_password_hash`, `check_password`; private legacy checker:
+  `_check_password_legacy`. All moved function ASTs equal the starting-HEAD bodies.
+- **Implementation:** `app/security/passwords.py` owns the logic;
+  `app/security/__init__.py` establishes the package; `main.py` preserves observed public
+  compatibility exports; `app/db.py`, `app/views/core.py`, `app/views/aluno.py` and
+  `tools/seed_demo_data.py` import from the shared module. Five password-specific lazy
+  `main` values and the direct seed-tool `main` edge were removed; unrelated lazy edges
+  remain. Algorithm, salt/encoding, legacy compatibility and rehash behavior are unchanged.
+- **Validation:** RED expected import failure; helper GREEN 5 passed; focused helper/auth/
+  route/RBAC lane 40 passed; runtime-isolation copy gate 15 passed; full hermetic suite
+  662 passed, 17 D73H deselected, zero failures/errors in 456.24s. The initial Hermes
+  Python attempt was rejected pre-collection for missing `openpyxl`; one MSYS basetemp
+  attempt produced 29 passes and 11 setup errors before native-path correction. Neither
+  attempt changed Git or the canonical database.
+- **Invariants:** routes 131 -> 131 (delta 0); unmapped RBAC 0 -> 0 (delta 0); behavior
+  delta 0; schema/database mutation 0. `database.db` remained at SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
+  No route/HTTP, authentication/RBAC decision, UI/template, dependency, production,
+  custody, restore-root, snapshot or SQLite-evidence change.
+- **Exact manifest:** `app/db.py`, `app/security/__init__.py`,
+  `app/security/passwords.py`, `app/views/aluno.py`, `app/views/core.py`, `main.py`,
+  `tests/test_password_helpers.py`, `tools/seed_demo_data.py`, `PROJECT_STATE.md`,
+  `AGENT_HANDOFF.md`.
+- **Next action:** external supervisor review of PHASE2-A. Do not start pagination/query
+  filters, text normalization/PT-BR sorting/collation, or any second helper extraction.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -269,7 +306,8 @@
   `working\` and `evidence\` contents remain PRESERVED until a separate explicit cleanup
   order; automatic cleanup prohibited; NO new SQLite opening is authorized; the fallback
   candidate remains unauthorized without a separate human decision; Level 3 NOT STARTED /
-  NOT AUTHORIZED; Phase 2 NOT STARTED / UNAUTHORIZED; custody track remains OPEN and
+  NOT AUTHORIZED; Phase 2-A is separately authorized and locally implemented pending
+  supervisor review; Phase 2-B onward is NOT STARTED / UNAUTHORIZED; custody track remains OPEN and
   SECURITY-COMPLETE CUSTODY is NOT CLAIMED.
   See `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`.
 - **PHASE-1-U4:** CLOSED / ACCEPTED.
@@ -316,10 +354,12 @@
   - Recovery used foreground PTY without bypassing Git Credential Manager.
   - None caused any additional repository change.
   - None is an authorized precedent.
-- **Phases 2-6 remain unauthorized.**
+- **Phase 2-A is separately authorized and locally implemented pending supervisor review;
+  Phase 2-B and Phases 3-6 remain unauthorized.**
 - **Production remains shadow-only; production hard enforcement remains unauthorized.**
 - **R20 and D73H remain unchanged.**
-- **Not authorized:** database snapshot deletion; Referrer-Policy changes; Phase 2 work.
+- **Not authorized:** database snapshot deletion; Referrer-Policy changes; a second helper
+  extraction or any Phase 2-B onward work.
 - **Preserved historical/superseded — pre-U3 wording:** statements that U3 was "NOT STARTED / REQUIRES SEPARATE ORDER", "awaiting separate implementation order", "awaiting original read-only proof", "awaiting external acceptance", or "only locally validated" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 - **Preserved historical/superseded — pre-U4 wording:** statements that U4 was "NOT STARTED", "future read-only only", "awaiting diagnosis/implementation", "U4-B awaiting audit", "hashlib comment deferred", or "import cleanup not done" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
 - **Preserved historical/superseded — pre-U5 wording:** statements that U5 was "NOT STARTED", "requires separate order", "read-only only", "NOT STARTED / REQUIRES SEPARATE ORDER", or "not authorized for mutation" are superseded by this closeout. Such claims in historical blocks below are preserved only as historical record.
@@ -330,11 +370,12 @@
 
 Exact next action:
 
-Supervisor review of the Level 2 acceptance record. No further custody action is
-authorized. Restore-root cleanup, any new SQLite opening, the fallback candidate,
-Level 3 and Phase 2 each require a new separate explicit human order.
+External supervisor review of PHASE2-A. Do not begin the pagination/query-filter unit,
+the text-normalization/PT-BR sorting/collation unit, or any other Phase 2 work before that
+review. No further custody action is authorized; restore-root cleanup, any new SQLite
+opening, the fallback candidate and Level 3 still require separate explicit human orders.
 
-No physical order is issued by this record.
+No physical custody order is issued by this record.
 
 Historical / superseded next action: "a new separate explicit human physical Level 2
 order restricted to the primary candidate and containing a concrete literal timestamped
@@ -345,8 +386,8 @@ A note on the Level 2 environment: NATIVE WINDOWS is selected for R7. The R3-era
 container preference (ISOLATED CONTAINER) is historical/provisional and superseded
 by this R7 closeout. No container fallback is currently ready.
 
-Phases 2-6 remain unauthorized. Custody track remains open; security-complete
-custody not claimed.
+Phase 2-A is locally implemented pending supervisor review. Phase 2-B and Phases 3-6
+remain unauthorized. Custody track remains open; security-complete custody not claimed.
 
 ### Preserved historical/superseded — pre-R5 wording
 

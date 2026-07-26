@@ -4,6 +4,7 @@ import sys
 from flask import g
 
 from app.db_maintenance import apply_schema_migrations
+from app.security.passwords import hash_password
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -60,7 +61,6 @@ def _get_main_db_helpers():
         "ensure_backup_settings_schema": main.ensure_backup_settings_schema,
         "gerar_codigo_turma": main.gerar_codigo_turma,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
-        "hash_password": main.hash_password,
         "logger": main.logger,
     }
 
@@ -80,7 +80,6 @@ def _init_db_impl():
     ensure_backup_settings_schema = helpers["ensure_backup_settings_schema"]
     gerar_codigo_turma = helpers["gerar_codigo_turma"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
-    hash_password = helpers["hash_password"]
     logger = helpers["logger"]
 
     conn = get_db_connection()

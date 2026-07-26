@@ -12,6 +12,7 @@ from app.auth import (
     canonicalize_access_level,
     default_access_level_for_user_type,
 )
+from app.security.passwords import check_password, hash_password, is_legacy_password_hash
 from utils.messages import flash
 
 
@@ -20,12 +21,9 @@ def _get_main_helpers():
 
     return {
         "aluno_url": main.aluno_url,
-        "check_password": main.check_password,
         "ensure_usuario_access_schema": main.ensure_usuario_access_schema,
         "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "get_db_connection": main.get_db_connection,
-        "hash_password": main.hash_password,
-        "is_legacy_password_hash": getattr(main, "is_legacy_password_hash", lambda _h: False),
         "logger": main.logger,
         "normalize_usuario_access_for_user_type": getattr(
             main, "normalize_usuario_access_for_user_type", lambda *_a, **_k: None
@@ -36,9 +34,6 @@ def _get_main_helpers():
 def login():
     helpers = _get_main_helpers()
     aluno_url = helpers["aluno_url"]
-    check_password = helpers["check_password"]
-    hash_password = helpers["hash_password"]
-    is_legacy_password_hash = helpers["is_legacy_password_hash"]
     get_db_connection = helpers["get_db_connection"]
     normalize_usuario_access_for_user_type = helpers["normalize_usuario_access_for_user_type"]
     logger = helpers["logger"]

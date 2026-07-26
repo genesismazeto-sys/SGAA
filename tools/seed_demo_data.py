@@ -8,7 +8,7 @@ if BASE_DIR not in sys.path:
 
 from app import create_app
 from app.db import get_db_connection, init_db
-from main import hash_password
+from app.security.passwords import hash_password
 
 
 def seed():

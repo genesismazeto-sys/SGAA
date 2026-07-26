@@ -22,6 +22,7 @@ from flask import (
 )
 
 from app.auth import aluno_required
+from app.security.passwords import hash_password
 from app.db import get_db_connection
 from app.student_documents import resolve_student_document_path, save_student_document
 from utils.messages import flash
@@ -52,7 +53,6 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
         "get_effective_matriz_for_turma": main.get_effective_matriz_for_turma,
         "save_upload": main.save_upload,
         "get_pagination": main.get_pagination,
-        "hash_password": main.hash_password,
         "get_student_request_update_alert": main.get_student_request_update_alert,
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
@@ -845,8 +845,6 @@ def aluno_progresso():
 def aluno_meus_dados():
     helpers = _get_main_helpers()
     ensure_usuario_profile_schema = helpers["ensure_usuario_profile_schema"]
-    hash_password = helpers["hash_password"]
-
     conn = get_db_connection()
     ensure_usuario_profile_schema(conn)
     usuario_id = session["user_id"]
