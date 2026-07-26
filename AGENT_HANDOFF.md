@@ -1,8 +1,51 @@
 # Agent Handoff
 
-## Current state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-C CLOSED / ACCEPTED — PHASE2-B CLOSED / ACCEPTED — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-A CANONICAL DATABASE CONNECTION CONSOLIDATION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE2-D residual shared-helper closure (2026-07-26)
+### Current operational handoff — PHASE 3-A canonical database connection consolidation (2026-07-26)
+
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 2 is
+  CLOSED / ACCEPTED. No `init_db` or `ensure_*` consolidation was started.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/remote
+  `7fc0629b4b4b40159a1eea6431402c9278fe3b40`, divergence 0/0, initially clean.
+- **Ownership change:** `app/db.py` now solely defines `DATABASE`, `get_db_connection` and
+  `close_db_connection`; `main.py` imports all three compatibility exports. Duplicate main
+  implementations and its duplicate teardown registration were removed. The connection
+  owner preserves environment/default path resolution, `sqlite3.Row`, foreign keys, WAL,
+  synchronous NORMAL, `PTBR_NOACCENT`, Flask `g` reuse and close lifecycle.
+- **Compatibility/runtime boundary:** main callable exports are object-identical to
+  `app.db`; all 21 dual-assignment test fixtures remain compatible. The old
+  `app.db`→`sys.modules["main"]`→`main.DATABASE` edge is zero. `init_db` and `_init_db_impl`
+  remain unchanged; the retained pre-call is a pure local no-op and does not read `main`.
+  Existing lazy `main` access for out-of-scope `init_db`/`ensure_*` helpers is unchanged.
+- **Tests:** focused connection/configuration/collation/monkeypatch/import/route/RBAC lane
+  38 passed; Git-aware runtime-isolation 15 passed; full hermetic suite 734 passed,
+  17 D73H deselected, zero failures/errors in 446.67s.
+- **Invariants:** routes 131→131; RBAC unmapped 0→0; behavior/schema/database delta 0;
+  canonical SQLite opens 0; `database.db` remained 544768 bytes with unchanged mtime and
+  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`;
+  no sidecars.
+- **Mode/model:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, high. Optional read-only mapping used
+  `opencode/deepseek-v4-flash-free`, session `ses_05fca25ebffeyu5VanMC7CJ7MV`, cost 0,
+  exit 0, no fallback, but exceeded its read allowlist; its compliance claim was rejected
+  and accepted findings were independently re-proven. Direct mutation minimized context
+  export and revalidation risk.
+- **Manifest:** `app/db.py`, `main.py`, `tests/test_db_connection_ownership.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. Subject:
+  `Consolidate canonical database connection ownership`; identity via Git history.
+- **Recovered defects:** the global Python lacked `flask_compress`; its collection failure
+  was rejected and the canonical `.venv` runner was used. A first implementation removed
+  the `init_db` pre-call; scope review caught it before closeout, restored the wrapper and
+  re-ran all focused, isolation and full-suite evidence. No hard stop or residue remains.
+- **Next action:** external supervisor review of PHASE 3-A only. Do not begin `init_db`,
+  `ensure_*`, repository, schema or migration consolidation.
+
+### Historical phase-time handoff — PHASE2-D residual shared-helper closure (2026-07-26)
+
+The waiting-review state below is superseded by the executive PHASE 2 CLOSED / ACCEPTED
+baseline above and remains only as phase-time evidence.
 
 - **Status:** IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED /
   AWAITING SUPERVISOR REVIEW. Do not declare Phase 2 closed or start Phase 3.
@@ -415,10 +458,10 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-D. Do not declare Phase 2 closed or begin Phase 3
-before that review. No further custody action is authorized; restore-root cleanup, any
-new SQLite opening, the fallback candidate and Level 3 still require separate explicit
-human orders.
+External supervisor review of PHASE 3-A. Do not begin `init_db`, `ensure_*`, repository,
+schema or migration consolidation. No further custody action is authorized; restore-root
+cleanup, any new SQLite opening, the fallback candidate and Level 3 still require separate
+explicit human orders.
 
 No physical custody order is issued by this record.
 

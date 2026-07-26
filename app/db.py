@@ -1,6 +1,5 @@
 import os
 import sqlite3
-import sys
 from flask import g
 
 from app.academics import (
@@ -10,6 +9,7 @@ from app.academics import (
 )
 from app.db_maintenance import apply_schema_migrations
 from app.security.passwords import hash_password
+from app.text import ptbr_sqlite_collation
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,23 +17,17 @@ DATABASE = os.getenv("APP_DATABASE", os.path.join(PROJECT_ROOT, "database.db"))
 
 
 def _sync_database_from_main():
-    global DATABASE
-    main = sys.modules.get("main")
-    if main is None:
-        return DATABASE
-
-    main_database = getattr(main, "DATABASE", None)
-    if main_database:
-        if DATABASE != main_database:
-            DATABASE = main_database
     return DATABASE
 
 
 def get_db_connection():
-    _sync_database_from_main()
     if "db" not in g:
         g.db = sqlite3.connect(DATABASE)
         g.db.row_factory = sqlite3.Row
+        try:
+            g.db.create_collation("PTBR_NOACCENT", ptbr_sqlite_collation)
+        except Exception:
+            pass
         try:
             g.db.execute("PRAGMA foreign_keys = ON")
             g.db.execute("PRAGMA journal_mode = WAL")

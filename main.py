@@ -35,6 +35,7 @@ from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
     gerar_codigo_turma,
 )
+from app.db import DATABASE, close_db_connection, get_db_connection
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import (
@@ -4438,11 +4439,7 @@ try:
 except Exception:
     pass
 
-# Caminho robusto do banco (padrão: arquivo local na pasta src)
-DATABASE = os.getenv(
-    "APP_DATABASE",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "database.db")
-)
+# Caminho robusto do banco, resolvido canonicamente por app.db.
 app.config["DATABASE_PATH"] = DATABASE
 app.config["LOCAL_BACKUP_DIR"] = os.getenv(
     "APP_LOCAL_BACKUP_DIR",
@@ -5002,24 +4999,6 @@ def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: s
     }
     return preview, storage_payload
 
-def get_db_connection():
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
-        try:
-            g.db.create_collation("PTBR_NOACCENT", ptbr_sqlite_collation)
-        except Exception:
-            pass
-        try:
-            # Segurança e integridade
-            g.db.execute("PRAGMA foreign_keys = ON")
-            # Performance para acesso concorrente leve
-            g.db.execute("PRAGMA journal_mode = WAL")
-            g.db.execute("PRAGMA synchronous = NORMAL")
-        except Exception:
-            pass
-    return g.db
-
 # Headers de segurança básicos em todas as respostas
 @app.after_request
 def add_security_headers(resp):
@@ -5037,13 +5016,6 @@ def add_security_headers(resp):
     except Exception as exc:
         logger.warning("Falha ao sincronizar snapshot do banco para nuvem: %s", exc)
     return resp
-
-@app.teardown_appcontext
-def close_db_connection(exception):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
-
 
 def _admin_access_denied_response(resource: str, required_scope: str):
     message = resolve_user_message(
