@@ -35,6 +35,16 @@ from app.security.passwords import (
     hash_password,
     is_legacy_password_hash,
 )
+from app.web.filters import (
+    append_conditions_sql,
+    append_text_contains_condition,
+    get_date_range_query,
+    get_int_multi_query_values,
+    get_multi_query_values,
+    get_number_range_query,
+    get_text_query_value,
+)
+from app.web.pagination import get_pagination, wants_pagination
 from app.auth import (
     ACCESS_RESOURCE_GROUPS,
     ACCESS_RESOURCE_ORDER,
@@ -308,38 +318,6 @@ def parse_documentos_json(raw) -> list[str]:
     parts = _re.split(r"[,;\n\|]+", t)
     return _normalize_list(parts)
 
-# ===================== Pagination helper =====================
-def get_pagination(default_per_page: int = 20, max_per_page: int = 100):
-    try:
-        page = int(request.args.get('page', 1))
-    except (TypeError, ValueError):
-        page = 1
-    try:
-        per_page = int(request.args.get('per_page', default_per_page))
-    except (TypeError, ValueError):
-        per_page = default_per_page
-    page = max(1, page)
-    per_page = max(1, min(max_per_page, per_page))
-    offset = (page - 1) * per_page
-    return page, per_page, offset
-
-def wants_pagination() -> bool:
-    """True se o cliente explicitou page/per_page via querystring.
-    Mantém comportamento atual: só aplica LIMIT/OFFSET quando solicitado.
-    """
-    args = request.args
-    return ('page' in args) or ('per_page' in args)
-
-def append_conditions_sql(base_has_where: bool, conditions: list[str], joiner: str = " AND ") -> str:
-    """Monta trecho SQL de condições a partir de uma lista de strings.
-    - Se base_has_where=True, prefixa com " AND "; caso contrário, com " WHERE ".
-    - Retorna string vazia quando não há condições.
-    """
-    if not conditions:
-        return ""
-    return (" AND " if base_has_where else " WHERE ") + joiner.join(conditions)
-
-
 DEFAULT_CURSO_TOTAL_HORAS_AAC = 160
 DEFAULT_CURSO_TOTAL_HORAS_AEU = 80
 ATIVIDADES_SCHEMA_COLUMNS = (
@@ -354,75 +332,6 @@ ATIVIDADES_SCHEMA_COLUMNS = (
     "limite_horas_total",
     "limite_horas_semestral",
 )
-
-
-def get_multi_query_values(name: str) -> list[str]:
-    values = request.args.getlist(name)
-    if not values and name in request.args:
-        values = [request.args.get(name)]
-
-    normalized = []
-    seen = set()
-    for value in values:
-        if value is None:
-            continue
-        parts = [str(value)]
-        if isinstance(value, str) and ("," in value or ";" in value):
-            parts = re.split(r"\s*[,;]\s*", value)
-        for part in parts:
-            item = str(part or "").strip()
-            if not item or item in seen:
-                continue
-            seen.add(item)
-            normalized.append(item)
-    return normalized
-
-
-def get_text_query_value(name: str) -> str:
-    return " ".join(str(request.args.get(name) or "").split())
-
-
-def get_int_multi_query_values(name: str) -> list[int]:
-    values = []
-    for raw in get_multi_query_values(name):
-        try:
-            values.append(int(raw))
-        except (TypeError, ValueError):
-            continue
-    return values
-
-
-def get_number_range_query(name: str, caster=int):
-    def _parse(raw):
-        raw = str(raw or "").strip()
-        if not raw:
-            return None
-        try:
-            return caster(raw)
-        except (TypeError, ValueError):
-            return None
-
-    return _parse(request.args.get(f"{name}_min")), _parse(request.args.get(f"{name}_max"))
-
-
-def get_date_range_query(name: str):
-    def _parse(raw):
-        raw = str(raw or "").strip()
-        if not raw:
-            return None
-        try:
-            return datetime.datetime.strptime(raw[:10], "%Y-%m-%d").date().isoformat()
-        except (TypeError, ValueError):
-            return None
-
-    return _parse(request.args.get(f"{name}_min")), _parse(request.args.get(f"{name}_max"))
-
-
-def append_text_contains_condition(conditions: list[str], params: list, sql_expression: str, value: str) -> None:
-    if not value:
-        return
-    conditions.append(f"LOWER(COALESCE({sql_expression}, '')) LIKE ?")
-    params.append(f"%{value.lower()}%")
 
 
 def _ensure_usuario_access_schema_impl(conn) -> None:

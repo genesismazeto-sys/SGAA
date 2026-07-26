@@ -1,56 +1,63 @@
-## Current authoritative state — PHASE2-A FIRST SHARED-HELPER EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE2-B PAGINATION AND QUERY-HELPER EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE2-A — first shared-helper extraction (2026-07-26)
+### PHASE2-B — pagination and query-helper extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. Phase 2 and
-  Phase 2-A are not claimed accepted or closed.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-A is
+  CLOSED / ACCEPTED at technical commit `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`.
+  Phase 2 as a whole is not claimed accepted or closed.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD and upstream
-  `cc188d38e2fad03422fc8d1eab1a29dd9f045931`; divergence 0/0; clean worktree and index.
-- **Execution:** direct IAsup `openai-codex/gpt-5.6-sol`, medium effort, because selecting
-  the boundary required coupled reconciliation of `main.py`, three lazy-helper maps,
-  compatibility exports, authentication tests and Git-aware full-suite behavior. No IAexec
-  delegation or model fallback was used.
-- **Candidate reconciliation:** password hashing/checking helpers were materially present
-  and isolatable as one behavior-neutral unit; pagination/query filters and PT-BR text
-  normalization/sorting/collation were inspected only as later candidates and not changed.
-- **Selected API:** `hash_password`, `is_legacy_password_hash` and `check_password` are the
-  public API of `app/security/passwords.py`; `_check_password_legacy` remains private.
-  All four moved function ASTs are identical to their starting-HEAD definitions.
-- **Implementation:** new `app/security/__init__.py` and `app/security/passwords.py`;
-  `main.py` now imports and preserves the three observed public compatibility exports.
-  Direct consumers use the shared module in `app/db.py`, `app/views/core.py`,
-  `app/views/aluno.py` and `tools/seed_demo_data.py`. Password algorithm
-  `pbkdf2:sha256:600000`, string coercion, encoding, legacy salted-SHA256 verification,
-  exception behavior and opportunistic legacy rehash flow remain unchanged.
-- **Import-edge reduction:** five password-specific values were removed from the existing
-  lazy `main` helper maps (`app/db.py`: one; `app/views/core.py`: three;
-  `app/views/aluno.py`: one). Their remaining lazy imports were preserved for other units.
-  The direct `tools/seed_demo_data.py -> main.hash_password` edge was also removed.
-- **Focused evidence:** new `tests/test_password_helpers.py`; RED failed as expected with
-  `ModuleNotFoundError: app.security`; GREEN 5 passed; focused helper/auth/route/RBAC lane
-  40 passed; Git-aware runtime-isolation gate 15 passed.
-- **Full hermetic evidence:** 662 passed, 17 D73H historical tests deselected, zero failed,
-  zero errors in 456.24s. D73H artifacts were not supplied and the historical lane executed
-  zero tests. A rejected pre-collection runner attempt lacked `openpyxl`; a later focused
-  attempt used an MSYS `--basetemp` path that Windows resolved incorrectly (29 passed,
-  11 setup errors). Both were mechanical, caused no repository/database drift, and were
-  replaced by the canonical `.venv/Scripts/python.exe` plus native `C:/...` basetemp.
-- **Invariants:** route inventory 131 before and after, route delta 0; unmapped RBAC inventory
-  0 before and after, RBAC delta 0; behavioral change 0; schema/database mutation 0;
-  canonical `database.db` remained unopened by the implementation and byte-identical at
-  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`
-  around every executed test lane. No route, endpoint, HTTP, authentication/RBAC decision,
-  template/UI, dependency, production policy, custody, restore-root, snapshot or SQLite
-  evidence change occurred.
-- **Technical manifest:** `app/db.py`, `app/security/__init__.py`,
-  `app/security/passwords.py`, `app/views/aluno.py`, `app/views/core.py`, `main.py`,
-  `tests/test_password_helpers.py`, `tools/seed_demo_data.py`. Canonical state files:
-  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`.
-- **Boundaries and residue:** first repository mutation and selective staging were crossed;
-  no database, external-service, custody, commit or publication boundary had been crossed
-  when this state block was authored. No hard stop remains. Phase 2-B and every second
-  helper extraction remain unauthorized pending external supervisor review.
+  `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`; divergence 0/0; clean worktree and index.
+- **Execution:** IAsup `openai-codex/gpt-5.6-sol`, profile `ia-sup-sgaa`, medium effort.
+  One read-only mapping consultation used logical route `flash_free`, effective
+  `opencode/deepseek-v4-flash-free`, with no fallback. IAsup rejected the proposed
+  one-module collapse and adjudicated the real two-module boundary. Implementation was
+  direct because the move was deterministic after reconciliation and a second exported
+  context would add supervision/revalidation cost without reducing risk.
+- **Selected boundary:** `app/web/pagination.py` owns `get_pagination` and
+  `wants_pagination`; `app/web/filters.py` owns `append_conditions_sql`,
+  `get_multi_query_values`, `get_text_query_value`, `get_int_multi_query_values`,
+  `get_number_range_query`, `get_date_range_query` and
+  `append_text_contains_condition`. All nine moved function bodies are AST-identical to
+  the starting-HEAD definitions. The two modules form one coherent request/query unit
+  while preserving the natural pagination/filter separation; no PT-BR normalization,
+  sorting or collation helper was moved or changed.
+- **Consumers reconciled:** fourteen `main.py` functions consume at least one shared
+  helper: `admin_cursos`, `_list_admin_arquivos_rows`, `admin_arquivos`,
+  `admin_requisicoes`, `admin_atividades`, `admin_atividades_academicas`,
+  `admin_atividades_extensao`, `admin_alunos`, `admin_turmas`,
+  `admin_detalhes_turma`, `admin_matrizes`, `admin_reportes`, `admin_alertas` and
+  `admin_acesso`. `app/views/aluno.py` consumes the shared modules directly in
+  `aluno_arquivos` and `aluno_minhas_requisicoes`.
+- **Compatibility/import edges:** `main.py` imports all nine shared callables, preserving
+  its real internal consumers and compatibility exports by object identity. Six obsolete
+  query-helper values were removed from `app/views/aluno.py::_get_main_helpers`; its lazy
+  `main` import and unrelated values remain. Shared modules import without importing
+  `main`; no other lazy edge was removed.
+- **Contract evidence:** new `tests/test_web_query_helpers.py`; RED failed as expected with
+  `ModuleNotFoundError: app.web`; GREEN 15 passed. Focused pagination/filter/import/route/
+  RBAC lane: 31 passed. Git-aware runtime-isolation gate: 15 passed.
+- **Full hermetic evidence:** 677 passed, 17 D73H historical tests deselected, zero failed,
+  zero errors in 273.67s. D73H artifacts were not supplied and the historical lane ran
+  zero tests.
+- **Invariants:** route inventory 131 before and after, route delta 0; unmapped RBAC
+  inventory 0 before and after, RBAC delta 0; behavior delta 0; schema/database mutation
+  0. Canonical `database.db` remained byte-identical at SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` around every
+  lane. Staged candidate identity and Git status were unchanged around runtime-isolation
+  and full-suite execution. No canonical database, snapshot, custody or restore root was
+  opened or mutated.
+- **Exact technical manifest:** `app/views/aluno.py`, `app/web/__init__.py`,
+  `app/web/filters.py`, `app/web/pagination.py`, `main.py`,
+  `tests/test_web_query_helpers.py`. Canonical state files: `PROJECT_STATE.md`,
+  `AGENT_HANDOFF.md`. Authorized single-commit subject: `Extract pagination and query
+  filter helpers`; commit identity is resolved through Git history.
+- **Boundaries and residue:** repository file mutation and selective staging were crossed;
+  no database, schema, dependency, external-service, production, custody or restore-root
+  mutation occurred. The read-only consultant inspected two repository files outside its
+  closed read allowlist; direct Git evidence proved zero resulting mutation, and its scope
+  claim was not accepted. No hard stop remains. After publication, external supervisor
+  review of PHASE2-B is the only next architecture action.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -391,10 +398,10 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-A. Do not begin the pagination/query-filter unit,
-the text-normalization/PT-BR sorting/collation unit, or any other Phase 2 work before that
-review. No further custody action is authorized; restore-root cleanup, any new SQLite
-opening, the fallback candidate and Level 3 still require separate explicit human orders.
+External supervisor review of PHASE2-B. Do not begin the PT-BR text-normalization,
+sorting/collation unit or any other Phase 2 unit before that review. No further custody
+action is authorized; restore-root cleanup, any new SQLite opening, the fallback candidate
+and Level 3 still require separate explicit human orders.
 
 No physical custody order is issued by this record.
 

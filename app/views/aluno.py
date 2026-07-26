@@ -25,6 +25,13 @@ from app.auth import aluno_required
 from app.security.passwords import hash_password
 from app.db import get_db_connection
 from app.student_documents import resolve_student_document_path, save_student_document
+from app.web.filters import (
+    get_date_range_query,
+    get_multi_query_values,
+    get_number_range_query,
+    get_text_query_value,
+)
+from app.web.pagination import get_pagination, wants_pagination
 from utils.messages import flash
 
 # Importa helpers diretamente de main, mas apenas quando necessário, para evitar
@@ -46,19 +53,13 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
         "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
         "get_admin_arquivo": main.get_admin_arquivo,
-        "get_multi_query_values": main.get_multi_query_values,
-        "get_text_query_value": main.get_text_query_value,
-        "get_number_range_query": main.get_number_range_query,
-        "get_date_range_query": main.get_date_range_query,
         "get_effective_matriz_for_turma": main.get_effective_matriz_for_turma,
         "save_upload": main.save_upload,
-        "get_pagination": main.get_pagination,
         "get_student_request_update_alert": main.get_student_request_update_alert,
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
         "maybe_run_versioned_resolver_shadow_read": main.maybe_run_versioned_resolver_shadow_read,
         "maybe_write_versioned_requisicao_snapshot": main.maybe_write_versioned_requisicao_snapshot,
-        "wants_pagination": main.wants_pagination,
         "app": main.app,
     }
 
@@ -969,11 +970,6 @@ def aluno_meus_dados():
 @aluno_required
 def aluno_arquivos():
     helpers = _get_main_helpers()
-    get_pagination = helpers["get_pagination"]
-    wants_pagination = helpers["wants_pagination"]
-    get_multi_query_values = helpers["get_multi_query_values"]
-    get_text_query_value = helpers["get_text_query_value"]
-    get_date_range_query = helpers["get_date_range_query"]
     ensure_admin_arquivos_table = helpers["ensure_admin_arquivos_table"]
 
     page, per_page, offset = get_pagination(default_per_page=25)
@@ -1307,11 +1303,6 @@ def aluno_reportar():
 def aluno_minhas_requisicoes():
     """Mesma lógica original, apenas movida de main.py para o blueprint."""
     helpers = _get_main_helpers()
-    get_pagination = helpers["get_pagination"]
-    wants_pagination = helpers["wants_pagination"]
-    get_multi_query_values = helpers["get_multi_query_values"]
-    get_number_range_query = helpers["get_number_range_query"]
-    get_date_range_query = helpers["get_date_range_query"]
     can_student_edit_requisition = helpers["can_student_edit_requisition"]
     can_student_delete_requisition = helpers["can_student_delete_requisition"]
 

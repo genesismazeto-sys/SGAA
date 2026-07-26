@@ -1,43 +1,46 @@
 # Agent Handoff
 
-## Current state — PHASE2-A FIRST SHARED-HELPER EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE2-B PAGINATION AND QUERY-HELPER EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE2-A first shared-helper extraction (2026-07-26)
+### Current operational handoff — PHASE2-B pagination and query-helper extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. No acceptance
-  or Phase 2 closeout is claimed.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-A is
+  CLOSED / ACCEPTED at `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`; Phase 2 remains open.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream
-  `cc188d38e2fad03422fc8d1eab1a29dd9f045931`, divergence 0/0, initially clean.
-- **Mode/model:** direct IAsup `openai-codex/gpt-5.6-sol`, medium; no delegation or fallback.
-  Direct execution kept the coupled boundary/import/test/Git-aware adjudication in one
-  context and avoided redundant executor export and revalidation.
-- **Selected unit:** password hashing/checking. Exact public API:
-  `hash_password`, `is_legacy_password_hash`, `check_password`; private legacy checker:
-  `_check_password_legacy`. All moved function ASTs equal the starting-HEAD bodies.
-- **Implementation:** `app/security/passwords.py` owns the logic;
-  `app/security/__init__.py` establishes the package; `main.py` preserves observed public
-  compatibility exports; `app/db.py`, `app/views/core.py`, `app/views/aluno.py` and
-  `tools/seed_demo_data.py` import from the shared module. Five password-specific lazy
-  `main` values and the direct seed-tool `main` edge were removed; unrelated lazy edges
-  remain. Algorithm, salt/encoding, legacy compatibility and rehash behavior are unchanged.
-- **Validation:** RED expected import failure; helper GREEN 5 passed; focused helper/auth/
-  route/RBAC lane 40 passed; runtime-isolation copy gate 15 passed; full hermetic suite
-  662 passed, 17 D73H deselected, zero failures/errors in 456.24s. The initial Hermes
-  Python attempt was rejected pre-collection for missing `openpyxl`; one MSYS basetemp
-  attempt produced 29 passes and 11 setup errors before native-path correction. Neither
-  attempt changed Git or the canonical database.
-- **Invariants:** routes 131 -> 131 (delta 0); unmapped RBAC 0 -> 0 (delta 0); behavior
-  delta 0; schema/database mutation 0. `database.db` remained at SHA-256
-  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`.
-  No route/HTTP, authentication/RBAC decision, UI/template, dependency, production,
-  custody, restore-root, snapshot or SQLite-evidence change.
-- **Exact manifest:** `app/db.py`, `app/security/__init__.py`,
-  `app/security/passwords.py`, `app/views/aluno.py`, `app/views/core.py`, `main.py`,
-  `tests/test_password_helpers.py`, `tools/seed_demo_data.py`, `PROJECT_STATE.md`,
-  `AGENT_HANDOFF.md`.
-- **Next action:** external supervisor review of PHASE2-A. Do not start pagination/query
-  filters, text normalization/PT-BR sorting/collation, or any second helper extraction.
+  `2f7cc5cd98a8b2c763151fd6e3c0b3e1c0bc52b2`, divergence 0/0, initially clean.
+- **Mode/model:** IAsup `openai-codex/gpt-5.6-sol`, profile `ia-sup-sgaa`, medium. One
+  read-only `flash_free` mapping consultation used `opencode/deepseek-v4-flash-free` with
+  no fallback; IAsup adjudicated the two-module split and implemented directly because
+  another context export would add cost and revalidation risk to a deterministic move.
+- **Selected unit:** `app/web/pagination.py` owns `get_pagination` and
+  `wants_pagination`; `app/web/filters.py` owns the seven request/query/SQL-condition
+  helpers. All nine moved bodies are AST-identical to starting HEAD. PT-BR normalization,
+  sorting and collation remain untouched and unauthorized before review.
+- **Consumers/imports:** fourteen `main.py` functions retain all nine callables through
+  shared imports and compatibility exports. `aluno_arquivos` and
+  `aluno_minhas_requisicoes` import their six needed callables directly. Exactly six
+  obsolete values left `app/views/aluno.py::_get_main_helpers`; unrelated lazy `main`
+  values and the lazy import remain. Shared modules do not import `main`.
+- **Validation:** RED expected `ModuleNotFoundError: app.web`; helper GREEN 15 passed;
+  focused pagination/filter/import/route/RBAC lane 31 passed; Git-aware runtime-isolation
+  gate 15 passed; full hermetic suite 677 passed, 17 D73H deselected, zero failures/errors
+  in 273.67s.
+- **Invariants:** routes 131 -> 131; unmapped RBAC 0 -> 0; behavior delta 0; schema/database
+  mutation 0. `database.db` remained at SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; candidate and
+  Git state were stable around isolation and full-suite lanes. No canonical database,
+  snapshot, custody or restore root was opened or changed.
+- **Exact manifest:** `app/views/aluno.py`, `app/web/__init__.py`,
+  `app/web/filters.py`, `app/web/pagination.py`, `main.py`,
+  `tests/test_web_query_helpers.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`.
+  Authorized subject: `Extract pagination and query filter helpers`; identity is resolved
+  through Git history.
+- **Residual:** the read-only consultant inspected two files outside its read allowlist;
+  independent Git evidence proved zero mutation and its scope claim was rejected. No hard
+  stop remains.
+- **Next action:** external supervisor review of PHASE2-B. Do not start PT-BR text-helper,
+  normalization, sorting/collation or any later Phase 2 unit before that review.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
@@ -370,10 +373,10 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-A. Do not begin the pagination/query-filter unit,
-the text-normalization/PT-BR sorting/collation unit, or any other Phase 2 work before that
-review. No further custody action is authorized; restore-root cleanup, any new SQLite
-opening, the fallback candidate and Level 3 still require separate explicit human orders.
+External supervisor review of PHASE2-B. Do not begin the PT-BR text-normalization,
+sorting/collation unit or any other Phase 2 unit before that review. No further custody
+action is authorized; restore-root cleanup, any new SQLite opening, the fallback candidate
+and Level 3 still require separate explicit human orders.
 
 No physical custody order is issued by this record.
 
