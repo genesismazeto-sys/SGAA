@@ -179,13 +179,15 @@ working 1 / total 1 / fallback 0; evidence 7/7 complete. Custody unchanged at 17
 4,808,704 bytes; source preserved; no source removal.
 Restore root and its `sealed\`, `working\` and `evidence\` contents remain PRESERVED
 until a separate explicit cleanup order. NO new SQLite opening is authorized.
-Level 3 and Phase 2: NOT STARTED / NOT AUTHORIZED.
+Level 3: NOT STARTED / NOT AUTHORIZED. Phase 2 was later authorized independently of
+the custody track and is IN PROGRESS; PHASE2-D awaits external review.
 
 Exact next action:
 
 Supervisor review of the Level 2 acceptance record. No further custody action is
 authorized; restore-root cleanup, any new SQLite opening, the fallback candidate,
-Level 3 and Phase 2 each require a new separate explicit human order.
+and Level 3 each require a new separate explicit human order. The former Phase 2
+authorization requirement was satisfied by later human orders.
 
 No physical order is issued by this record.
 
@@ -215,13 +217,33 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
   - **PHASE-1-U5 (stale diagnostic output): CLOSED / ACCEPTED.**
   - **PHASE-1-U6 (Phase-1 completion assessment): CLOSED / ACCEPTED.**
-- **Fase 2 — Shared helpers**: extract from `main.py`, break cycle.
+- **Fase 2 — Shared helpers**: **IN PROGRESS.** PHASE2-A and PHASE2-B are
+  CLOSED / ACCEPTED; PHASE2-C is the predecessor baseline; PHASE2-D is IMPLEMENTED /
+  CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW.
+  The explicit ownership rule moves database/schema/repository dependencies to Phase 3,
+  versioning/view dependencies to Phase 4, and wiring/logging/routing dependencies to
+  their owning later phases. Zero runtime `app`→`main` back-references remains mandatory
+  before Phase 6 closes; Phase 2 is not declared closed here.
 - **Fase 3 — Data access consolidation**: unify `init_db`, migrate `ensure_*`.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
-Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED. Phases 2–6 remain **unauthorized**. R1, R2 and R3 are CLOSED / ACCEPTED, R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 2 PHYSICAL RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (separate governance track, canonical destination `D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL target applied and independently verified, Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z` with validator SQLITE_LEVEL2_CHECKS_PASS and evidence 7/7, restore root preserved, no new SQLite opening authorized, see `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
+Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
+Phase 2 is authorized and IN PROGRESS; PHASE2-D awaits external review and does not
+authorize Phase 3. Phases 3–6 remain **unauthorized for execution**; the Phase 2 ownership
+decision only assigns their future responsibilities. R1, R2 and R3 are CLOSED / ACCEPTED,
+R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
+POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
+PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
+PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 2 PHYSICAL
+RESTORATION COMPLETE AND ACCEPTED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY
+NOT CLAIMED (separate governance track, canonical destination
+`D:\programas\SGAA_Historical_Custody`, 17 artifacts copied and verified, parent DACL
+target applied and independently verified, Level 2 executed and accepted in restore root
+`D:\tmp\sgaa_restore_20260726T165550Z` with validator SQLITE_LEVEL2_CHECKS_PASS and evidence
+7/7, restore root preserved, no new SQLite opening authorized, see
+`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`).
 
 ## Ledger
 

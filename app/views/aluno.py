@@ -21,10 +21,15 @@ from flask import (
     url_for,
 )
 
+from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
 from app.auth import aluno_required
+from app.presentation import format_date_ptbr
+from app.reporting import REPORTE_CATEGORY_OPTIONS
+from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
 from app.security.passwords import hash_password
 from app.db import get_db_connection
 from app.student_documents import resolve_student_document_path, save_student_document
+from app.uploads import ALLOWED_ATTACHMENTS, ALLOWED_REPORTE_SCREENSHOTS
 from app.web.filters import (
     get_date_range_query,
     get_multi_query_values,
@@ -40,27 +45,16 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
     import main  # type: ignore
 
     return {
-        "ALLOWED_ATTACHMENTS": main.ALLOWED_ATTACHMENTS,
-        "ALLOWED_REPORTE_SCREENSHOTS": main.ALLOWED_REPORTE_SCREENSHOTS,
-        "DEFAULT_CURSO_TOTAL_HORAS_AAC": main.DEFAULT_CURSO_TOTAL_HORAS_AAC,
-        "DEFAULT_CURSO_TOTAL_HORAS_AEU": main.DEFAULT_CURSO_TOTAL_HORAS_AEU,
-        "REPORTE_CATEGORY_OPTIONS": main.REPORTE_CATEGORY_OPTIONS,
-        "REPORTE_STATUS_OPTIONS": main.REPORTE_STATUS_OPTIONS,
-        "can_student_edit_requisition": main.can_student_edit_requisition,
-        "can_student_delete_requisition": main.can_student_delete_requisition,
         "ensure_reportes_table": main.ensure_reportes_table,
-        "format_date_ptbr": main.format_date_ptbr,
         "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
         "get_admin_arquivo": main.get_admin_arquivo,
         "get_effective_matriz_for_turma": main.get_effective_matriz_for_turma,
-        "save_upload": main.save_upload,
         "get_student_request_update_alert": main.get_student_request_update_alert,
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
         "maybe_run_versioned_resolver_shadow_read": main.maybe_run_versioned_resolver_shadow_read,
         "maybe_write_versioned_requisicao_snapshot": main.maybe_write_versioned_requisicao_snapshot,
-        "app": main.app,
     }
 
 
@@ -523,9 +517,8 @@ def aluno_dashboard():
     get_student_request_update_alert = helpers["get_student_request_update_alert"]
     list_active_admin_alertas = helpers["list_active_admin_alertas"]
     mark_student_request_updates_seen = helpers["mark_student_request_updates_seen"]
-    format_date_ptbr = helpers["format_date_ptbr"]
-    default_horas_aac = helpers["DEFAULT_CURSO_TOTAL_HORAS_AAC"]
-    default_horas_aeu = helpers["DEFAULT_CURSO_TOTAL_HORAS_AEU"]
+    default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
+    default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
 
     conn = get_db_connection()
     usuario_id = session.get("user_id")
@@ -1173,9 +1166,8 @@ def aluno_baixar_arquivo(arquivo_id: int):
 def aluno_reportar():
     helpers = _get_main_helpers()
     ensure_reportes_table = helpers["ensure_reportes_table"]
-    format_date_ptbr = helpers["format_date_ptbr"]
-    screenshot_extensions = helpers["ALLOWED_REPORTE_SCREENSHOTS"]
-    categoria_options = helpers["REPORTE_CATEGORY_OPTIONS"]
+    screenshot_extensions = ALLOWED_REPORTE_SCREENSHOTS
+    categoria_options = REPORTE_CATEGORY_OPTIONS
 
     conn = get_db_connection()
     ensure_reportes_table(conn)
@@ -1302,10 +1294,6 @@ def aluno_reportar():
 @aluno_required
 def aluno_minhas_requisicoes():
     """Mesma lógica original, apenas movida de main.py para o blueprint."""
-    helpers = _get_main_helpers()
-    can_student_edit_requisition = helpers["can_student_edit_requisition"]
-    can_student_delete_requisition = helpers["can_student_delete_requisition"]
-
     page, per_page, offset = get_pagination(default_per_page=20)
     conn = get_db_connection()
     user_id = session.get("user_id")
@@ -1592,7 +1580,7 @@ def aluno_minhas_requisicoes():
 @aluno_required
 def aluno_nova_requisicao():
     helpers = _get_main_helpers()
-    allowed_attachments = helpers["ALLOWED_ATTACHMENTS"]
+    allowed_attachments = ALLOWED_ATTACHMENTS
     maybe_run_versioned_resolver_shadow_read = helpers["maybe_run_versioned_resolver_shadow_read"]
     maybe_write_versioned_requisicao_snapshot = helpers["maybe_write_versioned_requisicao_snapshot"]
 
@@ -1750,10 +1738,6 @@ def aluno_nova_requisicao():
 @bp_aluno.route("/aluno/requisicoes/<int:req_id>", methods=["GET", "POST"])
 @aluno_required
 def aluno_requisicao_detalhe(req_id: int):
-    helpers = _get_main_helpers()
-    ALLOWED_ATTACHMENTS = helpers["ALLOWED_ATTACHMENTS"]
-    can_student_edit_requisition = helpers["can_student_edit_requisition"]
-    can_student_delete_requisition = helpers["can_student_delete_requisition"]
     conn = get_db_connection()
     user_id = session.get("user_id")
     arow = conn.execute("SELECT id FROM alunos WHERE usuario_id = ?", (user_id,)).fetchone()

@@ -1,8 +1,50 @@
 # Agent Handoff
 
-## Current state — PHASE2-C PT-BR TEXT-HELPER EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B CLOSED / ACCEPTED — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B CLOSED / ACCEPTED — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE2-C PT-BR text-helper extraction (2026-07-26)
+### Current operational handoff — PHASE2-D residual shared-helper closure (2026-07-26)
+
+- **Status:** IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED /
+  AWAITING SUPERVISOR REVIEW. Do not declare Phase 2 closed or start Phase 3.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/remote
+  `218d6949f63b0578ffd08507766fe5198b8f72b7`, divergence 0/0, initially clean.
+- **Mode/model:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`,
+  profile `ia-sup-sgaa`, high. Read-only `flash_free` mapping attempt had no retained usable
+  delivery. Independent pre-commit review used `opencode/deepseek-v4-flash-free`, provider
+  `opencode`, session `ses_05ff186dbffeTNNzVFHZSL9Nvw`, cost 0, exit 0, no fallback;
+  verdict `passed=true` with zero security, logic or scope findings, adjudicated by IAsup.
+  Direct implementation was safer than re-exporting the accumulated evidence context.
+- **Owners:** `app/presentation.py`, `app/requisition_policy.py`, `app/academics.py`,
+  `app/uploads.py`, `app/reporting.py`; moved bodies/values equal the baseline. `main.py`
+  compatibility exports preserve object identity; owner imports do not load `main`.
+- **Edges:** Category A lazy-map edges 0; the five specified Category E keys absent.
+  Category B/C/D implementation unchanged and three corresponding lazy `import main`
+  statements remain intentionally.
+- **Human ownership decision:** Phase 2 removes shared-helper and stale-map dependencies;
+  database/schema/repository goes to Phase 3, versioning/view to Phase 4, and wiring/logging/
+  routing to their owning later phases. Final zero runtime `app`→`main` remains mandatory
+  before Phase 6 closes; the former literal Phase 2 criterion is historical/superseded.
+- **Tests:** module contracts 28; affected functional lane 94; route/RBAC lane 87;
+  Git-aware isolation 15; full hermetic 727 passed, 18 D73H deselected, zero failures/errors.
+- **Invariants:** routes 131→131; RBAC unmapped 0→0; behavior/schema/database delta 0;
+  canonical SQLite opens 0; `database.db` 544768 bytes, unchanged mtime and SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; no sidecars.
+- **Manifest:** `app/academics.py`, `app/db.py`, `app/presentation.py`,
+  `app/reporting.py`, `app/requisition_policy.py`, `app/uploads.py`,
+  `app/views/aluno.py`, `app/views/core.py`, `main.py`,
+  `tests/test_residual_shared_helpers.py`, `docs/mapeamento/05_avaliacao_refactor.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `docs/DOCUMENTATION_INDEX.md`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. Subject:
+  `Extract residual shared helpers and resolve Phase 2 boundary`; identity via Git history.
+- **Recovered evidence defect:** one auxiliary literal-evaluator failure occurred after
+  implementation; physical state was preserved and a corrected read-only verifier proved
+  all 5 function bodies and 5 moved values equivalent. The first review transport failed on
+  an invalid MSYS path before router/model execution; native-path retry completed the same
+  read-only FREE review. No hard stop or unauthorized residue.
+- **Next action:** external supervisor review of PHASE2-D only.
+
+### Historical / superseded operational handoff — PHASE2-C PT-BR text-helper extraction (2026-07-26)
 
 - **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-B is
   CLOSED / ACCEPTED at `1a0a690343462c23b8a30a1f0d6d8cb250027936`; Phase 2 remains open.
@@ -369,8 +411,8 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-C. Do not begin another extraction or any other Phase 2
-unit before that review. No further custody action is authorized; restore-root cleanup, any
+External supervisor review of PHASE2-D. Do not declare Phase 2 closed or begin Phase 3
+before that review. No further custody action is authorized; restore-root cleanup, any
 new SQLite opening, the fallback candidate and Level 3 still require separate explicit
 human orders.
 

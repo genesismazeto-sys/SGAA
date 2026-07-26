@@ -1,6 +1,72 @@
-## Current authoritative state — PHASE2-C PT-BR TEXT-HELPER EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B: CLOSED / ACCEPTED — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH: IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B: CLOSED / ACCEPTED — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE2-C — PT-BR text-helper extraction (2026-07-26)
+### PHASE2-D — residual shared-helper closure batch (2026-07-26)
+
+- **Status:** IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED /
+  AWAITING SUPERVISOR REVIEW. Phase 2 is not declared accepted or closed; Phase 3 was not
+  started or authorized by this batch. PHASE2-C remains the predecessor baseline without a
+  new acceptance claim in this record.
+- **Human closure decision:** Phase 2 owns shared-helper dependencies and stale lazy-map
+  entries. Database/schema/repository ownership transfers to Phase 3; versioning/view
+  ownership transfers to Phase 4; wiring/logging/routing ownership transfers to the later
+  phases that own those domains. Zero runtime `app`→`main` back-references remains a final
+  mandatory architecture invariant before Phase 6 closes. The former literal Phase 2
+  criterion is explicitly superseded, not erased from history.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; starting HEAD/upstream/remote
+  `218d6949f63b0578ffd08507766fe5198b8f72b7`; clean worktree/index and divergence 0/0.
+- **Execution:** Hermes/IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, high. A bounded read-only `flash_free` mapping attempt produced no retained
+  usable report and was not accepted as evidence. Independent read-only pre-commit review
+  used `flash_free`, provider `opencode`, effective model
+  `opencode/deepseek-v4-flash-free`, session `ses_05ff186dbffeTNNzVFHZSL9Nvw`, cost 0,
+  exit 0, no fallback; its parseable verdict was `passed=true` with zero security, logic or
+  scope findings and was independently adjudicated by IAsup. Implementation, deterministic
+  gates, canonical synchronization and Git adjudication were direct IAsup because exporting
+  this already-mapped multi-evidence mutation would increase context fragmentation and
+  revalidation risk.
+- **Extracted owners:** `app/presentation.py` owns `format_date_ptbr`;
+  `app/requisition_policy.py` owns `_parse_optional_processing_datetime`,
+  `can_student_edit_requisition` and `can_student_delete_requisition`;
+  `app/academics.py` owns `DEFAULT_CURSO_TOTAL_HORAS_AAC`,
+  `DEFAULT_CURSO_TOTAL_HORAS_AEU` and `gerar_codigo_turma`; `app/uploads.py` owns
+  `ALLOWED_ATTACHMENTS` and `ALLOWED_REPORTE_SCREENSHOTS`; `app/reporting.py` owns
+  `REPORTE_CATEGORY_OPTIONS`. All five function bodies and all five moved values are
+  AST/value-identical to the starting-HEAD definitions.
+- **Consumers and compatibility:** `app/db.py` and `app/views/aluno.py` import Category A
+  symbols directly from their owners. `main.py` imports and continues exporting every moved
+  symbol by object identity. The five owner modules import without loading `main`.
+- **Lazy-map cleanup:** removed all Category A values from `app/db.py` and
+  `app/views/aluno.py`; removed only the proven-unused Category E keys
+  `ensure_usuario_access_schema`, `ensure_usuario_profile_schema`,
+  `REPORTE_STATUS_OPTIONS`, `save_upload` and `app` from their specified maps.
+  Category B/C/D values and their three remaining lazy `import main` statements remain.
+- **Validation:** expected RED was `ImportError` before owners existed; focused module
+  contracts 28 passed; affected dashboard/report/request/upload/turma/login/core lane 94
+  passed; route/RBAC/actor lane 87 passed; Git-aware runtime-isolation 15 passed; full
+  hermetic suite 727 passed, 18 D73H deselected, zero failures/errors in 370.02s.
+- **Invariants:** behavior delta 0; routes 131→131 and endpoint/method delta 0; unmapped RBAC
+  0→0; schema/database mutation 0; canonical database SQLite open count 0. `database.db`
+  remained 544768 bytes with unchanged mtime and SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; no WAL/SHM.
+- **Exact manifest:** `app/academics.py`, `app/db.py`, `app/presentation.py`,
+  `app/reporting.py`, `app/requisition_policy.py`, `app/uploads.py`,
+  `app/views/aluno.py`, `app/views/core.py`, `main.py`,
+  `tests/test_residual_shared_helpers.py`, `docs/mapeamento/05_avaliacao_refactor.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `docs/DOCUMENTATION_INDEX.md`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. Authorized subject:
+  `Extract residual shared helpers and resolve Phase 2 boundary`; identity is resolved
+  through Git history.
+- **Boundaries/residue:** repository file mutation and selective staging were crossed; no
+  schema/database, route, RBAC, HTTP, template/UI, production, custody or external-service
+  mutation occurred. A recoverable auxiliary literal-evaluator failure was reconciled and
+  replaced by a successful read-only AST/value check. The first pre-commit review transport
+  used an invalid MSYS path and failed before the router/model; the corrected native path
+  completed the FREE review without consuming a fallback. No hard stop remains.
+- **Next action:** external supervisor review of PHASE2-D. Do not declare Phase 2 closed and
+  do not start Phase 3 before acceptance.
+
+### Historical / superseded current block — PHASE2-C PT-BR text-helper extraction (2026-07-26)
 
 - **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-B is
   CLOSED / ACCEPTED at commit `1a0a690343462c23b8a30a1f0d6d8cb250027936`.
@@ -389,8 +455,8 @@
 
 Exact next action:
 
-External supervisor review of PHASE2-C. Do not begin another extraction or any other Phase 2
-unit before that review. No further custody action is authorized; restore-root cleanup, any
+External supervisor review of PHASE2-D. Do not declare Phase 2 closed or begin Phase 3
+before that review. No further custody action is authorized; restore-root cleanup, any
 new SQLite opening, the fallback candidate and Level 3 still require separate explicit
 human orders.
 

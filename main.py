@@ -30,12 +30,25 @@ except Exception:
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 from app import create_app
+from app.academics import (
+    DEFAULT_CURSO_TOTAL_HORAS_AAC,
+    DEFAULT_CURSO_TOTAL_HORAS_AEU,
+    gerar_codigo_turma,
+)
+from app.presentation import format_date_ptbr
+from app.reporting import REPORTE_CATEGORY_OPTIONS
+from app.requisition_policy import (
+    _parse_optional_processing_datetime,
+    can_student_delete_requisition,
+    can_student_edit_requisition,
+)
 from app.security.passwords import (
     check_password,
     hash_password,
     is_legacy_password_hash,
 )
 from app.text import normalize_header, ptbr_sqlite_collation, ptbr_text_sort_key
+from app.uploads import ALLOWED_ATTACHMENTS, ALLOWED_REPORTE_SCREENSHOTS
 from app.web.filters import (
     append_conditions_sql,
     append_text_contains_condition,
@@ -144,20 +157,6 @@ def aluno_required(f):
     return _auth_aluno_required(f)
 
 # ===================== Utils =====================
-
-def format_date_ptbr(value) -> str:
-    if value is None:
-        return ""
-    if hasattr(value, "strftime"):
-        return value.strftime("%d/%m/%Y")
-    raw = str(value).strip()
-    if not raw:
-        return ""
-    base = raw.split(" ")[0].split("T")[0]
-    try:
-        return datetime.datetime.strptime(base, "%Y-%m-%d").strftime("%d/%m/%Y")
-    except ValueError:
-        return raw
 
 def resolve_existing_aluno_by_identifiers(conn, matricula, email):
     matricula = (matricula or "").strip()
@@ -296,8 +295,6 @@ def parse_documentos_json(raw) -> list[str]:
     parts = _re.split(r"[,;\n\|]+", t)
     return _normalize_list(parts)
 
-DEFAULT_CURSO_TOTAL_HORAS_AAC = 160
-DEFAULT_CURSO_TOTAL_HORAS_AEU = 80
 ATIVIDADES_SCHEMA_COLUMNS = (
     "id",
     "grupo",
@@ -1452,37 +1449,6 @@ def ensure_usuario_profile_schema(conn) -> None:
             conn.execute("ALTER TABLE alunos ADD COLUMN turma_id INTEGER")
         except sqlite3.OperationalError:
             pass
-
-
-def _parse_optional_processing_datetime(data_processamento):
-    raw = str(data_processamento or "").strip()
-    if not raw:
-        return None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.datetime.strptime(raw[:19], fmt)
-        except ValueError:
-            continue
-    try:
-        return datetime.datetime.strptime(raw[:10], "%Y-%m-%d")
-    except ValueError:
-        return None
-
-
-def can_student_edit_requisition(status, data_processamento):
-    status_norm = str(status or "").strip()
-    if status_norm == "Pendente":
-        return True
-    if status_norm != "Devolvida":
-        return False
-    processed_at = _parse_optional_processing_datetime(data_processamento)
-    if not processed_at:
-        return False
-    return datetime.datetime.now() <= (processed_at + datetime.timedelta(days=14))
-
-
-def can_student_delete_requisition(status, data_processamento):
-    return can_student_edit_requisition(status, data_processamento)
 
 
 def ensure_requisicao_alert_receipts_table(conn) -> None:
@@ -4496,14 +4462,6 @@ app.config["EXTERNAL_BACKUP_ENABLED"] = os.getenv("APP_EXTERNAL_BACKUP_ENABLED",
 # Uploads: extensões permitidas
 ALLOWED_EXCEL = {"xlsx"}
 ALLOWED_CSV = {"csv"}
-ALLOWED_ATTACHMENTS = {"pdf", "png", "jpg", "jpeg"}
-ALLOWED_REPORTE_SCREENSHOTS = {"png", "jpg", "jpeg", "webp"}
-REPORTE_CATEGORY_OPTIONS = (
-    "Bug na plataforma",
-    "Problema em dados",
-    "Dificuldade de uso",
-    "Outro",
-)
 REPORTE_STATUS_OPTIONS = (
     "Novo",
     "Em análise",
@@ -5329,9 +5287,6 @@ def curso_mais_populoso_id() -> int | None:
         LIMIT 1
     """).fetchone()
     return row["id"] if row else None
-
-def gerar_codigo_turma(curso_codigo: str, numero: int) -> str:
-    return f"{curso_codigo}-T{int(numero):02d}"
 
 # ===================== DB Init / Migrações =====================
 

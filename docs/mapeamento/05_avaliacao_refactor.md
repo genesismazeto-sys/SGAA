@@ -260,13 +260,17 @@ Restore root and its `sealed\`, `working\` and `evidence\` contents remain PRESE
 until a separate explicit cleanup order; automatic cleanup prohibited.
 NO new SQLite opening is authorized.
 Level 3 operational restoration: NOT STARTED / NOT AUTHORIZED.
-Fase 2: NOT STARTED / UNAUTHORIZED.
+Fase 2: AUTHORIZED / IN PROGRESS; PHASE2-D LOCALLY VERIFIED / AWAITING SUPERVISOR
+REVIEW. A autorização arquitetural é separada da trilha de custódia e não autoriza
+qualquer nova ação física sobre snapshots ou restore roots.
 
 Exact next action:
 
 Supervisor review of the Level 2 acceptance record. No further custody action is
 authorized; restore-root cleanup, any new SQLite opening, the fallback candidate,
-Level 3 and Fase 2 each require a new separate explicit human order.
+and Level 3 each require a new separate explicit human order. O antigo requisito de
+uma nova ordem para iniciar a Fase 2 foi satisfeito por ordens humanas posteriores;
+PHASE2-D agora aguarda revisão externa.
 
 No physical order is issued by this record.
 
@@ -276,8 +280,8 @@ root matching `D:\tmp\sgaa_restore_<UTC>`" — satisfied by the executed and acc
 Level 2 restoration.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
-D73H historical lane unchanged; R20 unchanged. Fases 2–6 (target architecture) remain
-preserved as originally defined below but unauthorized.
+D73H historical lane unchanged; R20 unchanged. Fase 2 está autorizada e em progresso;
+Fases 3–6 permanecem preservadas como definidas abaixo e não autorizadas para execução.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [x] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — CLOSED / ACCEPTED (PHASE-1-U3, commit c4fd2dd; 0 inserções, 756 deleções; oito exports de compatibilidade preservados).
@@ -293,12 +297,31 @@ preserved as originally defined below but unauthorized.
 
 ### Fase 2 — Extrair helpers compartilhados (quebrar o ciclo) (2–3 dias)
 Mover de `main.py` para módulos próprios em `app/`, **um por PR**:
-- [ ] `app/security/passwords.py` — `hash_password`, `check_password`, legado.
-- [ ] `app/web/pagination.py` + `app/web/filters.py` — paginação e query helpers.
-- [ ] `app/text.py` — `normalize_header`, sort PT-BR, collation.
-- [ ] Apontar `app/db.py`, `core.py`, `aluno.py` para os novos módulos e
-      **remover os `import main` lazy** correspondentes.
-Meta da fase: **nenhum `import main` dentro de funções de `app/`**.
+- [x] `app/security/passwords.py` — `hash_password`, `check_password`, legado.
+- [x] `app/web/pagination.py` + `app/web/filters.py` — paginação e query helpers.
+- [x] `app/text.py` — `normalize_header`, sort PT-BR, collation.
+- [x] `app/presentation.py`, `app/requisition_policy.py`, `app/academics.py`,
+      `app/uploads.py` e `app/reporting.py` — helpers/policies residuais da Category A.
+- [x] Apontar consumidores diretos de `app/db.py` e `app/views/aluno.py` para os
+      novos owners e remover os edges Category A correspondentes.
+- [x] Remover as cinco entradas comprovadamente obsoletas da Category E nos lazy maps:
+      `ensure_usuario_access_schema` e `ensure_usuario_profile_schema` de `core.py`;
+      `REPORTE_STATUS_OPTIONS`, `save_upload` e `app` de `aluno.py`.
+
+**Regra autoritativa de fechamento da Fase 2 — decisão humana explícita:** a Fase 2
+remove dependências de helpers compartilhados e entradas obsoletas dos lazy maps.
+Dependências de banco/schema/repository pertencem à Fase 3. Dependências de
+versioning/views pertencem à Fase 4. Dependências de wiring/logging/routing pertencem
+às fases posteriores que detêm esses domínios. A invariável final de arquitetura
+continua obrigatória: zero back-references runtime de `app/` para `main`; ela deve ser
+satisfeita antes do fechamento da Fase 6.
+
+**Critério histórico/superado:** a antiga meta literal de que a Fase 2 só fecharia com
+“nenhum `import main` dentro de funções de `app/`” foi superada por esta decisão humana
+de ownership. As evidências históricas permanecem válidas como registro de seu tempo,
+mas esse texto não transfere silenciosamente trabalho das Categories B, C ou D para a
+Fase 2. A implementação PHASE2-D está localmente verificada e aguarda revisão externa;
+este registro não declara a Fase 2 fechada.
 
 ### Fase 3 — Consolidar acesso a dados (2–4 dias)
 - [ ] Unificar `init_db` (uma única implementação em `app/db.py`).

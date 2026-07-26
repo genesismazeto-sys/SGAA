@@ -3,6 +3,11 @@ import sqlite3
 import sys
 from flask import g
 
+from app.academics import (
+    DEFAULT_CURSO_TOTAL_HORAS_AAC,
+    DEFAULT_CURSO_TOTAL_HORAS_AEU,
+    gerar_codigo_turma,
+)
 from app.db_maintenance import apply_schema_migrations
 from app.security.passwords import hash_password
 
@@ -48,8 +53,6 @@ def _get_main_db_helpers():
     import main  # type: ignore
 
     return {
-        "DEFAULT_CURSO_TOTAL_HORAS_AAC": main.DEFAULT_CURSO_TOTAL_HORAS_AAC,
-        "DEFAULT_CURSO_TOTAL_HORAS_AEU": main.DEFAULT_CURSO_TOTAL_HORAS_AEU,
         "ensure_reportes_table": main.ensure_reportes_table,
         "ensure_requisicao_alert_receipts_table": main.ensure_requisicao_alert_receipts_table,
         "ensure_atividades_schema_current": main.ensure_atividades_schema_current,
@@ -59,7 +62,6 @@ def _get_main_db_helpers():
         "ensure_usuario_access_schema": main.ensure_usuario_access_schema,
         "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_backup_settings_schema": main.ensure_backup_settings_schema,
-        "gerar_codigo_turma": main.gerar_codigo_turma,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
         "logger": main.logger,
     }
@@ -67,8 +69,8 @@ def _get_main_db_helpers():
 
 def _init_db_impl():
     helpers = _get_main_db_helpers()
-    default_horas_aac = helpers["DEFAULT_CURSO_TOTAL_HORAS_AAC"]
-    default_horas_aeu = helpers["DEFAULT_CURSO_TOTAL_HORAS_AEU"]
+    default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
+    default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
     ensure_reportes_table = helpers["ensure_reportes_table"]
     ensure_requisicao_alert_receipts_table = helpers["ensure_requisicao_alert_receipts_table"]
     ensure_atividades_schema_current = helpers["ensure_atividades_schema_current"]
@@ -78,7 +80,6 @@ def _init_db_impl():
     ensure_usuario_access_schema = helpers["ensure_usuario_access_schema"]
     ensure_usuario_profile_schema = helpers["ensure_usuario_profile_schema"]
     ensure_backup_settings_schema = helpers["ensure_backup_settings_schema"]
-    gerar_codigo_turma = helpers["gerar_codigo_turma"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
     logger = helpers["logger"]
 

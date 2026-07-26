@@ -21,8 +21,6 @@ def _get_main_helpers():
 
     return {
         "aluno_url": main.aluno_url,
-        "ensure_usuario_access_schema": main.ensure_usuario_access_schema,
-        "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "get_db_connection": main.get_db_connection,
         "logger": main.logger,
         "normalize_usuario_access_for_user_type": getattr(
