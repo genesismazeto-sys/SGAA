@@ -1,10 +1,69 @@
-## Current authoritative state — PHASE 3-B1 REPORTES SCHEMA-HELPER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE 3-B2 USER PROFILE SCHEMA-HELPER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE 3-B1 — reportes schema-helper ownership extraction (2026-07-26)
+### PHASE 3-B2 — user profile schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-A and
-  the read-only PHASE 3-B ownership assessment are CLOSED / ACCEPTED. No later PHASE 3-B
-  unit is authorized by this record.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B1 is
+  CLOSED / ACCEPTED by the explicit B2 order. No PHASE 3-B3 work is authorized.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; starting HEAD/upstream/remote
+  `caeac4789eb217e8f45452b9f7b71a93f0abdd67`; divergence 0/0; clean worktree and index.
+- **Ownership:** `app/db_maintenance.py` is the sole defining owner of
+  `ensure_usuario_profile_schema`. Its complete function AST, including body, one-argument
+  signature and `None` return annotation, is identical to the starting-HEAD `main.py`
+  definition.
+- **Schema/transactions:** the helper retains both `PRAGMA table_info` inspections, the
+  conditional additions of `usuarios.foto_perfil`, `alunos.foto_perfil` and
+  `alunos.turma_id`, and the three localized `sqlite3.OperationalError` catches. Missing
+  tables remain no-ops, partial schemas remain supported, existing columns remain unchanged,
+  consecutive executions are idempotent, and caller-owned transactions remain open. No
+  commit, rollback, savepoint, migration or schema-version change was introduced.
+- **Compatibility/consumers:** `main.py` imports the owner and preserves
+  `main.ensure_usuario_profile_schema is app.db_maintenance.ensure_usuario_profile_schema`.
+  `app/db.py` and `app/views/aluno.py` import the owner directly. The `_init_db_impl` call
+  remains in the same position after `ensure_usuario_access_schema` and before
+  `ensure_backup_settings_schema`; aluno and administrador profile flows remain green.
+- **Lazy edges:** removed exactly `ensure_usuario_profile_schema` and its local retrieval
+  from `app.db._get_main_db_helpers` / `_init_db_impl`, and exactly that key plus the now-unused
+  profile-route lazy lookup from `app.views.aluno`. AST comparison proves zero added keys and
+  the original order and identity of every other lazy-map entry.
+- **Validation:** TDD RED produced 8 expected failures because the new owner was absent;
+  a focused follow-up RED caught the obsolete aluno profile lazy lookup. Focused profile
+  schema/ownership plus aluno/admin flows: 45 passed. Route inventory and RBAC: 3 passed.
+  Git-aware runtime-isolation: 15 passed. Full hermetic suite: 748 passed, 17 D73H historical
+  tests deselected, zero failures/errors in 326.28s.
+- **Invariants:** behavior delta 0; routes 131→131; RBAC unmapped 0→0; schema-definition
+  delta 0; migration delta 0; canonical database SQLite opens 0. `database.db` retained
+  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`
+  before/after all lanes; no WAL/SHM. SQLite coverage used only `:memory:` or pytest-owned
+  disposable databases outside the repository.
+- **Execution/review:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`,
+  profile `ia-sup-sgaa`, medium. Direct mutation was selected because the order limited
+  IAexec to optional read-only review and the exact-body move was cheaper and safer without
+  context export. Independent review used logical route `flash_free`, effective model
+  `opencode/deepseek-v4-flash-free`, session `ses_05f4b549effeycyyXPyKd54391`, cost 0,
+  exit 0, no fallback, read-only verdict `passed=true`. Its sole informational suggestion
+  concerned an unused historical classification constant and was rejected as outside the
+  live lazy-map contract; all material claims were independently proven.
+- **Exact manifest:** `app/db.py`, `app/db_maintenance.py`, `app/views/aluno.py`, `main.py`,
+  `tests/test_csrf_admin_flows.py`, `tests/test_db_schema_maintenance.py`,
+  `tests/test_residual_shared_helpers.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `docs/DOCUMENTATION_INDEX.md`. Authorized
+  subject `Extract user profile schema helper ownership`; commit identity resolves through
+  Git history.
+- **Boundaries/recovered defects:** repository file mutation was crossed. A route-lane
+  cleanup verifier reported an already-absent pytest basetemp as an error after 3 tests and
+  all physical invariants had passed; no test was repeated for that evidence defect. The
+  first runtime-isolation invocation used an MSYS basetemp path that Windows resolved under
+  the repository drive and failed before test setup; the corrected native path then passed
+  15/15 with unchanged physical state. No canonical database, schema, migration, route,
+  RBAC, production, service, commit or publication boundary had been crossed when this block
+  was written. No hard stop or unauthorized residue remains.
+- **Next action:** external supervisor review of PHASE 3-B2 only. Do not begin PHASE 3-B3.
+
+### Historical accepted technical evidence — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B2 order. PHASE 3-A and the read-only
+  PHASE 3-B ownership assessment are CLOSED / ACCEPTED.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD/upstream/remote
   `fac0d7a58af226de43e4ac81d35daf8e3bd0aa05`; divergence 0/0; clean worktree and index.
@@ -54,9 +113,8 @@
   schema, data, migration, route, RBAC, production, custody, restore, service, commit or
   publication boundary had been crossed when this state block was written. Temporary test
   roots were uniquely owned, disposable and removed after each lane. No hard stop remains.
-- **Next action:** external supervisor review of PHASE 3-B1 only. Do not begin PHASE 3-B2 or
-  combine this unit with migrations, access, backup, matrices, versioning, repository or the
-  final `init_db` cutover.
+- **Acceptance correction:** its former waiting-review next action is superseded by the
+  PHASE 3-B1 CLOSED / ACCEPTED decision that authorized PHASE 3-B2.
 
 ### Historical accepted technical evidence — PHASE 3-A canonical database connection consolidation (2026-07-26)
 

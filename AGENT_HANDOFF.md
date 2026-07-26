@@ -1,11 +1,54 @@
 # Agent Handoff
 
-## Current state — PHASE 3-B1 REPORTES SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B2 USER PROFILE SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
+### Current operational handoff — PHASE 3-B2 user profile schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-A and
-  PHASE 3-B assessment are CLOSED / ACCEPTED. Do not start B2 without a new order.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B1 is
+  CLOSED / ACCEPTED. Do not start PHASE 3-B3.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/remote
+  `caeac4789eb217e8f45452b9f7b71a93f0abdd67`, divergence 0/0, initially clean.
+- **Owner/compatibility:** `app/db_maintenance.py` solely defines
+  `ensure_usuario_profile_schema`; complete function AST, signature and `None` annotation are
+  identical to baseline. `main.ensure_usuario_profile_schema` is the same object.
+  `app/db.py` and `app/views/aluno.py` import the owner directly.
+- **Schema/transactions:** both `PRAGMA table_info` probes, all three conditional column
+  additions and all three `sqlite3.OperationalError` catches are unchanged. No-table,
+  usuarios-only, both-table, missing-column, existing-column and repeat-call states pass.
+  Caller transaction ownership remains intact; no commit, rollback or savepoint.
+- **Edges/order:** each affected lazy map removed exactly
+  `ensure_usuario_profile_schema`, added zero keys and preserved every other key in order.
+  `_init_db_impl` calls the direct import in the same position; the aluno profile route no
+  longer performs its obsolete profile-only lazy lookup.
+- **Tests:** focused schema/ownership and aluno/admin profile lane 45 passed; route/RBAC 3
+  passed; Git-aware isolation 15 passed; full hermetic 748 passed, 17 D73H deselected,
+  zero failures/errors in 326.28s.
+- **Invariants:** behavior/schema/migration/route/RBAC delta 0; routes 131; RBAC unmapped 0;
+  canonical SQLite opens 0; canonical SHA-256 remained
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; no WAL/SHM.
+- **Mode/review:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, medium, because the order limited IAexec to optional read-only review and
+  direct exact-body mutation minimized context/revalidation cost. Read-only FREE review used
+  `opencode/deepseek-v4-flash-free`, session `ses_05f4b549effeycyyXPyKd54391`, cost 0,
+  exit 0, no fallback, verdict `passed=true`; its sole informational suggestion about an
+  unused historical classification constant was rejected as outside the live map contract.
+- **Recovered evidence defects:** the route lane passed 3 tests and physical invariants,
+  after which cleanup treated an already-absent basetemp as an error; the physical result was
+  preserved. The first isolation invocation used an MSYS basetemp string rejected by Windows
+  path resolution before setup; native-path retry passed 15/15 with unchanged state.
+- **Manifest:** `app/db.py`, `app/db_maintenance.py`, `app/views/aluno.py`, `main.py`,
+  `tests/test_csrf_admin_flows.py`, `tests/test_db_schema_maintenance.py`,
+  `tests/test_residual_shared_helpers.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`,
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `docs/DOCUMENTATION_INDEX.md`. Subject:
+  `Extract user profile schema helper ownership`.
+- **Next action:** external supervisor review of PHASE 3-B2 only. B3, migrations, access,
+  backup, matrices, versioning, repository and final `init_db` cutover remain unauthorized.
+
+### Historical accepted operational handoff — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B2 order. PHASE 3-A and PHASE 3-B
+  assessment are CLOSED / ACCEPTED.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/remote
   `fac0d7a58af226de43e4ac81d35daf8e3bd0aa05`, divergence 0/0, initially clean.
@@ -34,8 +77,8 @@
   `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
   `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
   `docs/DOCUMENTATION_INDEX.md`. Subject: `Extract reportes schema helper ownership`.
-- **Next action:** external supervisor review of PHASE 3-B1. B2, migrations, access, backup,
-  matrices, versioning, repository and final `init_db` cutover remain unauthorized.
+- **Acceptance correction:** the former waiting-review action is superseded by the explicit
+  PHASE 3-B1 CLOSED / ACCEPTED decision that authorized PHASE 3-B2.
 
 ### Historical accepted operational handoff — PHASE 3-A canonical database connection consolidation (2026-07-26)
 

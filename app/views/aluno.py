@@ -23,7 +23,7 @@ from flask import (
 
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
 from app.auth import aluno_required
-from app.db_maintenance import ensure_reportes_table
+from app.db_maintenance import ensure_reportes_table, ensure_usuario_profile_schema
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
@@ -46,7 +46,6 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
     import main  # type: ignore
 
     return {
-        "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
         "get_admin_arquivo": main.get_admin_arquivo,
         "get_effective_matriz_for_turma": main.get_effective_matriz_for_turma,
@@ -837,8 +836,6 @@ def aluno_progresso():
 @bp_aluno.route("/aluno/meus_dados", methods=["GET", "POST"])
 @aluno_required
 def aluno_meus_dados():
-    helpers = _get_main_helpers()
-    ensure_usuario_profile_schema = helpers["ensure_usuario_profile_schema"]
     conn = get_db_connection()
     ensure_usuario_profile_schema(conn)
     usuario_id = session["user_id"]

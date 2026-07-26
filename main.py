@@ -87,6 +87,7 @@ from app.db_maintenance import (
     create_database_snapshot,
     delete_database_snapshot,
     ensure_reportes_table,
+    ensure_usuario_profile_schema,
     get_schema_status,
     list_database_backups,
     maybe_sync_database_to_cloud,
@@ -1430,27 +1431,6 @@ def _admin_can(resource: str | None, scope: str = "view", context: dict[str, obj
         return False
     effective = auth_context.get("effective_scopes", {})
     return permission_scope_satisfies(effective.get(resource, "none"), scope)
-
-
-def ensure_usuario_profile_schema(conn) -> None:
-    usuarios_cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
-    if "foto_perfil" not in usuarios_cols:
-        try:
-            conn.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT")
-        except sqlite3.OperationalError:
-            pass
-
-    alunos_cols = [row["name"] for row in conn.execute("PRAGMA table_info(alunos)").fetchall()]
-    if "foto_perfil" not in alunos_cols:
-        try:
-            conn.execute("ALTER TABLE alunos ADD COLUMN foto_perfil TEXT")
-        except sqlite3.OperationalError:
-            pass
-    if "turma_id" not in alunos_cols:
-        try:
-            conn.execute("ALTER TABLE alunos ADD COLUMN turma_id INTEGER")
-        except sqlite3.OperationalError:
-            pass
 
 
 def ensure_requisicao_alert_receipts_table(conn) -> None:

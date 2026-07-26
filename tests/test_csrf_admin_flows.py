@@ -413,6 +413,62 @@ def test_admin_meus_dados_password_change_requires_and_accepts_csrf(
     assert "/admin/dashboard" in (new_login.headers.get("Location") or "")
 
 
+def test_aluno_meus_dados_profile_flow_remains_available(isolated_client_csrf):
+    client = isolated_client_csrf
+    suffix = uuid.uuid4().hex[:8]
+    _admin_id, turma_id = _seed_admin_and_support_turma(suffix)
+    usuario_id, email = _seed_aluno_user(
+        suffix,
+        turma_id,
+        "AlunoPerfil!123",
+        email_prefix="aluno.perfil",
+    )
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = usuario_id
+        sess["user_type"] = "aluno"
+        sess["user_name"] = f"Aluno CSRF {suffix}"
+        sess["perfil"] = "Aluno"
+
+    page = client.get("/aluno/meus_dados")
+    assert page.status_code == 200
+    form_block = _extract_post_forms(page.get_data(as_text=True))[0]
+    csrf_token = _extract_csrf_token(form_block)
+
+    updated_name = f"Aluno Perfil Atualizado {suffix}"
+    valid = client.post(
+        "/aluno/meus_dados",
+        data={
+            "nome": updated_name,
+            "email": email,
+            "matricula": f"AL-{suffix}".upper(),
+            "turma_id": str(turma_id),
+            "remove_foto": "0",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+    assert valid.status_code in (302, 303)
+    assert "/aluno/dashboard" in (valid.headers.get("Location") or "")
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        usuario = conn.execute(
+            "SELECT nome, email FROM usuarios WHERE id = ?",
+            (usuario_id,),
+        ).fetchone()
+        aluno = conn.execute(
+            "SELECT nome, email, turma_id FROM alunos WHERE usuario_id = ?",
+            (usuario_id,),
+        ).fetchone()
+        assert (usuario["nome"], usuario["email"]) == (updated_name, email)
+        assert (aluno["nome"], aluno["email"], aluno["turma_id"]) == (
+            updated_name,
+            email,
+            turma_id,
+        )
+
+
 @pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_fetch_mutation_requires_csrf_header(
     isolated_client_csrf,

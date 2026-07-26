@@ -39,6 +39,27 @@ def ensure_reportes_table(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reportes_criado_em ON reportes(criado_em)")
 
 
+def ensure_usuario_profile_schema(conn) -> None:
+    usuarios_cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
+    if "foto_perfil" not in usuarios_cols:
+        try:
+            conn.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    alunos_cols = [row["name"] for row in conn.execute("PRAGMA table_info(alunos)").fetchall()]
+    if "foto_perfil" not in alunos_cols:
+        try:
+            conn.execute("ALTER TABLE alunos ADD COLUMN foto_perfil TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "turma_id" not in alunos_cols:
+        try:
+            conn.execute("ALTER TABLE alunos ADD COLUMN turma_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+
 _AUTO_SYNC_LOCK = threading.Lock()
 _AUTO_SYNC_STATE = {
     "last_signature": None,

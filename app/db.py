@@ -7,7 +7,11 @@ from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
     gerar_codigo_turma,
 )
-from app.db_maintenance import apply_schema_migrations, ensure_reportes_table
+from app.db_maintenance import (
+    apply_schema_migrations,
+    ensure_reportes_table,
+    ensure_usuario_profile_schema,
+)
 from app.security.passwords import hash_password
 from app.text import ptbr_sqlite_collation
 
@@ -53,7 +57,6 @@ def _get_main_db_helpers():
         "ensure_matriz_atividade_links_table": main.ensure_matriz_atividade_links_table,
         "ensure_matrizes_atividades_table": main.ensure_matrizes_atividades_table,
         "ensure_usuario_access_schema": main.ensure_usuario_access_schema,
-        "ensure_usuario_profile_schema": main.ensure_usuario_profile_schema,
         "ensure_backup_settings_schema": main.ensure_backup_settings_schema,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
         "logger": main.logger,
@@ -70,7 +73,6 @@ def _init_db_impl():
     ensure_matriz_atividade_links_table = helpers["ensure_matriz_atividade_links_table"]
     ensure_matrizes_atividades_table = helpers["ensure_matrizes_atividades_table"]
     ensure_usuario_access_schema = helpers["ensure_usuario_access_schema"]
-    ensure_usuario_profile_schema = helpers["ensure_usuario_profile_schema"]
     ensure_backup_settings_schema = helpers["ensure_backup_settings_schema"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
     logger = helpers["logger"]
