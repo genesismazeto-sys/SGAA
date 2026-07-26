@@ -217,8 +217,9 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   - **PHASE-1-U4 (unused main imports cleanup): CLOSED / ACCEPTED.**
   - **PHASE-1-U5 (stale diagnostic output): CLOSED / ACCEPTED.**
   - **PHASE-1-U6 (Phase-1 completion assessment): CLOSED / ACCEPTED.**
-- **Fase 2 — Shared helpers**: **IN PROGRESS.** PHASE2-A and PHASE2-B are
-  CLOSED / ACCEPTED; PHASE2-C is the predecessor baseline; PHASE2-D is IMPLEMENTED /
+- **Fase 2 — Shared helpers**: **IN PROGRESS.** PHASE2-A, PHASE2-B and PHASE2-C are
+  CLOSED / ACCEPTED; accepted PHASE2-C commit is
+  `218d6949f63b0578ffd08507766fe5198b8f72b7`. PHASE2-D is IMPLEMENTED /
   CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW.
   The explicit ownership rule moves database/schema/repository dependencies to Phase 3,
   versioning/view dependencies to Phase 4, and wiring/logging/routing dependencies to

@@ -1,11 +1,11 @@
-## Current authoritative state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH: IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B: CLOSED / ACCEPTED — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH: IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-C: CLOSED / ACCEPTED — PHASE2-B: CLOSED / ACCEPTED — PHASE2-A: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / POLICY APPROVED / CANONICAL_DESTINATION_SELECTED / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
 ### PHASE2-D — residual shared-helper closure batch (2026-07-26)
 
 - **Status:** IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED /
   AWAITING SUPERVISOR REVIEW. Phase 2 is not declared accepted or closed; Phase 3 was not
-  started or authorized by this batch. PHASE2-C remains the predecessor baseline without a
-  new acceptance claim in this record.
+  started or authorized by this batch. PHASE2-C is CLOSED / ACCEPTED at commit
+  `218d6949f63b0578ffd08507766fe5198b8f72b7`.
 - **Human closure decision:** Phase 2 owns shared-helper dependencies and stale lazy-map
   entries. Database/schema/repository ownership transfers to Phase 3; versioning/view
   ownership transfers to Phase 4; wiring/logging/routing ownership transfers to the later
@@ -66,11 +66,13 @@
 - **Next action:** external supervisor review of PHASE2-D. Do not declare Phase 2 closed and
   do not start Phase 3 before acceptance.
 
-### Historical / superseded current block — PHASE2-C PT-BR text-helper extraction (2026-07-26)
+### Historical technical evidence — PHASE2-C PT-BR text-helper extraction — CLOSED / ACCEPTED (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-B is
-  CLOSED / ACCEPTED at commit `1a0a690343462c23b8a30a1f0d6d8cb250027936`.
-  Phase 2 as a whole is not claimed accepted or closed.
+- **Status:** CLOSED / ACCEPTED.
+- **Accepted commit:** `218d6949f63b0578ffd08507766fe5198b8f72b7` —
+  `Extract PT-BR text helpers`.
+- **Predecessor:** PHASE2-B is CLOSED / ACCEPTED at commit
+  `1a0a690343462c23b8a30a1f0d6d8cb250027936`. Phase 2 as a whole remains open.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD, upstream and remote
   `1a0a690343462c23b8a30a1f0d6d8cb250027936`; divergence 0/0; clean worktree and index.
@@ -114,7 +116,9 @@
 - **Boundaries and residue:** repository file mutation and selective staging were crossed;
   no database, schema, dependency, route, HTTP, authentication/RBAC, template/UI,
   production, custody, snapshot or restore-root mutation occurred. No hard stop remains.
-  After publication, external supervisor review of PHASE2-C is the only next action.
+- **Acceptance correction:** the former phase-time next action of external PHASE2-C review
+  is superseded by its CLOSED / ACCEPTED decision. Current next action remains external
+  supervisor review of PHASE2-D; do not close Phase 2 or start Phase 3.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.

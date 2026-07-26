@@ -1,6 +1,6 @@
 # Agent Handoff
 
-## Current state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-B CLOSED / ACCEPTED — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE2-D RESIDUAL SHARED-HELPER CLOSURE BATCH IMPLEMENTED / CATEGORY_A_ZERO / CATEGORY_E_ZERO / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE2-C CLOSED / ACCEPTED — PHASE2-B CLOSED / ACCEPTED — PHASE2-A CLOSED / ACCEPTED — PHASE-1-U1 CLOSED / ACCEPTED — PHASE-1-U2 CLOSED / ACCEPTED — PHASE-1-U3 CLOSED / ACCEPTED — PHASE-1-U4 CLOSED / ACCEPTED — PHASE-1-U5 CLOSED / ACCEPTED — PHASE-1-U6 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — R1 CLOSED / ACCEPTED — R2 CLOSED / ACCEPTED — R3 CLOSED / ACCEPTED — R4 EXECUTED — R5 CLOSED / ACCEPTED — R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY — R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED — LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED / PARENT ACL HARDENING APPLIED AND VERIFIED / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
 ### Current operational handoff — PHASE2-D residual shared-helper closure (2026-07-26)
 
@@ -44,10 +44,13 @@
   read-only FREE review. No hard stop or unauthorized residue.
 - **Next action:** external supervisor review of PHASE2-D only.
 
-### Historical / superseded operational handoff — PHASE2-C PT-BR text-helper extraction (2026-07-26)
+### Historical technical handoff — PHASE2-C PT-BR text-helper extraction — CLOSED / ACCEPTED (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE2-B is
-  CLOSED / ACCEPTED at `1a0a690343462c23b8a30a1f0d6d8cb250027936`; Phase 2 remains open.
+- **Status:** CLOSED / ACCEPTED.
+- **Accepted commit:** `218d6949f63b0578ffd08507766fe5198b8f72b7` —
+  `Extract PT-BR text helpers`.
+- **Predecessor:** PHASE2-B is CLOSED / ACCEPTED at
+  `1a0a690343462c23b8a30a1f0d6d8cb250027936`; Phase 2 remains open.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/remote
   `1a0a690343462c23b8a30a1f0d6d8cb250027936`, divergence 0/0, initially clean.
@@ -77,8 +80,9 @@
   `tests/test_text_helpers.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. Authorized subject:
   `Extract PT-BR text helpers`; identity is resolved through Git history.
 - **Residual:** no technical hard stop or unauthorized physical residue remains.
-- **Next action:** external supervisor review of PHASE2-C. Do not start another extraction
-  or later Phase 2 unit before that review.
+- **Acceptance correction:** the former phase-time PHASE2-C review action is superseded.
+  Current next action is external supervisor review of PHASE2-D. Do not close Phase 2 or
+  start Phase 3.
 
 - **PHASE-1-U1:** CLOSED / ACCEPTED.
 - **Accepted commit:** 68f52fb902c726cc79ff92955e58f95ac0b21cd7 — `Remove accidental VS Code workspace artifact`.
