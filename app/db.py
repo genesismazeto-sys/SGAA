@@ -9,6 +9,8 @@ from app.academics import (
 )
 from app.db_maintenance import (
     apply_schema_migrations,
+    ensure_matriz_atividade_links_table,
+    ensure_matrizes_atividades_table,
     ensure_reportes_table,
     ensure_requisicao_alert_receipts_table,
     ensure_usuario_profile_schema,
@@ -54,8 +56,6 @@ def _get_main_db_helpers():
     return {
         "ensure_atividades_schema_current": main.ensure_atividades_schema_current,
         "ensure_atividade_versioning_schema": main.ensure_atividade_versioning_schema,
-        "ensure_matriz_atividade_links_table": main.ensure_matriz_atividade_links_table,
-        "ensure_matrizes_atividades_table": main.ensure_matrizes_atividades_table,
         "ensure_usuario_access_schema": main.ensure_usuario_access_schema,
         "ensure_backup_settings_schema": main.ensure_backup_settings_schema,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
@@ -69,8 +69,6 @@ def _init_db_impl():
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
     ensure_atividades_schema_current = helpers["ensure_atividades_schema_current"]
     ensure_atividade_versioning_schema = helpers["ensure_atividade_versioning_schema"]
-    ensure_matriz_atividade_links_table = helpers["ensure_matriz_atividade_links_table"]
-    ensure_matrizes_atividades_table = helpers["ensure_matrizes_atividades_table"]
     ensure_usuario_access_schema = helpers["ensure_usuario_access_schema"]
     ensure_backup_settings_schema = helpers["ensure_backup_settings_schema"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]

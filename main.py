@@ -86,6 +86,8 @@ from app.db_maintenance import (
     apply_schema_migrations,
     create_database_snapshot,
     delete_database_snapshot,
+    ensure_matriz_atividade_links_table,
+    ensure_matrizes_atividades_table,
     ensure_reportes_table,
     ensure_requisicao_alert_receipts_table,
     ensure_usuario_profile_schema,
@@ -1603,75 +1605,6 @@ def ensure_atividades_schema_current(conn) -> None:
         conn.execute("ALTER TABLE atividades__new RENAME TO atividades")
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
-
-
-def ensure_matrizes_atividades_table(conn) -> None:
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS matrizes_atividades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            curso_id INTEGER NOT NULL,
-            nome TEXT NOT NULL,
-            versao TEXT NOT NULL,
-            descricao TEXT,
-            status TEXT NOT NULL DEFAULT 'rascunho',
-            data_inicio_vigencia TEXT,
-            data_fim_vigencia TEXT,
-            horas_aac_obrigatorias INTEGER NOT NULL DEFAULT {DEFAULT_CURSO_TOTAL_HORAS_AAC},
-            horas_extensao_obrigatorias INTEGER NOT NULL DEFAULT {DEFAULT_CURSO_TOTAL_HORAS_AEU},
-            matriz_origem_id INTEGER,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(curso_id) REFERENCES cursos(id),
-            FOREIGN KEY(matriz_origem_id) REFERENCES matrizes_atividades(id)
-        )
-        """
-    )
-    try:
-        cols = [row["name"] for row in conn.execute("PRAGMA table_info(matrizes_atividades)").fetchall()]
-        if "horas_aac_obrigatorias" not in cols:
-            conn.execute(
-                f"ALTER TABLE matrizes_atividades ADD COLUMN horas_aac_obrigatorias INTEGER NOT NULL DEFAULT {DEFAULT_CURSO_TOTAL_HORAS_AAC}"
-            )
-        if "horas_extensao_obrigatorias" not in cols:
-            conn.execute(
-                f"ALTER TABLE matrizes_atividades ADD COLUMN horas_extensao_obrigatorias INTEGER NOT NULL DEFAULT {DEFAULT_CURSO_TOTAL_HORAS_AEU}"
-            )
-        if "matriz_origem_id" not in cols:
-            conn.execute("ALTER TABLE matrizes_atividades ADD COLUMN matriz_origem_id INTEGER")
-        if "created_at" not in cols:
-            conn.execute("ALTER TABLE matrizes_atividades ADD COLUMN created_at TEXT")
-            conn.execute("UPDATE matrizes_atividades SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = ''")
-    except sqlite3.OperationalError:
-        pass
-    conn.execute(
-        "UPDATE matrizes_atividades SET horas_aac_obrigatorias = ? WHERE horas_aac_obrigatorias IS NULL OR horas_aac_obrigatorias < 0",
-        (DEFAULT_CURSO_TOTAL_HORAS_AAC,),
-    )
-    conn.execute(
-        "UPDATE matrizes_atividades SET horas_extensao_obrigatorias = ? WHERE horas_extensao_obrigatorias IS NULL OR horas_extensao_obrigatorias < 0",
-        (DEFAULT_CURSO_TOTAL_HORAS_AEU,),
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matrizes_curso ON matrizes_atividades(curso_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matrizes_status ON matrizes_atividades(status)")
-
-
-def ensure_matriz_atividade_links_table(conn) -> None:
-    ensure_matrizes_atividades_table(conn)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS matrizes_atividades_itens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            matriz_id INTEGER NOT NULL,
-            atividade_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(matriz_id) REFERENCES matrizes_atividades(id) ON DELETE CASCADE,
-            FOREIGN KEY(atividade_id) REFERENCES atividades(id) ON DELETE CASCADE,
-            UNIQUE(matriz_id, atividade_id)
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_itens_matriz ON matrizes_atividades_itens(matriz_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_itens_atividade ON matrizes_atividades_itens(atividade_id)")
 
 
 _VERSAO_NEW_DDL = """

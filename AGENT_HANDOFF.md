@@ -1,11 +1,71 @@
 # Agent Handoff
 
-## Current state — PHASE 3-B3 REQUISITION ALERT-RECEIPTS SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B4 MATRIX SCHEMA-HELPER CLUSTER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B3 CLOSED / ACCEPTED — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction (2026-07-26)
+### Current operational handoff — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B2 is
-  CLOSED / ACCEPTED. Do not start PHASE 3-B4.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B3 is
+  CLOSED / ACCEPTED. Do not start PHASE 3-B5.
+- **Baseline/final identity:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/live remote
+  `b5f6267ba208fa363ffaddd4d3ddbded72374b4b`, divergence 0/0 and exact subject
+  `Extract requisition alert receipts schema ownership`. Final bounded commit uses authorized
+  subject `Extract matrix schema helper ownership`; identity is resolved through Git history
+  and must be copied from post-commit/post-push proof, never guessed inside its own commit.
+- **Owner/compatibility:** `app/db_maintenance.py` solely defines
+  `ensure_matrizes_atividades_table` and `ensure_matriz_atividade_links_table`; immutable-base
+  AST equivalence passes for both. `main.py` imports both compatibility exports and preserves
+  object identity. `app/db.py` is the only other `app/` consumer and imports both directly.
+- **Schema/transactions:** exact matrix and link-table DDL, defaults, foreign keys, named
+  indexes, composite unique key, nested call, conditional ALTERs, created-at backfill,
+  AAC/AEU normalization and valid-value preservation pass. Duplicate link rejection, both
+  deletion cascades, idempotence and caller transaction rollback/no-commit behavior pass using
+  only `:memory:` SQLite.
+- **Edges/order:** `app.db._get_main_db_helpers` removed exactly the two matrix keys and
+  `_init_db_impl` removed exactly the two corresponding retrievals. All other lazy keys and
+  order are unchanged. The existing bootstrap calls remain once each and in exact baseline
+  order before activity versioning.
+- **Files read directly:** `app/db.py`, `app/db_maintenance.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/conftest.py`,
+  `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py`, `PROJECT_STATE.md`,
+  `AGENT_HANDOFF.md`. IAexec read exactly the first four. Focused pytest additionally loaded
+  the exact 32 matrix/activity/requisition/versioning paths recorded in the validation command;
+  route/RBAC loaded the four exact nodes recorded below; the hermetic lane collected the full
+  repository suite with D73H excluded by the canonical collection hook.
+- **Files changed:** `app/db.py`, `app/db_maintenance.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`; no other path.
+- **Tests:** `.venv/Scripts/python.exe -B -m pytest tests/test_db_schema_maintenance.py -q`
+  returned 39 passed in 3.66s. The exact 32-path affected matrix/activity/requisition/versioning
+  command returned 334 passed in 143.48s. Route/RBAC exact-node command returned 4 passed in
+  0.77s and proves live inventory 131 and unmapped 0. Runtime isolation returned 15 passed in
+  9.43s. Full `.venv/Scripts/python.exe -B -m pytest -q` returned 773 passed, 17 deselected in
+  305.58s. Focused file hashes and dirty manifest remained stable across lanes.
+- **Database safety:** canonical SQLite opens 0; `tests/conftest.py` sets `APP_DATABASE` to a
+  session-owned external runtime root before module import and the new schema probes use only
+  `:memory:`. Canonical size remains 544768 and SHA-256 remains
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM absent after
+  every lane.
+- **Mode/routing:** implementation IAexec via R4 `flash_free`, effective provider/model
+  `opencode` / `opencode/deepseek-v4-flash-free`, session
+  `ses_05efda84cffeXU17BeYq5MJU6N`, cost 0, exit 0, no fallback. A prior transport-only dispatch
+  ended `BLOCKED_PROMPT_SOURCE_INVALID` before model/session creation, exit 64, cost 0. IAsup
+  `openai-codex/gpt-5.6-sol` adjudicated all diffs and gates and made one test-only deterministic
+  correction for current-map naming plus explicit sole-owner AST counts; code behavior was not
+  re-mutated. A separate review model was unnecessary because immutable AST, normalized module
+  comparison, exact lazy delta, SQLite contracts and the full suite are deterministic.
+- **Recovered verifier defect:** the first auxiliary normalized-AST script compared the two
+  authorized direct imports and exited 1 after all physical work was stable. It was corrected
+  read-only and then proved whole-module normalized delta zero, exact two-key lazy removal and
+  baseline-identical bootstrap order. No product mutation was repeated.
+- **Risks/next action:** no known technical hard stop or unauthorized residue. After selective
+  commit and exact feature-branch push, external supervisor review of PHASE 3-B4 is the only
+  next action. PHASE 3-B5, canonical DB opening, migrations, cleanup/custody and production
+  remain prohibited without a new explicit order.
+
+### Historical accepted operational handoff — PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B4 order. PHASE 3-B2 is
+  CLOSED / ACCEPTED.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/remote
   `420b3ddc6762b2ce2460a04912397fc7398a556c`, divergence 0/0, initially clean.
@@ -39,9 +99,8 @@
   `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
   `docs/DOCUMENTATION_INDEX.md`. Subject:
   `Extract requisition alert receipts schema ownership`.
-- **Next action:** external supervisor review of PHASE 3-B3 only. B4, migrations, access,
-  profile, backup, matrices, versioning, repository and final `init_db` cutover remain
-  unauthorized.
+- **Acceptance correction:** the former waiting-review action is superseded by the explicit
+  PHASE 3-B3 CLOSED / ACCEPTED decision that authorized PHASE 3-B4.
 
 ### Historical accepted operational handoff — PHASE 3-B2 user profile schema-helper ownership extraction (2026-07-26)
 
