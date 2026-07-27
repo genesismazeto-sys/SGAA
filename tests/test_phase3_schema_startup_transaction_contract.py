@@ -600,6 +600,9 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "normalize_usuario_access_startup_data",
             "ensure_matrizes_atividades_table",
             "ensure_matriz_atividade_links_table",
+            "ensure_atividade_versioning_leaf_tables",
+            "ensure_atividade_versioning_leaf_triggers",
+            "ensure_atividade_versioning_leaf_indexes",
         ),
         MAIN_PATH: (
             "ensure_app_settings_schema",
@@ -717,15 +720,16 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 2
+    assert ledger.count(CONTRACT_RELPATH) == 3
     assert ledger.count("| PHASE3-B7 |") == 1
+    assert ledger.count("| PHASE3-B8 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B7 intentional revision" in contract
+    assert "PHASE 3-B8 intentional revision" in contract
     assert "The exact four entries" in contract
     assert "Resolved by PHASE 3-B6" in contract
-    assert "PHASE 3-B8" in index
+    assert "PHASE 3-B9" in index

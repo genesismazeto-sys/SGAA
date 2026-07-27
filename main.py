@@ -93,6 +93,9 @@ from app.db_maintenance import (
     apply_schema_migrations,
     create_database_snapshot,
     delete_database_snapshot,
+    ensure_atividade_versioning_leaf_indexes,
+    ensure_atividade_versioning_leaf_tables,
+    ensure_atividade_versioning_leaf_triggers,
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
     ensure_reportes_table,
@@ -1660,66 +1663,7 @@ def ensure_atividade_versioning_schema(conn) -> None:
         """
     )
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS atividade_transicao (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            from_atividade_versao_id INTEGER,
-            to_atividade_versao_id INTEGER,
-            tipo_transicao TEXT NOT NULL CHECK(tipo_transicao IN ('mesmo_eixo', 'aac_para_aeu', 'nova_aeu', 'descontinuada', 'sem_transicao')),
-            justificativa TEXT,
-            observacao_admin TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(from_atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-            FOREIGN KEY(to_atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-            CHECK(from_atividade_versao_id IS NOT NULL OR to_atividade_versao_id IS NOT NULL),
-            CHECK(from_atividade_versao_id IS NULL OR to_atividade_versao_id IS NULL OR from_atividade_versao_id <> to_atividade_versao_id)
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS matriz_norma (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            matriz_id INTEGER NOT NULL,
-            norma_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(matriz_id) REFERENCES matrizes_atividades(id) ON DELETE CASCADE,
-            FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
-            UNIQUE(matriz_id, norma_id)
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS matriz_atividade_versao_item (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            matriz_id INTEGER NOT NULL,
-            atividade_versao_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(matriz_id) REFERENCES matrizes_atividades(id) ON DELETE CASCADE,
-            FOREIGN KEY(atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-            UNIQUE(matriz_id, atividade_versao_id)
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS atividade_legacy_map (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            atividade_id_legacy INTEGER NOT NULL UNIQUE,
-            atividade_base_id INTEGER,
-            status TEXT NOT NULL DEFAULT 'pendente' CHECK(status IN ('pendente', 'mapeada', 'revisar')),
-            observacao_admin TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(atividade_id_legacy) REFERENCES atividades(id) ON DELETE RESTRICT,
-            FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE SET NULL
-        )
-        """
-    )
+    ensure_atividade_versioning_leaf_tables(conn)
 
     conn.execute(
         """
@@ -1807,54 +1751,7 @@ def ensure_atividade_versioning_schema(conn) -> None:
         """
     )
 
-    conn.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_atividade_transicao_aac_para_aeu_insert
-        BEFORE INSERT ON atividade_transicao
-        FOR EACH ROW
-        WHEN NEW.tipo_transicao = 'aac_para_aeu'
-        BEGIN
-            SELECT CASE
-                WHEN NEW.justificativa IS NULL OR TRIM(NEW.justificativa) = ''
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige justificativa')
-            END;
-            SELECT CASE
-                WHEN NEW.from_atividade_versao_id IS NULL OR NEW.to_atividade_versao_id IS NULL
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige from/to atividade_versao')
-            END;
-            SELECT CASE
-                WHEN (SELECT eixo FROM atividade_versao WHERE id = NEW.from_atividade_versao_id) <> 'AAC'
-                     OR (SELECT eixo FROM atividade_versao WHERE id = NEW.to_atividade_versao_id) <> 'AEU'
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige eixo AAC -> AEU')
-            END;
-        END;
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_atividade_transicao_aac_para_aeu_update
-        BEFORE UPDATE OF tipo_transicao, justificativa, from_atividade_versao_id, to_atividade_versao_id
-        ON atividade_transicao
-        FOR EACH ROW
-        WHEN NEW.tipo_transicao = 'aac_para_aeu'
-        BEGIN
-            SELECT CASE
-                WHEN NEW.justificativa IS NULL OR TRIM(NEW.justificativa) = ''
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige justificativa')
-            END;
-            SELECT CASE
-                WHEN NEW.from_atividade_versao_id IS NULL OR NEW.to_atividade_versao_id IS NULL
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige from/to atividade_versao')
-            END;
-            SELECT CASE
-                WHEN (SELECT eixo FROM atividade_versao WHERE id = NEW.from_atividade_versao_id) <> 'AAC'
-                     OR (SELECT eixo FROM atividade_versao WHERE id = NEW.to_atividade_versao_id) <> 'AEU'
-                THEN RAISE(ABORT, 'Transição aac_para_aeu exige eixo AAC -> AEU')
-            END;
-        END;
-        """
-    )
+    ensure_atividade_versioning_leaf_triggers(conn)
 
     try:
         req_cols = [row["name"] for row in conn.execute("PRAGMA table_info(requisicoes)").fetchall()]
@@ -1877,14 +1774,7 @@ def ensure_atividade_versioning_schema(conn) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_eixo ON atividade_versao(eixo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_versao_status ON atividade_versao(status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_transicao_from ON atividade_transicao(from_atividade_versao_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_transicao_to ON atividade_transicao(to_atividade_versao_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_transicao_tipo ON atividade_transicao(tipo_transicao)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_norma_matriz ON matriz_norma(matriz_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_norma_norma ON matriz_norma(norma_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_atividade_versao_item_matriz ON matriz_atividade_versao_item(matriz_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_atividade_versao_item_versao ON matriz_atividade_versao_item(atividade_versao_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_legacy_map_base ON atividade_legacy_map(atividade_base_id)")
+    ensure_atividade_versioning_leaf_indexes(conn)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_requisicoes_atividade_versao_id ON requisicoes(atividade_versao_id)")
 
 
