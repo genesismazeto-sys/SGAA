@@ -23,7 +23,7 @@
   finds `main.init_db` at 73 call expressions, `app.db.init_db` at one, and
   `app.db._init_db_impl` at one. Startup is `main.py::<module>` under explicit app context;
   restore is `_restore_database_from_source` under inherited request/app context; demo seed is
-  `tools/seed_demo_data.py::seed` under explicit app context; three smoke tools and 69 test/
+  `tools/seed_demo_data.py::seed` under explicit app context; three smoke tools and 68 test/
   fixture call expressions are explicit-context callers. The exact path/scope multiset is
   frozen in contract Section 4 and asserted by the executable manifest.
 - **Dual-init/commit contract:** `app.db.init_db` wraps local no-op sync plus
