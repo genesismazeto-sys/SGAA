@@ -15,9 +15,93 @@ from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AAC,
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
 )
+from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_type
 
 
 SCHEMA_VERSION = 1
+
+
+def ensure_usuario_access_structural_schema(conn) -> None:
+    """Ensure only the structural access-schema objects."""
+    cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
+    if "nivel_acesso" not in cols:
+        try:
+            conn.execute("ALTER TABLE usuarios ADD COLUMN nivel_acesso TEXT NOT NULL DEFAULT 'administrativo'")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS configuracoes_acesso (
+            nivel_acesso TEXT PRIMARY KEY,
+            senha_padrao TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS usuarios_permissoes_acesso (
+            usuario_id INTEGER NOT NULL,
+            recurso TEXT NOT NULL,
+            escopo TEXT NOT NULL,
+            PRIMARY KEY (usuario_id, recurso),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_usuarios_permissoes_usuario ON usuarios_permissoes_acesso(usuario_id)"
+    )
+
+
+def seed_usuario_access_default_data(conn) -> None:
+    """Insert the five historical access defaults without overwriting custom values."""
+    for nivel_acesso, senha_padrao in DEFAULT_ACCESS_PASSWORDS.items():
+        # NOTA: senhas "padrão" históricas são gravadas SOMENTE na primeira inicialização.
+        # Em ambientes onde não houver linha pré-existente, mantemos os valores acima
+        # para preservar o fluxo administrativo. NUNCA reutilize esses valores em
+        # produção; reescreva-os via interface após o primeiro login.
+        conn.execute(
+            "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+            (nivel_acesso, senha_padrao),
+        )
+
+
+def normalize_usuario_access_startup_data(conn) -> None:
+    """Normalize only the accepted startup-wide historical access states."""
+    conn.execute(
+        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'admin' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
+        (default_access_level_for_user_type("admin"),),
+    )
+    conn.execute(
+        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
+        (default_access_level_for_user_type("aluno"),),
+    )
+    conn.execute(
+        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND LOWER(TRIM(COALESCE(nivel_acesso, ''))) = 'administrativo'",
+        (default_access_level_for_user_type("aluno"),),
+    )
+    # NOTA: permanece ausente o UPDATE incondicional que promovia
+    # o e-mail "admin@ej.edu.br" a admin_total a cada execução.
+
+
+def ensure_usuario_access_schema(conn) -> None:
+    """Ensure access schema and startup data without finalizing caller work.
+
+    Releasing this helper-owned savepoint persists its work on a clean
+    connection. Under an existing transaction, the caller retains commit and
+    rollback ownership.
+    """
+    conn.execute("SAVEPOINT ensure_usuario_access_schema")
+    try:
+        ensure_usuario_access_structural_schema(conn)
+        seed_usuario_access_default_data(conn)
+        normalize_usuario_access_startup_data(conn)
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT ensure_usuario_access_schema")
+        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
+        raise
+    else:
+        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
 
 
 def ensure_reportes_table(conn) -> None:

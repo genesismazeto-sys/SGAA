@@ -90,6 +90,7 @@ from app.db_maintenance import (
     ensure_matrizes_atividades_table,
     ensure_reportes_table,
     ensure_requisicao_alert_receipts_table,
+    ensure_usuario_access_schema,
     ensure_usuario_profile_schema,
     get_schema_status,
     list_database_backups,
@@ -313,87 +314,6 @@ ATIVIDADES_SCHEMA_COLUMNS = (
     "limite_horas_total",
     "limite_horas_semestral",
 )
-
-
-def _ensure_usuario_access_schema_impl(conn) -> None:
-    cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
-    if "nivel_acesso" not in cols:
-        try:
-            conn.execute("ALTER TABLE usuarios ADD COLUMN nivel_acesso TEXT NOT NULL DEFAULT 'administrativo'")
-        except sqlite3.OperationalError:
-            pass
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS configuracoes_acesso (
-            nivel_acesso TEXT PRIMARY KEY,
-            senha_padrao TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS usuarios_permissoes_acesso (
-            usuario_id INTEGER NOT NULL,
-            recurso TEXT NOT NULL,
-            escopo TEXT NOT NULL,
-            PRIMARY KEY (usuario_id, recurso),
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_usuarios_permissoes_usuario ON usuarios_permissoes_acesso(usuario_id)"
-    )
-    for nivel_acesso, senha_padrao in {
-        "admin_total": "admin123",
-        "consultivo": "consultivo123",
-        "administrativo": "admin123",
-        "usuario": "aluno123",
-        "usuario_teste": "teste123",
-    }.items():
-        # NOTA: senhas "padrão" históricas são gravadas SOMENTE na primeira inicialização.
-        # Em ambientes onde não houver linha pré-existente, mantemos os valores acima
-        # para preservar o fluxo administrativo. NUNCA reutilize esses valores em
-        # produção; reescreva-os via interface após o primeiro login.
-        conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
-            (nivel_acesso, senha_padrao),
-        )
-    conn.execute(
-        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'admin' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
-        (default_access_level_for_user_type("admin"),),
-    )
-    conn.execute(
-        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
-        (default_access_level_for_user_type("aluno"),),
-    )
-    conn.execute(
-        "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND LOWER(TRIM(COALESCE(nivel_acesso, ''))) = 'administrativo'",
-        (default_access_level_for_user_type("aluno"),),
-    )
-    # NOTA: removido UPDATE incondicional que promovia
-    # o e-mail "admin@ej.edu.br" a admin_total a cada execução.
-    # A promoção por e-mail era um vetor de elevação de privilégios
-    # (atacante criar conta com esse e-mail ? admin total).
-
-
-def ensure_usuario_access_schema(conn) -> None:
-    """Ensure the access schema without finalizing a caller-owned transaction.
-
-    The implementation uses idempotent DML which opens a sqlite transaction
-    even when it changes no rows.  This savepoint is owned by this helper:
-    releasing it commits helper work only on a clean connection; if a caller
-    already owns a transaction, that outer transaction remains active.
-    """
-    conn.execute("SAVEPOINT ensure_usuario_access_schema")
-    try:
-        _ensure_usuario_access_schema_impl(conn)
-    except Exception:
-        conn.execute("ROLLBACK TO SAVEPOINT ensure_usuario_access_schema")
-        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
-        raise
-    else:
-        conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
 
 
 DEFAULT_RESPONSE_GOAL_DAYS = 10

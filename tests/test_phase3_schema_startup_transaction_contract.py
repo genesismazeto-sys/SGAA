@@ -20,13 +20,13 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "ensure_matrizes_atividades_table",
     "ensure_reportes_table",
     "ensure_requisicao_alert_receipts_table",
+    "ensure_usuario_access_schema",
     "ensure_usuario_profile_schema",
 )
 
 EXPECTED_LAZY_BRIDGE = (
     "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
-    "ensure_usuario_access_schema",
     "ensure_backup_settings_schema",
     "get_preferred_matriz_for_curso",
     "logger",
@@ -500,7 +500,7 @@ def test_dual_init_entry_points_and_exact_caller_manifest():
     }
 
 
-def test_exact_direct_import_set_and_six_entry_lazy_bridge():
+def test_exact_direct_import_set_and_five_entry_lazy_bridge():
     app_tree = _tree(APP_DB_PATH)
     assert _imported_names(app_tree, "app.db_maintenance") == EXPECTED_DIRECT_MAINTENANCE_IMPORTS
 
@@ -591,11 +591,13 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "ensure_reportes_table",
             "ensure_usuario_profile_schema",
             "ensure_requisicao_alert_receipts_table",
+            "ensure_usuario_access_structural_schema",
+            "seed_usuario_access_default_data",
+            "normalize_usuario_access_startup_data",
             "ensure_matrizes_atividades_table",
             "ensure_matriz_atividade_links_table",
         ),
         MAIN_PATH: (
-            "_ensure_usuario_access_schema_impl",
             "ensure_app_settings_schema",
             "ensure_backup_settings_schema",
             "ensure_cloud_backup_schema",
@@ -627,7 +629,7 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
     }
     assert _transaction_facts(APP_DB_PATH, "init_db") == neutral
 
-    access = _transaction_facts(MAIN_PATH, "ensure_usuario_access_schema")
+    access = _transaction_facts(DB_MAINTENANCE_PATH, "ensure_usuario_access_schema")
     assert access == {**neutral, "savepoint": True, "rollback_sql": True}
 
     atividades = _transaction_facts(MAIN_PATH, "ensure_atividades_schema_current")
@@ -703,10 +705,14 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6 |"
         )
         == 1
     )
     assert ledger.count(CONTRACT_RELPATH) == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
+    assert "PHASE 3-B6 intentional revision" in contract
+    assert "The exact five entries" in contract
+    assert "Resolved by PHASE 3-B6" in contract
+    assert "PHASE 3-B7" in index

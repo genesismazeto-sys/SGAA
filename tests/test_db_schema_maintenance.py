@@ -93,7 +93,6 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
 EXPECTED_DB_LAZY_KEYS_AFTER_MATRIX_EXTRACTION = {
     "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
-    "ensure_usuario_access_schema",
     "ensure_backup_settings_schema",
     "get_preferred_matriz_for_curso",
     "logger",
@@ -1101,5 +1100,283 @@ def test_matriz_atividade_links_preserves_caller_owned_transaction():
             "SELECT 1 FROM sqlite_master WHERE type = 'table' "
             "AND name = 'matrizes_atividades_itens'"
         ).fetchone() is None
+    finally:
+        conn.close()
+
+
+ACCESS_STRUCTURAL_SQL = (
+    "PRAGMA table_info(usuarios)",
+    "ALTER TABLE usuarios ADD COLUMN nivel_acesso TEXT NOT NULL DEFAULT 'administrativo'",
+    "CREATE TABLE IF NOT EXISTS configuracoes_acesso ( nivel_acesso TEXT PRIMARY KEY, senha_padrao TEXT NOT NULL )",
+    "CREATE TABLE IF NOT EXISTS usuarios_permissoes_acesso ( usuario_id INTEGER NOT NULL, recurso TEXT NOT NULL, escopo TEXT NOT NULL, PRIMARY KEY (usuario_id, recurso), FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE )",
+    "CREATE INDEX IF NOT EXISTS idx_usuarios_permissoes_usuario ON usuarios_permissoes_acesso(usuario_id)",
+)
+ACCESS_DEFAULT_DATA_SQL = (
+    "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+)
+ACCESS_NORMALIZATION_SQL = (
+    "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'admin' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
+    "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
+    "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND LOWER(TRIM(COALESCE(nivel_acesso, ''))) = 'administrativo'",
+)
+ACCESS_DEFAULT_ROWS = (
+    ("admin_total", "admin123"),
+    ("consultivo", "consultivo123"),
+    ("administrativo", "admin123"),
+    ("usuario", "aluno123"),
+    ("usuario_teste", "teste123"),
+)
+
+
+def _executed_sql(function):
+    node = ast.parse(textwrap.dedent(inspect.getsource(function))).body[0]
+    statements = []
+    for call in ast.walk(node):
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "execute"
+            and call.args
+            and isinstance(call.args[0], ast.Constant)
+            and isinstance(call.args[0].value, str)
+        ):
+            continue
+        statements.append((call.lineno, call.col_offset, " ".join(call.args[0].value.split())))
+    return tuple(statement for _, _, statement in sorted(statements))
+
+
+def _new_access_connection(*, with_usuarios=True):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    if with_usuarios:
+        conn.execute(
+            """
+            CREATE TABLE usuarios (
+                id INTEGER PRIMARY KEY,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                senha TEXT NOT NULL,
+                tipo TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    return conn
+
+
+def test_access_components_preserve_statement_categories_and_order():
+    structural = db_maintenance.ensure_usuario_access_structural_schema
+    defaults = db_maintenance.seed_usuario_access_default_data
+    normalization = db_maintenance.normalize_usuario_access_startup_data
+    orchestrator = db_maintenance.ensure_usuario_access_schema
+
+    assert _executed_sql(structural) == ACCESS_STRUCTURAL_SQL
+    assert _executed_sql(defaults) == ACCESS_DEFAULT_DATA_SQL
+    assert _executed_sql(normalization) == ACCESS_NORMALIZATION_SQL
+
+    source = inspect.getsource(orchestrator)
+    assert source.index("ensure_usuario_access_structural_schema(conn)") < source.index(
+        "seed_usuario_access_default_data(conn)"
+    ) < source.index("normalize_usuario_access_startup_data(conn)")
+    assert "SAVEPOINT ensure_usuario_access_schema" in source
+    assert "ROLLBACK TO SAVEPOINT ensure_usuario_access_schema" in source
+    assert source.count("RELEASE SAVEPOINT ensure_usuario_access_schema") == 2
+    assert "conn.commit" not in source
+    assert "conn.rollback" not in source
+
+
+def test_access_helper_has_sole_owner_and_direct_compatibility_exports():
+    names = (
+        "ensure_usuario_access_structural_schema",
+        "seed_usuario_access_default_data",
+        "normalize_usuario_access_startup_data",
+        "ensure_usuario_access_schema",
+    )
+    assert _module_function_definition_counts(db_maintenance, names) == {name: 1 for name in names}
+    assert _module_function_definition_counts(main, names) == {name: 0 for name in names}
+    assert _module_function_definition_counts(app_db, names) == {name: 0 for name in names}
+    assert main.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
+    assert app_db.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
+    assert "ensure_usuario_access_schema" not in _lazy_return_keys(app_db._get_main_db_helpers)
+    assert 'helpers["ensure_usuario_access_schema"]' not in inspect.getsource(app_db._init_db_impl)
+
+
+def test_access_structural_helper_preserves_missing_parent_and_partial_schema_behavior():
+    conn = _new_access_connection(with_usuarios=False)
+    try:
+        db_maintenance.ensure_usuario_access_structural_schema(conn)
+        assert conn.execute("PRAGMA table_info(usuarios)").fetchall() == []
+        assert {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        } == {"configuracoes_acesso", "usuarios_permissoes_acesso"}
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_usuarios_permissoes_usuario'"
+        ).fetchone() is not None
+    finally:
+        conn.close()
+
+    conn = _new_access_connection()
+    try:
+        conn.execute("CREATE TABLE configuracoes_acesso (nivel_acesso TEXT PRIMARY KEY, senha_padrao TEXT NOT NULL)")
+        db_maintenance.ensure_usuario_access_structural_schema(conn)
+        db_maintenance.ensure_usuario_access_structural_schema(conn)
+        columns = conn.execute("PRAGMA table_info(usuarios)").fetchall()
+        assert [(row["name"], row["type"], row["notnull"], row["dflt_value"]) for row in columns][-1] == (
+            "nivel_acesso",
+            "TEXT",
+            1,
+            "'administrativo'",
+        )
+        permission_columns = conn.execute("PRAGMA table_info(usuarios_permissoes_acesso)").fetchall()
+        assert [(row["name"], row["pk"]) for row in permission_columns] == [
+            ("usuario_id", 1),
+            ("recurso", 2),
+            ("escopo", 0),
+        ]
+        foreign_keys = conn.execute("PRAGMA foreign_key_list(usuarios_permissoes_acesso)").fetchall()
+        assert [
+            (row["table"], row["from"], row["to"], row["on_update"], row["on_delete"])
+            for row in foreign_keys
+        ] == [("usuarios", "usuario_id", "id", "CASCADE", "CASCADE")]
+    finally:
+        conn.close()
+
+
+def test_access_default_data_is_exact_idempotent_and_does_not_overwrite_customization():
+    conn = _new_access_connection()
+    try:
+        db_maintenance.ensure_usuario_access_structural_schema(conn)
+        assert conn.execute("SELECT COUNT(*) FROM configuracoes_acesso").fetchone()[0] == 0
+        db_maintenance.seed_usuario_access_default_data(conn)
+        assert tuple(
+            tuple(row)
+            for row in conn.execute(
+                "SELECT nivel_acesso, senha_padrao FROM configuracoes_acesso ORDER BY rowid"
+            ).fetchall()
+        ) == ACCESS_DEFAULT_ROWS
+        conn.execute(
+            "UPDATE configuracoes_acesso SET senha_padrao = 'customizada' WHERE nivel_acesso = 'admin_total'"
+        )
+        db_maintenance.seed_usuario_access_default_data(conn)
+        assert conn.execute(
+            "SELECT senha_padrao FROM configuracoes_acesso WHERE nivel_acesso = 'admin_total'"
+        ).fetchone()[0] == "customizada"
+        assert conn.execute("SELECT COUNT(*) FROM configuracoes_acesso").fetchone()[0] == 5
+    finally:
+        conn.close()
+
+
+def test_access_startup_normalization_is_exact_and_performs_no_ddl():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute(
+            """
+            CREATE TABLE usuarios (
+                id INTEGER PRIMARY KEY,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                senha TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                nivel_acesso TEXT
+            )
+            """
+        )
+        rows = (
+            (1, "Blank Admin", "blank-admin@example.com", "x", "admin", ""),
+            (2, "Null Admin", "null-admin@example.com", "x", "admin", None),
+            (3, "Blank Student", "blank-student@example.com", "x", "aluno", " "),
+            (4, "Contaminated", "contaminated@example.com", "x", "aluno", "administrativo"),
+            (5, "Valid Admin", "valid-admin@example.com", "x", "admin", "consultivo"),
+            (6, "Valid Student", "valid-student@example.com", "x", "aluno", "usuario_teste"),
+            (7, "Unrelated", "unrelated@example.com", "x", "outro", "custom"),
+        )
+        conn.executemany(
+            "INSERT INTO usuarios (id, nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        before_schema = tuple(conn.execute(
+            "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+        ).fetchall())
+        db_maintenance.normalize_usuario_access_startup_data(conn)
+        after_schema = tuple(conn.execute(
+            "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+        ).fetchall())
+        assert after_schema == before_schema
+        assert dict(conn.execute("SELECT id, nivel_acesso FROM usuarios")) == {
+            1: "admin_total",
+            2: "admin_total",
+            3: "usuario",
+            4: "usuario",
+            5: "consultivo",
+            6: "usuario_teste",
+            7: "custom",
+        }
+    finally:
+        conn.close()
+
+
+def test_access_orchestrator_preserves_clean_and_outer_transaction_semantics():
+    conn = _new_access_connection()
+    try:
+        assert conn.in_transaction is False
+        db_maintenance.ensure_usuario_access_schema(conn)
+        assert conn.in_transaction is False
+        assert conn.execute("SELECT COUNT(*) FROM configuracoes_acesso").fetchone()[0] == 5
+    finally:
+        conn.close()
+
+    conn = _new_access_connection()
+    try:
+        conn.execute("CREATE TABLE caller_work (value TEXT NOT NULL)")
+        conn.commit()
+        conn.execute("INSERT INTO caller_work VALUES ('pending')")
+        db_maintenance.ensure_usuario_access_schema(conn)
+        assert conn.in_transaction is True
+        assert conn.execute("SELECT COUNT(*) FROM configuracoes_acesso").fetchone()[0] == 5
+        conn.rollback()
+        assert "nivel_acesso" not in _column_names(conn, "usuarios")
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'configuracoes_acesso'"
+        ).fetchone() is None
+        assert conn.execute("SELECT COUNT(*) FROM caller_work").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize(
+    "component",
+    (
+        "ensure_usuario_access_structural_schema",
+        "seed_usuario_access_default_data",
+        "normalize_usuario_access_startup_data",
+    ),
+)
+def test_access_orchestrator_rolls_back_releases_and_propagates_each_component_failure(monkeypatch, component):
+    conn = _new_access_connection()
+    trace = []
+    conn.set_trace_callback(trace.append)
+    sentinel = RuntimeError(component)
+
+    def fail(_conn):
+        raise sentinel
+
+    monkeypatch.setattr(db_maintenance, component, fail)
+    try:
+        conn.execute("CREATE TABLE caller_work (value TEXT NOT NULL)")
+        conn.commit()
+        conn.execute("INSERT INTO caller_work VALUES ('pending')")
+        with pytest.raises(RuntimeError) as caught:
+            db_maintenance.ensure_usuario_access_schema(conn)
+        assert caught.value is sentinel
+        assert conn.in_transaction is True
+        assert conn.execute("SELECT COUNT(*) FROM caller_work").fetchone()[0] == 1
+        assert any(sql == "ROLLBACK TO SAVEPOINT ensure_usuario_access_schema" for sql in trace)
+        assert any(sql == "RELEASE SAVEPOINT ensure_usuario_access_schema" for sql in trace)
+        with pytest.raises(sqlite3.OperationalError, match="no such savepoint"):
+            conn.execute("RELEASE SAVEPOINT ensure_usuario_access_schema")
+        conn.rollback()
     finally:
         conn.close()

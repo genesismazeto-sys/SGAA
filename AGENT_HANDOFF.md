@@ -1,12 +1,76 @@
 # Agent Handoff
 
-## Current state — PHASE 3-B5 CANONICAL SCHEMA / STARTUP / TRANSACTION CONTRACT FREEZE IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B4 CLOSED / ACCEPTED — PHASE 3-B3 CLOSED / ACCEPTED — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B6 ACCESS SCHEMA / DEFAULT-DATA / NORMALIZATION SEPARATION IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B5-R1 CLOSED / ACCEPTED — PHASE 3-B5 CLOSED / ACCEPTED — PHASE 3-B4 CLOSED / ACCEPTED — PHASE 3-B3 CLOSED / ACCEPTED — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-B5 schema/startup/transaction contract freeze (2026-07-26)
+### Current operational handoff — PHASE 3-B6 access responsibility separation (2026-07-27)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW; B5 is not
-  CLOSED / ACCEPTED. PHASE 3-B4 is CLOSED / ACCEPTED by this order. B6 is prohibited until B5
-  receives supervisor acceptance and a separate explicit implementation authorization.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW. B5/B5-R1 are CLOSED /
+  ACCEPTED. B7 remains unauthorized.
+- **Baseline/final contract:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, baseline HEAD/upstream/live remote
+  `b29688839ea2105782fbf889550bbbd047e2a3f7`, subject
+  `Correct B5 caller inventory handoff`, parent
+  `39e5832d17820f4363829342c5f03bad3172844c`, divergence 0/0 and clean before mutation.
+  Authorized commit subject: `Separate access schema from normalization`; final SHA resolves
+  only from post-commit evidence.
+- **Statement classification:** structural DDL is the conditional `usuarios.nivel_acesso`
+  ALTER, both access-table CREATEs and named index CREATE. Historical default DML is exactly
+  five `INSERT OR IGNORE` rows. Startup normalization is exactly blank/null admin, blank/null
+  aluno and contaminated aluno/administrativo updates. Savepoint orchestration remains the
+  public wrapper. Runtime per-user login normalization is separate and unchanged.
+- **Final owner matrix:** `app/db_maintenance.py` solely defines
+  `ensure_usuario_access_structural_schema`, `seed_usuario_access_default_data`,
+  `normalize_usuario_access_startup_data`, and `ensure_usuario_access_schema`.
+  `main.ensure_usuario_access_schema is app.db_maintenance.ensure_usuario_access_schema` and
+  `app.db.ensure_usuario_access_schema` has the same identity. `app.auth` remains sole policy/
+  defaults owner; its import is cycle-free and importing `app.db_maintenance` does not import
+  `main`.
+- **Exact lazy delta:** removed only `ensure_usuario_access_schema` and only its matching
+  `helpers[...]` retrieval. Remaining exact order: `ensure_atividades_schema_current`,
+  `ensure_atividade_versioning_schema`, `ensure_backup_settings_schema`,
+  `get_preferred_matriz_for_curso`, `logger`. Bootstrap call count and semantic position are
+  unchanged; the helper is now a direct import.
+- **Transactions:** exact savepoint name and clean/nested durability are preserved. Each of the
+  structural/default/normalization failure points has rollback-to, release, original exception
+  propagation and outer-work preservation coverage. No helper commit or full rollback exists.
+- **Runtime login isolation:** `normalize_usuario_access_for_user_type` remains in `main.py`;
+  `app/views/core.py` is unchanged, including post-password normalization, commit, refresh,
+  exception warning and session behavior. No pre-authentication schema write was introduced.
+- **Files read:** `main.py`, `app/db.py`, `app/db_maintenance.py`, `app/auth.py`,
+  `app/views/core.py`, all target-token test consumers found by tracked search, the B5 contract
+  and executable manifest, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, Documentation Index and
+  Architecture Refactor Ledger.
+- **Files changed:** `app/db.py`, `app/db_maintenance.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
+  `tests/test_phase3_schema_startup_transaction_contract.py`,
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`,
+  `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`. No other path is authorized.
+- **TDD/tests:** RED: 3 expected failures for absent semantic owner, stale lazy key and missing
+  direct import. First integrated run: 83 passed, 2 test-harness failures; corrected AST source
+  order and nullable historical fixture. Final focused rerun: 85 passed in 7.52s. Access/auth/
+  admin/student/login/RBAC: 130 passed in 62.79s. Runtime-isolation/clean-install/route/RBAC:
+  19 passed in 11.60s. Full hermetic: 791 passed, 17 canonical D73H deselected, zero failures/
+  errors in 298.10s. Routes 131; RBAC unmapped 0. Post-commit gates remain pending.
+- **Routing/provider/model/session/cost:** Stage A IAexec R4 `flash_free`; effective
+  `opencode` / `opencode/deepseek-v4-flash-free`; session
+  `ses_05ba20c3fffe6lmflBQ9a4Pt0v`; cost 0; exit 0; no fallback. IAsup effective
+  `openai-codex/gpt-5.6-sol` performed implementation and deterministic adjudication.
+  Independent review used the second R4 FREE call with the same effective provider/model,
+  session `ses_05b89c360ffe5jZGiAApFj775p`, cost 0, exit 0, no fallback, verdict APPROVE,
+  no material finding and mutations NONE.
+- **Database/residual:** canonical SQLite opens 0; size 544768; SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM absent.
+  Accepted ignored log classification remains `PREEXISTING_IGNORED_WORKSPACE_RESIDUAL /
+  SUPERVISOR_ACCEPTED / PRESERVED_UNCHANGED / OUTSIDE_COMMIT_MANIFEST`.
+- **Residual risks/next action:** dual init, final commits and unrelated transaction debt remain
+  outside B6. Complete gates, review, commit/push and post-commit verification only. **Do not
+  begin PHASE 3-B7.**
+
+### Historical accepted operational handoff — PHASE 3-B5 schema/startup/transaction contract freeze (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B6 order; B5-R1 corrected only the
+  caller-inventory handoff subcount.
 - **Baseline/final identity:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/live remote
   `41a84fb4dd71278c61fd1707535dd60560a86a27`, parent
@@ -100,7 +164,7 @@
 - **Boundaries/risks:** repository test/document mutation only. Dual-init divergence and listed
   transaction exceptions are intentionally preserved risk. No production code, canonical
   SQLite, migration, restore, cleanup, route, RBAC, service or custody mutation occurred.
-- **Next action:** external B5 review only. **Do not begin PHASE 3-B6.**
+- **Historical next action:** superseded by B5/B5-R1 acceptance and the explicit B6 order.
 
 ### Historical accepted operational handoff — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
 

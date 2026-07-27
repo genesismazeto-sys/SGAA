@@ -1,11 +1,54 @@
-## Current authoritative state — PHASE 3-B5 CANONICAL SCHEMA / STARTUP / TRANSACTION CONTRACT FREEZE: IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B4: CLOSED / ACCEPTED — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE 3-B6 ACCESS SCHEMA / DEFAULT-DATA / NORMALIZATION SEPARATION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B5-R1: CLOSED / ACCEPTED — PHASE 3-B5: CLOSED / ACCEPTED — PHASE 3-B4: CLOSED / ACCEPTED — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-27)
 
-### PHASE 3-B5 — canonical schema/startup/transaction contract freeze (2026-07-26)
+### PHASE 3-B6 — access responsibility separation and ownership extraction (2026-07-27)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW; B5 is
-  not CLOSED / ACCEPTED. PHASE 3-B4 is CLOSED / ACCEPTED by the explicit B5 order. No
-  PHASE 3-B6 implementation is authorized before B5 supervisor acceptance and a separate
-  explicit order.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW. B5 and B5-R1 are CLOSED /
+  ACCEPTED by the explicit B6 order. PHASE 3-B7 is not authorized.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; HEAD/upstream/live remote
+  `b29688839ea2105782fbf889550bbbd047e2a3f7`; subject
+  `Correct B5 caller inventory handoff`; divergence 0/0; clean tracked worktree, empty index,
+  zero non-ignored untracked paths and no Git operation in progress.
+- **Ownership/decomposition:** `app/db_maintenance.py` solely defines
+  `ensure_usuario_access_structural_schema`, `seed_usuario_access_default_data`,
+  `normalize_usuario_access_startup_data`, and the compatibility orchestrator
+  `ensure_usuario_access_schema`. Structural DDL, historical defaults, startup-wide
+  normalization, and savepoint orchestration are separate ordered layers. Policy/defaults are
+  reused from `app.auth`; `main` and `app.db` export the same orchestrator object.
+- **Lazy/runtime isolation:** `app.db` removed exactly the access key and matching retrieval;
+  five entries remain in original order: activities-current, activity-versioning,
+  backup-settings, preferred-matrix query, logger. `normalize_usuario_access_for_user_type`
+  remains in `main.py`; `app/views/core.py` is unchanged, including login commit/refresh/error
+  handling and absence of pre-authentication schema writes.
+- **Transactions:** public signature and savepoint name are unchanged. Clean top-level release
+  persists helper work; under caller `BEGIN`, release leaves the outer transaction active and
+  caller rollback removes helper DDL/DML. Structural/default/normalization failures each
+  rollback to and release the helper savepoint, propagate the original exception, and preserve
+  preexisting outer work.
+- **TDD/evidence:** the RED lane failed exactly for missing B6 owner symbols, the stale access
+  lazy key and absent direct import. After implementation, the complete schema-maintenance,
+  residual-owner and Phase 3 contract files passed 85 tests in 7.13s. Two test-harness defects
+  (AST walk order and an impossible NULL fixture under NOT NULL DDL) were corrected without
+  repeating production mutation. Access/authorization/admin/student/login/RBAC passed 130 in
+  62.79s; isolation/clean-install/route/RBAC passed 19 in 11.60s; full hermetic passed 791 with
+  17 canonical D73H deselected in 298.10s. Routes are 131; RBAC unmapped is 0.
+- **Routing:** Stage A used R4 `flash_free`, effective provider/model `opencode` /
+  `opencode/deepseek-v4-flash-free`, session `ses_05ba20c3fffe6lmflBQ9a4Pt0v`, cost 0,
+  exit 0, no fallback and no mutation. IAsup `openai-codex/gpt-5.6-sol` rejected its stale B6-
+  authorization objection and its proposed `app/views/core.py` mutation, then implemented the
+  deterministic transaction-sensitive split directly. Independent pre-commit review used the
+  second R4 FREE call, session `ses_05b89c360ffe5jZGiAApFj775p`, cost 0, exit 0, no fallback,
+  verdict APPROVE and mutations NONE; IAsup adjudicated no material finding.
+- **Canonical safety:** canonical SQLite opens 0; `database.db` remains 544768 bytes with
+  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM
+  absent. The accepted ignored log remains preserved outside the commit manifest.
+- **Next action:** independent diff review, selective publication, post-commit verification and
+  external B6 supervisor review. Do not begin PHASE 3-B7.
+
+### Historical accepted technical evidence — PHASE 3-B5 canonical schema/startup/transaction contract freeze (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B6 order. PHASE 3-B5-R1 corrected only
+  the published handoff caller subcount; B5 contract behavior remained accepted.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD/upstream/live remote
   `41a84fb4dd71278c61fd1707535dd60560a86a27`; subject
@@ -61,7 +104,7 @@
 - **Boundaries:** repository test/document mutation only; no production Python, canonical
   SQLite, migration, restore, route, RBAC, service or custody mutation. The contract freezes
   current behavior without making it ideal or permanent.
-- **Next action:** external B5 review only. Do not begin B6.
+- **Historical next action:** superseded by B5/B5-R1 acceptance and the explicit B6 order.
 
 ### Historical accepted technical evidence — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
 
