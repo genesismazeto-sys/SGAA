@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from app import academics, db as app_db, db_maintenance, presentation, reporting, requisition_policy, uploads
+from app import academics, backup_settings, db as app_db, db_maintenance, presentation, reporting, requisition_policy, uploads
 from app.views import aluno as aluno_views
 from app.views import core as core_views
 import main
@@ -186,9 +186,12 @@ def test_direct_app_consumers_have_no_category_a_lazy_edges_and_e_keys_are_absen
     assert "ensure_usuario_profile_schema" not in db_keys
     assert "ensure_requisicao_alert_receipts_table" not in db_keys
     assert "ensure_usuario_access_schema" not in db_keys
+    assert "ensure_backup_settings_schema" not in db_keys
     assert "logger" in db_keys
     assert main.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert app_db.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
+    assert main.ensure_backup_settings_schema is backup_settings.ensure_backup_settings_schema
+    assert app_db.ensure_backup_settings_schema is backup_settings.ensure_backup_settings_schema
 
 
 def test_runtime_login_normalization_remains_separate_from_startup_maintenance():

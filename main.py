@@ -81,6 +81,13 @@ from app.auth import (
     permission_scope_satisfies,
 )
 import app.cloud_drives as _cd
+from app.backup_settings import (
+    _apply_backup_settings_to_app,
+    _backup_settings_defaults,
+    bind_backup_settings_runtime_app,
+    ensure_backup_settings_schema,
+    get_backup_settings,
+)
 from app.db_maintenance import (
     apply_retention_policy,
     apply_schema_migrations,
@@ -571,65 +578,6 @@ def _calculate_pending_response_metrics(conn, *, goal_days: int, reset_at: str =
 
     avg_days = (sum(ages) / len(ages)) if ages else 0.0
     return avg_days, overdue_count
-
-
-def _backup_settings_defaults() -> dict[str, str]:
-    return {
-        "local_backup_dir": str(app.config.get("LOCAL_BACKUP_DIR") or ""),
-        "cloud_backup_dir": str(app.config.get("CLOUD_BACKUP_DIR") or ""),
-        "cloud_sync_interval_seconds": str(app.config.get("CLOUD_SYNC_INTERVAL_SECONDS") or 600),
-        "external_backup_url": str(app.config.get("EXTERNAL_BACKUP_URL") or ""),
-        "external_backup_token": str(app.config.get("EXTERNAL_BACKUP_TOKEN") or ""),
-        "external_backup_enabled": "1" if app.config.get("EXTERNAL_BACKUP_ENABLED") else "0",
-    }
-
-
-def _apply_backup_settings_to_app(settings: dict[str, str]) -> None:
-    app.config["LOCAL_BACKUP_DIR"] = settings.get("local_backup_dir") or app.config.get("LOCAL_BACKUP_DIR")
-    app.config["CLOUD_BACKUP_DIR"] = settings.get("cloud_backup_dir") or ""
-    try:
-        app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = max(0, int(settings.get("cloud_sync_interval_seconds") or 600))
-    except (TypeError, ValueError):
-        app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = 600
-    app.config["EXTERNAL_BACKUP_URL"] = settings.get("external_backup_url") or ""
-    app.config["EXTERNAL_BACKUP_TOKEN"] = settings.get("external_backup_token") or ""
-    app.config["EXTERNAL_BACKUP_ENABLED"] = str(settings.get("external_backup_enabled") or "0") in {"1", "true", "True"}
-
-
-def ensure_backup_settings_schema(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS configuracoes_backup (
-            chave TEXT PRIMARY KEY,
-            valor TEXT NOT NULL,
-            atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    defaults = _backup_settings_defaults()
-    for chave, valor in defaults.items():
-        conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_backup (chave, valor) VALUES (?, ?)",
-            (chave, valor),
-        )
-    intervalo_atual = conn.execute(
-        "SELECT valor FROM configuracoes_backup WHERE chave = 'cloud_sync_interval_seconds'"
-    ).fetchone()
-    if intervalo_atual and str(intervalo_atual["valor"] or "").strip() == "300":
-        conn.execute(
-            "UPDATE configuracoes_backup SET valor = ?, atualizado_em = datetime('now') WHERE chave = 'cloud_sync_interval_seconds'",
-            (defaults["cloud_sync_interval_seconds"],),
-        )
-    _apply_backup_settings_to_app(get_backup_settings(conn))
-
-
-def get_backup_settings(conn) -> dict[str, str]:
-    defaults = _backup_settings_defaults()
-    rows = conn.execute("SELECT chave, valor FROM configuracoes_backup").fetchall()
-    settings = dict(defaults)
-    for row in rows:
-        settings[str(row["chave"])] = str(row["valor"])
-    return settings
 
 
 def _normalize_backup_directory(value: str, *, allow_empty: bool = False) -> str:
@@ -4243,6 +4191,7 @@ app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = int(
 app.config["EXTERNAL_BACKUP_URL"] = os.getenv("APP_EXTERNAL_BACKUP_URL", "")
 app.config["EXTERNAL_BACKUP_TOKEN"] = os.getenv("APP_EXTERNAL_BACKUP_TOKEN", "")
 app.config["EXTERNAL_BACKUP_ENABLED"] = os.getenv("APP_EXTERNAL_BACKUP_ENABLED", "0") in ("1", "true", "True")
+bind_backup_settings_runtime_app(app)
 
 # Uploads: extensões permitidas
 ALLOWED_EXCEL = {"xlsx"}

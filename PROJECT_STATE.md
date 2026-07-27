@@ -1,9 +1,21 @@
-## Current authoritative state — PHASE 3-B6 ACCESS SCHEMA / DEFAULT-DATA / NORMALIZATION SEPARATION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B5-R1: CLOSED / ACCEPTED — PHASE 3-B5: CLOSED / ACCEPTED — PHASE 3-B4: CLOSED / ACCEPTED — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-27)
+## Current authoritative state — PHASE 3-B7 BACKUP SETTINGS SCHEMA / DEFAULT DATA / LEGACY NORMALIZATION / RUNTIME CONFIGURATION SEPARATION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B6: CLOSED / ACCEPTED — PHASE 3-B5-R1: CLOSED / ACCEPTED — PHASE 3-B5: CLOSED / ACCEPTED — PHASE 3-B4: CLOSED / ACCEPTED — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-27)
 
-### PHASE 3-B6 — access responsibility separation and ownership extraction (2026-07-27)
+### PHASE 3-B7 — backup-settings responsibility separation and lazy-edge removal (2026-07-27)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW. B5 and B5-R1 are CLOSED /
-  ACCEPTED by the explicit B6 order. PHASE 3-B7 is not authorized.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW. B6 is CLOSED / ACCEPTED by the explicit B7 order. PHASE 3-B8 is not authorized.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch `refactor/architecture-safety-net`; HEAD/upstream/live remote `b328789f16cc4db0173e58d2d2454902565d0610`; subject `Separate access schema from normalization`; parent `b29688839ea2105782fbf889550bbbd047e2a3f7`; divergence 0/0 and clean before mutation.
+- **Ownership/decomposition:** `app.db_maintenance.ensure_backup_settings_structural_schema` solely owns the exact `configuracoes_backup` CREATE. New `app.backup_settings` solely owns runtime-derived defaults, six-row `INSERT OR IGNORE`, exact stripped `"300"` normalization, persisted read/merge, six Flask config effects and the one-argument orchestrator. `main` compatibility identities and `app.db` direct-import identity are preserved.
+- **Lazy/runtime binding/imports:** `app.db` removed exactly the backup key and matching retrieval; four entries remain in exact order: activities-current, activity-versioning, preferred-matrix query, logger. The direct bootstrap call remains after user-profile schema and before `alunos`. `tools/seed_demo_data.py` proved `current_app` is not baseline-equivalent because its context app differs from module-level `main.app`. Under the explicit continuation waiver, `main` binds its exact app into `app.backup_settings` after configuring all six keys. The runtime owner uses only that bound target, fails clearly before binding, never falls back to `current_app`, and never imports `main`; no cycle exists. Classification: `EXPLICIT_LEGACY_RUNTIME_APP_BINDING / BASELINE_COMPATIBILITY_SHIM / NOT_TARGET_ARCHITECTURE`.
+- **Transactions/runtime timing:** no component owns commit, rollback or savepoint. Clean calls and caller `BEGIN`, repeated execution, caller rollback and failures at structural/seed/normalize/read/apply boundaries are covered. Partial DB work remains caller-owned exactly as before. Runtime config is still applied before caller commit and is not reverted by a later database rollback; runtime-apply failure may leave partial config mutation.
+- **Isolation:** `save_backup_settings`, retention, drive config, `_get_runtime_backup_settings`, cloud schema/tables, OAuth/token handling, provider behavior, directory creation, snapshot and restore remain in `main.py` and unchanged. The new modules perform no directory, network, provider, snapshot, restore or cleanup action.
+- **Evidence/recovery:** focused binding coverage passed 39 in 3.35s; integrated ownership/schema/contract 124 in 13.85s; backup/cloud/restore isolation 54 in 21.17s; release admin/route/RBAC 6 in 6.35s; runtime isolation 15 in 13.91s. The first full run exposed only test-owned binding leakage (828 passed, 17 deselected, 2 failures in 308.97s); the authorized ownership test now restores the previous binding, the contaminating order passed 41 in 14.42s, and the final hermetic suite passed 830 with 17 canonical D73H deselected in 375.82s, zero failures/errors and no material warning. Post-governance regression passed 142 in 21.43s; routes remain 131 and RBAC unmapped remains 0.
+- **Routing/review:** Stage A used R4 `flash_free`, effective `opencode` / `opencode/deepseek-v4-flash-free`, session `ses_05b5aa2a5ffeasQzu1zrYMXvoY`, cost 0, exit 0 and no fallback. Independent final review used the same FREE provider/model, session `ses_05b37cc64ffeUakdqRN7BkJ9pq`, cost 0, exit 0, no fallback or mutation, and returned APPROVE; IAsup accepted the material verdict while retaining the explicit compatibility debt.
+- **Canonical safety:** canonical SQLite opens 0; `database.db` remains 544768 bytes with SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM absent. The accepted ignored log remains 17420 bytes with SHA-256 `7388cfbc8f446410ef3c98ec0fa274c2c36ff4f3ef8ed2cd649bb1f3e1d3bb0e`, content/creation/last-write preserved, ignored/untracked and outside the manifest.
+- **Next action:** after verified publication of the authorized single B7 commit on `refactor/architecture-safety-net`, external supervisor review is the only next decision. Do not begin PHASE 3-B8.
+
+### Historical accepted technical evidence — PHASE 3-B6 access responsibility separation and ownership extraction (2026-07-27)
+
+- **Status:** CLOSED / ACCEPTED by the explicit B7 order. B5 and B5-R1 are CLOSED / ACCEPTED.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; HEAD/upstream/live remote
   `b29688839ea2105782fbf889550bbbd047e2a3f7`; subject
@@ -42,8 +54,7 @@
 - **Canonical safety:** canonical SQLite opens 0; `database.db` remains 544768 bytes with
   SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM
   absent. The accepted ignored log remains preserved outside the commit manifest.
-- **Next action:** independent diff review, selective publication, post-commit verification and
-  external B6 supervisor review. Do not begin PHASE 3-B7.
+- **Historical next action:** superseded by B6 acceptance and the explicit B7 order.
 
 ### Historical accepted technical evidence — PHASE 3-B5 canonical schema/startup/transaction contract freeze (2026-07-26)
 

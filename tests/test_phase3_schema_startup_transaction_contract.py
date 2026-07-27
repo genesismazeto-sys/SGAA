@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APP_DB_PATH = PROJECT_ROOT / "app" / "db.py"
 DB_MAINTENANCE_PATH = PROJECT_ROOT / "app" / "db_maintenance.py"
+BACKUP_SETTINGS_PATH = PROJECT_ROOT / "app" / "backup_settings.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CONTRACT_PATH = PROJECT_ROOT / "docs" / "refactor" / "PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
@@ -27,7 +28,6 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
 EXPECTED_LAZY_BRIDGE = (
     "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
-    "ensure_backup_settings_schema",
     "get_preferred_matriz_for_curso",
     "logger",
 )
@@ -500,9 +500,12 @@ def test_dual_init_entry_points_and_exact_caller_manifest():
     }
 
 
-def test_exact_direct_import_set_and_five_entry_lazy_bridge():
+def test_exact_direct_import_set_and_four_entry_lazy_bridge():
     app_tree = _tree(APP_DB_PATH)
     assert _imported_names(app_tree, "app.db_maintenance") == EXPECTED_DIRECT_MAINTENANCE_IMPORTS
+    assert _imported_names(app_tree, "app.backup_settings") == (
+        "ensure_backup_settings_schema",
+    )
 
     lazy_function = _top_level_function(app_tree, "_get_main_db_helpers")
     keys, values = _dict_return_contract(lazy_function)
@@ -591,6 +594,7 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "ensure_reportes_table",
             "ensure_usuario_profile_schema",
             "ensure_requisicao_alert_receipts_table",
+            "ensure_backup_settings_structural_schema",
             "ensure_usuario_access_structural_schema",
             "seed_usuario_access_default_data",
             "normalize_usuario_access_startup_data",
@@ -599,10 +603,18 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
         ),
         MAIN_PATH: (
             "ensure_app_settings_schema",
-            "ensure_backup_settings_schema",
             "ensure_cloud_backup_schema",
             "ensure_turmas_matriz_schema",
             "get_preferred_matriz_for_curso",
+        ),
+        BACKUP_SETTINGS_PATH: (
+            "_backup_settings_defaults",
+            "seed_backup_settings_default_data",
+            "normalize_legacy_backup_sync_interval",
+            "read_backup_settings",
+            "_apply_backup_settings_to_app",
+            "get_backup_settings",
+            "ensure_backup_settings_schema",
         ),
     }
     neutral = {
@@ -705,14 +717,15 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 1
+    assert ledger.count(CONTRACT_RELPATH) == 2
+    assert ledger.count("| PHASE3-B7 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B6 intentional revision" in contract
-    assert "The exact five entries" in contract
+    assert "PHASE 3-B7 intentional revision" in contract
+    assert "The exact four entries" in contract
     assert "Resolved by PHASE 3-B6" in contract
-    assert "PHASE 3-B7" in index
+    assert "PHASE 3-B8" in index

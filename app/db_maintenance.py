@@ -21,6 +21,19 @@ from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_typ
 SCHEMA_VERSION = 1
 
 
+def ensure_backup_settings_structural_schema(conn) -> None:
+    """Ensure only the physical backup-settings table."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS configuracoes_backup (
+            chave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+
 def ensure_usuario_access_structural_schema(conn) -> None:
     """Ensure only the structural access-schema objects."""
     cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]

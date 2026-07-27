@@ -15,7 +15,8 @@
 5. **Architecture refactor ledger** (`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`)
    — normalized table of every refactor phase, commits, status, and residual risk.
 6. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3 contracts) — per-phase scope, decisions,
-   and closeout evidence. The current Phase 3-B5 authority, intentionally revised by B6, is
+   and closeout evidence. The current Phase 3-B5 authority, intentionally revised and locally
+   verified by B6 and B7, is
    `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`. Standalone REF contracts exist for: REF-0TF, REF-0TF-A,
    REF-0TF-B, REF-0C-A, REF-0C-B1-P0, REF-0C-B2-A, REF-0C-B2, REF-0C-C-A,
    REF-0C-C-B1. No standalone contract exists for REF-0A, REF-0ENV, REF-0B,
@@ -226,20 +227,23 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   routing dependencies to their owning later phases. Zero runtime `app`→`main`
   back-references remains mandatory before Phase 6 closes.
 - **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A, the PHASE 3-B
-  assessment, and PHASE 3-B1 through PHASE 3-B5-R1 are CLOSED / ACCEPTED. PHASE 3-B6
+  assessment, and PHASE 3-B1 through PHASE 3-B6 are CLOSED / ACCEPTED. PHASE 3-B7
   intentionally revises the single schema/startup/transaction authority at
-  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`: access DDL, historical
-  defaults, startup normalization, and savepoint orchestration now have explicit semantic
-  layers owned by `app.db_maintenance`; the `app.db` lazy bridge has five entries. B6 is
-  IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW. The executable semantic manifest is
-  `tests/test_phase3_schema_startup_transaction_contract.py`. PHASE 3-B7 is not authorized.
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`: backup-settings structural
+  DDL is owned by `app.db_maintenance`; defaults, seeding, exact legacy normalization,
+  read/merge and runtime application are owned by `app.backup_settings`, explicitly bound
+  to module-level `main.app` as a baseline compatibility shim; the `app.db` lazy
+  bridge has four entries. B7 is IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL
+  SUPERVISOR REVIEW. The executable semantic manifests are
+  `tests/test_phase3_schema_startup_transaction_contract.py` and
+  `tests/test_backup_settings_ownership.py`. PHASE 3-B8 is not authorized.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through PHASE 3-B6 implementation and
-local verification; PHASE 3-B7 and later production units and
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through PHASE 3-B7 implementation and
+local verification; PHASE 3-B8 and later production units and
 Phases 4–6 remain **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
@@ -273,7 +277,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6 | Canonical current-state dual-init, caller, schema-owner, startup-order, migration and transaction contract; intentionally revised by B6 access separation |
+| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7 | Canonical current-state dual-init, caller, schema-owner, startup-order, migration and transaction contract; B7 records the reviewed backup-settings split, explicit legacy `main.app` binding, four-entry lazy bridge and non-atomic runtime/DB timing |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -300,7 +304,7 @@ The original REF-0C-D scope was documented in
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
-| Phase 3-B5/B6 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5/B5-R1 CLOSED / ACCEPTED; B6 IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW |
+| Phase 3-B5/B6/B7 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_backup_settings_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5/B5-R1/B6 CLOSED / ACCEPTED; B7 IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

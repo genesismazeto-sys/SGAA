@@ -2,6 +2,7 @@ import os
 import sqlite3
 from flask import g
 
+from app.backup_settings import ensure_backup_settings_schema
 from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AAC,
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
@@ -57,7 +58,6 @@ def _get_main_db_helpers():
     return {
         "ensure_atividades_schema_current": main.ensure_atividades_schema_current,
         "ensure_atividade_versioning_schema": main.ensure_atividade_versioning_schema,
-        "ensure_backup_settings_schema": main.ensure_backup_settings_schema,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
         "logger": main.logger,
     }
@@ -69,7 +69,6 @@ def _init_db_impl():
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
     ensure_atividades_schema_current = helpers["ensure_atividades_schema_current"]
     ensure_atividade_versioning_schema = helpers["ensure_atividade_versioning_schema"]
-    ensure_backup_settings_schema = helpers["ensure_backup_settings_schema"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
     logger = helpers["logger"]
 

@@ -90,10 +90,9 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
     )
 '''
 
-EXPECTED_DB_LAZY_KEYS_AFTER_MATRIX_EXTRACTION = {
+EXPECTED_DB_LAZY_KEYS_AFTER_BACKUP_EXTRACTION = {
     "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
-    "ensure_backup_settings_schema",
     "get_preferred_matriz_for_curso",
     "logger",
 }
@@ -717,7 +716,7 @@ def test_matriz_atividade_links_helper_owner_exports_and_direct_consumers():
     assert app_db.ensure_matriz_atividade_links_table is db_maintenance.ensure_matriz_atividade_links_table
     assert (
         _lazy_return_keys(app_db._get_main_db_helpers)
-        == EXPECTED_DB_LAZY_KEYS_AFTER_MATRIX_EXTRACTION
+        == EXPECTED_DB_LAZY_KEYS_AFTER_BACKUP_EXTRACTION
     )
     init_source = inspect.getsource(app_db._init_db_impl)
     assert 'helpers["ensure_matriz_atividade_links_table"]' not in init_source
