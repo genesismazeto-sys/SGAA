@@ -1,11 +1,52 @@
 # Agent Handoff
 
-## Current state — PHASE 3-B2 USER PROFILE SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B3 REQUISITION ALERT-RECEIPTS SCHEMA-HELPER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-B2 user profile schema-helper ownership extraction (2026-07-26)
+### Current operational handoff — PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B1 is
-  CLOSED / ACCEPTED. Do not start PHASE 3-B3.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B2 is
+  CLOSED / ACCEPTED. Do not start PHASE 3-B4.
+- **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/remote
+  `420b3ddc6762b2ce2460a04912397fc7398a556c`, divergence 0/0, initially clean.
+- **Owner/compatibility:** `app/db_maintenance.py` solely defines
+  `ensure_requisicao_alert_receipts_table`; complete AST, SQL, signature and annotation are
+  baseline-identical. `main.ensure_requisicao_alert_receipts_table` is the same object.
+  The sole `app/` consumer, `app/db.py`, imports it directly.
+- **Schema/transactions:** exact five columns, `seen_at` default, composite unique triple,
+  two cascading foreign keys and two named indexes preserved. Missing parents at creation,
+  parents present, duplicate rejection, both delete cascades, repeat execution and transaction
+  rollback contracts pass. No commit, rollback or savepoint in the helper.
+- **Edges/order:** `app.db._get_main_db_helpers` removed exactly this key and its local
+  retrieval; all other keys remain in original order. Whole-module normalized AST proves the
+  direct `_init_db_impl` call remains at the same point and unrelated delta is zero.
+- **Tests:** focused schema/ownership/request-alert/admin-and-student-dashboard lane 59 passed;
+  route/RBAC 3 passed; Git-aware isolation 15 passed; full hermetic 756 passed, 17 D73H
+  deselected, zero failures/errors in 406.48s.
+- **Invariants:** behavior/schema/migration/route/RBAC delta 0; routes 131; RBAC unmapped 0;
+  canonical SQLite opens 0; canonical SHA-256 remained
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; no WAL/SHM.
+- **Mode/review:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`, profile
+  `ia-sup-sgaa`, medium. Optional FREE review used
+  `opencode/deepseek-v4-flash-free`, session `ses_05f20ebebffeCSTfszrEfFP4pZ`, cost 0,
+  exit 0 and no fallback. Reject its `passed=false`: it compared `HEAD~1`, mixed published B2
+  changes into B3 and generated false warnings. Deterministic IAsup gates prove the B3 delta.
+- **Recovered defect:** the first integrated lane passed 58 tests and exposed one B2 test
+  expectation that still listed the B3 key. The B2 contract now checks only its profile edge;
+  the B3 exact map contract owns the current key set. Rerun passed 59/59.
+- **Manifest:** `app/db.py`, `app/db_maintenance.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `docs/DOCUMENTATION_INDEX.md`. Subject:
+  `Extract requisition alert receipts schema ownership`.
+- **Next action:** external supervisor review of PHASE 3-B3 only. B4, migrations, access,
+  profile, backup, matrices, versioning, repository and final `init_db` cutover remain
+  unauthorized.
+
+### Historical accepted operational handoff — PHASE 3-B2 user profile schema-helper ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B3 order. PHASE 3-B1 is
+  CLOSED / ACCEPTED.
 - **Baseline:** `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/remote
   `caeac4789eb217e8f45452b9f7b71a93f0abdd67`, divergence 0/0, initially clean.
@@ -42,8 +83,8 @@
   `tests/test_residual_shared_helpers.py`, `PROJECT_STATE.md`, `AGENT_HANDOFF.md`,
   `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `docs/DOCUMENTATION_INDEX.md`. Subject:
   `Extract user profile schema helper ownership`.
-- **Next action:** external supervisor review of PHASE 3-B2 only. B3, migrations, access,
-  backup, matrices, versioning, repository and final `init_db` cutover remain unauthorized.
+- **Acceptance correction:** the former waiting-review action is superseded by the explicit
+  PHASE 3-B2 CLOSED / ACCEPTED decision that authorized PHASE 3-B3.
 
 ### Historical accepted operational handoff — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
 

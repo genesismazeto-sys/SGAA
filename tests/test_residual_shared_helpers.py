@@ -185,6 +185,7 @@ def test_direct_app_consumers_have_no_category_a_lazy_edges_and_e_keys_are_absen
     } <= aluno_keys
     assert {"get_db_connection", "logger", "aluno_url"} <= core_keys
     assert "ensure_usuario_profile_schema" not in db_keys
+    assert "ensure_requisicao_alert_receipts_table" not in db_keys
     assert {"ensure_usuario_access_schema", "logger"} <= db_keys
 
 

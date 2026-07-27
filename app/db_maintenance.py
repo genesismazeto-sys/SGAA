@@ -60,6 +60,29 @@ def ensure_usuario_profile_schema(conn) -> None:
             pass
 
 
+def ensure_requisicao_alert_receipts_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS requisicao_alerta_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requisicao_id INTEGER NOT NULL,
+            usuario_id INTEGER NOT NULL,
+            alert_kind TEXT NOT NULL,
+            seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (requisicao_id) REFERENCES requisicoes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            UNIQUE(requisicao_id, usuario_id, alert_kind)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_user_kind ON requisicao_alerta_receipts(usuario_id, alert_kind)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_req ON requisicao_alerta_receipts(requisicao_id)"
+    )
+
+
 _AUTO_SYNC_LOCK = threading.Lock()
 _AUTO_SYNC_STATE = {
     "last_signature": None,

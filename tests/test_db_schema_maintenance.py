@@ -6,6 +6,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE not in sys.path:
@@ -64,8 +66,31 @@ def ensure_usuario_profile_schema(conn) -> None:
             pass
 '''
 
-EXPECTED_DB_LAZY_KEYS_AFTER_PROFILE_EXTRACTION = {
-    "ensure_requisicao_alert_receipts_table",
+BASELINE_ENSURE_REQUISICAO_ALERT_RECEIPTS_TABLE_SOURCE = '''
+def ensure_requisicao_alert_receipts_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS requisicao_alerta_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requisicao_id INTEGER NOT NULL,
+            usuario_id INTEGER NOT NULL,
+            alert_kind TEXT NOT NULL,
+            seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (requisicao_id) REFERENCES requisicoes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            UNIQUE(requisicao_id, usuario_id, alert_kind)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_user_kind ON requisicao_alerta_receipts(usuario_id, alert_kind)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_req ON requisicao_alerta_receipts(requisicao_id)"
+    )
+'''
+
+EXPECTED_DB_LAZY_KEYS_AFTER_ALERT_RECEIPTS_EXTRACTION = {
     "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
     "ensure_matriz_atividade_links_table",
@@ -133,6 +158,16 @@ def _new_reportes_connection():
 def _new_profile_connection():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _new_alert_receipts_connection(*, with_parents=True):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    if with_parents:
+        conn.execute("CREATE TABLE usuarios (id INTEGER PRIMARY KEY)")
+        conn.execute("CREATE TABLE requisicoes (id INTEGER PRIMARY KEY)")
     return conn
 
 
@@ -253,7 +288,7 @@ def test_usuario_profile_helper_owner_exports_and_direct_consumers():
     assert app_db.ensure_usuario_profile_schema is db_maintenance.ensure_usuario_profile_schema
     assert aluno_views.ensure_usuario_profile_schema is db_maintenance.ensure_usuario_profile_schema
 
-    assert _lazy_return_keys(app_db._get_main_db_helpers) == EXPECTED_DB_LAZY_KEYS_AFTER_PROFILE_EXTRACTION
+    assert "ensure_usuario_profile_schema" not in _lazy_return_keys(app_db._get_main_db_helpers)
     assert _lazy_return_keys(aluno_views._get_main_helpers) == EXPECTED_ALUNO_LAZY_KEYS_AFTER_PROFILE_EXTRACTION
     assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(app_db._init_db_impl)
     assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(aluno_views.aluno_meus_dados)
@@ -359,6 +394,179 @@ def test_usuario_profile_helper_preserves_caller_owned_transaction():
         conn.rollback()
         assert _column_names(conn, "usuarios") == ["id"]
         assert _column_names(conn, "alunos") == ["id"]
+    finally:
+        conn.close()
+
+
+def test_alert_receipts_helper_is_ast_identical_to_accepted_baseline():
+    assert _function_ast(
+        db_maintenance.ensure_requisicao_alert_receipts_table
+    ) == _baseline_function_ast(BASELINE_ENSURE_REQUISICAO_ALERT_RECEIPTS_TABLE_SOURCE)
+
+
+def test_alert_receipts_helper_owner_export_and_direct_db_consumer():
+    assert (
+        main.ensure_requisicao_alert_receipts_table
+        is db_maintenance.ensure_requisicao_alert_receipts_table
+    )
+    assert (
+        app_db.ensure_requisicao_alert_receipts_table
+        is db_maintenance.ensure_requisicao_alert_receipts_table
+    )
+    assert (
+        _lazy_return_keys(app_db._get_main_db_helpers)
+        == EXPECTED_DB_LAZY_KEYS_AFTER_ALERT_RECEIPTS_EXTRACTION
+    )
+    init_source = inspect.getsource(app_db._init_db_impl)
+    assert 'helpers["ensure_requisicao_alert_receipts_table"]' not in init_source
+    assert init_source.count("ensure_requisicao_alert_receipts_table(conn)") == 1
+
+
+def test_db_maintenance_alert_receipts_import_does_not_import_main():
+    code = (
+        "import importlib, sys; "
+        "assert 'main' not in sys.modules; "
+        "module = importlib.import_module('app.db_maintenance'); "
+        "assert module.ensure_requisicao_alert_receipts_table; "
+        "assert 'main' not in sys.modules"
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", code],
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_alert_receipts_schema_can_be_created_before_parent_tables_exist():
+    conn = _new_alert_receipts_connection(with_parents=False)
+    try:
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'requisicao_alerta_receipts'"
+        ).fetchone() is not None
+    finally:
+        conn.close()
+
+
+def test_alert_receipts_schema_is_exact_and_idempotent():
+    conn = _new_alert_receipts_connection()
+    try:
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+        first_schema = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master "
+            "WHERE tbl_name = 'requisicao_alerta_receipts' ORDER BY type, name"
+        ).fetchall()
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+        second_schema = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master "
+            "WHERE tbl_name = 'requisicao_alerta_receipts' ORDER BY type, name"
+        ).fetchall()
+
+        columns = conn.execute("PRAGMA table_info(requisicao_alerta_receipts)").fetchall()
+        assert [(row["name"], row["type"], row["notnull"], row["dflt_value"], row["pk"]) for row in columns] == [
+            ("id", "INTEGER", 0, None, 1),
+            ("requisicao_id", "INTEGER", 1, None, 0),
+            ("usuario_id", "INTEGER", 1, None, 0),
+            ("alert_kind", "TEXT", 1, None, 0),
+            ("seen_at", "TEXT", 1, "datetime('now')", 0),
+        ]
+
+        foreign_keys = conn.execute(
+            "PRAGMA foreign_key_list(requisicao_alerta_receipts)"
+        ).fetchall()
+        assert {
+            (row["table"], row["from"], row["to"], row["on_update"], row["on_delete"])
+            for row in foreign_keys
+        } == {
+            ("requisicoes", "requisicao_id", "id", "CASCADE", "CASCADE"),
+            ("usuarios", "usuario_id", "id", "CASCADE", "CASCADE"),
+        }
+
+        indexes = conn.execute("PRAGMA index_list(requisicao_alerta_receipts)").fetchall()
+        named_indexes = {row["name"] for row in indexes if not row["name"].startswith("sqlite_autoindex")}
+        assert named_indexes == {
+            "idx_req_alert_receipts_user_kind",
+            "idx_req_alert_receipts_req",
+        }
+        unique_indexes = [row for row in indexes if row["unique"]]
+        assert len(unique_indexes) == 1
+        unique_columns = conn.execute(
+            f"PRAGMA index_info({unique_indexes[0]['name']})"
+        ).fetchall()
+        assert [row["name"] for row in unique_columns] == [
+            "requisicao_id",
+            "usuario_id",
+            "alert_kind",
+        ]
+        assert second_schema == first_schema
+    finally:
+        conn.close()
+
+
+def test_alert_receipts_rejects_duplicate_composite_key():
+    conn = _new_alert_receipts_connection()
+    try:
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+        conn.execute("INSERT INTO usuarios (id) VALUES (1)")
+        conn.execute("INSERT INTO requisicoes (id) VALUES (1)")
+        values = (1, 1, "admin_new_request")
+        conn.execute(
+            "INSERT INTO requisicao_alerta_receipts "
+            "(requisicao_id, usuario_id, alert_kind) VALUES (?, ?, ?)",
+            values,
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO requisicao_alerta_receipts "
+                "(requisicao_id, usuario_id, alert_kind) VALUES (?, ?, ?)",
+                values,
+            )
+    finally:
+        conn.close()
+
+
+def test_alert_receipts_cascade_on_requisition_and_user_deletion():
+    conn = _new_alert_receipts_connection()
+    try:
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+        conn.executemany("INSERT INTO usuarios (id) VALUES (?)", [(1,), (2,)])
+        conn.executemany("INSERT INTO requisicoes (id) VALUES (?)", [(1,), (2,)])
+        conn.executemany(
+            "INSERT INTO requisicao_alerta_receipts "
+            "(requisicao_id, usuario_id, alert_kind) VALUES (?, ?, ?)",
+            [(1, 1, "admin_new_request"), (2, 2, "coordinator_new_request")],
+        )
+
+        conn.execute("DELETE FROM requisicoes WHERE id = 1")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM requisicao_alerta_receipts WHERE requisicao_id = 1"
+        ).fetchone()[0] == 0
+        conn.execute("DELETE FROM usuarios WHERE id = 2")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM requisicao_alerta_receipts WHERE usuario_id = 2"
+        ).fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_alert_receipts_helper_preserves_caller_owned_transaction():
+    conn = _new_alert_receipts_connection()
+    try:
+        conn.commit()
+        conn.execute("BEGIN")
+        assert conn.in_transaction
+
+        db_maintenance.ensure_requisicao_alert_receipts_table(conn)
+
+        assert conn.in_transaction
+        conn.rollback()
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'requisicao_alerta_receipts'"
+        ).fetchone() is None
     finally:
         conn.close()
 

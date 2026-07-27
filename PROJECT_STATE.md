@@ -1,9 +1,68 @@
-## Current authoritative state — PHASE 3-B2 USER PROFILE SCHEMA-HELPER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE 3-B3 REQUISITION ALERT-RECEIPTS SCHEMA-HELPER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE 3-B2 — user profile schema-helper ownership extraction (2026-07-26)
+### PHASE 3-B3 — requisition alert-receipts schema-helper ownership extraction (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B1 is
-  CLOSED / ACCEPTED by the explicit B2 order. No PHASE 3-B3 work is authorized.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B2 is
+  CLOSED / ACCEPTED by the explicit B3 order. No PHASE 3-B4 work is authorized.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; starting HEAD/upstream/remote
+  `420b3ddc6762b2ce2460a04912397fc7398a556c`; divergence 0/0; clean worktree and index.
+- **Ownership:** `app/db_maintenance.py` is the sole defining owner of
+  `ensure_requisicao_alert_receipts_table`. Complete function AST, body, SQL, one-argument
+  signature and `None` return annotation are identical to the starting-HEAD `main.py`
+  definition. Normalized whole-module comparison proves zero unrelated delta in `main.py`,
+  `app/db_maintenance.py` and `app/db.py`.
+- **Schema/transactions:** exact `requisicao_alerta_receipts` table preserved with `id`,
+  `requisicao_id`, `usuario_id`, `alert_kind`, `seen_at DEFAULT (datetime('now'))`, composite
+  `UNIQUE(requisicao_id, usuario_id, alert_kind)`, cascading update/delete foreign keys to
+  `requisicoes(id)` and `usuarios(id)`, and indexes `idx_req_alert_receipts_user_kind` and
+  `idx_req_alert_receipts_req`. Parent tables may be absent at creation; repeat execution is
+  idempotent; duplicate triples are rejected; both deletion cascades work. Caller transaction
+  ownership remains intact with no commit, rollback or savepoint in the helper.
+- **Compatibility/consumers:** `main.py` imports the owner and preserves
+  `main.ensure_requisicao_alert_receipts_table is
+  app.db_maintenance.ensure_requisicao_alert_receipts_table`. The complete pre-mutation
+  `app/` inventory found only `app/db.py` as runtime consumer; it now imports the owner
+  directly. All existing readers, writers and admin/student dashboard flows remain unchanged.
+- **Lazy edge/order:** removed exactly `ensure_requisicao_alert_receipts_table` and its local
+  `helpers[...]` retrieval from `app.db`; every other lazy key remains in original order. The
+  direct call remains at the exact normalized-AST point in `_init_db_impl`; bootstrap order
+  delta is zero.
+- **Validation:** TDD RED produced 8 expected owner-absent failures. Focused receipts schema
+  tests then passed 8/8. The first integrated lane passed 58 tests and exposed one historical
+  B2 map expectation; after limiting that B2 contract to its own removed key, the focused
+  ownership/schema/request-alert/admin-and-student-dashboard lane passed 59/59. Route/RBAC:
+  3 passed. Git-aware runtime-isolation: 15 passed. Full hermetic suite: 756 passed, 17 D73H
+  historical tests deselected, zero failures/errors in 406.48s.
+- **Invariants:** behavior delta 0; routes 131→131; RBAC unmapped 0→0; schema-definition
+  delta 0; migration delta 0; canonical database SQLite opens 0. `database.db` retained size
+  544768 and SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`;
+  no WAL/SHM. SQLite coverage used only `:memory:` or pytest-owned disposable databases
+  outside the repository.
+- **Execution/review:** direct IAsup `openai-codex/gpt-5.6-sol`, provider `openai-codex`,
+  profile `ia-sup-sgaa`, medium. Direct mutation honored the order limiting IAexec to optional
+  read-only review and minimized context/revalidation cost. FREE review used effective model
+  `opencode/deepseek-v4-flash-free`, session `ses_05f20ebebffeCSTfszrEfFP4pZ`, cost 0,
+  exit 0 and no fallback. Its `passed=false` verdict is rejected because it ran
+  `git diff HEAD~1` instead of the authorized `HEAD`, falsely attributing already-published B2
+  changes to B3; its positive exact-body/test-coverage observations were independently proven.
+- **Exact manifest:** `app/db.py`, `app/db_maintenance.py`, `main.py`,
+  `tests/test_db_schema_maintenance.py`, `tests/test_residual_shared_helpers.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `docs/DOCUMENTATION_INDEX.md`. Authorized subject
+  `Extract requisition alert receipts schema ownership`; commit identity resolves through Git
+  history.
+- **Boundaries/residue:** repository file mutation was crossed. The historical B2 test
+  expectation was corrected after physical reconciliation; no product mutation was repeated.
+  No canonical database, migration, route, RBAC, production, service, commit or publication
+  boundary had been crossed when this block was written. No hard stop or unauthorized residue
+  remains.
+- **Next action:** external supervisor review of PHASE 3-B3 only. Do not begin PHASE 3-B4.
+
+### Historical accepted technical evidence — PHASE 3-B2 user profile schema-helper ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B3 order. PHASE 3-B1 is
+  CLOSED / ACCEPTED.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD/upstream/remote
   `caeac4789eb217e8f45452b9f7b71a93f0abdd67`; divergence 0/0; clean worktree and index.
@@ -58,7 +117,8 @@
   15/15 with unchanged physical state. No canonical database, schema, migration, route,
   RBAC, production, service, commit or publication boundary had been crossed when this block
   was written. No hard stop or unauthorized residue remains.
-- **Next action:** external supervisor review of PHASE 3-B2 only. Do not begin PHASE 3-B3.
+- **Acceptance correction:** its former waiting-review next action is superseded by the
+  PHASE 3-B2 CLOSED / ACCEPTED decision that authorized PHASE 3-B3.
 
 ### Historical accepted technical evidence — PHASE 3-B1 reportes schema-helper ownership extraction (2026-07-26)
 

@@ -224,16 +224,17 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   back-references remains mandatory before Phase 6 closes.
 - **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A canonical database
   connection ownership, PHASE 3-B assessment and PHASE 3-B1 reportes schema-helper
-  extraction are CLOSED / ACCEPTED. PHASE 3-B2 user profile schema-helper ownership
-  extraction is IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B3
-  is not authorized.
+  extraction are CLOSED / ACCEPTED. PHASE 3-B2 user profile schema-helper ownership is also
+  CLOSED / ACCEPTED. PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction
+  is IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B4 is not
+  authorized.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS only through the bounded PHASE 3-B2
-candidate described above; PHASE 3-B3, later Phase 3 units and Phases 4–6 remain
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS only through the bounded PHASE 3-B3
+candidate described above; PHASE 3-B4, later Phase 3 units and Phases 4–6 remain
 **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT

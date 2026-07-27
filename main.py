@@ -87,6 +87,7 @@ from app.db_maintenance import (
     create_database_snapshot,
     delete_database_snapshot,
     ensure_reportes_table,
+    ensure_requisicao_alert_receipts_table,
     ensure_usuario_profile_schema,
     get_schema_status,
     list_database_backups,
@@ -1431,29 +1432,6 @@ def _admin_can(resource: str | None, scope: str = "view", context: dict[str, obj
         return False
     effective = auth_context.get("effective_scopes", {})
     return permission_scope_satisfies(effective.get(resource, "none"), scope)
-
-
-def ensure_requisicao_alert_receipts_table(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS requisicao_alerta_receipts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            requisicao_id INTEGER NOT NULL,
-            usuario_id INTEGER NOT NULL,
-            alert_kind TEXT NOT NULL,
-            seen_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (requisicao_id) REFERENCES requisicoes(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE,
-            UNIQUE(requisicao_id, usuario_id, alert_kind)
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_user_kind ON requisicao_alerta_receipts(usuario_id, alert_kind)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_req_alert_receipts_req ON requisicao_alerta_receipts(requisicao_id)"
-    )
 
 
 def get_student_request_update_alert(conn, aluno_id: int | None):

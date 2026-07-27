@@ -10,6 +10,7 @@ from app.academics import (
 from app.db_maintenance import (
     apply_schema_migrations,
     ensure_reportes_table,
+    ensure_requisicao_alert_receipts_table,
     ensure_usuario_profile_schema,
 )
 from app.security.passwords import hash_password
@@ -51,7 +52,6 @@ def _get_main_db_helpers():
     import main  # type: ignore
 
     return {
-        "ensure_requisicao_alert_receipts_table": main.ensure_requisicao_alert_receipts_table,
         "ensure_atividades_schema_current": main.ensure_atividades_schema_current,
         "ensure_atividade_versioning_schema": main.ensure_atividade_versioning_schema,
         "ensure_matriz_atividade_links_table": main.ensure_matriz_atividade_links_table,
@@ -67,7 +67,6 @@ def _init_db_impl():
     helpers = _get_main_db_helpers()
     default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
-    ensure_requisicao_alert_receipts_table = helpers["ensure_requisicao_alert_receipts_table"]
     ensure_atividades_schema_current = helpers["ensure_atividades_schema_current"]
     ensure_atividade_versioning_schema = helpers["ensure_atividade_versioning_schema"]
     ensure_matriz_atividade_links_table = helpers["ensure_matriz_atividade_links_table"]
