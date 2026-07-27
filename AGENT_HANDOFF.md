@@ -1,11 +1,111 @@
 # Agent Handoff
 
-## Current state — PHASE 3-B4 MATRIX SCHEMA-HELPER CLUSTER OWNERSHIP EXTRACTION IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B3 CLOSED / ACCEPTED — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
+## Current state — PHASE 3-B5 CANONICAL SCHEMA / STARTUP / TRANSACTION CONTRACT FREEZE IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B4 CLOSED / ACCEPTED — PHASE 3-B3 CLOSED / ACCEPTED — PHASE 3-B2 CLOSED / ACCEPTED — PHASE 3-B1 CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT CLOSED / ACCEPTED — PHASE 3-A CLOSED / ACCEPTED — PHASE 2 CLOSED / ACCEPTED — Phase 1 CLOSED / ACCEPTED — Historical snapshot custody OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED
 
-### Current operational handoff — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
+### Current operational handoff — PHASE 3-B5 schema/startup/transaction contract freeze (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B3 is
-  CLOSED / ACCEPTED. Do not start PHASE 3-B5.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW; B5 is not
+  CLOSED / ACCEPTED. PHASE 3-B4 is CLOSED / ACCEPTED by this order. B6 is prohibited until B5
+  receives supervisor acceptance and a separate explicit implementation authorization.
+- **Baseline/final identity:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
+  `refactor/architecture-safety-net`, starting HEAD/upstream/live remote
+  `41a84fb4dd71278c61fd1707535dd60560a86a27`, parent
+  `b5f6267ba208fa363ffaddd4d3ddbded72374b4b`, subject
+  `Extract matrix schema helper ownership`, divergence 0/0 and clean before mutation.
+  Authorized bounded subject is `Freeze schema startup transaction contract`; the resulting
+  commit identity is resolved through Git history and direct publication proof rather than
+  guessed inside its own tree.
+- **Canonical contract:**
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`; executable manifest:
+  `tests/test_phase3_schema_startup_transaction_contract.py`. No equivalent prior contract
+  existed. The document is current behavior, not target architecture or cutover permission.
+- **Exact caller inventory:** AST over the exact baseline output of `git ls-files '*.py'`
+  finds `main.init_db` at 73 call expressions, `app.db.init_db` at one, and
+  `app.db._init_db_impl` at one. Startup is `main.py::<module>` under explicit app context;
+  restore is `_restore_database_from_source` under inherited request/app context; demo seed is
+  `tools/seed_demo_data.py::seed` under explicit app context; three smoke tools and 69 test/
+  fixture call expressions are explicit-context callers. The exact path/scope multiset is
+  frozen in contract Section 4 and asserted by the executable manifest.
+- **Dual-init/commit contract:** `app.db.init_db` wraps local no-op sync plus
+  `_init_db_impl`; `_init_db_impl` and `main.init_db` are active and divergent. Each obtains
+  the shared Flask `g` connection and calls exactly one final `conn.commit()` after
+  `apply_schema_migrations`. Callers rely on callee finalization; neither init is safe to call
+  as a neutral nested helper with unrelated pending work.
+- **Ownership map:** `app.db` solely owns `DATABASE`, `get_db_connection`,
+  `close_db_connection`, one bootstrap body and its wrapper. `app.db_maintenance` directly owns
+  `apply_schema_migrations`, `ensure_reportes_table`, `ensure_usuario_profile_schema`,
+  `ensure_requisicao_alert_receipts_table`, `ensure_matrizes_atividades_table`, and
+  `ensure_matriz_atividade_links_table`. `main.py` still defines its divergent init, access,
+  app/backup/cloud settings, activity rebuild/versioning, turma-matrix, lazy query and logger
+  dependencies. `main` connection and maintenance names are compatibility exports only.
+- **Lazy/order/migration:** exact lazy order is activities-current, activity-versioning,
+  user-access, backup-settings, preferred-matrix query, logger, with same-name retrievals.
+  Direct matrix -> links -> versioning order remains; migration application precedes the one
+  final app-db commit. `SCHEMA_VERSION` remains 1 and migration v1 remains a historical marker,
+  not a physical schema definition.
+- **Transaction exceptions:** `ensure_usuario_access_schema` owns SAVEPOINT/rollback-to/
+  release semantics; `ensure_atividades_schema_current` toggles FK PRAGMA; activity-version
+  recreate uses `executescript` with internal `BEGIN`/`COMMIT` and FK PRAGMA; migrate/default-
+  fix and versioning conditionally delegate to it; the preferred-matrix query can trigger a
+  caller-owned matrix ensure. All accepted direct maintenance helpers and migration metadata
+  remain caller-owned with no commit/rollback/savepoint.
+- **Files read:** direct inspection of `app/__init__.py`, `app/db.py`,
+  `app/db_maintenance.py`, `main.py`, `tools/seed_demo_data.py`, restore/clean/runtime-isolation/
+  connection-ownership/residual/schema-maintenance tests, `pytest.ini`, `tests/conftest.py`,
+  `PROJECT_STATE.md`, `AGENT_HANDOFF.md`, `docs/DOCUMENTATION_INDEX.md`, and
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`; source-search/AST caller inventory read the
+  baseline set selected by `git ls-files '*.py'`. The IAexec read-only session inspected source
+  and tests only and made no mutation.
+- **Files changed:** exactly
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`,
+  `tests/test_phase3_schema_startup_transaction_contract.py`,
+  `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `PROJECT_STATE.md`, and `AGENT_HANDOFF.md`. Production Python delta must remain zero.
+- **TDD/tests:** RED is recorded at the documentation-governance node because the contract file
+  was absent. Static contract/migration parser corrections were reconciled against source. All
+  commands used repository `.venv/Scripts/python.exe -B`; exit was 0 in every lane: complete
+  contract file 8 passed in 0.23s; database/schema maintenance 39 in 3.14s; ownership/residual
+  helpers 34 in 0.59s; startup/application factory 10 in 0.69s; restore/clean disposable paths
+  2 in 2.88s; Git-aware runtime isolation 15 in 10.65s; documentation governance/index 1 in
+  0.22s; route/RBAC 3 in 0.64s with 131 routes and 0 unmapped; full hermetic suite 781 passed,
+  17 canonical D73H deselected, 0 failures/errors in 305.48s. No materially relevant pytest
+  warning occurred. Hashes of all six paths were stable across the full suite before closeout.
+- **Database safety:** canonical SQLite opens 0; size 544768; SHA-256
+  `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM absent.
+  Contract inspection is static and pytest runtime must remain outside the repository.
+- **Supervisor-accepted ignored workspace residual:**
+  `DOneDriveProgramaçãoSGAA_clean_baselined76g1_full_run.log`; 17420 bytes; creation and
+  modification date 2026-06-13; SHA-256
+  `7388cfbc8f446410ef3c98ec0fa274c2c36ff4f3ef8ed2cd649bb1f3e1d3bb0e`; ignored by
+  `.gitignore` rule `*.log`, untracked, absent from HEAD, predates B5, and preserved without
+  content inspection, edit, move, rename, truncation, staging or cleanup. Exact origin remains
+  unknown. `PREEXISTING_IGNORED_WORKSPACE_RESIDUAL / SUPERVISOR_ACCEPTED /
+  PRESERVED_UNCHANGED / OUTSIDE_COMMIT_MANIFEST`.
+- **Mode/routing/review:** inventory IAexec R4 `flash_free`, effective provider/model `opencode`
+  / `opencode/deepseek-v4-flash-free`, session `ses_05ebff3ddffeBbYv49zENKvSsp`, cost 0,
+  no fallback and no repository mutation. IAsup `openai-codex/gpt-5.6-sol` rejected its erroneous
+  no-commit classification for `main.init_db` and owns all deterministic gates. First review
+  session `ses_05e8ec944ffeEtPduaRhCiZxvH`, same FREE route/model, cost 0, exit 0 and no
+  fallback, returned APPROVE but was rejected for creating/removing one external temporary
+  script and falsely reporting `MUTATIONS: NONE`; exact repository hashes stayed unchanged and
+  the external residue was absent on reconciliation. Fresh replacement review session
+  `ses_05e8aa690ffeIdhCqffTTIquW5`, same FREE route/model, cost 0, exit 0, no fallback, used
+  exactly 23 read plus 4 grep calls and no shell/write/edit, returned APPROVE / findings NONE,
+  and was accepted after IAsup adjudication against source, full diff and test evidence.
+- **Publication proof contract:** stage only the exact six paths, commit once with subject
+  `Freeze schema startup transaction contract`, and push only
+  `refactor/architecture-safety-net`. Commit identity, local/upstream/live-remote equality and
+  post-commit test results are final direct Git/test evidence; they cannot be self-recorded as a
+  future SHA inside the tree they identify.
+- **Boundaries/risks:** repository test/document mutation only. Dual-init divergence and listed
+  transaction exceptions are intentionally preserved risk. No production code, canonical
+  SQLite, migration, restore, cleanup, route, RBAC, service or custody mutation occurred.
+- **Next action:** external B5 review only. **Do not begin PHASE 3-B6.**
+
+### Historical accepted operational handoff — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B5 order. PHASE 3-B3 is
+  CLOSED / ACCEPTED.
 - **Baseline/final identity:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch
   `refactor/architecture-safety-net`, starting HEAD/upstream/live remote
   `b5f6267ba208fa363ffaddd4d3ddbded72374b4b`, divergence 0/0 and exact subject

@@ -14,8 +14,9 @@
    formal decisions.
 5. **Architecture refactor ledger** (`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`)
    — normalized table of every refactor phase, commits, status, and residual risk.
-6. **Phase contracts** (`docs/refactor/REF_*.md`) — per-phase scope, decisions,
-   and closeout evidence. Standalone contracts exist for: REF-0TF, REF-0TF-A,
+6. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3 contracts) — per-phase scope, decisions,
+   and closeout evidence. The current Phase 3-B5 authority is
+   `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`. Standalone REF contracts exist for: REF-0TF, REF-0TF-A,
    REF-0TF-B, REF-0C-A, REF-0C-B1-P0, REF-0C-B2-A, REF-0C-B2, REF-0C-C-A,
    REF-0C-C-B1. No standalone contract exists for REF-0A, REF-0ENV, REF-0B,
    REF-0T, REF-0C-A-R1, or REF-0C-D; their scope is documented in the ledger
@@ -51,10 +52,12 @@
 2. `docs/mapeamento/README.md` — top-level map index.
 3. `docs/mapeamento/05_avaliacao_refactor.md` — master plan, Phase 0–6.
 4. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — phase ledger.
-5. `PROJECT_STATE.md` — canonical current state (top block).
-6. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
-7. `AGENT_HANDOFF.md` — current operational handoff.
-8. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
+5. `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` — current
+   executable pre-cutover schema/startup/transaction contract.
+6. `PROJECT_STATE.md` — canonical current state (top block).
+7. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
+8. `AGENT_HANDOFF.md` — current operational handoff.
+9. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
@@ -222,20 +225,25 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   dependencies to Phase 3, versioning/view dependencies to Phase 4, and wiring/logging/
   routing dependencies to their owning later phases. Zero runtime `app`→`main`
   back-references remains mandatory before Phase 6 closes.
-- **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A canonical database
-  connection ownership, PHASE 3-B assessment and PHASE 3-B1 reportes schema-helper
-  extraction are CLOSED / ACCEPTED. PHASE 3-B2 user profile schema-helper ownership is also
-  CLOSED / ACCEPTED. PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction
-  is IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B4 is not
-  authorized.
+- **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A, the PHASE 3-B
+  assessment, and PHASE 3-B1 through PHASE 3-B4 are CLOSED / ACCEPTED. PHASE 3-B5
+  freezes the current dual-init, schema-owner, startup-order, migration, caller and
+  transaction contract in the single authority
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`; it is IMPLEMENTED /
+  LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW and is not CLOSED / ACCEPTED.
+  The executable semantic manifest is
+  `tests/test_phase3_schema_startup_transaction_contract.py`. Validation passed 781 tests
+  with 17 canonical D73H deselected; routes remain 131 and RBAC unmapped remains 0. No
+  PHASE 3-B6 implementation is authorized before supervisor acceptance and a separate
+  explicit order.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS only through the bounded PHASE 3-B3
-candidate described above; PHASE 3-B4, later Phase 3 units and Phases 4–6 remain
-**unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through the implemented and locally
+verified PHASE 3-B5 contract freeze awaiting external supervisor review; PHASE 3-B6 and later production units and
+Phases 4–6 remain **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
 PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
@@ -268,6 +276,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
+| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5 | Canonical current-state dual-init, caller, schema-owner, startup-order, migration and transaction freeze |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -294,6 +303,7 @@ The original REF-0C-D scope was documented in
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
+| Phase 3-B5 schema/startup/transaction freeze | `tests/test_phase3_schema_startup_transaction_contract.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW; NOT CLOSED / ACCEPTED |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

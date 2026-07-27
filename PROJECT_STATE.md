@@ -1,9 +1,72 @@
-## Current authoritative state — PHASE 3-B4 MATRIX SCHEMA-HELPER CLUSTER OWNERSHIP EXTRACTION: IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
+## Current authoritative state — PHASE 3-B5 CANONICAL SCHEMA / STARTUP / TRANSACTION CONTRACT FREEZE: IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW — PHASE 3-B4: CLOSED / ACCEPTED — PHASE 3-B3: CLOSED / ACCEPTED — PHASE 3-B2: CLOSED / ACCEPTED — PHASE 3-B1: CLOSED / ACCEPTED — PHASE 3-B ASSESSMENT: CLOSED / ACCEPTED — PHASE 3-A: CLOSED / ACCEPTED — PHASE 2: CLOSED / ACCEPTED — Architecture refactor Phase 1: CLOSED / ACCEPTED — Historical snapshot custody: OPEN / SOURCE PRESERVED / LEVEL 3 NOT EXECUTED / SECURITY-COMPLETE CUSTODY NOT CLAIMED (2026-07-26)
 
-### PHASE 3-B4 — matrix schema-helper cluster ownership extraction (2026-07-26)
+### PHASE 3-B5 — canonical schema/startup/transaction contract freeze (2026-07-26)
 
-- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW. PHASE 3-B3 is
-  CLOSED / ACCEPTED by the explicit B4 order. No PHASE 3-B5 work is authorized.
+- **Status:** IMPLEMENTED / LOCALLY VERIFIED / AWAITING EXTERNAL SUPERVISOR REVIEW; B5 is
+  not CLOSED / ACCEPTED. PHASE 3-B4 is CLOSED / ACCEPTED by the explicit B5 order. No
+  PHASE 3-B6 implementation is authorized before B5 supervisor acceptance and a separate
+  explicit order.
+- **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
+  `refactor/architecture-safety-net`; starting HEAD/upstream/live remote
+  `41a84fb4dd71278c61fd1707535dd60560a86a27`; subject
+  `Extract matrix schema helper ownership`; parent
+  `b5f6267ba208fa363ffaddd4d3ddbded72374b4b`; divergence 0/0; clean worktree, empty index,
+  zero untracked files and no Git operation in progress before mutation.
+- **Canonical authority:**
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` is the single B5 contract;
+  `tests/test_phase3_schema_startup_transaction_contract.py` is its executable static
+  manifest. The full 73/1/1 caller inventory and complete owner/order/transaction matrices
+  live there and are referenced rather than duplicated in state.
+- **Current behavior frozen:** `app.db.init_db`, `app.db._init_db_impl`, and `main.init_db`
+  remain active; the two implementations are divergent. `app.db` solely defines connection
+  authority; six direct maintenance owners remain in `app.db_maintenance`; six ordered lazy
+  bridge entries remain in `app.db`; both init implementations own one final commit.
+- **Known transaction exceptions:** access owns a SAVEPOINT; the activity-table rebuild is
+  `PRAGMA foreign_keys` sensitive; activity-version rebuild uses `executescript` with internal
+  `BEGIN`/`COMMIT`; versioning may delegate to that self-transactional path; the matrix
+  preference query can trigger caller-owned schema ensuring.
+- **Migration baseline:** `SCHEMA_VERSION == 1`; the only ordered migration is
+  `baseline_schema_management`; v1 remains a historical marker and not a complete physical
+  schema definition. `apply_schema_migrations` remains caller-owned and both init owners
+  commit after it.
+- **Routing/review:** inventory IAexec effective provider/model `opencode` /
+  `opencode/deepseek-v4-flash-free`, session `ses_05ebff3ddffeBbYv49zENKvSsp`, cost 0,
+  no model fallback and no repository mutation. IAsup rejected its incorrect no-commit claim
+  for `main.init_db`. First review session `ses_05e8ec944ffeEtPduaRhCiZxvH`, same FREE model,
+  cost 0, was rejected because it created and removed one external temporary script despite
+  the no-artifact rule; repository hashes and manifest remained unchanged. Fresh replacement
+  review session `ses_05e8aa690ffeIdhCqffTTIquW5`, same FREE model, cost 0, no fallback,
+  used only native read/grep, returned APPROVE with no findings, and was accepted after IAsup
+  source/diff/test adjudication. IAsup performed deterministic test/document work directly
+  because re-exporting the complete reconciled context for mutation would add cost and risk.
+- **Authorized manifest:** only
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`,
+  `tests/test_phase3_schema_startup_transaction_contract.py`,
+  `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`,
+  `PROJECT_STATE.md`, and `AGENT_HANDOFF.md`. Production Python delta must remain zero.
+- **Database safety:** canonical SQLite opens 0. Starting `database.db` size 544768 and
+  SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM absent.
+  Tests must use static inspection, `:memory:`, or pytest-owned paths outside the repository.
+- **Validation:** `.venv/Scripts/python.exe -B -m pytest
+  tests/test_phase3_schema_startup_transaction_contract.py -q --tb=short` passed 8 in 0.23s.
+  Focused lanes passed: schema maintenance 39; ownership/residual 34; startup/factory 10;
+  restore/clean 2; Git-aware runtime isolation 15; documentation governance/index 1; route/RBAC
+  3, proving exactly 131 routes and 0 unmapped. Full hermetic `.venv/Scripts/python.exe -B -m
+  pytest -q --tb=short` passed 781 with 17 canonical D73H deselected, 0 failures/errors in
+  305.48s. No materially relevant pytest warning occurred.
+- **Publication contract:** exactly the six authorized paths are eligible for one selective
+  commit with subject `Freeze schema startup transaction contract` and push only to
+  `refactor/architecture-safety-net`; the resulting identity and remote equality are resolved
+  through Git history and direct final Git evidence, not guessed inside the commit tree.
+- **Boundaries:** repository test/document mutation only; no production Python, canonical
+  SQLite, migration, restore, route, RBAC, service or custody mutation. The contract freezes
+  current behavior without making it ideal or permanent.
+- **Next action:** external B5 review only. Do not begin B6.
+
+### Historical accepted technical evidence — PHASE 3-B4 matrix schema-helper cluster ownership extraction (2026-07-26)
+
+- **Status:** CLOSED / ACCEPTED by the explicit PHASE 3-B5 order. PHASE 3-B3 is
+  CLOSED / ACCEPTED.
 - **Baseline:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`; branch
   `refactor/architecture-safety-net`; starting HEAD/upstream/remote
   `b5f6267ba208fa363ffaddd4d3ddbded72374b4b`; exact subject
@@ -55,7 +118,8 @@
   migration, route, RBAC, production, service or custody mutation occurred. Selective commit
   and exact one-branch publication are the remaining authorized boundaries at this writing.
   No hard stop or unauthorized residue remains.
-- **Next action:** external supervisor review of PHASE 3-B4 only. Do not begin PHASE 3-B5.
+- **Historical next action:** external supervisor review of PHASE 3-B4; superseded by the
+  explicit B5 acceptance/implementation order above.
 
 ### Historical accepted technical evidence — PHASE 3-B3 requisition alert-receipts schema-helper ownership extraction (2026-07-26)
 
