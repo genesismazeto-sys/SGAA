@@ -91,7 +91,6 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
 '''
 
 EXPECTED_DB_LAZY_KEYS_AFTER_BACKUP_EXTRACTION = {
-    "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
     "get_preferred_matriz_for_curso",
     "logger",
@@ -589,7 +588,7 @@ def test_init_db_registers_schema_version():
     assert schema_version == db_maintenance.SCHEMA_VERSION
     assert migration is not None
     assert migration["version"] == db_maintenance.SCHEMA_VERSION
-    assert migration["name"] == "baseline_schema_management"
+    assert migration["name"] == "normalize_atividades_schema"
 
 
 BASELINE_ENSURE_MATRIZES_ATIVIDADES_TABLE_SOURCE = '''

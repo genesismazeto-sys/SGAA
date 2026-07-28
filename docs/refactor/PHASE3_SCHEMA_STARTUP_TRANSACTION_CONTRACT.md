@@ -1,16 +1,18 @@
 # Phase 3 schema, startup, and transaction contract
 
-**Status:** PHASE 3-B8 intentional revision of the accepted PHASE 3-B5/B6/B7 contract
-**Phase status:** B5/B5-R1/B6/B7 CLOSED / ACCEPTED; B8 IMPLEMENTED / LOCALLY VERIFIED / INDEPENDENT REVIEW APPROVED / PUBLICATION PENDING
-**B8 baseline:** `d1947b0c11506045b8d52bd235bc7381a2ca22c9` (`Separate backup schema from runtime configuration`)
+**Status:** PHASE 3-B9 intentional revision of the accepted PHASE 3-B5/B6/B7/B8 contract
+**Phase status:** B5/B5-R1/B6/B7/B8 CLOSED / ACCEPTED; B9 IMPLEMENTED / FOCUSED VERIFIED / FULL VERIFICATION AND PUBLICATION PENDING
+**B9 baseline:** `42ad0b500fe26fb2a4f49a2f8655d0217233af75` (`Extract activity versioning leaf schema ownership`)
 **Executable contract:** `tests/test_phase3_schema_startup_transaction_contract.py`
 
 ## 1. Scope and purpose
 
 This document freezes the accepted behavior that exists before the final Phase 3
-cutover. B8 intentionally revises only ownership of the four activity-versioning leaf
-tables, two transition triggers and eight leaf indexes, plus the main orchestrator
-composition and the affected caller-owned transaction matrix. It remains a review and
+cutover. B9 replaces the recurring `atividades` rebuild with migration v2,
+adds an isolated pre-bootstrap migration checkpoint to both active init bodies,
+converges both fresh schemas to the canonical eleven-column contract, and removes
+only the matching lazy edge and request-route repair call. B8 leaf ownership and
+the B10 activity-versioning core remain unchanged. It remains a review and
 regression baseline for later settings,
 backup, migration, activity-rebuild, activity-versioning, repository, and
 `init_db`-cutover units. It records current ownership, call paths, ordering, and
@@ -48,23 +50,24 @@ created with `create_app(...)`; development bootstrap happens separately in the
 Both implementations are active. They share many core tables and helpers, but
 are not equivalent:
 
-- `app.db._init_db_impl` obtains four dependencies through the lazy bridge,
-  directly invokes `ensure_usuario_access_schema` and `ensure_reportes_table`, invokes
-  `ensure_atividades_schema_current`, includes `cursos.total_horas_aac` and
-  `cursos.total_horas_aeu`, reconciles `turmas.matriz_id`, and then commits.
+- `app.db._init_db_impl` obtains three dependencies through the lazy bridge,
+  invokes `apply_early_schema_migrations` immediately after connection acquisition,
+  directly invokes `ensure_usuario_access_schema` and `ensure_reportes_table`, includes
+  `cursos.total_horas_aac` and `cursos.total_horas_aeu`, reconciles
+  `turmas.matriz_id`, and then commits.
 - `main.init_db` owns its own monolithic table/ALTER sequence, invokes
   `ensure_app_settings_schema`, `ensure_cloud_backup_schema`, and
-  `ensure_turmas_matriz_schema`, adds legacy `atividades.documentos_json`, does
-  not call `ensure_reportes_table` or `ensure_atividades_schema_current`, and
-  then commits.
-- Both call migration metadata at the end and both finalize the shared Flask
-  connection. A caller that already has pending work on that connection would
-  have that work committed too; this is frozen current behavior, not a target.
+  `ensure_turmas_matriz_schema`, invokes the same early checkpoint immediately
+  after connection acquisition, does not call `ensure_reportes_table`, and then commits.
+- Both create the same eleven-column `atividades` table on a fresh database, call
+  unrestricted migration application at the end, and finalize the shared Flask
+  connection. The early checkpoint rejects preexisting caller work before any
+  bootstrap SQL, so neither init may silently commit or roll back unrelated work.
 
 ## 4. Exact caller inventory
 
 The executable manifest identifies call expressions by tracked path and lexical
-scope rather than by brittle line number. At this baseline there are **73** calls
+scope rather than by brittle line number. At this baseline there are **74** calls
 to `main.init_db`, **1** call to `app.db.init_db`, and **1** call to
 `app.db._init_db_impl`.
 
@@ -147,6 +150,7 @@ scope names represent distinct call expressions and are intentional.
 - `tests/test_csrf_e2e_critical_flows.py` -> `isolated_client_e2e`
 - `tests/test_csrf_inventory_audit.py` -> `_setup_isolated_csrf_clients`
 - `tests/test_db_schema_maintenance.py` -> `test_init_db_registers_schema_version`
+- `tests/test_atividades_schema_migration_v2.py` -> `_run_init_on_temp_database`
 - `tests/test_filter_schema_contract.py` -> `client`
 - `tests/test_pagination.py` -> `setup_module`
 - `tests/test_phase_0_smoke_flows.py` -> `smoke_env`
@@ -173,50 +177,46 @@ The following is the exact current semantic order of
 
 1. Obtain `_get_main_db_helpers`.
 2. Bind AAC/AEU defaults.
-3. Retrieve, in exact order: `ensure_atividades_schema_current`,
-   `ensure_atividade_versioning_schema`, `get_preferred_matriz_for_curso`, `logger`.
+3. Retrieve, in exact order: `ensure_atividade_versioning_schema`,
+   `get_preferred_matriz_for_curso`, `logger`.
 4. Obtain `conn` from `get_db_connection`.
-5. Create `usuarios`; best-effort email index.
-6. Call direct `ensure_usuario_access_schema`.
-7. Call direct `ensure_usuario_profile_schema`.
-8. Call direct `ensure_backup_settings_schema` from `app.backup_settings`.
-9. Create `alunos`; best-effort indexes.
-10. Create `turmas`; best-effort status index.
-11. Create `atividades`.
-12. Create `requisicoes`.
-13. Create `requisicao_arquivos`; best-effort requisition/file indexes.
-14. Call direct `ensure_reportes_table`.
-15. Read bootstrap-admin settings and conditionally insert the admin.
-16. Attempt the six legacy `atividades` column additions, in order:
-    `tipo_atividade`, `tem_limitacao`, `tipo_limitacao`, `limite_horas_total`,
-    `limite_horas_semestral`, `descricao`.
-17. Normalize empty/null `atividades.tipo_atividade`.
-18. Call lazy `ensure_atividades_schema_current`.
-19. Conditionally add `alunos.turma_id` plus index.
-20. Conditionally add `alunos.foto_perfil`.
-21. Conditionally add `requisicoes.nome_evento`.
-22. Conditionally add `requisicoes.aluno_update_notified_at`.
-23. Conditionally add `requisicoes.aluno_update_seen_at`.
-24. Best-effort create `idx_reqs_aluno_update_pending`.
-25. Call direct `ensure_requisicao_alert_receipts_table`.
-26. Conditionally add `turmas.numero`.
-27. Create `cursos` with AAC/AEU totals.
-28. Conditionally add `cursos.periodo`, `total_horas_aac`, and
+5. Call direct `apply_early_schema_migrations(conn, logger=logger)`.
+6. Create `usuarios`; best-effort email index.
+7. Call direct `ensure_usuario_access_schema`.
+8. Call direct `ensure_usuario_profile_schema`.
+9. Call direct `ensure_backup_settings_schema` from `app.backup_settings`.
+10. Create `alunos`; best-effort indexes.
+11. Create `turmas`; best-effort status index.
+12. Create canonical eleven-column `atividades`.
+13. Create `requisicoes`.
+14. Create `requisicao_arquivos`; best-effort requisition/file indexes.
+15. Call direct `ensure_reportes_table`.
+16. Read bootstrap-admin settings and conditionally insert the admin.
+17. Conditionally add `alunos.turma_id` plus index.
+18. Conditionally add `alunos.foto_perfil`.
+19. Conditionally add `requisicoes.nome_evento`.
+20. Conditionally add `requisicoes.aluno_update_notified_at`.
+21. Conditionally add `requisicoes.aluno_update_seen_at`.
+22. Best-effort create `idx_reqs_aluno_update_pending`.
+23. Call direct `ensure_requisicao_alert_receipts_table`.
+24. Conditionally add `turmas.numero`.
+25. Create `cursos` with AAC/AEU totals.
+26. Conditionally add `cursos.periodo`, `total_horas_aac`, and
     `total_horas_aeu`; normalize invalid/null totals.
-29. Seed `GERAL` only when no course exists.
-30. Call direct `ensure_matrizes_atividades_table`.
-31. Call direct `ensure_matriz_atividade_links_table`.
-32. Call lazy `ensure_atividade_versioning_schema`.
-33. Attempt the five `turmas` additions, in order: `curso_id`, `ano_inicio`,
+27. Seed `GERAL` only when no course exists.
+28. Call direct `ensure_matrizes_atividades_table`.
+29. Call direct `ensure_matriz_atividade_links_table`.
+30. Call lazy `ensure_atividade_versioning_schema`.
+31. Attempt the five `turmas` additions, in order: `curso_id`, `ano_inicio`,
     `semestre_inicio`, `codigo`, `matriz_id`.
-34. Conditionally add `ano_fim`, then `semestre_fim`.
-35. Create course/matrix indexes and best-effort unique turma indexes.
-36. Reconcile old turmas: assign `GERAL`, sequential numbers, and generated
+32. Conditionally add `ano_fim`, then `semestre_fim`.
+33. Create course/matrix indexes and best-effort unique turma indexes.
+34. Reconcile old turmas: assign `GERAL`, sequential numbers, and generated
     codes with collision fallback.
-37. Reconcile missing `turmas.matriz_id` through lazy
+35. Reconcile missing `turmas.matriz_id` through lazy
     `get_preferred_matriz_for_curso`.
-38. Call direct `apply_schema_migrations(conn, logger=logger)`.
-39. Execute the one expected final `conn.commit()`.
+36. Call unrestricted `apply_schema_migrations(conn, logger=logger)`.
+37. Execute the one expected final `conn.commit()`.
 
 The matrix order is mandatory: matrices before links, links before activity
 versioning. Migration metadata is mandatory before the final commit.
@@ -240,7 +240,7 @@ or schema verification.
 | `ensure_requisicao_alert_receipts_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
 | `ensure_matrizes_atividades_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` and `app.db` compatibility exports. |
 | `ensure_matriz_atividade_links_table` | `app/db_maintenance.py` | Accepted direct schema owner; delegates matrix-table ensure. `main` and `app.db` compatibility exports. |
-| `ensure_schema_migrations_table`, `_migration_v1_baseline`, `apply_schema_migrations`, `SCHEMA_VERSION`, `SCHEMA_MIGRATIONS` | `app/db_maintenance.py` | Migration metadata and application owner. |
+| `ensure_schema_migrations_table`, `_migration_v1_baseline`, `_migration_v2_normalize_atividades_schema`, `apply_schema_migrations`, `apply_early_schema_migrations`, `SCHEMA_VERSION`, `SCHEMA_MIGRATIONS` | `app/db_maintenance.py` | Sole versioned migration owner. The early runner alone owns the isolated pre-bootstrap transaction. |
 | `ensure_usuario_access_structural_schema` | `app/db_maintenance.py` | Pure access DDL owner; no default-data, normalization, savepoint, commit, or rollback. |
 | `seed_usuario_access_default_data` | `app/db_maintenance.py` | Historical five-row `INSERT OR IGNORE` owner; reuses `app.auth.DEFAULT_ACCESS_PASSWORDS`; no DDL. |
 | `normalize_usuario_access_startup_data` | `app/db_maintenance.py` | Startup-wide accepted access normalization owner; reuses `app.auth.default_access_level_for_user_type`; no DDL. |
@@ -249,7 +249,7 @@ or schema verification.
 | `bind_backup_settings_runtime_app`, `_backup_settings_defaults`, `seed_backup_settings_default_data`, `normalize_legacy_backup_sync_interval`, `read_backup_settings`, `_apply_backup_settings_to_app`, `get_backup_settings`, `ensure_backup_settings_schema` | `app/backup_settings.py` | Sole owners of the explicit legacy runtime-app binding, runtime-derived defaults, historical six-row seeding, exact stripped `"300"` normalization, persisted read/merge, six Flask config effects and ordered startup orchestration. `main` binds its exact module-level `app` after configuring the six values and compatibility-exports the four historical names; `app.db` directly imports the orchestrator. |
 | `ensure_app_settings_schema` | `main.py` | Application-settings schema owner, reachable from `main.init_db` only. |
 | `ensure_cloud_backup_schema` | `main.py` | Adjacent cloud schema owner for `cloud_accounts`, `backup_logs`, and `cloud_drive_settings`; unchanged and isolated from B7. |
-| `ensure_atividades_schema_current` | `main.py` | Legacy activity-table rebuild owner and PRAGMA-sensitive path. |
+| `ATIVIDADES_SCHEMA_COLUMNS`, migration-v2 predicate/copy/rebuild/validation | `app/db_maintenance.py` | Sole canonical eleven-column migration contract. `main.ensure_atividades_schema_current` and its request-time call are retired. |
 | `ensure_atividade_versioning_leaf_tables`, `ensure_atividade_versioning_leaf_triggers`, `ensure_atividade_versioning_leaf_indexes` | `app/db_maintenance.py` | Pure owners, respectively, of exactly four additive leaf tables, two `atividade_transicao` triggers and eight ordinary leaf indexes. They own no transaction, migration, PRAGMA, DML, core or requisicoes statement. |
 | `_recreate_atividade_versao`, `_migrate_atividade_versao_to_numero_versao`, `_fix_atividade_versao_default`, `ensure_atividade_versioning_schema` | `main.py` | Self-transactional rebuild/migration owners and active public orchestrator. The orchestrator retains core tables/triggers/indexes and requisicoes compatibility statements and composes the three leaf helpers at their accepted semantic positions. |
 | `ensure_turmas_matriz_schema` | `main.py` | Remaining turma/matrix schema owner; delegates accepted matrix owner. |
@@ -264,30 +264,31 @@ therefore outside this init reachability matrix.
 
 ## 7. Remaining lazy-bridge matrix
 
-The exact four entries and matching `_init_db_impl` retrievals are frozen in this
+The exact three entries and matching `_init_db_impl` retrievals are frozen in this
 order:
 
 | Order | Lazy key | Current source object | Matching local retrieval | Role |
 |---:|---|---|---|---|
-| 1 | `ensure_atividades_schema_current` | `main.ensure_atividades_schema_current` | same-name local | Schema rebuild |
-| 2 | `ensure_atividade_versioning_schema` | `main.ensure_atividade_versioning_schema` | same-name local | Versioning schema |
-| 3 | `get_preferred_matriz_for_curso` | `main.get_preferred_matriz_for_curso` | same-name local | Query/runtime with lazy schema side effect |
-| 4 | `logger` | `main.logger` | same-name local | Warning/migration logging |
+| 1 | `ensure_atividade_versioning_schema` | `main.ensure_atividade_versioning_schema` | same-name local | Versioning schema |
+| 2 | `get_preferred_matriz_for_curso` | `main.get_preferred_matriz_for_curso` | same-name local | Query/runtime with lazy schema side effect |
+| 3 | `logger` | `main.logger` | same-name local | Warning/migration logging |
 
-B7 removed only the backup-settings key and matching retrieval; B8 changes no lazy key,
-retrieval, direct import or bootstrap order and retains the exact relative order above. `app.db` directly imports only
+B7 removed only the backup-settings key and matching retrieval; B8 preserved the
+then-four-entry bridge. B9 removes only the recurring-activities key and retrieval and
+adds the direct early runner before bootstrap SQL. `app.db` directly imports only
 `ensure_backup_settings_schema` from `app.backup_settings`. The exact direct
 `app.db_maintenance` import set remains:
-`apply_schema_migrations`, `ensure_matriz_atividade_links_table`,
+`apply_early_schema_migrations`, `apply_schema_migrations`, `ensure_matriz_atividade_links_table`,
 `ensure_matrizes_atividades_table`, `ensure_reportes_table`,
 `ensure_requisicao_alert_receipts_table`, `ensure_usuario_access_schema`, and
 `ensure_usuario_profile_schema`.
 
 ## 8. Migration baseline
 
-- `SCHEMA_VERSION == 1`.
-- `SCHEMA_MIGRATIONS` contains exactly one ordered item:
-  `(1, "baseline_schema_management", _migration_v1_baseline)`.
+- `SCHEMA_VERSION == 2`.
+- `SCHEMA_MIGRATIONS` contains exactly two contiguous ordered items:
+  `(1, "baseline_schema_management", _migration_v1_baseline)` and
+  `(2, "normalize_atividades_schema", _migration_v2_normalize_atividades_schema)`.
 - Migration v1 is a **historical baseline marker**. Its function body is only a
   docstring; the current physical schema is still produced by the two bootstrap
   bodies and their reachable helpers. The baseline migration is not a complete
@@ -295,12 +296,21 @@ retrieval, direct import or bootstrap order and retains the exact relative order
 - `schema_migrations` columns are `version INTEGER PRIMARY KEY`,
   `name TEXT NOT NULL`, `applied_at TEXT NOT NULL DEFAULT (datetime('now'))`,
   and nullable `details_json`.
-- `apply_schema_migrations` ensures the metadata table, reads recorded versions
-  into a set, iterates the ordered tuple, calls each missing migration, inserts
-  its metadata, logs when a logger exists, sets `PRAGMA user_version` to
-  `SCHEMA_VERSION`, and returns status.
+- Migration v2 accepts only known legacy subsets, preserves accepted data including
+  `documentos_json`, rebuilds to the exact eleven-column table when needed, preserves
+  `sqlite_sequence`, validates the physical postcondition and rejects later drift once
+  v2 is recorded.
+- `apply_schema_migrations` validates contiguous version/name history, optionally bounds
+  application with `through_version`, calls each missing migration, records only a
+  successful migration, and sets `PRAGMA user_version` to the highest actually recorded
+  version rather than the global target.
 - It performs no commit, rollback, savepoint, or `executescript`; both current
-  init implementations own the final commit.
+  init implementations own the final unrestricted-pass commit.
+- `apply_early_schema_migrations` skips a physically fresh database without recording v2.
+  For an existing `atividades`, it requires `conn.in_transaction is False`, records and
+  disables FK enforcement before `BEGIN IMMEDIATE`, runs through v2, commits only that
+  bounded transaction, rolls the whole unit back on failure, and restores the original
+  FK state. Failure propagates before bootstrap continues.
 
 ## 9. Transaction-boundary matrix
 
@@ -314,6 +324,7 @@ caller before the helper is entered.
 | `app.db.init_db` | none directly | none | none | delegates | indirect | Delegates to `_init_db_impl` | Same as implementation | Wrapper |
 | Five caller-owned direct schema helpers in `app.db_maintenance` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes their uncommitted DDL/DML | Caller-owned |
 | `ensure_schema_migrations_table`, `apply_schema_migrations` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted metadata/PRAGMA transaction effects as SQLite permits | Caller-owned |
+| `apply_early_schema_migrations` | 1 bounded | 1 bounded on error | none | `BEGIN IMMEDIATE` | records original; `OFF` before begin; exact restore after completion | Requires no active transaction and verifies FK is actually disabled | No caller work may exist; migration/rebuild/v2 metadata/user-version effects roll back together | Isolated early migration owner |
 | `ensure_usuario_access_structural_schema` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted DDL | Caller-owned structural component |
 | `seed_usuario_access_default_data` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted inserts | Caller-owned default-data component |
 | `normalize_usuario_access_startup_data` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted updates | Caller-owned normalization component |
@@ -328,7 +339,7 @@ caller before the helper is entered.
 | `ensure_cloud_backup_schema` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted work | Caller-owned |
 | `ensure_turmas_matriz_schema` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes its and delegated matrix work | Caller-owned/delegating |
 | `get_preferred_matriz_for_curso` | none | none | none | none | none | Query may be called clean or active | Delegated matrix ensure remains caller-owned | Query/runtime with schema side effect |
-| `ensure_atividades_schema_current` | none | none | none | none | `OFF`, then `ON` in `finally` | Effective PRAGMA toggling assumes a connection state in which SQLite accepts it; code does not enforce this precondition | Rebuild DDL/DML may be caller-rollbackable, but PRAGMA is connection state and not proof of transaction ownership | PRAGMA-sensitive rebuild exception |
+
 | `_recreate_atividade_versao` | SQL `COMMIT` | no explicit SQL rollback | none | one `executescript` containing `PRAGMA OFF; BEGIN; ... COMMIT; PRAGMA ON` | `OFF`/`ON` | Must not be treated as a neutral nested helper | Caller rollback cannot undo the completed internal commit | Self-transactional exception |
 | `_migrate_atividade_versao_to_numero_versao`, `_fix_atividade_versao_default` | indirect | indirect | none | each delegates once to `_recreate_atividade_versao` | indirect | Same conditional constraint as delegate | Same as delegate when branch executes | Delegated self-transactional exception |
 | `ensure_atividade_versioning_schema` | none directly | none directly | none | conditionally invokes either self-transactional delegate | indirect | Caller-owned only when no rebuild branch runs | Caller rollback covers direct additive DDL, not a completed rebuild delegate | Conditional self-transactional exception |
@@ -345,11 +356,11 @@ as migration metadata.
 ## 10. Known exceptions and technical debt
 
 1. Two active init bodies duplicate and diverge.
-2. Both init owners commit the shared Flask connection and may finalize unrelated
-   pending caller work.
+2. Both init owners retain one final bootstrap commit, but the early checkpoint now
+   rejects unrelated pending caller work at entry.
 3. The access helper has savepoint-dependent clean-vs-nested durability.
-4. `ensure_atividades_schema_current` changes `PRAGMA foreign_keys` around a
-   rebuild without enforcing a transaction-state precondition.
+4. The `atividades` rebuild is now one-time migration v2; later drift is detected and
+   fails instead of being repaired silently.
 5. Activity-version migration/default-fix branches call a self-transactional
    `executescript` and cannot be classified as caller-owned.
 6. `get_preferred_matriz_for_curso` is named as a query but lazily ensures matrix
@@ -359,12 +370,12 @@ as migration metadata.
 8. Development startup uses `main.init_db`; demo seeding uses `app.db.init_db`.
 9. Logger warnings can hide best-effort ALTER/index/reconciliation failures; a
    warning is not schema postcondition evidence.
-10. The v1 migration marker records a baseline rather than constructing the
-    complete physical schema.
+10. The v1 migration marker still records a historical baseline; v2 owns only the
+    canonical `atividades` transition, not the complete physical schema.
 
 ## 11. Current versus target architecture
 
-**Current:** the exact dual-init, four-entry lazy bridge, compatibility exports,
+**Current:** the exact dual-init, three-entry lazy bridge, compatibility exports,
 helper ownership, transaction exceptions, and call graph above are accepted and
 frozen for regression protection. Access DDL, historical defaults, startup-wide
 normalization, and savepoint orchestration are explicit semantic layers in
@@ -383,6 +394,8 @@ The activity-versioning public orchestrator, core `atividade_versao` schema, reb
 migration predicates/delegates, core triggers/indexes and requisicoes compatibility
 block remain in `main.py`. Only the four-table leaf cluster, two transition triggers
 and eight matching indexes are defined by three pure helpers in `app.db_maintenance`.
+The separate `atividades` table is governed by recorded migration v2 and an isolated
+early checkpoint; request processing no longer repairs its schema.
 
 **Target:** later separately authorized units may establish one canonical init,
 move remaining owners out of `main.py`, separate query behavior from schema
@@ -403,17 +416,18 @@ boundaries, not authorization:
 | Application-settings schema | **Phase 3 application-settings ownership unit** |
 | Backup-settings schema/default-data/legacy normalization/runtime application | **Resolved by PHASE 3-B7** |
 | Cloud-account/log/drive schema and backup offloading | **Phase 5 backup-schema/offloading unit**, separately gated |
-| `atividades` rebuild and FK PRAGMA semantics | **Phase 3 activity-rebuild unit** |
+| `atividades` rebuild and FK PRAGMA semantics | **Resolved by PHASE 3-B9** |
 | Activity-versioning leaf tables/transition triggers/leaf indexes | **Resolved by PHASE 3-B8** |
 | Activity-versioning core schema, requisicoes compatibility and self-transactional rebuild | **Later Phase 3 activity-versioning core ownership unit** |
-| Migration baseline expansion/version policy | **Phase 3 migration-metadata unit** |
+| Migration baseline expansion/version policy | **Partially resolved by PHASE 3-B9 through version 2; later migrations remain separately gated** |
 | Matrix query that ensures schema | **Phase 3 matrix/repository boundary unit** |
 | Logger/wiring lazy edge | **Final Phase 3 init wiring unit** |
 | Dual direct core schemas, startup/seed/restore selection, and final commit ownership | **Final Phase 3 `init_db` cutover unit** |
 | Main-defined admin-only lazy schemas not reachable from init | Their route/module extraction phases; not part of the init cutover until explicitly added |
 
-B8 was separately authorized after B7 acceptance and changed only the leaf-schema
-ownership unit described above. No B9 implementation is inferred or authorized.
+B9 was separately authorized after B8 acceptance and changed only the versioned
+`atividades` migration/checkpoint/bridge unit described above. No B10 implementation
+is inferred or authorized.
 
 ## 13. Canonical-database safety rules
 
@@ -421,7 +435,7 @@ ownership unit described above. No B9 implementation is inferred or authorized.
 - Frozen identity for B5: SHA-256
   `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`,
   size `544768` bytes, `database.db-wal` absent, `database.db-shm` absent.
-- Canonical SQLite opens in B5, B6, B7 and B8: **exactly 0**.
+- Canonical SQLite opens in B5, B6, B7, B8 and B9: **exactly 0**.
 - Contract tests are static or use pytest-owned paths. No contract test calls
   `sqlite3.connect`; existing schema helper tests use `:memory:` and release
   tests use `tmp_path`/session-owned external roots.
@@ -462,7 +476,7 @@ change this contract silently.
 - divergent does not mean equivalent;
 - caller-owned does not include the savepoint, PRAGMA-sensitive, conditional
   self-transactional, or self-finalizing exceptions listed above;
-- this contract is not authorization for B9, unrelated production code, migration,
+- this contract is not authorization for B10, unrelated production code, another migration,
   restore, canonical SQLite access, or final cutover.
 
 ## 16. B5 validation and review record
@@ -577,4 +591,86 @@ are recorded after those gates complete. Stage-A FREE used
 `opencode/deepseek-v4-flash-free`, session `ses_05af8e352ffetO5DM4E9LJ4n3d`, cost 0,
 exit 0 and no fallback. IAsup accepted its factual statement map but rejected its
 incorrect recommendation to move the three `_needs_*` predicates; those remain in
-`main.py` as required. PHASE 3-B9 remains unauthorized.
+`main.py` as required. B8 is CLOSED / ACCEPTED by the explicit B9 authorization.
+
+## 20. B9 intentional revision and validation record
+
+B9 was separately authorized after B8 acceptance, with an explicit three-test-path
+manifest waiver. Baseline `42ad0b500fe26fb2a4f49a2f8655d0217233af75` contained a
+request-time ten-column rebuild that could discard `documentos_json` and could cascade-delete
+FK children when dropping `atividades`. PATH A was rejected because deferred FK checking
+does not defer `ON DELETE CASCADE`; PATH B disables and verifies FK enforcement before an
+isolated `BEGIN IMMEDIATE` checkpoint.
+
+Migration v2 `normalize_atividades_schema` now owns the exact eleven-column target in
+`app.db_maintenance`. It preserves accepted legacy values, unusual/empty/null JSON text,
+IDs and `sqlite_sequence`; rejects unknown source columns and preexisting temp residue;
+and validates unique/check constraints and physical state. The early runner rejects an
+existing transaction, snapshots/restores FK state, commits only the bounded migration,
+and rolls back CREATE/copy/DROP/rename/metadata/user-version failures atomically. Exact
+rows in `requisicoes`, `matrizes_atividades_itens`, and `atividade_legacy_map` are preserved.
+
+Both init bodies call the early runner immediately after obtaining the connection and
+before dependent bootstrap SQL, create the same fresh eleven-column schema, and retain
+one unrestricted final migration application followed by one final bootstrap commit.
+The recurring helper, request-route call, old defensive ALTER/normalization sequence,
+and one lazy key/retrieval are retired. B8 leaf helpers remain AST-equivalent to baseline;
+the activity-versioning core remains in `main.py` and no B10 work is included.
+
+TDD RED recorded 20 expected failures before production changes. Focused migration GREEN
+ultimately passed 23 tests and the critical aggregate, including both CSRF snapshots,
+passed 173. The initial complete hermetic run produced 869 passed, 2 failed and 17
+canonical D73H deselected. Both failures were localized to CSRF inventory/message-catalog
+collection: literal migration-infrastructure strings passed directly to `RuntimeError`
+were incorrectly collected as editable UI messages; no route, CSRF-policy or snapshot
+drift occurred. The bounded correction introduced `SchemaMigrationStateError`, kept it
+as an internal `RuntimeError` subclass, and enforced the read-only contradiction hard stop
+before any FK or transaction mutation. The final Windows `PYTHONUTF8=1`/`-B` hermetic
+pre-staging suite passed 872 with 17 deselected and zero failures/errors in 354.14s.
+Selective staging then made `tests/test_atividades_schema_migration_v2.py` visible to the
+Git-aware exact caller scan. The post-staging lane produced 78 passed and one failure:
+the frozen manifest omitted `_run_init_on_temp_database` and still asserted 73
+`main.init_db` callers. This was a localized contract-evidence defect, not a migration,
+runtime, database or route defect. Only the already authorized contract test and this
+canonical contract were corrected to 74 callers. The targeted node passed 1, the complete
+post-staging lane passed 79, and the required full hermetic rerun passed 873 with 17
+deselected and zero failures/errors in 357.56s. Stage A FREE used `opencode` /
+`opencode/deepseek-v4-flash-free`, session `ses_05ac5d405ffenqwkRrh7QeBAIo`, cost 0,
+and was rejected as unusable. Explicit fallback reason
+`FALLBACK_FREE_UNUSABLE_DELIVERY` used `opencode-go` /
+`opencode-go/deepseek-v4-flash`, session `ses_05abb3bd1ffeut3C2R2SSaIuw7`, cost
+`0.0021259168`; its PATH B conclusion was accepted after IAsup adjudication.
+
+Independent review attempted the required FREE route first, but the FREE transport was
+technically unusable/incomplete. After two recorded FREE uses, the final read-only delta
+re-review explicitly used `FALLBACK_FREE_BUDGET_EXHAUSTED`: effective provider/model
+`opencode-go` / `opencode-go/deepseek-v4-flash`, session
+`ses_05a18eb14ffejH0B4Z7zROy427`, reported final-call cost `0.0005707464`, exit 0 and
+zero mutation. Verdict: APPROVE, findings NONE. IAsup did not accept the verdict merely
+as text: it independently checked the PATH B transaction boundary, original FK-state
+restoration, contradiction detection before mutation, lossless `documentos_json`
+preservation, exact preservation of `requisicoes`, `matrizes_atividades_itens` and
+`atividade_legacy_map`, PATH A rejection evidence, and the exact three-key lazy bridge.
+The verdict is accepted.
+
+The authorized commit-tree manifest is exactly:
+
+1. `AGENT_HANDOFF.md`
+2. `PROJECT_STATE.md`
+3. `app/db.py`
+4. `app/db_maintenance.py`
+5. `docs/DOCUMENTATION_INDEX.md`
+6. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
+7. `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`
+8. `main.py`
+9. `tests/test_atividades_schema_migration_v2.py`
+10. `tests/test_activity_versioning_leaf_schema_ownership.py`
+11. `tests/test_backup_settings_ownership.py`
+12. `tests/test_db_schema_maintenance.py`
+13. `tests/test_phase3_schema_startup_transaction_contract.py`
+14. `tests/test_ref_0c_b1_p0_access_context_transactions.py`
+
+No fourth waiver path exists. Canonical `database.db` remains outside the manifest and
+unopened as SQLite; the protected ignored residual remains outside the index. Publication
+is intentionally recorded as pending at commit-tree time, and no future/self-referential
+commit SHA is inserted into this commit. PHASE 3-B10 remains unauthorized.

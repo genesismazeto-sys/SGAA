@@ -89,6 +89,7 @@ from app.backup_settings import (
     get_backup_settings,
 )
 from app.db_maintenance import (
+    apply_early_schema_migrations,
     apply_retention_policy,
     apply_schema_migrations,
     create_database_snapshot,
@@ -311,20 +312,6 @@ def parse_documentos_json(raw) -> list[str]:
     import re as _re
     parts = _re.split(r"[,;\n\|]+", t)
     return _normalize_list(parts)
-
-ATIVIDADES_SCHEMA_COLUMNS = (
-    "id",
-    "grupo",
-    "nome",
-    "descricao",
-    "limite_horas",
-    "tipo_atividade",
-    "tem_limitacao",
-    "tipo_limitacao",
-    "limite_horas_total",
-    "limite_horas_semestral",
-)
-
 
 DEFAULT_RESPONSE_GOAL_DAYS = 10
 DEFAULT_RETURN_RESPONSE_DAYS = 7
@@ -1414,68 +1401,6 @@ def mark_admin_new_request_alert_seen(
         """,
         [(requisicao_id, usuario_id, alert_kind, seen_at) for requisicao_id in requisicao_ids],
     )
-
-
-def ensure_atividades_schema_current(conn) -> None:
-    cols = tuple(row["name"] for row in conn.execute("PRAGMA table_info(atividades)").fetchall())
-    if not cols:
-        return
-    if cols == ATIVIDADES_SCHEMA_COLUMNS:
-        return
-
-    conn.execute("PRAGMA foreign_keys = OFF")
-    try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS atividades__new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                grupo TEXT NOT NULL,
-                nome TEXT NOT NULL UNIQUE,
-                descricao TEXT,
-                limite_horas INTEGER,
-                tipo_atividade TEXT NOT NULL DEFAULT 'Acadêmica Complementar' CHECK(tipo_atividade IN ('Acadêmica Complementar', 'Extensão Universitária')),
-                tem_limitacao BOOLEAN DEFAULT 0,
-                tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral')),
-                limite_horas_total INTEGER,
-                limite_horas_semestral INTEGER
-            )
-            """
-        )
-        conn.execute(
-            """
-            INSERT INTO atividades__new (
-                id,
-                grupo,
-                nome,
-                descricao,
-                limite_horas,
-                tipo_atividade,
-                tem_limitacao,
-                tipo_limitacao,
-                limite_horas_total,
-                limite_horas_semestral
-            )
-            SELECT
-                id,
-                grupo,
-                nome,
-                CASE
-                    WHEN EXISTS(SELECT 1 FROM pragma_table_info('atividades') WHERE name = 'descricao') THEN descricao
-                    ELSE NULL
-                END,
-                limite_horas,
-                COALESCE(NULLIF(tipo_atividade, ''), 'Acadêmica Complementar'),
-                COALESCE(tem_limitacao, 0),
-                tipo_limitacao,
-                limite_horas_total,
-                limite_horas_semestral
-            FROM atividades
-            """
-        )
-        conn.execute("DROP TABLE atividades")
-        conn.execute("ALTER TABLE atividades__new RENAME TO atividades")
-    finally:
-        conn.execute("PRAGMA foreign_keys = ON")
 
 
 _VERSAO_NEW_DDL = """
@@ -4891,6 +4816,7 @@ def curso_mais_populoso_id() -> int | None:
 
 def init_db():
     conn = get_db_connection()
+    apply_early_schema_migrations(conn, logger=logger)
 
     # usuarios
     conn.execute("""
@@ -4959,7 +4885,8 @@ def init_db():
         tem_limitacao BOOLEAN DEFAULT 0,
         tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral')),
         limite_horas_total INTEGER,
-        limite_horas_semestral INTEGER
+        limite_horas_semestral INTEGER,
+        documentos_json TEXT
     );
     """)
 
@@ -5056,34 +4983,6 @@ CREATE TABLE IF NOT EXISTS requisicoes (
             )
         except sqlite3.OperationalError:
             pass
-
-    # Migrações defensivas (atividades)
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN tipo_atividade TEXT NOT NULL DEFAULT 'Acadêmica Complementar' CHECK(tipo_atividade IN ('Acadêmica Complementar', 'Extensão Universitária'))")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN tem_limitacao BOOLEAN DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral'))")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN limite_horas_total INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN limite_horas_semestral INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    # documentos obrigatórios por atividade (JSON textual)
-    try:
-        conn.execute("ALTER TABLE atividades ADD COLUMN documentos_json TEXT")
-    except sqlite3.OperationalError:
-        pass
-    conn.execute("UPDATE atividades SET tipo_atividade = 'Acadêmica Complementar' WHERE tipo_atividade IS NULL OR tipo_atividade = ''")
 
     # Migração defensiva: garantir turma_id em alunos
     try:
@@ -11590,7 +11489,6 @@ def admin_editar_matriz(matriz_id: int):
 @admin_required
 def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
     conn = get_db_connection()
-    ensure_atividades_schema_current(conn)
     ensure_matriz_atividade_links_table(conn)
     ensure_atividade_versioning_schema(conn)
 

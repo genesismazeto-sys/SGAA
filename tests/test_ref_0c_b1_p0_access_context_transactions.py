@@ -118,64 +118,53 @@ def _make_consultivo() -> int:
     return user_id
 
 
-def _make_atividades_schema_out_of_order() -> None:
-    """Force the lazy rebuild path without changing data or using a real DB."""
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        rows = conn.execute(
-            """
-            SELECT id, grupo, nome, descricao, limite_horas, tipo_atividade,
-                   tem_limitacao, tipo_limitacao, limite_horas_total,
-                   limite_horas_semestral
-              FROM atividades
-            """
-        ).fetchall()
-        conn.execute("PRAGMA foreign_keys = OFF")
-        conn.execute("DROP TABLE atividades")
-        conn.execute(
-            """
-            CREATE TABLE atividades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                grupo TEXT NOT NULL,
-                nome TEXT NOT NULL UNIQUE,
-                descricao TEXT,
-                limite_horas INTEGER,
-                tipo_atividade TEXT NOT NULL,
-                tem_limitacao BOOLEAN DEFAULT 0,
-                tipo_limitacao TEXT,
-                limite_horas_semestral INTEGER,
-                limite_horas_total INTEGER
-            )
-            """
-        )
-        conn.executemany(
-            """
-            INSERT INTO atividades (
-                id, grupo, nome, descricao, limite_horas, tipo_atividade,
-                tem_limitacao, tipo_limitacao, limite_horas_total,
-                limite_horas_semestral
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [tuple(row) for row in rows],
-        )
-        conn.commit()
-        conn.execute("PRAGMA foreign_keys = ON")
-
-
-def test_mapped_rebuild_route_runs_after_gate_without_lock_or_fk_ddl_failure(versioned_env, monkeypatch):
-    _make_atividades_schema_out_of_order()
+def test_mapped_route_uses_bootstrapped_v2_without_recurring_atividades_ddl(
+    versioned_env, monkeypatch
+):
     client = versioned_env["client"]
     _login(client, 1)
-    original_rebuild = main.ensure_atividades_schema_current
-    rebuild_calls = []
+    expected_columns = (
+        "id",
+        "grupo",
+        "nome",
+        "descricao",
+        "limite_horas",
+        "tipo_atividade",
+        "tem_limitacao",
+        "tipo_limitacao",
+        "limite_horas_total",
+        "limite_horas_semestral",
+        "documentos_json",
+    )
+    assert not hasattr(main, "ensure_atividades_schema_current")
 
-    def checked_rebuild(conn):
-        rebuild_calls.append(conn.in_transaction)
-        return original_rebuild(conn)
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        columns_before = tuple(
+            row["name"] for row in conn.execute("PRAGMA table_info(atividades)")
+        )
+        migrations_before = tuple(
+            tuple(row)
+            for row in conn.execute(
+                "SELECT version, name FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        )
+        user_version_before = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert columns_before == expected_columns
+    assert migrations_before[-1] == (2, "normalize_atividades_schema")
+    assert user_version_before == 2
 
-    monkeypatch.setattr(main, "ensure_atividades_schema_current", checked_rebuild)
+    original_get_db_connection = main.get_db_connection
+    statements = []
 
-    activity_name = f"P0 rebuilt activity {uuid.uuid4().hex}"
+    def traced_connection():
+        conn = original_get_db_connection()
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(main, "get_db_connection", traced_connection)
+
+    activity_name = f"P0 versioned activity {uuid.uuid4().hex}"
     response = client.post(
         "/admin/matrizes/1/atividades/nova/aac",
         data={
@@ -187,13 +176,37 @@ def test_mapped_rebuild_route_runs_after_gate_without_lock_or_fk_ddl_failure(ver
     )
 
     assert response.status_code == 302
-    assert rebuild_calls == [False]
+    forbidden_atividades_ddl = (
+        "ALTER TABLE ATIVIDADES",
+        "DROP TABLE ATIVIDADES",
+        "CREATE TABLE ATIVIDADES__NEW",
+        "INSERT INTO SCHEMA_MIGRATIONS",
+        "PRAGMA USER_VERSION =",
+        "PRAGMA FOREIGN_KEYS = OFF",
+    )
+    normalized_statements = tuple(" ".join(sql.split()).upper() for sql in statements)
+    assert not any(
+        token in sql for token in forbidden_atividades_ddl for sql in normalized_statements
+    )
     with main.app.app_context():
-        columns = tuple(
-            row["name"]
-            for row in main.get_db_connection().execute("PRAGMA table_info(atividades)").fetchall()
+        conn = original_get_db_connection()
+        columns_after = tuple(
+            row["name"] for row in conn.execute("PRAGMA table_info(atividades)")
         )
-    assert columns == main.ATIVIDADES_SCHEMA_COLUMNS
+        migrations_after = tuple(
+            tuple(row)
+            for row in conn.execute(
+                "SELECT version, name FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        )
+        user_version_after = conn.execute("PRAGMA user_version").fetchone()[0]
+        created = conn.execute(
+            "SELECT COUNT(*) FROM atividades WHERE nome = ?", (activity_name,)
+        ).fetchone()[0]
+    assert columns_after == columns_before
+    assert migrations_after == migrations_before
+    assert user_version_after == user_version_before
+    assert created == 1
 
 
 def test_gate_keeps_mapped_route_allow_and_deny_results(versioned_env):

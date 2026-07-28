@@ -262,11 +262,22 @@ def test_core_migration_and_rebuild_nodes_are_byte_semantically_unchanged():
         assert _dump(_function(current_tree, name)) == _dump(_function(baseline_tree, name))
 
 
-def test_migration_registry_and_schema_version_are_unchanged():
+def test_b8_v1_is_unchanged_and_b9_adds_only_the_authorized_v2_registry_delta():
     baseline_tree = _tree(_baseline(DB_MAINTENANCE_PATH))
     current_tree = _tree(_read(DB_MAINTENANCE_PATH))
-    for name in ("SCHEMA_VERSION", "SCHEMA_MIGRATIONS"):
-        assert _dump(_assignment(current_tree, name)) == _dump(_assignment(baseline_tree, name))
+    baseline_registry = _assignment(baseline_tree, "SCHEMA_MIGRATIONS").value
+    current_registry = _assignment(current_tree, "SCHEMA_MIGRATIONS").value
+    assert isinstance(baseline_registry, (ast.Tuple, ast.List))
+    assert isinstance(current_registry, (ast.Tuple, ast.List))
+    assert ast.literal_eval(_assignment(baseline_tree, "SCHEMA_VERSION").value) == 1
+    assert ast.literal_eval(_assignment(current_tree, "SCHEMA_VERSION").value) == 2
+    assert len(baseline_registry.elts) == 1
+    assert len(current_registry.elts) == 2
+    assert _dump(current_registry.elts[0]) == _dump(baseline_registry.elts[0])
+    version, name, function = current_registry.elts[1].elts
+    assert ast.literal_eval(version) == 2
+    assert ast.literal_eval(name) == "normalize_atividades_schema"
+    assert isinstance(function, ast.Name) and function.id == "_migration_v2_normalize_atividades_schema"
 
 
 def test_sole_defining_ownership_import_identity_and_cycle_isolation():
@@ -301,9 +312,19 @@ def test_sole_defining_ownership_import_identity_and_cycle_isolation():
     assert result.returncode == 0, result.stderr
 
 
-def test_app_db_is_byte_identical_to_b8_baseline_and_keeps_exact_lazy_bridge():
-    assert _read(APP_DB_PATH) == _baseline(APP_DB_PATH)
+def test_app_db_preserves_b8_semantics_with_only_the_b9_checkpoint_and_lazy_delta():
     tree = _tree(_read(APP_DB_PATH))
+    baseline_tree = _tree(_baseline(APP_DB_PATH))
+    current_functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    baseline_functions = {
+        node.name: node for node in baseline_tree.body if isinstance(node, ast.FunctionDef)
+    }
+    assert current_functions.keys() == baseline_functions.keys()
+    for name in current_functions.keys() - {"_get_main_db_helpers", "_init_db_impl"}:
+        assert _dump(current_functions[name]) == _dump(baseline_functions[name]), name
+
     helper_map = _function(tree, "_get_main_db_helpers")
     returns = [node for node in ast.walk(helper_map) if isinstance(node, ast.Return)]
     assert len(returns) == 1 and isinstance(returns[0].value, ast.Dict)
@@ -314,7 +335,6 @@ def test_app_db_is_byte_identical_to_b8_baseline_and_keeps_exact_lazy_bridge():
         if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name)
     )
     expected = (
-        "ensure_atividades_schema_current",
         "ensure_atividade_versioning_schema",
         "get_preferred_matriz_for_curso",
         "logger",
@@ -326,6 +346,13 @@ def test_app_db_is_byte_identical_to_b8_baseline_and_keeps_exact_lazy_bridge():
     assert source is not None
     for name in expected:
         assert source.count(f'helpers["{name}"]') == 1
+    assert "ensure_atividades_schema_current" not in source
+    assert source.count("apply_early_schema_migrations(conn, logger=logger)") == 1
+    assert source.index("conn = get_db_connection()") < source.index(
+        "apply_early_schema_migrations(conn, logger=logger)"
+    ) < source.index("CREATE TABLE IF NOT EXISTS usuarios")
+    assert "ALTER TABLE atividades ADD COLUMN" not in source
+    assert "UPDATE atividades SET tipo_atividade" not in source
     assert "from main import ensure_atividade_versioning_schema" not in _read(APP_DB_PATH)
 
 

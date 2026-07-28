@@ -227,24 +227,24 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   routing dependencies to their owning later phases. Zero runtime `app`→`main`
   back-references remains mandatory before Phase 6 closes.
 - **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A, the PHASE 3-B
-  assessment, and PHASE 3-B1 through PHASE 3-B7 are CLOSED / ACCEPTED. PHASE 3-B8
+  assessment, and PHASE 3-B1 through PHASE 3-B8 are CLOSED / ACCEPTED. PHASE 3-B9
   intentionally revises the single schema/startup/transaction authority at
-  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`: three pure helpers in
-  `app.db_maintenance` own exactly four activity-versioning leaf tables, two transition
-  triggers and eight leaf indexes. The public orchestrator, core versioning schema,
-  rebuild/migration and requisicoes compatibility remain in `main`; the `app.db` lazy
-  bridge remains unchanged at four entries. B8 is IMPLEMENTED / LOCALLY VERIFIED /
-  INDEPENDENT REVIEW APPROVED / PUBLICATION PENDING. The executable semantic manifests are
+  `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`: migration v2 owns the
+  canonical eleven-column `atividades` table, both init bodies use the isolated early
+  checkpoint, and the recurring repair plus matching lazy edge are retired. B8 leaf
+  ownership and the B10 activity-versioning core remain unchanged. B9 is IMPLEMENTED /
+  LOCALLY VERIFIED / INDEPENDENTLY REVIEWED / PUBLICATION PENDING AT COMMIT-TREE TIME. The executable semantic manifests are
   `tests/test_phase3_schema_startup_transaction_contract.py`,
-  `tests/test_activity_versioning_leaf_schema_ownership.py`, and the preserved B7
-  ownership tests. PHASE 3-B9 is not authorized.
+  `tests/test_atividades_schema_migration_v2.py`,
+  `tests/test_activity_versioning_leaf_schema_ownership.py`, and the preserved B7/B8
+  ownership tests. PHASE 3-B10 is not authorized.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through PHASE 3-B8 implementation and
-local verification; PHASE 3-B9 and later production units and
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through PHASE 3-B9 implementation,
+local verification and independent review; PHASE 3-B10 and later production units and
 Phases 4–6 remain **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
@@ -278,7 +278,7 @@ table of every phase.
 | `REF_0C_C_B1_FAIL_CLOSED_SHADOW_GATE_IMPLEMENTATION.md` | REF-0C-C-B1 | Shadow gate + hard test/dev failure |
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
-| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8 | Canonical current-state dual-init, caller, schema-owner, startup-order, migration and transaction contract; B8 records activity-versioning leaf table/trigger/index ownership while preserving the main core/rebuild orchestrator and four-entry lazy bridge |
+| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9 | Canonical current-state dual-init, caller, schema-owner, startup-order, migration and transaction contract; B9 records versioned eleven-column `atividades`, isolated early migration, retired recurring repair and three-entry lazy bridge while preserving the B8 leaf and B10 core boundaries |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -305,7 +305,7 @@ The original REF-0C-D scope was documented in
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
-| Phase 3-B5/B6/B7/B8 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5/B5-R1/B6/B7 CLOSED / ACCEPTED; B8 IMPLEMENTED / LOCALLY VERIFIED / INDEPENDENT REVIEW APPROVED / PUBLICATION PENDING |
+| Phase 3-B5/B6/B7/B8/B9 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5/B5-R1/B6/B7/B8 CLOSED / ACCEPTED; B9 IMPLEMENTED / LOCALLY VERIFIED / INDEPENDENTLY REVIEWED / PUBLICATION PENDING AT COMMIT-TREE TIME |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

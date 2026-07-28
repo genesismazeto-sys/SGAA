@@ -9,6 +9,7 @@ from app.academics import (
     gerar_codigo_turma,
 )
 from app.db_maintenance import (
+    apply_early_schema_migrations,
     apply_schema_migrations,
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
@@ -56,7 +57,6 @@ def _get_main_db_helpers():
     import main  # type: ignore
 
     return {
-        "ensure_atividades_schema_current": main.ensure_atividades_schema_current,
         "ensure_atividade_versioning_schema": main.ensure_atividade_versioning_schema,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
         "logger": main.logger,
@@ -67,12 +67,12 @@ def _init_db_impl():
     helpers = _get_main_db_helpers()
     default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
-    ensure_atividades_schema_current = helpers["ensure_atividades_schema_current"]
     ensure_atividade_versioning_schema = helpers["ensure_atividade_versioning_schema"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
     logger = helpers["logger"]
 
     conn = get_db_connection()
+    apply_early_schema_migrations(conn, logger=logger)
 
     conn.execute(
         """
@@ -149,7 +149,8 @@ def _init_db_impl():
             tem_limitacao BOOLEAN DEFAULT 0,
             tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral')),
             limite_horas_total INTEGER,
-            limite_horas_semestral INTEGER
+            limite_horas_semestral INTEGER,
+            documentos_json TEXT
         );
         """
     )
@@ -224,23 +225,6 @@ def _init_db_impl():
             "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
             ("Administrador", admin_email, hashed_password, "admin", "admin_total"),
         )
-
-    for migration_sql in [
-        "ALTER TABLE atividades ADD COLUMN tipo_atividade TEXT NOT NULL DEFAULT 'Acadêmica Complementar' CHECK(tipo_atividade IN ('Acadêmica Complementar', 'Extensão Universitária'))",
-        "ALTER TABLE atividades ADD COLUMN tem_limitacao BOOLEAN DEFAULT 0",
-        "ALTER TABLE atividades ADD COLUMN tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral'))",
-        "ALTER TABLE atividades ADD COLUMN limite_horas_total INTEGER",
-        "ALTER TABLE atividades ADD COLUMN limite_horas_semestral INTEGER",
-        "ALTER TABLE atividades ADD COLUMN descricao TEXT",
-    ]:
-        try:
-            conn.execute(migration_sql)
-        except sqlite3.OperationalError:
-            pass
-    conn.execute(
-        "UPDATE atividades SET tipo_atividade = 'Acadêmica Complementar' WHERE tipo_atividade IS NULL OR tipo_atividade = ''"
-    )
-    ensure_atividades_schema_current(conn)
 
     try:
         cols = [row["name"] for row in conn.execute("PRAGMA table_info(alunos)").fetchall()]

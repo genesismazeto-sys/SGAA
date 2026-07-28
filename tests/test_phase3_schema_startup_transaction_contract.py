@@ -16,6 +16,7 @@ CONTRACT_PATH = PROJECT_ROOT / "docs" / "refactor" / "PHASE3_SCHEMA_STARTUP_TRAN
 CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 
 EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
+    "apply_early_schema_migrations",
     "apply_schema_migrations",
     "ensure_matriz_atividade_links_table",
     "ensure_matrizes_atividades_table",
@@ -26,7 +27,6 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
 )
 
 EXPECTED_LAZY_BRIDGE = (
-    "ensure_atividades_schema_current",
     "ensure_atividade_versioning_schema",
     "get_preferred_matriz_for_curso",
     "logger",
@@ -91,6 +91,7 @@ EXPECTED_MAIN_INIT_CALLERS = {
     "tests/test_csrf_e2e_critical_flows.py": ("isolated_client_e2e",),
     "tests/test_csrf_inventory_audit.py": ("_setup_isolated_csrf_clients",),
     "tests/test_db_schema_maintenance.py": ("test_init_db_registers_schema_version",),
+    "tests/test_atividades_schema_migration_v2.py": ("_run_init_on_temp_database",),
     "tests/test_filter_schema_contract.py": ("client",),
     "tests/test_pagination.py": ("setup_module",),
     "tests/test_phase_0_smoke_flows.py": ("smoke_env",),
@@ -115,6 +116,7 @@ EXPECTED_BOOTSTRAP_EVENTS = (
     "lazy-map",
     *(f"lazy:{name}" for name in EXPECTED_LAZY_BRIDGE),
     "connection",
+    "helper:apply_early_schema_migrations",
     "table:usuarios",
     "helper:ensure_usuario_access_schema",
     "helper:ensure_usuario_profile_schema",
@@ -125,7 +127,7 @@ EXPECTED_BOOTSTRAP_EVENTS = (
     "table:requisicoes",
     "table:requisicao_arquivos",
     "helper:ensure_reportes_table",
-    "helper:ensure_atividades_schema_current",
+
     "helper:ensure_requisicao_alert_receipts_table",
     "table:cursos",
     "helper:ensure_matrizes_atividades_table",
@@ -379,7 +381,7 @@ def _bootstrap_events():
         "ensure_usuario_profile_schema",
         "ensure_backup_settings_schema",
         "ensure_reportes_table",
-        "ensure_atividades_schema_current",
+        "apply_early_schema_migrations",
         "ensure_requisicao_alert_receipts_table",
         "ensure_matrizes_atividades_table",
         "ensure_matriz_atividade_links_table",
@@ -479,7 +481,7 @@ def test_dual_init_entry_points_and_exact_caller_manifest():
     for path, scope, _, _ in records["main.init_db"]:
         actual_main[path].append(scope)
     assert {path: tuple(scopes) for path, scopes in actual_main.items()} == EXPECTED_MAIN_INIT_CALLERS
-    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 73
+    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 74
 
     assert [(path, scope) for path, scope, _, _ in records["app.db.init_db"]] == [
         ("tools/seed_demo_data.py", "seed")
@@ -500,7 +502,7 @@ def test_dual_init_entry_points_and_exact_caller_manifest():
     }
 
 
-def test_exact_direct_import_set_and_four_entry_lazy_bridge():
+def test_exact_direct_import_set_and_three_entry_lazy_bridge():
     app_tree = _tree(APP_DB_PATH)
     assert _imported_names(app_tree, "app.db_maintenance") == EXPECTED_DIRECT_MAINTENANCE_IMPORTS
     assert _imported_names(app_tree, "app.backup_settings") == (
@@ -535,7 +537,7 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
         and any(isinstance(target, ast.Name) and target.id == "SCHEMA_VERSION" for target in node.targets)
     ]
     assert len(version_nodes) == 1
-    assert ast.literal_eval(version_nodes[0].value) == 1
+    assert ast.literal_eval(version_nodes[0].value) == 2
 
     migration_nodes = [
         node
@@ -556,11 +558,15 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
     assert len(migration_nodes) == 1
     migrations = migration_nodes[0].value
     assert isinstance(migrations, (ast.Tuple, ast.List))
-    assert len(migrations.elts) == 1
+    assert len(migrations.elts) == 2
     version, name, function = migrations.elts[0].elts
     assert ast.literal_eval(version) == 1
     assert ast.literal_eval(name) == "baseline_schema_management"
     assert isinstance(function, ast.Name) and function.id == "_migration_v1_baseline"
+    version, name, function = migrations.elts[1].elts
+    assert ast.literal_eval(version) == 2
+    assert ast.literal_eval(name) == "normalize_atividades_schema"
+    assert isinstance(function, ast.Name) and function.id == "_migration_v2_normalize_atividades_schema"
 
     baseline = _top_level_function(tree, "_migration_v1_baseline")
     assert len(baseline.body) == 1
@@ -579,7 +585,7 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
     apply = _top_level_function(tree, "apply_schema_migrations")
     apply_source = ast.get_source_segment(_read(DB_MAINTENANCE_PATH), apply)
     assert apply_source is not None
-    assert "SELECT version FROM schema_migrations" in apply_source
+    assert "SELECT version, name FROM schema_migrations ORDER BY version" in apply_source
     assert "for version, name, migration in SCHEMA_MIGRATIONS" in apply_source
     assert "migration(conn)" in apply_source
     assert "INSERT INTO schema_migrations" in apply_source
@@ -647,8 +653,13 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
     access = _transaction_facts(DB_MAINTENANCE_PATH, "ensure_usuario_access_schema")
     assert access == {**neutral, "savepoint": True, "rollback_sql": True}
 
-    atividades = _transaction_facts(MAIN_PATH, "ensure_atividades_schema_current")
-    assert atividades == {**neutral, "foreign_keys_pragma": True}
+    early = _transaction_facts(DB_MAINTENANCE_PATH, "apply_early_schema_migrations")
+    assert early == {
+        **neutral,
+        "commit_method": 1,
+        "rollback_method": 1,
+        "foreign_keys_pragma": True,
+    }
 
     recreate = _transaction_facts(MAIN_PATH, "_recreate_atividade_versao")
     assert recreate == {
@@ -677,7 +688,7 @@ def test_db_maintenance_import_isolated_and_contract_tests_are_static(tmp_path):
         "import sys; "
         "assert 'main' not in sys.modules; "
         "import app.db_maintenance as module; "
-        "assert module.SCHEMA_VERSION == 1; "
+        "assert module.SCHEMA_VERSION == 2; "
         "assert 'main' not in sys.modules"
     )
     environment = os.environ.copy()
@@ -720,16 +731,17 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 3
+    assert ledger.count(CONTRACT_RELPATH) == 4
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
+    assert ledger.count("| PHASE3-B9 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B8 intentional revision" in contract
-    assert "The exact four entries" in contract
+    assert "PHASE 3-B9 intentional revision" in contract
+    assert "The exact three entries" in contract
     assert "Resolved by PHASE 3-B6" in contract
-    assert "PHASE 3-B9" in index
+    assert "PHASE 3-B10" in index

@@ -18,7 +18,40 @@ from app.academics import (
 from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_type
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+ATIVIDADES_SCHEMA_COLUMNS = (
+    "id",
+    "grupo",
+    "nome",
+    "descricao",
+    "limite_horas",
+    "tipo_atividade",
+    "tem_limitacao",
+    "tipo_limitacao",
+    "limite_horas_total",
+    "limite_horas_semestral",
+    "documentos_json",
+)
+_ATIVIDADES_REQUIRED_LEGACY_COLUMNS = {"id", "grupo", "nome", "limite_horas"}
+_ATIVIDADES_TARGET_TABLE_INFO = (
+    ("id", "INTEGER", 0, None, 1),
+    ("grupo", "TEXT", 1, None, 0),
+    ("nome", "TEXT", 1, None, 0),
+    ("descricao", "TEXT", 0, None, 0),
+    ("limite_horas", "INTEGER", 0, None, 0),
+    ("tipo_atividade", "TEXT", 1, "'Acadêmica Complementar'", 0),
+    ("tem_limitacao", "BOOLEAN", 0, "0", 0),
+    ("tipo_limitacao", "TEXT", 0, None, 0),
+    ("limite_horas_total", "INTEGER", 0, None, 0),
+    ("limite_horas_semestral", "INTEGER", 0, None, 0),
+    ("documentos_json", "TEXT", 0, None, 0),
+)
+_THROUGH_VERSION_ERROR = "through_version must be non-negative"
+
+
+class SchemaMigrationStateError(RuntimeError):
+    """Internal schema-migration state contradiction, never a UI message."""
 
 
 def ensure_backup_settings_structural_schema(conn) -> None:
@@ -204,8 +237,176 @@ def _migration_v1_baseline(conn: sqlite3.Connection) -> None:
     """
 
 
+def _schema_object_exists(conn, object_type: str, name: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        is not None
+    )
+
+
+def _atividades_table_info(conn):
+    return tuple(
+        (row[1], str(row[2]).upper(), int(row[3]), row[4], int(row[5]))
+        for row in conn.execute("PRAGMA table_info(atividades)").fetchall()
+    )
+
+
+def _atividades_has_unique_nome(conn) -> bool:
+    for row in conn.execute("PRAGMA index_list(atividades)").fetchall():
+        if not int(row[2]):
+            continue
+        index_name = str(row[1]).replace('"', '""')
+        columns = tuple(
+            index_row[2]
+            for index_row in conn.execute(f'PRAGMA index_info("{index_name}")').fetchall()
+        )
+        if columns == ("nome",):
+            return True
+    return False
+
+
+def _atividades_schema_is_current(conn) -> bool:
+    if not _schema_object_exists(conn, "table", "atividades"):
+        return False
+    if _atividades_table_info(conn) != _ATIVIDADES_TARGET_TABLE_INFO:
+        return False
+    if not _atividades_has_unique_nome(conn):
+        return False
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'atividades'"
+    ).fetchone()
+    normalized = "".join(str(row[0] or "").lower().split()) if row else ""
+    return all(
+        fragment in normalized
+        for fragment in (
+            "check(tipo_atividadein('acadêmicacomplementar','extensãouniversitária'))",
+            "check(tipo_limitacaoin('total','semestral'))",
+        )
+    )
+
+
+def _validate_recorded_atividades_v2(conn) -> None:
+    if _schema_object_exists(conn, "table", "atividades__new"):
+        raise SchemaMigrationStateError(
+            "recorded v2 contradicts physical schema: orphan atividades__new table"
+        )
+    if not _atividades_schema_is_current(conn):
+        raise SchemaMigrationStateError(
+            "recorded v2 contradicts physical schema: atividades is not canonical"
+        )
+
+
+def _create_atividades_v2_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE atividades__new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            grupo TEXT NOT NULL,
+            nome TEXT NOT NULL UNIQUE,
+            descricao TEXT,
+            limite_horas INTEGER,
+            tipo_atividade TEXT NOT NULL DEFAULT 'Acadêmica Complementar'
+                CHECK(tipo_atividade IN ('Acadêmica Complementar', 'Extensão Universitária')),
+            tem_limitacao BOOLEAN DEFAULT 0,
+            tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral')),
+            limite_horas_total INTEGER,
+            limite_horas_semestral INTEGER,
+            documentos_json TEXT
+        )
+        """
+    )
+
+
+def _migration_v2_normalize_atividades_schema(conn) -> None:
+    if not _schema_object_exists(conn, "table", "atividades"):
+        raise SchemaMigrationStateError("atividades must exist before migration v2")
+    if _schema_object_exists(conn, "table", "atividades__new"):
+        raise SchemaMigrationStateError("unexpected preexisting atividades__new table")
+    if _atividades_schema_is_current(conn):
+        return
+
+    source_columns = tuple(row[1] for row in conn.execute("PRAGMA table_info(atividades)"))
+    source_set = set(source_columns)
+    unexpected = source_set - set(ATIVIDADES_SCHEMA_COLUMNS)
+    missing_required = _ATIVIDADES_REQUIRED_LEGACY_COLUMNS - source_set
+    if unexpected or missing_required:
+        raise SchemaMigrationStateError(
+            "unsupported atividades schema for v2: "
+            f"unexpected={sorted(unexpected)!r}, missing={sorted(missing_required)!r}"
+        )
+
+    sequence_row = None
+    if _schema_object_exists(conn, "table", "sqlite_sequence"):
+        sequence_row = conn.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'atividades'"
+        ).fetchone()
+    previous_sequence = int(sequence_row[0]) if sequence_row is not None else None
+
+    def source_or_null(name: str) -> str:
+        return f'"{name}"' if name in source_set else "NULL"
+
+    tipo_atividade = (
+        "COALESCE(NULLIF(TRIM(tipo_atividade), ''), 'Acadêmica Complementar')"
+        if "tipo_atividade" in source_set
+        else "'Acadêmica Complementar'"
+    )
+    tem_limitacao = (
+        "COALESCE(tem_limitacao, 0)" if "tem_limitacao" in source_set else "0"
+    )
+    copy_expressions = (
+        '"id"',
+        '"grupo"',
+        '"nome"',
+        source_or_null("descricao"),
+        '"limite_horas"',
+        tipo_atividade,
+        tem_limitacao,
+        source_or_null("tipo_limitacao"),
+        source_or_null("limite_horas_total"),
+        source_or_null("limite_horas_semestral"),
+        source_or_null("documentos_json"),
+    )
+
+    _create_atividades_v2_table(conn)
+    conn.execute(
+        f"""
+        INSERT INTO atividades__new ({', '.join(ATIVIDADES_SCHEMA_COLUMNS)})
+        SELECT {', '.join(copy_expressions)}
+          FROM atividades
+         ORDER BY id
+        """
+    )
+    conn.execute("DROP TABLE atividades")
+    conn.execute("ALTER TABLE atividades__new RENAME TO atividades")
+
+    max_id = int(conn.execute("SELECT COALESCE(MAX(id), 0) FROM atividades").fetchone()[0])
+    desired_sequence = max(max_id, previous_sequence or 0)
+    conn.execute(
+        "DELETE FROM sqlite_sequence WHERE name IN ('atividades', 'atividades__new')"
+    )
+    if desired_sequence:
+        conn.execute(
+            "INSERT INTO sqlite_sequence(name, seq) VALUES ('atividades', ?)",
+            (desired_sequence,),
+        )
+
+    if not _atividades_schema_is_current(conn):
+        raise SchemaMigrationStateError(
+            "atividades v2 rebuild did not produce the canonical schema"
+        )
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise SchemaMigrationStateError(
+            f"foreign key violations after atividades v2: {violations!r}"
+        )
+
+
 SCHEMA_MIGRATIONS: tuple[tuple[int, str, Callable[[sqlite3.Connection], None]], ...] = (
     (1, "baseline_schema_management", _migration_v1_baseline),
+    (2, "normalize_atividades_schema", _migration_v2_normalize_atividades_schema),
 )
 
 
@@ -222,17 +423,53 @@ def ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
     )
 
 
-def apply_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict[str, object]:
+def apply_schema_migrations(
+    conn: sqlite3.Connection, logger=None, through_version: int | None = None
+) -> dict[str, object]:
     ensure_schema_migrations_table(conn)
-    applied_versions = {
-        int(row[0])
-        for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
-    }
+    applied_rows = tuple(
+        (int(row[0]), str(row[1]))
+        for row in conn.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    )
+    registry_names = {version: name for version, name, _ in SCHEMA_MIGRATIONS}
+    applied_versions = {version for version, _ in applied_rows}
+    unknown = applied_versions - set(registry_names)
+    if unknown:
+        raise SchemaMigrationStateError(
+            f"unknown recorded schema migrations: {sorted(unknown)!r}"
+        )
+    for version, name in applied_rows:
+        if name != registry_names[version]:
+            raise SchemaMigrationStateError(
+                f"schema migration v{version} name mismatch: {name!r}"
+            )
+    if applied_versions and applied_versions != set(
+        range(1, max(applied_versions) + 1)
+    ):
+        raise SchemaMigrationStateError(
+            f"schema migration history contains gaps: {sorted(applied_versions)!r}"
+        )
+
+    target_version = SCHEMA_VERSION
+    if through_version is not None:
+        requested = int(through_version)
+        if requested < 0:
+            raise ValueError(_THROUGH_VERSION_ERROR)
+        target_version = min(requested, SCHEMA_VERSION)
+
     applied_now: list[int] = []
     for version, name, migration in SCHEMA_MIGRATIONS:
+        if version > target_version:
+            continue
         if version in applied_versions:
+            if version == 2:
+                _validate_recorded_atividades_v2(conn)
             continue
         migration(conn)
+        if version == 2:
+            _validate_recorded_atividades_v2(conn)
         conn.execute(
             "INSERT INTO schema_migrations (version, name, details_json) VALUES (?, ?, ?)",
             (
@@ -245,12 +482,94 @@ def apply_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict[str, 
         if logger is not None:
             logger.info("Schema migration v%s aplicada: %s", version, name)
 
-    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    current_row = conn.execute(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+    ).fetchone()
+    current_version = int(current_row[0]) if current_row is not None else 0
+    conn.execute(f"PRAGMA user_version = {current_version}")
     return {
-        "schema_version": get_schema_version(conn),
+        "schema_version": current_version,
         "target_schema_version": SCHEMA_VERSION,
         "applied_now": applied_now,
     }
+
+
+def apply_early_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict[str, object]:
+    """Apply existing-database migrations in one isolated pre-bootstrap transaction."""
+    if conn.in_transaction:
+        raise SchemaMigrationStateError(
+            "early schema migration requires no active transaction"
+        )
+
+    if not _schema_object_exists(conn, "table", "atividades"):
+        user_version = get_schema_version(conn)
+        recorded: tuple[int, ...] = ()
+        if _schema_object_exists(conn, "table", "schema_migrations"):
+            recorded = tuple(
+                int(row[0])
+                for row in conn.execute(
+                    "SELECT version FROM schema_migrations ORDER BY version"
+                ).fetchall()
+            )
+        if 2 in recorded or user_version >= 2:
+            raise SchemaMigrationStateError(
+                "recorded v2 contradicts physical schema: atividades table is absent"
+            )
+        return {
+            "schema_version": max(recorded, default=0),
+            "target_schema_version": SCHEMA_VERSION,
+            "applied_now": [],
+        }
+
+    recorded_user_version = get_schema_version(conn)
+    if recorded_user_version > SCHEMA_VERSION:
+        raise SchemaMigrationStateError(
+            f"unsupported user_version {recorded_user_version} exceeds schema registry"
+        )
+    has_recorded_v2 = (
+        _schema_object_exists(conn, "table", "schema_migrations")
+        and conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = 2"
+        ).fetchone()
+        is not None
+    )
+    if (
+        recorded_user_version >= 2
+        and not has_recorded_v2
+        and not _atividades_schema_is_current(conn)
+    ):
+        raise SchemaMigrationStateError(
+            "user_version v2 contradicts physical schema: atividades is not canonical"
+        )
+
+    original_foreign_keys = int(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+    conn.execute("PRAGMA foreign_keys = OFF")
+    if int(conn.execute("PRAGMA foreign_keys").fetchone()[0]) != 0:
+        raise SchemaMigrationStateError(
+            "could not disable foreign key enforcement before migration"
+        )
+
+    transaction_started = False
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        transaction_started = True
+        result = apply_schema_migrations(
+            conn, logger=logger, through_version=SCHEMA_VERSION
+        )
+        conn.commit()
+        transaction_started = False
+        return result
+    except Exception:
+        if transaction_started and conn.in_transaction:
+            conn.rollback()
+        raise
+    finally:
+        conn.execute(f"PRAGMA foreign_keys = {original_foreign_keys}")
+        restored = int(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+        if restored != original_foreign_keys:
+            raise SchemaMigrationStateError(
+                "could not restore original foreign key enforcement state"
+            )
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
