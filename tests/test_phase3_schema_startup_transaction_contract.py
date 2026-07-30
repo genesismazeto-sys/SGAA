@@ -736,7 +736,7 @@ def test_canonical_contract_document_and_governance_registration():
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 5
+    assert ledger.count(CONTRACT_RELPATH) == 6
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
     assert ledger.count("| PHASE3-B9 |") == 1
@@ -746,3 +746,8 @@ def test_canonical_contract_document_and_governance_registration():
     assert "The exact two entries" in contract
     assert "Resolved by PHASE 3-B6" in contract
     assert "PHASE 3-B10" in index
+    assert "two dependencies through the lazy bridge" in contract
+    assert "three dependencies through the lazy bridge" not in contract
+    assert "tests/test_ref_0c_b1_p0_access_context_transactions.py" in contract
+    assert "MECHANICALLY_REQUIRED_V3_EXPECTATION_UPDATE" in handoff
+    assert "process nonconformity" in handoff

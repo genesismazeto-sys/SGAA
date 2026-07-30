@@ -228,13 +228,12 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   back-references remains mandatory before Phase 6 closes.
 - **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A, the PHASE 3-B
   assessment, and PHASE 3-B1 through PHASE 3-B9 are CLOSED / ACCEPTED. PHASE 3-B10
-  extracts the v3 activity-versioning core migration `normalize_activity_versioning_core`:
-  SCHEMA_VERSION is 3, core ownership moved to `app.db_maintenance`, legacy
-  self-transactional rebuild retired from `main.py`, lazy bridge reduced to exactly
-  two entries (`get_preferred_matriz_for_curso` and `logger`), and B8 leaf ownership
-  preserved. B10 is IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW /
-  PUBLICATION PENDING AT COMMIT-TREE TIME. Phases 3-B11 and later production units remain
-  not authorized.
+  is COMMITTED AND PUSHED at `8fe0345eab08e312f7e015730f70d02327e7eb5f`
+  (`Version activity versioning core schema`). B10-R1 is a governance-only
+  correction recording the actual 15-path manifest, classifying the undocumented
+  fifteenth test path as a process nonconformity, and correcting the lazy-bridge
+  description in the canonical contract. Phases 3-B11 and later production units
+  remain not authorized.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.

@@ -54,7 +54,7 @@ created with `create_app(...)`; development bootstrap happens separately in the
 Both implementations are active. They share many core tables and helpers, but
 are not equivalent:
 
-- `app.db._init_db_impl` obtains three dependencies through the lazy bridge,
+- `app.db._init_db_impl` obtains two dependencies through the lazy bridge,
   invokes `apply_early_schema_migrations` immediately after connection acquisition,
   directly invokes `ensure_usuario_access_schema` and `ensure_reportes_table`, includes
   `cursos.total_horas_aac` and `cursos.total_horas_aeu`, reconciles
@@ -660,17 +660,21 @@ The authorized commit-tree manifest is exactly:
 6. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
 7. `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`
 8. `main.py`
-9. `tests/test_atividades_schema_migration_v2.py`
-10. `tests/test_activity_versioning_leaf_schema_ownership.py`
-11. `tests/test_backup_settings_ownership.py`
-12. `tests/test_db_schema_maintenance.py`
-13. `tests/test_phase3_schema_startup_transaction_contract.py`
-14. `tests/test_ref_0c_b1_p0_access_context_transactions.py`
+9. `tests/test_activity_versioning_core_migration_v3.py`
+10. `tests/test_atividades_schema_migration_v2.py`
+11. `tests/test_activity_versioning_leaf_schema_ownership.py`
+12. `tests/test_backup_settings_ownership.py`
+13. `tests/test_db_schema_maintenance.py`
+14. `tests/test_phase3_schema_startup_transaction_contract.py`
+15. `tests/test_ref_0c_b1_p0_access_context_transactions.py`
 
-No fourth waiver path exists. Canonical `database.db` remains outside the manifest and
-unopened as SQLite; the protected ignored residual remains outside the index. Publication
-is intentionally recorded as pending at commit-tree time, and no future/self-referential
-commit SHA is inserted into this commit. PHASE 3-B10 remains unauthorized.
+Path 15 is a mechanically required v3 expectation update (migration
+`normalize_activity_versioning_core` and `user_version 3`) with no production
+scope expansion. It was not preauthorized in the explicit B10 boundary, its
+content is accepted as correct, and it is classified as a process nonconformity
+requiring this governance correction.
+
+Publication is pending at commit-tree time. PHASE 3-B11 remains unauthorized.
 
 ## 21. B10 intentional revision and validation record
 
