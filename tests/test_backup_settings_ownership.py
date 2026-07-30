@@ -53,7 +53,6 @@ EXACT_DEFAULTS = {
     "external_backup_enabled": "1",
 }
 EXPECTED_LAZY_KEYS = (
-    "ensure_atividade_versioning_schema",
     "get_preferred_matriz_for_curso",
     "logger",
 )

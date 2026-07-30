@@ -18,6 +18,7 @@ CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "apply_early_schema_migrations",
     "apply_schema_migrations",
+    "ensure_atividade_versioning_schema",
     "ensure_matriz_atividade_links_table",
     "ensure_matrizes_atividades_table",
     "ensure_reportes_table",
@@ -27,7 +28,6 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
 )
 
 EXPECTED_LAZY_BRIDGE = (
-    "ensure_atividade_versioning_schema",
     "get_preferred_matriz_for_curso",
     "logger",
 )
@@ -502,7 +502,7 @@ def test_dual_init_entry_points_and_exact_caller_manifest():
     }
 
 
-def test_exact_direct_import_set_and_three_entry_lazy_bridge():
+def test_exact_direct_import_set_and_two_entry_lazy_bridge():
     app_tree = _tree(APP_DB_PATH)
     assert _imported_names(app_tree, "app.db_maintenance") == EXPECTED_DIRECT_MAINTENANCE_IMPORTS
     assert _imported_names(app_tree, "app.backup_settings") == (
@@ -537,7 +537,7 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
         and any(isinstance(target, ast.Name) and target.id == "SCHEMA_VERSION" for target in node.targets)
     ]
     assert len(version_nodes) == 1
-    assert ast.literal_eval(version_nodes[0].value) == 2
+    assert ast.literal_eval(version_nodes[0].value) == 3
 
     migration_nodes = [
         node
@@ -558,7 +558,7 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
     assert len(migration_nodes) == 1
     migrations = migration_nodes[0].value
     assert isinstance(migrations, (ast.Tuple, ast.List))
-    assert len(migrations.elts) == 2
+    assert len(migrations.elts) == 3
     version, name, function = migrations.elts[0].elts
     assert ast.literal_eval(version) == 1
     assert ast.literal_eval(name) == "baseline_schema_management"
@@ -567,6 +567,10 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
     assert ast.literal_eval(version) == 2
     assert ast.literal_eval(name) == "normalize_atividades_schema"
     assert isinstance(function, ast.Name) and function.id == "_migration_v2_normalize_atividades_schema"
+    version, name, function = migrations.elts[2].elts
+    assert ast.literal_eval(version) == 3
+    assert ast.literal_eval(name) == "normalize_activity_versioning_core"
+    assert isinstance(function, ast.Name) and function.id == "_migration_v3_normalize_activity_versioning_core"
 
     baseline = _top_level_function(tree, "_migration_v1_baseline")
     assert len(baseline.body) == 1
@@ -661,25 +665,22 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
         "foreign_keys_pragma": True,
     }
 
-    recreate = _transaction_facts(MAIN_PATH, "_recreate_atividade_versao")
-    assert recreate == {
-        **neutral,
-        "executescript": 1,
-        "begin_sql": True,
-        "commit_sql": True,
-        "foreign_keys_pragma": True,
-    }
-
     main_tree = _tree(MAIN_PATH)
-    versioning_calls = _direct_calls(_top_level_function(main_tree, "ensure_atividade_versioning_schema"))
-    assert "_migrate_atividade_versao_to_numero_versao" in versioning_calls
-    assert "_fix_atividade_versao_default" in versioning_calls
-    for delegate in (
+    assert _top_level_function(_tree(DB_MAINTENANCE_PATH), "ensure_atividade_versioning_schema")
+
+    legacy_rebuild = (
+        "_needs_atividade_versao_migration",
+        "_needs_atividade_versao_default_fix",
+        "_needs_index_hardening",
+        "_recreate_atividade_versao",
         "_migrate_atividade_versao_to_numero_versao",
         "_fix_atividade_versao_default",
-    ):
-        calls = _direct_calls(_top_level_function(main_tree, delegate))
-        assert calls.count("_recreate_atividade_versao") == 1
+    )
+    main_functions = {
+        node.name for node in main_tree.body if isinstance(node, ast.FunctionDef)
+    }
+    assert not (set(legacy_rebuild) & main_functions)
+    assert "ensure_atividade_versioning_schema" not in main_functions
 
 
 def test_db_maintenance_import_isolated_and_contract_tests_are_static(tmp_path):
@@ -688,7 +689,7 @@ def test_db_maintenance_import_isolated_and_contract_tests_are_static(tmp_path):
         "import sys; "
         "assert 'main' not in sys.modules; "
         "import app.db_maintenance as module; "
-        "assert module.SCHEMA_VERSION == 2; "
+        "assert module.SCHEMA_VERSION == 3; "
         "assert 'main' not in sys.modules"
     )
     environment = os.environ.copy()
@@ -731,17 +732,17 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 4
+    assert ledger.count(CONTRACT_RELPATH) == 5
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
     assert ledger.count("| PHASE3-B9 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B9 intentional revision" in contract
-    assert "The exact three entries" in contract
+    assert "PHASE 3-B10 intentional revision" in contract
+    assert "The exact two entries" in contract
     assert "Resolved by PHASE 3-B6" in contract
     assert "PHASE 3-B10" in index

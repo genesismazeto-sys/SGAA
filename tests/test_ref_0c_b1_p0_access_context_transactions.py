@@ -151,8 +151,8 @@ def test_mapped_route_uses_bootstrapped_v2_without_recurring_atividades_ddl(
         )
         user_version_before = conn.execute("PRAGMA user_version").fetchone()[0]
     assert columns_before == expected_columns
-    assert migrations_before[-1] == (2, "normalize_atividades_schema")
-    assert user_version_before == 2
+    assert migrations_before[-1] == (3, "normalize_activity_versioning_core")
+    assert user_version_before == 3
 
     original_get_db_connection = main.get_db_connection
     statements = []

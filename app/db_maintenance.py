@@ -18,7 +18,7 @@ from app.academics import (
 from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_type
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 ATIVIDADES_SCHEMA_COLUMNS = (
     "id",
@@ -404,9 +404,701 @@ def _migration_v2_normalize_atividades_schema(conn) -> None:
         )
 
 
+_ACTIVITY_VERSIONING_CORE_TABLES = (
+    "atividade_base",
+    "norma_atividade",
+    "atividade_versao",
+)
+_ACTIVITY_VERSIONING_LEAF_TABLES = (
+    "atividade_transicao",
+    "matriz_norma",
+    "matriz_atividade_versao_item",
+    "atividade_legacy_map",
+)
+_ACTIVITY_VERSIONING_CORE_TRIGGERS = (
+    "trg_atividade_versao_eixo_norma_insert",
+    "trg_atividade_versao_prev_same_eixo_insert",
+    "trg_atividade_versao_prev_same_eixo_update",
+    "trg_atividade_versao_eixo_norma_update",
+    "trg_atividade_versao_num_pos_insert",
+    "trg_atividade_versao_num_pos_update",
+)
+_ACTIVITY_VERSIONING_LEAF_TRIGGERS = (
+    "trg_atividade_transicao_aac_para_aeu_insert",
+    "trg_atividade_transicao_aac_para_aeu_update",
+)
+_ACTIVITY_VERSIONING_CORE_INDEXES = {
+    "idx_norma_atividade_codigo": (
+        "norma_atividade",
+        ("codigo",),
+        False,
+    ),
+    "idx_norma_atividade_eixo": ("norma_atividade", ("eixo",), False),
+    "idx_atividade_versao_base": (
+        "atividade_versao",
+        ("atividade_base_id",),
+        False,
+    ),
+    "idx_atividade_versao_norma": (
+        "atividade_versao",
+        ("norma_id",),
+        False,
+    ),
+    "idx_atividade_versao_base_num": (
+        "atividade_versao",
+        ("atividade_base_id", "numero_versao"),
+        True,
+    ),
+    "idx_atividade_versao_eixo": ("atividade_versao", ("eixo",), False),
+    "idx_atividade_versao_status": (
+        "atividade_versao",
+        ("status",),
+        False,
+    ),
+}
+_ACTIVITY_VERSIONING_LEAF_INDEXES = (
+    "idx_atividade_transicao_from",
+    "idx_atividade_transicao_to",
+    "idx_atividade_transicao_tipo",
+    "idx_matriz_norma_matriz",
+    "idx_matriz_norma_norma",
+    "idx_matriz_atividade_versao_item_matriz",
+    "idx_matriz_atividade_versao_item_versao",
+    "idx_atividade_legacy_map_base",
+)
+_ACTIVITY_VERSIONING_PARENT_COLUMNS = {
+    "atividade_base": (
+        "id",
+        "nome_conceito",
+        "descricao",
+        "status",
+        "created_at",
+    ),
+    "norma_atividade": (
+        "id",
+        "codigo",
+        "eixo",
+        "revisao",
+        "nome",
+        "descricao",
+        "status",
+        "created_at",
+    ),
+}
+_ACTIVITY_VERSIONING_VERSAO_COLUMNS = (
+    "id",
+    "atividade_base_id",
+    "norma_id",
+    "codigo_normativo",
+    "eixo",
+    "grupo",
+    "ch_por_evento",
+    "limite_semestre",
+    "limite_total",
+    "observacao_aluno",
+    "observacao_admin",
+    "documentos_json",
+    "vigencia_inicio",
+    "vigencia_fim",
+    "numero_versao",
+    "status",
+    "versao_anterior_id",
+    "created_at",
+)
+_ACTIVITY_VERSIONING_VERSAO_LEGACY_COLUMNS = (
+    "id",
+    "atividade_base_id",
+    "norma_id",
+    "codigo_normativo",
+    "eixo",
+    "grupo",
+    "ch_por_evento",
+    "limite_semestre",
+    "limite_total",
+    "observacao_aluno",
+    "observacao_admin",
+    "documentos_json",
+    "vigencia_inicio",
+    "vigencia_fim",
+    "status",
+    "versao_anterior_id",
+    "created_at",
+)
+
+
+def _schema_object_sql(conn, object_type: str, name: str) -> str:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = ? AND name = ?",
+        (object_type, name),
+    ).fetchone()
+    return str(row[0] or "") if row else ""
+
+
+def _table_column_names(conn, table_name: str) -> tuple[str, ...]:
+    escaped = table_name.replace('"', '""')
+    return tuple(
+        str(row[1])
+        for row in conn.execute(f'PRAGMA table_info("{escaped}")').fetchall()
+    )
+
+
+def _activity_versioning_recorded_versions(conn) -> tuple[int, ...]:
+    if not _schema_object_exists(conn, "table", "schema_migrations"):
+        return ()
+    return tuple(
+        int(row[0])
+        for row in conn.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    )
+
+
+def _activity_versioning_source_variant(conn) -> str:
+    if _schema_object_exists(conn, "table", "atividade_versao_new"):
+        raise SchemaMigrationStateError(
+            "preexisting atividade_versao_new table blocks migration v3"
+        )
+
+    present_core = {
+        table
+        for table in _ACTIVITY_VERSIONING_CORE_TABLES
+        if _schema_object_exists(conn, "table", table)
+    }
+    present_leaf = {
+        table
+        for table in _ACTIVITY_VERSIONING_LEAF_TABLES
+        if _schema_object_exists(conn, "table", table)
+    }
+    present_parents = present_core.intersection(_ACTIVITY_VERSIONING_PARENT_COLUMNS)
+    for table in present_parents:
+        expected_columns = _ACTIVITY_VERSIONING_PARENT_COLUMNS[table]
+        actual_columns = _table_column_names(conn, table)
+        if actual_columns != expected_columns:
+            raise SchemaMigrationStateError(
+                "unsupported activity-versioning core: "
+                f"{table} columns={actual_columns!r}"
+            )
+        normalized_parent = "".join(
+            _schema_object_sql(conn, "table", table).lower().split()
+        )
+        required_fragments = {
+            "atividade_base": (
+                "nome_conceitotextnotnullunique",
+                "check(statusin('ativo','inativo'))",
+            ),
+            "norma_atividade": (
+                "codigotextnotnullunique",
+                "check(eixoin('aac','aeu'))",
+                "check(statusin('ativa','inativa'))",
+            ),
+        }[table]
+        if not all(fragment in normalized_parent for fragment in required_fragments):
+            raise SchemaMigrationStateError(
+                f"unsupported activity-versioning parent constraints: {table}"
+            )
+
+    if "atividade_versao" not in present_core:
+        unsupported_leaf = present_leaf - {"atividade_legacy_map"}
+        if unsupported_leaf or (present_leaf and "atividade_base" not in present_core):
+            raise SchemaMigrationStateError(
+                "partial activity-versioning core cannot be completed safely: "
+                f"leaf={sorted(present_leaf)!r}"
+            )
+        if "atividade_legacy_map" in present_leaf:
+            expected_map_columns = (
+                "id",
+                "atividade_id_legacy",
+                "atividade_base_id",
+                "status",
+                "observacao_admin",
+                "created_at",
+            )
+            if _table_column_names(conn, "atividade_legacy_map") != expected_map_columns:
+                raise SchemaMigrationStateError(
+                    "unsupported partial atividade_legacy_map schema"
+                )
+        return "absent"
+
+    if present_core != set(_ACTIVITY_VERSIONING_CORE_TABLES):
+        raise SchemaMigrationStateError(
+            "partial activity-versioning core: "
+            f"present={sorted(present_core)!r}"
+        )
+
+    columns = _table_column_names(conn, "atividade_versao")
+    if columns not in (
+        _ACTIVITY_VERSIONING_VERSAO_COLUMNS,
+        _ACTIVITY_VERSIONING_VERSAO_LEGACY_COLUMNS,
+    ):
+        raise SchemaMigrationStateError(
+            "unsupported activity-versioning core: "
+            f"atividade_versao columns={columns!r}"
+        )
+
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise SchemaMigrationStateError(
+            "activity-versioning core has foreign key violations: "
+            f"{violations!r}"
+        )
+
+    if columns == _ACTIVITY_VERSIONING_VERSAO_LEGACY_COLUMNS:
+        return "missing_numero"
+
+    invalid = conn.execute(
+        "SELECT id FROM atividade_versao "
+        "WHERE numero_versao IS NULL OR numero_versao < 1 "
+        "ORDER BY id LIMIT 1"
+    ).fetchone()
+    if invalid is not None:
+        raise SchemaMigrationStateError(
+            f"invalid numero_versao in atividade_versao id={int(invalid[0])}"
+        )
+    duplicate = conn.execute(
+        "SELECT atividade_base_id, numero_versao "
+        "FROM atividade_versao GROUP BY atividade_base_id, numero_versao "
+        "HAVING COUNT(*) > 1 LIMIT 1"
+    ).fetchone()
+    if duplicate is not None:
+        raise SchemaMigrationStateError(
+            "duplicate atividade_versao numbering for "
+            f"base={int(duplicate[0])}, numero={int(duplicate[1])}"
+        )
+
+    normalized = "".join(
+        _schema_object_sql(conn, "table", "atividade_versao")
+        .lower()
+        .replace('"', "")
+        .split()
+    )
+    index_row = next(
+        (
+            row
+            for row in conn.execute(
+                "PRAGMA index_list(atividade_versao)"
+            ).fetchall()
+            if str(row[1]) == "idx_atividade_versao_base_num"
+        ),
+        None,
+    )
+    named_index_is_canonical = False
+    if index_row is not None:
+        index_columns = tuple(
+            row[2]
+            for row in conn.execute(
+                "PRAGMA index_info(idx_atividade_versao_base_num)"
+            ).fetchall()
+        )
+        named_index_is_canonical = (
+            int(index_row[2]) == 1
+            and int(index_row[4]) == 0
+            and index_columns == ("atividade_base_id", "numero_versao")
+        )
+    canonical_fragments = (
+        "numero_versaointegernotnulldefault1check(numero_versao>=1)",
+        "foreignkey(versao_anterior_id)referencesatividade_versao(id)ondeleterestrict",
+        "statusin('rascunho','ativa','inativa','descontinuada','substituida')",
+    )
+    if all(fragment in normalized for fragment in canonical_fragments):
+        return "canonical" if named_index_is_canonical else "canonical_needs_objects"
+    return "legacy_numero"
+
+
+def _create_activity_versioning_core_tables(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS atividade_base (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_conceito TEXT NOT NULL UNIQUE,
+            descricao TEXT,
+            status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo', 'inativo')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS norma_atividade (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT NOT NULL UNIQUE,
+            eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
+            revisao TEXT NOT NULL,
+            nome TEXT,
+            descricao TEXT,
+            status TEXT NOT NULL DEFAULT 'ativa' CHECK(status IN ('ativa', 'inativa')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS atividade_versao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            atividade_base_id INTEGER NOT NULL,
+            norma_id INTEGER NOT NULL,
+            codigo_normativo TEXT NOT NULL,
+            eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
+            grupo TEXT,
+            ch_por_evento REAL,
+            limite_semestre REAL,
+            limite_total REAL,
+            observacao_aluno TEXT,
+            observacao_admin TEXT,
+            documentos_json TEXT,
+            vigencia_inicio TEXT,
+            vigencia_fim TEXT,
+            numero_versao INTEGER NOT NULL DEFAULT 1 CHECK(numero_versao >= 1),
+            status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
+            versao_anterior_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
+            FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
+            FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT
+        )
+        """
+    )
+
+
+def ensure_activity_versioning_core_tables(conn) -> None:
+    _create_activity_versioning_core_tables(conn)
+
+
+def ensure_activity_versioning_core_triggers(conn) -> None:
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_eixo_norma_insert
+        BEFORE INSERT ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.norma_id IS NOT NULL
+             AND EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id = NEW.norma_id AND n.eixo <> NEW.eixo)
+        BEGIN
+            SELECT RAISE(ABORT, 'atividade_versao.eixo incompatível com norma_atividade.eixo');
+        END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_prev_same_eixo_insert
+        BEFORE INSERT ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.versao_anterior_id IS NOT NULL
+             AND EXISTS(
+                 SELECT 1
+                   FROM atividade_versao prev
+                  WHERE prev.id = NEW.versao_anterior_id
+                    AND prev.eixo <> NEW.eixo
+             )
+        BEGIN
+            SELECT RAISE(ABORT, 'Mudança de eixo não pode ocorrer via versao_anterior_id; registre em atividade_transicao');
+        END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_prev_same_eixo_update
+        BEFORE UPDATE OF versao_anterior_id, eixo ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.versao_anterior_id IS NOT NULL
+             AND EXISTS(
+                 SELECT 1
+                   FROM atividade_versao prev
+                  WHERE prev.id = NEW.versao_anterior_id
+                    AND prev.eixo <> NEW.eixo
+             )
+        BEGIN
+            SELECT RAISE(ABORT, 'Mudança de eixo não pode ocorrer via versao_anterior_id; registre em atividade_transicao');
+        END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_eixo_norma_update
+        BEFORE UPDATE OF norma_id, eixo ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.norma_id IS NOT NULL
+             AND EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id = NEW.norma_id AND n.eixo <> NEW.eixo)
+        BEGIN
+            SELECT RAISE(ABORT, 'atividade_versao.eixo incompatível com norma_atividade.eixo');
+        END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_num_pos_insert
+        BEFORE INSERT ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.numero_versao <= 0
+        BEGIN
+            SELECT RAISE(ABORT, 'numero_versao deve ser >= 1');
+        END;
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_num_pos_update
+        BEFORE UPDATE OF numero_versao ON atividade_versao
+        FOR EACH ROW
+        WHEN NEW.numero_versao <= 0
+        BEGIN
+            SELECT RAISE(ABORT, 'numero_versao deve ser >= 1');
+        END;
+        """
+    )
+
+
+def ensure_requisicoes_versioning_compatibility_schema(conn) -> None:
+    if not _schema_object_exists(conn, "table", "requisicoes"):
+        raise SchemaMigrationStateError(
+            "requisicoes must exist before activity-versioning schema"
+        )
+    columns = set(_table_column_names(conn, "requisicoes"))
+    additions = (
+        ("atividade_versao_id", "INTEGER"),
+        ("regra_snapshot_json", "TEXT"),
+        ("codigo_normativo_snapshot", "TEXT"),
+    )
+    for name, sql_type in additions:
+        if name not in columns:
+            conn.execute(
+                f"ALTER TABLE requisicoes ADD COLUMN {name} {sql_type}"
+            )
+
+
+def ensure_activity_versioning_core_indexes(conn) -> None:
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_norma_atividade_codigo "
+        "ON norma_atividade(codigo)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_norma_atividade_eixo "
+        "ON norma_atividade(eixo)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_atividade_versao_base "
+        "ON atividade_versao(atividade_base_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_atividade_versao_norma "
+        "ON atividade_versao(norma_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_atividade_versao_base_num "
+        "ON atividade_versao(atividade_base_id, numero_versao)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_atividade_versao_eixo "
+        "ON atividade_versao(eixo)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_atividade_versao_status "
+        "ON atividade_versao(status)"
+    )
+
+
+def ensure_requisicoes_versioning_compatibility_index(conn) -> None:
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_requisicoes_atividade_versao_id "
+        "ON requisicoes(atividade_versao_id)"
+    )
+
+
+def _drop_activity_versioning_rebuild_sensitive_objects(conn) -> None:
+    for trigger_name in _ACTIVITY_VERSIONING_LEAF_TRIGGERS:
+        conn.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}"')
+    conn.execute("DROP INDEX IF EXISTS idx_atividade_versao_base_num")
+
+
+def _rebuild_activity_versioning_core_v3(conn, variant: str) -> None:
+    sequence_row = None
+    if _schema_object_exists(conn, "table", "sqlite_sequence"):
+        sequence_row = conn.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'atividade_versao'"
+        ).fetchone()
+    previous_sequence = int(sequence_row[0]) if sequence_row else 0
+
+    _drop_activity_versioning_rebuild_sensitive_objects(conn)
+    conn.execute(
+        """
+        CREATE TABLE atividade_versao_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            atividade_base_id INTEGER NOT NULL,
+            norma_id INTEGER NOT NULL,
+            codigo_normativo TEXT NOT NULL,
+            eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
+            grupo TEXT,
+            ch_por_evento REAL,
+            limite_semestre REAL,
+            limite_total REAL,
+            observacao_aluno TEXT,
+            observacao_admin TEXT,
+            documentos_json TEXT,
+            vigencia_inicio TEXT,
+            vigencia_fim TEXT,
+            numero_versao INTEGER NOT NULL DEFAULT 1 CHECK(numero_versao >= 1),
+            status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
+            versao_anterior_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
+            FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
+            FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao_new(id) ON DELETE RESTRICT
+        )
+        """
+    )
+    number_expression = (
+        "ROW_NUMBER() OVER (PARTITION BY atividade_base_id ORDER BY id)"
+        if variant == "missing_numero"
+        else "numero_versao"
+    )
+    conn.execute(
+        f"""
+        INSERT INTO atividade_versao_new (
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno,
+            observacao_admin, documentos_json, vigencia_inicio, vigencia_fim,
+            numero_versao, status, versao_anterior_id, created_at
+        )
+        SELECT
+            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            ch_por_evento, limite_semestre, limite_total, observacao_aluno,
+            observacao_admin, documentos_json, vigencia_inicio, vigencia_fim,
+            {number_expression}, status, versao_anterior_id, created_at
+        FROM atividade_versao
+        ORDER BY id
+        """
+    )
+    conn.execute("DROP TABLE atividade_versao")
+    conn.execute(
+        "ALTER TABLE atividade_versao_new RENAME TO atividade_versao"
+    )
+    max_id = int(
+        conn.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM atividade_versao"
+        ).fetchone()[0]
+    )
+    desired_sequence = max(previous_sequence, max_id)
+    conn.execute(
+        "DELETE FROM sqlite_sequence "
+        "WHERE name IN ('atividade_versao', 'atividade_versao_new')"
+    )
+    if desired_sequence:
+        conn.execute(
+            "INSERT INTO sqlite_sequence(name, seq) "
+            "VALUES('atividade_versao', ?)",
+            (desired_sequence,),
+        )
+
+
+def _validate_activity_versioning_v3(conn) -> None:
+    variant = _activity_versioning_source_variant(conn)
+    if variant != "canonical":
+        raise SchemaMigrationStateError(
+            "activity-versioning v3 core is not canonical: "
+            f"state={variant}"
+        )
+    missing_triggers = tuple(
+        name
+        for name in _ACTIVITY_VERSIONING_CORE_TRIGGERS
+        if not _schema_object_exists(conn, "trigger", name)
+    )
+    if missing_triggers:
+        raise SchemaMigrationStateError(
+            f"activity-versioning v3 missing core triggers: {missing_triggers!r}"
+        )
+    for name, (table, columns, unique) in _ACTIVITY_VERSIONING_CORE_INDEXES.items():
+        row = next(
+            (
+                row
+                for row in conn.execute(f"PRAGMA index_list({table})").fetchall()
+                if str(row[1]) == name
+            ),
+            None,
+        )
+        if row is None:
+            raise SchemaMigrationStateError(
+                f"activity-versioning v3 missing core index: {name}"
+            )
+        actual_columns = tuple(
+            index_row[2]
+            for index_row in conn.execute(f'PRAGMA index_info("{name}")').fetchall()
+        )
+        if (
+            bool(row[2]) is not unique
+            or int(row[4]) != 0
+            or actual_columns != columns
+        ):
+            raise SchemaMigrationStateError(
+                f"activity-versioning v3 noncanonical core index: {name}"
+            )
+    missing_leaf = tuple(
+        name
+        for name in (
+            *_ACTIVITY_VERSIONING_LEAF_TABLES,
+            *_ACTIVITY_VERSIONING_LEAF_TRIGGERS,
+            *_ACTIVITY_VERSIONING_LEAF_INDEXES,
+        )
+        if not any(
+            _schema_object_exists(conn, object_type, name)
+            for object_type in ("table", "trigger", "index")
+        )
+    )
+    if missing_leaf:
+        raise SchemaMigrationStateError(
+            f"activity-versioning v3 missing B8 leaf objects: {missing_leaf!r}"
+        )
+    requisicoes_columns = set(_table_column_names(conn, "requisicoes"))
+    required_columns = {
+        "atividade_versao_id",
+        "regra_snapshot_json",
+        "codigo_normativo_snapshot",
+    }
+    if not required_columns <= requisicoes_columns:
+        raise SchemaMigrationStateError(
+            "activity-versioning v3 missing requisicoes compatibility columns"
+        )
+    if not _schema_object_exists(
+        conn, "index", "idx_requisicoes_atividade_versao_id"
+    ):
+        raise SchemaMigrationStateError(
+            "activity-versioning v3 missing requisicoes compatibility index"
+        )
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise SchemaMigrationStateError(
+            f"foreign key violations after activity-versioning v3: {violations!r}"
+        )
+
+
+def _validate_recorded_activity_versioning_v3(conn) -> None:
+    try:
+        _validate_activity_versioning_v3(conn)
+    except SchemaMigrationStateError as exc:
+        raise SchemaMigrationStateError(
+            f"recorded v3 contradicts physical schema: {exc}"
+        ) from exc
+
+
+def _migration_v3_normalize_activity_versioning_core(conn) -> None:
+    variant = _activity_versioning_source_variant(conn)
+    if variant == "absent":
+        raise SchemaMigrationStateError(
+            "activity-versioning core must exist before migration v3"
+        )
+    if variant != "canonical":
+        _rebuild_activity_versioning_core_v3(conn, variant)
+    ensure_atividade_versioning_leaf_tables(conn)
+    ensure_activity_versioning_core_triggers(conn)
+    ensure_atividade_versioning_leaf_triggers(conn)
+    ensure_requisicoes_versioning_compatibility_schema(conn)
+    ensure_activity_versioning_core_indexes(conn)
+    ensure_atividade_versioning_leaf_indexes(conn)
+    ensure_requisicoes_versioning_compatibility_index(conn)
+    _validate_activity_versioning_v3(conn)
+
+
 SCHEMA_MIGRATIONS: tuple[tuple[int, str, Callable[[sqlite3.Connection], None]], ...] = (
     (1, "baseline_schema_management", _migration_v1_baseline),
     (2, "normalize_atividades_schema", _migration_v2_normalize_atividades_schema),
+    (3, "normalize_activity_versioning_core", _migration_v3_normalize_activity_versioning_core),
 )
 
 
@@ -466,10 +1158,14 @@ def apply_schema_migrations(
         if version in applied_versions:
             if version == 2:
                 _validate_recorded_atividades_v2(conn)
+            if version == 3:
+                _validate_recorded_activity_versioning_v3(conn)
             continue
         migration(conn)
         if version == 2:
             _validate_recorded_atividades_v2(conn)
+        if version == 3:
+            _validate_activity_versioning_v3(conn)
         conn.execute(
             "INSERT INTO schema_migrations (version, name, details_json) VALUES (?, ?, ?)",
             (
@@ -501,19 +1197,29 @@ def apply_early_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict
             "early schema migration requires no active transaction"
         )
 
-    if not _schema_object_exists(conn, "table", "atividades"):
-        user_version = get_schema_version(conn)
-        recorded: tuple[int, ...] = ()
-        if _schema_object_exists(conn, "table", "schema_migrations"):
-            recorded = tuple(
-                int(row[0])
-                for row in conn.execute(
-                    "SELECT version FROM schema_migrations ORDER BY version"
-                ).fetchall()
+    recorded = _activity_versioning_recorded_versions(conn)
+    recorded_user_version = get_schema_version(conn)
+    if recorded_user_version > SCHEMA_VERSION:
+        raise SchemaMigrationStateError(
+            f"unsupported user_version {recorded_user_version} exceeds schema registry"
+        )
+    core_variant = _activity_versioning_source_variant(conn)
+    has_atividades = _schema_object_exists(conn, "table", "atividades")
+    if 3 in recorded or recorded_user_version >= 3:
+        if 3 not in recorded:
+            raise SchemaMigrationStateError(
+                "user_version v3 contradicts schema migration registry"
             )
-        if 2 in recorded or user_version >= 2:
+        _validate_recorded_activity_versioning_v3(conn)
+
+    if not has_atividades:
+        if 2 in recorded or recorded_user_version >= 2:
             raise SchemaMigrationStateError(
                 "recorded v2 contradicts physical schema: atividades table is absent"
+            )
+        if core_variant != "absent":
+            raise SchemaMigrationStateError(
+                "partial activity-versioning core: atividades table is absent"
             )
         return {
             "schema_version": max(recorded, default=0),
@@ -521,18 +1227,7 @@ def apply_early_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict
             "applied_now": [],
         }
 
-    recorded_user_version = get_schema_version(conn)
-    if recorded_user_version > SCHEMA_VERSION:
-        raise SchemaMigrationStateError(
-            f"unsupported user_version {recorded_user_version} exceeds schema registry"
-        )
-    has_recorded_v2 = (
-        _schema_object_exists(conn, "table", "schema_migrations")
-        and conn.execute(
-            "SELECT 1 FROM schema_migrations WHERE version = 2"
-        ).fetchone()
-        is not None
-    )
+    has_recorded_v2 = 2 in recorded
     if (
         recorded_user_version >= 2
         and not has_recorded_v2
@@ -541,6 +1236,23 @@ def apply_early_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict
         raise SchemaMigrationStateError(
             "user_version v2 contradicts physical schema: atividades is not canonical"
         )
+
+    through_version = 2 if core_variant == "absent" else SCHEMA_VERSION
+    if core_variant != "absent":
+        required_prerequisites = (
+            "requisicoes",
+            "matrizes_atividades",
+        )
+        missing = tuple(
+            name
+            for name in required_prerequisites
+            if not _schema_object_exists(conn, "table", name)
+        )
+        if missing:
+            raise SchemaMigrationStateError(
+                "partial activity-versioning core: missing prerequisites "
+                f"{missing!r}"
+            )
 
     original_foreign_keys = int(conn.execute("PRAGMA foreign_keys").fetchone()[0])
     conn.execute("PRAGMA foreign_keys = OFF")
@@ -554,7 +1266,7 @@ def apply_early_schema_migrations(conn: sqlite3.Connection, logger=None) -> dict
         conn.execute("BEGIN IMMEDIATE")
         transaction_started = True
         result = apply_schema_migrations(
-            conn, logger=logger, through_version=SCHEMA_VERSION
+            conn, logger=logger, through_version=through_version
         )
         conn.commit()
         transaction_started = False
@@ -1126,3 +1838,29 @@ def ensure_atividade_versioning_leaf_indexes(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_atividade_versao_item_matriz ON matriz_atividade_versao_item(matriz_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_matriz_atividade_versao_item_versao ON matriz_atividade_versao_item(atividade_versao_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_atividade_legacy_map_base ON atividade_legacy_map(atividade_base_id)")
+
+
+def ensure_atividade_versioning_schema(conn) -> None:
+    """Ensure canonical activity-versioning objects under caller transaction ownership."""
+    recorded = _activity_versioning_recorded_versions(conn)
+    if 3 in recorded:
+        _validate_recorded_activity_versioning_v3(conn)
+    variant = _activity_versioning_source_variant(conn)
+    if variant not in ("absent", "canonical"):
+        raise SchemaMigrationStateError(
+            "activity-versioning core requires isolated migration v3 before ensure: "
+            f"state={variant}"
+        )
+
+    ensure_matriz_atividade_links_table(conn)
+    ensure_activity_versioning_core_tables(conn)
+    ensure_atividade_versioning_leaf_tables(conn)
+    ensure_activity_versioning_core_triggers(conn)
+    ensure_atividade_versioning_leaf_triggers(conn)
+    ensure_requisicoes_versioning_compatibility_schema(conn)
+    ensure_activity_versioning_core_indexes(conn)
+    ensure_atividade_versioning_leaf_indexes(conn)
+    ensure_requisicoes_versioning_compatibility_index(conn)
+
+    if 3 in recorded:
+        _validate_recorded_activity_versioning_v3(conn)

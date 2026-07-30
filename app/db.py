@@ -11,6 +11,7 @@ from app.academics import (
 from app.db_maintenance import (
     apply_early_schema_migrations,
     apply_schema_migrations,
+    ensure_atividade_versioning_schema,
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
     ensure_reportes_table,
@@ -57,7 +58,6 @@ def _get_main_db_helpers():
     import main  # type: ignore
 
     return {
-        "ensure_atividade_versioning_schema": main.ensure_atividade_versioning_schema,
         "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
         "logger": main.logger,
     }
@@ -67,7 +67,6 @@ def _init_db_impl():
     helpers = _get_main_db_helpers()
     default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
-    ensure_atividade_versioning_schema = helpers["ensure_atividade_versioning_schema"]
     get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
     logger = helpers["logger"]
 

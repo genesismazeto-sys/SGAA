@@ -243,26 +243,20 @@ def test_baseline_leaf_blocks_are_owned_by_three_pure_helpers_in_exact_order():
         assert getattr(db_maintenance, name)
 
 
-def test_main_orchestrator_diff_is_exactly_three_semantic_helper_calls():
-    baseline_tree = _tree(_baseline(MAIN_PATH))
+def test_main_orchestrator_is_absent_after_b10_core_migration():
     current_tree = _tree(_read(MAIN_PATH))
-    baseline_function = _function(baseline_tree, "ensure_atividade_versioning_schema")
-    current_function = _function(current_tree, "ensure_atividade_versioning_schema")
-    assert _dump(current_function) == _dump(_expected_b8_orchestrator(baseline_function))
-    assert [name for name in _direct_calls(current_function) if name in LEAF_HELPERS] == list(LEAF_HELPERS)
+    assert _definition_count(current_tree, "ensure_atividade_versioning_schema") == 0
+    assert _definition_count(current_tree, "_VERSAO_NEW_DDL") == 0
 
 
-def test_core_migration_and_rebuild_nodes_are_byte_semantically_unchanged():
-    baseline_tree = _tree(_baseline(MAIN_PATH))
+def test_core_migration_and_rebuild_nodes_are_absent_from_main_after_b10():
     current_tree = _tree(_read(MAIN_PATH))
-    assert _dump(_assignment(current_tree, "_VERSAO_NEW_DDL")) == _dump(
-        _assignment(baseline_tree, "_VERSAO_NEW_DDL")
-    )
+    assert _definition_count(current_tree, "_VERSAO_NEW_DDL") == 0
     for name in CORE_FUNCTIONS:
-        assert _dump(_function(current_tree, name)) == _dump(_function(baseline_tree, name))
+        assert _definition_count(current_tree, name) == 0
 
 
-def test_b8_v1_is_unchanged_and_b9_adds_only_the_authorized_v2_registry_delta():
+def test_b8_v1_is_unchanged_and_b10_adds_v2_and_v3_registry_entries():
     baseline_tree = _tree(_baseline(DB_MAINTENANCE_PATH))
     current_tree = _tree(_read(DB_MAINTENANCE_PATH))
     baseline_registry = _assignment(baseline_tree, "SCHEMA_MIGRATIONS").value
@@ -270,14 +264,18 @@ def test_b8_v1_is_unchanged_and_b9_adds_only_the_authorized_v2_registry_delta():
     assert isinstance(baseline_registry, (ast.Tuple, ast.List))
     assert isinstance(current_registry, (ast.Tuple, ast.List))
     assert ast.literal_eval(_assignment(baseline_tree, "SCHEMA_VERSION").value) == 1
-    assert ast.literal_eval(_assignment(current_tree, "SCHEMA_VERSION").value) == 2
+    assert ast.literal_eval(_assignment(current_tree, "SCHEMA_VERSION").value) == 3
     assert len(baseline_registry.elts) == 1
-    assert len(current_registry.elts) == 2
+    assert len(current_registry.elts) == 3
     assert _dump(current_registry.elts[0]) == _dump(baseline_registry.elts[0])
-    version, name, function = current_registry.elts[1].elts
-    assert ast.literal_eval(version) == 2
-    assert ast.literal_eval(name) == "normalize_atividades_schema"
-    assert isinstance(function, ast.Name) and function.id == "_migration_v2_normalize_atividades_schema"
+    v2_version, v2_name, v2_function = current_registry.elts[1].elts
+    assert ast.literal_eval(v2_version) == 2
+    assert ast.literal_eval(v2_name) == "normalize_atividades_schema"
+    assert isinstance(v2_function, ast.Name) and v2_function.id == "_migration_v2_normalize_atividades_schema"
+    v3_version, v3_name, v3_function = current_registry.elts[2].elts
+    assert ast.literal_eval(v3_version) == 3
+    assert ast.literal_eval(v3_name) == "normalize_activity_versioning_core"
+    assert isinstance(v3_function, ast.Name) and v3_function.id == "_migration_v3_normalize_activity_versioning_core"
 
 
 def test_sole_defining_ownership_import_identity_and_cycle_isolation():
@@ -294,12 +292,13 @@ def test_sole_defining_ownership_import_identity_and_cycle_isolation():
         assert _definition_count(trees["maintenance"], name) == 1
         assert _definition_count(trees["main"], name) == 0
         assert _definition_count(trees["app_db"], name) == 0
-        assert getattr(main, name) is getattr(db_maintenance, name)
+
+    assert getattr(main, "ensure_atividade_versioning_schema") is getattr(db_maintenance, "ensure_atividade_versioning_schema")
 
     code = (
         "import sys; assert 'main' not in sys.modules; "
         "import app.db_maintenance as module; "
-        f"assert all(hasattr(module, name) for name in {LEAF_HELPERS!r}); "
+        f"assert hasattr(module, 'ensure_atividade_versioning_schema'); "
         "assert 'main' not in sys.modules"
     )
     result = subprocess.run(
@@ -335,7 +334,6 @@ def test_app_db_preserves_b8_semantics_with_only_the_b9_checkpoint_and_lazy_delt
         if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name)
     )
     expected = (
-        "ensure_atividade_versioning_schema",
         "get_preferred_matriz_for_curso",
         "logger",
     )

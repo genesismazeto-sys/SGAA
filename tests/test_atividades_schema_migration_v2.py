@@ -162,18 +162,32 @@ def _seed_fk_dependents(conn) -> None:
             matriz_id INTEGER NOT NULL REFERENCES matrizes_atividades(id) ON DELETE CASCADE,
             atividade_id INTEGER NOT NULL REFERENCES atividades(id) ON DELETE CASCADE
         );
-        CREATE TABLE atividade_base(id INTEGER PRIMARY KEY);
+        CREATE TABLE atividade_base(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_conceito TEXT NOT NULL UNIQUE,
+            descricao TEXT,
+            status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo', 'inativo')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
         CREATE TABLE atividade_legacy_map(
-            id INTEGER PRIMARY KEY,
-            atividade_id_legacy INTEGER NOT NULL REFERENCES atividades(id) ON DELETE RESTRICT,
-            atividade_base_id INTEGER REFERENCES atividade_base(id) ON DELETE SET NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            atividade_id_legacy INTEGER NOT NULL UNIQUE,
+            atividade_base_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'pendente'
+                CHECK(status IN ('pendente', 'mapeada', 'revisar')),
+            observacao_admin TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(atividade_id_legacy) REFERENCES atividades(id) ON DELETE RESTRICT,
+            FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE SET NULL
         );
         INSERT INTO cursos VALUES(1);
         INSERT INTO matrizes_atividades VALUES(1, 1);
-        INSERT INTO atividade_base VALUES(1);
+        INSERT INTO atividade_base(id, nome_conceito) VALUES(1, 'Base legado');
         INSERT INTO requisicoes VALUES(1, NULL, 7, NULL);
         INSERT INTO matrizes_atividades_itens VALUES(1, 1, 7);
-        INSERT INTO atividade_legacy_map VALUES(1, 7, 1);
+        INSERT INTO atividade_legacy_map(
+            id, atividade_id_legacy, atividade_base_id
+        ) VALUES(1, 7, 1);
         """
     )
 
@@ -232,25 +246,27 @@ class _ForeignKeysCannotDisable(_ExecuteProbe):
         return super().execute(sql, parameters)
 
 
-def test_registry_has_exact_v1_v2_and_bounded_runner_reports_actual_version():
-    assert db_maintenance.SCHEMA_VERSION == 2
+def test_registry_preserves_v1_v2_and_bounded_runner_reports_actual_version():
+    assert db_maintenance.SCHEMA_VERSION == 3
     assert tuple((version, name) for version, name, _ in db_maintenance.SCHEMA_MIGRATIONS) == (
         (1, "baseline_schema_management"),
         (2, "normalize_atividades_schema"),
+        (3, "normalize_activity_versioning_core"),
     )
-    assert len({version for version, _, _ in db_maintenance.SCHEMA_MIGRATIONS}) == 2
+    assert len({version for version, _, _ in db_maintenance.SCHEMA_MIGRATIONS}) == 3
 
     conn = _connection()
     try:
         _create_current_schema(conn)
         result_v1 = db_maintenance.apply_schema_migrations(conn, through_version=1)
         assert result_v1["schema_version"] == 1
-        assert result_v1["target_schema_version"] == 2
+        assert result_v1["target_schema_version"] == 3
         assert result_v1["applied_now"] == [1]
         assert _migration_rows(conn) == ((1, "baseline_schema_management"),)
 
-        result_v2 = db_maintenance.apply_schema_migrations(conn)
+        result_v2 = db_maintenance.apply_schema_migrations(conn, through_version=2)
         assert result_v2["schema_version"] == 2
+        assert result_v2["target_schema_version"] == 3
         assert result_v2["applied_now"] == [2]
         assert _migration_rows(conn) == (
             (1, "baseline_schema_management"),
@@ -697,8 +713,12 @@ def test_dual_init_paths_converge_only_the_atividades_schema_and_metadata(tmp_pa
     assert main_result[:4] == app_result[:4] == (
         TARGET_COLUMNS,
         TARGET_TABLE_INFO,
-        ((1, "baseline_schema_management"), (2, "normalize_atividades_schema")),
-        2,
+        (
+            (1, "baseline_schema_management"),
+            (2, "normalize_atividades_schema"),
+            (3, "normalize_activity_versioning_core"),
+        ),
+        3,
     )
     if legacy:
         for result in (main_result, app_result):
