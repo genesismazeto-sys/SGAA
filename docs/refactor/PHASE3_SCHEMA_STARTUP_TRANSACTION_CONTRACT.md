@@ -1,8 +1,9 @@
 # Phase 3 schema, startup, and transaction contract
 
-**Status:** PHASE 3-B11 final single-init revision of the accepted PHASE 3-B5/B6/B7/B8/B9/B10 contract; B11-R1 governance closeout implemented / awaiting supervisor review
-**Phase status:** B5 through B10-R1 CLOSED / ACCEPTED; B11 technical artifact COMMITTED AND PUSHED / POST-COMMIT VERIFIED at `c9009bf3d68950ad4e0499b65928603e84bee341`; Phase 3 not formally closed until B11-R1 supervisor acceptance
+**Status:** FINAL / ACCEPTED Macro Phase 3 single-init schema/startup/transaction contract
+**Phase status:** Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 CLOSED / ACCEPTED; Phase 4 NOT AUTHORIZED
 **B11 identity:** `c9009bf3d68950ad4e0499b65928603e84bee341` (`Unify database initialization ownership`), parent `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` (`Correct B10 governance manifest record`)
+**B11-R1 identity:** `630d4eb448b992bdc3beb28752c30717989312bb` (`Record B11 publication and review closeout`), parent `c9009bf3d68950ad4e0499b65928603e84bee341`
 **Executable contract:** `tests/test_phase3_schema_startup_transaction_contract.py`
 
 ## 1. Scope and purpose
@@ -854,7 +855,9 @@ size 144049 bytes and reported SHA-256
 `fcd1b62e141434dccaa89dabe9b604afe61977c96490674503b9410185627771`. It remains
 preserved without inspection, alteration, or deletion under B11-R1.
 
-B11-R1 is a six-path governance-only closeout awaiting supervisor review. It does not
-repeat independent review, change the accepted architectural/transactional contract,
-or authorize production work. Phase 3 is not formally closed until supervisor
-acceptance. Phase 4 remains NOT AUTHORIZED and migration v4 remains PROHIBITED.
+B11-R1 is the accepted six-path governance-only closeout at
+`630d4eb448b992bdc3beb28752c30717989312bb`. External supervisor acceptance closes
+PHASE 3-B11-R1, PHASE 3-B11, and Macro Phase 3. The final architecture is accepted;
+the transaction and failure semantics in sections 1–15 remain unchanged. Both reviewer
+nonconformities above remain permanently declared. This documentary acceptance implies
+no Phase 4 authority: Phase 4 remains NOT AUTHORIZED and migration v4 remains PROHIBITED.

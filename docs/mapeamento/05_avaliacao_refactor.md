@@ -280,8 +280,9 @@ root matching `D:\tmp\sgaa_restore_<UTC>`" — satisfied by the executed and acc
 Level 2 restoration.
 
 Production shadow-only remains in force; production hard enforcement unauthorized.
-D73H historical lane unchanged; R20 unchanged. Fase 2 está autorizada e em progresso;
-Fases 3–6 permanecem preservadas como definidas abaixo e não autorizadas para execução.
+D73H historical lane unchanged; R20 unchanged. The custody-track phase-time statement
+that Phases 3–6 were unauthorized is superseded for Phase 3 only by the accepted Macro
+Phase 3 closeout below. Phases 4–6 remain not authorized for execution.
 
 ### Fase 1 — Limpeza sem risco (0,5 dia)
 - [x] Remover **código morto do aluno** (`@aluno_runtime_route` no-op em main.py) — CLOSED / ACCEPTED (PHASE-1-U3, commit c4fd2dd; 0 inserções, 756 deleções; oito exports de compatibilidade preservados).
@@ -323,12 +324,25 @@ mas esse texto não transfere silenciosamente trabalho das Categories B, C ou D 
 Fase 2. A implementação PHASE2-D está localmente verificada e aguarda revisão externa;
 este registro não declara a Fase 2 fechada.
 
-### Fase 3 — Consolidar acesso a dados (2–4 dias)
-- [ ] Unificar `init_db` (uma única implementação em `app/db.py`).
-- [ ] Migrar os `ensure_*` ad-hoc para migrações versionadas em
-      `app/db_maintenance.py` + `schema_migrations`.
-- [ ] (Opcional) introduzir `app/repositories/` (ex.: `requisicoes_repo.py`,
-      `alunos_repo.py`) extraindo as queries das views.
+### Macro Fase 3 — Consolidar acesso a dados — CLOSED / ACCEPTED
+
+**Status:** CLOSED / ACCEPTED by external supervisor decision. Accepted technical
+commit `c9009bf3d68950ad4e0499b65928603e84bee341`; accepted B11-R1 governance commit
+`630d4eb448b992bdc3beb28752c30717989312bb`. All mandatory Phase 3 objectives are
+satisfied; no open Phase 3 technical implementation remains.
+
+- [x] Unificar `init_db` (uma única implementação em `app/db.py`) — satisfied by
+      PHASE 3-B11; `main.init_db` is compatibility identity only.
+- [x] Migrar os `ensure_*` ad-hoc para manutenção/migrações versionadas em
+      `app/db_maintenance.py` + `schema_migrations` — satisfied through the accepted
+      v1/v2/v3 registry, isolated destructive migration boundary and accepted schema owners.
+- [ ] **OPTIONAL / NOT IMPLEMENTED / NOT A CLOSURE BLOCKER:** introduzir
+      `app/repositories/` (ex.: `requisicoes_repo.py`, `alunos_repo.py`) extraindo
+      queries das views. This optional item is deferred by design and is not silently
+      assigned to Phase 4.
+
+Phase 4, migration v4, blueprint reconnaissance/movement and production changes remain
+NOT AUTHORIZED by this closeout.
 
 ### Fase 4 — Quebrar `main.py` em blueprints admin (4–8 dias, o grosso)
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:

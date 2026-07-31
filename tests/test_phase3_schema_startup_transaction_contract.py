@@ -16,7 +16,9 @@ CONTRACT_PATH = PROJECT_ROOT / "docs" / "refactor" / "PHASE3_SCHEMA_STARTUP_TRAN
 CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 HANDOFF_PATH = PROJECT_ROOT / "AGENT_HANDOFF.md"
 STATE_PATH = PROJECT_ROOT / "PROJECT_STATE.md"
+MASTER_PLAN_PATH = PROJECT_ROOT / "docs" / "mapeamento" / "05_avaliacao_refactor.md"
 B11_COMMIT = "c9009bf3d68950ad4e0499b65928603e84bee341"
+B11_R1_COMMIT = "630d4eb448b992bdc3beb28752c30717989312bb"
 
 EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "apply_early_schema_migrations",
@@ -874,11 +876,11 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11/B11-R1 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 10
+    assert ledger.count(CONTRACT_RELPATH) == 11
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
     assert ledger.count("| PHASE3-B9 |") == 1
@@ -886,7 +888,7 @@ def test_canonical_contract_document_and_governance_registration():
     assert ledger.count("| PHASE3-B11-R1 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B11 final single-init revision" in contract
+    assert "FINAL / ACCEPTED Macro Phase 3" in contract
     assert "The exact lazy bridge is empty" in contract
     assert "No class-E boundary was found" in contract
     assert "Failure postcondition matrix" in contract
@@ -901,21 +903,70 @@ def test_canonical_contract_document_and_governance_registration():
     assert "process nonconformity" in handoff
 
 
-def test_b11_r1_current_governance_blocks_record_publication_without_stale_hard_stop():
-    stale_current_states = (
-        "NO COMMIT",
-        "NO PUSH",
-        "HARD STOP BEFORE STAGING",
-        "publication pending",
+def test_macro_phase3_acceptance_closeout_is_current_and_bounded():
+    handoff_current = _read(HANDOFF_PATH).split(
+        "### Historical / superseded recovery narrative", 1
+    )[0]
+    state_current = _read(STATE_PATH).split(
+        "### Historical / superseded recovery narrative", 1
+    )[0]
+    index = _read(PROJECT_ROOT / "docs" / "DOCUMENTATION_INDEX.md")
+    index_current = index.split("## Canonical current state", 1)[1].split(
+        "## Ledger", 1
+    )[0]
+    ledger = _read(
+        PROJECT_ROOT / "docs" / "refactor" / "ARCHITECTURE_REFACTOR_LEDGER.md"
     )
-    for path in (HANDOFF_PATH, STATE_PATH):
-        current_block = _read(path).split(
-            "### Historical / superseded recovery narrative", 1
-        )[0]
+    contract = _read(CONTRACT_PATH)
+    master_plan = _read(MASTER_PLAN_PATH)
+    master_phase3 = master_plan.split("### Macro Fase 3", 1)[1].split(
+        "### Fase 4", 1
+    )[0]
+
+    for current_block in (handoff_current, state_current):
+        assert "MACRO PHASE 3 CLOSED / ACCEPTED" in current_block.upper()
+        assert "PHASE 3-B11 CLOSED / ACCEPTED" in current_block.upper()
+        assert "PHASE 3-B11-R1 CLOSED / ACCEPTED" in current_block.upper()
         assert B11_COMMIT in current_block
-        assert "B11 technical commit: COMMITTED AND PUSHED" in current_block
-        assert "B11 post-commit verification: COMPLETE" in current_block
+        assert B11_R1_COMMIT in current_block
         assert "Phase 4 remains NOT AUTHORIZED" in current_block
         assert "migration v4 remains PROHIBITED" in current_block
-        for stale_state in stale_current_states:
-            assert stale_state not in current_block
+        current_lower = current_block.lower()
+        assert "awaiting b11-r1 supervisor review" not in current_lower
+        assert "phase 3 in progress" not in current_lower
+        assert "phase 3 closure pending" not in current_lower
+
+    for accepted_record in (
+        index_current,
+        ledger,
+        contract,
+        master_phase3,
+    ):
+        assert B11_COMMIT in accepted_record
+        assert B11_R1_COMMIT in accepted_record
+
+    assert "Macro Phase 3" in index_current
+    assert "CLOSED / ACCEPTED" in index_current
+    assert "| PHASE3-B11 |" in ledger
+    assert "| PHASE3-B11-R1 |" in ledger
+    assert "| Fase 3 | Data access consolidation | CLOSED / ACCEPTED |" in ledger
+    assert "| Fase 4 | Admin blueprint extraction | NOT AUTHORIZED |" in ledger
+    assert "FINAL / ACCEPTED Macro Phase 3" in contract
+    assert "Phase 4 remains NOT AUTHORIZED" in contract
+    assert "migration v4 remains PROHIBITED" in contract
+
+    assert "CLOSED / ACCEPTED" in master_phase3
+    assert "- [x] Unificar `init_db`" in master_phase3
+    assert "- [x] Migrar os `ensure_*` ad-hoc" in master_phase3
+    assert "OPTIONAL / NOT IMPLEMENTED / NOT A CLOSURE BLOCKER" in master_phase3
+    assert "- [x] **OPTIONAL" not in master_phase3
+    assert "not silently\n      assigned to Phase 4" in master_phase3
+
+    phase4 = master_plan.split("### Fase 4", 1)[1].split("### Fase 5", 1)[0]
+    phase5 = master_plan.split("### Fase 5", 1)[1].split("### Fase 6", 1)[0]
+    phase6 = master_plan.split("### Fase 6", 1)[1].split(
+        "> **Estimativa total:**", 1
+    )[0]
+    assert "- [x]" not in phase4
+    assert "- [x]" not in phase5
+    assert "- [x]" not in phase6
