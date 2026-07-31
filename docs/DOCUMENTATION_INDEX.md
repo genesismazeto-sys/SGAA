@@ -62,9 +62,17 @@
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
-## Canonical current state (2026-07-26)
+## Canonical current state (2026-07-31)
 
 - Branch: `refactor/architecture-safety-net`
+- **Final Phase 3 technical commit:** `c9009bf3d68950ad4e0499b65928603e84bee341`
+  (`Unify database initialization ownership`), parent
+  `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a`; the 14-path B11 technical
+  artifact is committed, pushed, and post-commit verified.
+- **PHASE 3-B11-R1:** governance-only publication/review closeout implemented and
+  awaiting supervisor review. Phase 3 is not formally closed until B11-R1 receives
+  supervisor acceptance. B11-R1 updates the existing canonical Phase 3 contract;
+  it creates no competing Phase 3 contract.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -226,29 +234,33 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   dependencies to Phase 3, versioning/view dependencies to Phase 4, and wiring/logging/
   routing dependencies to their owning later phases. Zero runtime `app`→`main`
   back-references remains mandatory before Phase 6 closes.
-- **Fase 3 — Data access consolidation**: **IN PROGRESS.** PHASE 3-A, the PHASE 3-B
-  assessment, and PHASE 3-B1 through PHASE 3-B10-R1 are CLOSED / ACCEPTED. PHASE 3-B10
+- **Fase 3 — Data access consolidation**: **IN PROGRESS / B11 TECHNICAL ARTIFACT
+  ACCEPTED / B11-R1 GOVERNANCE CLOSEOUT AWAITING SUPERVISOR REVIEW.** PHASE 3-A,
+  the PHASE 3-B assessment, and PHASE 3-B1 through PHASE 3-B10-R1 are CLOSED /
+  ACCEPTED. PHASE 3-B10
   is COMMITTED AND PUSHED at `8fe0345eab08e312f7e015730f70d02327e7eb5f`
   (`Version activity versioning core schema`). B10-R1 is a governance-only
   correction recording the actual 15-path manifest, classifying the undocumented
   fifteenth test path as a process nonconformity, and correcting the lazy-bridge
-  description in the canonical contract. PHASE 3-B11 is implemented in the
-  worktree and locally verified; its caller verifier records qualified lexical
-  inventory 72 `main.init_db(...)` / 5 `app_db.init_db(...)`, and its corrected
-  registry extractor proves exact callable v1/v2/v3 with no gap, duplicate or v4.
-  Preserved pre-correction hermetic checkpoint is 913 passed / 17 D73H deselected /
-  348.40s / exit 0; the final post-correction gate passed 913 / 17 / 416.66s /
-  exit 0, with routes 131 and RBAC unmapped 0. The one mandatory FREE review call
-  timed out without usable output; hard stop occurred before staging, with no commit
-  or push and no paid fallback. Phase 4 and migration v4 remain not authorized.
+  description in the canonical contract. PHASE 3-B11 is published at
+  `c9009bf3d68950ad4e0499b65928603e84bee341`; its caller verifier records qualified
+  lexical inventory 72 `main.init_db(...)` / 5 `app_db.init_db(...)` plus three bare
+  imported-owner calls, and its corrected registry extractor proves exact callable
+  v1/v2/v3 with no gap, duplicate or v4. Final hermetic evidence is 913 passed / 17
+  deselected / 416.66s / exit 0; index-visible evidence is 67 passed; post-publication
+  evidence is 212 passed / 42.37s; routes remain 131 and RBAC unmapped remains 0.
+  Independent paid-Flash review verdict `APPROVE` is accepted with both declared
+  reviewer process nonconformities recorded in the canonical state, ledger, and
+  contract. Phase 4 and migration v4 remain not authorized.
 - **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
-Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS through PHASE 3-B10-R1 CLOSED /
-ACCEPTED; PHASE 3-B11 is IMPLEMENTED IN WORKTREE / LOCALLY VERIFIED / INDEPENDENT
-REVIEW AND PUBLICATION PENDING. Phase 4, migration v4, and Phases 4–6 remain
+Phase 2 is CLOSED / ACCEPTED. Phase 3 is IN PROGRESS; PHASE 3-B11 technical artifact
+is COMMITTED AND PUSHED / POST-COMMIT VERIFIED at `c9009bf3d68950ad4e0499b65928603e84bee341`,
+and PHASE 3-B11-R1 is the governance closeout awaiting supervisor review. Phase 3 is
+not formally closed until that acceptance. Phase 4, migration v4, and Phases 4–6 remain
 **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
@@ -309,7 +321,7 @@ The original REF-0C-D scope was documented in
 | D-R1 route-complete actor matrix | `tests/test_ref_0c_d_r1_route_complete_actor_matrix.py` | CLOSED / ACCEPTED |
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
-| Phase 3-B5/B6/B7/B8/B9/B10/B11 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_phase3_final_init_cutover.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_activity_versioning_core_migration_v3.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5 through B10-R1 CLOSED / ACCEPTED; B11 IMPLEMENTED IN WORKTREE / FINAL 913/17 GATE GREEN / MANDATORY FREE REVIEW UNUSABLE / HARD STOP BEFORE STAGING / NO COMMIT / NO PUSH |
+| Phase 3-B5/B6/B7/B8/B9/B10/B11 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_phase3_final_init_cutover.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_activity_versioning_core_migration_v3.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5 through B10-R1 CLOSED / ACCEPTED; B11 technical artifact COMMITTED AND PUSHED / POST-COMMIT VERIFIED at `c9009bf3d68950ad4e0499b65928603e84bee341`; accepted review APPROVE; B11-R1 governance closeout awaiting supervisor review; Phase 3 not formally closed |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

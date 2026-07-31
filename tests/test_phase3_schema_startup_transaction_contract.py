@@ -14,6 +14,9 @@ BACKUP_SETTINGS_PATH = PROJECT_ROOT / "app" / "backup_settings.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CONTRACT_PATH = PROJECT_ROOT / "docs" / "refactor" / "PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
+HANDOFF_PATH = PROJECT_ROOT / "AGENT_HANDOFF.md"
+STATE_PATH = PROJECT_ROOT / "PROJECT_STATE.md"
+B11_COMMIT = "c9009bf3d68950ad4e0499b65928603e84bee341"
 
 EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "apply_early_schema_migrations",
@@ -875,11 +878,12 @@ def test_canonical_contract_document_and_governance_registration():
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 7
+    assert ledger.count(CONTRACT_RELPATH) == 10
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
     assert ledger.count("| PHASE3-B9 |") == 1
     assert ledger.count("| PHASE3-B11 |") == 1
+    assert ledger.count("| PHASE3-B11-R1 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
     assert "PHASE 3-B11 final single-init revision" in contract
@@ -895,3 +899,23 @@ def test_canonical_contract_document_and_governance_registration():
     assert "tests/test_ref_0c_b1_p0_access_context_transactions.py" in contract
     assert "MECHANICALLY_REQUIRED_V3_EXPECTATION_UPDATE" in handoff
     assert "process nonconformity" in handoff
+
+
+def test_b11_r1_current_governance_blocks_record_publication_without_stale_hard_stop():
+    stale_current_states = (
+        "NO COMMIT",
+        "NO PUSH",
+        "HARD STOP BEFORE STAGING",
+        "publication pending",
+    )
+    for path in (HANDOFF_PATH, STATE_PATH):
+        current_block = _read(path).split(
+            "### Historical / superseded recovery narrative", 1
+        )[0]
+        assert B11_COMMIT in current_block
+        assert "B11 technical commit: COMMITTED AND PUSHED" in current_block
+        assert "B11 post-commit verification: COMPLETE" in current_block
+        assert "Phase 4 remains NOT AUTHORIZED" in current_block
+        assert "migration v4 remains PROHIBITED" in current_block
+        for stale_state in stale_current_states:
+            assert stale_state not in current_block

@@ -1,8 +1,8 @@
 # Phase 3 schema, startup, and transaction contract
 
-**Status:** PHASE 3-B11 final single-init revision of the accepted PHASE 3-B5/B6/B7/B8/B9/B10 contract
-**Phase status:** B5 through B10-R1 CLOSED / ACCEPTED; B11 IMPLEMENTED IN WORKTREE / LOCALLY VERIFIED / INDEPENDENT REVIEW AND PUBLICATION PENDING
-**B11 baseline:** `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` (`Correct B10 governance manifest record`)
+**Status:** PHASE 3-B11 final single-init revision of the accepted PHASE 3-B5/B6/B7/B8/B9/B10 contract; B11-R1 governance closeout implemented / awaiting supervisor review
+**Phase status:** B5 through B10-R1 CLOSED / ACCEPTED; B11 technical artifact COMMITTED AND PUSHED / POST-COMMIT VERIFIED at `c9009bf3d68950ad4e0499b65928603e84bee341`; Phase 3 not formally closed until B11-R1 supervisor acceptance
+**B11 identity:** `c9009bf3d68950ad4e0499b65928603e84bee341` (`Unify database initialization ownership`), parent `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` (`Correct B10 governance manifest record`)
 **Executable contract:** `tests/test_phase3_schema_startup_transaction_contract.py`
 
 ## 1. Scope and purpose
@@ -771,39 +771,34 @@ The authorized commit-tree manifest is exactly:
 13. `tests/test_db_schema_maintenance.py`
 14. `tests/test_phase3_schema_startup_transaction_contract.py`
 
-Publication is pending at commit-tree time. PHASE 3-B11 remains unauthorized.
+Historical B10 commit-tree state: publication was pending and PHASE 3-B11 remained
+unauthorized. That predecessor state is superseded by the published B11 record below.
 
-## 22. B11 single-init and transaction-postcondition validation record
+## 22. B11 single-init validation, publication, and B11-R1 closeout record
 
 PHASE 3-B11 starts from accepted B10-R1 commit
-`e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a`. It establishes `app.db.init_db`
-as the sole defining initializer, with `main.init_db` as an object-identical
-compatibility import. `_init_db_impl`, `_get_main_db_helpers`, the local database
-sync shim, every lazy retrieval, and every `app.db → main` dependency are removed.
+`e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` and is published as technical commit
+`c9009bf3d68950ad4e0499b65928603e84bee341`, subject `Unify database initialization
+ownership`, with exactly one parent. Publication and post-publication verification
+are complete. The exact B11 architecture and transaction semantics remain those in
+sections 1–15; B11-R1 changes publication/review/closeout metadata only.
 
-The exact transaction-owner inventory and failure postcondition matrix are in
+The accepted B11 artifact establishes `app.db.init_db` as the sole defining
+initializer, with `main.init_db` as an object-identical compatibility import.
+`_init_db_impl`, `_get_main_db_helpers`, the local database sync shim, every lazy
+retrieval, and every `app.db → main` dependency are removed. No production correction
+occurred after independent review.
+
+The exact transaction-owner inventory and failure postcondition matrix remain in
 section 9. Deterministic AST comparison found no B11-added transaction boundary.
-Fault injection covers state on the failing connection, a concurrently opened
-observer, state after close rollback, migration rows, `user_version`, FK restoration,
-rows, tables, indexes, exception propagation, and absence of continuation. The
-focused reconciliation rerun passed 15 tests in 3.85 seconds. The corrected
-caller/registry/postcondition gate passed 52 tests in 8.46 seconds. An established
-affected lane had passed 206 tests in 29.22 seconds before this documentation revision.
+Fault injection covers failing-connection state, observer state, close rollback,
+migration rows, `user_version`, FK restoration, rows, tables, indexes, exception
+propagation, and absence of continuation. Caller inventory remains 72 qualified
+`main.init_db(...)`, 5 qualified direct-owner calls, and three separately tracked bare
+imported-owner calls. Registry remains exact contiguous unique v1/v2/v3 with
+`SCHEMA_VERSION == 3`; no migration v4 exists.
 
-The caller correction records the actual qualified lexical inventory 72/5 without
-modifying production call sites or recreating obsolete 74/1. The read-only AST
-registry extractor now parses the real annotated `SCHEMA_MIGRATIONS` assignment and
-proves `SCHEMA_VERSION == 3`, exact versions/names v1 `baseline_schema_management`,
-v2 `normalize_atividades_schema`, v3 `normalize_activity_versioning_core`, callable
-entries, no duplicate, no gap and no v4. `app/db_maintenance.py` is unchanged.
-
-The preserved pre-correction hermetic checkpoint is `913 passed / 17 D73H
-deselected / 348.40s / exit 0`. The final post-correction hermetic gate passed
-`913 passed / 17 D73H deselected / 416.66s / exit 0`, with zero failures/errors,
-all 25 slowest durations captured and no pytest process remaining. Route inventory
-remains 131 and RBAC unmapped remains zero.
-
-The authorized B11 manifest is exactly 14 paths:
+The B11 technical manifest is exactly 14 paths:
 
 1. `AGENT_HANDOFF.md`
 2. `PROJECT_STATE.md`
@@ -820,15 +815,46 @@ The authorized B11 manifest is exactly 14 paths:
 13. `tests/test_phase3_schema_startup_transaction_contract.py`
 14. `tests/test_residual_shared_helpers.py`
 
-No Phase 4, migration v4, route, RBAC, UI, API or template change is included.
-Full hermetic validation completed at 913/17/416.66s. Exactly one effective
-independent read-only call used the direct no-fallback wrapper fixed to `opencode` /
-`opencode/deepseek-v4-flash-free`; it timed out after 600s without usable stdout or
-wrapper metadata, so session ID, cost and verdict are unavailable. A preceding
-Windows/MSYS path-format failure happened before the wrapper/model frontier and was
-recovered without consuming a model attempt. No retry or paid fallback occurred.
-Post-failure reconciliation proved reviewer mutation zero, no remaining reviewer
-process, unchanged 14-path manifest, identical pre/post diff SHA-256
-`27e6c3ef2e769809008a8de81709b29a37caed693f1ce18a96820d18b9b80dff`, empty index,
-and preserved protected assets. The mandated hard stop occurred before staging;
-there is no B11 commit or push. Any recovery requires new explicit authorization.
+Git statistics are 1428 insertions and 812 deletions. Production paths are exactly
+`app/db.py` and `main.py`. Canonical technical diff SHA-256 is
+`19f59666f1c55259493281950fa2651e6261fc7e6f8b8e01473f254326c87378`.
+
+Accepted test evidence is: final hermetic `913 passed / 17 deselected / 416.66s /
+exit 0`; index-visible 67 passed; route/RBAC `3 passed / routes 131 / unmapped 0`;
+post-publication `212 passed / 42.37s`.
+
+The accepted independent review record is:
+
+- fallback cause `FALLBACK_FREE_TIMEOUT_UNUSABLE_DELIVERY`;
+- provider `opencode-go`;
+- effective model `opencode-go/deepseek-v4-flash`;
+- session `ses_032324d57fferZNeqNjUW681iq`;
+- observed cost `0.01252156 USD`;
+- verdict `APPROVE`;
+- Material/Critical/High findings: 0;
+- accepted LOW: the `main` compatibility import creates intentional and tested
+  compatibility coupling;
+- accepted INFO: registry remains v1/v2/v3; caller inventory 72/5 plus three bare
+  imports is correctly distinguished; transaction fault-injection coverage is
+  sufficient.
+
+Reviewer nonconformity 1 is accepted with declaration:
+`SAME_SESSION_OUTPUT_RECOVERY / SECOND_INVOCATION_PROCESS_NONCONFORMITY /
+SAME_PROVIDER_MODEL_AND_SESSION / NO_NEW_TOOLS / NO_DIFF_CHANGE /
+NO_REVIEWER_SUBSTITUTION / USABLE_VERDICT_RECOVERED / ACCEPTED_WITH_DECLARATION`.
+The first post-opt-in inference produced no final text. A textual continuation in the
+same provider/model/session recovered the verdict. No fallback, new tool, repository
+mutation, reviewer substitution, or reviewed-candidate change occurred.
+
+Reviewer nonconformity 2 is accepted with declaration:
+`EXTERNAL_TEMPORARY_FILE_MUTATION / OUTSIDE_REPOSITORY / NOT_STAGED / NOT_COMMITTED /
+NO_REPOSITORY_OR_INDEX_IMPACT / UNAUTHORIZED_BY_REVIEW_CONTRACT /
+ACCEPTED_WITH_DECLARATION`. The declared artifact is `/tmp/candidate.diff`, reported
+size 144049 bytes and reported SHA-256
+`fcd1b62e141434dccaa89dabe9b604afe61977c96490674503b9410185627771`. It remains
+preserved without inspection, alteration, or deletion under B11-R1.
+
+B11-R1 is a six-path governance-only closeout awaiting supervisor review. It does not
+repeat independent review, change the accepted architectural/transactional contract,
+or authorize production work. Phase 3 is not formally closed until supervisor
+acceptance. Phase 4 remains NOT AUTHORIZED and migration v4 remains PROHIBITED.
