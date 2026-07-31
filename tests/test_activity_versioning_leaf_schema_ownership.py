@@ -311,7 +311,7 @@ def test_sole_defining_ownership_import_identity_and_cycle_isolation():
     assert result.returncode == 0, result.stderr
 
 
-def test_app_db_preserves_b8_semantics_with_only_the_b9_checkpoint_and_lazy_delta():
+def test_app_db_preserves_b8_leaf_semantics_through_the_b11_final_cutover():
     tree = _tree(_read(APP_DB_PATH))
     baseline_tree = _tree(_baseline(APP_DB_PATH))
     current_functions = {
@@ -320,30 +320,28 @@ def test_app_db_preserves_b8_semantics_with_only_the_b9_checkpoint_and_lazy_delt
     baseline_functions = {
         node.name: node for node in baseline_tree.body if isinstance(node, ast.FunctionDef)
     }
-    assert current_functions.keys() == baseline_functions.keys()
-    for name in current_functions.keys() - {"_get_main_db_helpers", "_init_db_impl"}:
+    assert current_functions.keys() - baseline_functions.keys() == {
+        "_app_settings_defaults",
+        "ensure_app_settings_schema",
+        "ensure_cloud_backup_schema",
+        "ensure_turmas_matriz_schema",
+        "get_preferred_matriz_for_curso",
+    }
+    assert baseline_functions.keys() - current_functions.keys() == {
+        "_get_main_db_helpers",
+        "_init_db_impl",
+        "_sync_database_from_main",
+    }
+    for name in {"get_db_connection", "close_db_connection"}:
         assert _dump(current_functions[name]) == _dump(baseline_functions[name]), name
 
-    helper_map = _function(tree, "_get_main_db_helpers")
-    returns = [node for node in ast.walk(helper_map) if isinstance(node, ast.Return)]
-    assert len(returns) == 1 and isinstance(returns[0].value, ast.Dict)
-    keys = tuple(ast.literal_eval(key) for key in returns[0].value.keys)
-    values = tuple(
-        f"{value.value.id}.{value.attr}"
-        for value in returns[0].value.values
-        if isinstance(value, ast.Attribute) and isinstance(value.value, ast.Name)
-    )
-    expected = (
-        "get_preferred_matriz_for_curso",
-        "logger",
-    )
-    assert keys == expected
-    assert values == tuple(f"main.{name}" for name in expected)
-    init = _function(tree, "_init_db_impl")
+    assert "_get_main_db_helpers" not in current_functions
+    assert "_init_db_impl" not in current_functions
+    init = _function(tree, "init_db")
     source = ast.get_source_segment(_read(APP_DB_PATH), init)
     assert source is not None
-    for name in expected:
-        assert source.count(f'helpers["{name}"]') == 1
+    assert "helpers[" not in source
+    assert "bind_backup_settings_runtime_app(runtime_app)" in source
     assert "ensure_atividades_schema_current" not in source
     assert source.count("apply_early_schema_migrations(conn, logger=logger)") == 1
     assert source.index("conn = get_db_connection()") < source.index(

@@ -165,10 +165,12 @@ def test_main_preserves_all_compatibility_exports_by_identity():
 
 
 
-def test_direct_app_consumers_have_no_category_a_lazy_edges_and_e_keys_are_absent():
+def test_direct_app_consumers_and_app_db_have_no_residual_lazy_edges():
     aluno_keys = _lazy_return_keys(aluno_views._get_main_helpers)
     core_keys = _lazy_return_keys(core_views._get_main_helpers)
-    db_keys = _lazy_return_keys(app_db._get_main_db_helpers)
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    assert not hasattr(app_db, "_init_db_impl")
+    db_keys = set()
 
     assert not (aluno_keys & EXPECTED_CATEGORY_A_LAZY_KEYS)
     assert not (db_keys & EXPECTED_CATEGORY_A_LAZY_KEYS)
@@ -187,7 +189,8 @@ def test_direct_app_consumers_have_no_category_a_lazy_edges_and_e_keys_are_absen
     assert "ensure_requisicao_alert_receipts_table" not in db_keys
     assert "ensure_usuario_access_schema" not in db_keys
     assert "ensure_backup_settings_schema" not in db_keys
-    assert "logger" in db_keys
+    assert app_db.logger.name == "app.db"
+    assert main.get_preferred_matriz_for_curso is app_db.get_preferred_matriz_for_curso
     assert main.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert app_db.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert main.ensure_backup_settings_schema is backup_settings.ensure_backup_settings_schema

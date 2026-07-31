@@ -1,8 +1,12 @@
+import logging
 import os
 import sqlite3
-from flask import g
+from flask import current_app, g
 
-from app.backup_settings import ensure_backup_settings_schema
+from app.backup_settings import (
+    bind_backup_settings_runtime_app,
+    ensure_backup_settings_schema,
+)
 from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AAC,
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
@@ -25,10 +29,12 @@ from app.text import ptbr_sqlite_collation
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE = os.getenv("APP_DATABASE", os.path.join(PROJECT_ROOT, "database.db"))
+logger = logging.getLogger(__name__)
 
-
-def _sync_database_from_main():
-    return DATABASE
+DEFAULT_RESPONSE_GOAL_DAYS = 10
+DEFAULT_RETURN_RESPONSE_DAYS = 7
+DEFAULT_HORAS_ACADEMICA = 160
+DEFAULT_HORAS_EXTENSAO = 160
 
 
 def get_db_connection():
@@ -54,21 +60,129 @@ def close_db_connection(exception):
         db.close()
 
 
-def _get_main_db_helpers():
-    import main  # type: ignore
-
+def _app_settings_defaults() -> dict[str, str]:
     return {
-        "get_preferred_matriz_for_curso": main.get_preferred_matriz_for_curso,
-        "logger": main.logger,
+        "response_goal_days": str(DEFAULT_RESPONSE_GOAL_DAYS),
+        "response_metrics_reset_at": "",
+        "return_response_days": str(DEFAULT_RETURN_RESPONSE_DAYS),
+        "auto_indefer_devolvida": "0",
+        "horas_padrao_academica": str(DEFAULT_HORAS_ACADEMICA),
+        "horas_padrao_extensao": str(DEFAULT_HORAS_EXTENSAO),
     }
 
 
-def _init_db_impl():
-    helpers = _get_main_db_helpers()
+def ensure_app_settings_schema(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS configuracoes_app (
+            chave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    for chave, valor in _app_settings_defaults().items():
+        conn.execute(
+            "INSERT OR IGNORE INTO configuracoes_app (chave, valor) VALUES (?, ?)",
+            (chave, valor),
+        )
+
+
+def ensure_cloud_backup_schema(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cloud_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            account_email TEXT,
+            token_json TEXT NOT NULL,
+            connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT,
+            active INTEGER DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS backup_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT,
+            file_name TEXT,
+            file_size INTEGER,
+            status TEXT,
+            error_message TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cloud_accounts_provider_active ON cloud_accounts(provider, active, id DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_backup_logs_provider_created ON backup_logs(provider, created_at DESC, id DESC)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cloud_drive_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL UNIQUE,
+            folder_id TEXT,
+            folder_name TEXT,
+            folder_path_label TEXT,
+            drive_id TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+
+def get_preferred_matriz_for_curso(conn, curso_id: int | None):
+    if not curso_id:
+        return None
+    ensure_matrizes_atividades_table(conn)
+    return conn.execute(
+        """
+        SELECT *
+          FROM matrizes_atividades
+         WHERE curso_id = ?
+      ORDER BY CASE LOWER(COALESCE(status, ''))
+                   WHEN 'ativa' THEN 0
+                   WHEN 'vigente' THEN 0
+                   WHEN 'rascunho' THEN 1
+                   ELSE 2
+               END,
+               COALESCE(data_inicio_vigencia, '') DESC,
+               id DESC
+         LIMIT 1
+        """,
+        (curso_id,),
+    ).fetchone()
+
+
+def ensure_turmas_matriz_schema(conn) -> None:
+    ensure_matrizes_atividades_table(conn)
+    try:
+        cols_t = [
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(turmas)").fetchall()
+        ]
+        if "matriz_id" not in cols_t:
+            conn.execute("ALTER TABLE turmas ADD COLUMN matriz_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_turmas_matriz_id ON turmas(matriz_id)"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def init_db():
+    runtime_app = current_app._get_current_object()
+    bind_backup_settings_runtime_app(runtime_app)
     default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
-    get_preferred_matriz_for_curso = helpers["get_preferred_matriz_for_curso"]
-    logger = helpers["logger"]
 
     conn = get_db_connection()
     apply_early_schema_migrations(conn, logger=logger)
@@ -92,7 +206,9 @@ def _init_db_impl():
 
     ensure_usuario_access_schema(conn)
     ensure_usuario_profile_schema(conn)
+    ensure_app_settings_schema(conn)
     ensure_backup_settings_schema(conn)
+    ensure_cloud_backup_schema(conn)
 
     conn.execute(
         """
@@ -206,8 +322,6 @@ def _init_db_impl():
     bootstrap_admin = False
     bootstrap_password = ""
     try:
-        from flask import current_app
-
         admin_email = (current_app.config.get("BOOTSTRAP_ADMIN_EMAIL") or admin_email).strip().lower()
         bootstrap_admin = bool(current_app.config.get("BOOTSTRAP_DEFAULT_ADMIN"))
         bootstrap_password = (current_app.config.get("BOOTSTRAP_ADMIN_PASSWORD") or "").strip()
@@ -224,6 +338,14 @@ def _init_db_impl():
             "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
             ("Administrador", admin_email, hashed_password, "admin", "admin_total"),
         )
+    elif not admin_exists and not bootstrap_admin:
+        try:
+            logger.warning(
+                "Nenhum usuário admin existente e bootstrap automático desabilitado. "
+                "Crie um admin manualmente antes do primeiro login produtivo."
+            )
+        except Exception:
+            pass
 
     try:
         cols = [row["name"] for row in conn.execute("PRAGMA table_info(alunos)").fetchall()]
@@ -323,7 +445,7 @@ def _init_db_impl():
             ("Geral", "GERAL", 8, default_horas_aac, default_horas_aeu, "ativo"),
         )
 
-    ensure_matrizes_atividades_table(conn)
+    ensure_turmas_matriz_schema(conn)
     ensure_matriz_atividade_links_table(conn)
     ensure_atividade_versioning_schema(conn)
 
@@ -418,8 +540,3 @@ def _init_db_impl():
 
     apply_schema_migrations(conn, logger=logger)
     conn.commit()
-
-
-def init_db():
-    _sync_database_from_main()
-    return _init_db_impl()

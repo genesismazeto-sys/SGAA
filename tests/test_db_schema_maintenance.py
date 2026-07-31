@@ -90,10 +90,7 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
     )
 '''
 
-EXPECTED_DB_LAZY_KEYS_AFTER_BACKUP_EXTRACTION = {
-    "get_preferred_matriz_for_curso",
-    "logger",
-}
+
 
 EXPECTED_ALUNO_LAZY_KEYS_AFTER_PROFILE_EXTRACTION = {
     "ensure_admin_arquivos_table",
@@ -189,9 +186,9 @@ def test_reportes_helper_owner_exports_and_direct_consumers():
     assert app_db.ensure_reportes_table is db_maintenance.ensure_reportes_table
     assert aluno_views.ensure_reportes_table is db_maintenance.ensure_reportes_table
 
-    assert "ensure_reportes_table" not in _lazy_return_keys(app_db._get_main_db_helpers)
+    assert not hasattr(app_db, "_get_main_db_helpers")
     assert "ensure_reportes_table" not in _lazy_return_keys(aluno_views._get_main_helpers)
-    assert 'helpers["ensure_reportes_table"]' not in inspect.getsource(app_db._init_db_impl)
+    assert 'helpers["ensure_reportes_table"]' not in inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_reportes_table"]' not in inspect.getsource(aluno_views.aluno_reportar)
     assert "_get_main_helpers()" not in inspect.getsource(aluno_views.aluno_reportar)
 
@@ -293,9 +290,9 @@ def test_usuario_profile_helper_owner_exports_and_direct_consumers():
     assert app_db.ensure_usuario_profile_schema is db_maintenance.ensure_usuario_profile_schema
     assert aluno_views.ensure_usuario_profile_schema is db_maintenance.ensure_usuario_profile_schema
 
-    assert "ensure_usuario_profile_schema" not in _lazy_return_keys(app_db._get_main_db_helpers)
+    assert not hasattr(app_db, "_get_main_db_helpers")
     assert _lazy_return_keys(aluno_views._get_main_helpers) == EXPECTED_ALUNO_LAZY_KEYS_AFTER_PROFILE_EXTRACTION
-    assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(app_db._init_db_impl)
+    assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(aluno_views.aluno_meus_dados)
     assert "_get_main_helpers()" not in inspect.getsource(aluno_views.aluno_meus_dados)
 
@@ -418,10 +415,8 @@ def test_alert_receipts_helper_owner_export_and_direct_db_consumer():
         app_db.ensure_requisicao_alert_receipts_table
         is db_maintenance.ensure_requisicao_alert_receipts_table
     )
-    assert "ensure_requisicao_alert_receipts_table" not in _lazy_return_keys(
-        app_db._get_main_db_helpers
-    )
-    init_source = inspect.getsource(app_db._init_db_impl)
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    init_source = inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_requisicao_alert_receipts_table"]' not in init_source
     assert init_source.count("ensure_requisicao_alert_receipts_table(conn)") == 1
 
@@ -703,26 +698,23 @@ def test_matrizes_helper_owner_exports_and_direct_consumers():
     }
     assert main.ensure_matrizes_atividades_table is db_maintenance.ensure_matrizes_atividades_table
     assert app_db.ensure_matrizes_atividades_table is db_maintenance.ensure_matrizes_atividades_table
-    assert "ensure_matrizes_atividades_table" not in _lazy_return_keys(app_db._get_main_db_helpers)
-    init_source = inspect.getsource(app_db._init_db_impl)
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    init_source = inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_matrizes_atividades_table"]' not in init_source
-    assert init_source.count("ensure_matrizes_atividades_table(conn)") == 1
+    assert init_source.count("ensure_turmas_matriz_schema(conn)") == 1
 
 
 def test_matriz_atividade_links_helper_owner_exports_and_direct_consumers():
     assert main.ensure_matriz_atividade_links_table is db_maintenance.ensure_matriz_atividade_links_table
     assert app_db.ensure_matriz_atividade_links_table is db_maintenance.ensure_matriz_atividade_links_table
-    assert (
-        _lazy_return_keys(app_db._get_main_db_helpers)
-        == EXPECTED_DB_LAZY_KEYS_AFTER_BACKUP_EXTRACTION
-    )
-    init_source = inspect.getsource(app_db._init_db_impl)
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    init_source = inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_matriz_atividade_links_table"]' not in init_source
     assert init_source.count("ensure_matriz_atividade_links_table(conn)") == 1
-    assert init_source.count("ensure_matrizes_atividades_table(conn)") == 1
+    assert init_source.count("ensure_turmas_matriz_schema(conn)") == 1
     assert init_source.count("ensure_atividade_versioning_schema(conn)") == 1
     lines = [l.strip() for l in init_source.splitlines()]
-    idx_matriz = lines.index("ensure_matrizes_atividades_table(conn)")
+    idx_matriz = lines.index("ensure_turmas_matriz_schema(conn)")
     idx_links = lines.index("ensure_matriz_atividade_links_table(conn)")
     idx_vers = lines.index("ensure_atividade_versioning_schema(conn)")
     assert idx_matriz < idx_links < idx_vers
@@ -1195,8 +1187,8 @@ def test_access_helper_has_sole_owner_and_direct_compatibility_exports():
     assert _module_function_definition_counts(app_db, names) == {name: 0 for name in names}
     assert main.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert app_db.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
-    assert "ensure_usuario_access_schema" not in _lazy_return_keys(app_db._get_main_db_helpers)
-    assert 'helpers["ensure_usuario_access_schema"]' not in inspect.getsource(app_db._init_db_impl)
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    assert 'helpers["ensure_usuario_access_schema"]' not in inspect.getsource(app_db.init_db)
 
 
 def test_access_structural_helper_preserves_missing_parent_and_partial_schema_behavior():

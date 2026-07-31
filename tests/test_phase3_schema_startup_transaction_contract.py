@@ -27,13 +27,9 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "ensure_usuario_profile_schema",
 )
 
-EXPECTED_LAZY_BRIDGE = (
-    "get_preferred_matriz_for_curso",
-    "logger",
-)
+EXPECTED_LAZY_BRIDGE = ()
 
 EXPECTED_MAIN_INIT_CALLERS = {
-    "main.py": ("_restore_database_from_source", "<module>"),
     "tests/test_activity_versioning_phase_b_schema.py": (
         "test_phase_b_schema_creates_additive_tables_and_columns",
         "test_phase_b_allows_normas_and_versions_with_constraints",
@@ -112,15 +108,33 @@ EXPECTED_MAIN_INIT_CALLERS = {
     "tools/smoke_test_rbac_permissions.py": ("run",),
 }
 
+EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS = {
+    "tests/test_atividades_schema_migration_v2.py": (
+        "_run_init_on_temp_database",
+    ),
+    "tests/test_phase3_final_init_cutover.py": (
+        "test_bootstrap_failure_postconditions_match_each_accepted_transaction_owner",
+        "test_early_migration_commit_survives_later_bootstrap_failure_without_partial_bootstrap",
+        "test_failure_inside_early_migration_rolls_back_only_the_isolated_unit",
+        "test_failure_after_successful_early_migration_preserves_only_committed_versions",
+    ),
+}
+
+EXPECTED_IMPORTED_OWNER_INIT_CALLERS = {
+    "main.py": ("_restore_database_from_source", "<module>"),
+    "tools/seed_demo_data.py": ("seed",),
+}
+
 EXPECTED_BOOTSTRAP_EVENTS = (
-    "lazy-map",
-    *(f"lazy:{name}" for name in EXPECTED_LAZY_BRIDGE),
+    "helper:bind_backup_settings_runtime_app",
     "connection",
     "helper:apply_early_schema_migrations",
     "table:usuarios",
     "helper:ensure_usuario_access_schema",
     "helper:ensure_usuario_profile_schema",
+    "helper:ensure_app_settings_schema",
     "helper:ensure_backup_settings_schema",
+    "helper:ensure_cloud_backup_schema",
     "table:alunos",
     "table:turmas",
     "table:atividades",
@@ -130,7 +144,7 @@ EXPECTED_BOOTSTRAP_EVENTS = (
 
     "helper:ensure_requisicao_alert_receipts_table",
     "table:cursos",
-    "helper:ensure_matrizes_atividades_table",
+    "helper:ensure_turmas_matriz_schema",
     "helper:ensure_matriz_atividade_links_table",
     "helper:ensure_atividade_versioning_schema",
     "helper:get_preferred_matriz_for_curso",
@@ -141,15 +155,15 @@ EXPECTED_BOOTSTRAP_EVENTS = (
 CONTRACT_SECTIONS = (
     "## 1. Scope and purpose",
     "## 2. Current connection authority",
-    "## 3. Current dual-init entry-point inventory",
-    "## 4. Exact caller inventory",
+    "## 3. Final single-init ownership",
+    "## 4. Final caller inventory",
     "## 5. app.db bootstrap sequence",
     "## 6. Schema-owner matrix",
-    "## 7. Remaining lazy-bridge matrix",
+    "## 7. Zero lazy-bridge contract",
     "## 8. Migration baseline",
     "## 9. Transaction-boundary matrix",
-    "## 10. Known exceptions and technical debt",
-    "## 11. Current versus target architecture",
+    "## 10. Retained compatibility and technical debt",
+    "## 11. Final Phase 3 architecture",
     "## 12. Later owning phases",
     "## 13. Canonical-database safety rules",
     "## 14. Contract change procedure",
@@ -267,43 +281,85 @@ class _InitCallerVisitor(ast.NodeVisitor):
     visit_AsyncWith = visit_With
 
     def visit_Call(self, node):
-        target = self._target(node.func)
-        if target:
+        resolution = self._target(node.func)
+        if resolution:
+            target, expression, imported_binding, canonical_owner = resolution
             self.calls.append(
-                (target, self.scope[-1], node.lineno, self.app_context_depth > 0)
+                (
+                    target,
+                    self.scope[-1],
+                    node.lineno,
+                    self.app_context_depth > 0,
+                    expression,
+                    imported_binding,
+                    canonical_owner,
+                )
             )
         self.generic_visit(node)
 
     def _target(self, function):
         if isinstance(function, ast.Name):
             if function.id == "_init_db_impl" and self.relative_path == "app/db.py":
-                return "app.db._init_db_impl"
+                return (
+                    "app.db._init_db_impl",
+                    "_init_db_impl",
+                    None,
+                    "app.db._init_db_impl",
+                )
             if function.id != "init_db":
                 return None
             origin = self.imports.get(function.id)
-            if self.relative_path == "main.py" or origin == ("main", "init_db"):
-                return "main.init_db"
             if origin == ("app.db", "init_db"):
-                return "app.db.init_db"
+                return (
+                    "app.db.imported init_db",
+                    "init_db",
+                    origin,
+                    "app.db.init_db",
+                )
+            if origin == ("main", "init_db"):
+                return (
+                    "main.imported init_db",
+                    "init_db",
+                    origin,
+                    "app.db.init_db",
+                )
             return None
-        if not (
-            isinstance(function, ast.Attribute)
-            and function.attr == "init_db"
-            and isinstance(function.value, ast.Name)
-        ):
+        expression = _dotted_name(function)
+        if not expression or not expression.endswith(".init_db"):
             return None
-        base = function.value.id
+        base = expression.removesuffix(".init_db")
         origin = self.imports.get(base)
-        if base == "main" or origin == ("main", None):
-            return "main.init_db"
-        if origin == ("app.db", None):
-            return "app.db.init_db"
+        if expression == "main.init_db" or origin == ("main", None):
+            return (
+                "main.init_db",
+                expression,
+                origin,
+                "app.db.init_db",
+            )
+        if expression == "app.db.init_db" or origin in {
+            ("app", "db"),
+            ("app.db", None),
+        }:
+            return (
+                "app.db.init_db",
+                expression,
+                origin,
+                "app.db.init_db",
+            )
         return None
 
 
 def _tracked_python_files() -> tuple[str, ...]:
     result = subprocess.run(
-        ["git", "ls-files", "*.py"],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "*.py",
+        ],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -317,17 +373,46 @@ def _init_callers():
     for relative_path in _tracked_python_files():
         tree = _tree(PROJECT_ROOT / relative_path)
         imports = {}
-        for node in tree.body:
+        for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     imports[alias.asname or alias.name] = (alias.name, None)
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
                     imports[alias.asname or alias.name] = (node.module or "", alias.name)
+            elif (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Call)
+                and _dotted_name(node.value.func) == "importlib.import_module"
+                and len(node.value.args) == 1
+                and isinstance(node.value.args[0], ast.Constant)
+                and isinstance(node.value.args[0].value, str)
+            ):
+                imports[node.targets[0].id] = (node.value.args[0].value, None)
         visitor = _InitCallerVisitor(relative_path, imports)
         visitor.visit(tree)
-        for target, scope, line, owns_context in visitor.calls:
-            records[target].append((relative_path, scope, line, owns_context))
+        for (
+            target,
+            scope,
+            line,
+            owns_context,
+            expression,
+            imported_binding,
+            canonical_owner,
+        ) in visitor.calls:
+            records[target].append(
+                (
+                    relative_path,
+                    scope,
+                    line,
+                    owns_context,
+                    expression,
+                    imported_binding,
+                    canonical_owner,
+                )
+            )
     return records
 
 
@@ -374,9 +459,12 @@ def _transaction_facts(path: Path, function_name: str):
 
 def _bootstrap_events():
     tree = _tree(APP_DB_PATH)
-    function = _top_level_function(tree, "_init_db_impl")
+    function = _top_level_function(tree, "init_db")
     events = []
     helper_names = {
+        "bind_backup_settings_runtime_app",
+        "ensure_app_settings_schema",
+        "ensure_cloud_backup_schema",
         "ensure_usuario_access_schema",
         "ensure_usuario_profile_schema",
         "ensure_backup_settings_schema",
@@ -384,6 +472,7 @@ def _bootstrap_events():
         "apply_early_schema_migrations",
         "ensure_requisicao_alert_receipts_table",
         "ensure_matrizes_atividades_table",
+        "ensure_turmas_matriz_schema",
         "ensure_matriz_atividade_links_table",
         "ensure_atividade_versioning_schema",
         "get_preferred_matriz_for_curso",
@@ -434,13 +523,14 @@ def _bootstrap_events():
     return tuple(event for _, _, event in sorted(events))
 
 
-def test_connection_authority_exports_pragmas_and_local_sync_noop():
+def test_connection_authority_exports_pragmas_without_main_sync_bridge():
     app_tree = _tree(APP_DB_PATH)
     main_tree = _tree(MAIN_PATH)
     app_functions, app_assignments = _top_level_names(app_tree)
     main_functions, main_assignments = _top_level_names(main_tree)
 
-    assert {"get_db_connection", "close_db_connection", "_sync_database_from_main"} <= app_functions
+    assert {"get_db_connection", "close_db_connection"} <= app_functions
+    assert "_sync_database_from_main" not in app_functions
     assert "DATABASE" in app_assignments
     assert not ({"get_db_connection", "close_db_connection"} & main_functions)
     assert "DATABASE" not in main_assignments
@@ -448,11 +538,6 @@ def test_connection_authority_exports_pragmas_and_local_sync_noop():
         _imported_names(main_tree, "app.db")
     )
 
-    sync = _top_level_function(app_tree, "_sync_database_from_main")
-    assert len(sync.body) == 1
-    assert isinstance(sync.body[0], ast.Return)
-    assert isinstance(sync.body[0].value, ast.Name)
-    assert sync.body[0].value.id == "DATABASE"
 
     connection_source = ast.get_source_segment(_read(APP_DB_PATH), _top_level_function(app_tree, "get_db_connection"))
     assert connection_source is not None
@@ -470,58 +555,91 @@ def test_connection_authority_exports_pragmas_and_local_sync_noop():
     assert Path(app_db.DATABASE).resolve() != (PROJECT_ROOT / "database.db").resolve()
 
 
-def test_dual_init_entry_points_and_exact_caller_manifest():
+def test_single_init_owner_and_exact_compatibility_caller_manifest():
     app_functions, _ = _top_level_names(_tree(APP_DB_PATH))
     main_functions, _ = _top_level_names(_tree(MAIN_PATH))
-    assert {"init_db", "_init_db_impl"} <= app_functions
-    assert "init_db" in main_functions
+    assert "init_db" in app_functions
+    assert "_init_db_impl" not in app_functions
+    assert "_get_main_db_helpers" not in app_functions
+    assert "init_db" not in main_functions
 
     records = _init_callers()
     actual_main = defaultdict(list)
-    for path, scope, _, _ in records["main.init_db"]:
+    for path, scope, _, _, expression, imported_binding, canonical_owner in records[
+        "main.init_db"
+    ]:
+        assert expression == "main.init_db"
+        assert imported_binding == ("main", None)
+        assert canonical_owner == "app.db.init_db"
         actual_main[path].append(scope)
     assert {path: tuple(scopes) for path, scopes in actual_main.items()} == EXPECTED_MAIN_INIT_CALLERS
-    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 74
+    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 72
 
-    assert [(path, scope) for path, scope, _, _ in records["app.db.init_db"]] == [
-        ("tools/seed_demo_data.py", "seed")
-    ]
-    assert [(path, scope) for path, scope, _, _ in records["app.db._init_db_impl"]] == [
-        ("app/db.py", "init_db")
-    ]
+    actual_app_db = defaultdict(list)
+    for path, scope, _, _, expression, imported_binding, canonical_owner in records[
+        "app.db.init_db"
+    ]:
+        assert expression in {"app.db.init_db", "app_db.init_db"}
+        assert imported_binding in {("app", "db"), ("app.db", None)}
+        assert canonical_owner == "app.db.init_db"
+        actual_app_db[path].append(scope)
+    assert {
+        path: tuple(scopes) for path, scopes in actual_app_db.items()
+    } == EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS
+    assert sum(map(len, EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS.values())) == 5
+
+    actual_imported_owner = defaultdict(list)
+    for path, scope, _, _, expression, imported_binding, canonical_owner in records[
+        "app.db.imported init_db"
+    ]:
+        assert expression == "init_db"
+        assert imported_binding == ("app.db", "init_db")
+        assert canonical_owner == "app.db.init_db"
+        actual_imported_owner[path].append(scope)
+    assert {
+        path: tuple(scopes) for path, scopes in actual_imported_owner.items()
+    } == EXPECTED_IMPORTED_OWNER_INIT_CALLERS
+
+    assert records["app.db._init_db_impl"] == []
+    assert records["main.imported init_db"] == []
 
     no_explicit_context = {
         (target, path, scope)
         for target, entries in records.items()
-        for path, scope, _, owns_context in entries
+        for path, scope, _, owns_context, _, _, _ in entries
         if not owns_context
     }
     assert no_explicit_context == {
-        ("main.init_db", "main.py", "_restore_database_from_source"),
-        ("app.db._init_db_impl", "app/db.py", "init_db"),
+        (
+            "app.db.imported init_db",
+            "main.py",
+            "_restore_database_from_source",
+        ),
     }
 
+    app_db = importlib.import_module("app.db")
+    main = importlib.import_module("main")
+    assert main.init_db is app_db.init_db
 
-def test_exact_direct_import_set_and_two_entry_lazy_bridge():
+
+def test_exact_direct_import_set_and_zero_lazy_bridge():
     app_tree = _tree(APP_DB_PATH)
     assert _imported_names(app_tree, "app.db_maintenance") == EXPECTED_DIRECT_MAINTENANCE_IMPORTS
     assert _imported_names(app_tree, "app.backup_settings") == (
+        "bind_backup_settings_runtime_app",
         "ensure_backup_settings_schema",
     )
 
-    lazy_function = _top_level_function(app_tree, "_get_main_db_helpers")
-    keys, values = _dict_return_contract(lazy_function)
-    assert keys == EXPECTED_LAZY_BRIDGE
-    assert values == tuple(f"main.{name}" for name in EXPECTED_LAZY_BRIDGE)
-
-    init_function = _top_level_function(app_tree, "_init_db_impl")
-    assert _lazy_retrievals(init_function) == tuple((name, name) for name in EXPECTED_LAZY_BRIDGE)
-    assert not (set(EXPECTED_LAZY_BRIDGE) & set(EXPECTED_DIRECT_MAINTENANCE_IMPORTS))
+    app_functions, _ = _top_level_names(app_tree)
+    assert "_get_main_db_helpers" not in app_functions
+    init_function = _top_level_function(app_tree, "init_db")
+    assert _lazy_retrievals(init_function) == ()
+    assert "import main" not in _read(APP_DB_PATH)
 
 
 def test_app_db_bootstrap_semantic_order_and_single_final_commit():
     assert _bootstrap_events() == EXPECTED_BOOTSTRAP_EVENTS
-    assert EXPECTED_BOOTSTRAP_EVENTS.index("helper:ensure_matrizes_atividades_table") < EXPECTED_BOOTSTRAP_EVENTS.index(
+    assert EXPECTED_BOOTSTRAP_EVENTS.index("helper:ensure_turmas_matriz_schema") < EXPECTED_BOOTSTRAP_EVENTS.index(
         "helper:ensure_matriz_atividade_links_table"
     ) < EXPECTED_BOOTSTRAP_EVENTS.index("helper:ensure_atividade_versioning_schema")
     assert EXPECTED_BOOTSTRAP_EVENTS.index("helper:apply_schema_migrations") < EXPECTED_BOOTSTRAP_EVENTS.index("commit")
@@ -559,18 +677,42 @@ def test_schema_migration_metadata_and_historical_baseline_marker():
     migrations = migration_nodes[0].value
     assert isinstance(migrations, (ast.Tuple, ast.List))
     assert len(migrations.elts) == 3
-    version, name, function = migrations.elts[0].elts
-    assert ast.literal_eval(version) == 1
-    assert ast.literal_eval(name) == "baseline_schema_management"
-    assert isinstance(function, ast.Name) and function.id == "_migration_v1_baseline"
-    version, name, function = migrations.elts[1].elts
-    assert ast.literal_eval(version) == 2
-    assert ast.literal_eval(name) == "normalize_atividades_schema"
-    assert isinstance(function, ast.Name) and function.id == "_migration_v2_normalize_atividades_schema"
-    version, name, function = migrations.elts[2].elts
-    assert ast.literal_eval(version) == 3
-    assert ast.literal_eval(name) == "normalize_activity_versioning_core"
-    assert isinstance(function, ast.Name) and function.id == "_migration_v3_normalize_activity_versioning_core"
+    registry = []
+    for item in migrations.elts:
+        assert isinstance(item, (ast.Tuple, ast.List)) and len(item.elts) == 3
+        version, name, function = item.elts
+        assert isinstance(function, ast.Name)
+        registry.append(
+            (ast.literal_eval(version), ast.literal_eval(name), function.id)
+        )
+    assert registry == [
+        (1, "baseline_schema_management", "_migration_v1_baseline"),
+        (
+            2,
+            "normalize_atividades_schema",
+            "_migration_v2_normalize_atividades_schema",
+        ),
+        (
+            3,
+            "normalize_activity_versioning_core",
+            "_migration_v3_normalize_activity_versioning_core",
+        ),
+    ]
+    versions = tuple(version for version, _, _ in registry)
+    assert versions == tuple(range(1, 4))
+    assert len(versions) == len(set(versions))
+    assert 4 not in versions
+
+    db_maintenance = importlib.import_module("app.db_maintenance")
+    assert db_maintenance.SCHEMA_VERSION == 3
+    assert tuple(
+        (version, name, migration.__name__)
+        for version, name, migration in db_maintenance.SCHEMA_MIGRATIONS
+    ) == tuple(registry)
+    assert all(
+        callable(migration)
+        for _, _, migration in db_maintenance.SCHEMA_MIGRATIONS
+    )
 
     baseline = _top_level_function(tree, "_migration_v1_baseline")
     assert len(baseline.body) == 1
@@ -614,7 +756,7 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "ensure_atividade_versioning_leaf_triggers",
             "ensure_atividade_versioning_leaf_indexes",
         ),
-        MAIN_PATH: (
+        APP_DB_PATH: (
             "ensure_app_settings_schema",
             "ensure_cloud_backup_schema",
             "ensure_turmas_matriz_schema",
@@ -644,15 +786,12 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
         for name in names:
             assert _transaction_facts(path, name) == neutral, f"{path.name}:{name}"
 
-    assert _transaction_facts(APP_DB_PATH, "_init_db_impl") == {
+    assert _transaction_facts(APP_DB_PATH, "init_db") == {
         **neutral,
         "commit_method": 1,
     }
-    assert _transaction_facts(MAIN_PATH, "init_db") == {
-        **neutral,
-        "commit_method": 1,
-    }
-    assert _transaction_facts(APP_DB_PATH, "init_db") == neutral
+    main_functions, _ = _top_level_names(_tree(MAIN_PATH))
+    assert "init_db" not in main_functions
 
     access = _transaction_facts(DB_MAINTENANCE_PATH, "ensure_usuario_access_schema")
     assert access == {**neutral, "savepoint": True, "rollback_sql": True}
@@ -732,22 +871,27 @@ def test_canonical_contract_document_and_governance_registration():
     assert CONTRACT_RELPATH in index
     assert (
         index.count(
-            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10 |"
+            "| `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11 |"
         )
         == 1
     )
-    assert ledger.count(CONTRACT_RELPATH) == 6
+    assert ledger.count(CONTRACT_RELPATH) == 7
     assert ledger.count("| PHASE3-B7 |") == 1
     assert ledger.count("| PHASE3-B8 |") == 1
     assert ledger.count("| PHASE3-B9 |") == 1
+    assert ledger.count("| PHASE3-B11 |") == 1
     assert CONTRACT_RELPATH in state
     assert CONTRACT_RELPATH in handoff
-    assert "PHASE 3-B10 intentional revision" in contract
-    assert "The exact two entries" in contract
+    assert "PHASE 3-B11 final single-init revision" in contract
+    assert "The exact lazy bridge is empty" in contract
+    assert "No class-E boundary was found" in contract
+    assert "Failure postcondition matrix" in contract
     assert "Resolved by PHASE 3-B6" in contract
-    assert "PHASE 3-B10" in index
-    assert "two dependencies through the lazy bridge" in contract
-    assert "three dependencies through the lazy bridge" not in contract
+    assert "PHASE 3-B11" in index
+    active_contract = contract.split("## 16. B5 validation and review record", 1)[0]
+    assert "two dependencies through the lazy bridge" not in active_contract
+    assert "three dependencies through the lazy bridge" not in active_contract
+    assert "migration v4" in active_contract
     assert "tests/test_ref_0c_b1_p0_access_context_transactions.py" in contract
     assert "MECHANICALLY_REQUIRED_V3_EXPECTATION_UPDATE" in handoff
     assert "process nonconformity" in handoff

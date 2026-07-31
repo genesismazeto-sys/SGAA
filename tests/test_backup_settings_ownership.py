@@ -5,7 +5,7 @@ import os
 import sqlite3
 import subprocess
 import sys
-import textwrap
+
 from pathlib import Path
 
 import pytest
@@ -52,10 +52,7 @@ EXACT_DEFAULTS = {
     "external_backup_token": "runtime-token",
     "external_backup_enabled": "1",
 }
-EXPECTED_LAZY_KEYS = (
-    "get_preferred_matriz_for_curso",
-    "logger",
-)
+
 
 
 def _memory_connection():
@@ -95,14 +92,6 @@ def _top_level_function_names(module):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
 
-
-def _lazy_mapping_contract():
-    node = ast.parse(textwrap.dedent(inspect.getsource(app_db._get_main_db_helpers))).body[0]
-    returned = next(child.value for child in ast.walk(node) if isinstance(child, ast.Return))
-    assert isinstance(returned, ast.Dict)
-    keys = tuple(key.value for key in returned.keys)
-    values = tuple(ast.unparse(value) for value in returned.values)
-    return keys, values
 
 
 def _direct_call_scopes(module, called_name):
@@ -173,14 +162,16 @@ def test_runtime_modules_import_without_main_or_database_creation(tmp_path):
     assert not database_path.exists()
 
 
-def test_exact_lazy_delta_and_bootstrap_position():
-    keys, values = _lazy_mapping_contract()
-    assert keys == EXPECTED_LAZY_KEYS
-    assert values == tuple(f"main.{name}" for name in EXPECTED_LAZY_KEYS)
+def test_zero_lazy_bridge_and_explicit_bootstrap_binding_position():
+    assert not hasattr(app_db, "_get_main_db_helpers")
+    assert not hasattr(app_db, "_init_db_impl")
 
-    init_source = inspect.getsource(app_db._init_db_impl)
-    assert 'helpers["ensure_backup_settings_schema"]' not in init_source
+    init_source = inspect.getsource(app_db.init_db)
+    assert "bind_backup_settings_runtime_app(runtime_app)" in init_source
     assert init_source.count("ensure_backup_settings_schema(conn)") == 1
+    assert init_source.index("bind_backup_settings_runtime_app(runtime_app)") < init_source.index(
+        "conn = get_db_connection()"
+    )
     assert init_source.index("ensure_usuario_profile_schema(conn)") < init_source.index(
         "ensure_backup_settings_schema(conn)"
     ) < init_source.index("CREATE TABLE IF NOT EXISTS alunos")
@@ -191,10 +182,9 @@ def test_complete_one_argument_caller_and_application_context_contract():
         "save_backup_settings",
         "save_retention_policy",
         "_save_drive_config",
-        "init_db",
     )
     assert _direct_call_scopes(app_db, "ensure_backup_settings_schema") == (
-        "_init_db_impl",
+        "init_db",
     )
 
     runtime_source = inspect.getsource(backup_settings)
@@ -696,10 +686,11 @@ def test_cloud_retention_restore_and_runtime_consumers_remain_in_main():
         "save_retention_policy",
         "_save_drive_config",
         "_get_runtime_backup_settings",
-        "ensure_cloud_backup_schema",
         "_maybe_upload_to_drives",
         "_restore_database_from_source",
     } <= main_names
+    assert "ensure_cloud_backup_schema" not in main_names
+    assert main.ensure_cloud_backup_schema is app_db.ensure_cloud_backup_schema
 
     runtime_source = inspect.getsource(backup_settings).lower()
     for table in ("cloud_accounts", "backup_logs", "cloud_drive_settings"):

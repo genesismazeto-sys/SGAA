@@ -1,30 +1,26 @@
 # Phase 3 schema, startup, and transaction contract
 
-**Status:** PHASE 3-B10 intentional revision of the accepted PHASE 3-B5/B6/B7/B8/B9 contract
-**Phase status:** B5/B5-R1/B6/B7/B8/B9 CLOSED / ACCEPTED; B10 IMPLEMENTED / LOCALLY VERIFIED / AWAITING SUPERVISOR REVIEW / PUBLICATION PENDING AT COMMIT-TREE TIME
-**B10 baseline:** `37c8757e4ef41647c971ad8a974c853dec6ce4e7` (`Version atividades schema migration`)
+**Status:** PHASE 3-B11 final single-init revision of the accepted PHASE 3-B5/B6/B7/B8/B9/B10 contract
+**Phase status:** B5 through B10-R1 CLOSED / ACCEPTED; B11 IMPLEMENTED IN WORKTREE / LOCALLY VERIFIED / INDEPENDENT REVIEW AND PUBLICATION PENDING
+**B11 baseline:** `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` (`Correct B10 governance manifest record`)
 **Executable contract:** `tests/test_phase3_schema_startup_transaction_contract.py`
 
 ## 1. Scope and purpose
 
-This document freezes the accepted behavior that exists before the final Phase 3
-cutover. B9 replaced the recurring `atividades` rebuild with migration v2,
-added an isolated pre-bootstrap migration checkpoint to both active init bodies,
-converged both fresh schemas to the canonical eleven-column contract, and removed
-only the matching lazy edge and request-route repair call. B10 extracts the v3
-activity-versioning core migration `normalize_activity_versioning_core`,
-retires the self-transactional rebuild from `main.py`, moves core table/trigger/index/
-requisicoes-compatibility ownership to `app.db_maintenance`, and reduces the lazy
-bridge to exactly two entries (`get_preferred_matriz_for_curso` and `logger`).
-B8 leaf ownership and B9 atividades v2 remain unchanged. It remains a review and
-regression baseline for later settings,
-backup, migration, activity-rebuild, activity-versioning, repository, and
-`init_db`-cutover units. It records current ownership, call paths, ordering, and
-transaction boundaries; it does not redesign unrelated behavior.
+This document defines the final Phase 3 single-initializer contract. B11 moves the
+complete bootstrap body to `app.db.init_db`, removes `app.db._init_db_impl`, removes
+`main.init_db` as a defining function, and preserves `main.init_db` only as the
+object-identical compatibility import of the canonical owner. The former two-entry
+lazy bridge is removed completely: `app.db` has no import, lookup, callback, or other
+runtime dependency on `main`.
 
-The two active initialization implementations are deliberately documented as
-**divergent**. B5 changes no production Python, schema, migration, runtime,
-route, RBAC, template, UI, backup, restore, or canonical database state.
+B11 directly owns application settings, cloud backup schema, turma/matrix schema,
+preferred-matrix selection, and its module-local logger. It explicitly binds the
+active Flask app into the historical backup-settings runtime owner before connection
+acquisition. B8 leaf ownership, B9 migration v2, B10 migration v3, route/RBAC/API/UI
+behavior, restore order, seed behavior, and migration registry remain unchanged.
+This revision records exact transaction postconditions rather than imposing a false
+whole-bootstrap rollback contract over independently durable historical units.
 
 ## 2. Current connection authority
 
@@ -36,44 +32,37 @@ route, RBAC, template, UI, backup, restore, or canonical database state.
 | Main compatibility | `main.py` imports `DATABASE`, `get_db_connection`, and `close_db_connection`; the exported objects are identical to the `app.db` owners. Compatibility is not defining ownership. |
 | Row and collation | New connections use `sqlite3.Row` and register `PTBR_NOACCENT`. |
 | PRAGMAs | Every newly created connection executes `foreign_keys = ON`, `journal_mode = WAL`, and `synchronous = NORMAL`, in that order. |
-| Local sync shim | `app.db._sync_database_from_main()` is the accepted no-op and returns local `DATABASE`; it does not read or import `main`. |
+| Reverse dependency | There is no sync shim and no `app.db` import or lazy lookup of `main`. |
 
 The application factory creates/configures the Flask app and registers the close
-lifecycle. It does **not** call either `init_db`. Module-level `main.app` is
-created with `create_app(...)`; development bootstrap happens separately in the
-`__main__` block.
+lifecycle. It does not call `init_db`. Module-level `main.app` is created with
+`create_app(...)`; development bootstrap happens separately in the `__main__` block.
 
-## 3. Current dual-init entry-point inventory
+## 3. Final single-init ownership
 
-| Entry point | Defining owner | Direct caller | Context and transaction contract |
+| Export | Defining owner | Direct caller | Context and transaction contract |
 |---|---|---|---|
-| `app.db.init_db` | `app/db.py` | `tools/seed_demo_data.py::seed` | Caller explicitly owns `app.app_context()`. Wrapper calls the local no-op sync and delegates to `_init_db_impl`; the implementation commits. |
-| `app.db._init_db_impl` | `app/db.py` | `app.db.init_db` only | Requires an active Flask application context because `get_db_connection` uses `g`. It obtains the connection and performs exactly one final `conn.commit()`. |
-| `main.init_db` | `main.py` | Startup, restore, tools, and tests listed below | Requires an active or inherited Flask application/request context. It obtains the connection and performs exactly one final `conn.commit()`. |
+| `app.db.init_db` | `app/db.py` | `tools/seed_demo_data.py::seed` plus all compatibility callers below | Requires an active Flask application context, binds backup runtime settings, obtains the canonical connection, runs the complete bootstrap, and performs one final `conn.commit()`. |
+| `main.init_db` | `app/db.py` | Development startup, restore, tools, and tests below | `main.py` imports the canonical function; `main.init_db is app.db.init_db`. It has no independent body or transaction ownership. |
 
-Both implementations are active. They share many core tables and helpers, but
-are not equivalent:
+`app.db.init_db` is the only defining initializer. `_init_db_impl`,
+`_get_main_db_helpers`, `_sync_database_from_main`, the main-defined initializer,
+and every lazy bridge entry are absent. Compatibility call sites keep their
+historical spelling without retaining duplicate ownership.
 
-- `app.db._init_db_impl` obtains two dependencies through the lazy bridge,
-  invokes `apply_early_schema_migrations` immediately after connection acquisition,
-  directly invokes `ensure_usuario_access_schema` and `ensure_reportes_table`, includes
-  `cursos.total_horas_aac` and `cursos.total_horas_aeu`, reconciles
-  `turmas.matriz_id`, and then commits.
-- `main.init_db` owns its own monolithic table/ALTER sequence, invokes
-  `ensure_app_settings_schema`, `ensure_cloud_backup_schema`, and
-  `ensure_turmas_matriz_schema`, invokes the same early checkpoint immediately
-  after connection acquisition, does not call `ensure_reportes_table`, and then commits.
-- Both create the same eleven-column `atividades` table on a fresh database, call
-  unrestricted migration application at the end, and finalize the shared Flask
-  connection. The early checkpoint rejects preexisting caller work before any
-  bootstrap SQL, so neither init may silently commit or roll back unrelated work.
+## 4. Final caller inventory
 
-## 4. Exact caller inventory
+The executable manifest identifies qualified call expressions by tracked/intended
+path, lexical scope, exact expression, imported binding and canonical runtime owner,
+rather than by brittle line number. The corrected qualified lexical inventory is
+exactly **72** `main.init_db(...)` expressions and **5** `app_db.init_db(...)`
+expressions. Every one resolves to canonical runtime owner `app.db.init_db`.
+There are no calls to `_init_db_impl` because that symbol no longer exists.
 
-The executable manifest identifies call expressions by tracked path and lexical
-scope rather than by brittle line number. At this baseline there are **74** calls
-to `main.init_db`, **1** call to `app.db.init_db`, and **1** call to
-`app.db._init_db_impl`.
+Three additional bare `init_db(...)` expressions are tracked separately because
+their exact imported binding is `from app.db import init_db`: development startup
+and restore in `main.py`, plus `tools/seed_demo_data.py::seed`. They prove startup,
+restore and factory/seed ownership but are not members of the qualified 72/5 count.
 
 ### Startup and restore callers
 
@@ -174,21 +163,35 @@ context. Pytest routes `APP_DATABASE` to a session-owned external runtime root
 before collection. Release restore/clean tests additionally bind all effective
 database paths to `tmp_path` and fingerprint repository databases.
 
+### Qualified direct-owner call expressions
+
+- `tests/test_atividades_schema_migration_v2.py::_run_init_on_temp_database` ->
+  `app_db.init_db`, imported by `from app import db as app_db`
+- `tests/test_phase3_final_init_cutover.py` -> `app_db.init_db`, imported by
+  `from app import db as app_db`, in these four lexical scopes:
+  `test_bootstrap_failure_postconditions_match_each_accepted_transaction_owner`,
+  `test_early_migration_commit_survives_later_bootstrap_failure_without_partial_bootstrap`,
+  `test_failure_inside_early_migration_rolls_back_only_the_isolated_unit`, and
+  `test_failure_after_successful_early_migration_preserves_only_committed_versions`
+
+All five have canonical runtime owner `app.db.init_db`. The 72 compatibility
+expressions listed above have exact expression `main.init_db`, binding `main`, and
+the same canonical runtime owner through the independently tested object identity.
+
 ## 5. app.db bootstrap sequence
 
-The following is the exact current semantic order of
-`app.db._init_db_impl`; nested SQL details are grouped without changing order:
+The following is the exact semantic order of the sole `app.db.init_db`; nested
+SQL details are grouped without changing order:
 
-1. Obtain `_get_main_db_helpers`.
-2. Bind AAC/AEU defaults.
-3. Retrieve, in exact order: `ensure_atividade_versioning_schema`,
-   `get_preferred_matriz_for_curso`, `logger`.
-4. Obtain `conn` from `get_db_connection`.
-5. Call direct `apply_early_schema_migrations(conn, logger=logger)`.
-6. Create `usuarios`; best-effort email index.
-7. Call direct `ensure_usuario_access_schema`.
-8. Call direct `ensure_usuario_profile_schema`.
-9. Call direct `ensure_backup_settings_schema` from `app.backup_settings`.
+1. Bind the active Flask application with `bind_backup_settings_runtime_app(current_app._get_current_object())`.
+2. Obtain `conn` from `get_db_connection`.
+3. Call direct `apply_early_schema_migrations(conn, logger=logger)`.
+4. Create `usuarios`; best-effort email index.
+5. Call direct `ensure_usuario_access_schema`.
+6. Call direct `ensure_usuario_profile_schema`.
+7. Call direct `ensure_app_settings_schema`.
+8. Call direct `ensure_backup_settings_schema`.
+9. Call direct `ensure_cloud_backup_schema`.
 10. Create `alunos`; best-effort indexes.
 11. Create `turmas`; best-effort status index.
 12. Create canonical eleven-column `atividades`.
@@ -208,16 +211,16 @@ The following is the exact current semantic order of
 26. Conditionally add `cursos.periodo`, `total_horas_aac`, and
     `total_horas_aeu`; normalize invalid/null totals.
 27. Seed `GERAL` only when no course exists.
-28. Call direct `ensure_matrizes_atividades_table`.
+28. Call direct `ensure_turmas_matriz_schema`.
 29. Call direct `ensure_matriz_atividade_links_table`.
-30. Call lazy `ensure_atividade_versioning_schema`.
+30. Call direct `ensure_atividade_versioning_schema`.
 31. Attempt the five `turmas` additions, in order: `curso_id`, `ano_inicio`,
     `semestre_inicio`, `codigo`, `matriz_id`.
 32. Conditionally add `ano_fim`, then `semestre_fim`.
 33. Create course/matrix indexes and best-effort unique turma indexes.
 34. Reconcile old turmas: assign `GERAL`, sequential numbers, and generated
     codes with collision fallback.
-35. Reconcile missing `turmas.matriz_id` through lazy
+35. Reconcile missing `turmas.matriz_id` through direct
     `get_preferred_matriz_for_curso`.
 36. Call unrestricted `apply_schema_migrations(conn, logger=logger)`.
 37. Execute the one expected final `conn.commit()`.
@@ -225,7 +228,8 @@ The following is the exact current semantic order of
 The matrix order is mandatory: matrices before links, links before activity
 versioning. Migration metadata is mandatory before the final commit.
 
-Logger-dependent paths in this implementation are the caught failures for:
+The logger is `logging.getLogger(__name__)` in `app.db`; it has no local handler
+and no dependency on `main.logger`. Logger-dependent paths are the caught failures for:
 `alunos.turma_id`, `alunos.foto_perfil`, `requisicoes.nome_evento`, both
 requisition alert timestamps, the pending-alert index, `turmas.numero`,
 `turmas.ano_fim`, `turmas.semestre_fim`, old turma course/code reconciliation,
@@ -236,9 +240,9 @@ or schema verification.
 
 | Function or metadata | Defining owner | Frozen classification |
 |---|---|---|
-| `_init_db_impl` | `app/db.py` | Direct owner of one current core bootstrap and its final commit. |
-| `init_db` in `app.db` | `app/db.py` | Compatibility/bootstrap wrapper only; no independent schema body. |
-| `init_db` in `main` | `main.py` | Direct owner of the second active, divergent core bootstrap and its final commit. |
+| `init_db` in `app.db` | `app/db.py` | Sole defining bootstrap owner and owner of the one final bootstrap commit. |
+| `init_db` export in `main` | `app.db.init_db` object | Compatibility import only; object-identical and without a local function body. |
+| `_init_db_impl` | Retired by B11 | Former delegated bootstrap body; symbol and callers removed. |
 | `ensure_reportes_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
 | `ensure_usuario_profile_schema` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
 | `ensure_requisicao_alert_receipts_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
@@ -250,43 +254,38 @@ or schema verification.
 | `normalize_usuario_access_startup_data` | `app/db_maintenance.py` | Startup-wide accepted access normalization owner; reuses `app.auth.default_access_level_for_user_type`; no DDL. |
 | `ensure_usuario_access_schema` | `app/db_maintenance.py` | Public compatibility orchestrator and sole owner of the access savepoint. `main` and `app.db` are direct compatibility exports. |
 | `ensure_backup_settings_structural_schema` | `app/db_maintenance.py` | Pure owner of `configuracoes_backup` CREATE TABLE; no Flask config, DML, read/merge, transaction control, directory or external effect. |
-| `bind_backup_settings_runtime_app`, `_backup_settings_defaults`, `seed_backup_settings_default_data`, `normalize_legacy_backup_sync_interval`, `read_backup_settings`, `_apply_backup_settings_to_app`, `get_backup_settings`, `ensure_backup_settings_schema` | `app/backup_settings.py` | Sole owners of the explicit legacy runtime-app binding, runtime-derived defaults, historical six-row seeding, exact stripped `"300"` normalization, persisted read/merge, six Flask config effects and ordered startup orchestration. `main` binds its exact module-level `app` after configuring the six values and compatibility-exports the four historical names; `app.db` directly imports the orchestrator. |
-| `ensure_app_settings_schema` | `main.py` | Application-settings schema owner, reachable from `main.init_db` only. |
-| `ensure_cloud_backup_schema` | `main.py` | Adjacent cloud schema owner for `cloud_accounts`, `backup_logs`, and `cloud_drive_settings`; unchanged and isolated from B7. |
+| `bind_backup_settings_runtime_app`, `_backup_settings_defaults`, `seed_backup_settings_default_data`, `normalize_legacy_backup_sync_interval`, `read_backup_settings`, `_apply_backup_settings_to_app`, `get_backup_settings`, `ensure_backup_settings_schema` | `app/backup_settings.py` | Sole owners of the explicit runtime-app binding and backup-settings layers. Canonical init rebinds the active Flask app before obtaining the connection; the historical module-level main binding remains for non-init compatibility consumers. |
+| `ensure_app_settings_schema` | `app/db.py` | Direct application-settings schema/default owner in the canonical bootstrap. |
+| `ensure_cloud_backup_schema` | `app/db.py` | Direct owner of `cloud_accounts`, `backup_logs`, and `cloud_drive_settings` in the canonical bootstrap. |
 | `ATIVIDADES_SCHEMA_COLUMNS`, migration-v2 predicate/copy/rebuild/validation | `app/db_maintenance.py` | Sole canonical eleven-column migration contract. `main.ensure_atividades_schema_current` and its request-time call are retired. |
 | `ensure_atividade_versioning_leaf_tables`, `ensure_atividade_versioning_leaf_triggers`, `ensure_atividade_versioning_leaf_indexes` | `app/db_maintenance.py` | Pure owners, respectively, of exactly four additive leaf tables, two `atividade_transicao` triggers and eight ordinary leaf indexes. They own no transaction, migration, PRAGMA, DML, core or requisicoes statement. |
 | `ensure_activity_versioning_core_tables`, `ensure_activity_versioning_core_triggers`, `ensure_activity_versioning_core_indexes`, `_create_activity_versioning_core_tables`, `_rebuild_activity_versioning_core_v3`, `_drop_activity_versioning_rebuild_sensitive_objects`, `_validate_activity_versioning_v3`, `_migration_v3_normalize_activity_versioning_core`, `ensure_requisicoes_versioning_compatibility_schema`, `ensure_requisicoes_versioning_compatibility_index`, `ensure_atividade_versioning_schema` | `app/db_maintenance.py` | Sole owner of the canonical activity-versioning core DDL, six core triggers, seven core indexes, requisicoes compatibility columns/index, and the v3 migration. B10 moved all core responsibility from `main.py` to `app.db_maintenance`. The public orchestrator `ensure_atividade_versioning_schema` is caller-owned (non-destructive) when v3 is recorded or absent; it rejects non-canonical non-v3 states. |
 | `_migration_v3_normalize_activity_versioning_core`, `_activity_versioning_source_variant` | `app/db_maintenance.py` | v3 classification and eligibility; determines `absent`, `missing_numero`, `canonical`, etc. |
-| `ensure_turmas_matriz_schema` | `main.py` | Remaining turma/matrix schema owner; delegates accepted matrix owner. |
+| `ensure_turmas_matriz_schema` | `app/db.py` | Direct turma/matrix schema owner; delegates the accepted matrix owner. |
 | `_needs_atividade_versao_migration`, `_needs_atividade_versao_default_fix`, `_needs_index_hardening` | Retired by B10 | Former schema-state predicates in `main.py`; retired along with the self-transactional rebuild. |
-| `get_preferred_matriz_for_curso` | `main.py` | Query/runtime behavior rather than defining ownership, but it invokes the matrix ensure and can therefore cause caller-owned schema work. |
-| `_get_main_db_helpers` | `app/db.py` | Compatibility/lazy wiring only, not schema ownership. |
+| `get_preferred_matriz_for_curso` | `app/db.py` | Direct query/runtime owner; it invokes the matrix ensure and can therefore cause caller-owned schema work. `main` compatibility-exports the same object. |
+| `_get_main_db_helpers` | Retired by B11 | Former lazy wiring; symbol, map, and all retrievals removed. |
 | `DATABASE`, `get_db_connection`, `close_db_connection` exports in `main.py` | `app.db` objects | Compatibility exports only, not defining ownership. |
 
 `ensure_admin_arquivos_table` and `ensure_admin_alertas_table` remain defined by
-`main.py`, but they are not reachable from either current `init_db` path and are
+`main.py`, but they are not reachable from the canonical `init_db` path and are
 therefore outside this init reachability matrix.
 
-## 7. Remaining lazy-bridge matrix
+## 7. Zero lazy-bridge contract
 
-The exact two entries and matching `_init_db_impl` retrievals are frozen in this
-order:
+The exact lazy bridge is empty. `_get_main_db_helpers` does not exist, there are
+no `helpers[...]` retrievals, and `app.db` contains no `import main`, `sys.modules`
+lookup, `importlib` lookup, callback, or logger reference that resolves through
+`main`.
 
-| Order | Lazy key | Current source object | Matching local retrieval | Role |
-|---:|---|---|---|---|
-| 1 | `get_preferred_matriz_for_curso` | `main.get_preferred_matriz_for_curso` | same-name local | Query/runtime with lazy schema side effect |
-| 2 | `logger` | `main.logger` | same-name local | Warning/migration logging |
-
-B7 removed only the backup-settings key and matching retrieval; B8 preserved the
-then-four-entry bridge. B9 removed only the recurring-activities key and retrieval and
-added the direct early runner before bootstrap SQL. B10 removed the
-activity-versioning key and retrieval, making `ensure_atividade_versioning_schema`
-a direct import in both `app.db` and `main.py`. The exact direct
-`app.db_maintenance` import set now includes
-`ensure_atividade_versioning_schema`, `apply_early_schema_migrations`, `apply_schema_migrations`,
-`ensure_matriz_atividade_links_table`, `ensure_matrizes_atividades_table`, `ensure_reportes_table`,
+The exact direct `app.db_maintenance` import set is
+`apply_early_schema_migrations`, `apply_schema_migrations`,
+`ensure_atividade_versioning_schema`, `ensure_matriz_atividade_links_table`,
+`ensure_matrizes_atividades_table`, `ensure_reportes_table`,
 `ensure_requisicao_alert_receipts_table`, `ensure_usuario_access_schema`, and
-`ensure_usuario_profile_schema`.
+`ensure_usuario_profile_schema`. Backup settings are imported directly from
+`app.backup_settings`; app settings, cloud backup, preferred matrix, and turma
+matrix ownership are local to `app.db`.
 
 ## 8. Migration baseline
 
@@ -296,8 +295,8 @@ a direct import in both `app.db` and `main.py`. The exact direct
   `(2, "normalize_atividades_schema", _migration_v2_normalize_atividades_schema)`, and
   `(3, "normalize_activity_versioning_core", _migration_v3_normalize_activity_versioning_core)`.
 - Migration v1 is a **historical baseline marker**. Its function body is only a
-  docstring; the current physical schema is still produced by the two bootstrap
-  bodies and their reachable helpers. The baseline migration is not a complete
+  docstring; the current physical schema is still produced by the canonical
+  bootstrap body and its reachable helpers. The baseline migration is not a complete
   physical-schema definition.
 - Migration v2 owns the canonical eleven-column `atividades` table transition,
   preserves accepted data including `documentos_json`, validates physical postconditions,
@@ -318,17 +317,16 @@ caller before the helper is entered.
 
 | Function/path | Commit | Rollback | Savepoint | `executescript` / SQL transaction | FK PRAGMA | Active transaction expectation | Caller rollback contract | Classification |
 |---|---:|---:|---:|---|---|---|---|---|
-| `app.db._init_db_impl` | 1 final | none | none | none | indirect only | Does not require one; will finalize all pending work on the shared connection | Not available after its final commit | Self-finalizing init owner |
-| `main.init_db` | 1 final | none | none | none | indirect only | Does not require one; will finalize all pending work on the shared connection | Not available after its final commit | Self-finalizing init owner |
-| `app.db.init_db` | none directly | none | none | delegates | indirect | Delegates to `_init_db_impl` | Same as implementation | Wrapper |
-| Five caller-owned direct schema helpers in `app.db_maintenance` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes their uncommitted DDL/DML | Caller-owned |
+| `app.db.init_db` | 1 final | none | none | none | indirect only | Starts on a clean connection after the isolated early runner; later DML owns the pending caller transaction | Not available after its successful final commit; failure propagates with pending work still rollback-capable or closed by the context | Sole self-finalizing init owner |
+| `main.init_db` compatibility export | none independently | none | none | none | none | Object-identical call into `app.db.init_db` | Same as canonical owner | Compatibility import, not an owner |
+| Caller-owned direct schema helpers in `app.db_maintenance` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes their uncommitted DDL/DML | Caller-owned |
 | `ensure_schema_migrations_table`, `apply_schema_migrations` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted metadata/PRAGMA transaction effects as SQLite permits | Caller-owned |
 | `apply_early_schema_migrations` | 1 bounded | 1 bounded on error | none | `BEGIN IMMEDIATE` | records original; `OFF` before begin; exact restore after completion | Requires no active transaction and verifies FK is actually disabled | No caller work may exist; migration/rebuild/v2 metadata/user-version effects roll back together | Isolated early migration owner |
 | `ensure_usuario_access_structural_schema` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted DDL | Caller-owned structural component |
 | `seed_usuario_access_default_data` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted inserts | Caller-owned default-data component |
 | `normalize_usuario_access_startup_data` | none | none | none | none | none | Invoked directly in tests or through public wrapper | Outer rollback removes uncommitted updates | Caller-owned normalization component |
 | `ensure_usuario_access_schema` | none via connection method | `ROLLBACK TO SAVEPOINT` only on error | owns `ensure_usuario_access_schema` savepoint and releases it | none | none | Works clean or nested | On a clean connection, top-level `RELEASE` finalizes helper work; inside an outer transaction, caller rollback still removes it | Savepoint-owned exception |
-| `ensure_app_settings_schema` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted work | Caller-owned |
+| `ensure_app_settings_schema` | none | none | none | none | none | On a clean connection its table CREATE is SQLite statement-autocommitted; first INSERT opens/joins caller work | Outer rollback removes uncommitted rows, not an already completed clean-connection DDL statement | Caller-owned; no explicit finalization |
 | `ensure_backup_settings_structural_schema` | none | none | none | none | none | Clean call creates only the table; under caller `BEGIN`, DDL remains caller-owned | Clean post-DDL table remains; outer rollback removes uncommitted DDL | Caller-owned structural component |
 | `seed_backup_settings_default_data` | none | none | none | none | none | First DML starts/joins the caller transaction; partial insert failure is not repaired | Caller rollback removes inserted defaults | Caller-owned default-data component |
 | `normalize_legacy_backup_sync_interval` | none | none | none | none | none | Exact stripped `"300"` update joins caller work | Caller rollback removes the update | Caller-owned legacy-normalization component |
@@ -341,6 +339,45 @@ caller before the helper is entered.
 | `ensure_atividade_versioning_schema` | none directly | none directly | none | none | none | Caller-owned additive DDL only | Outer rollback removes its uncommitted DDL | Caller-owned pure DDL orchestrator when v3 is absent or canonical |
 | Three `ensure_atividade_versioning_leaf_*` helpers | none | none | none | none | none | Execute only caller-owned `CREATE TABLE`, `CREATE TRIGGER`, or `CREATE INDEX` statements | Outer rollback removes their uncommitted DDL; injected failures propagate without commit, rollback or savepoint | Caller-owned pure DDL components |
 
+### Transaction-owner classification
+
+| Helper/stage | Class | Exact owner fact |
+|---|---|---|
+| `apply_early_schema_migrations` | A | Isolated `BEGIN IMMEDIATE`; one commit on success, one rollback on error, exact FK restoration. |
+| `ensure_usuario_access_schema` | B | Owns the only startup savepoint; outermost RELEASE persists on a clean connection, nested RELEASE leaves ownership with the caller. |
+| `ensure_usuario_profile_schema` | D | Pure PRAGMA/ALTER helper; no finalization. |
+| `ensure_backup_settings_schema` | C/D | Joins the transaction already opened by app-settings inserts; database work remains caller-owned, while runtime Flask config is non-transactional. |
+| `ensure_app_settings_schema` | D | No explicit finalization; on clean SQLite connection its CREATE completes in autocommit, then INSERT opens caller work. |
+| `ensure_cloud_backup_schema` | C | Executes after app-settings DML, inside caller-owned work. |
+| `ensure_reportes_table` | C | Executes inside caller-owned work. |
+| `ensure_turmas_matriz_schema` | C | Executes inside caller-owned work and delegates matrix-table ensure. |
+| `ensure_matriz_atividade_links_table` | C | Executes inside caller-owned work. |
+| `ensure_atividade_versioning_schema` | C | Executes inside caller-owned work and owns no finalization. |
+| final `apply_schema_migrations` | C | Records v1/v2/v3 and `user_version` inside caller-owned work; no commit. |
+| final `init_db` commit | C finalizer | The sole final bootstrap commit. |
+
+No class-E boundary was found. AST comparison against B10 proves that both former
+init bodies and B11 each contain one `conn.commit()` and no body-owned BEGIN,
+SAVEPOINT, RELEASE, SQL COMMIT, or rollback. B11 added no transaction split.
+
+### Failure postcondition matrix
+
+The focused executable contract keeps the failing connection open, records
+`in_transaction`, compares its visible state with a newly opened observer, and
+then closes it without an explicit rollback to prove SQLite close rollback.
+
+| Injection point | State immediately before/after exception | Observer-visible durable state | Forbidden false state |
+|---|---|---|---|
+| Before early migration | not in transaction / not in transaction | no tables, indexes, migration rows; `user_version=0`; FK unchanged | Any bootstrap continuation. |
+| Inside early v2 migration | isolated transaction rolls back; FK restored | preexisting four-column `atividades` and its data only; no `schema_migrations`; `user_version=0` | False migration row, false user version, orphan migration table, or bootstrap continuation. |
+| After successful early v1/v2 migration | not in transaction | canonical eleven-column `atividades`, migration rows v1/v2 and `user_version=2` remain durable | Undoing the accepted migration commit or starting bootstrap after injected failure. |
+| During first core table CREATE | not in transaction | no new object | Any later helper or final commit. |
+| During app-settings ensure, after access RELEASE | not in transaction | `usuarios`, `configuracoes_acesso`, `usuarios_permissoes_acesso`, `sqlite_sequence`; access defaults 5; indexes `idx_usuarios_email`, `idx_usuarios_permissoes_usuario` | Any settings, backup, course, matrix, or migration completion. |
+| During matrix schema | caller transaction active | preceding access durable set plus empty `configuracoes_app`; all rows and later tables visible only on failing connection disappear on close | Hidden commit of app/backup settings, courses, core bootstrap, or matrix work. |
+| Before final migration pass | caller transaction active | same preceding durable set; no durable `schema_migrations`; observer `user_version=0` on a fresh database | Representation of final migrations as completed. |
+| Immediately before final commit | caller transaction active; one commit attempt fails | same preceding durable set; caller sees v1/v2/v3 and `user_version=3`, observer sees none and `user_version=0`; close removes caller work | Successful final commit, swallowed exception, or post-failure continuation. |
+| Later failure after a successful early migration | depends on later point | successfully committed v1/v2/v3 remain; only later work beyond the exact historically durable access/autocommit set must remain uncommitted | Treating accepted early durability as partial-bootstrap defect. |
+
 The accepted caller-owned direct schema helpers are:
 `ensure_reportes_table`, `ensure_usuario_profile_schema`,
 `ensure_requisicao_alert_receipts_table`,
@@ -349,55 +386,51 @@ The accepted caller-owned direct schema helpers are:
 `ensure_usuario_access_schema`; `apply_schema_migrations` is listed separately
 as migration metadata.
 
-## 10. Known exceptions and technical debt
+## 10. Retained compatibility and technical debt
 
-1. Two active init bodies duplicate and diverge.
-2. Both init owners retain one final bootstrap commit, but the early checkpoint now
+1. `main.init_db` remains a compatibility import because 72 qualified lexical
+   callers retain the historical spelling; five qualified direct-owner expressions
+   use `app_db.init_db`, and three bare imported-owner calls are recorded separately.
+   Identity is canonical and defining duplication is zero.
+2. The canonical initializer retains one final bootstrap commit; the early runner
    rejects unrelated pending caller work at entry.
-3. The access helper has savepoint-dependent clean-vs-nested durability.
-4. The `atividades` rebuild is now one-time migration v2; later drift is detected and
-   fails instead of being repaired silently.
-5. Activity-versioning core migration v3 is the sole destructive migration boundary;
-   its isolated `BEGIN IMMEDIATE` transaction is bounded and atomic. The legacy
-   self-transactional rebuild has been retired.
-6. `get_preferred_matriz_for_curso` is named as a query but lazily ensures matrix
-   schema.
-7. The restore flow reinitializes the restored database through `main.init_db`,
-   not `app.db.init_db`.
-8. Development startup uses `main.init_db`; demo seeding uses `app.db.init_db`.
-9. Logger warnings can hide best-effort ALTER/index/reconciliation failures; a
+3. The access helper retains savepoint-dependent clean-vs-nested durability.
+4. Clean-connection DDL before the first DML follows SQLite statement autocommit;
+   this is preexisting behavior and is represented exactly in failure postconditions.
+5. Backup runtime config is applied before caller database commit and cannot be
+   rolled back with SQLite; the explicit active-app binding removes target ambiguity,
+   not this timing debt.
+6. `get_preferred_matriz_for_curso` remains a query that ensures matrix schema,
+   but its owner is now direct and no lazy bridge remains.
+7. Restore and development callers retain `main.init_db` spelling but execute the
+   object-identical `app.db.init_db`; seed calls the owner directly.
+8. Logger warnings can hide best-effort ALTER/index/reconciliation failures; a
    warning is not schema postcondition evidence.
-10. The v1 migration marker still records a historical baseline; v2 owns only the
-    canonical `atividades` transition; v3 owns the activity-versioning core transition.
+9. The v1 migration marker remains historical; v2 owns the `atividades` transition;
+   v3 owns the activity-versioning core transition. No migration v4 exists.
 
-## 11. Current versus target architecture
+## 11. Final Phase 3 architecture
 
-**Current:** the exact dual-init, three-entry lazy bridge, compatibility exports,
-helper ownership, transaction exceptions, and call graph above are accepted and
-frozen for regression protection. Access DDL, historical defaults, startup-wide
-normalization, and savepoint orchestration are explicit semantic layers in
+**Final Phase 3:** `app.db` solely defines connection authority and initialization.
+`main` compatibility-exports the canonical objects. The lazy bridge and reverse
+`app.db → main` dependency are zero. Access DDL, historical defaults, startup-wide
+normalization, and savepoint orchestration remain explicit semantic layers in
 `app.db_maintenance`; runtime login normalization remains in `main.py` and is
 consumed unchanged by `app/views/core.py`.
 Backup-settings table DDL is separately owned by `app.db_maintenance`; runtime
 defaults, seeding, exact legacy normalization, read/merge, Flask config application
 and the one-argument compatibility orchestrator are explicit layers in
-`app.backup_settings`. The runtime module deliberately does not use `current_app`:
-`main` explicitly binds its exact module-level `app`, preserving the historical target
-even while another Flask app context is active. This is
-`EXPLICIT_LEGACY_RUNTIME_APP_BINDING / BASELINE_COMPATIBILITY_SHIM /
-NOT_TARGET_ARCHITECTURE`, not the final application-factory design. Cloud/OAuth/
-retention/restore workflows remain in `main.py`.
-The activity-versioning public orchestrator, core `atividade_versao` schema, rebuild,
-migration predicates/delegates, core triggers/indexes and requisicoes compatibility
-block remain in `main.py`. Only the four-table leaf cluster, two transition triggers
-and eight matching indexes are defined by three pure helpers in `app.db_maintenance`.
+`app.backup_settings`. Canonical init binds its exact active Flask app explicitly
+before connection acquisition; no reverse import is used. Cloud/OAuth/retention/
+restore workflows remain in `main.py`.
+Activity-versioning migration/core/leaf/requisicoes compatibility ownership remains
+in `app.db_maintenance` as established by B8/B10.
 The separate `atividades` table is governed by recorded migration v2 and an isolated
 early checkpoint; request processing no longer repairs its schema.
 
-**Target:** later separately authorized units may establish one canonical init,
-move remaining owners out of `main.py`, separate query behavior from schema
-ensures, and make transaction ownership explicit. This document does not choose
-or implement that redesign.
+Later separately authorized units may separate query behavior from schema ensures
+or move cloud/route concerns, but they may not recreate duplicate initialization or
+reverse dependencies. Phase 4 is not authorized by this closeout.
 
 No target statement changes current behavior. No current statement endorses the
 behavior as ideal.
@@ -410,21 +443,21 @@ boundaries, not authorization:
 | Unresolved responsibility | Explicit later owning unit |
 |---|---|
 | Access schema/default-data/startup normalization and savepoint semantics | **Resolved by PHASE 3-B6** |
-| Application-settings schema | **Phase 3 application-settings ownership unit** |
+| Application-settings schema | **Resolved by PHASE 3-B11** |
 | Backup-settings schema/default-data/legacy normalization/runtime application | **Resolved by PHASE 3-B7** |
 | Cloud-account/log/drive schema and backup offloading | **Phase 5 backup-schema/offloading unit**, separately gated |
 | `atividades` rebuild and FK PRAGMA semantics | **Resolved by PHASE 3-B9** |
 | Activity-versioning leaf tables/transition triggers/leaf indexes | **Resolved by PHASE 3-B8** |
-| Activity-versioning core schema, requisicoes compatibility and self-transactional rebuild | **Later Phase 3 activity-versioning core ownership unit** |
-| Migration baseline expansion/version policy | **Partially resolved by PHASE 3-B9 through version 2; later migrations remain separately gated** |
-| Matrix query that ensures schema | **Phase 3 matrix/repository boundary unit** |
-| Logger/wiring lazy edge | **Final Phase 3 init wiring unit** |
-| Dual direct core schemas, startup/seed/restore selection, and final commit ownership | **Final Phase 3 `init_db` cutover unit** |
+| Activity-versioning core schema, requisicoes compatibility and self-transactional rebuild | **Resolved by PHASE 3-B10** |
+| Migration baseline expansion/version policy | **Resolved through v3 by PHASE 3-B9/B10; any v4 remains separately gated and unauthorized** |
+| Matrix query that ensures schema | **Direct owner established by PHASE 3-B11; query/schema coupling remains explicit debt** |
+| Logger/wiring lazy edge | **Resolved by PHASE 3-B11** |
+| Dual direct core schemas, startup/seed/restore selection, and final commit ownership | **Resolved by PHASE 3-B11** |
 | Main-defined admin-only lazy schemas not reachable from init | Their route/module extraction phases; not part of the init cutover until explicitly added |
 
-B9 was separately authorized after B8 acceptance and changed only the versioned
-`atividades` migration/checkpoint/bridge unit described above. No B10 implementation
-is inferred or authorized.
+B11 closes the Phase 3 initialization cutover only. It does not authorize Phase 4,
+migration v4, cloud offloading, route extraction, repository redesign, or unrelated
+production changes.
 
 ## 13. Canonical-database safety rules
 
@@ -432,10 +465,10 @@ is inferred or authorized.
 - Frozen identity for B5: SHA-256
   `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`,
   size `544768` bytes, `database.db-wal` absent, `database.db-shm` absent.
-- Canonical SQLite opens in B5, B6, B7, B8 and B9: **exactly 0**.
-- Contract tests are static or use pytest-owned paths. No contract test calls
-  `sqlite3.connect`; existing schema helper tests use `:memory:` and release
-  tests use `tmp_path`/session-owned external roots.
+- Canonical SQLite opens in B5 through B11: **exactly 0**.
+- Static contract tests do not connect to SQLite. B11 fault-injection, seed,
+  factory, migration, release, and restore tests use only `:memory:`, `tmp_path`,
+  or session-owned external roots.
 - `APP_DATABASE` must be set before application imports during pytest and must
   resolve outside the repository.
 - Hashing/stat/searching source bytes is permitted; opening the canonical file
@@ -450,7 +483,8 @@ An intentional change requires all of the following:
 
 1. A separate authorization naming production and documentary scope.
 2. Fresh read-only caller, owner, order, migration, and transaction inventory.
-3. Explicit adjudication of whether the two init implementations still diverge.
+3. Explicit adjudication of sole init ownership, compatibility identity, zero
+   reverse dependency, and every transaction owner.
 4. A test change that first fails for the intended semantic contract change; do
    not ratchet whole-module bytes or irrelevant formatting.
 5. Matching update to this document, the executable manifest, documentation
@@ -470,11 +504,11 @@ change this contract silently.
 - **frozen does not mean permanent**;
 - **compatibility export does not mean defining ownership**;
 - **baseline migration does not define the complete physical schema**;
-- divergent does not mean equivalent;
-- caller-owned does not include the savepoint, PRAGMA-sensitive, or
-  self-finalizing exceptions listed above;
-- this contract is not authorization for B10, unrelated production code, another migration,
-  restore, canonical SQLite access, or final cutover.
+- compatibility spelling does not create a second initializer;
+- caller-owned does not include the isolated migration, savepoint, SQLite
+  clean-connection autocommit, runtime-config, or finalizing exceptions above;
+- this contract is not authorization for Phase 4, unrelated production code,
+  migration v4, canonical SQLite access, restore execution, or cleanup.
 
 ## 16. B5 validation and review record
 
@@ -738,3 +772,63 @@ The authorized commit-tree manifest is exactly:
 14. `tests/test_phase3_schema_startup_transaction_contract.py`
 
 Publication is pending at commit-tree time. PHASE 3-B11 remains unauthorized.
+
+## 22. B11 single-init and transaction-postcondition validation record
+
+PHASE 3-B11 starts from accepted B10-R1 commit
+`e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a`. It establishes `app.db.init_db`
+as the sole defining initializer, with `main.init_db` as an object-identical
+compatibility import. `_init_db_impl`, `_get_main_db_helpers`, the local database
+sync shim, every lazy retrieval, and every `app.db → main` dependency are removed.
+
+The exact transaction-owner inventory and failure postcondition matrix are in
+section 9. Deterministic AST comparison found no B11-added transaction boundary.
+Fault injection covers state on the failing connection, a concurrently opened
+observer, state after close rollback, migration rows, `user_version`, FK restoration,
+rows, tables, indexes, exception propagation, and absence of continuation. The
+focused reconciliation rerun passed 15 tests in 3.85 seconds. The corrected
+caller/registry/postcondition gate passed 52 tests in 8.46 seconds. An established
+affected lane had passed 206 tests in 29.22 seconds before this documentation revision.
+
+The caller correction records the actual qualified lexical inventory 72/5 without
+modifying production call sites or recreating obsolete 74/1. The read-only AST
+registry extractor now parses the real annotated `SCHEMA_MIGRATIONS` assignment and
+proves `SCHEMA_VERSION == 3`, exact versions/names v1 `baseline_schema_management`,
+v2 `normalize_atividades_schema`, v3 `normalize_activity_versioning_core`, callable
+entries, no duplicate, no gap and no v4. `app/db_maintenance.py` is unchanged.
+
+The preserved pre-correction hermetic checkpoint is `913 passed / 17 D73H
+deselected / 348.40s / exit 0`. The final post-correction hermetic gate passed
+`913 passed / 17 D73H deselected / 416.66s / exit 0`, with zero failures/errors,
+all 25 slowest durations captured and no pytest process remaining. Route inventory
+remains 131 and RBAC unmapped remains zero.
+
+The authorized B11 manifest is exactly 14 paths:
+
+1. `AGENT_HANDOFF.md`
+2. `PROJECT_STATE.md`
+3. `app/db.py`
+4. `docs/DOCUMENTATION_INDEX.md`
+5. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
+6. `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`
+7. `main.py`
+8. `tests/test_activity_versioning_leaf_schema_ownership.py`
+9. `tests/test_backup_settings_ownership.py`
+10. `tests/test_db_connection_ownership.py`
+11. `tests/test_db_schema_maintenance.py`
+12. `tests/test_phase3_final_init_cutover.py`
+13. `tests/test_phase3_schema_startup_transaction_contract.py`
+14. `tests/test_residual_shared_helpers.py`
+
+No Phase 4, migration v4, route, RBAC, UI, API or template change is included.
+Full hermetic validation completed at 913/17/416.66s. Exactly one effective
+independent read-only call used the direct no-fallback wrapper fixed to `opencode` /
+`opencode/deepseek-v4-flash-free`; it timed out after 600s without usable stdout or
+wrapper metadata, so session ID, cost and verdict are unavailable. A preceding
+Windows/MSYS path-format failure happened before the wrapper/model frontier and was
+recovered without consuming a model attempt. No retry or paid fallback occurred.
+Post-failure reconciliation proved reviewer mutation zero, no remaining reviewer
+process, unchanged 14-path manifest, identical pre/post diff SHA-256
+`27e6c3ef2e769809008a8de81709b29a37caed693f1ce18a96820d18b9b80dff`, empty index,
+and preserved protected assets. The mandated hard stop occurred before staging;
+there is no B11 commit or push. Any recovery requires new explicit authorization.

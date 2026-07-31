@@ -35,7 +35,21 @@ from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
     gerar_codigo_turma,
 )
-from app.db import DATABASE, close_db_connection, get_db_connection
+from app.db import (
+    DATABASE,
+    DEFAULT_HORAS_ACADEMICA,
+    DEFAULT_HORAS_EXTENSAO,
+    DEFAULT_RESPONSE_GOAL_DAYS,
+    DEFAULT_RETURN_RESPONSE_DAYS,
+    _app_settings_defaults,
+    close_db_connection,
+    ensure_app_settings_schema,
+    ensure_cloud_backup_schema,
+    ensure_turmas_matriz_schema,
+    get_db_connection,
+    get_preferred_matriz_for_curso,
+    init_db,
+)
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import (
@@ -311,22 +325,6 @@ def parse_documentos_json(raw) -> list[str]:
     parts = _re.split(r"[,;\n\|]+", t)
     return _normalize_list(parts)
 
-DEFAULT_RESPONSE_GOAL_DAYS = 10
-DEFAULT_RETURN_RESPONSE_DAYS = 7
-DEFAULT_HORAS_ACADEMICA = 160
-DEFAULT_HORAS_EXTENSAO = 160
-
-
-def _app_settings_defaults() -> dict[str, str]:
-    return {
-        "response_goal_days": str(DEFAULT_RESPONSE_GOAL_DAYS),
-        "response_metrics_reset_at": "",
-        "return_response_days": str(DEFAULT_RETURN_RESPONSE_DAYS),
-        "auto_indefer_devolvida": "0",
-        "horas_padrao_academica": str(DEFAULT_HORAS_ACADEMICA),
-        "horas_padrao_extensao": str(DEFAULT_HORAS_EXTENSAO),
-    }
-
 
 def _normalize_optional_iso_date(value: str, *, allow_empty: bool = False) -> str:
     raw = str(value or "").strip()
@@ -341,24 +339,6 @@ def _normalize_optional_iso_date(value: str, *, allow_empty: bool = False) -> st
     if parsed > date.today():
         raise ValueError("O início da apuração não pode estar no futuro.")
     return parsed.isoformat()
-
-
-def ensure_app_settings_schema(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS configuracoes_app (
-            chave TEXT PRIMARY KEY,
-            valor TEXT NOT NULL,
-            atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    defaults = _app_settings_defaults()
-    for chave, valor in defaults.items():
-        conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_app (chave, valor) VALUES (?, ?)",
-            (chave, valor),
-        )
 
 
 def get_app_settings(conn) -> dict[str, str]:
@@ -794,54 +774,6 @@ def _save_drive_config(conn, updates: dict[str, str]) -> None:
             """,
             (chave, str(valor)),
         )
-
-
-def ensure_cloud_backup_schema(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS cloud_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider TEXT NOT NULL,
-            account_email TEXT,
-            token_json TEXT NOT NULL,
-            connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT,
-            active INTEGER DEFAULT 1
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS backup_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider TEXT,
-            file_name TEXT,
-            file_size INTEGER,
-            status TEXT,
-            error_message TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_cloud_accounts_provider_active ON cloud_accounts(provider, active, id DESC)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_backup_logs_provider_created ON backup_logs(provider, created_at DESC, id DESC)"
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS cloud_drive_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider TEXT NOT NULL UNIQUE,
-            folder_id TEXT,
-            folder_name TEXT,
-            folder_path_label TEXT,
-            drive_id TEXT,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
 
 
 _CLOUD_FOLDER_PROVIDERS = {"google", "onedrive"}
@@ -1982,29 +1914,6 @@ def get_legacy_map_list(conn) -> list:
     ).fetchall()
 
 
-def get_preferred_matriz_for_curso(conn, curso_id: int | None):
-    if not curso_id:
-        return None
-    ensure_matrizes_atividades_table(conn)
-    return conn.execute(
-        """
-        SELECT *
-          FROM matrizes_atividades
-         WHERE curso_id = ?
-      ORDER BY CASE LOWER(COALESCE(status, ''))
-                   WHEN 'ativa' THEN 0
-                   WHEN 'vigente' THEN 0
-                   WHEN 'rascunho' THEN 1
-                   ELSE 2
-               END,
-               COALESCE(data_inicio_vigencia, '') DESC,
-               id DESC
-         LIMIT 1
-        """,
-        (curso_id,),
-    ).fetchone()
-
-
 def get_effective_matriz_for_turma(conn, curso_id: int | None, turma_matriz_id: int | None):
     ensure_matrizes_atividades_table(conn)
     if turma_matriz_id:
@@ -2012,20 +1921,6 @@ def get_effective_matriz_for_turma(conn, curso_id: int | None, turma_matriz_id: 
         if row:
             return row
     return get_preferred_matriz_for_curso(conn, curso_id)
-
-
-def ensure_turmas_matriz_schema(conn) -> None:
-    ensure_matrizes_atividades_table(conn)
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "matriz_id" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN matriz_id INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_turmas_matriz_id ON turmas(matriz_id)")
-    except sqlite3.OperationalError:
-        pass
 
 
 def _matriz_option_label(row) -> str:
@@ -4514,327 +4409,6 @@ def curso_mais_populoso_id() -> int | None:
 
 # ===================== DB Init / Migrações =====================
 
-def init_db():
-    conn = get_db_connection()
-    apply_early_schema_migrations(conn, logger=logger)
-
-    # usuarios
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        senha TEXT NOT NULL,
-        tipo TEXT NOT NULL CHECK(tipo IN ("admin", "aluno"))
-    );
-    """)
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email)")
-    except sqlite3.OperationalError:
-        pass
-
-    # alunos
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS alunos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        usuario_id INTEGER UNIQUE,
-        nome TEXT NOT NULL,
-        matricula TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE,
-        turma TEXT,                -- legado (texto)
-        turma_id INTEGER,          -- FK opcional para turmas(id)
-        foto_perfil TEXT,
-        status TEXT DEFAULT 'Ativo' CHECK(status IN ('Ativo', 'Inativo')),
-        FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-    );
-    """)
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_usuario_id ON alunos(usuario_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_matricula ON alunos(matricula)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_email ON alunos(email)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_turma_id ON alunos(turma_id)")
-    except sqlite3.OperationalError:
-        pass
-
-    # turmas (com numero, mantendo nome como legado)
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS turmas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL UNIQUE,
-        ano INTEGER,
-        semestre INTEGER CHECK(semestre IN (1,2)),
-        turno TEXT,
-        status TEXT NOT NULL DEFAULT 'Ativa' CHECK(status IN ('Ativa','Inativa')),
-        numero INTEGER
-    );
-    """)
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_turmas_status ON turmas(status)")
-    except sqlite3.OperationalError:
-        pass
-
-    # atividades
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS atividades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        grupo TEXT NOT NULL,
-        nome TEXT NOT NULL UNIQUE,
-        descricao TEXT,
-        limite_horas INTEGER,
-        tipo_atividade TEXT NOT NULL DEFAULT 'Acadêmica Complementar' CHECK(tipo_atividade IN ('Acadêmica Complementar', 'Extensão Universitária')),
-        tem_limitacao BOOLEAN DEFAULT 0,
-        tipo_limitacao TEXT CHECK(tipo_limitacao IN ('total', 'semestral')),
-        limite_horas_total INTEGER,
-        limite_horas_semestral INTEGER,
-        documentos_json TEXT
-    );
-    """)
-
-    # requisicoes
-    conn.execute("""
-CREATE TABLE IF NOT EXISTS requisicoes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    aluno_id INTEGER,
-    atividade_id INTEGER NOT NULL,
-    data_solicitacao TEXT NOT NULL,
-    data_evento TEXT NOT NULL,
-    horas_solicitadas REAL NOT NULL,
-    nome_evento TEXT,
-    status TEXT NOT NULL CHECK(status IN ('Pendente','Deferida','Deferida Parcialmente','Indeferida','Devolvida')),
-    horas_deferidas REAL,
-    observacao TEXT,
-    arquivo_comprovante TEXT,
-    data_processamento TEXT,
-    admin_id INTEGER,
-    aluno_update_notified_at TEXT,
-    aluno_update_seen_at TEXT,
-    FOREIGN KEY (aluno_id)   REFERENCES alunos(id)   ON DELETE SET NULL ON UPDATE CASCADE,
-    FOREIGN KEY (atividade_id) REFERENCES atividades(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    FOREIGN KEY (admin_id)   REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
-);
-
-    """)
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS requisicao_arquivos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            requisicao_id INTEGER NOT NULL,
-            label TEXT,
-            filename TEXT,
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id)
-        )
-        """
-    )
-
-    # Índices para melhorar consultas
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_aluno ON requisicoes(aluno_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_atividade ON requisicoes(atividade_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_status ON requisicoes(status)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_req_arquivos_req ON requisicao_arquivos(requisicao_id)")
-    except sqlite3.OperationalError:
-        pass
-
-    # Admin default â€” apenas quando explicitamente habilitado pelo ambiente.
-    # IMPORTANTE: a coluna `nivel_acesso` é adicionada por
-    # `ensure_usuario_access_schema()` mais abaixo. Para evitar erro em primeira
-    # execução, inserimos com colunas básicas e ajustamos o nível depois.
-    bootstrap_admin = bool(app.config.get("BOOTSTRAP_DEFAULT_ADMIN"))
-    bootstrap_email = (app.config.get("BOOTSTRAP_ADMIN_EMAIL") or "admin@ej.edu.br").strip().lower()
-    bootstrap_password = (app.config.get("BOOTSTRAP_ADMIN_PASSWORD") or "").strip()
-    admin_exists = conn.execute(
-        "SELECT 1 FROM usuarios WHERE LOWER(email) = ?", (bootstrap_email,)
-    ).fetchone()
-    seeded_admin_email = None
-    if not admin_exists and bootstrap_admin and bootstrap_password:
-        hashed_password = hash_password(bootstrap_password)
-        try:
-            conn.execute(
-                "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)",
-                ("Administrador", bootstrap_email, hashed_password, "admin"),
-            )
-            seeded_admin_email = bootstrap_email
-        except sqlite3.IntegrityError:
-            # Já existe um registro com este e-mail (corrida ou variação de caixa).
-            seeded_admin_email = bootstrap_email
-    elif not admin_exists and not bootstrap_admin:
-        try:
-            logger.warning(
-                "Nenhum usuário admin existente e bootstrap automático desabilitado. "
-                "Crie um admin manualmente antes do primeiro login produtivo."
-            )
-        except Exception:
-            pass
-
-    ensure_usuario_access_schema(conn)
-    ensure_usuario_profile_schema(conn)
-    ensure_app_settings_schema(conn)
-    ensure_backup_settings_schema(conn)
-    ensure_cloud_backup_schema(conn)
-
-    # Após garantir o schema de acesso, marca o admin recém-semeado como admin_total.
-    if seeded_admin_email:
-        try:
-            conn.execute(
-                "UPDATE usuarios SET nivel_acesso = 'admin_total' WHERE LOWER(email) = ?",
-                (seeded_admin_email,),
-            )
-        except sqlite3.OperationalError:
-            pass
-
-    # Migração defensiva: garantir turma_id em alunos
-    try:
-        cols = [row["name"] for row in conn.execute("PRAGMA table_info(alunos)").fetchall()]
-        if "turma_id" not in cols:
-            conn.execute("ALTER TABLE alunos ADD COLUMN turma_id INTEGER")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_turma_id ON alunos(turma_id)")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração turma_id já aplicada ou não necessária: {e}")
-
-    # Migração defensiva: garantir numero em turmas (bancos antigos)
-    # Migração defensiva: adicionar nome_evento em requisicoes, se não existir
-    try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(requisicoes)").fetchall()]
-        if "nome_evento" not in cols:
-            conn.execute("ALTER TABLE requisicoes ADD COLUMN nome_evento TEXT")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração nome_evento já aplicada ou não necessária: {e}")
-    try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(requisicoes)").fetchall()]
-        if "aluno_update_notified_at" not in cols:
-            conn.execute("ALTER TABLE requisicoes ADD COLUMN aluno_update_notified_at TEXT")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração aluno_update_notified_at já aplicada ou não necessária: {e}")
-    try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(requisicoes)").fetchall()]
-        if "aluno_update_seen_at" not in cols:
-            conn.execute("ALTER TABLE requisicoes ADD COLUMN aluno_update_seen_at TEXT")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração aluno_update_seen_at já aplicada ou não necessária: {e}")
-    try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_aluno_update_pending ON requisicoes(aluno_id, aluno_update_seen_at, aluno_update_notified_at)")
-    except sqlite3.OperationalError:
-        pass
-    ensure_requisicao_alert_receipts_table(conn)
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "numero" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN numero INTEGER")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração 'numero' já aplicada ou não necessária: {e}")
-
-    # ===== NOVO: cursos =====
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS cursos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        codigo TEXT NOT NULL UNIQUE,             -- LETRAS MAIÚSCULAS + HÍFEN
-        duracao_periodos INTEGER NOT NULL CHECK(duracao_periodos > 0),
-        periodo TEXT NOT NULL DEFAULT 'diurno',  -- diurno | vespertino | noturno | integral
-        status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo'))
-    );
-    """)
-
-    # Seed: curso GERAL (para amarrar turmas antigas, se necessário)
-    # Migração defensiva: adicionar coluna periodo em bancos antigos
-    try:
-        cols_c = [row[1] if isinstance(row, tuple) else row["name"] for row in conn.execute("PRAGMA table_info(cursos)").fetchall()]
-        if "periodo" not in cols_c:
-            conn.execute("ALTER TABLE cursos ADD COLUMN periodo TEXT DEFAULT 'diurno'")
-    except sqlite3.OperationalError:
-        pass
-
-    existe_curso = conn.execute("SELECT 1 FROM cursos LIMIT 1").fetchone()
-    if not existe_curso:
-        conn.execute(
-            "INSERT INTO cursos (nome, codigo, duracao_periodos, status) VALUES (?,?,?,?)",
-            ("Geral", "GERAL", 8, "ativo")
-        )
-
-    # NOVAS colunas em turmas
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "curso_id" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN curso_id INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "ano_inicio" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN ano_inicio INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "semestre_inicio" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN semestre_inicio INTEGER")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "codigo" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN codigo TEXT")
-    except sqlite3.OperationalError:
-        pass
-    ensure_turmas_matriz_schema(conn)
-    ensure_matriz_atividade_links_table(conn)
-    ensure_atividade_versioning_schema(conn)
-
-    # Migração defensiva: adicionar período final (ano_fim, semestre_fim) em turmas
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "ano_fim" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN ano_fim INTEGER")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração 'ano_fim' já aplicada ou não necessária: {e}")
-    try:
-        cols_t = [row["name"] for row in conn.execute("PRAGMA table_info(turmas)").fetchall()]
-        if "semestre_fim" not in cols_t:
-            conn.execute("ALTER TABLE turmas ADD COLUMN semestre_fim INTEGER")
-    except sqlite3.OperationalError as e:
-        logger.warning(f"Migração 'semestre_fim' já aplicada ou não necessária: {e}")
-
-    # Índices/constraints novas
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_turmas_curso ON turmas(curso_id);")
-    try:
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_turma_por_curso ON turmas(curso_id, numero);")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_turma_codigo ON turmas(codigo);")
-    except sqlite3.OperationalError:
-        pass
-
-    # Popular curso_id/codigo para turmas antigas
-    try:
-        geral = conn.execute("SELECT id, codigo FROM cursos WHERE codigo='GERAL'").fetchone()
-        if geral:
-            conn.execute("UPDATE turmas SET curso_id = ? WHERE curso_id IS NULL OR curso_id = 0", (geral["id"],))
-            # numero vazio -> dar números sequenciais simples (em Python para evitar dependências)
-            turmas_sem_num = conn.execute("SELECT id FROM turmas WHERE numero IS NULL OR numero = 0 ORDER BY id").fetchall()
-            if turmas_sem_num:
-                maxnum = conn.execute("SELECT COALESCE(MAX(numero),0) AS mx FROM turmas").fetchone()["mx"] or 0
-                n = int(maxnum)
-                for r in turmas_sem_num:
-                    n += 1
-                    conn.execute("UPDATE turmas SET numero=? WHERE id=?", (n, r["id"]))
-            # gerar códigos faltantes para GERAL
-            turmas_sem_cod = conn.execute("SELECT id, numero FROM turmas WHERE (codigo IS NULL OR codigo='')").fetchall()
-            for t in turmas_sem_cod:
-                cod = gerar_codigo_turma(geral["codigo"], t["numero"])
-                try:
-                    conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (cod, t["id"]))
-                except sqlite3.IntegrityError:
-                    # se por algum motivo colidir, acrescenta sufixo
-                    cod2 = f"{cod}-{t['id']}"
-                    conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (cod2, t["id"]))
-    except Exception as e:
-        logger.warning(f"População inicial de curso_id/codigo em turmas antigas: {e}")
-
-    apply_schema_migrations(conn, logger=logger)
-    conn.commit()
 
 def proximo_numero_turma(conn, ano=None, semestre=None):
     """[LEGADO] Sugere próximo número de turma (global ou filtrado por ano/semestre)."""

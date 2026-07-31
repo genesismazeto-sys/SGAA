@@ -46,23 +46,21 @@ def test_app_db_is_the_only_connection_owner_and_main_imports_compatibility_expo
     main_functions, main_assignments, main_imports = _top_level_definitions(main)
 
     assert {"get_db_connection", "close_db_connection"} <= app_functions
-    assert "_sync_database_from_main" in app_functions
+    assert "_sync_database_from_main" not in app_functions
+    assert "init_db" in app_functions
+    assert "_init_db_impl" not in app_functions
+    assert "_get_main_db_helpers" not in app_functions
     assert "DATABASE" in app_assignments
-    assert not ({"get_db_connection", "close_db_connection"} & main_functions)
+    assert not ({"get_db_connection", "close_db_connection", "init_db"} & main_functions)
     assert "DATABASE" not in main_assignments
-    assert {"DATABASE", "get_db_connection", "close_db_connection"} <= main_imports
+    assert {"DATABASE", "get_db_connection", "close_db_connection", "init_db"} <= main_imports
 
     app_db_source = inspect.getsource(app_db)
-    sync_source = inspect.getsource(app_db._sync_database_from_main)
     assert 'sys.modules.get("main")' not in app_db_source
     assert "main.DATABASE" not in app_db_source
-    assert "import main" not in sync_source
-    assert "sys.modules" not in sync_source
-    assert inspect.getsource(app_db.init_db) == (
-        "def init_db():\n"
-        "    _sync_database_from_main()\n"
-        "    return _init_db_impl()\n"
-    )
+    assert "import main" not in app_db_source
+    assert "sys.modules" not in app_db_source
+    assert main.init_db is app_db.init_db
 
 
 def test_main_connection_compatibility_exports_are_owner_objects():
