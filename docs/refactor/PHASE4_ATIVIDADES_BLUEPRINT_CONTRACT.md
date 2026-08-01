@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-**Status: IMPLEMENTED / AWAITING SUPERVISOR REVIEW.** This contract does not declare B3 CLOSED / ACCEPTED.
+**Status: CLOSED / ACCEPTED.** Published technical commit: `50801b6bdddc4d2772853c13f4905c49e8c996cf`, parent `81cc6b10b893f1d34bd211a527e9fd12c3b6bbbe`. Post-publication verification: **COMPLETE**. External supervisor acceptance: **RECORDED BY B3-R3**.
 
 Phase 4-B3 extracts the complete Atividades administrative cohort from `main.py` into `app.views.admin.atividades` while preserving the legacy public surface. The bounded owner contains exactly **22 endpoints** and **29 governed route/method combinations**.
 
@@ -86,13 +86,21 @@ argument is a controlled relative path.
 ## B3-R1 scope-expansion reconciliation
 
 The early changes to `app/uploads.py`, `utils/messages.py` and the two CSRF inventory snapshots
-were withheld from staging/publication until direct reconciliation. Their classification is:
+were withheld from staging/publication until direct reconciliation. Their historical
+pre-publication classification was:
 
 `PRE_REVIEW_SCOPE_EXPANSION / MECHANICALLY_CAUSED_BY_CANONICAL_OWNER_MOVE /
 NOT_STAGED / NOT_COMMITTED / PUBLICATION_WITHHELD /
 REQUIRES_SUPERVISOR_RECONCILIATION / RECONCILED_BY_B3_R1_EXACT_DELTA_PROVED`.
 
-This is exact, path-specific reconciliation and not general retroactive authorization.
+Current disposition:
+
+`EXACT_DELTA_PROVED / SUPERVISOR_RECONCILED / INCLUDED_IN_ACCEPTED_B3_COMMIT /
+NO_GENERIC_RETROACTIVE_AUTHORITY`.
+
+The historical `NOT_STAGED / NOT_COMMITTED / PUBLICATION_WITHHELD` tokens do not describe the
+current physical state. This is exact, path-specific reconciliation and not general retroactive
+authorization.
 
 ### Message inventory exact delta
 
@@ -126,11 +134,14 @@ not duplicated. Matrizes and Requisições route bodies remain physically in `ma
 
 ## Qualification and physical evidence
 
-- baseline HEAD/upstream/live remote: `81cc6b10b893f1d34bd211a527e9fd12c3b6bbbe`;
+- technical baseline/parent: `81cc6b10b893f1d34bd211a527e9fd12c3b6bbbe`;
+- published technical commit: `50801b6bdddc4d2772853c13f4905c49e8c996cf`;
 - B3 RED: 12 failed / 2 passed; current B3 owner/upload contract: 19 passed;
 - mandatory final affected lane: 353 passed in 119.56s;
 - historical pre-final-test-delta full run: 974 passed / 17 deselected / 292.86s, not final qualification;
 - final exact-candidate hermetic: 974 passed / 17 deselected / zero failures/errors / 399.95s / exit 0;
+- index-visible focused gates: 300 passed;
+- post-publication focused gates: 300 passed;
 - routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0;
 - actor matrix 402 = 263 allowed + 139 denied;
 - route inventory snapshot byte-identical;
@@ -140,9 +151,10 @@ not duplicated. Matrizes and Requisições route bodies remain physically in `ma
 - protected residual 17420 bytes / SHA-256
   `7388cfbc8f446410ef3c98ec0fa274c2c36ff4f3ef8ed2cd649bb1f3e1d3bb0e`.
 
-The exact candidate ceiling is 16 paths: six production, four tests/snapshots and six
-governance paths. A seventeenth path is a hard stop. Implementation and deterministic gates were
-performed directly by IAsup `openai-codex/gpt-5.6-sol`; independent review mutates zero files.
+The exact accepted technical artifact is 16 paths: six production, four tests/snapshots and six
+governance paths. It was published by commit `50801b6bdddc4d2772853c13f4905c49e8c996cf` and
+post-publication verified. Implementation and deterministic gates were performed directly by
+IAsup `openai-codex/gpt-5.6-sol`; independent review mutated zero files.
 
 ## B3-R2 review evidence and adjudication
 
@@ -166,13 +178,21 @@ performed directly by IAsup `openai-codex/gpt-5.6-sol`; independent review mutat
   The reviewer's no-test limitation is `ACCEPTED_NONBLOCKING` because the reviewer was
   intentionally read-only and the final hermetic gate belongs to IAsup.
 
-The B3-R1 scope expansion remains reconciled by the exact message and CSRF proofs above. This
-review record does not change the status from IMPLEMENTED / AWAITING SUPERVISOR REVIEW and does
-not authorize B4, Phase 5, Phase 6 or migration v4.
+The documentary addendum first returned REJECT because stale historical wording in the
+Documentation Index could be read as current. The correction was limited to governance. The
+final addendum used effective model `opencode-go/deepseek-v4-flash`, session
+`ses_04203dca3ffe8OM83rhbHyjqYI`, and returned PASS / findings NONE over final publication hash
+`c41ffe5b7328b6d5a986dbdc28f054fe89641496589003b4e5649ff88463cc19`, governance hash
+`af2906ef0fa9fef7fdd469dd4e967cd1c914b4bfb21fc2a132b8d74c2d8dfd27`, and non-governance
+hash `13b0af13e653641d75d2466d7d8d69090e655a18e28bb678a7090dbe0e2ecab0`.
+
+The B3-R1 scope expansion remains reconciled by the exact message and CSRF proofs above. The
+technical review, documentary addendum, publication and post-publication verification are
+complete. B3 is CLOSED / ACCEPTED. This does not authorize B4, Phase 5, Phase 6 or migration v4.
 
 ## Acceptance gates
 
-Acceptance requires:
+Acceptance was granted after proving:
 
 1. the exact route matrix and RBAC mapping above;
 2. compatibility exports by identity from `main.py`;
@@ -184,6 +204,6 @@ Acceptance requires:
 8. protected database and residual hashes unchanged;
 9. independent review of the frozen diff.
 
-After these gates, only selective per-path staging is allowed. The reviewed and staged diff
-hashes must match, with zero unstaged and zero non-ignored untracked paths. B4, Phase 5, Phase 6
+All gates above were satisfied by the published 16-path technical artifact. Publication and
+post-publication verification are COMPLETE; no B3 correction remains open. B4, Phase 5, Phase 6
 and migration v4 remain unauthorized/prohibited.

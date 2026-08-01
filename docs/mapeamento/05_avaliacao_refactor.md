@@ -345,7 +345,7 @@ The Phase 3 closeout granted no Phase 4 authority. That historical prohibition w
 superseded only for the explicit PHASE 4-B1, PHASE 4-B2 and PHASE 4-B3 units below. Migration v4
 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B2 CLOSED / ACCEPTED / B3 IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3 CLOSED / ACCEPTED
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -394,7 +394,9 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `opencode/deepseek-v4-flash-free`, session `ses_0431aa4d7ffev4hTZImBDA86Ca`, cost 0,
       and returned PASS with no fallback. Publication and post-publication verification are
       complete.
-- **PHASE 4-B3 — IMPLEMENTED / AWAITING SUPERVISOR REVIEW:** exactly 22 legacy
+- **PHASE 4-B3 — CLOSED / ACCEPTED:** technical commit
+      `50801b6bdddc4d2772853c13f4905c49e8c996cf`, parent
+      `81cc6b10b893f1d34bd211a527e9fd12c3b6bbbe`; exact 16-path artifact. Exactly 22 legacy
       Atividades/CRUD/import/groups/versioned-catalog/normas/legacy-mapping endpoints and 29
       route/method combinations are owned by `app.views.admin.atividades` through the accepted
       legacy registrar. `app.activity_catalog` neutrally owns 14 shared helpers;
@@ -406,7 +408,8 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       final exact-candidate hermetic requalification passed 974 / 17 deselected / zero
       failures/errors in 399.95s. Routes 131;
       endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot and
-      protected physical artifacts unchanged. Exact candidate ceiling: 16 paths. Provisional
+      protected physical artifacts unchanged. Index-visible and post-publication gates passed
+      300/300. Provisional
       FREE review (`opencode/deepseek-v4-flash-free`, session
       `ses_0425bf1cbffeIxMwsDQn0etSEC`, cost 0, no fallback) was UNUSABLE DELIVERY / NO VERDICT.
       The final FREE session `ses_0422f0e1cffepCXyNpg47dWpoq`, cost 0, timed out after 600s;
@@ -415,13 +418,23 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `ec96796d3541710a36ac8121e40ffd888737c7c926f191a28034482cedbfd556`, mutation 0, PASS,
       findings NONE. IAsup accepted PASS; canonicalization concern was REJECTED_INCORRECT and
       no-test limitation ACCEPTED_NONBLOCKING. Frozen non-governance hash
-      `13b0af13e653641d75d2466d7d8d69090e655a18e28bb678a7090dbe0e2ecab0`. Selective
-      publication remains pending; B3 is not CLOSED / ACCEPTED. The B3-R1 scope expansion is
-      reconciled exactly, including message and CSRF owner-only proofs. Contract:
+      `13b0af13e653641d75d2466d7d8d69090e655a18e28bb678a7090dbe0e2ecab0`. Final publication
+      hash `c41ffe5b7328b6d5a986dbdc28f054fe89641496589003b4e5649ff88463cc19`; governance hash
+      `af2906ef0fa9fef7fdd469dd4e967cd1c914b4bfb21fc2a132b8d74c2d8dfd27`. Documentary
+      addendum first REJECTED stale historical Documentation Index wording; the governance-only
+      correction then passed under `opencode-go/deepseek-v4-flash`, session
+      `ses_04203dca3ffe8OM83rhbHyjqYI`. Publication and post-publication verification are COMPLETE.
+      The B3-R1 scope expansion is reconciled exactly, including message and CSRF owner-only
+      proofs. Contract:
       `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md`.
 - [ ] `app/views/admin/requisicoes.py`
-- [ ] `app/views/admin/atividades.py` (+ catálogo versionado) — B3 implemented / awaiting
-      supervisor review; not yet accepted.
+- **Historical/superseded checklist token (not current):** the following literal represented
+      the pre-acceptance B3 state:
+      ```text
+      - [ ] `app/views/admin/atividades.py`
+      ```
+- [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED;
+      `app.activity_catalog` established and the B3 prerequisite is complete.
 - [ ] `app/views/admin/matrizes.py`
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`

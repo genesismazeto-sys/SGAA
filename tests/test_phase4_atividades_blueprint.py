@@ -26,6 +26,11 @@ VIEW_PATH = ROOT / "app" / "views" / "admin" / "atividades.py"
 CATALOG_PATH = ROOT / "app" / "activity_catalog.py"
 UPLOADS_PATH = ROOT / "app" / "uploads.py"
 CONTRACT_PATH = ROOT / "docs" / "refactor" / "PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md"
+HANDOFF_PATH = ROOT / "AGENT_HANDOFF.md"
+STATE_PATH = ROOT / "PROJECT_STATE.md"
+INDEX_PATH = ROOT / "docs" / "DOCUMENTATION_INDEX.md"
+PLAN_PATH = ROOT / "docs" / "mapeamento" / "05_avaliacao_refactor.md"
+LEDGER_PATH = ROOT / "docs" / "refactor" / "ARCHITECTURE_REFACTOR_LEDGER.md"
 
 ROUTE_MATRIX = (
     ("/admin/atividades", "admin_atividades", ("GET",)),
@@ -472,3 +477,74 @@ def test_factory_signature_exposes_explicit_b3_registration_switch():
     parameter = signature.parameters["register_admin_atividades_blueprint"]
     assert parameter.default is True
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_b3_r3_governance_closeout_is_canonical():
+    documents = {
+        "handoff": HANDOFF_PATH.read_text(encoding="utf-8"),
+        "state": STATE_PATH.read_text(encoding="utf-8"),
+        "index": INDEX_PATH.read_text(encoding="utf-8"),
+        "plan": PLAN_PATH.read_text(encoding="utf-8"),
+        "ledger": LEDGER_PATH.read_text(encoding="utf-8"),
+        "contract": CONTRACT_PATH.read_text(encoding="utf-8"),
+    }
+    technical_commit = "50801b6bdddc4d2772853c13f4905c49e8c996cf"
+    current_records = {
+        "handoff": documents["handoff"].split("## Historical state — PHASE 4-B2", 1)[0],
+        "state": documents["state"].split(
+            "## Historical authoritative state — PHASE 4-B2", 1
+        )[0],
+        "index": documents["index"].split("- **PHASE 4-B3:**", 1)[1].split(
+            "- Accepted technical commits:", 1
+        )[0],
+        "plan": documents["plan"].split("- **PHASE 4-B3", 1)[1].split(
+            "### Fase 5", 1
+        )[0],
+        "ledger": "\n".join(
+            line
+            for line in documents["ledger"].splitlines()
+            if line.startswith(("| PHASE4-B3 |", "| Fase 4 |"))
+        ),
+        "contract": documents["contract"],
+    }
+    for name, block in current_records.items():
+        assert "CLOSED / ACCEPTED" in block, name
+        assert technical_commit in block, name
+
+    for name in ("handoff", "state", "contract"):
+        block = current_records[name]
+        assert "Publication: COMPLETE" in block or "Publication and\npost-publication verification are COMPLETE" in block, name
+        assert "Post-publication verification: COMPLETE" in block or "Post-publication verification: **COMPLETE**" in block or "post-publication verification are COMPLETE" in block, name
+
+    assert "Current decision:** PHASE 4-B3: CLOSED / ACCEPTED" in current_records["handoff"]
+    assert "Status/authority:** PHASE 4-B3 CLOSED / ACCEPTED" in current_records["state"]
+    assert "**Status: CLOSED / ACCEPTED.**" in current_records["contract"]
+    assert "Historical pre-publication state (superseded)" in current_records["handoff"]
+    assert "Historical pre-publication state (superseded)" in current_records["state"]
+    assert "These pending states are not current" in current_records["handoff"]
+    assert "They are not current state" in current_records["state"]
+
+    phase4 = "\n".join(current_records.values())
+    for token in (
+        "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION",
+        "Phase 5",
+        "Phase 6",
+        "NOT AUTHORIZED",
+        "migration v4",
+        "PROHIBITED",
+    ):
+        assert token in phase4
+    assert "PHASE 4-B4" in phase4 and "NOT AUTHORIZED" in phase4
+
+    plan = current_records["plan"]
+    assert "- [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED" in plan
+    assert "- [ ] `app/views/admin/requisicoes.py`" in plan
+    assert "- [ ] `app/views/admin/matrizes.py`" in plan
+
+    for name in ("handoff", "state", "contract"):
+        block = current_records[name]
+        words = " ".join(block.split())
+        assert "historical pre-publication" in words.lower(), name
+        assert "NOT_STAGED / NOT_COMMITTED / PUBLICATION_WITHHELD" in words, name
+        assert "EXACT_DELTA_PROVED / SUPERVISOR_RECONCILED /" in words, name
+        assert "INCLUDED_IN_ACCEPTED_B3_COMMIT / NO_GENERIC_RETROACTIVE_AUTHORITY" in words, name
