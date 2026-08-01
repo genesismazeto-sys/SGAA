@@ -251,3 +251,52 @@ def test_b41_governance_records_exact_scope_and_preserves_later_prohibitions():
     assert "- [ ] `app/views/admin/requisicoes.py`" in documents["plan"]
     for path in ("app/settings.py", "app/requisitions.py", "app/matrix_scope.py"):
         assert path in documents["contract"]
+
+    current_slices = {
+        "handoff": documents["handoff"].split("## Historical state", 1)[0],
+        "state": documents["state"].split("## Historical authoritative state", 1)[0],
+        "index": documents["index"].split("- **PHASE 4-B4.1:**", 1)[1].split("- Accepted technical commits:", 1)[0],
+        "plan": documents["plan"].split("- [x] PHASE 4-B4.1", 1)[1].split("### Fase 5", 1)[0],
+        "ledger": next(
+            line
+            for line in documents["ledger"].splitlines()
+            if line.startswith("| PHASE4-B4.1 |")
+        ),
+        "contract": documents["contract"],
+    }
+    current = "\n".join(current_slices.values())
+    upper = current.upper()
+
+    assert "PHASE 4-B4-A: CLOSED / ACCEPTED" in upper
+    assert "PHASE 4-B4.1: CLOSED / ACCEPTED" in upper or "PHASE4-B4.1 |" in upper
+    assert "73EBF0DC34681E74E778759AF476E1CD2F981444" in upper
+    assert "PUBLICATION: COMPLETE" in upper
+    assert "POST-PUBLICATION VERIFICATION: COMPLETE" in upper
+    assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in upper
+    assert "PHASE 4-B4.2: NOT AUTHORIZED" in upper
+    assert "PHASE 5: NOT AUTHORIZED" in upper
+    assert "PHASE 6: NOT AUTHORIZED" in upper
+    assert "MIGRATION V4: PROHIBITED" in upper
+    assert "- [ ] `APP/VIEWS/ADMIN/REQUISICOES.PY`" in upper
+    assert "EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY" in upper
+    assert "B2 ESTABLISHED SIX" in upper
+    for key in (
+        "ensure_admin_arquivos_table",
+        "get_admin_arquivo",
+        "get_student_request_update_alert",
+        "list_active_admin_alertas",
+        "mark_student_request_updates_seen",
+    ):
+        assert key in current
+
+    forbidden_current_tokens = (
+        "awaiting supervisor review",
+        "review pending",
+        "staging pending",
+        "commit pending",
+        "push pending",
+        "publication pending",
+    )
+    lowered = current.lower()
+    for token in forbidden_current_tokens:
+        assert token not in lowered

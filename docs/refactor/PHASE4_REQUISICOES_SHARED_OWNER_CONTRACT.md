@@ -4,8 +4,8 @@
 
 PHASE 4-B4-A: **CLOSED / ACCEPTED**.
 
-PHASE 4-B4.1 is an authorized, bounded shared-owner extraction. Its recorded state is
-**IMPLEMENTED / AWAITING SUPERVISOR REVIEW**. PHASE 4 remains open.
+PHASE 4-B4.1: **CLOSED / ACCEPTED**. External supervisor acceptance:
+**RECORDED BY B4.1-R2**. PHASE 4 remains **OPEN / INCREMENTAL IMPLEMENTATION**.
 
 PHASE 4-B4.2: NOT AUTHORIZED. Phase 5: NOT AUTHORIZED. Phase 6: NOT AUTHORIZED.
 Migration v4: PROHIBITED.
@@ -18,9 +18,10 @@ Migration v4: PROHIBITED.
 - Required baseline divergence: `0/0`.
 - Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
 - B4.1 commit subject: `Extract requisition shared owners`.
-- The exact commit identity is resolved from that subject as the single child of the
-  recorded parent on the authorized feature branch; the commit tree does not carry a
-  self-referential SHA.
+- Published technical commit: `73ebf0dc34681e74e778759af476e1cd2f981444`.
+- Publication: **COMPLETE**. Post-publication verification: **COMPLETE**.
+- Governance closeout subject: `Record acceptance of Phase 4-B4.1`; its identity is
+  resolved through Git history and is not self-referenced by this contract.
 
 ## Exact scope
 
@@ -151,10 +152,19 @@ Any path outside this manifest is unauthorized for B4.1.
   Non-governance SHA-256:
   `74649089be0699dff4440260bdb11793b4e5793550f17456893f4a281bd6096b`.
   Reviewer narrative “8 tests” is rejected as
-  `REJECTED_NON_MATERIAL / STALE NARRATIVE COUNT / NO TECHNICAL CONSEQUENCE`; the exact
+  `REJECTED_NON_MATERIAL / STALE_NARRATIVE_COUNT / NO_TECHNICAL_CONSEQUENCE`; the exact
   manifest contains seven test paths.
 - Index-visible and post-publication counts are recorded in the current state/handoff and
-  execution closeout after their respective boundaries.
+  accepted here as 170 passed / 170 passed.
+- Final publication SHA-256:
+  `bdd947a18df900aac691ce12683f393a82d8c8efc3e28a8c54c55226d7bf2d4a`.
+- Governance SHA-256:
+  `301a6a891936338bd1a752ff0be65dd7855302d1e3a8e81f9bcbd94964b66a71`.
+- Documentary addendum: route `flash_free`; provider/model `opencode` /
+  `opencode/deepseek-v4-flash-free`; session `ses_040ae7625ffeHCGZxyXoMzoQmw`; exit 0;
+  cost 0; fallback none; mutation count 0; PASS; blocking findings NONE; nonblocking
+  findings NONE. Preserve `READ_SCOPE_DEVIATION / NON_MUTATING / PHYSICALLY_RECONCILED /
+  NO_CANDIDATE_IMPACT`.
 
 ## Irreversible boundaries
 
@@ -166,5 +176,5 @@ Any path outside this manifest is unauthorized for B4.1.
 
 ## Next authority
 
-External supervisor review of B4.1 is the next action after this selective publication.
-B4.2 remains separately gated and must not begin without a new explicit order.
+No B4.1 technical or documentary action remains open. B4.2 remains separately gated,
+is NOT AUTHORIZED, and must not begin without a new explicit order.

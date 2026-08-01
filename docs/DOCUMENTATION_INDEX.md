@@ -141,6 +141,25 @@
   `opencode-go/deepseek-v4-flash`, session `ses_04203dca3ffe8OM83rhbHyjqYI`. The former
   review/staging/commit/push/publication-pending state is historical and superseded. B4, Phase
   5/6 and migration v4 remain unauthorized/prohibited.
+- **PHASE 4-B4.1:** CLOSED / ACCEPTED. Published technical commit
+  `73ebf0dc34681e74e778759af476e1cd2f981444` (`Extract requisition shared owners`), parent
+  `185426daccc9f0eb0dba4497248100c1a88d15fa`; exact 20-path artifact = 7 production + 7
+  tests + 6 governance. Publication and post-publication verification are COMPLETE.
+  Accepted owners are `app.settings` for eight settings helpers, `app.requisitions` for
+  `auto_indefer_devolvidas`, and `app.matrix_scope` for exactly six matrix-scope symbols.
+  Configurações/`main` identity exports are preserved; Aluno directly imports the matrix
+  resolver and retains exactly five lazy-main edges. NO ROUTE MOVEMENT; nine Requisições
+  handlers / 12 route-method pairs remain in `main.py`; `app/views/admin/requisicoes.py` is
+  absent. Final hermetic 984/17; index-visible 170; post-publication 170; routes 131;
+  endpoints 130; governed pairs 134; RBAC unmapped 0; actor 402 = 263 + 139; message catalog
+  536. Technical review PASS / findings NONE; documentary addendum PASS / findings NONE.
+  Accepted hashes: reviewed `f4b6cb00b4365cc7c20af5fcba1ac736ece1bab0ab9c6e0f89b19084799727f9`,
+  pre-addendum `ddc73cb94786899595f3cce9d577bdbcca961a082c83866498a36ebd4687a23f`,
+  non-governance `74649089be0699dff4440260bdb11793b4e5793550f17456893f4a281bd6096b`,
+  final publication `bdd947a18df900aac691ce12683f393a82d8c8efc3e28a8c54c55226d7bf2d4a`,
+  governance `301a6a891936338bd1a752ff0be65dd7855302d1e3a8e81f9bcbd94964b66a71`.
+  External supervisor acceptance is recorded by B4.1-R2. Phase 4 remains open; B4.2 is not
+  authorized.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -323,7 +342,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   and is not a closure blocker or hidden Phase 4 assignment.
 - **Fase 4 — Blueprint extraction**: OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED /
   ACCEPTED / B2 CLOSED / ACCEPTED / B3 CLOSED / ACCEPTED / PHASE 4-B4-A CLOSED /
-  ACCEPTED / PHASE 4-B4.1 IMPLEMENTED / AWAITING SUPERVISOR REVIEW;
+  ACCEPTED / PHASE 4-B4.1 CLOSED / ACCEPTED;
   Phase 4 is not closed. B1 commit
   `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the accepted compatibility
   registrar and exact eight-route Configurações/Mensagens cohort. B2 establishes the
@@ -339,8 +358,10 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   `opencode/deepseek-v4-flash-free`, session `ses_040d538bfffegBsAJQbLJrnqSV`, cost 0,
   reviewed hash `f4b6cb00b4365cc7c20af5fcba1ac736ece1bab0ab9c6e0f89b19084799727f9`,
   mutation 0, PASS / findings NONE. Final hermetic: 984 passed / 17 deselected. Exact artifact:
-  20 paths = 7 production + 7 tests + 6 governance; message catalog 536. NO ROUTE MOVEMENT,
-  EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY. Contract:
+  20 paths = 7 production + 7 tests + 6 governance; message catalog 536. Technical commit
+  `73ebf0dc34681e74e778759af476e1cd2f981444`; publication and post-publication verification
+  COMPLETE; index-visible/post-publication 170/170. NO ROUTE MOVEMENT, EXACT 9 REQUISICOES
+  ROUTES REMAIN IN MAIN.PY. Contract:
   `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md`. Phase 4 remains open.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
@@ -351,7 +372,8 @@ CLOSED / ACCEPTED at technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`
 and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
 CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; PHASE 4-B2 is
 CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; PHASE 4-B3 is
-CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; Phase 4 is not
+CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; PHASE 4-B4.1 is
+CLOSED / ACCEPTED at `73ebf0dc34681e74e778759af476e1cd2f981444`; Phase 4 is not
 closed. PHASE 4-B4.2: NOT AUTHORIZED. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED.
 MIGRATION V4: PROHIBITED. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
@@ -390,6 +412,7 @@ table of every phase.
 | `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import. Its B2 prohibition is the preserved B1 phase-time boundary, superseded only by the separate B2 order/contract below. |
 | `PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | PHASE 4-B2 | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; canonical resolver/snapshot/shadow-read owners, exact three legacy diagnostics, six-key aluno lazy boundary, repository-root logging and logger-identity compatibility; full 954/17; index-visible 271; post-publication 282; exact 24-path artifact; technical review PASS; documentary addendum PASS; publication complete. |
 | `PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | PHASE 4-B3 | CURRENT / CLOSED / ACCEPTED at technical commit `50801b6bdddc4d2772853c13f4905c49e8c996cf`; exact 22 legacy endpoints / 29 route-method pairs; neutral shared activity-catalog and upload owners; exact message/CSRF scope-expansion reconciliation; full 974/17; index-visible and post-publication 300/300; exact 16-path artifact; technical review and documentary addendum PASS; publication complete. |
+| `PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` | PHASE 4-B4.1 | CLOSED / ACCEPTED at technical commit `73ebf0dc34681e74e778759af476e1cd2f981444`; exact 20-path shared-owner artifact; full 984/17; index-visible and post-publication 170/170; technical review and documentary addendum PASS; zero Requisições route movement; publication complete; external supervisor acceptance recorded by B4.1-R2. |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -418,7 +441,8 @@ The original REF-0C-D scope was documented in
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
 | Phase 3-B5/B6/B7/B8/B9/B10/B11 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_phase3_final_init_cutover.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_activity_versioning_core_migration_v3.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5 through B11-R1 CLOSED / ACCEPTED; B11 technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`; B11-R1 governance commit `630d4eb448b992bdc3beb28752c30717989312bb`; review APPROVE; Macro Phase 3 CLOSED / ACCEPTED; Phase 4 NOT AUTHORIZED |
 | Phase 4-B2 versioning ownership and compatibility | `tests/test_phase4_versioning_subsystem.py` + versioning resolver/shadow/diagnostic/aluno/ownership/runtime/route/RBAC gates + `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; contract 14; affected 241; full 954 passed / 17 deselected; index-visible 271; post-publication 282; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; technical review PASS; documentary addendum PASS; publication complete |
-| Phase 4-B3 Atividades blueprint and scope reconciliation | `tests/test_phase4_atividades_blueprint.py` + Atividades/import/catalog/CSRF/B1/B2/route/RBAC/actor/runtime gates + `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; B3 contract 19; affected 353; full 974 passed / 17 deselected; index-visible 300; post-publication 300; exact 22 endpoints / 29 combinations; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot unchanged; exact 16-path artifact; technical review and documentary addendum PASS; publication complete. |
+| Phase 4-B3 Atividades blueprint and scope reconciliation | `tests/test_phase4_atividades_blueprint.py` + Atividades/import/catalog/CSRF/B1/B2/route/RBAC/actor/runtime gates + `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; B3 contract 19; affected lane 353; full 974 passed / 17 deselected; index-visible 300; post-publication 300; exact 22 endpoints / 29 combinations; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot unchanged; exact 16-path artifact; technical review and documentary addendum PASS; publication complete. |
+| Phase 4-B4.1 Requisições shared-owner prerequisite | `tests/test_phase4_requisicoes_shared_owners.py` + B1/B2/B3/Phase-3/route/RBAC/actor gates + `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` | CLOSED / ACCEPTED at `73ebf0dc34681e74e778759af476e1cd2f981444`; exact 20-path artifact; full 984/17; index-visible 170; post-publication 170; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; message catalog 536; technical review and documentary addendum PASS; publication complete. |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

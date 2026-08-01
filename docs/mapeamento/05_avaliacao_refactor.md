@@ -345,7 +345,7 @@ The Phase 3 closeout granted no Phase 4 authority. That historical prohibition w
 superseded only for the explicit PHASE 4-B1, PHASE 4-B2 and PHASE 4-B3 units below. Migration v4
 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3 CLOSED / ACCEPTED
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3 AND B4.1 CLOSED / ACCEPTED
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -429,7 +429,13 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md`.
 - [x] PHASE 4-B4.1 neutral shared-owner prerequisite — `app/settings.py`,
       `app/requisitions.py` and `app/matrix_scope.py`; identity-preserving re-exports;
-      NO ROUTE MOVEMENT; EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY. Contract:
+      CLOSED / ACCEPTED at technical commit
+      `73ebf0dc34681e74e778759af476e1cd2f981444`, parent
+      `185426daccc9f0eb0dba4497248100c1a88d15fa`; exact 20-path artifact = 7 production +
+      7 tests + 6 governance. Publication and post-publication verification are COMPLETE.
+      Final hermetic 984/17; index-visible/post-publication 170/170; technical review PASS;
+      documentary addendum PASS. NO ROUTE MOVEMENT; EXACT 9 REQUISICOES ROUTES REMAIN IN
+      MAIN.PY / 12 route-method pairs. Contract:
       `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md`.
 - [ ] `app/views/admin/requisicoes.py` — PHASE 4-B4.2: NOT AUTHORIZED
 - **Historical/superseded checklist token (not current):** the following literal represented
@@ -450,7 +456,7 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
 Phase 4 is not closed. PHASE 4-B4-A is CLOSED / ACCEPTED. PHASE 4-B4.1 is
-IMPLEMENTED / AWAITING SUPERVISOR REVIEW and is only the shared-owner prerequisite. The
+CLOSED / ACCEPTED and is only the shared-owner prerequisite. The
 bounded expansion is reconciled: all eight B1 settings-helper bodies move from their B1-time
 Configurações owner to neutral `app.settings` with Configurações/`main` identity exports;
 `app.matrix_scope` owns exactly the six shared matrix-scope symbols; Aluno removes only the
@@ -460,7 +466,12 @@ five at B4.1-time; the Phase-3 test delta is governance-reader-only. Technical r
 `ses_040d538bfffegBsAJQbLJrnqSV`, cost 0, reviewed hash
 `f4b6cb00b4365cc7c20af5fcba1ac736ece1bab0ab9c6e0f89b19084799727f9`, mutation 0,
 PASS / findings NONE. Exact artifact: 20 paths = 7 production + 7 tests + 6 governance;
-final hermetic 984 passed / 17 deselected; message catalog 536.
+final hermetic 984 passed / 17 deselected; index-visible 170; post-publication 170; message
+catalog 536. Documentary addendum `flash_free`, `opencode/deepseek-v4-flash-free`, session
+`ses_040ae7625ffeHCGZxyXoMzoQmw`, cost 0, mutation 0, PASS / findings NONE; its read-scope
+deviation is `READ_SCOPE_DEVIATION / NON_MUTATING / PHYSICALLY_RECONCILED /
+NO_CANDIDATE_IMPACT`. External supervisor acceptance is recorded by B4.1-R2. No B4.1
+technical residual remains.
 PHASE 4-B4.2: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados` ownership remain
 unresolved and are not complete. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED.
 MIGRATION V4: PROHIBITED. No later route cohort is marked complete.
