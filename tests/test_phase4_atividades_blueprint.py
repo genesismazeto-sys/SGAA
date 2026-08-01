@@ -534,7 +534,7 @@ def test_b3_r3_governance_closeout_is_canonical():
         "PROHIBITED",
     ):
         assert token in phase4
-    assert "PHASE 4-B4" in phase4 and "NOT AUTHORIZED" in phase4
+    assert "PHASE 4-B4.2" in phase4 and "NOT AUTHORIZED" in phase4
 
     plan = current_records["plan"]
     assert "- [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED" in plan

@@ -24,6 +24,7 @@ from flask import (
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
 from app.auth import aluno_required
 from app.db_maintenance import ensure_reportes_table, ensure_usuario_profile_schema
+from app.matrix_scope import get_effective_matriz_for_turma
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
@@ -52,7 +53,6 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
     return {
         "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
         "get_admin_arquivo": main.get_admin_arquivo,
-        "get_effective_matriz_for_turma": main.get_effective_matriz_for_turma,
         "get_student_request_update_alert": main.get_student_request_update_alert,
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
@@ -199,8 +199,6 @@ def _get_aluno_scope(conn, usuario_id: int):
 
 
 def _get_effective_matriz_for_usuario(conn, usuario_id: int):
-    helpers = _get_main_helpers()
-    get_effective_matriz_for_turma = helpers["get_effective_matriz_for_turma"]
     aluno_scope = _get_aluno_scope(conn, usuario_id)
     if not aluno_scope:
         return None, None
@@ -514,7 +512,6 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
 @aluno_required
 def aluno_dashboard():
     helpers = _get_main_helpers()
-    get_effective_matriz_for_turma = helpers["get_effective_matriz_for_turma"]
     get_student_request_update_alert = helpers["get_student_request_update_alert"]
     list_active_admin_alertas = helpers["list_active_admin_alertas"]
     mark_student_request_updates_seen = helpers["mark_student_request_updates_seen"]

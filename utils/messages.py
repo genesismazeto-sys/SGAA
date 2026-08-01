@@ -431,6 +431,7 @@ def _iter_backend_files() -> list[Path]:
         PROJECT_ROOT / "main.py",
         PROJECT_ROOT / "app" / "auth.py",
         PROJECT_ROOT / "app" / "db_maintenance.py",
+        PROJECT_ROOT / "app" / "settings.py",
         PROJECT_ROOT / "app" / "uploads.py",
     ]
     views_dir = PROJECT_ROOT / "app" / "views"

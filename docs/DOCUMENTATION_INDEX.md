@@ -322,7 +322,8 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   objectives are satisfied. Optional repository-layer extraction is not implemented
   and is not a closure blocker or hidden Phase 4 assignment.
 - **Fase 4 — Blueprint extraction**: OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED /
-  ACCEPTED / B2 CLOSED / ACCEPTED / B3 CLOSED / ACCEPTED;
+  ACCEPTED / B2 CLOSED / ACCEPTED / B3 CLOSED / ACCEPTED / PHASE 4-B4-A CLOSED /
+  ACCEPTED / PHASE 4-B4.1 IMPLEMENTED / AWAITING SUPERVISOR REVIEW;
   Phase 4 is not closed. B1 commit
   `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the accepted compatibility
   registrar and exact eight-route Configurações/Mensagens cohort. B2 establishes the
@@ -331,7 +332,16 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   review PASS, documentary addendum PASS, publication and post-publication verification are
   recorded. B3 technical commit `50801b6bdddc4d2772853c13f4905c49e8c996cf`, exact 16-path
   artifact, technical review PASS, documentary addendum PASS, publication and post-publication
-  verification are recorded above. Phase 4 remains open; no B4 authority is implied.
+  verification are recorded above. PHASE 4-B4.1 reconciles the bounded expansion to
+  `app/settings.py` (neutral owner of all eight B1 helpers), `app/matrix_scope.py` (dedicated
+  six-symbol neutral owner), the one direct-import reduction in `app/views/aluno.py`, and the
+  governance-reader-only Phase-3 test delta. Technical review `flash_free`, effective
+  `opencode/deepseek-v4-flash-free`, session `ses_040d538bfffegBsAJQbLJrnqSV`, cost 0,
+  reviewed hash `f4b6cb00b4365cc7c20af5fcba1ac736ece1bab0ab9c6e0f89b19084799727f9`,
+  mutation 0, PASS / findings NONE. Final hermetic: 984 passed / 17 deselected. Exact artifact:
+  20 paths = 7 production + 7 tests + 6 governance; message catalog 536. NO ROUTE MOVEMENT,
+  EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY. Contract:
+  `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md`. Phase 4 remains open.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
@@ -342,8 +352,8 @@ and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
 CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; PHASE 4-B2 is
 CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; PHASE 4-B3 is
 CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; Phase 4 is not
-closed. B4, Phase 5 and Phase 6 remain **NOT AUTHORIZED**, and migration v4 remains
-**PROHIBITED**. R1, R2 and R3 are CLOSED / ACCEPTED,
+closed. PHASE 4-B4.2: NOT AUTHORIZED. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED.
+MIGRATION V4: PROHIBITED. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
 PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /

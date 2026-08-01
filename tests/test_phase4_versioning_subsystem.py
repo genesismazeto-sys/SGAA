@@ -58,7 +58,6 @@ SERVICE_OWNERS = {
 REMAINING_ALUNO_MAIN_HELPERS = {
     "ensure_admin_arquivos_table",
     "get_admin_arquivo",
-    "get_effective_matriz_for_turma",
     "get_student_request_update_alert",
     "list_active_admin_alertas",
     "mark_student_request_updates_seen",
@@ -98,10 +97,12 @@ def _top_level_functions(path: Path) -> set[str]:
 
 
 def test_phase4_b2_current_governance_records_external_acceptance():
-    handoff = HANDOFF_PATH.read_text(encoding="utf-8").split("## Historical state", 1)[0]
+    handoff = HANDOFF_PATH.read_text(encoding="utf-8").split(
+        "## Historical state — PHASE 4-B2", 1
+    )[1].split("## Historical state — PHASE 4-B1", 1)[0]
     project_state = PROJECT_STATE_PATH.read_text(encoding="utf-8").split(
-        "## Historical authoritative state", 1
-    )[0]
+        "## Historical authoritative state — PHASE 4-B2", 1
+    )[1].split("## Historical authoritative state — PHASE 4-B1", 1)[0]
     documentation_index = DOCUMENTATION_INDEX_PATH.read_text(encoding="utf-8").split(
         "- Accepted technical commits:", 1
     )[0]
@@ -142,7 +143,7 @@ def test_phase4_b2_current_governance_records_external_acceptance():
     ):
         assert stale_claim not in current_text
 
-    assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in handoff
+    assert "PHASE 4" in handoff and "OPEN / INCREMENTAL IMPLEMENTATION" in handoff
     assert "PHASE 4-B3: NOT AUTHORIZED" in current_text.upper()
     assert "PHASE 5: NOT AUTHORIZED" in current_text.upper()
     assert "PHASE 6: NOT AUTHORIZED" in current_text.upper()

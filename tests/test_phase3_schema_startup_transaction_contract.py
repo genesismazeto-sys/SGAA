@@ -967,6 +967,10 @@ def test_macro_phase3_acceptance_closeout_is_current_and_bounded():
     phase6 = master_plan.split("### Fase 6", 1)[1].split(
         "> **Estimativa total:**", 1
     )[0]
-    assert "- [x]" not in phase4
+    checked_phase4 = [line.strip() for line in phase4.splitlines() if "- [x]" in line]
+    assert checked_phase4 == [
+        "- [x] PHASE 4-B4.1 neutral shared-owner prerequisite — `app/settings.py`,",
+        "- [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED;",
+    ]
     assert "- [x]" not in phase5
     assert "- [x]" not in phase6

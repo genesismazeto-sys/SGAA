@@ -236,7 +236,10 @@ def test_new_policy_modules_import_without_importing_main():
     module_names = (
         "app.presentation",
         "app.requisition_policy",
+        "app.requisitions",
+        "app.settings",
         "app.academics",
+        "app.matrix_scope",
         "app.uploads",
         "app.reporting",
     )

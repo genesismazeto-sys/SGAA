@@ -68,10 +68,29 @@ from app.db import (
 )
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
+from app.matrix_scope import (
+    MATRIZ_STATUS_META,
+    _matriz_option_label,
+    _matriz_status_label,
+    get_allowed_activity_ids_for_turma_matrix,
+    get_effective_matriz_for_turma,
+    is_activity_allowed_for_turma_matrix,
+)
 from app.requisition_policy import (
     _parse_optional_processing_datetime,
     can_student_delete_requisition,
     can_student_edit_requisition,
+)
+from app.requisitions import auto_indefer_devolvidas
+from app.settings import (
+    _normalize_optional_iso_date,
+    get_app_settings,
+    get_horas_settings,
+    get_response_time_settings,
+    reset_response_time_metrics,
+    save_app_settings,
+    save_horas_settings,
+    save_return_response_settings,
 )
 from app.security.passwords import (
     check_password,
@@ -239,7 +258,6 @@ from app.views.admin.atividades import (
     admin_normas_atividade,
 )
 from app.views.admin.configuracoes import (
-    _normalize_optional_iso_date,
     admin_configuracoes,
     admin_configuracoes_horas_padrao_salvar,
     admin_configuracoes_prazo_adequacao_salvar,
@@ -248,13 +266,6 @@ from app.views.admin.configuracoes import (
     admin_mensagens,
     admin_mensagens_resetar,
     admin_mensagens_salvar,
-    get_app_settings,
-    get_horas_settings,
-    get_response_time_settings,
-    reset_response_time_metrics,
-    save_app_settings,
-    save_horas_settings,
-    save_return_response_settings,
 )
 from app.versioning.resolver import (
     _atividade_versao_status_ativo,
@@ -401,39 +412,6 @@ def resequence_turma_aluno_matriculas_for_ids(conn, *turma_ids):
 # ===================== Parsing helpers =====================
 
 
-
-
-def auto_indefer_devolvidas(conn) -> int:
-    """Indeferir automaticamente requisições Devolvidas cujo prazo de adequação expirou.
-
-    Retorna o número de requisições alteradas.
-    """
-    settings = get_response_time_settings(conn)
-    if not settings.get("auto_indefer_devolvida"):
-        return 0
-    days = int(settings.get("return_response_days") or DEFAULT_RETURN_RESPONSE_DAYS)
-    if days <= 0:
-        return 0
-
-    result = conn.execute(
-        """
-        UPDATE requisicoes
-           SET status = 'Indeferida',
-               observacao = CASE
-                   WHEN observacao IS NULL OR observacao = ''
-                       THEN '[Indeferida automaticamente: prazo de adequação de ' || ? || ' dias expirado.]'
-                   ELSE observacao || char(10) || '[Indeferida automaticamente: prazo de adequação de ' || ? || ' dias expirado.]'
-               END
-         WHERE status = 'Devolvida'
-           AND data_processamento IS NOT NULL
-           AND datetime(data_processamento) <= datetime('now', '-' || ? || ' days')
-        """,
-        (days, days, days),
-    )
-    count = result.rowcount
-    if count:
-        conn.commit()
-    return count
 
 
 def _calculate_pending_response_metrics(conn, *, goal_days: int, reset_at: str = "") -> tuple[float, int]:
@@ -1585,24 +1563,6 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
 
 
 
-def get_effective_matriz_for_turma(conn, curso_id: int | None, turma_matriz_id: int | None):
-    ensure_matrizes_atividades_table(conn)
-    if turma_matriz_id:
-        row = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (turma_matriz_id,)).fetchone()
-        if row:
-            return row
-    return get_preferred_matriz_for_curso(conn, curso_id)
-
-
-def _matriz_option_label(row) -> str:
-    parts = [str(row["nome"] or "Matriz sem nome").strip()]
-    if row["versao"]:
-        parts.append(str(row["versao"]).strip())
-    if row["status"]:
-        parts.append(_matriz_status_label(row["status"]))
-    return " | ".join(part for part in parts if part)
-
-
 def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
     ensure_matrizes_atividades_table(conn)
     rows = conn.execute(
@@ -1662,46 +1622,6 @@ def _periodo_label_for_turma_row(turma) -> str:
 def _turma_effective_matriz_label(conn, turma) -> str:
     matriz = get_effective_matriz_for_turma(conn, turma["curso_id"], turma["matriz_id"])
     return _matriz_option_label(matriz) if matriz else "-"
-
-
-def is_activity_allowed_for_turma_matrix(
-    conn,
-    atividade_id: int | None,
-    curso_id: int | None,
-    turma_matriz_id: int | None,
-) -> bool:
-    if not atividade_id:
-        return False
-    ensure_matriz_atividade_links_table(conn)
-    matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
-    if not matriz:
-        return True
-    row = conn.execute(
-        "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
-        (matriz["id"], atividade_id),
-    ).fetchone()
-    return row is not None
-
-
-def get_allowed_activity_ids_for_turma_matrix(
-    conn,
-    curso_id: int | None,
-    turma_matriz_id: int | None,
-):
-    ensure_matriz_atividade_links_table(conn)
-    matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
-    if not matriz:
-        return None, None
-    activity_ids = {
-        row["atividade_id"]
-        for row in conn.execute(
-            "SELECT atividade_id FROM matrizes_atividades_itens WHERE matriz_id = ?",
-            (matriz["id"],),
-        ).fetchall()
-    }
-    return activity_ids, matriz
-
-
 
 
 def ensure_admin_arquivos_table(conn) -> None:
@@ -7063,18 +6983,6 @@ def admin_matrizes():
         total=total,
         total_pages=total_pages,
     )
-
-
-MATRIZ_STATUS_META = {
-    "rascunho": {"label": "Rascunho", "badge_type": "warning"},
-    "vigente": {"label": "Vigente", "badge_type": "success"},
-    "encerrada": {"label": "Encerrada", "badge_type": "danger"},
-}
-
-
-def _matriz_status_label(status: str | None) -> str:
-    normalized = (status or "rascunho").strip().lower()
-    return MATRIZ_STATUS_META.get(normalized, MATRIZ_STATUS_META["rascunho"])["label"]
 
 
 def _matriz_status_badge_type(status: str | None) -> str:

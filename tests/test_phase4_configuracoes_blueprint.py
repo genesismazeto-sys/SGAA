@@ -73,6 +73,14 @@ MOVED_MESSAGE_DEFAULTS = {
     "msg_df3076ae3d104b97": "Informe uma data válida.",
     "msg_e00429f0684f4079": "Prazo de adequação de solicitações devolvidas atualizado com sucesso.",
 }
+SETTINGS_MESSAGE_KEYS = {
+    "msg_3cfd9280a4d6da6f",
+    "msg_4613bb9b498e92ef",
+    "msg_6206a00ba4a5f008",
+    "msg_88ab2789659bfd66",
+    "msg_ab39ea13f2a09d09",
+    "msg_df3076ae3d104b97",
+}
 RBAC_MATRIX = {
     "admin_configuracoes": ("configuracoes", "view"),
     "admin_configuracoes_horas_padrao_salvar": ("configuracoes", "edit"),
@@ -314,10 +322,14 @@ def test_legacy_url_for_and_request_endpoint_behavior():
 
 def test_main_compatibility_exports_are_identity_imports_and_app_uses_canonical_views():
     import main
+    from app import settings
 
     module = _canonical_module()
-    for name in ROUTE_NAMES + HELPER_NAMES:
+    for name in ROUTE_NAMES:
         assert getattr(main, name) is getattr(module, name)
+    for name in HELPER_NAMES:
+        assert getattr(main, name) is getattr(settings, name)
+        assert getattr(module, name) is getattr(settings, name)
     for name in ROUTE_NAMES:
         assert main.app.view_functions[name] is getattr(module, name)
         assert main.app.view_functions[name].__module__ == module.__name__
@@ -332,14 +344,22 @@ def test_main_no_longer_defines_moved_bodies_or_route_decorators():
     }
     assert not (set(ROUTE_NAMES) | set(HELPER_NAMES)) & defined
 
-    imports = [
+    route_imports = [
         alias.name
         for node in tree.body
         if isinstance(node, ast.ImportFrom)
         and node.module == "app.views.admin.configuracoes"
         for alias in node.names
     ]
-    assert set(ROUTE_NAMES) | set(HELPER_NAMES) <= set(imports)
+    helper_imports = [
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "app.settings"
+        for alias in node.names
+    ]
+    assert set(ROUTE_NAMES) <= set(route_imports)
+    assert set(HELPER_NAMES) <= set(helper_imports)
 
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -552,13 +572,14 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
     assert "main.py" in relative_paths
     assert "app/auth.py" in relative_paths
     assert "app/db_maintenance.py" in relative_paths
+    assert "app/settings.py" in relative_paths
     assert "app/uploads.py" in relative_paths
     assert "app/views/admin/atividades.py" in relative_paths
     assert "app/views/admin/configuracoes.py" in relative_paths
     assert all(path.endswith(".py") for path in relative_paths)
     assert all("__pycache__" not in Path(path).parts for path in relative_paths)
     assert all(
-        path in {"main.py", "app/auth.py", "app/db_maintenance.py", "app/uploads.py"}
+        path in {"main.py", "app/auth.py", "app/db_maintenance.py", "app/settings.py", "app/uploads.py"}
         or path.startswith("app/views/")
         for path in relative_paths
     )
@@ -577,8 +598,13 @@ def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_ow
     for key in MOVED_MESSAGE_DEFAULTS:
         usages = catalog[key]["usages"]
         assert usages
+        expected_owner = (
+            "app/settings.py"
+            if key in SETTINGS_MESSAGE_KEYS
+            else "app/views/admin/configuracoes.py"
+        )
         assert all(
-            usage["source_path"] == "app/views/admin/configuracoes.py"
+            usage["source_path"] == expected_owner
             for usage in usages
         )
 

@@ -427,7 +427,11 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       The B3-R1 scope expansion is reconciled exactly, including message and CSRF owner-only
       proofs. Contract:
       `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md`.
-- [ ] `app/views/admin/requisicoes.py`
+- [x] PHASE 4-B4.1 neutral shared-owner prerequisite — `app/settings.py`,
+      `app/requisitions.py` and `app/matrix_scope.py`; identity-preserving re-exports;
+      NO ROUTE MOVEMENT; EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY. Contract:
+      `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md`.
+- [ ] `app/views/admin/requisicoes.py` — PHASE 4-B4.2: NOT AUTHORIZED
 - **Historical/superseded checklist token (not current):** the following literal represented
       the pre-acceptance B3 state:
       ```text
@@ -445,9 +449,21 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-Phase 4 is not closed. PHASE 4-B4: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados`
-ownership remain unresolved and are not complete. Phase 5 and Phase 6 are not authorized;
-migration v4 remains prohibited. No later cohort is marked complete.
+Phase 4 is not closed. PHASE 4-B4-A is CLOSED / ACCEPTED. PHASE 4-B4.1 is
+IMPLEMENTED / AWAITING SUPERVISOR REVIEW and is only the shared-owner prerequisite. The
+bounded expansion is reconciled: all eight B1 settings-helper bodies move from their B1-time
+Configurações owner to neutral `app.settings` with Configurações/`main` identity exports;
+`app.matrix_scope` owns exactly the six shared matrix-scope symbols; Aluno removes only the
+`get_effective_matriz_for_turma` lazy-main edge, reducing the B2-time six residual edges to
+five at B4.1-time; the Phase-3 test delta is governance-reader-only. Technical review used
+`flash_free` / `opencode/deepseek-v4-flash-free`, session
+`ses_040d538bfffegBsAJQbLJrnqSV`, cost 0, reviewed hash
+`f4b6cb00b4365cc7c20af5fcba1ac736ece1bab0ab9c6e0f89b19084799727f9`, mutation 0,
+PASS / findings NONE. Exact artifact: 20 paths = 7 production + 7 tests + 6 governance;
+final hermetic 984 passed / 17 deselected; message catalog 536.
+PHASE 4-B4.2: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados` ownership remain
+unresolved and are not complete. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED.
+MIGRATION V4: PROHIBITED. No later route cohort is marked complete.
 
 ### Fase 5 — Mover backup/sync para fora do request (1–2 dias)
 - [ ] Tirar `_maybe_sync_database_snapshot` do `after_request`; transformar em
