@@ -427,11 +427,25 @@ def _should_keep_frontend_literal(text: str) -> bool:
 
 
 def _iter_backend_files() -> list[Path]:
-    files = [PROJECT_ROOT / "main.py", PROJECT_ROOT / "app" / "auth.py", PROJECT_ROOT / "app" / "db_maintenance.py"]
+    files = [
+        PROJECT_ROOT / "main.py",
+        PROJECT_ROOT / "app" / "auth.py",
+        PROJECT_ROOT / "app" / "db_maintenance.py",
+    ]
     views_dir = PROJECT_ROOT / "app" / "views"
     if views_dir.is_dir():
-        files.extend(sorted(views_dir.glob("*.py")))
-    return [path for path in files if path.is_file()]
+        files.extend(
+            path
+            for path in views_dir.rglob("*.py")
+            if "__pycache__" not in path.relative_to(PROJECT_ROOT).parts
+        )
+
+    unique_files = {
+        path.relative_to(PROJECT_ROOT).as_posix(): path
+        for path in files
+        if path.is_file()
+    }
+    return [unique_files[key] for key in sorted(unique_files)]
 
 
 def _iter_frontend_files() -> list[Path]:
@@ -580,11 +594,33 @@ def _route_path_from_decorators(decorators: list[ast.expr], source: str) -> str 
     return None
 
 
+def _legacy_route_paths(tree: ast.AST, source: str) -> dict[str, str]:
+    routes: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or _call_name(node.func) != "LegacyRouteSpec":
+            continue
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords if keyword.arg}
+        rule_node = keywords.get("rule") or (node.args[0] if node.args else None)
+        view_func = keywords.get("view_func") or (node.args[2] if len(node.args) >= 3 else None)
+        rule = _extract_python_template(rule_node, source)
+        if rule and rule.startswith("/") and isinstance(view_func, ast.Name):
+            routes[view_func.id] = rule
+    return routes
+
+
 class _BackendMessageVisitor(ast.NodeVisitor):
-    def __init__(self, *, catalog: dict[str, dict[str, Any]], source: str, source_path: str):
+    def __init__(
+        self,
+        *,
+        catalog: dict[str, dict[str, Any]],
+        source: str,
+        source_path: str,
+        legacy_route_paths: dict[str, str] | None = None,
+    ):
         self.catalog = catalog
         self.source = source
         self.source_path = source_path
+        self.legacy_route_paths = legacy_route_paths or {}
         self.scope_stack: list[dict[str, str]] = []
 
     def _current_scope(self) -> dict[str, str]:
@@ -595,7 +631,10 @@ class _BackendMessageVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         scope = {
             "function": node.name,
-            "route": _route_path_from_decorators(node.decorator_list, self.source) or "",
+            "route": (
+                _route_path_from_decorators(node.decorator_list, self.source)
+                or self.legacy_route_paths.get(node.name, "")
+            ),
         }
         self.scope_stack.append(scope)
         self.generic_visit(node)
@@ -604,7 +643,10 @@ class _BackendMessageVisitor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         scope = {
             "function": node.name,
-            "route": _route_path_from_decorators(node.decorator_list, self.source) or "",
+            "route": (
+                _route_path_from_decorators(node.decorator_list, self.source)
+                or self.legacy_route_paths.get(node.name, "")
+            ),
         }
         self.scope_stack.append(scope)
         self.generic_visit(node)
@@ -700,7 +742,12 @@ def _scan_backend_catalog(catalog: dict[str, dict[str, Any]]) -> None:
     for path in _iter_backend_files():
         source = _read_text(path)
         tree = ast.parse(source)
-        visitor = _BackendMessageVisitor(catalog=catalog, source=source, source_path=_rel_path(path))
+        visitor = _BackendMessageVisitor(
+            catalog=catalog,
+            source=source,
+            source_path=_rel_path(path),
+            legacy_route_paths=_legacy_route_paths(tree, source),
+        )
         visitor.visit(tree)
 
 

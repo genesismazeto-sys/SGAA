@@ -139,16 +139,27 @@ def _module_name_from_path(project_root: Path, py_path: Path) -> str:
     return ".".join(rel.parts)
 
 
+def _iter_route_owner_files(project_root: Path) -> list[Path]:
+    files = [project_root / "main.py"]
+    views_dir = project_root / "app" / "views"
+    if views_dir.is_dir():
+        files.extend(
+            path
+            for path in views_dir.rglob("*.py")
+            if "__pycache__" not in path.relative_to(project_root).parts
+        )
+
+    unique_files = {
+        path.relative_to(project_root).as_posix(): path
+        for path in files
+        if path.is_file()
+    }
+    return [unique_files[key] for key in sorted(unique_files)]
+
+
 def _collect_route_source_metadata(project_root: Path) -> dict[tuple[str, str], dict]:
-    candidates = [
-        project_root / "main.py",
-        project_root / "app" / "views" / "aluno.py",
-        project_root / "app" / "views" / "core.py",
-    ]
     metadata: dict[tuple[str, str], dict] = {}
-    for file_path in candidates:
-        if not file_path.exists():
-            continue
+    for file_path in _iter_route_owner_files(project_root):
         source = file_path.read_text(encoding="utf-8", errors="replace")
         tree = ast.parse(source)
         module_name = _module_name_from_path(project_root, file_path)
@@ -170,6 +181,26 @@ def _collect_route_source_metadata(project_root: Path) -> dict[tuple[str, str], 
                 "templates": sorted(set(templates)),
             }
     return metadata
+
+
+def _resolve_view_ownership(view_func) -> dict[str, str]:
+    unwrapped = inspect.unwrap(view_func)
+    module_name = str(unwrapped.__module__)
+    function_name = str(unwrapped.__name__)
+    legacy_export = getattr(main, function_name, None)
+    legacy_unwrapped = inspect.unwrap(legacy_export) if callable(legacy_export) else None
+    legacy_name = (
+        f"main.{function_name}"
+        if function_name in MOVED_CONFIGURACOES_HANDLERS
+        and (legacy_export is view_func or legacy_unwrapped is unwrapped)
+        else ""
+    )
+    return {
+        "canonical_owner": f"{module_name}.{function_name}",
+        "legacy_compatibility_export": legacy_name,
+        "module_name": module_name,
+        "function_name": function_name,
+    }
 
 
 def _walk_ast(node):
@@ -1061,9 +1092,9 @@ def _build_csrf_inventory(tmp_path: Path) -> dict:
         ):
             methods = sorted(set(rule.methods or []) & MUTATING_METHODS)
             view_func = app.view_functions.get(rule.endpoint)
-            unwrapped = inspect.unwrap(view_func) if view_func else None
-            module_name = unwrapped.__module__ if unwrapped else ""
-            func_name = unwrapped.__name__ if unwrapped else rule.endpoint
+            ownership = _resolve_view_ownership(view_func) if view_func else None
+            module_name = ownership["module_name"] if ownership else ""
+            func_name = ownership["function_name"] if ownership else rule.endpoint
             meta = source_metadata.get((module_name, func_name), {"decorators": [], "templates": []})
             decorators = set(meta.get("decorators", []))
             route_evidences = list(page_evidences.get(rule.rule, []))
@@ -1106,7 +1137,12 @@ def _build_csrf_inventory(tmp_path: Path) -> dict:
             row = {
                 "route": rule.rule,
                 "method": ",".join(methods),
-                "view_function": f"{module_name}.{func_name}" if module_name else func_name,
+                "view_function": (
+                    ownership["legacy_compatibility_export"]
+                    or ownership["canonical_owner"]
+                    if ownership
+                    else func_name
+                ),
                 "template_related": list(meta.get("templates", [])),
                 "requires_login": _infer_login_requirement(rule.rule, decorators),
                 "has_post_form": any(ev["kind"] == "rendered_form" for ev in route_evidences),
@@ -1293,3 +1329,50 @@ def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, 
         )
         == "msg_ee9900f9eb19b308"
     )
+
+
+MOVED_CONFIGURACOES_HANDLERS = (
+    "admin_configuracoes",
+    "admin_configuracoes_horas_padrao_salvar",
+    "admin_configuracoes_prazo_adequacao_salvar",
+    "admin_configuracoes_tempo_resposta_salvar",
+    "admin_configuracoes_tempo_resposta_resetar",
+    "admin_mensagens",
+    "admin_mensagens_salvar",
+    "admin_mensagens_resetar",
+)
+
+
+def test_recursive_route_owner_discovery_includes_nested_admin_module_once():
+    project_root = Path(BASE)
+    candidates = _iter_route_owner_files(project_root)
+    relative_paths = [path.relative_to(project_root).as_posix() for path in candidates]
+
+    assert relative_paths == sorted(relative_paths)
+    assert len(relative_paths) == len(set(relative_paths))
+    assert "main.py" in relative_paths
+    assert "app/views/aluno.py" in relative_paths
+    assert "app/views/core.py" in relative_paths
+    assert "app/views/admin/configuracoes.py" in relative_paths
+    assert all(path == "main.py" or path.startswith("app/views/") for path in relative_paths)
+
+
+def test_moved_handlers_use_canonical_source_and_identity_only_for_legacy_compatibility():
+    project_root = Path(BASE)
+    source_metadata = _collect_route_source_metadata(project_root)
+
+    for handler_name in MOVED_CONFIGURACOES_HANDLERS:
+        view_func = main.app.view_functions[handler_name]
+        ownership = _resolve_view_ownership(view_func)
+        assert ownership == {
+            "canonical_owner": f"app.views.admin.configuracoes.{handler_name}",
+            "legacy_compatibility_export": f"main.{handler_name}",
+            "module_name": "app.views.admin.configuracoes",
+            "function_name": handler_name,
+        }
+        assert getattr(main, handler_name) is view_func
+        metadata = source_metadata[(ownership["module_name"], handler_name)]
+        assert "admin_required" in metadata["decorators"]
+        assert _infer_login_requirement(
+            "/admin/configuracoes", set(metadata["decorators"])
+        ) == "admin"

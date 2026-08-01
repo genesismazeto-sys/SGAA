@@ -341,21 +341,33 @@ satisfied; no open Phase 3 technical implementation remains.
       queries das views. This optional item is deferred by design and is not silently
       assigned to Phase 4.
 
-Phase 4, migration v4, blueprint reconnaissance/movement and production changes remain
-NOT AUTHORIZED by this closeout.
+The Phase 3 closeout granted no Phase 4 authority. That historical prohibition was later
+superseded only for the explicit PHASE 4-B1 unit below. Migration v4 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin (4–8 dias, o grosso)
+### Fase 4 — Quebrar `main.py` em blueprints admin — IN PROGRESS / B1 IMPLEMENTED
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
+- **PHASE 4-B1 — IMPLEMENTED / AWAITING SUPERVISOR REVIEW:**
+      `app/views/admin/configuracoes.py` owns exactly eight
+      Configurações/Mensagens routes and eight settings helpers. The reusable registrar in
+      `app/views/admin/__init__.py` preserves global legacy endpoints without aliases or
+      namespaced routes. Contract:
+      `docs/refactor/PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md`.
+      B1-R1 establishes recursive AST/read-only message discovery and recursive canonical
+      CSRF owner discovery. Final pre-publication gates: targeted 47 passed; full hermetic
+      939 passed / 17 deselected; independent Flash FREE review PASS; exact 13-path manifest.
 - [ ] `app/views/admin/requisicoes.py`
 - [ ] `app/views/admin/atividades.py` (+ catálogo versionado)
 - [ ] `app/views/admin/matrizes.py`
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
-- [ ] `app/views/admin/acesso.py` + `app/views/admin/configuracoes.py`
+- [ ] `app/views/admin/acesso.py` and any later Configurações cohort not included in B1
 - [ ] Mover o subsistema de **versionamento** para `app/versioning/`
       (resolver, snapshot, shadow read, diagnóstico).
+
+Phase 4 is not closed. B2 is not authorized. `dashboard.py` and `admin_meus_dados`
+ownership remain unresolved. Phase 5, Phase 6, and migration v4 remain unauthorized.
 
 ### Fase 5 — Mover backup/sync para fora do request (1–2 dias)
 - [ ] Tirar `_maybe_sync_database_snapshot` do `after_request`; transformar em

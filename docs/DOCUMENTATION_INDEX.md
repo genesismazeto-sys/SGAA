@@ -14,14 +14,15 @@
    formal decisions.
 5. **Architecture refactor ledger** (`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`)
    — normalized table of every refactor phase, commits, status, and residual risk.
-6. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3 contracts) — per-phase scope, decisions,
+6. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3/4 contracts) — per-phase scope, decisions,
    and closeout evidence. The canonical Phase 3 authority, intentionally revised
    through the B11 single-init cutover, is
    `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`. Standalone REF contracts exist for: REF-0TF, REF-0TF-A,
    REF-0TF-B, REF-0C-A, REF-0C-B1-P0, REF-0C-B2-A, REF-0C-B2, REF-0C-C-A,
    REF-0C-C-B1. No standalone contract exists for REF-0A, REF-0ENV, REF-0B,
    REF-0T, REF-0C-A-R1, or REF-0C-D; their scope is documented in the ledger
-   and PROJECT_STATE historical blocks.
+   and PROJECT_STATE historical blocks. Phase 4 endpoint-preserving blueprint extraction is
+   governed by `docs/refactor/PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md`.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
     — autonomous administrative/governance track for the 17 historical database
     snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**;
@@ -55,10 +56,12 @@
 4. `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — phase ledger.
 5. `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` — final and accepted
    Macro Phase 3 executable single-init schema/startup/transaction contract.
-6. `PROJECT_STATE.md` — canonical current state (top block).
-7. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
-8. `AGENT_HANDOFF.md` — current operational handoff.
-9. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
+6. `docs/refactor/PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` — current B1
+   endpoint-preservation, registrar, factory, compatibility-export and scope contract.
+7. `PROJECT_STATE.md` — canonical current state (top block).
+8. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
+9. `AGENT_HANDOFF.md` — current operational handoff.
+10. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
@@ -74,8 +77,11 @@
   closeout`), parent `c9009bf3d68950ad4e0499b65928603e84bee341`.
 - **Macro Phase 3:** CLOSED / ACCEPTED. The canonical Phase 3 contract is final and
   accepted; B11 and B11-R1 are the accepted technical/governance baseline. B11-R1
-  updated the existing contract and created no competing Phase 3 contract. Phase 4
-  remains NOT AUTHORIZED.
+  updated the existing contract and created no competing Phase 3 contract.
+- **PHASE 4-B1:** IMPLEMENTED / AWAITING SUPERVISOR REVIEW. Exactly eight
+  Configurações/Mensagens routes and eight settings helpers moved under the first admin
+  blueprint with global legacy endpoints preserved. Phase 4 is not closed; B2, Phase 5,
+  Phase 6 and migration v4 remain unauthorized.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -255,17 +261,18 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   reviewer process nonconformities recorded in the canonical state, ledger, and
   contract. B11 and B11-R1 are CLOSED / ACCEPTED; all mandatory Macro Phase 3
   objectives are satisfied. Optional repository-layer extraction is not implemented
-  and is not a closure blocker or hidden Phase 4 assignment. Phase 4 and migration v4
-  remain not authorized.
-- **Fase 4 — Blueprint extraction**: one admin blueprint per domain.
+  and is not a closure blocker or hidden Phase 4 assignment.
+- **Fase 4 — Blueprint extraction**: IN PROGRESS / B1 IMPLEMENTED / AWAITING SUPERVISOR
+  REVIEW. B1 establishes the compatibility registrar and exact eight-route
+  Configurações/Mensagens cohort. Phase 4 is not closed and B2 is unauthorized.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
 Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
 Phase 2 is CLOSED / ACCEPTED. Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 are
 CLOSED / ACCEPTED at technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`
-and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. Phase 4,
-migration v4, and Phases 4–6 remain
+and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
+implemented and awaiting supervisor review; B2, migration v4, Phase 5 and Phase 6 remain
 **unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
@@ -300,6 +307,7 @@ table of every phase.
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
 | `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11/B11-R1 | Final accepted Macro Phase 3 single-init, caller, schema-owner, startup-order, migration and transaction contract; B11 establishes `app.db` as sole init owner, preserves `main.init_db` identity compatibility, removes all lazy bridge and `app.db → main` dependencies, directly owns preferred-matrix selection and startup settings, and records exact per-boundary failure postconditions; B11-R1 records accepted publication/review governance |
+| `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | Endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
