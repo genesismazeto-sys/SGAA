@@ -657,7 +657,7 @@
     {
       "route": "/admin/adicionar_atividade",
       "method": "POST",
-      "view_function": "main.admin_adicionar_atividade",
+      "view_function": "app.views.admin.atividades.admin_adicionar_atividade",
       "template_related": [
         "admin_adicionar_atividade.html"
       ],
@@ -990,7 +990,7 @@
     {
       "route": "/admin/atividades/importar/confirmar",
       "method": "POST",
-      "view_function": "main.admin_atividades_importar_confirmar",
+      "view_function": "app.views.admin.atividades.admin_atividades_importar_confirmar",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1022,7 +1022,7 @@
     {
       "route": "/admin/atividades/importar/preview",
       "method": "POST",
-      "view_function": "main.admin_atividades_importar_preview",
+      "view_function": "app.views.admin.atividades.admin_atividades_importar_preview",
       "template_related": [
         "admin_importar_atividades.html"
       ],
@@ -1426,7 +1426,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/nova-versao",
       "method": "POST",
-      "view_function": "main.admin_catalogo_nova_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_nova_versao",
       "template_related": [
         "admin_catalogo_versao_form.html"
       ],
@@ -1460,7 +1460,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/ativar",
       "method": "POST",
-      "view_function": "main.admin_catalogo_ativar_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_ativar_versao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1492,7 +1492,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/descontinuar",
       "method": "POST",
-      "view_function": "main.admin_catalogo_descontinuar_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_descontinuar_versao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1524,7 +1524,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar",
       "method": "POST",
-      "view_function": "main.admin_catalogo_editar_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_editar_versao",
       "template_related": [
         "admin_catalogo_versao_form.html"
       ],
@@ -1558,7 +1558,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/inativar",
       "method": "POST",
-      "view_function": "main.admin_catalogo_inativar_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_inativar_versao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1590,7 +1590,7 @@
     {
       "route": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir",
       "method": "POST",
-      "view_function": "main.admin_catalogo_substituir_versao",
+      "view_function": "app.views.admin.atividades.admin_catalogo_substituir_versao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1622,7 +1622,7 @@
     {
       "route": "/admin/catalogo-versoes/nova-base",
       "method": "POST",
-      "view_function": "main.admin_catalogo_nova_base",
+      "view_function": "app.views.admin.atividades.admin_catalogo_nova_base",
       "template_related": [
         "admin_catalogo_base_form.html"
       ],
@@ -1884,7 +1884,7 @@
     {
       "route": "/admin/deletar_atividade/<int:atividade_id>",
       "method": "POST",
-      "view_function": "main.admin_deletar_atividade",
+      "view_function": "app.views.admin.atividades.admin_deletar_atividade",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -2014,7 +2014,7 @@
     {
       "route": "/admin/editar_atividade/<int:atividade_id>",
       "method": "POST",
-      "view_function": "main.admin_editar_atividade",
+      "view_function": "app.views.admin.atividades.admin_editar_atividade",
       "template_related": [
         "admin_editar_atividade.html"
       ],
@@ -2142,7 +2142,7 @@
     {
       "route": "/admin/grupos/excluir",
       "method": "POST",
-      "view_function": "main.admin_grupos_excluir",
+      "view_function": "app.views.admin.atividades.admin_grupos_excluir",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -2166,7 +2166,7 @@
     {
       "route": "/admin/grupos/renomear",
       "method": "POST",
-      "view_function": "main.admin_grupos_renomear",
+      "view_function": "app.views.admin.atividades.admin_grupos_renomear",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -9429,7 +9429,7 @@
     {
       "route": "/admin/normas-atividade/nova",
       "method": "POST",
-      "view_function": "main.admin_norma_nova",
+      "view_function": "app.views.admin.atividades.admin_norma_nova",
       "template_related": [
         "admin_norma_form.html"
       ],

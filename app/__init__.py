@@ -14,6 +14,7 @@ from presets_api import bp_presets
 from app.db import close_db_connection
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
+from app.views.admin.atividades import bp_admin_atividades
 from app.views.admin.configuracoes import bp_admin_configuracoes
 from app.views.admin.versioning import bp_admin_versioning
 from app.views import core as core_views
@@ -85,6 +86,7 @@ def create_app(
     *,
     register_presets_blueprint: bool = True,
     register_aluno_blueprint: bool = True,
+    register_admin_atividades_blueprint: bool = True,
     register_admin_configuracoes_blueprint: bool = True,
     register_admin_versioning_blueprint: bool = True,
 ) -> Flask:
@@ -230,6 +232,8 @@ def create_app(
         if endpoint in app.view_functions:
             continue
         app.add_url_rule(rule, endpoint=endpoint, view_func=view_func, methods=methods)
+    if register_admin_atividades_blueprint:
+        register_legacy_blueprint(app, bp_admin_atividades)
     if register_admin_configuracoes_blueprint:
         register_legacy_blueprint(app, bp_admin_configuracoes)
     if register_admin_versioning_blueprint:

@@ -342,10 +342,10 @@ satisfied; no open Phase 3 technical implementation remains.
       assigned to Phase 4.
 
 The Phase 3 closeout granted no Phase 4 authority. That historical prohibition was later
-superseded only for the explicit PHASE 4-B1 and PHASE 4-B2 units below. Migration v4
+superseded only for the explicit PHASE 4-B1, PHASE 4-B2 and PHASE 4-B3 units below. Migration v4
 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED / ACCEPTED / B2 CLOSED / ACCEPTED
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B2 CLOSED / ACCEPTED / B3 IMPLEMENTED / AWAITING SUPERVISOR REVIEW
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -394,8 +394,34 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `opencode/deepseek-v4-flash-free`, session `ses_0431aa4d7ffev4hTZImBDA86Ca`, cost 0,
       and returned PASS with no fallback. Publication and post-publication verification are
       complete.
+- **PHASE 4-B3 — IMPLEMENTED / AWAITING SUPERVISOR REVIEW:** exactly 22 legacy
+      Atividades/CRUD/import/groups/versioned-catalog/normas/legacy-mapping endpoints and 29
+      route/method combinations are owned by `app.views.admin.atividades` through the accepted
+      legacy registrar. `app.activity_catalog` neutrally owns 14 shared helpers;
+      `app.uploads` neutrally owns `save_upload`, which retains non-B3 consumers and uses the
+      active app upload root. Matrizes/Requisições route bodies remain in `main`; no B2 helper,
+      schema or migration moved. B3-R1 proves message inventory 536→536 with zero key/default/
+      semantic delta and CSRF snapshots with exactly 15 owner-only deltas each. B3 contract 19
+      passed; affected lane 353. The 974/17/292.86s run is historical pre-final-test-delta;
+      final exact-candidate hermetic requalification passed 974 / 17 deselected / zero
+      failures/errors in 399.95s. Routes 131;
+      endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot and
+      protected physical artifacts unchanged. Exact candidate ceiling: 16 paths. Provisional
+      FREE review (`opencode/deepseek-v4-flash-free`, session
+      `ses_0425bf1cbffeIxMwsDQn0etSEC`, cost 0, no fallback) was UNUSABLE DELIVERY / NO VERDICT.
+      The final FREE session `ses_0422f0e1cffepCXyNpg47dWpoq`, cost 0, timed out after 600s;
+      accepted fallback used `opencode-go/deepseek-v4-flash`, session
+      `ses_04224ca47ffe5qAwwHGtxlR7i7`, router cost `0.0010424344 USD`, hash
+      `ec96796d3541710a36ac8121e40ffd888737c7c926f191a28034482cedbfd556`, mutation 0, PASS,
+      findings NONE. IAsup accepted PASS; canonicalization concern was REJECTED_INCORRECT and
+      no-test limitation ACCEPTED_NONBLOCKING. Frozen non-governance hash
+      `13b0af13e653641d75d2466d7d8d69090e655a18e28bb678a7090dbe0e2ecab0`. Selective
+      publication remains pending; B3 is not CLOSED / ACCEPTED. The B3-R1 scope expansion is
+      reconciled exactly, including message and CSRF owner-only proofs. Contract:
+      `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md`.
 - [ ] `app/views/admin/requisicoes.py`
-- [ ] `app/views/admin/atividades.py` (+ catálogo versionado)
+- [ ] `app/views/admin/atividades.py` (+ catálogo versionado) — B3 implemented / awaiting
+      supervisor review; not yet accepted.
 - [ ] `app/views/admin/matrizes.py`
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
@@ -406,7 +432,7 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-Phase 4 is not closed. PHASE 4-B3: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados`
+Phase 4 is not closed. PHASE 4-B4: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados`
 ownership remain unresolved and are not complete. Phase 5 and Phase 6 are not authorized;
 migration v4 remains prohibited. No later cohort is marked complete.
 

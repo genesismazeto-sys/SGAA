@@ -22,8 +22,9 @@
    REF-0C-C-B1. No standalone contract exists for REF-0A, REF-0ENV, REF-0B,
    REF-0T, REF-0C-A-R1, or REF-0C-D; their scope is documented in the ledger
    and PROJECT_STATE historical blocks. Phase 4 endpoint-preserving extraction is
-   governed by `docs/refactor/PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` for B1
-   and `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` for B2.
+   governed by `docs/refactor/PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` for B1,
+   `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` for B2, and
+   `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` for B3.
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
     — autonomous administrative/governance track for the 17 historical database
     snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**;
@@ -61,10 +62,12 @@
    endpoint-preservation, registrar, factory, compatibility-export and scope contract.
 7. `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` — current B2
    ownership, three-route, aluno reverse-edge and logging-compatibility contract.
-8. `PROJECT_STATE.md` — canonical current state (top block).
-9. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
-10. `AGENT_HANDOFF.md` — current operational handoff.
-11. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
+8. `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` — current B3 exact
+   22-endpoint/29-combination, shared-catalog, upload and scope-reconciliation contract.
+9. `PROJECT_STATE.md` — canonical current state (top block).
+10. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
+11. `AGENT_HANDOFF.md` — current operational handoff.
+12. All `docs/refactor/REF_*.md` / `docs/refactor/PHASE_0_*.md` files in dependency order: REF-0TF →
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
@@ -113,8 +116,29 @@
   `opencode/deepseek-v4-flash-free`, session `ses_0431aa4d7ffev4hTZImBDA86Ca`, cost 0,
   PASS, no fallback. Final published diff SHA-256
   `2a98b4a4ff9747745335259d0e5aad2c18eb9a8c0bc4762c1ea2681bc7571eec`.
-  Phase 4 remains OPEN / INCREMENTAL IMPLEMENTATION and is not closed. PHASE 4-B3: NOT AUTHORIZED.
+  Phase 4 remains OPEN / INCREMENTAL IMPLEMENTATION and is not closed. The B2 closeout's
+  phase-time B3 prohibition is superseded only by the separate B3 authorization below.
   Phase 5: NOT AUTHORIZED. Phase 6: NOT AUTHORIZED. Migration v4: PROHIBITED.
+- **PHASE 4-B3:** IMPLEMENTED / AWAITING SUPERVISOR REVIEW at baseline
+  `81cc6b10b893f1d34bd211a527e9fd12c3b6bbbe`. Exactly 22 legacy endpoints and 29
+  route/method combinations moved to `app.views.admin.atividades`; shared helpers moved to
+  neutral `app.activity_catalog`; `save_upload` moved to neutral `app.uploads`. The reconciled
+  message inventory remains 536 keys with zero semantic/default delta; both CSRF snapshots
+  have exactly 15 owner-only deltas and no functional delta. Mandatory lane 353 passed. The
+  historical pre-final-test-delta run was 974/17/292.86s; final exact-candidate hermetic
+  requalification passed 974 / 17 deselected / zero failures/errors in 399.95s. Routes 131;
+  endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402. Exact ceiling: 16 paths.
+  Provisional FREE review (`opencode/deepseek-v4-flash-free`, session
+  `ses_0425bf1cbffeIxMwsDQn0etSEC`, cost 0, no fallback) was UNUSABLE DELIVERY / NO VERDICT.
+  The final FREE session `ses_0422f0e1cffepCXyNpg47dWpoq`, cost 0, timed out; accepted fallback
+  review used `opencode-go/deepseek-v4-flash`, session `ses_04224ca47ffe5qAwwHGtxlR7i7`,
+  router cost `0.0010424344 USD`, hash
+  `ec96796d3541710a36ac8121e40ffd888737c7c926f191a28034482cedbfd556`, mutation 0, PASS,
+  findings NONE. IAsup accepted PASS; canonicalization concern was REJECTED_INCORRECT and the
+  no-test limitation ACCEPTED_NONBLOCKING. Frozen non-governance hash:
+  `13b0af13e653641d75d2466d7d8d69090e655a18e28bb678a7090dbe0e2ecab0`. Selective publication
+  and post-publication proof remain next; B3 is not CLOSED / ACCEPTED. B4, Phase 5/6 and
+  migration v4 remain unauthorized/prohibited.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -296,13 +320,15 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   objectives are satisfied. Optional repository-layer extraction is not implemented
   and is not a closure blocker or hidden Phase 4 assignment.
 - **Fase 4 — Blueprint extraction**: OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED /
-  ACCEPTED / B2 CLOSED / ACCEPTED; Phase 4 is not closed. B1 commit
+  ACCEPTED / B2 CLOSED / ACCEPTED / B3 IMPLEMENTED / AWAITING SUPERVISOR REVIEW;
+  Phase 4 is not closed. B1 commit
   `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the accepted compatibility
   registrar and exact eight-route Configurações/Mensagens cohort. B2 establishes the
   locally qualified versioning owners, exactly three diagnostics and six-key aluno lazy
   boundary. B2 technical commit `17e468ad938e873e1f9e9c303808ad31b9f3806b`, technical
   review PASS, documentary addendum PASS, publication and post-publication verification are
-  recorded. B3 is not authorized.
+  recorded. B3 is separately authorized, implemented and technically reviewed as recorded in
+  the canonical B3 block above; it is not CLOSED / ACCEPTED and its publication remains pending.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
@@ -311,9 +337,9 @@ Phase 2 is CLOSED / ACCEPTED. Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 are
 CLOSED / ACCEPTED at technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`
 and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
 CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; PHASE 4-B2 is
-CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; Phase 4 is not
-closed. B3, Phase 5 and Phase 6 remain **NOT
-AUTHORIZED**, and migration v4 remains
+CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; PHASE 4-B3 is
+IMPLEMENTED / AWAITING SUPERVISOR REVIEW and is not CLOSED / ACCEPTED; Phase 4 is not
+closed. B4, Phase 5 and Phase 6 remain **NOT AUTHORIZED**, and migration v4 remains
 **PROHIBITED**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
@@ -350,6 +376,7 @@ table of every phase.
 | `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11/B11-R1 | Final accepted Macro Phase 3 single-init, caller, schema-owner, startup-order, migration and transaction contract; B11 establishes `app.db` as sole init owner, preserves `main.init_db` identity compatibility, removes all lazy bridge and `app.db → main` dependencies, directly owns preferred-matrix selection and startup settings, and records exact per-boundary failure postconditions; B11-R1 records accepted publication/review governance |
 | `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import. Its B2 prohibition is the preserved B1 phase-time boundary, superseded only by the separate B2 order/contract below. |
 | `PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | PHASE 4-B2 | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; canonical resolver/snapshot/shadow-read owners, exact three legacy diagnostics, six-key aluno lazy boundary, repository-root logging and logger-identity compatibility; full 954/17; index-visible 271; post-publication 282; exact 24-path artifact; technical review PASS; documentary addendum PASS; publication complete. |
+| `PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | PHASE 4-B3 | IMPLEMENTED / AWAITING SUPERVISOR REVIEW; exact 22 legacy endpoints / 29 route-method pairs; neutral shared activity-catalog and upload owners; exact message/CSRF scope-expansion reconciliation; full 974/17; exact 16-path candidate ceiling; review/publication pending at commit-tree time. |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -378,6 +405,7 @@ The original REF-0C-D scope was documented in
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
 | Phase 3-B5/B6/B7/B8/B9/B10/B11 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_phase3_final_init_cutover.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_activity_versioning_core_migration_v3.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5 through B11-R1 CLOSED / ACCEPTED; B11 technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`; B11-R1 governance commit `630d4eb448b992bdc3beb28752c30717989312bb`; review APPROVE; Macro Phase 3 CLOSED / ACCEPTED; Phase 4 NOT AUTHORIZED |
 | Phase 4-B2 versioning ownership and compatibility | `tests/test_phase4_versioning_subsystem.py` + versioning resolver/shadow/diagnostic/aluno/ownership/runtime/route/RBAC gates + `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; contract 14; affected 241; full 954 passed / 17 deselected; index-visible 271; post-publication 282; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; technical review PASS; documentary addendum PASS; publication complete |
+| Phase 4-B3 Atividades blueprint and scope reconciliation | `tests/test_phase4_atividades_blueprint.py` + Atividades/import/catalog/CSRF/B1/B2/route/RBAC/actor/runtime gates + `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | IMPLEMENTED / AWAITING SUPERVISOR REVIEW; B3 contract 19; affected 353; full 974 passed / 17 deselected; exact 22 endpoints / 29 combinations; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot unchanged; exact 16-path ceiling |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

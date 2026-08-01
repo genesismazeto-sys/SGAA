@@ -521,6 +521,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
     sources = list(ADMIN_PACKAGE.glob("*.py"))
     assert {path.name for path in sources} == {
         "__init__.py",
+        "atividades.py",
         "configuracoes.py",
         "versioning.py",
     }
@@ -551,11 +552,13 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
     assert "main.py" in relative_paths
     assert "app/auth.py" in relative_paths
     assert "app/db_maintenance.py" in relative_paths
+    assert "app/uploads.py" in relative_paths
+    assert "app/views/admin/atividades.py" in relative_paths
     assert "app/views/admin/configuracoes.py" in relative_paths
     assert all(path.endswith(".py") for path in relative_paths)
     assert all("__pycache__" not in Path(path).parts for path in relative_paths)
     assert all(
-        path in {"main.py", "app/auth.py", "app/db_maintenance.py"}
+        path in {"main.py", "app/auth.py", "app/db_maintenance.py", "app/uploads.py"}
         or path.startswith("app/views/")
         for path in relative_paths
     )
@@ -601,53 +604,57 @@ def test_phase4_b1_governance_closeout_is_canonical():
         ).read_text(encoding="utf-8"),
     }
 
-    current = {
+    b1_records = {
         "handoff": documents["handoff"].split(
-            "### Current operational handoff — Macro Phase 3", 1
+            "## Historical state — PHASE 4-B1", 1
+        )[1].split("### Current operational handoff — Macro Phase 3", 1)[0],
+        "state": documents["state"].split(
+            "## Historical authoritative state — PHASE 4-B1", 1
+        )[1].split("### Macro Phase 3", 1)[0],
+        "index": documents["index"].split("- **PHASE 4-B1:**", 1)[1].split(
+            "- **PHASE 4-B2:**", 1
         )[0],
-        "state": documents["state"].split("### Macro Phase 3", 1)[0],
-        "index": documents["index"].split("## Master plan", 1)[0],
-        "plan": documents["plan"].split(
-            "### Fase 4 — Quebrar `main.py` em blueprints admin", 1
-        )[1].split("### Fase 5", 1)[0],
-        "ledger": "\n".join(
+        "plan": documents["plan"].split("- **PHASE 4-B1", 1)[1].split(
+            "- **PHASE 4-B2", 1
+        )[0],
+        "ledger": next(
             line
             for line in documents["ledger"].splitlines()
-            if line.startswith(("| PHASE4-B1 |", "| Fase 4 |", "| Fase 5 |", "| Fase 6 |"))
+            if line.startswith("| PHASE4-B1 |")
         ),
         "contract": documents["contract"],
     }
     accepted_commit = "cd8a76b2484abc376174332578ecd8be4b8206ea"
     awaiting = "IMPLEMENTED / " + "AWAITING SUPERVISOR REVIEW"
-    formal_decision = (
-        "PHASE 4-B1: CLOSED / ACCEPTED",
-        "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION",
-        "PHASE 4-B2: NOT AUTHORIZED",
-        "PHASE 5: NOT AUTHORIZED",
-        "PHASE 6: NOT AUTHORIZED",
-        "Migration v4: PROHIBITED",
-    )
-
-    for name in ("handoff", "state"):
-        assert all(token in current[name] for token in formal_decision), name
-
-    for name, block in current.items():
+    for name, block in b1_records.items():
         lower_block = block.lower()
         assert "CLOSED / ACCEPTED" in block, name
         assert accepted_commit in block, name
         assert awaiting not in block, name
-        assert "not closed" in lower_block, name
-        assert "B2" in block and "not authorized" in lower_block, name
-        assert "phase 5" in lower_block and "phase 6" in lower_block, name
-        assert "migration v4" in lower_block and "prohibit" in lower_block, name
 
-    assert "`app/views/admin/acesso.py` — NOT IMPLEMENTED" in current["plan"]
-    plan_words = " ".join(current["plan"].split())
-    ledger_words = " ".join(current["ledger"].split())
+    current_handoff = documents["handoff"].split("## Historical state — PHASE 4-B2", 1)[0]
+    current_state = documents["state"].split("## Historical authoritative state — PHASE 4-B2", 1)[0]
+    for name, block in (("handoff", current_handoff), ("state", current_state)):
+        assert "PHASE 4-B1" in block and "CLOSED / ACCEPTED" in block, name
+        assert "PHASE 4-B3" in block and awaiting in block, name
+        assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in block, name
+
+    current_plan = documents["plan"].split(
+        "### Fase 4 — Quebrar `main.py` em blueprints admin", 1
+    )[1].split("### Fase 5", 1)[0]
+    current_ledger = "\n".join(
+        line
+        for line in documents["ledger"].splitlines()
+        if line.startswith(("| PHASE4-B1 |", "| PHASE4-B3 |", "| Fase 4 |"))
+    )
+    assert "`app/views/admin/acesso.py` — NOT IMPLEMENTED" in current_plan
+    assert "- [ ] `app/views/admin/atividades.py`" in current_plan
+    plan_words = " ".join(current_plan.split())
+    ledger_words = " ".join(current_ledger.split())
     assert "`dashboard.py` and `admin_meus_dados` ownership remain unresolved" in plan_words
     assert "`dashboard.py` and `admin_meus_dados` ownership unresolved" in ledger_words
 
-    discovery = current["contract"].split("5. `utils/messages.py`", 1)[1].split(
+    discovery = b1_records["contract"].split("5. `utils/messages.py`", 1)[1].split(
         "Test paths", 1
     )[0]
     assert "filesystem-recursive" in discovery
