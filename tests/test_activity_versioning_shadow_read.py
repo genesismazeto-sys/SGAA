@@ -17,6 +17,8 @@ if BASE not in sys.path:
 
 import main
 from app import db as app_db_module
+from app.versioning import resolver as versioning_resolver
+from app.versioning import shadow_reads as versioning_shadow_reads
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -220,7 +222,7 @@ def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env,
             "reason": "ok",
         }
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", fake_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", fake_resolver)
 
     response = client.post(
         "/aluno/nova-requisicao",
@@ -259,7 +261,7 @@ def test_shadow_read_student_create_does_not_block_on_resolver_error(shadow_read
     def raising_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise RuntimeError("boom aluno")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", raising_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", raising_resolver)
 
     response = client.post(
         "/aluno/nova-requisicao",
@@ -293,7 +295,7 @@ def test_shadow_read_student_create_skips_resolver_when_flag_off(shadow_read_env
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise AssertionError("resolvedor não deveria ser chamado com a flag desligada")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     event_name = f"Evento Shadow Aluno Off {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -363,7 +365,7 @@ def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, m
             "reason": "ok",
         }
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", fake_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", fake_resolver)
 
     response = client.post(
         "/admin/requisicoes/nova",
@@ -403,7 +405,7 @@ def test_shadow_read_admin_create_does_not_block_on_resolver_error(shadow_read_e
     def raising_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise RuntimeError("boom admin")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", raising_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", raising_resolver)
 
     response = client.post(
         "/admin/requisicoes/nova",
@@ -438,7 +440,7 @@ def test_shadow_read_admin_create_skips_resolver_when_flag_off(shadow_read_env, 
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise AssertionError("resolvedor não deveria ser chamado com a flag desligada")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     event_name = f"Evento Shadow Admin Off {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -509,7 +511,7 @@ def test_snapshot_write_student_create_writes_aac_snapshot_with_shadow_off(shado
     assert snapshot["versao_status"] == "ativa"
     assert "T" in snapshot["snapshot_written_at"]
     assert snapshot["snapshot_written_at"].endswith("Z")
-    assert not os.path.exists(main._versioned_shadow_read_dedicated_log_path())
+    assert not os.path.exists(versioning_shadow_reads._versioned_shadow_read_dedicated_log_path())
 
 
 def test_snapshot_write_admin_create_writes_aeu_snapshot_with_shadow_off(shadow_read_env, monkeypatch):
@@ -554,7 +556,7 @@ def test_snapshot_write_admin_create_writes_aeu_snapshot_with_shadow_off(shadow_
     assert snapshot["legacy_scope_ok"] is True
     assert snapshot["resolver_status"] == "resolved"
     assert snapshot["resolver_warnings"] == []
-    assert not os.path.exists(main._versioned_shadow_read_dedicated_log_path())
+    assert not os.path.exists(versioning_shadow_reads._versioned_shadow_read_dedicated_log_path())
 
 
 def test_snapshot_write_student_create_keeps_null_when_resolver_not_resolved(shadow_read_env, monkeypatch):
@@ -579,7 +581,7 @@ def test_snapshot_write_student_create_keeps_null_when_resolver_not_resolved(sha
             "reason": "sem mapeamento para base",
         }
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", fake_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", fake_resolver)
 
     event_name = f"Evento Snapshot Unresolved {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -621,7 +623,7 @@ def test_snapshot_write_admin_edit_remains_out_of_scope(shadow_read_env, monkeyp
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise AssertionError("resolvedor nao deveria ser chamado em admin_edit")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     req_id = _insert_pending_req(seed["aluno_id"], 1, nome_evento="Req edit sem snapshot")
     response = client.post(
@@ -655,7 +657,7 @@ def test_snapshot_write_admin_processar_remains_out_of_scope(shadow_read_env, mo
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise AssertionError("resolvedor nao deveria ser chamado em admin_processar_requisicao")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     req_id = _insert_pending_req(seed["aluno_id"], 1, nome_evento="Req process sem snapshot")
     response = client.post(
@@ -686,7 +688,7 @@ def test_snapshot_write_admin_importar_remains_out_of_scope(shadow_read_env, mon
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise AssertionError("resolvedor nao deveria ser chamado em admin_importar_requisicoes")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -745,7 +747,7 @@ def test_shadow_read_resolver_exception_captures_traceback_details(
     probe_log = tmp_path / "logs" / "versioned_shadow_reads.log"
     probe_log.parent.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(probe_log),
     )
@@ -756,7 +758,7 @@ def test_shadow_read_resolver_exception_captures_traceback_details(
     def raising_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise RuntimeError(raised_message)
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", raising_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", raising_resolver)
 
     event_name = f"Evento Shadow Trace {unique_marker}"
     response = client.post(
@@ -818,7 +820,7 @@ def test_shadow_read_resolved_event_includes_timestamp(
     probe_log = tmp_path / "logs" / "versioned_shadow_reads.log"
     probe_log.parent.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(probe_log),
     )
@@ -836,7 +838,7 @@ def test_shadow_read_resolved_event_includes_timestamp(
             "reason": "ok",
         }
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", fake_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", fake_resolver)
 
     event_name = f"Evento Shadow Resolved Ts {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -937,7 +939,7 @@ def test_shadow_read_not_invoked_for_dashboard_and_admin_list(shadow_read_env, m
         calls.append((aluno_id, atividade_id_legacy, strict_legacy_scope))
         raise AssertionError("resolvedor não deveria ser chamado fora da criação")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", forbidden_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
     _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
     aluno_dashboard = client.get("/aluno/dashboard")
@@ -960,7 +962,9 @@ def test_pytest_does_not_write_to_real_general_workspace_logs():
     real_app_log = os.path.join(real_logs_dir, "app.log")
 
     # 1) O log dedicado do shadow read aponta para fora do diretorio real.
-    active_dedicated = os.path.abspath(main._versioned_shadow_read_dedicated_log_path())
+    active_dedicated = os.path.abspath(
+        versioning_shadow_reads._versioned_shadow_read_dedicated_log_path()
+    )
     assert active_dedicated != os.path.abspath(real_dedicated)
     assert not active_dedicated.startswith(real_logs_dir + os.sep)
 

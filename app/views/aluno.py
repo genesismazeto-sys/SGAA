@@ -38,6 +38,10 @@ from app.web.filters import (
     get_text_query_value,
 )
 from app.web.pagination import get_pagination, wants_pagination
+from app.versioning import (
+    maybe_run_versioned_resolver_shadow_read,
+    maybe_write_versioned_requisicao_snapshot,
+)
 from utils.messages import flash
 
 # Importa helpers diretamente de main, mas apenas quando necessário, para evitar
@@ -52,8 +56,6 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
         "get_student_request_update_alert": main.get_student_request_update_alert,
         "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
-        "maybe_run_versioned_resolver_shadow_read": main.maybe_run_versioned_resolver_shadow_read,
-        "maybe_write_versioned_requisicao_snapshot": main.maybe_write_versioned_requisicao_snapshot,
     }
 
 
@@ -1574,10 +1576,7 @@ def aluno_minhas_requisicoes():
 @bp_aluno.route("/aluno/nova_requisicao", methods=["GET", "POST"])
 @aluno_required
 def aluno_nova_requisicao():
-    helpers = _get_main_helpers()
     allowed_attachments = ALLOWED_ATTACHMENTS
-    maybe_run_versioned_resolver_shadow_read = helpers["maybe_run_versioned_resolver_shadow_read"]
-    maybe_write_versioned_requisicao_snapshot = helpers["maybe_write_versioned_requisicao_snapshot"]
 
     conn = get_db_connection()
     tipo_filtro = request.args.get("tipo", "Acadêmica Complementar")

@@ -35,6 +35,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as versioning_resolver
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -699,7 +700,7 @@ def test_d82b_t04_aluno_create_write_on_unresolved_creates_without_snapshot(
             reason="forçado não-resolvido para T04",
         )
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", _fake_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", _fake_resolver)
 
     event_name = f"D82B T04 {uuid.uuid4().hex[:8]}"
     resp = client.post(
@@ -743,7 +744,7 @@ def test_d82b_t05_writer_exception_does_not_block_creation(
     def _boom_resolver(conn, **kwargs):
         raise RuntimeError("falha simulada no resolvedor (T05)")
 
-    monkeypatch.setattr(main, "resolver_versao_por_aluno", _boom_resolver)
+    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", _boom_resolver)
 
     event_name = f"D82B T05 {uuid.uuid4().hex[:8]}"
     resp = client.post(

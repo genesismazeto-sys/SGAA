@@ -1,6 +1,26 @@
 # Agent Handoff
 
-## Current state — PHASE 4-B1 CLOSED / ACCEPTED — PHASE 4 OPEN / INCREMENTAL IMPLEMENTATION
+## Current state — PHASE 4-B2 IMPLEMENTED; AWAITING SUPERVISOR REVIEW
+
+### Current operational handoff — PHASE 4-B2-R2 documentary synchronization and selective publication (2026-08-01)
+
+- **Baseline/physical state:** workspace `D:\OneDrive\Programação\SGAA_clean_baseline`, branch `refactor/architecture-safety-net`, local/upstream/live remote baseline `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`; index empty before this phase and no Git operation in progress. Resume the physical candidate; do not reset, broadly restore or reimplement it.
+- **Status:** B2 IMPLEMENTED; AWAITING SUPERVISOR REVIEW; NOT CLOSED / NOT ACCEPTED. Baseline `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`; actual manifest exactly 24 paths = 8 production + 10 tests + 6 governance. B1 remains CLOSED / ACCEPTED.
+- **Owners:** resolver → `app.versioning.resolver`; snapshot → `app.versioning.snapshots`; shadow read/log discovery → `app.versioning.shadow_reads`; exactly three diagnostic handlers → `app.views.admin.versioning`. `main` has identity-only compatibility imports and no local defining bodies for the moved runtime functions/handlers.
+- **Logging correction:** `PROJECT_ROOT = Path(__file__).resolve().parents[2]`; logical logger `logging.getLogger("main")`; default dedicated `<repo>/logs/versioned_shadow_reads.log`; explicit fallback `<repo>/logs/app.log`; `APP_LOG_DIR` and handler-derived file paths preserved; no import-time handler/directory/log/database/network effect.
+- **Routes/RBAC:** exact legacy GET routes `/admin/diagnostico/atividades-versionadas`, `/admin/diagnostico/atividades-versionadas/view`, `/admin/diagnostico/versioned-shadow-reads`; endpoints unchanged; requirements respectively `atividades:view`, `atividades:view`, `banco_dados:view`; B1 registrar reused; no namespaced endpoint or duplicate rule.
+- **Aluno boundary:** direct canonical imports for the snapshot and shadow functions; exact residual lazy-main keys: `ensure_admin_arquivos_table`, `get_admin_arquivo`, `get_effective_matriz_for_turma`, `get_student_request_update_alert`, `list_active_admin_alertas`, `mark_student_request_updates_seen`.
+- **Recovered/final gates:** first full 949 passed / 2 stale lazy-map failures / 17 deselected / 384.10s; final logging contract 14 passed; affected lane 241 passed / 106.86s; final full 954 passed / 17 deselected / 343.75s / exit 0. Routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402 = 263 allowed + 139 denied.
+- **Manifest:** exact candidate 24 paths = 8 production + 3 original-pool tests + 7 R1-expanded tests + 6 governance. `tests/test_activity_versioning_resolver.py` is the only authorized original-pool omission because no semantic delta is needed. All seven expanded tests are retained for candidate sandbox, ownership, lazy-map, B1 and RBAC compatibility. No 25th/26th path.
+- **Physical invariants:** canonical DB SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; protected residual SHA-256 `7388cfbc8f446410ef3c98ec0fa274c2c36ff4f3ef8ed2cd649bb1f3e1d3bb0e`; both unchanged; WAL/SHM/journal absent; route snapshot byte-identical; no pytest process or repository artifact. No EOL-only diff remains.
+- **Canonical contract:** `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md`.
+- **Accepted technical review:** FREE attempt `opencode` / `opencode/deepseek-v4-flash-free`, session `ses_0433de371ffefBa8J03FBmkoV4`, cost 0, exit 0: UNUSABLE DELIVERY / NO VERDICT; fallback `FALLBACK_FREE_UNUSABLE_DELIVERY`. Accepted `opencode-go` / `opencode-go/deepseek-v4-flash`, session `ses_043375c9affeYmMxqtbpNjNohl`, cost `0.01838004 USD`, exit 0, diff SHA-256 `a97275ac9f29cefcfd8ed4d3038ce37f552a886036481be0f7fd1c7f85a373b7`, mutation count 0, PASS, material findings 0.
+- **Adjudication:** LOW matrix status-label finding REJECTED AS NON-MATERIAL / SEMANTIC EQUIVALENCE PROVED.
+- **Scratch nonconformity:** external `baseline_main.py`, SHA-256 `2652d1213d7f0b5ac577ebddb528341448e9eb0afb8b41d051e5826a56d4af48`: OUTSIDE_REPOSITORY / NOT_STAGED / NOT_COMMITTED / SELECTIVELY_REMOVED / NO_CANDIDATE_OR_INDEX_IMPACT; do not recreate.
+- **Next exact action:** prove the 18-path production/test diff is byte-identical before/after this six-document synchronization; freeze the final full and governance hashes; obtain the bounded read-only review addendum; then stage exactly 24 paths individually, run index-visible gates, create one commit `Extract versioning subsystem ownership`, verify the remote baseline, push the feature branch by normal fast-forward and execute post-publication gates.
+- **Prohibitions:** no stage before accepted review; no commit/push before all gates; B3, Phase 5 and Phase 6 NOT AUTHORIZED; migration v4 PROHIBITED.
+
+## Historical state — PHASE 4-B1 CLOSED / ACCEPTED — PHASE 4 OPEN / INCREMENTAL IMPLEMENTATION
 
 ### Current operational handoff — PHASE 4-B1 Configurações/Mensagens blueprint (2026-07-31)
 

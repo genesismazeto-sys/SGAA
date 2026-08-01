@@ -8,6 +8,8 @@ import sys
 import pytest
 
 from app import academics, backup_settings, db as app_db, db_maintenance, presentation, reporting, requisition_policy, uploads
+from app.versioning import shadow_reads as versioning_shadow_reads
+from app.versioning import snapshots as versioning_snapshots
 from app.views import aluno as aluno_views
 from app.views import core as core_views
 import main
@@ -180,10 +182,18 @@ def test_direct_app_consumers_and_app_db_have_no_residual_lazy_edges():
     assert "ensure_reportes_table" not in db_keys
 
     assert "ensure_usuario_profile_schema" not in aluno_keys
-    assert {
+    assert not ({
         "maybe_run_versioned_resolver_shadow_read",
         "maybe_write_versioned_requisicao_snapshot",
-    } <= aluno_keys
+    } & aluno_keys)
+    assert (
+        aluno_views.maybe_run_versioned_resolver_shadow_read
+        is versioning_shadow_reads.maybe_run_versioned_resolver_shadow_read
+    )
+    assert (
+        aluno_views.maybe_write_versioned_requisicao_snapshot
+        is versioning_snapshots.maybe_write_versioned_requisicao_snapshot
+    )
     assert {"get_db_connection", "logger", "aluno_url"} <= core_keys
     assert "ensure_usuario_profile_schema" not in db_keys
     assert "ensure_requisicao_alert_receipts_table" not in db_keys

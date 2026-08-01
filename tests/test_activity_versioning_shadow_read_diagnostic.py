@@ -14,6 +14,7 @@ if BASE not in sys.path:
 
 import main
 from app import db as app_db_module
+from app.versioning import shadow_reads as versioning_shadow_reads
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -119,11 +120,11 @@ def test_shadow_diagnostic_without_log_returns_empty_payload(shadow_diagnostic_e
     _set_admin_session(client)
     missing_log = tmp_path / "missing" / "versioned_shadow_reads.log"
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(missing_log),
     )
-    monkeypatch.setattr(main, "_collect_versioned_shadow_read_log_paths", lambda: [str(missing_log)])
+    monkeypatch.setattr(versioning_shadow_reads, "_collect_versioned_shadow_read_log_paths", lambda: [str(missing_log)])
 
     response = client.get("/admin/diagnostico/versioned-shadow-reads")
     assert response.status_code == 200
@@ -164,11 +165,11 @@ def test_shadow_diagnostic_parser_filters_and_limit(shadow_diagnostic_env, monke
         ],
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(log_path),
     )
-    monkeypatch.setattr(main, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
+    monkeypatch.setattr(versioning_shadow_reads, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
 
     response = client.get("/admin/diagnostico/versioned-shadow-reads")
     assert response.status_code == 200
@@ -261,11 +262,11 @@ def test_shadow_diagnostic_read_only_and_flag_default_off(shadow_diagnostic_env,
         ],
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(log_path),
     )
-    monkeypatch.setattr(main, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
+    monkeypatch.setattr(versioning_shadow_reads, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
     monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
     assert main.is_versioned_resolver_shadow_read_enabled() is False
 
@@ -333,12 +334,12 @@ def test_shadow_diagnostic_prefers_dedicated_log_over_fallback_sources(
     )
 
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(dedicated_log),
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_collect_versioned_shadow_read_log_paths",
         lambda: [str(dedicated_log), str(app_log_1), str(app_log)],
     )
@@ -381,12 +382,12 @@ def test_shadow_diagnostic_fallback_reads_app_logs_when_dedicated_is_missing(
     )
 
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(dedicated_missing),
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_collect_versioned_shadow_read_log_paths",
         lambda: [str(dedicated_missing), str(app_log_1), str(app_log)],
     )
@@ -417,12 +418,12 @@ def test_shadow_diagnostic_e2e_create_request_logs_and_is_readable(
     probe_log = tmp_path / "logs" / "versioned_shadow_reads.log"
     probe_log.parent.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(probe_log),
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_collect_versioned_shadow_read_log_paths",
         lambda: [str(probe_log)],
     )
@@ -533,12 +534,12 @@ def test_shadow_diagnostic_flag_off_does_not_write_dedicated_log(
 
     probe_log = tmp_path / "logs" / "versioned_shadow_reads.log"
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: str(probe_log),
     )
     monkeypatch.setattr(
-        main,
+        versioning_shadow_reads,
         "_collect_versioned_shadow_read_log_paths",
         lambda: [str(probe_log)],
     )

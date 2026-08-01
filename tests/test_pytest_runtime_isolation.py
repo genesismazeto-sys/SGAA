@@ -42,13 +42,15 @@ def _disposable_repo_copy(dest):
     dest_path = Path(dest) / "SGAA_clean_baseline"
 
     result = subprocess.run(
-        ["git", "ls-files", "-z"],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
         capture_output=True,
         check=True,
         cwd=git_root,
     )
-    tracked = [f for f in result.stdout.decode("utf-8").strip().split("\0") if f]
-    for f in tracked:
+    repository_files = [
+        f for f in result.stdout.decode("utf-8").strip().split("\0") if f
+    ]
+    for f in repository_files:
         src = os.path.join(git_root, f)
         dst = os.path.join(str(dest_path), f)
         os.makedirs(os.path.dirname(dst), exist_ok=True)

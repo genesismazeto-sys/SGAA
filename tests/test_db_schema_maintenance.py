@@ -92,15 +92,13 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
 
 
 
-EXPECTED_ALUNO_LAZY_KEYS_AFTER_PROFILE_EXTRACTION = {
+EXPECTED_ALUNO_LAZY_KEYS_AFTER_VERSIONING_EXTRACTION = {
     "ensure_admin_arquivos_table",
     "get_admin_arquivo",
     "get_effective_matriz_for_turma",
     "get_student_request_update_alert",
     "list_active_admin_alertas",
     "mark_student_request_updates_seen",
-    "maybe_run_versioned_resolver_shadow_read",
-    "maybe_write_versioned_requisicao_snapshot",
 }
 
 
@@ -291,7 +289,10 @@ def test_usuario_profile_helper_owner_exports_and_direct_consumers():
     assert aluno_views.ensure_usuario_profile_schema is db_maintenance.ensure_usuario_profile_schema
 
     assert not hasattr(app_db, "_get_main_db_helpers")
-    assert _lazy_return_keys(aluno_views._get_main_helpers) == EXPECTED_ALUNO_LAZY_KEYS_AFTER_PROFILE_EXTRACTION
+    assert (
+        _lazy_return_keys(aluno_views._get_main_helpers)
+        == EXPECTED_ALUNO_LAZY_KEYS_AFTER_VERSIONING_EXTRACTION
+    )
     assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(app_db.init_db)
     assert 'helpers["ensure_usuario_profile_schema"]' not in inspect.getsource(aluno_views.aluno_meus_dados)
     assert "_get_main_helpers()" not in inspect.getsource(aluno_views.aluno_meus_dados)

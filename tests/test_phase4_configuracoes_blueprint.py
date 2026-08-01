@@ -519,7 +519,11 @@ def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():
     assert ADMIN_PACKAGE.is_dir()
     sources = list(ADMIN_PACKAGE.glob("*.py"))
-    assert {path.name for path in sources} == {"__init__.py", "configuracoes.py"}
+    assert {path.name for path in sources} == {
+        "__init__.py",
+        "configuracoes.py",
+        "versioning.py",
+    }
 
     for path in sources:
         source = path.read_text(encoding="utf-8")

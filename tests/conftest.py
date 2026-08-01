@@ -158,6 +158,8 @@ def _remove_owned_runtime_root(root, marker_token):
 
 @pytest.fixture(autouse=True)
 def _isolate_real_log_writes(monkeypatch):
+    from app.versioning import shadow_reads as versioning_shadow_reads
+
     main_module = sys.modules.get("main")
     if main_module is None:
         import main as main_module
@@ -175,7 +177,7 @@ def _isolate_real_log_writes(monkeypatch):
     log_dir.mkdir(parents=True, exist_ok=True)
     dedicated_log = os.path.join(str(log_dir), "versioned_shadow_reads.log")
     monkeypatch.setattr(
-        main_module,
+        versioning_shadow_reads,
         "_versioned_shadow_read_dedicated_log_path",
         lambda: dedicated_log,
     )

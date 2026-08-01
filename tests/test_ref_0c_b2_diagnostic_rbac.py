@@ -18,6 +18,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import shadow_reads as versioning_shadow_reads
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -117,8 +118,8 @@ def _configure_temporary_shadow_log(monkeypatch, tmp_path: Path) -> Path:
         "exception_type=RuntimeError exception_message=controlled_traceback\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(main, "_versioned_shadow_read_dedicated_log_path", lambda: str(log_path))
-    monkeypatch.setattr(main, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
+    monkeypatch.setattr(versioning_shadow_reads, "_versioned_shadow_read_dedicated_log_path", lambda: str(log_path))
+    monkeypatch.setattr(versioning_shadow_reads, "_collect_versioned_shadow_read_log_paths", lambda: [str(log_path)])
     return log_path
 
 
