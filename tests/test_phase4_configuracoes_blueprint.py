@@ -574,3 +574,79 @@ def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_ow
             usage["source_path"] == "app/views/admin/configuracoes.py"
             for usage in usages
         )
+
+
+def test_phase4_b1_governance_closeout_is_canonical():
+    documents = {
+        "handoff": (PROJECT_ROOT / "AGENT_HANDOFF.md").read_text(encoding="utf-8"),
+        "state": (PROJECT_ROOT / "PROJECT_STATE.md").read_text(encoding="utf-8"),
+        "index": (PROJECT_ROOT / "docs" / "DOCUMENTATION_INDEX.md").read_text(
+            encoding="utf-8"
+        ),
+        "plan": (
+            PROJECT_ROOT / "docs" / "mapeamento" / "05_avaliacao_refactor.md"
+        ).read_text(encoding="utf-8"),
+        "ledger": (
+            PROJECT_ROOT / "docs" / "refactor" / "ARCHITECTURE_REFACTOR_LEDGER.md"
+        ).read_text(encoding="utf-8"),
+        "contract": (
+            PROJECT_ROOT
+            / "docs"
+            / "refactor"
+            / "PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md"
+        ).read_text(encoding="utf-8"),
+    }
+
+    current = {
+        "handoff": documents["handoff"].split(
+            "### Current operational handoff — Macro Phase 3", 1
+        )[0],
+        "state": documents["state"].split("### Macro Phase 3", 1)[0],
+        "index": documents["index"].split("## Master plan", 1)[0],
+        "plan": documents["plan"].split(
+            "### Fase 4 — Quebrar `main.py` em blueprints admin", 1
+        )[1].split("### Fase 5", 1)[0],
+        "ledger": "\n".join(
+            line
+            for line in documents["ledger"].splitlines()
+            if line.startswith(("| PHASE4-B1 |", "| Fase 4 |", "| Fase 5 |", "| Fase 6 |"))
+        ),
+        "contract": documents["contract"],
+    }
+    accepted_commit = "cd8a76b2484abc376174332578ecd8be4b8206ea"
+    awaiting = "IMPLEMENTED / " + "AWAITING SUPERVISOR REVIEW"
+    formal_decision = (
+        "PHASE 4-B1: CLOSED / ACCEPTED",
+        "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION",
+        "PHASE 4-B2: NOT AUTHORIZED",
+        "PHASE 5: NOT AUTHORIZED",
+        "PHASE 6: NOT AUTHORIZED",
+        "Migration v4: PROHIBITED",
+    )
+
+    for name in ("handoff", "state"):
+        assert all(token in current[name] for token in formal_decision), name
+
+    for name, block in current.items():
+        lower_block = block.lower()
+        assert "CLOSED / ACCEPTED" in block, name
+        assert accepted_commit in block, name
+        assert awaiting not in block, name
+        assert "not closed" in lower_block, name
+        assert "B2" in block and "not authorized" in lower_block, name
+        assert "phase 5" in lower_block and "phase 6" in lower_block, name
+        assert "migration v4" in lower_block and "prohibit" in lower_block, name
+
+    assert "`app/views/admin/acesso.py` — NOT IMPLEMENTED" in current["plan"]
+    plan_words = " ".join(current["plan"].split())
+    ledger_words = " ".join(current["ledger"].split())
+    assert "`dashboard.py` and `admin_meus_dados` ownership remain unresolved" in plan_words
+    assert "`dashboard.py` and `admin_meus_dados` ownership unresolved" in ledger_words
+
+    discovery = current["contract"].split("5. `utils/messages.py`", 1)[1].split(
+        "Test paths", 1
+    )[0]
+    assert "filesystem-recursive" in discovery
+    assert "repository tree" in discovery
+    assert "does not query or filter through the Git index" in discovery
+    assert "clean-worktree and repository-boundary assumptions" in discovery

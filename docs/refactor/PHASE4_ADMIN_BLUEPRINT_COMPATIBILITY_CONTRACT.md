@@ -4,9 +4,11 @@
 
 This document is the canonical compatibility contract for the incremental Phase 4 admin-blueprint extraction.
 
-Current authorized unit: **PHASE 4-B1 — IMPLEMENTED / AWAITING SUPERVISOR REVIEW**.
+Current status: **PHASE 4-B1 — CLOSED / ACCEPTED**.
 
 Phase 4 is not closed. Phase 4-B2 is not authorized. Phase 5 and Phase 6 are not authorized. Migration v4 is prohibited.
+
+Accepted technical commit: `cd8a76b2484abc376174332578ecd8be4b8206ea`, subject `Extract admin configuration blueprint`, parent `7f393c72ad3e9d70eae4c06ee41e0d74881e40f2`. The registrar, exact legacy-endpoint strategy, factory default/opt-out behavior, canonical helper ownership and identity-based `main` compatibility exports are accepted. Compatibility exports remain transitional; cleanup remains deferred until the final Phase 4 cohort. B2 is not authorized.
 
 ## 2. Accepted endpoint-preservation strategy
 
@@ -119,7 +121,7 @@ Production paths are exactly:
 2. `main.py`;
 3. `app/views/admin/__init__.py`;
 4. `app/views/admin/configuracoes.py`;
-5. `utils/messages.py`, limited to deterministic recursive AST/read-only discovery under `app/views/**/*.py` and static `LegacyRouteSpec` route metadata.
+5. `utils/messages.py`, limited to deterministic filesystem-recursive AST/read-only discovery in the repository tree under `app/views/**/*.py` and static `LegacyRouteSpec` route metadata. The implementation does not query or filter through the Git index; clean-worktree and repository-boundary assumptions remain enforced by the execution protocol.
 
 Test paths are `tests/test_phase4_configuracoes_blueprint.py` and `tests/test_csrf_inventory_audit.py`; the latter is limited to deterministic recursive canonical-owner discovery and transitional `main` compatibility identity for the eight moved handlers. Governance paths are this contract, `docs/DOCUMENTATION_INDEX.md`, `docs/mapeamento/05_avaliacao_refactor.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, `PROJECT_STATE.md`, and `AGENT_HANDOFF.md`. The complete authorized manifest is exactly 13 paths; no fourteenth path is authorized.
 

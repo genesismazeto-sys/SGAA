@@ -78,10 +78,13 @@
 - **Macro Phase 3:** CLOSED / ACCEPTED. The canonical Phase 3 contract is final and
   accepted; B11 and B11-R1 are the accepted technical/governance baseline. B11-R1
   updated the existing contract and created no competing Phase 3 contract.
-- **PHASE 4-B1:** IMPLEMENTED / AWAITING SUPERVISOR REVIEW. Exactly eight
-  Configurações/Mensagens routes and eight settings helpers moved under the first admin
-  blueprint with global legacy endpoints preserved. Phase 4 is not closed; B2, Phase 5,
-  Phase 6 and migration v4 remain unauthorized.
+- **PHASE 4-B1:** CLOSED / ACCEPTED at technical commit
+  `cd8a76b2484abc376174332578ecd8be4b8206ea` (`Extract admin configuration blueprint`).
+  Exactly eight Configurações/Mensagens routes and eight settings helpers moved under the
+  accepted endpoint-preserving registrar/factory/identity-export pattern. B1-R1 uses
+  deterministic filesystem-recursive repository-tree discovery under `app/views/**/*.py`;
+  it does not query or filter through the Git index. Phase 4 is not closed; B2, Phase 5 and
+  Phase 6 are not authorized, and migration v4 remains prohibited.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -262,9 +265,10 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   contract. B11 and B11-R1 are CLOSED / ACCEPTED; all mandatory Macro Phase 3
   objectives are satisfied. Optional repository-layer extraction is not implemented
   and is not a closure blocker or hidden Phase 4 assignment.
-- **Fase 4 — Blueprint extraction**: IN PROGRESS / B1 IMPLEMENTED / AWAITING SUPERVISOR
-  REVIEW. B1 establishes the compatibility registrar and exact eight-route
-  Configurações/Mensagens cohort. Phase 4 is not closed and B2 is unauthorized.
+- **Fase 4 — Blueprint extraction**: OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED /
+  ACCEPTED. B1 commit `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the
+  accepted compatibility registrar and exact eight-route Configurações/Mensagens cohort.
+  Phase 4 is not closed and B2 is not authorized.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
@@ -272,8 +276,9 @@ Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
 Phase 2 is CLOSED / ACCEPTED. Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 are
 CLOSED / ACCEPTED at technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`
 and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
-implemented and awaiting supervisor review; B2, migration v4, Phase 5 and Phase 6 remain
-**unauthorized for execution**. R1, R2 and R3 are CLOSED / ACCEPTED,
+CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; Phase 4 is not
+closed. B2, Phase 5 and Phase 6 remain **NOT AUTHORIZED**, and migration v4 remains
+**PROHIBITED**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
 POST-MUTATION NONCONFORMITY, and R7 is CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT
 PUBLISHED — Historical snapshot custody: OPEN / DESTINATION PROVISIONED / COPY VERIFIED /
@@ -307,7 +312,7 @@ table of every phase.
 | `REF_0C_D_R1_ROUTE_COMPLETE_ACTOR_IMMUTABILITY.md` | REF-0C-D-R1 | Route-complete actor matrix + browser/AJAX denial contracts |
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
 | `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11/B11-R1 | Final accepted Macro Phase 3 single-init, caller, schema-owner, startup-order, migration and transaction contract; B11 establishes `app.db` as sole init owner, preserves `main.init_db` identity compatibility, removes all lazy bridge and `app.db → main` dependencies, directly owns preferred-matrix selection and startup settings, and records exact per-boundary failure postconditions; B11-R1 records accepted publication/review governance |
-| `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | Endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import |
+| `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import. Phase 4 not closed; B2 not authorized. |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
