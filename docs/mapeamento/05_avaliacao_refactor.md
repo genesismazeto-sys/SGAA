@@ -345,7 +345,7 @@ The Phase 3 closeout granted no Phase 4 authority. That historical prohibition w
 superseded only for the explicit PHASE 4-B1 and PHASE 4-B2 units below. Migration v4
 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED / ACCEPTED / B2 IMPLEMENTED; AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED / ACCEPTED / B2 CLOSED / ACCEPTED
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -363,8 +363,8 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       17 deselected; post-publication 91 passed; routes 131; endpoints 130; governed pairs
       134; RBAC unmapped 0; independent Flash FREE review PASS; exact 13-path manifest; no
       database, migration, template, JavaScript, RBAC or snapshot delta.
-- **PHASE 4-B2 — IMPLEMENTED; AWAITING SUPERVISOR REVIEW; NOT CLOSED / NOT
-      ACCEPTED:** baseline
+- **PHASE 4-B2 — CLOSED / ACCEPTED:** published technical commit
+      `17e468ad938e873e1f9e9c303808ad31b9f3806b`, parent
       `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`. Canonical owners are
       `app.versioning.resolver`, `app.versioning.snapshots`,
       `app.versioning.shadow_reads` and `app.views.admin.versioning`; `main` retains
@@ -372,10 +372,11 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       existing RBAC requirements are preserved through the B1 registrar. The aluno
       lazy-main map drops the two versioning entries and retains exactly six accepted
       residual dependencies. R1 repairs the repository-root dedicated/fallback logs and
-      preserves logger identity `main` without importing `main`. Final local evidence:
+      preserves logger identity `main` without importing `main`. Accepted evidence:
       contract 14; affected lane 241; full hermetic 954 passed / 17 deselected /
       343.75s / exit 0; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0;
-      actor matrix 402 = 263 allowed + 139 denied; exact 24-path candidate = 8 production
+      actor matrix 402 = 263 allowed + 139 denied; index-visible 271 passed;
+      post-publication 282 passed; exact 24-path artifact = 8 production
       + 10 tests + 6 governance; canonical
       database, protected residual and route snapshot unchanged. Contract:
       `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md`. The FREE attempt
@@ -389,8 +390,10 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       SEMANTIC EQUIVALENCE PROVED. External `baseline_main.py` scratch, SHA-256
       `2652d1213d7f0b5ac577ebddb528341448e9eb0afb8b41d051e5826a56d4af48`, was outside
       the repository, not staged/committed, selectively removed and had no candidate/index
-      impact. The bounded documentary addendum, selective publication and post-publication
-      proof remain pending.
+      impact. The final documentary review addendum used `flash_free`,
+      `opencode/deepseek-v4-flash-free`, session `ses_0431aa4d7ffev4hTZImBDA86Ca`, cost 0,
+      and returned PASS with no fallback. Publication and post-publication verification are
+      complete.
 - [ ] `app/views/admin/requisicoes.py`
 - [ ] `app/views/admin/atividades.py` (+ catálogo versionado)
 - [ ] `app/views/admin/matrizes.py`
@@ -400,11 +403,10 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - [ ] `app/views/admin/acesso.py` — NOT IMPLEMENTED; the combined Acesso work is not complete
       and no later Configurações cohort is included in accepted B1.
 - **Subsystem de versionamento:** movido para `app/versioning/` (resolver, snapshot,
-      shadow read, diagnóstico) por B2 — IMPLEMENTED; AWAITING SUPERVISOR REVIEW;
-      not yet CLOSED / ACCEPTED.
+      shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
+      extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-Phase 4 is not closed. B2 is implemented and awaiting supervisor review, not accepted. B3 is not
-authorized. `dashboard.py` and `admin_meus_dados`
+Phase 4 is not closed. PHASE 4-B3: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados`
 ownership remain unresolved and are not complete. Phase 5 and Phase 6 are not authorized;
 migration v4 remains prohibited. No later cohort is marked complete.
 

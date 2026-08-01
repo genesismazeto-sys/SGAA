@@ -2,13 +2,14 @@
 
 ## 1. Status and authority
 
-- **Unit:** PHASE 4-B2 / R2 documentary synchronization and selective publication.
-- **Status:** **PHASE 4-B2: IMPLEMENTED / AWAITING SUPERVISOR REVIEW**.
-- **Baseline:** `2fbe4954106dc8d410f6495ca8bd4b1956b326d2` (`Record acceptance of Phase 4-B1`).
+- **Unit:** PHASE 4-B2 / B2-R3 external supervisor acceptance closeout.
+- **Status:** **PHASE 4-B2: CLOSED / ACCEPTED**.
+- **Published commit:** `17e468ad938e873e1f9e9c303808ad31b9f3806b` (`Extract versioning subsystem ownership`), parent `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`.
 - **Workspace/branch:** `D:\OneDrive\Programação\SGAA_clean_baseline` / `refactor/architecture-safety-net`.
-- **Actual manifest:** exactly 24 paths: 8 production, 10 tests and 6 governance.
-- **Acceptance boundary:** this contract does not claim B2 CLOSED / ACCEPTED. External supervisor acceptance remains pending.
-- **Preserved authority:** PHASE 4-B1 remains CLOSED / ACCEPTED. PHASE 4-B3, Phase 5 and Phase 6 are NOT AUTHORIZED. Migration v4 remains PROHIBITED.
+- **Published manifest:** exactly 24 paths: 8 production, 10 tests and 6 governance.
+- **Post-publication verification:** COMPLETE.
+- **External supervisor acceptance:** RECORDED BY B2-R3.
+- **Preserved authority:** PHASE 4-B1 remains CLOSED / ACCEPTED. PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION. PHASE 4-B3: NOT AUTHORIZED. Phase 5: NOT AUTHORIZED. Phase 6: NOT AUTHORIZED. Migration v4: PROHIBITED.
 
 ## 2. Purpose and bounded production scope
 
@@ -207,7 +208,7 @@ No 25th or 26th path is required.
 
 ## 14. Accepted technical review and process evidence
 
-The accepted technical review applies to the complete 24-path pre-synchronization diff, SHA-256 `a97275ac9f29cefcfd8ed4d3038ce37f552a886036481be0f7fd1c7f85a373b7` (234297 bytes). Its production/test portion is frozen separately during R2 and must remain byte-identical through documentary synchronization.
+The accepted technical review applies to the complete 24-path pre-synchronization diff, SHA-256 `a97275ac9f29cefcfd8ed4d3038ce37f552a886036481be0f7fd1c7f85a373b7` (234297 bytes). Its production/test portion was frozen separately during R2 and remained byte-identical through documentary synchronization.
 
 - FREE attempt: provider `opencode`; model `opencode/deepseek-v4-flash-free`; session `ses_0433de371ffefBa8J03FBmkoV4`; cost 0; exit 0; result **UNUSABLE DELIVERY / NO VERDICT**.
 - Fallback classification: `FALLBACK_FREE_UNUSABLE_DELIVERY`.
@@ -216,19 +217,10 @@ The accepted technical review applies to the complete 24-path pre-synchronizatio
 
 An external reviewer continuation created `baseline_main.py` outside the repository. The artifact had SHA-256 `2652d1213d7f0b5ac577ebddb528341448e9eb0afb8b41d051e5826a56d4af48` and is classified **EXTERNAL_REVIEW_SCRATCH / OUTSIDE_REPOSITORY / NOT_STAGED / NOT_COMMITTED / SELECTIVELY_REMOVED / NO_CANDIDATE_OR_INDEX_IMPACT**. It must not be recreated.
 
-R2 requires a bounded read-only review addendum of only the synchronized six-document delta. It is not a second technical review. The addendum must prove mutation count 0 and return PASS before staging.
+The final documentary review addendum covered only the synchronized six-document delta and did not repeat the technical review. Route `flash_free`; provider/model `opencode` / `opencode/deepseek-v4-flash-free`; session `ses_0431aa4d7ffev4hTZImBDA86Ca`; cost 0; verdict **PASS**; no fallback.
 
-## 15. Publication boundary and next action
+## 15. Publication and acceptance completion
 
-Before publication:
+Publication completed as one normal fast-forward of `refactor/architecture-safety-net`. The accepted technical commit is `17e468ad938e873e1f9e9c303808ad31b9f3806b`, with the exact 24-path manifest and parent stated above. Index-visible qualification passed 271 tests; post-publication qualification passed 282 tests. Final published diff SHA-256: `2a98b4a4ff9747745335259d0e5aad2c18eb9a8c0bc4762c1ea2681bc7571eec`. Published technical diff SHA-256: `76f8089b577f04c7d9f4b2090627c1767ec2f2f4b9b3abcb6e973c1e41959e50`. Technical physical aggregate: `d54bec738de05934906e03c610f513dac18269206fdf3a6de9b0a79d64cd99a3`.
 
-1. preserve the exact 24-path Git manifest and physical invariants;
-2. prove the 18-path production/test diff and individual file hashes are unchanged across six-document synchronization;
-3. freeze the complete binary diff and six-document delta, then obtain and adjudicate the bounded review addendum;
-4. selectively stage every actual path individually;
-5. prove staged manifest/hash equals the reviewed candidate and run index-visible gates;
-6. create exactly one commit with subject `Extract versioning subsystem ownership` and parent `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`;
-7. verify the live remote remains at the baseline, then push only `refactor/architecture-safety-net` by normal fast-forward;
-8. execute post-publication qualification and Git/physical proofs.
-
-B2 remains **AWAITING SUPERVISOR REVIEW**, not CLOSED / ACCEPTED. B3, Phase 5 and Phase 6 remain NOT AUTHORIZED. Migration v4 remains PROHIBITED.
+B2 is **CLOSED / ACCEPTED** and has no demonstrated technical residual or open correction. The stale R2 prepublication continuation instructions are historical and superseded by this B2-R3 closeout. PHASE 4 remains **OPEN / INCREMENTAL IMPLEMENTATION**. PHASE 4-B3: NOT AUTHORIZED. Phase 5: NOT AUTHORIZED. Phase 6: NOT AUTHORIZED. Migration v4: PROHIBITED.

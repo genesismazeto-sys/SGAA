@@ -17,6 +17,16 @@ MAIN_PATH = PROJECT_ROOT / "main.py"
 ALUNO_PATH = PROJECT_ROOT / "app" / "views" / "aluno.py"
 VERSIONING_PACKAGE = PROJECT_ROOT / "app" / "versioning"
 ADMIN_VERSIONING_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "versioning.py"
+HANDOFF_PATH = PROJECT_ROOT / "AGENT_HANDOFF.md"
+PROJECT_STATE_PATH = PROJECT_ROOT / "PROJECT_STATE.md"
+DOCUMENTATION_INDEX_PATH = PROJECT_ROOT / "docs" / "DOCUMENTATION_INDEX.md"
+MASTER_PLAN_PATH = PROJECT_ROOT / "docs" / "mapeamento" / "05_avaliacao_refactor.md"
+ARCHITECTURE_LEDGER_PATH = (
+    PROJECT_ROOT / "docs" / "refactor" / "ARCHITECTURE_REFACTOR_LEDGER.md"
+)
+VERSIONING_CONTRACT_PATH = (
+    PROJECT_ROOT / "docs" / "refactor" / "PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md"
+)
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 ROUTE_MATRIX = (
@@ -85,6 +95,62 @@ def _top_level_functions(path: Path) -> set[str]:
         for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
+
+
+def test_phase4_b2_current_governance_records_external_acceptance():
+    handoff = HANDOFF_PATH.read_text(encoding="utf-8").split("## Historical state", 1)[0]
+    project_state = PROJECT_STATE_PATH.read_text(encoding="utf-8").split(
+        "## Historical authoritative state", 1
+    )[0]
+    documentation_index = DOCUMENTATION_INDEX_PATH.read_text(encoding="utf-8").split(
+        "- Accepted technical commits:", 1
+    )[0]
+    master_plan = MASTER_PLAN_PATH.read_text(encoding="utf-8").split(
+        "### Fase 4 —", 1
+    )[1].split("### Fase 5 —", 1)[0]
+    ledger_lines = ARCHITECTURE_LEDGER_PATH.read_text(encoding="utf-8").splitlines()
+    ledger = "\n".join(
+        line
+        for line in ledger_lines
+        if line.startswith(("| PHASE4-B2 |", "| Fase 4 |", "| Fase 5 |", "| Fase 6 |"))
+    )
+    contract = VERSIONING_CONTRACT_PATH.read_text(encoding="utf-8")
+    current_records = (
+        handoff,
+        project_state,
+        documentation_index,
+        master_plan,
+        ledger,
+        contract,
+    )
+
+    accepted_commit = "17e468ad938e873e1f9e9c303808ad31b9f3806b"
+    for record in current_records:
+        assert "PHASE 4-B2" in record or "PHASE4-B2" in record
+        assert "CLOSED / ACCEPTED" in record
+        assert accepted_commit in record
+        assert "post-publication" in record.lower()
+        assert "complete" in record.lower()
+
+    current_text = "\n".join(current_records).lower()
+    for stale_claim in (
+        "stage is pending",
+        "staging is pending",
+        "commit is pending",
+        "push is pending",
+        "review addendum is pending",
+    ):
+        assert stale_claim not in current_text
+
+    assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in handoff
+    assert "PHASE 4-B3: NOT AUTHORIZED" in current_text.upper()
+    assert "PHASE 5: NOT AUTHORIZED" in current_text.upper()
+    assert "PHASE 6: NOT AUTHORIZED" in current_text.upper()
+    assert "MIGRATION V4: PROHIBITED" in current_text.upper()
+    assert "- [ ] `app/views/admin/requisicoes.py`" in master_plan
+    assert "- [ ] `app/views/admin/atividades.py`" in master_plan
+    assert "- [ ] `app/views/admin/matrizes.py`" in master_plan
+    assert "prerequisite versioning extraction" in " ".join(master_plan.split())
 
 
 def test_versioning_package_import_isolated_from_main_and_side_effects(tmp_path):

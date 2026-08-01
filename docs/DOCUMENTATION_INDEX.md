@@ -87,14 +87,16 @@
   accepted endpoint-preserving registrar/factory/identity-export pattern. B1-R1 uses
   deterministic filesystem-recursive repository-tree discovery under `app/views/**/*.py`;
   it does not query or filter through the Git index.
-- **PHASE 4-B2:** IMPLEMENTED; AWAITING SUPERVISOR REVIEW; NOT CLOSED / NOT
-  ACCEPTED. Baseline `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`; exact 24-path
-  candidate: 8 production, 10 tests and 6 governance.
+- **PHASE 4-B2:** CLOSED / ACCEPTED. Published technical commit
+  `17e468ad938e873e1f9e9c303808ad31b9f3806b` (`Extract versioning subsystem ownership`),
+  parent `2fbe4954106dc8d410f6495ca8bd4b1956b326d2`; exact 24-path artifact:
+  8 production, 10 tests and 6 governance. Post-publication verification: COMPLETE.
   Resolver, snapshot and shadow-read ownership moved to `app.versioning`; exactly three
   legacy diagnostic endpoints moved to `app.views.admin.versioning`; aluno retains six
   lazy-main dependencies. R1 preserves repository-root logging paths and logger `main`.
   Recovered first full 949 passed / 2 failed / 17 deselected; final contract 14, affected
-  lane 241 and full hermetic 954 passed / 17 deselected / 343.75s / exit 0. Routes 131,
+  lane 241, full hermetic 954 passed / 17 deselected / 343.75s / exit 0, index-visible
+  271 passed and post-publication 282 passed. Routes 131,
   endpoints 130, governed pairs 134, RBAC unmapped 0 and actor matrix 402. Canonical
   database, protected residual and route snapshot remain unchanged. The FREE review attempt
   (`opencode/deepseek-v4-flash-free`, session `ses_0433de371ffefBa8J03FBmkoV4`, cost 0,
@@ -107,10 +109,12 @@
   External `baseline_main.py` scratch (SHA-256
   `2652d1213d7f0b5ac577ebddb528341448e9eb0afb8b41d051e5826a56d4af48`) was outside the
   repository, never staged/committed, selectively removed and had no candidate/index impact.
-  The bounded documentary review addendum, selective publication and post-publication proof
-  remain pending.
-  Phase 4 is not closed; B3, Phase 5 and Phase 6 are not authorized, and migration v4
-  remains prohibited.
+  Final documentary review addendum: route `flash_free`, provider/model
+  `opencode/deepseek-v4-flash-free`, session `ses_0431aa4d7ffev4hTZImBDA86Ca`, cost 0,
+  PASS, no fallback. Final published diff SHA-256
+  `2a98b4a4ff9747745335259d0e5aad2c18eb9a8c0bc4762c1ea2681bc7571eec`.
+  Phase 4 remains OPEN / INCREMENTAL IMPLEMENTATION and is not closed. PHASE 4-B3: NOT AUTHORIZED.
+  Phase 5: NOT AUTHORIZED. Phase 6: NOT AUTHORIZED. Migration v4: PROHIBITED.
 - Accepted technical commits: `68f52fb902c726cc79ff92955e58f95ac0b21cd7` (U1), `5932dff2d6dbd63e4a1f52ffd649ea33577535d0` (U2), `c4fd2dd1852011a0ec860493ed4cf53834584c42` (U3), `742b67c0623bdf41e292280a11a40d2fddad717c` (U4), `8b55230314605dcf9295072c109f04bea59323c3` (U5)
 - **PHASE-0-R9A pytest runtime isolation:** CLOSED / ACCEPTED
 - **PHASE-0-R9 smoke-flow contract and evidence:** CLOSED / ACCEPTED via R10 docs-only external acceptance closeout
@@ -292,12 +296,13 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   objectives are satisfied. Optional repository-layer extraction is not implemented
   and is not a closure blocker or hidden Phase 4 assignment.
 - **Fase 4 — Blueprint extraction**: OPEN / INCREMENTAL IMPLEMENTATION / B1 CLOSED /
-  ACCEPTED / B2 IMPLEMENTED; AWAITING SUPERVISOR REVIEW; NOT CLOSED. B1 commit
+  ACCEPTED / B2 CLOSED / ACCEPTED; Phase 4 is not closed. B1 commit
   `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the accepted compatibility
   registrar and exact eight-route Configurações/Mensagens cohort. B2 establishes the
   locally qualified versioning owners, exactly three diagnostics and six-key aluno lazy
-  boundary; accepted technical review PASS is recorded, while the documentary addendum and
-  publication remain pending. Phase 4 is not closed and B3 is not authorized.
+  boundary. B2 technical commit `17e468ad938e873e1f9e9c303808ad31b9f3806b`, technical
+  review PASS, documentary addendum PASS, publication and post-publication verification are
+  recorded. B3 is not authorized.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
 
@@ -305,8 +310,9 @@ Phase 1 is CLOSED / ACCEPTED. U1, U2, U3, U4, U5 and U6 are CLOSED / ACCEPTED.
 Phase 2 is CLOSED / ACCEPTED. Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 are
 CLOSED / ACCEPTED at technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`
 and governance commit `630d4eb448b992bdc3beb28752c30717989312bb`. PHASE 4-B1 is
-CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; Phase 4 is not
-closed. B2 is implemented but not accepted; B3, Phase 5 and Phase 6 remain **NOT
+CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; PHASE 4-B2 is
+CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; Phase 4 is not
+closed. B3, Phase 5 and Phase 6 remain **NOT
 AUTHORIZED**, and migration v4 remains
 **PROHIBITED**. R1, R2 and R3 are CLOSED / ACCEPTED,
 R4 is EXECUTED, R5 is CLOSED / ACCEPTED, R6 is CLOSED / ACCEPTED WITH DECLARED
@@ -343,7 +349,7 @@ table of every phase.
 | `PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | PHASE-0-R9 | Five smoke flows (admin/aluno login, create/process requisicao, local backup) |
 | `PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | PHASE 3-B5/B6/B7/B8/B9/B10/B11/B11-R1 | Final accepted Macro Phase 3 single-init, caller, schema-owner, startup-order, migration and transaction contract; B11 establishes `app.db` as sole init owner, preserves `main.init_db` identity compatibility, removes all lazy bridge and `app.db → main` dependencies, directly owns preferred-matrix selection and startup settings, and records exact per-boundary failure postconditions; B11-R1 records accepted publication/review governance |
 | `PHASE4_ADMIN_BLUEPRINT_COMPATIBILITY_CONTRACT.md` | PHASE 4-B1 | CLOSED / ACCEPTED at `cd8a76b2484abc376174332578ecd8be4b8206ea`; endpoint-preserving admin blueprint pattern: immutable legacy route specs, collision-safe `record_once` registrar, exact eight Configurações/Mensagens routes, settings-helper ownership, factory opt-out, `main` identity exports, and no app-to-main import. Its B2 prohibition is the preserved B1 phase-time boundary, superseded only by the separate B2 order/contract below. |
-| `PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | PHASE 4-B2 | IMPLEMENTED; AWAITING SUPERVISOR REVIEW; NOT ACCEPTED; canonical resolver/snapshot/shadow-read owners, exact three legacy diagnostics, six-key aluno lazy boundary, repository-root logging and logger-identity compatibility; final local full 954/17; exact 24-path candidate; technical review PASS; documentary addendum/publication pending. |
+| `PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | PHASE 4-B2 | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; canonical resolver/snapshot/shadow-read owners, exact three legacy diagnostics, six-key aluno lazy boundary, repository-root logging and logger-identity compatibility; full 954/17; index-visible 271; post-publication 282; exact 24-path artifact; technical review PASS; documentary addendum PASS; publication complete. |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -371,7 +377,7 @@ The original REF-0C-D scope was documented in
 | R9A pytest runtime isolation | `tests/test_pytest_runtime_isolation.py` + session-owned `tests/conftest.py` runtime root | CLOSED / ACCEPTED |
 | R9 smoke flows | `tests/test_phase_0_smoke_flows.py` (5 tests) + `docs/refactor/PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.md` | CLOSED / ACCEPTED via R10 |
 | Phase 3-B5/B6/B7/B8/B9/B10/B11 schema/startup/transaction contract | `tests/test_phase3_schema_startup_transaction_contract.py` + `tests/test_phase3_final_init_cutover.py` + `tests/test_atividades_schema_migration_v2.py` + `tests/test_activity_versioning_core_migration_v3.py` + `tests/test_backup_settings_ownership.py` + `tests/test_activity_versioning_leaf_schema_ownership.py` + `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md` | B5 through B11-R1 CLOSED / ACCEPTED; B11 technical commit `c9009bf3d68950ad4e0499b65928603e84bee341`; B11-R1 governance commit `630d4eb448b992bdc3beb28752c30717989312bb`; review APPROVE; Macro Phase 3 CLOSED / ACCEPTED; Phase 4 NOT AUTHORIZED |
-| Phase 4-B2 versioning ownership and compatibility | `tests/test_phase4_versioning_subsystem.py` + versioning resolver/shadow/diagnostic/aluno/ownership/runtime/route/RBAC gates + `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | IMPLEMENTED; AWAITING SUPERVISOR REVIEW; contract 14; affected 241; full 954 passed / 17 deselected; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; accepted technical review PASS; not accepted/published |
+| Phase 4-B2 versioning ownership and compatibility | `tests/test_phase4_versioning_subsystem.py` + versioning resolver/shadow/diagnostic/aluno/ownership/runtime/route/RBAC gates + `docs/refactor/PHASE4_VERSIONING_SUBSYSTEM_CONTRACT.md` | CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; contract 14; affected 241; full 954 passed / 17 deselected; index-visible 271; post-publication 282; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; technical review PASS; documentary addendum PASS; publication complete |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 
