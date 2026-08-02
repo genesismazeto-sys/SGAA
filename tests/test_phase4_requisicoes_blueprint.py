@@ -23,6 +23,7 @@ ARTIFACTS_DIR = PROJECT_ROOT / "tests" / "_artifacts"
 ROUTE_INVENTORY_PATH = ARTIFACTS_DIR / "route_inventory_baseline.json"
 CSRF_OFF_PATH = ARTIFACTS_DIR / "csrf_inventory_shadow_off.json"
 CSRF_ON_PATH = ARTIFACTS_DIR / "csrf_inventory_shadow_on.json"
+B4_2_BASELINE_COMMIT = "c587098152e97d125f41a2d26f2f414c10ae5676"
 
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
@@ -410,7 +411,7 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         assert snapshot_path.is_file(), f"missing CSRF snapshot: {snapshot_path}"
         relative = snapshot_path.relative_to(PROJECT_ROOT).as_posix()
         old_result = subprocess.run(
-            ["git", "show", f"HEAD:{relative}"],
+            ["git", "show", f"{B4_2_BASELINE_COMMIT}:{relative}"],
             capture_output=True,
             text=True,
             encoding="utf-8",

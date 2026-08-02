@@ -243,31 +243,59 @@ def test_b41_governance_records_exact_scope_and_preserves_later_prohibitions():
     }
     for name, text in documents.items():
         assert "PHASE 4-B4.1" in text or "PHASE4-B4.1" in text, name
-    current = "\n".join(documents.values()).upper()
-    assert "PHASE 4-B4.2: NOT AUTHORIZED" in current
-    assert "PHASE 5: NOT AUTHORIZED" in current
-    assert "PHASE 6: NOT AUTHORIZED" in current
-    assert "MIGRATION V4: PROHIBITED" in current
-    assert "NO ROUTE MOVEMENT" in current
-    assert "EXACT 9 REQUISICOES ROUTES REMAIN IN MAIN.PY" in current
-    assert "- [ ] `app/views/admin/requisicoes.py`" in documents["plan"]
+
+    current = "\n".join(
+        (
+            documents["handoff"].split("## Historical state", 1)[0],
+            documents["state"].split("## Historical authoritative state", 1)[0],
+        )
+    ).upper()
+    assert "PHASE 4-B4.2: CLOSED / ACCEPTED" in current
+    assert "PHASE 4-B5-P: IMPLEMENTED / AWAITING SUPERVISOR REVIEW" in current
+    assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in current
+    assert "PHASE 5" in current and "NOT AUTHORIZED" in current
+    assert "PHASE 6" in current and "NOT AUTHORIZED" in current
+    assert "MIGRATION V4" in current and "PROHIBITED" in current
+    assert "- [x] `app/views/admin/requisicoes.py`" in documents["plan"]
     for path in ("app/settings.py", "app/requisitions.py", "app/matrix_scope.py"):
         assert path in documents["contract"]
 
-    current_slices = {
-        "handoff": documents["handoff"].split("## Historical state", 1)[0],
-        "state": documents["state"].split("## Historical authoritative state", 1)[0],
-        "index": documents["index"].split("- **PHASE 4-B4.1:**", 1)[1].split("- Accepted technical commits:", 1)[0],
-        "plan": documents["plan"].split("- [x] PHASE 4-B4.1", 1)[1].split("### Fase 5", 1)[0],
+    accepted_b41_commit = "c587098152e97d125f41a2d26f2f414c10ae5676"
+    accepted_paths = {
+        "handoff": PROJECT_ROOT / "AGENT_HANDOFF.md",
+        "state": PROJECT_ROOT / "PROJECT_STATE.md",
+        "index": PROJECT_ROOT / "docs" / "DOCUMENTATION_INDEX.md",
+        "plan": PROJECT_ROOT / "docs" / "mapeamento" / "05_avaliacao_refactor.md",
+        "ledger": PROJECT_ROOT / "docs" / "refactor" / "ARCHITECTURE_REFACTOR_LEDGER.md",
+        "contract": CONTRACT_PATH,
+    }
+    accepted_documents = {}
+    for name, path in accepted_paths.items():
+        relative = path.relative_to(PROJECT_ROOT).as_posix()
+        result = subprocess.run(
+            ["git", "show", f"{accepted_b41_commit}:{relative}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 0, result.stderr
+        accepted_documents[name] = result.stdout
+
+    accepted_b41_slices = {
+        "handoff": accepted_documents["handoff"].split("## Historical state", 1)[0],
+        "state": accepted_documents["state"].split("## Historical authoritative state", 1)[0],
+        "index": accepted_documents["index"].split("- **PHASE 4-B4.1:**", 1)[1].split("- Accepted technical commits:", 1)[0],
+        "plan": accepted_documents["plan"].split("- [x] PHASE 4-B4.1", 1)[1].split("### Fase 5", 1)[0],
         "ledger": next(
             line
-            for line in documents["ledger"].splitlines()
+            for line in accepted_documents["ledger"].splitlines()
             if line.startswith("| PHASE4-B4.1 |")
         ),
-        "contract": documents["contract"],
+        "contract": accepted_documents["contract"],
     }
-    current = "\n".join(current_slices.values())
-    upper = current.upper()
+    accepted_b41 = "\n".join(accepted_b41_slices.values())
+    upper = accepted_b41.upper()
 
     assert "PHASE 4-B4-A: CLOSED / ACCEPTED" in upper
     assert "PHASE 4-B4.1: CLOSED / ACCEPTED" in upper or "PHASE4-B4.1 |" in upper
@@ -289,7 +317,7 @@ def test_b41_governance_records_exact_scope_and_preserves_later_prohibitions():
         "list_active_admin_alertas",
         "mark_student_request_updates_seen",
     ):
-        assert key in current
+        assert key in accepted_b41
 
     forbidden_current_tokens = (
         "awaiting supervisor review",
@@ -299,6 +327,6 @@ def test_b41_governance_records_exact_scope_and_preserves_later_prohibitions():
         "push pending",
         "publication pending",
     )
-    lowered = current.lower()
+    lowered = accepted_b41.lower()
     for token in forbidden_current_tokens:
         assert token not in lowered
