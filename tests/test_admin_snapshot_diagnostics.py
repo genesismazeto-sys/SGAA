@@ -10,6 +10,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.views.admin import requisicoes as requisicoes_owner
 
 
 @pytest.fixture()
@@ -473,7 +474,9 @@ def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(c
         called.append((atividade_id, curso_id, matriz_id))
         return True
 
-    monkeypatch.setattr(main, "is_activity_allowed_for_turma_matrix", fake_scope_check)
+    monkeypatch.setattr(
+        requisicoes_owner, "is_activity_allowed_for_turma_matrix", fake_scope_check
+    )
     _login_admin(client)
 
     response = client.post(

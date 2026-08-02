@@ -342,10 +342,14 @@ satisfied; no open Phase 3 technical implementation remains.
       assigned to Phase 4.
 
 The Phase 3 closeout granted no Phase 4 authority. That historical prohibition was later
-superseded only for the explicit PHASE 4-B1, PHASE 4-B2 and PHASE 4-B3 units below. Migration v4
-remains prohibited.
+superseded only for the explicit PHASE 4-B1, PHASE 4-B2, PHASE 4-B3, PHASE 4-B4.1 and
+PHASE 4-B4.2 units below. Migration v4 remains prohibited.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3 AND B4.1 CLOSED / ACCEPTED
+Current authorized checklist marker:
+- [x] `app/views/admin/requisicoes.py` — PHASE 4-B4.2 IMPLEMENTED / LOCALLY VERIFIED /
+      AWAITING_SUPERVISOR_REVIEW.
+
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3 AND B4.1 CLOSED / ACCEPTED / B4.2 IMPLEMENTED / INDEPENDENTLY REVIEWED / AWAITING SUPERVISOR REVIEW
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -437,11 +441,26 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       documentary addendum PASS. NO ROUTE MOVEMENT; EXACT 9 REQUISICOES ROUTES REMAIN IN
       MAIN.PY / 12 route-method pairs. Contract:
       `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md`.
-- [ ] `app/views/admin/requisicoes.py` — PHASE 4-B4.2: NOT AUTHORIZED
+  - **`app/views/admin/requisicoes.py` — [x] PHASE 4-B4.2 IMPLEMENTED / LOCALLY VERIFIED /**
+      INDEPENDENTLY REVIEWED / AWAITING_SUPERVISOR_REVIEW. The canonical owner contains exactly nine
+      global legacy endpoints / 12 route-method pairs through the accepted registrar, with
+      RBAC `view=4`, `edit=5`, `full=3`. `main` retains identity exports; the factory supports
+      default registration and exact cohort opt-out; no `app -> main` edge exists. Focused
+      lanes pass 138 + 107; routes remain 131, endpoints 130, governed pairs 134, RBAC
+      unmapped 0, actor matrix 402, message catalog 536; each CSRF snapshot has exactly five
+      owner-only deltas. Contract:
+      `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md`.
+      The first full lane exposed four stale governance assertions without physical drift
+      (`1001 passed / 4 failed / 17 deselected`); after the bounded documentary correction,
+      final hermetic qualification completed at `1005 passed / 17 deselected`.
+      Flash FREE technical review session `ses_03ff5695bffeEBNIZRiSVZonYz` returned PASS,
+      blocking NONE, scope EXACT, behavior PRESERVED, governance COHERENT, mutation 0 and no
+      fallback; its one nonblocking hash-method documentation finding was corrected.
 - **Historical/superseded checklist token (not current):** the following literal represented
-      the pre-acceptance B3 state:
+      the pre-acceptance B3/B4.2 state and is preserved only for phase-time contract tests:
       ```text
       - [ ] `app/views/admin/atividades.py`
+      - [ ] `app/views/admin/requisicoes.py`
       ```
 - [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED;
       `app.activity_catalog` established and the B3 prerequisite is complete.
@@ -455,8 +474,9 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-Phase 4 is not closed. PHASE 4-B4-A is CLOSED / ACCEPTED. PHASE 4-B4.1 is
-CLOSED / ACCEPTED and is only the shared-owner prerequisite. The
+Phase 4 is not closed. PHASE 4-B4-A and PHASE 4-B4.1 are CLOSED / ACCEPTED.
+PHASE 4-B4.2 is IMPLEMENTED / LOCALLY VERIFIED / INDEPENDENTLY REVIEWED /
+AWAITING_SUPERVISOR_REVIEW. B4.1 remains the accepted shared-owner prerequisite. The
 bounded expansion is reconciled: all eight B1 settings-helper bodies move from their B1-time
 Configurações owner to neutral `app.settings` with Configurações/`main` identity exports;
 `app.matrix_scope` owns exactly the six shared matrix-scope symbols; Aluno removes only the
@@ -472,9 +492,14 @@ catalog 536. Documentary addendum `flash_free`, `opencode/deepseek-v4-flash-free
 deviation is `READ_SCOPE_DEVIATION / NON_MUTATING / PHYSICALLY_RECONCILED /
 NO_CANDIDATE_IMPACT`. External supervisor acceptance is recorded by B4.1-R2. No B4.1
 technical residual remains.
-PHASE 4-B4.2: NOT AUTHORIZED. `dashboard.py` and `admin_meus_dados` ownership remain
-unresolved and are not complete. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED.
-MIGRATION V4: PROHIBITED. No later route cohort is marked complete.
+For B4.2, the exact 16-path candidate is implemented from baseline `c587098...`; final
+hermetic qualification and independent review are complete, and it remains
+unstaged/unpublished pending selective publication. Exactly nine
+Requisições handlers / 12 route-method pairs moved; `main` preserves identities and no route,
+RBAC, transaction, message, template, document, versioning or matrix-scope behavior changed.
+`dashboard.py` and `admin_meus_dados` ownership remain unresolved and are not complete.
+Matrizes is not started. PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED. MIGRATION V4:
+PROHIBITED. No later route cohort is marked complete.
 
 ### Fase 5 — Mover backup/sync para fora do request (1–2 dias)
 - [ ] Tirar `_maybe_sync_database_snapshot` do `after_request`; transformar em

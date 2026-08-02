@@ -1,6 +1,21 @@
 # Agent Handoff
 
-## Current state — PHASE 4-B4.1 CLOSED / ACCEPTED
+## Current state — PHASE 4-B4.2 IMPLEMENTED / AWAITING_SUPERVISOR_REVIEW
+
+### Operational handoff — PHASE 4-B4.2 Admin Requisições blueprint (2026-08-01)
+
+- **Authority/status:** PHASE 4-B4.2 is IMPLEMENTED / LOCALLY VERIFIED / INDEPENDENTLY_REVIEWED / AWAITING_SUPERVISOR_REVIEW. PHASE 4-B4-A: CLOSED / ACCEPTED. PHASE 4-B4.1: CLOSED / ACCEPTED; its publication: COMPLETE and post-publication verification: COMPLETE. B1, B2 and B3 remain CLOSED / ACCEPTED. PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION. Preserved B4.1 phase-time boundary: PHASE 4-B4.2: NOT AUTHORIZED; that historical boundary is superseded only by the current explicit B4.2 order. Phase 5 and Phase 6 are NOT AUTHORIZED. Migration v4 is PROHIBITED.
+- **Baseline:** clean branch `refactor/architecture-safety-net` at `c587098152e97d125f41a2d26f2f414c10ae5676`, equal to upstream/live remote at entry. Candidate remains unstaged and unpublished.
+- **Implemented owner:** `app.views.admin.requisicoes` canonically owns exactly nine legacy global endpoints / 12 route-method pairs and the five-item route-private closure (`ALLOWED_EXCEL` plus four helpers). `main` re-exports all identities. `app.create_app` provides default registration and exact cohort opt-out through the accepted legacy registrar.
+- **Preserved contracts:** RBAC pairs remain `view=4`, `edit=5`, `full=3`; no `@bp.route`, wrapper, alias, duplicate, namespaced endpoint or direct/dynamic `app -> main` edge. AST adjudication proves moved bodies unchanged except legacy route-decorator removal and the mechanical `app.config -> current_app.config` owner adaptation.
+- **Test gates:** RED `20 failed / 3 passed`; final focused lanes `138 passed` and `107 passed`. The first full lane exposed four stale governance assertions without candidate or physical drift (`1001 passed / 4 failed / 17 deselected`); the bounded documentary correction was focused-GREEN, and the final hermetic lane was `1005 passed / 17 deselected`. Routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402 = 263 allowed + 139 denied; message catalog 536 with zero key/default/kind/semantic delta; both CSRF snapshots contain exactly five owner-only deltas and no other field change.
+- **Authorized compatibility corrections:** the supervisor expressly added `tests/test_admin_snapshot_diagnostics.py` for the canonical monkeypatch owner change. The already-authorized B1/B3 blueprint tests were mechanically advanced to recognize `requisicoes.py` and canonical import ownership; assertions were not weakened.
+- **Independent review:** Flash FREE `opencode/deepseek-v4-flash-free`, session `ses_03ff5695bffeEBNIZRiSVZonYz`, cost 0, exit 0, no fallback, mutation 0: PASS / blocking NONE / scope EXACT / behavior PRESERVED / governance COHERENT. The single nonblocking hash-reproducibility documentation finding was accepted and corrected by documenting the algorithm; technical reviewed content hash `a75677c343b393f884c690f06f29e637ac942a1fff52a4a0a4125dd2d4ee390a`.
+- **Exact manifest:** 16 paths = 3 production + 7 tests/snapshots + 6 governance, listed in `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md`. The reviewed technical candidate remains unstaged and unpublished.
+- **Physical invariants:** `database.db` remains 544768 bytes / SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`; WAL/SHM/journal absent. Protected residual remains 17420 bytes / SHA-256 `7388cfbc8f446410ef3c98ec0fa274c2c36ff4f3ef8ed2cd649bb1f3e1d3bb0e`.
+- **Next exact action:** documentary addendum over the six governance paths, selective staging, index-visible gates, one commit and fast-forward push. Do not start Matrizes, Phase 5, Phase 6 or migration v4.
+
+## Historical state — PHASE 4-B4.1 CLOSED / ACCEPTED
 
 ### Operational handoff — PHASE 4-B4.1-R2 external supervisor acceptance closeout (2026-08-01)
 

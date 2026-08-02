@@ -2190,7 +2190,7 @@
     {
       "route": "/admin/importar_requisicoes",
       "method": "POST",
-      "view_function": "main.admin_importar_requisicoes",
+      "view_function": "app.views.admin.requisicoes.admin_importar_requisicoes",
       "template_related": [
         "admin_importar_requisicoes.html"
       ],
@@ -9463,7 +9463,7 @@
     {
       "route": "/admin/processar_requisicao/<int:req_id>",
       "method": "POST",
-      "view_function": "main.admin_processar_requisicao",
+      "view_function": "app.views.admin.requisicoes.admin_processar_requisicao",
       "template_related": [
         "admin_processar_requisicao.html"
       ],
@@ -9547,7 +9547,7 @@
     {
       "route": "/admin/requisicoes/<int:req_id>/editar",
       "method": "POST",
-      "view_function": "main.admin_editar_requisicao",
+      "view_function": "app.views.admin.requisicoes.admin_editar_requisicao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -9571,7 +9571,7 @@
     {
       "route": "/admin/requisicoes/<int:req_id>/excluir",
       "method": "POST",
-      "view_function": "main.admin_excluir_requisicao",
+      "view_function": "app.views.admin.requisicoes.admin_excluir_requisicao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -9596,7 +9596,7 @@
     {
       "route": "/admin/requisicoes/nova",
       "method": "POST",
-      "view_function": "main.admin_nova_requisicao",
+      "view_function": "app.views.admin.requisicoes.admin_nova_requisicao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,

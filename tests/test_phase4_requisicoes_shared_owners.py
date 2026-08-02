@@ -149,15 +149,17 @@ def test_b41_aluno_consumes_matrix_scope_directly_and_drops_only_that_lazy_edge(
     }
 
 
-def test_b41_preserves_all_requisicoes_routes_in_main_without_creating_blueprint():
+def test_b42_requisicoes_routes_moved_to_canonical_view_and_reexported_identically():
     import main
+    from app.views.admin import requisicoes
 
-    assert not REQUISICOES_VIEW_PATH.exists()
-    assert REQUISICOES_ROUTE_NAMES <= _top_level_functions(MAIN_PATH)
+    assert REQUISICOES_VIEW_PATH.exists()
+    assert not REQUISICOES_ROUTE_NAMES & _top_level_functions(MAIN_PATH)
     for name in REQUISICOES_ROUTE_NAMES:
+        assert getattr(main, name) is getattr(requisicoes, name)
         view_func = main.app.view_functions[name]
-        assert view_func is getattr(main, name)
-        assert view_func.__module__ == "main"
+        assert view_func is getattr(requisicoes, name)
+        assert view_func.__module__ == "app.views.admin.requisicoes"
 
 
 def test_auto_indefer_preserves_helper_owned_commit_boundary():

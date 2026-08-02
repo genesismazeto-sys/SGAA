@@ -302,7 +302,10 @@ def test_shared_catalog_preserves_future_main_consumers_without_view_dependency(
         assert name in _imports_from(MAIN_PATH, "app.activity_catalog")
     main_functions = _top_level_functions(MAIN_PATH)
     assert "admin_matriz_versoes" in main_functions
-    assert "admin_requisicoes" in main_functions
+    assert "admin_requisicoes" not in main_functions
+    assert "admin_requisicoes" in _imports_from(
+        MAIN_PATH, "app.views.admin.requisicoes"
+    )
 
 
 def test_upload_filesystem_helper_has_neutral_shared_owner():

@@ -1,0 +1,573 @@
+from __future__ import annotations
+
+import ast
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+from flask import Flask, request, url_for
+
+from app import create_app
+from app.auth import get_admin_permission_requirement
+from app.views.admin import LegacyRouteRegistrationError, register_legacy_blueprint
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MAIN_PATH = PROJECT_ROOT / "main.py"
+ADMIN_PACKAGE = PROJECT_ROOT / "app" / "views" / "admin"
+REQUISICOES_VIEW_PATH = ADMIN_PACKAGE / "requisicoes.py"
+ARTIFACTS_DIR = PROJECT_ROOT / "tests" / "_artifacts"
+ROUTE_INVENTORY_PATH = ARTIFACTS_DIR / "route_inventory_baseline.json"
+CSRF_OFF_PATH = ARTIFACTS_DIR / "csrf_inventory_shadow_off.json"
+CSRF_ON_PATH = ARTIFACTS_DIR / "csrf_inventory_shadow_on.json"
+
+BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+ROUTE_MATRIX = (
+    ("/admin/importar_requisicoes", "admin_importar_requisicoes", ("GET", "POST")),
+    ("/admin/requisicoes", "admin_requisicoes", ("GET",)),
+    ("/admin/requisicoes/nova", "admin_nova_requisicao", ("GET", "POST")),
+    ("/admin/requisicoes/<int:req_id>/editar", "admin_editar_requisicao", ("POST",)),
+    ("/admin/requisicoes/<int:req_id>/excluir", "admin_excluir_requisicao", ("POST",)),
+    ("/admin/requisicao/<int:req_id>", "admin_detalhes_requisicao", ("GET",)),
+    ("/admin/api/requisicao/<int:req_id>", "admin_api_requisicao", ("GET",)),
+    (
+        "/admin/api/aluno/<int:aluno_id>/requisicao-scope",
+        "admin_api_aluno_requisicao_scope",
+        ("GET",),
+    ),
+    ("/admin/processar_requisicao/<int:req_id>", "admin_processar_requisicao", ("GET", "POST")),
+)
+ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
+
+HELPER_NAMES = (
+    "_normalize_requisicao_data_evento",
+    "_get_admin_requisicao_scope_for_aluno",
+    "_list_admin_requisicao_alunos",
+    "_append_requisicao_arquivos",
+)
+CONSTANT_NAMES = ("ALLOWED_EXCEL",)
+
+RBAC_MATRIX = {
+    "admin_importar_requisicoes": ("requisicoes", "full"),
+    "admin_requisicoes": ("requisicoes", "view"),
+    "admin_nova_requisicao": ("requisicoes", "edit"),
+    "admin_editar_requisicao": ("requisicoes", "edit"),
+    "admin_excluir_requisicao": ("requisicoes", "full"),
+    "admin_detalhes_requisicao": ("requisicoes", "view"),
+    "admin_api_requisicao": ("requisicoes", "view"),
+    "admin_api_aluno_requisicao_scope": ("requisicoes", "view"),
+    "admin_processar_requisicao": ("requisicoes", "edit"),
+}
+
+RBAC_SCOPE_COUNTS = {"view": 4, "edit": 5, "full": 3}
+
+CSRF_MUTATING_PAIRS = {
+    "/admin/importar_requisicoes": "admin_importar_requisicoes",
+    "/admin/requisicoes/<int:req_id>/editar": "admin_editar_requisicao",
+    "/admin/requisicoes/<int:req_id>/excluir": "admin_excluir_requisicao",
+    "/admin/requisicoes/nova": "admin_nova_requisicao",
+    "/admin/processar_requisicao/<int:req_id>": "admin_processar_requisicao",
+}
+
+
+def _canonical_module():
+    from app.views.admin import requisicoes
+
+    return requisicoes
+
+
+def _factory(**kwargs):
+    return create_app(
+        register_presets_blueprint=False,
+        register_aluno_blueprint=False,
+        **kwargs,
+    )
+
+
+def _live_moved_rules(app):
+    return [rule for rule in app.url_map.iter_rules() if rule.endpoint in ROUTE_NAMES]
+
+
+def _route_tuples(app):
+    return {
+        (
+            rule.rule,
+            rule.endpoint,
+            tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)),
+        )
+        for rule in _live_moved_rules(app)
+    }
+
+
+def _tree(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+def _top_level_functions(path: Path) -> set[str]:
+    return {
+        node.name
+        for node in _tree(path).body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _top_level_assignments(path: Path) -> set[str]:
+    result: set[str] = set()
+    for node in _tree(path).body:
+        if isinstance(node, ast.Assign):
+            result.update(
+                target.id for target in node.targets if isinstance(target, ast.Name)
+            )
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            result.add(node.target.id)
+    return result
+
+
+def _imports_from(path: Path, module_name: str) -> set[str]:
+    result: set[str] = set()
+    for node in _tree(path).body:
+        if isinstance(node, ast.ImportFrom) and node.module == module_name:
+            result.update(alias.asname or alias.name for alias in node.names)
+    return result
+
+
+def _materialize_rule(rule: str, req_id: int = 1, aluno_id: int = 1) -> str:
+    return rule.replace("<int:req_id>", str(req_id)).replace(
+        "<int:aluno_id>", str(aluno_id)
+    )
+
+
+# =====================================================================
+# Contrato estrutural exato
+# =====================================================================
+
+
+def test_b42_contract_is_exactly_nine_specs_and_twelve_rule_method_pairs():
+    assert len(ROUTE_MATRIX) == 9
+    assert len(ROUTE_NAMES) == len(set(ROUTE_NAMES)) == 9
+    assert sum(len(methods) for _, _, methods in ROUTE_MATRIX) == 12
+    pairs = {(rule, method) for rule, _, methods in ROUTE_MATRIX for method in methods}
+    assert len(pairs) == 12
+    assert all(method in BUSINESS_METHODS for _, _, methods in ROUTE_MATRIX for method in methods)
+    assert all(rule.startswith("/admin/") for rule, _, _ in ROUTE_MATRIX)
+
+
+def test_module_import_isolated_from_main_database_filesystem_and_network(tmp_path):
+    runtime = tmp_path / "isolated-import"
+    code = r'''
+import json
+import os
+from pathlib import Path
+import socket
+import sqlite3
+import sys
+
+root = Path(os.environ["PHASE4_IMPORT_ROOT"])
+root.mkdir()
+
+def forbidden(*args, **kwargs):
+    raise AssertionError("import-time side effect")
+
+sqlite3.connect = forbidden
+socket.create_connection = forbidden
+socket.socket.connect = forbidden
+before = sorted(path.name for path in root.iterdir())
+assert "main" not in sys.modules
+import app.views.admin.requisicoes as module
+assert "main" not in sys.modules
+assert module.__name__ == "app.views.admin.requisicoes"
+after = sorted(path.name for path in root.iterdir())
+assert before == after == []
+assert not Path(os.environ["APP_DATABASE"]).exists()
+print(json.dumps({"main_imported": False, "filesystem_delta": [], "database_created": False}))
+'''
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PHASE4_IMPORT_ROOT": str(runtime),
+            "APP_DATABASE": str(runtime / "never-created.sqlite3"),
+            "APP_UPLOAD_FOLDER": str(runtime / "uploads"),
+            "APP_DOCUMENTOS_ALUNOS_FOLDER": str(runtime / "documentos"),
+            "APP_LOG_DIR": str(runtime / "logs"),
+            "APP_LOCAL_BACKUP_DIR": str(runtime / "backups" / "local"),
+            "APP_CLOUD_BACKUP_DIR": str(runtime / "backups" / "cloud"),
+            "APP_ENV": "testing",
+            "APP_SECRET_KEY": "phase4-import-test-secret-key-000000000000",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUTF8": "1",
+        }
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", code],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {
+        "main_imported": False,
+        "filesystem_delta": [],
+        "database_created": False,
+    }
+
+
+def test_exactly_nine_immutable_route_specs_match_legacy_matrix():
+    module = _canonical_module()
+    specs = module.LEGACY_ROUTE_SPECS
+
+    assert isinstance(specs, tuple)
+    assert len(specs) == 9
+    assert tuple((spec.rule, spec.endpoint, spec.methods) for spec in specs) == ROUTE_MATRIX
+    with pytest.raises((AttributeError, TypeError)):
+        specs[0].endpoint = "changed"
+
+
+def test_route_functions_are_admin_decorated_and_specs_reference_them():
+    module = _canonical_module()
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+    assert set(ROUTE_NAMES) <= set(functions)
+    for name in ROUTE_NAMES:
+        decorators = {ast.unparse(item) for item in functions[name].decorator_list}
+        assert decorators == {"admin_required"}
+    assert "@bp" not in source
+    assert {spec.view_func for spec in module.LEGACY_ROUTE_SPECS} == {
+        getattr(module, name) for name in ROUTE_NAMES
+    }
+
+
+# =====================================================================
+# Factory / registro
+# =====================================================================
+
+
+def test_factory_registers_legacy_routes_by_default_and_supports_opt_out():
+    default_app = _factory()
+    opt_out_app = _factory(register_admin_requisicoes_blueprint=False)
+
+    assert _route_tuples(default_app) == set(ROUTE_MATRIX)
+    assert _live_moved_rules(opt_out_app) == []
+
+
+def test_two_independent_factory_apps_each_register_each_route_once():
+    first = _factory()
+    second = _factory()
+
+    assert _route_tuples(first) == set(ROUTE_MATRIX)
+    assert _route_tuples(second) == set(ROUTE_MATRIX)
+    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 9
+    assert first is not second
+
+
+def test_duplicate_blueprint_registration_fails_explicitly():
+    module = _canonical_module()
+    app = _factory()
+
+    with pytest.raises(LegacyRouteRegistrationError, match="already registered"):
+        register_legacy_blueprint(app, module.bp_admin_requisicoes)
+    assert len(_live_moved_rules(app)) == 9
+
+
+@pytest.mark.parametrize("collision_kind", ["endpoint", "rule_method"])
+def test_route_collision_fails_before_any_legacy_route_mutation(collision_kind):
+    module = _canonical_module()
+    app = _factory(register_admin_requisicoes_blueprint=False)
+    if collision_kind == "endpoint":
+        app.add_url_rule(
+            "/unrelated",
+            endpoint="admin_importar_requisicoes",
+            view_func=lambda: "x",
+        )
+    else:
+        app.add_url_rule(
+            "/admin/requisicoes",
+            endpoint="phase4_b42_collision",
+            view_func=lambda: "x",
+            methods=["GET"],
+        )
+
+    with pytest.raises(LegacyRouteRegistrationError, match="collision"):
+        register_legacy_blueprint(app, module.bp_admin_requisicoes)
+    moved_rules = {rule for rule, _, _ in ROUTE_MATRIX}
+    assert not any(rule.rule in moved_rules for rule in _live_moved_rules(app))
+
+
+def test_no_namespaced_endpoint_alias_or_duplicate_rule_exists():
+    app = _factory()
+    moved = _live_moved_rules(app)
+
+    assert len(moved) == 9
+    assert not any(
+        rule.endpoint.startswith("admin_requisicoes_blueprint.")
+        for rule in app.url_map.iter_rules()
+    )
+    assert not any("." in rule.endpoint for rule in moved)
+    assert len({rule.rule for rule in moved}) == 9
+    for expected_rule, expected_endpoint, expected_methods in ROUTE_MATRIX:
+        matches = [
+            rule
+            for rule in app.url_map.iter_rules()
+            if rule.rule == expected_rule
+            and tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)) == expected_methods
+        ]
+        assert [rule.endpoint for rule in matches] == [expected_endpoint]
+
+
+def test_legacy_url_for_and_request_endpoint_behavior():
+    app = _factory()
+
+    with app.test_request_context():
+        for rule, endpoint, _ in ROUTE_MATRIX:
+            values = {}
+            if "<int:req_id>" in rule:
+                values["req_id"] = 1
+            if "<int:aluno_id>" in rule:
+                values["aluno_id"] = 1
+            assert url_for(endpoint, **values) == _materialize_rule(rule)
+
+    for rule, endpoint, methods in ROUTE_MATRIX:
+        path = _materialize_rule(rule)
+        with app.test_request_context(path, method=methods[0]):
+            assert request.endpoint == endpoint
+
+
+# =====================================================================
+# Exports de compatibilidade em main
+# =====================================================================
+
+
+def test_main_compatibility_exports_are_identity_imports_and_app_uses_canonical_views():
+    import main
+
+    module = _canonical_module()
+    for name in ROUTE_NAMES + HELPER_NAMES:
+        assert getattr(main, name) is getattr(module, name)
+    assert main.ALLOWED_EXCEL is module.ALLOWED_EXCEL
+    for name in ROUTE_NAMES:
+        assert main.app.view_functions[name] is getattr(module, name)
+        assert main.app.view_functions[name].__module__ == module.__name__
+
+
+def test_main_no_longer_defines_moved_bodies_or_route_decorators():
+    moved = set(ROUTE_NAMES) | set(HELPER_NAMES)
+    assert not (moved & _top_level_functions(MAIN_PATH))
+    assert not set(CONSTANT_NAMES) & _top_level_assignments(MAIN_PATH)
+    assert set(ROUTE_NAMES) | set(HELPER_NAMES) <= _imports_from(
+        MAIN_PATH, "app.views.admin.requisicoes"
+    )
+    assert set(CONSTANT_NAMES) <= _imports_from(MAIN_PATH, "app.views.admin.requisicoes")
+    source = MAIN_PATH.read_text(encoding="utf-8")
+    for rule, _, _ in ROUTE_MATRIX:
+        assert f'app.route("{rule}"' not in source
+        assert f"app.route('{rule}'" not in source
+
+
+# =====================================================================
+# RBAC
+# =====================================================================
+
+
+def test_rbac_requirements_remain_exact_for_twelve_pairs():
+    for _, endpoint, methods in ROUTE_MATRIX:
+        for method in methods:
+            assert get_admin_permission_requirement(endpoint, method) == RBAC_MATRIX[endpoint]
+
+
+def test_rbac_scope_counts_remain_exact_4_view_5_edit_3_full():
+    from collections import Counter
+
+    counts: Counter = Counter()
+    for _, endpoint, methods in ROUTE_MATRIX:
+        for method in methods:
+            resource, scope = get_admin_permission_requirement(endpoint, method)
+            assert resource == "requisicoes"
+            counts[scope] += 1
+    assert dict(counts) == RBAC_SCOPE_COUNTS
+
+
+# =====================================================================
+# CSRF dos 5 handlers mutantes + prova estática dos 5 deltas owner-only
+# =====================================================================
+
+
+def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
+    import subprocess
+
+    for snapshot_path in (CSRF_OFF_PATH, CSRF_ON_PATH):
+        assert snapshot_path.is_file(), f"missing CSRF snapshot: {snapshot_path}"
+        relative = snapshot_path.relative_to(PROJECT_ROOT).as_posix()
+        old_result = subprocess.run(
+            ["git", "show", f"HEAD:{relative}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=PROJECT_ROOT,
+        )
+        assert old_result.returncode == 0, old_result.stderr
+        old_snapshot = json.loads(old_result.stdout)
+        new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+        old_rows = old_snapshot["rows"]
+        new_rows = new_snapshot["rows"]
+        assert len(old_rows) == len(new_rows) == 78
+        assert old_snapshot["summary"] == new_snapshot["summary"]
+        assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
+
+        deltas = [
+            pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]
+        ]
+        assert len(deltas) == 5
+        assert {new_row["route"] for _, new_row in deltas} == set(CSRF_MUTATING_PAIRS)
+
+        for old_row, new_row in deltas:
+            expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.requisicoes.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in {
+                "ok_rendered_form_token",
+                "ok_dynamic_form_token",
+                "ok_specific_regression_test",
+                "ok_fetch_token",
+                "ok_api_csrf_contract",
+            }
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+
+# =====================================================================
+# Route inventory / catálogo / owners / fronteiras
+# =====================================================================
+
+
+def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
+    import main
+
+    raw = ROUTE_INVENTORY_PATH.read_bytes()
+    data = json.loads(raw.decode("utf-8"))
+    assert data["schema_version"] == 1
+    assert data["generated_from"] == "main.app.url_map"
+    routes = data["routes"]
+    assert len(routes) == 131
+    assert len({entry["rule"] for entry in routes}) == 130
+    non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
+    assert len(non_static) == 130
+
+    baseline_triples = {
+        (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
+    }
+    live_triples = {
+        (rule.rule, rule.endpoint, tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)))
+        for rule in main.app.url_map.iter_rules()
+        if set(rule.methods or ()) & BUSINESS_METHODS
+    }
+    assert live_triples == baseline_triples
+    assert ROUTE_INVENTORY_PATH.read_bytes() == raw
+
+
+def test_message_catalog_count_remains_536():
+    from utils import messages
+
+    messages._message_catalog.cache_clear()
+    catalog = messages._message_catalog()
+    assert len(catalog) == 536
+
+
+def test_admin_package_has_no_main_import_or_dynamic_equivalent():
+    sources = list(ADMIN_PACKAGE.glob("*.py"))
+    assert sources
+
+    for path in sources:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        assert "import main" not in source
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert all(alias.name != "main" for alias in node.names)
+            if isinstance(node, ast.ImportFrom):
+                assert node.module != "main"
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                assert node.func.id not in {"__import__", "eval", "exec"}
+        assert "sys.modules" not in source
+        assert "importlib" not in source
+
+
+def test_b1_b2_b3_b41_shared_owners_remain_intact():
+    import main
+    from app import matrix_scope, requisitions, settings, uploads, activity_catalog
+    from app.views.admin import atividades, configuracoes
+
+    settings_helpers = (
+        "_normalize_optional_iso_date",
+        "get_app_settings",
+        "get_response_time_settings",
+        "save_app_settings",
+        "reset_response_time_metrics",
+        "save_return_response_settings",
+        "get_horas_settings",
+        "save_horas_settings",
+    )
+    matrix_helpers = (
+        "MATRIZ_STATUS_META",
+        "_matriz_option_label",
+        "_matriz_status_label",
+        "get_allowed_activity_ids_for_turma_matrix",
+        "get_effective_matriz_for_turma",
+        "is_activity_allowed_for_turma_matrix",
+    )
+    catalog_helpers = (
+        "get_atividade_base",
+        "get_atividade_base_list",
+        "get_atividade_versao_by_id",
+        "get_next_numero_versao",
+        "parse_documentos_json",
+    )
+    upload_helpers = ("_allowed", "_unique_filename", "save_upload")
+
+    for name in settings_helpers:
+        assert getattr(main, name) is getattr(settings, name)
+        assert getattr(configuracoes, name) is getattr(settings, name)
+    for name in matrix_helpers:
+        assert getattr(main, name) is getattr(matrix_scope, name)
+    assert main.auto_indefer_devolvidas is requisitions.auto_indefer_devolvidas
+    for name in catalog_helpers:
+        assert getattr(main, name) is getattr(activity_catalog, name)
+        assert getattr(atividades, name) is getattr(activity_catalog, name)
+    for name in upload_helpers:
+        assert getattr(main, name) is getattr(uploads, name)
+    for name in ("admin_atividades", "admin_editar_atividade", "admin_catalogo_versoes"):
+        assert getattr(main, name) is getattr(atividades, name)
+
+
+def test_no_matriz_aluno_or_dashboard_route_was_moved():
+    import main
+
+    for endpoint in ("admin_matrizes", "admin_matriz_versoes", "admin_dashboard", "admin_meus_dados"):
+        assert endpoint in main.app.view_functions
+        assert main.app.view_functions[endpoint].__module__ == "main"
+
+    for endpoint in (
+        "aluno.aluno_dashboard",
+        "aluno.aluno_minhas_requisicoes",
+        "aluno.aluno_nova_requisicao",
+        "aluno.aluno_requisicao_detalhe",
+    ):
+        assert endpoint in main.app.view_functions
+        assert main.app.view_functions[endpoint].__module__ == "app.views.aluno"
