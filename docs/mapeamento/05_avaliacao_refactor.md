@@ -348,13 +348,14 @@ PHASE 4-B4.2 units below. Migration v4 remains prohibited.
 Current authorized checklist marker:
 - [x] `app/views/admin/requisicoes.py` — PHASE 4-B4.2 CLOSED / ACCEPTED at technical commit
       `3231dbd2ff9759d8f855f2a4118102783aedea83`.
-- [ ] PHASE 4-B5-P — neutral admin-access shared-owner prerequisite (IMPLEMENTED /
-      AWAITING SUPERVISOR REVIEW; NEVER CLOSED / ACCEPTED). `app/admin_access.py` owns
-      exactly the five admin-access context symbols; `main` re-exports by identity; no
-      route moved; `app/views/admin/matrizes.py` remains absent; B5 blueprint extraction
-      is NOT AUTHORIZED.
+- [x] PHASE 4-B5-P — neutral admin-access shared-owner prerequisite CLOSED / ACCEPTED at
+      technical commit `92486f87ea15697282a265cb7a9941678cb9138f` (parent
+      `a0b56896252a276e562da3842d3d61b078bd9f27`). `app/admin_access.py` owns exactly the
+      five admin-access context symbols; `main` re-exports by identity; no route moved;
+      `app/views/admin/matrizes.py` remains absent; B5 blueprint extraction is NOT
+      AUTHORIZED.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1 AND B4.2 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / B5-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1 AND B4.2 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / B5-P CLOSED / ACCEPTED
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
 - **PHASE 4-B1 — CLOSED / ACCEPTED:** accepted technical commit
@@ -471,15 +472,16 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `opencode-go/deepseek-v4-flash`, session `ses_03fce2ebbffejkf6IUdfPrsxF3`, mutation 0
       and outside-scope reads 0. Flash FREE itself did not complete that addendum.
 - **PHASE 4-B5-A — DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED** and
-      **PHASE 4-B5-P — IMPLEMENTED / AWAITING SUPERVISOR REVIEW (NEVER CLOSED /
-      ACCEPTED).** Neutral admin-access shared-owner prerequisite over baseline HEAD
+      **PHASE 4-B5-P — CLOSED / ACCEPTED.** Neutral admin-access shared-owner
+      prerequisite at technical commit `92486f87ea15697282a265cb7a9941678cb9138f`
+      (`Extract admin access context shared owner`), parent baseline HEAD
       `a0b56896252a276e562da3842d3d61b078bd9f27` (`Record acceptance of Phase 4-B4.2`);
       protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. `app/admin_access.py`
       canonically owns exactly `_fetch_user_access_overrides`,
       `_build_access_scope_groups_for_level`, `_load_admin_access_context`,
       `_get_current_admin_access_context` and `_admin_can`; `main.py` has zero local bodies
-      and re-exports all five by identity; all moved bodies are AST-identical to
-      `HEAD:main.py`. Six exact main consumers: `enforce_admin_access_control`,
+      and re-exports all five by identity; all moved bodies are AST-identical to parent
+      `a0b56896252a276e562da3842d3d61b078bd9f27:main.py`. Six exact main consumers: `enforce_admin_access_control`,
       `inject_admin_access_helpers`, `admin_editar_matriz`, `admin_matriz_nova_atividade`,
       `admin_acesso`, `uploaded_file`. Import graph: `app.admin_access -> app.auth, app.db,
       app.db_maintenance` and Flask `g`/`session`; `app.admin_access -> main = 0`;
@@ -503,10 +505,12 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       Phase 6 NOT AUTHORIZED, Migration v4 PROHIBITED; classification
       `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 /
       FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`; R2 exact node 1
-      passed in 1.02s; affected governance aggregate 118 passed in 16.70s; final full
-      hermetic after R2 total collected 1042 = 1025 passed + exactly 17 D73H
-      deselected; 0 failed; 0 errors; 326.74s; exit 0 (the earlier 1025/17/306.41s run is
-      only pre-R2 historical evidence). Routes 131; endpoints 130; business
+      passed in 1.02s; affected governance aggregate 118 passed in 16.70s; final
+      pre-publication hermetic after R2 total collected 1042 = 1025 passed + exactly 17
+      D73H deselected; 0 failed; 0 errors; 326.74s; exit 0 (the earlier 1025/17/306.41s
+      run is only pre-R2 historical evidence); independent-review rerun 1025/17/0/0 in
+      367.27s; post-publication focused 132 passed / 0 failed / 0 errors / 39.23s.
+      Routes 131; endpoints 130; business
       pairs 160; governed pairs 134; RBAC unmapped 0; actor 402 = 263 allowed + 139 denied;
       message catalog 536; route inventory byte-identical (20814 bytes, SHA-256
       `6e32148c…49fa`); CSRF shadow-off/on byte-identical to HEAD and each other (each
@@ -526,9 +530,15 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `ses_03c9ae6a7ffe4XeucPqy9Iyrre`, exit 0, cost `0.0005911248 USD`, with no fallback
       and mutations limited to the same six governance paths; the R2 test correction was
       a direct IAsup Sol correction (deterministic,
-      exact, tiny, safer/cheaper than another context export). Independent read-only
-      review, staging, commit and publication are
-      PENDING; no identity, verdict, hash or cost is invented. **No Matrizes route moved;
+      exact, tiny, safer/cheaper than another context export). Accepted independent
+      read-only review: provider `opencode`, model `opencode/deepseek-v4-flash-free`,
+      session `ses_03c92c10affegAmZLZ63tmTjjA`, exit 0, cost 0, fallback none, mutation 0,
+      blocking 0, nonblocking 3 (R2 no literal `NO ROUTE MOVEMENT` token;
+      `B4_2_BASELINE_COMMIT` naming; runtime duration changed); external acceptance
+      GRANTED by the PHASE 4-B5-P-R3 order. Technical commit `92486f87…` is published;
+      publication and post-publication verification are COMPLETE; governance closeout is
+      published. The former pre-publication pending state is historical and superseded.
+      **No Matrizes route moved;
       `app/views/admin/matrizes.py` remains absent; PHASE 4-B5 blueprint extraction is NOT
       AUTHORIZED.** Contract:
       `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
@@ -586,11 +596,15 @@ is changed by the closeout. The former prepublication candidate state and its ou
 documentary, Git-publication and external-acceptance gates are superseded; RED/GREEN,
 first-failed-full-suite, review/fallback, hash-normalization and authorized scope-expansion
 history remain preserved. For B5-P, only the neutral admin-access shared-owner
-      prerequisite is implemented: `app.admin_access` owns exactly the five admin-access
-      context symbols, `main` re-exports them by identity, and the actual candidate manifest is
-      11 paths (2 production + 3 tests + 6 governance) within the updated ceiling 12
-      (the B5-P-R2 test `tests/test_phase4_requisicoes_shared_owners.py` reads accepted B4.1
-      governance from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676`). Matrizes
+      prerequisite is implemented and CLOSED / ACCEPTED: `app.admin_access` owns exactly the
+      five admin-access context symbols, `main` re-exports them by identity, and the actual
+      artifact is 11 paths (2 production + 3 tests + 6 governance) within the updated ceiling
+      12 (the B5-P-R2 test `tests/test_phase4_requisicoes_shared_owners.py` reads accepted
+      B4.1 governance from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676`).
+      Accepted technical commit `92486f87ea15697282a265cb7a9941678cb9138f` (parent
+      `a0b56896252a276e562da3842d3d61b078bd9f27`); publication and post-publication
+      verification COMPLETE; accepted independent review session
+      `ses_03c92c10affegAmZLZ63tmTjjA`; governance closeout published. Matrizes
       is NOT STARTED / NOT AUTHORIZED; `app/views/admin/matrizes.py` remains absent and no
       Matrizes route moved.
 PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED. MIGRATION V4:

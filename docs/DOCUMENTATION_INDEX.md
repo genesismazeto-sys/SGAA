@@ -28,8 +28,8 @@
    `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` for B4.1,
    `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md` for B4.2, and
    `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` for B5-P (neutral
-   admin-access shared-owner prerequisite; Matrizes blueprint extraction is NOT
-   AUTHORIZED).
+    admin-access shared-owner prerequisite; CLOSED / ACCEPTED; Matrizes blueprint
+    extraction is NOT AUTHORIZED).
 7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
     — autonomous administrative/governance track for the 17 historical database
     snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**;
@@ -72,9 +72,9 @@
  9. `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` — accepted B4.1 neutral-owner contract.
  10. `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md` — accepted B4.2 exact
      nine-endpoint/12-pair blueprint and publication contract.
- 11. `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` — current B5-P neutral
-     admin-access shared-owner prerequisite contract; IMPLEMENTED / AWAITING SUPERVISOR
-     REVIEW; Matrizes blueprint extraction is NOT AUTHORIZED.
+ 11. `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` — accepted B5-P neutral
+     admin-access shared-owner prerequisite contract; CLOSED / ACCEPTED; Matrizes
+     blueprint extraction is NOT AUTHORIZED.
  12. `PROJECT_STATE.md` — canonical current state (top block).
  13. `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` — historical snapshot custody governance track.
  14. `AGENT_HANDOFF.md` — current operational handoff.
@@ -85,41 +85,46 @@
 ## Canonical current state (2026-08-02)
 
 - Branch: `refactor/architecture-safety-net`
-- **PHASE 4-B5-P:** CURRENT / IMPLEMENTED / AWAITING SUPERVISOR REVIEW (NEVER CLOSED /
-  ACCEPTED). Neutral admin-access shared-owner prerequisite over baseline HEAD
-  `a0b56896252a276e562da3842d3d61b078bd9f27` (`Record acceptance of Phase 4-B4.2`);
-  protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. `app.admin_access`
-  canonically owns exactly `_fetch_user_access_overrides`,
-  `_build_access_scope_groups_for_level`, `_load_admin_access_context`,
-  `_get_current_admin_access_context` and `_admin_can`; `main` has zero local bodies and
-  re-exports all five by identity. Six exact main consumers:
-  `enforce_admin_access_control`, `inject_admin_access_helpers`, `admin_editar_matriz`,
-  `admin_matriz_nova_atividade`, `admin_acesso`, `uploaded_file`. Zero
-  `app.admin_access -> main` and zero `app.auth -> app.admin_access` edges; no cycle.
-  Actual 11-path candidate manifest (2 production + 3 tests + 6 governance) within the
+- **PHASE 4-B5-P:** CLOSED / ACCEPTED. Neutral admin-access shared-owner prerequisite
+  at technical commit `92486f87ea15697282a265cb7a9941678cb9138f` (`Extract admin access
+  context shared owner`), parent baseline HEAD `a0b56896252a276e562da3842d3d61b078bd9f27`
+  (`Record acceptance of Phase 4-B4.2`); protected `main`
+  `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Publication: COMPLETE. Post-publication
+  verification: COMPLETE. `app.admin_access` canonically owns exactly
+  `_fetch_user_access_overrides`, `_build_access_scope_groups_for_level`,
+  `_load_admin_access_context`, `_get_current_admin_access_context` and `_admin_can`;
+  `main` has zero local bodies and re-exports all five by identity. Six exact main
+  consumers: `enforce_admin_access_control`, `inject_admin_access_helpers`,
+  `admin_editar_matriz`, `admin_matriz_nova_atividade`, `admin_acesso`, `uploaded_file`.
+  Zero `app.admin_access -> main` and zero `app.auth -> app.admin_access` edges; no
+  cycle. Actual 11-path artifact (2 production + 3 tests + 6 governance) within the
   updated authorized ceiling 12 (2 production + pool of 4 tests + 6 governance); the
   authorized but unchanged `tests/test_ref_0c_b1_p0_access_context_transactions.py`
   remains a gate, not a changed path. B5-P-R2 SUPPLEMENTAL SCOPE AUTHORIZATION added and
   modified only `tests/test_phase4_requisicoes_shared_owners.py`: it reads accepted B4.1
   governance from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676`, preserves
   B4.1 closure/publication/assertions, and separately proves current B4.2 CLOSED /
-  ACCEPTED, B5-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW, Phase 4 OPEN, Phase 5 and
-  Phase 6 NOT AUTHORIZED, Migration v4 PROHIBITED. Classification
-  `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 /
+  ACCEPTED, Phase 4 OPEN, Phase 5 and Phase 6 NOT AUTHORIZED, Migration v4 PROHIBITED.
+  Classification `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 /
   FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`; R2 node 1 passed in
-  1.02s; affected governance aggregate 118 passed in 16.70s. Final full hermetic after
-  R2: 1025 passed / 17 deselected / 0 failed / 0 errors / 326.74s / exit 0; the earlier
-  1025/17/306.41s run is only pre-R2 historical evidence, not final. Routes 131;
-  endpoints 130; business pairs 160;
-  governed pairs 134; RBAC unmapped 0; actor 402 = 263 + 139; message catalog 536; route
+  1.02s; affected governance aggregate 118 passed in 16.70s. Final pre-publication
+  hermetic after R2: 1025 passed / 17 deselected / 0 failed / 0 errors / 326.74s / exit
+  0; the earlier 1025/17/306.41s run is only pre-R2 historical evidence. Independent
+  review rerun 1025/17/0/0/367.27s; post-publication focused 132 passed / 39.23s.
+  Accepted independent review: provider `opencode`, model `opencode/deepseek-v4-flash-free`,
+  session `ses_03c92c10affegAmZLZ63tmTjjA`, exit 0, cost 0, fallback none, mutation 0,
+  blocking 0, nonblocking 3; external acceptance GRANTED by the PHASE 4-B5-P-R3 order.
+  Accepted content identities: raw candidate `bf67fcaa…`, technical raw `932793aa…`,
+  Git-normalized `068bf70d…`. Routes 131; endpoints 130; business pairs 160; governed
+  pairs 134; RBAC unmapped 0; actor 402 = 263 + 139; message catalog 536; route
   inventory byte-identical (20814 bytes, SHA-256 `6e32148c…49fa`); CSRF shadow-off/on
   byte-identical to HEAD and each other (each 288349 bytes, SHA-256 `3a94e2e1…a0056`);
   canonical database 544768 bytes / `a3a55e63…70fe9`, WAL/SHM/journal absent, opens 0;
-  protected residual 17420 bytes / `7388cfbc…bb0e`. Independent read-only review,
-  staging, commit and publication are PENDING; no identity, verdict, hash or cost is
-  invented. **No Matrizes route moved; `app/views/admin/matrizes.py` remains absent;
-  PHASE 4-B5 blueprint extraction is NOT AUTHORIZED.** Contract:
-  `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
+  protected residual 17420 bytes / `7388cfbc…bb0e`. The former pre-publication pending
+  state (IMPLEMENTED / AWAITING SUPERVISOR REVIEW; independent review, staging, commit
+  and publication PENDING) is historical and superseded. **No Matrizes route moved;
+  `app/views/admin/matrizes.py` remains absent; PHASE 4-B5 blueprint extraction is NOT
+  AUTHORIZED.** Contract: `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
 - **Final Phase 3 technical commit:** `c9009bf3d68950ad4e0499b65928603e84bee341`
   (`Unify database initialization ownership`), parent
   `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a`; the 14-path B11 technical
@@ -414,8 +419,7 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   ACCEPTED / B2 CLOSED / ACCEPTED / B3 CLOSED / ACCEPTED / PHASE 4-B4-A CLOSED /
   ACCEPTED / PHASE 4-B4.1 CLOSED / ACCEPTED / PHASE 4-B4.2 CLOSED / ACCEPTED /
   PHASE 4-B5-A DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED /
-  PHASE 4-B5-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW (NEVER CLOSED / ACCEPTED) /
-  PHASE 4-B5 NOT AUTHORIZED FOR IMPLEMENTATION;
+  PHASE 4-B5-P CLOSED / ACCEPTED / PHASE 4-B5 NOT AUTHORIZED FOR IMPLEMENTATION;
   Phase 4 is not closed. B1 commit
   `cd8a76b2484abc376174332578ecd8be4b8206ea` establishes the accepted compatibility
   registrar and exact eight-route Configurações/Mensagens cohort. B2 establishes the
@@ -443,23 +447,27 @@ Defined in `docs/mapeamento/05_avaliacao_refactor.md`:
   post-publication verification are complete at technical commit
   `3231dbd2ff9759d8f855f2a4118102783aedea83`. Contract:
   `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md`. PHASE 4-B5-P is the neutral
-  admin-access shared-owner prerequisite: `app.admin_access` canonically owns exactly
-  `_fetch_user_access_overrides`, `_build_access_scope_groups_for_level`,
-  `_load_admin_access_context`, `_get_current_admin_access_context` and `_admin_can`;
-  `main` has zero local bodies and re-exports all five by identity; six exact main
-  consumers; zero `app.admin_access -> main` and zero `app.auth -> app.admin_access`
-  edges; actual 11-path candidate manifest (2 production + 3 tests + 6 governance)
-  within updated ceiling 12; B5-P-R2 supplemental scope authorization added and modified
-  only `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance
+  admin-access shared-owner prerequisite, CLOSED / ACCEPTED: `app.admin_access`
+  canonically owns exactly `_fetch_user_access_overrides`,
+  `_build_access_scope_groups_for_level`, `_load_admin_access_context`,
+  `_get_current_admin_access_context` and `_admin_can`; `main` has zero local bodies and
+  re-exports all five by identity; six exact main consumers; zero
+  `app.admin_access -> main` and zero `app.auth -> app.admin_access` edges; actual
+  11-path artifact (2 production + 3 tests + 6 governance) within updated ceiling 12;
+  B5-P-R2 supplemental scope authorization added and modified only
+  `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance
   from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676` (classification
   `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 /
-  FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`); final full hermetic
-  after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is pre-R2 historical); routes 131;
-  endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped 0; actor 402;
-  message catalog 536; route inventory and CSRF shadows byte-identical. **No Matrizes
-  route moved; `app/views/admin/matrizes.py` remains absent; B5 blueprint extraction is
-  NOT AUTHORIZED.** Independent read-only review, staging, commit and publication are
-  PENDING. Contract: `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
+  FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`); final
+  pre-publication hermetic after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is
+  pre-R2 historical); independent-review rerun 367.27s; post-publication focused 132
+  passed/39.23s; accepted independent review session `ses_03c92c10affegAmZLZ63tmTjjA`
+  (blocking 0 / nonblocking 3); routes 131; endpoints 130; business pairs 160; governed
+  pairs 134; RBAC unmapped 0; actor 402; message catalog 536; route inventory and CSRF
+  shadows byte-identical. **No Matrizes route moved; `app/views/admin/matrizes.py`
+  remains absent; B5 blueprint extraction is NOT AUTHORIZED.** Technical commit
+  `92486f87ea15697282a265cb7a9941678cb9138f` published; governance closeout published.
+  Contract: `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
   Phase 4 remains open.
 - **Fase 5 — Backup/sync offloading**: background jobs.
 - **Fase 6 — `main.py` as entrypoint only**: ~50–150 lines.
@@ -473,8 +481,9 @@ CLOSED / ACCEPTED at `17e468ad938e873e1f9e9c303808ad31b9f3806b`; PHASE 4-B3 is
 CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; PHASE 4-B4.1 is
 CLOSED / ACCEPTED at `73ebf0dc34681e74e778759af476e1cd2f981444`; PHASE 4-B4.2 is
 CLOSED / ACCEPTED at technical commit `3231dbd2ff9759d8f855f2a4118102783aedea83`.
-PHASE 4-B5-P is IMPLEMENTED / AWAITING SUPERVISOR REVIEW at baseline HEAD
-`a0b56896252a276e562da3842d3d61b078bd9f27`; PHASE 4-B5-A DIAGNOSIS COMPLETE /
+PHASE 4-B5-P is CLOSED / ACCEPTED at technical commit
+`92486f87ea15697282a265cb7a9941678cb9138f` (parent
+`a0b56896252a276e562da3842d3d61b078bd9f27`); PHASE 4-B5-A DIAGNOSIS COMPLETE /
 SHARED_OWNER_PREREQUISITE REQUIRED; PHASE 4-B5: NOT AUTHORIZED FOR IMPLEMENTATION.
 Phase 4
 is not closed. Matrizes is NOT STARTED / NOT AUTHORIZED; only its neutral admin-access
@@ -519,7 +528,7 @@ table of every phase.
 | `PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | PHASE 4-B3 | CURRENT / CLOSED / ACCEPTED at technical commit `50801b6bdddc4d2772853c13f4905c49e8c996cf`; exact 22 legacy endpoints / 29 route-method pairs; neutral shared activity-catalog and upload owners; exact message/CSRF scope-expansion reconciliation; full 974/17; index-visible and post-publication 300/300; exact 16-path artifact; technical review and documentary addendum PASS; publication complete. |
 | `PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` | PHASE 4-B4.1 | CLOSED / ACCEPTED at technical commit `73ebf0dc34681e74e778759af476e1cd2f981444`; exact 20-path shared-owner artifact; full 984/17; index-visible and post-publication 170/170; technical review and documentary addendum PASS; zero Requisições route movement; publication complete; external supervisor acceptance recorded by B4.1-R2. |
 | `PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md` | PHASE 4-B4.2 | CLOSED / ACCEPTED at technical commit `3231dbd2ff9759d8f855f2a4118102783aedea83`; exact 9 global endpoints / 12 route-method pairs; RBAC 4 view / 5 edit / 3 full; canonical `app.views.admin.requisicoes` owner; exact 16-path artifact; final hermetic 1005/17; index-visible 57; post-publication 56/1; Flash FREE technical review PASS; documentary addendum paid-Flash fallback PASS; publication complete; external supervisor acceptance recorded by B4.2-R2. |
-| `PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` | PHASE 4-B5-P | CURRENT / IMPLEMENTED / AWAITING SUPERVISOR REVIEW (NEVER CLOSED / ACCEPTED) over baseline HEAD `a0b56896252a276e562da3842d3d61b078bd9f27`; PHASE 4-B5-A DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED; PHASE 4-B5 NOT AUTHORIZED FOR IMPLEMENTATION. `app.admin_access` canonically owns exactly five symbols; `main` zero local bodies with identity re-exports; six exact main consumers; zero `app.admin_access -> main` and zero `app.auth -> app.admin_access` edges; actual 11-path candidate manifest (2 production + 3 tests + 6 governance) within ceiling 12; B5-P-R2 supplemental scope authorization added and modified only `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676`; final full hermetic after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is pre-R2 historical); routes 131; endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped 0; actor 402; message catalog 536; route inventory and CSRF shadows byte-identical. No Matrizes route moved; `app/views/admin/matrizes.py` remains absent; B5 blueprint extraction NOT AUTHORIZED. Independent read-only review, staging, commit and publication PENDING. |
+| `PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` | PHASE 4-B5-P | CLOSED / ACCEPTED at technical commit `92486f87ea15697282a265cb7a9941678cb9138f`, parent `a0b56896252a276e562da3842d3d61b078bd9f27`; PHASE 4-B5-A DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED; PHASE 4-B5 NOT AUTHORIZED FOR IMPLEMENTATION. `app.admin_access` canonically owns exactly five symbols; `main` zero local bodies with identity re-exports; six exact main consumers; zero `app.admin_access -> main` and zero `app.auth -> app.admin_access` edges; actual 11-path artifact (2 production + 3 tests + 6 governance) within ceiling 12; B5-P-R2 supplemental scope authorization added and modified only `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance from fixed commit `c587098152e97d125f41a2d26f2f414c10ae5676`; final pre-publication hermetic after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is pre-R2 historical); independent-review rerun 1025/17/0/0/367.27s; post-publication focused 132 passed/39.23s; accepted independent review session `ses_03c92c10affegAmZLZ63tmTjjA` (blocking 0 / nonblocking 3); routes 131; endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped 0; actor 402; message catalog 536; route inventory and CSRF shadows byte-identical. No Matrizes route moved; `app/views/admin/matrizes.py` remains absent; B5 blueprint extraction NOT AUTHORIZED. Publication and governance closeout published. |
 | `HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md` | Autonomous governance | Administrative custody track for 17 historical snapshot artifacts; R1-R3 CLOSED / ACCEPTED; R4 EXECUTED; R5 CLOSED / ACCEPTED; R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY; R7 CLOSED / ACCEPTED / DOCUMENTARY CLOSEOUT PUBLISHED; LEVEL 2 PHYSICAL RESTORATION COMPLETE / LOCALLY VERIFIED / SUPERVISOR ACCEPTED — destination provisioned, 17 artifacts copied and integrity-verified, source preserved, parent DACL target applied and independently verified; Level 2 executed and accepted in restore root `D:\tmp\sgaa_restore_20260726T165550Z`, evidence 7/7, restore root preserved, no new SQLite opening authorized; Level 3 not executed; security-complete custody not claimed |
 
 Phases without standalone contracts: REF-0A, REF-0ENV, REF-0B, REF-0T,
@@ -551,7 +560,7 @@ The original REF-0C-D scope was documented in
 | Phase 4-B3 Atividades blueprint and scope reconciliation | `tests/test_phase4_atividades_blueprint.py` + Atividades/import/catalog/CSRF/B1/B2/route/RBAC/actor/runtime gates + `docs/refactor/PHASE4_ATIVIDADES_BLUEPRINT_CONTRACT.md` | CLOSED / ACCEPTED at `50801b6bdddc4d2772853c13f4905c49e8c996cf`; B3 contract 19; affected lane 353; full 974 passed / 17 deselected; index-visible 300; post-publication 300; exact 22 endpoints / 29 combinations; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; route snapshot unchanged; exact 16-path artifact; technical review and documentary addendum PASS; publication complete. |
 | Phase 4-B4.1 Requisições shared-owner prerequisite | `tests/test_phase4_requisicoes_shared_owners.py` + B1/B2/B3/Phase-3/route/RBAC/actor gates + `docs/refactor/PHASE4_REQUISICOES_SHARED_OWNER_CONTRACT.md` | CLOSED / ACCEPTED at `73ebf0dc34681e74e778759af476e1cd2f981444`; exact 20-path artifact; full 984/17; index-visible 170; post-publication 170; routes 131; endpoints 130; governed pairs 134; RBAC unmapped 0; actor matrix 402; message catalog 536; technical review and documentary addendum PASS; publication complete. |
 | Phase 4-B4.2 Admin Requisições blueprint | `tests/test_phase4_requisicoes_blueprint.py` + shared-owner/functional/CSRF/B1/B2/B3/Phase-3/route/RBAC/actor/runtime gates + `docs/refactor/PHASE4_REQUISICOES_BLUEPRINT_CONTRACT.md` | CLOSED / ACCEPTED at `3231dbd2ff9759d8f855f2a4118102783aedea83`; RED 20 failed / 3 passed and first full 1001/4/17 preserved historically; final hermetic 1005/17; index-visible 57; post-publication 56/1; exact 9 endpoints / 12 pairs; routes 131; endpoints 130; governed 134; unmapped 0; actor 402; message catalog 536; CSRF 5/5 owner-only; technical review PASS; documentary addendum PASS; publication complete. |
-| Phase 4-B5-P Matrizes neutral admin-access shared-owner prerequisite | `tests/test_phase4_matrizes_shared_owners.py` (new) + access/admin-context/route/RBAC/CSRF/message gates + `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` | IMPLEMENTED / AWAITING SUPERVISOR REVIEW over baseline HEAD `a0b56896252a276e562da3842d3d61b078bd9f27`; actual 11-path candidate manifest (2 production + 3 tests + 6 governance) within ceiling 12; B5-P-R2 added and modified only `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance from fixed commit `c587098...`, classification `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 / FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`, R2 node 1 passed in 1.02s, affected governance aggregate 118 passed in 16.70s; corrected pre-production RED 20 failed; recovered core lane 25 passed; focused lane 168 passed; final full hermetic after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is pre-R2 historical); routes 131; endpoints 130; business pairs 160; governed pairs 134; unmapped 0; actor 402; message catalog 536; route inventory and CSRF shadows byte-identical; B4.2 five-owner-only deltas proven against fixed `c587098...` baseline. No Matrizes route moved; `app/views/admin/matrizes.py` absent; B5 blueprint extraction NOT AUTHORIZED. Independent review, staging, commit and publication PENDING. |
+| Phase 4-B5-P Matrizes neutral admin-access shared-owner prerequisite | `tests/test_phase4_matrizes_shared_owners.py` (new) + access/admin-context/route/RBAC/CSRF/message gates + `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` | CLOSED / ACCEPTED at technical commit `92486f87ea15697282a265cb7a9941678cb9138f`, parent `a0b56896252a276e562da3842d3d61b078bd9f27`; actual 11-path artifact (2 production + 3 tests + 6 governance) within ceiling 12; B5-P-R2 added and modified only `tests/test_phase4_requisicoes_shared_owners.py`, reading accepted B4.1 governance from fixed commit `c587098...`, classification `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED_B5_P_R2 / FIXED_ACCEPTED_B4_1_BASELINE / NO_RETROACTIVE_GENERIC_AUTHORITY`, R2 node 1 passed in 1.02s, affected governance aggregate 118 passed in 16.70s; corrected pre-production RED 20 failed; recovered core lane 25 passed; focused lane 168 passed; final pre-publication hermetic after R2 1025/17/0/0/326.74s/exit 0 (the 306.41s run is pre-R2 historical); independent-review rerun 367.27s; post-publication focused 132 passed/39.23s; accepted review `ses_03c92c10affegAmZLZ63tmTjjA`; routes 131; endpoints 130; business pairs 160; governed pairs 134; unmapped 0; actor 402; message catalog 536; route inventory and CSRF shadows byte-identical; B4.2 five-owner-only deltas proven against fixed `c587098...` baseline. No Matrizes route moved; `app/views/admin/matrizes.py` absent; B5 blueprint extraction NOT AUTHORIZED. Publication and governance closeout published. |
 | Hermetic full suite (R9) | 654 passed, 17 deselected, 0 failures, 0 errors | CLOSED / ACCEPTED |
 | Smoke tools | `tools/smoke_test.py`, `tools/smoke_test_admin.py`, `tools/smoke_test_rbac_permissions.py` | SUPERSEDED_BY_R9 |
 

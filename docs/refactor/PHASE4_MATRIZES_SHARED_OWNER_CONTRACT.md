@@ -1,14 +1,16 @@
 # PHASE 4-B5-P — Matrizes neutral admin-access shared-owner contract
 
 Date: 2026-08-02
-Status: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**
+Status: **CLOSED / ACCEPTED** (PHASE 4-B5-P-R3 governance closeout)
 
 ## Status and authority
 
 PHASE 4-B4.2: **CLOSED / ACCEPTED**.
 PHASE 4-B5-A: **DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED**.
-PHASE 4-B5-P: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**. It is **NEVER**
-CLOSED / ACCEPTED; no identity, reviewer, verdict, hash or cost is invented for it.
+PHASE 4-B5-P: **CLOSED / ACCEPTED** by external supervisor acceptance. Its
+published technical commit, independent review, publication and post-publication
+verification are recorded below; no identity, reviewer, verdict, hash or cost is
+invented.
 PHASE 4-B5: **NOT AUTHORIZED FOR IMPLEMENTATION**. PHASE 4 remains
 **OPEN / INCREMENTAL IMPLEMENTATION** and is not closed. Phase 5 and Phase 6 are
 **NOT AUTHORIZED**. Migration v4 is **PROHIBITED**.
@@ -17,16 +19,30 @@ This unit is only the neutral shared-owner prerequisite for the future Matrizes
 cohort. **B5 Matrizes blueprint extraction is NOT AUTHORIZED and no route moved.**
 `app/views/admin/matrizes.py` remains absent.
 
-## Baseline
+## Baseline and published technical identity
 
 - Repository: `genesismazeto-sys/SGAA`.
 - Branch: `refactor/architecture-safety-net`.
-- Parent/current pre-commit HEAD/upstream/live remote:
-  `a0b56896252a276e562da3842d3d61b078bd9f27` (`Record acceptance of Phase 4-B4.2`).
+- Baseline HEAD (pre-commit): `a0b56896252a276e562da3842d3d61b078bd9f27`
+  (`Record acceptance of Phase 4-B4.2`).
 - Required baseline divergence: `0/0`.
 - Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
-- Technical commit, push and independent review remain **PENDING**; no identity is
-  invented for them.
+- **Published technical commit:** `92486f87ea15697282a265cb7a9941678cb9138f`
+  (`Extract admin access context shared owner`), parent
+  `a0b56896252a276e562da3842d3d61b078bd9f27`. Publication: COMPLETE.
+  Post-publication verification: COMPLETE.
+- **Accepted independent review:** provider `opencode`, model
+  `opencode/deepseek-v4-flash-free`, session `ses_03c92c10affegAmZLZ63tmTjjA`,
+  exit 0, cost 0, fallback none, mutation 0, blocking findings 0, nonblocking
+  findings 3 (R2 no literal `NO ROUTE MOVEMENT` token; `B4_2_BASELINE_COMMIT`
+  naming; runtime duration changed). External acceptance GRANTED by the
+  PHASE 4-B5-P-R3 order.
+- **Accepted content identities:** raw candidate `bf67fcaa7a44d27ae70adc4b2ab38842a9e808d31eb66a7907f56dad50aefaaf`;
+  technical raw `932793aaac94862cac81310dcfca17aa53a5ce52a69283f82e7c2f2d5fde574c`;
+  Git-normalized `068bf70d5434685980c8268c12de5c550c7f6f2f4ed07666c8d802ff8334e9bf`.
+- This closeout is authorized under subject `Record acceptance of Phase 4-B5-P`;
+  the future closeout commit identity is resolved through Git history and is not
+  invented here.
 
 ## Ownership: exact five-symbol closure
 
@@ -39,8 +55,8 @@ cohort. **B5 Matrizes blueprint extraction is NOT AUTHORIZED and no route moved.
 - `_admin_can`
 
 `main.py` has **zero local bodies** for those five symbols. It directly imports and
-re-exports all five by identity. All five moved bodies are **AST-identical** to
-`HEAD:main.py` with **no redesign**; no behavioral, signature, default or error-path
+re-exports all five by identity. All five moved bodies are **AST-identical** to parent
+`a0b56896252a276e562da3842d3d61b078bd9f27:main.py` with **no redesign**; no behavioral, signature, default or error-path
 change was introduced.
 
 `_persist_user_access_overrides` and `_parse_access_overrides_from_form` remain local
@@ -144,6 +160,12 @@ snapshot or shadow-read behavior changed.
   deselected; 0 failed; 0 errors; `326.74s`; exit 0. The earlier
   `1025 passed / 17 deselected / 306.41s` run is only pre-R2 historical evidence, not
   final.
+- Independent-review rerun of the final candidate: 1025 passed / 17 deselected /
+  0 failed / 0 errors / `367.27s` / exit 0.
+- Post-publication focused lane: 132 passed / 0 failed / 0 errors / `39.23s`.
+- Historical first full hermetic (stale B4.2 CSRF baseline): `1 failed / 1024 passed /
+  17 deselected / 399.46s`; superseded after the B5-P-R1 fixed-baseline correction.
+  All pre-publication pending statements are historical and superseded, not current.
 
 ## Execution and routing evidence
 
@@ -170,9 +192,12 @@ snapshot or shadow-read behavior changed.
   and mutations limited to the same six governance paths.
 - The R2 test correction was a direct IAsup Sol correction because it was
   deterministic, exact, tiny, and safer/cheaper than another context export.
-- Independent read-only review is still **PENDING** and must occur only after these
-  governance files are complete and candidate content identity is frozen. No
-  reviewer, session, hash, verdict or cost is invented.
+- **Accepted independent review (post-publication):** provider `opencode`, model
+  `opencode/deepseek-v4-flash-free`, session `ses_03c92c10affegAmZLZ63tmTjjA`,
+  exit 0, cost 0, fallback none, mutation 0, blocking findings 0, nonblocking
+  findings 3 (R2 no literal `NO ROUTE MOVEMENT` token; `B4_2_BASELINE_COMMIT`
+  naming; runtime duration changed). External acceptance GRANTED by the
+  PHASE 4-B5-P-R3 order.
 
 ## Candidate manifest (exact 11 changed paths) and ceiling
 
@@ -208,23 +233,27 @@ remains a **gate**, not a changed path. Do not claim 12 changed paths.
 ## Irreversible boundaries
 
 - Repository mutation: crossed only for the exact source/test/governance manifest.
-- Commit, push and independent read-only review: **PENDING**; none is performed by
-  this governance synchronization.
-- No canonical database, migration, schema, route, RBAC, template, static,
-  transaction or production boundary is crossed.
+- Technical commit, technical push and independent technical read-only review: **COMPLETE**. Technical commit
+  `92486f87ea15697282a265cb7a9941678cb9138f` is published; publication and
+  post-publication verification are COMPLETE; external acceptance is GRANTED.
+- This B5-P-R3 closeout changes only the six governance paths; it changes no
+  production, test, snapshot, database, migration, schema, route, RBAC, template,
+  static or transaction path.
 - No Matrizes route moved; `app/views/admin/matrizes.py` remains absent; B5 blueprint
   extraction remains NOT AUTHORIZED.
 
 ## Final current status
 
-`PHASE_4_B5_P_IMPLEMENTED / AWAITING_SUPERVISOR_REVIEW /
-SHARED_OWNER_PREREQUISITE_ONLY / NO_MATRIZES_ROUTE_MOVED /
-MATRIZES_BLUEPRINT_NOT_AUTHORIZED / B4_2_CLOSED_ACCEPTED /
-B5_A_DIAGNOSIS_COMPLETE / B5_NOT_AUTHORIZED_FOR_IMPLEMENTATION /
+`PHASE4_B5_P_CLOSED / ACCEPTED / ADMIN_ACCESS_NEUTRAL_OWNER_ESTABLISHED /
+EXACT_FIVE_SHARED_SYMBOLS / MAIN_IDENTITY_REEXPORTS_PRESERVED /
+ZERO_LOCAL_MAIN_BODIES_FOR_FIVE / TRANSACTION_NEUTRALITY_PRESERVED /
+ZERO_ROUTE_MOVEMENT /
 ROUTES_131 / ENDPOINTS_130 / BUSINESS_PAIRS_160 / GOVERNED_PAIRS_134 /
 RBAC_UNMAPPED_ZERO / ACTOR_402_263_139 / MESSAGE_CATALOG_536 /
-ROUTE_INVENTORY_BYTE_IDENTICAL / CSRF_SHADOW_BYTE_IDENTICAL /
-FULL_HERMETIC_1025_17 / INDEPENDENT_REVIEW_PENDING / TECHNICAL_PUBLICATION_PENDING`.
+ROUTE_INVENTORY_BYTE_IDENTICAL / CSRF_SHADOWS_BYTE_IDENTICAL /
+FULL_HERMETIC_1025_17 / INDEPENDENT_REVIEW_PASS / TECHNICAL_COMMIT_92486F87 /
+PUBLICATION_VERIFIED / GOVERNANCE_CLOSEOUT_PUBLISHED`.
 
-Independent review, staging, commit and publication are the only remaining actions
-and each requires its own authority. Do not begin the Matrizes blueprint cohort.
+No B5-P technical action remains. PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION.
+PHASE 4-B5 is NOT AUTHORIZED BY THIS CLOSEOUT. Do not begin
+`app/views/admin/matrizes.py`; later cohorts remain NOT AUTHORIZED.
