@@ -354,13 +354,13 @@ Current authorized checklist marker:
       five admin-access context symbols; `main` re-exports by identity; no route moved at
       B5-P-time; B5 blueprint extraction was NOT AUTHORIZED at B5-P-time.
 - [x] `app/views/admin/matrizes.py` — PHASE 4-B5 Matrizes admin blueprint extraction
-      **IMPLEMENTED / AWAITING SUPERVISOR REVIEW** (NOT CLOSED / ACCEPTED). Candidate
-      unstaged / uncommitted / unpushed at baseline HEAD
-      `ef874b9d14b02656a0f26ea885024a280d49682e` (`Record acceptance of Phase 4-B5-P`);
-      protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; future authorized
-      technical subject `Extract admin matrices blueprint`; independent technical review
-      COMPLETE / PASS (READ-ONLY, mutation 0, verdict PASS / SCOPE EXACT / BEHAVIOR
-      PRESERVED); external supervisor review PENDING.
+      **CLOSED / ACCEPTED** at published technical commit
+      `2a122357a79080fa66aa19c00ed5ff8533308f41`, subject
+      `Extract admin matrices blueprint`, parent
+      `ef874b9d14b02656a0f26ea885024a280d49682e`; publication and post-publication
+      verification COMPLETE; external technical acceptance GRANTED; published manifest
+      exactly 17 paths; protected `main` remains
+      `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
       Exactly 10 global legacy endpoints / 12 route-method pairs and 21 corrected helpers
       owned by `app.views.admin.matrizes`; `main` identity re-exports with zero local
       bodies; factory keyword-only `register_admin_matrizes_blueprint=True`; RBAC 3 view /
@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1 AND B4.2 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / B5-P CLOSED / ACCEPTED / PHASE 4-B5 IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -576,13 +576,13 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       PHASE 4-B5 blueprint extraction is NOT AUTHORIZED are B5-P closeout-time history only.
       Contract:
       `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md`.
-- **PHASE 4-B5 — Matrizes admin blueprint extraction — IMPLEMENTED / AWAITING SUPERVISOR
-      REVIEW (NOT CLOSED / ACCEPTED).** Candidate unstaged / uncommitted / unpushed at
-      baseline HEAD `ef874b9d14b02656a0f26ea885024a280d49682e` (`Record acceptance of
-      Phase 4-B5-P`); protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; future
-      authorized technical subject `Extract admin matrices blueprint`; independent technical
-      review COMPLETE / PASS (READ-ONLY, mutation 0, verdict PASS / SCOPE EXACT / BEHAVIOR
-      PRESERVED); external supervisor review PENDING at the time of this writing.
+- **PHASE 4-B5 — Matrizes admin blueprint extraction — CLOSED / ACCEPTED.** Published
+      technical commit `2a122357a79080fa66aa19c00ed5ff8533308f41`, subject
+      `Extract admin matrices blueprint`, parent
+      `ef874b9d14b02656a0f26ea885024a280d49682e`; exact 17-path published manifest;
+      publication COMPLETE; post-publication verification COMPLETE; external technical
+      acceptance GRANTED. The former unstaged/uncommitted/unpushed and awaiting-review
+      statements are historical pre-publication facts superseded by this state.
       `app.views.admin.matrizes` canonically owns
       exactly 10 global legacy endpoints / 12 route-method pairs and 21 corrected helpers;
       `main` re-exports all by identity with zero local bodies/decorators; `bp_admin_matrizes`
@@ -612,6 +612,7 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       package membership; HARD STOP); B5-R3 one-for-one mutable-pool substitution (node
       1 passed / 0.64s; affected focused 143 passed / 24.30s); final full hermetic fresh
       `1050 passed / 17 deselected / 0 failed / 0 errors / 317.65s` (collected 1067);
+      accepted post-publication bounded lane `59 passed / 0 failed / 0 errors / 22.59s`;
       routes 131; endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped 0;
       actor 402 = 263 allowed + 139 denied; message catalog 536; route inventory
       byte-identical (20814 bytes, SHA-256 `6e32148c…49fa`); CSRF exactly `[8, 8]`
@@ -629,10 +630,28 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       (3 production + 8 tests/snapshots) within ceiling 18 after governance;
       `tests/test_phase4_requisicoes_shared_owners.py` authorized but unchanged;
       `tests/test_ref_0c_b1_p0_access_context_transactions.py` read-only focused gate,
-      unchanged. Contract:
-      `docs/refactor/PHASE4_MATRIZES_BLUEPRINT_CONTRACT.md`. PHASE 4 remains OPEN /
-      INCREMENTAL IMPLEMENTATION; PHASE 4-B5 is NOT CLOSED / ACCEPTED and awaits
-      independent review; do not stage, commit, push or claim acceptance.
+      unchanged. Accepted technical review history: initial `flash_free`, effective
+      `opencode/deepseek-v4-flash-free`, session `ses_03adb7f27ffeJ1feNSLhrFij5R`, exit 1,
+      cost 0, TECHNICAL EXECUTION FAILURE / NO USABLE VERDICT / NO MUTATION; explicit
+      `FALLBACK_FREE_EXECUTION_FAILURE` to `opencode-go/deepseek-v4-flash`, session
+      `ses_03ad0a15dffeR53I9BqGU6a4tl`, exit 0, cost `0.001000188`, mutation 0, PASS /
+      SCOPE EXACT / BEHAVIOR PRESERVED, blocking 0, nonblocking 4; no Pro/Luna/GPT
+      escalation. Contract: `docs/refactor/PHASE4_MATRIZES_BLUEPRINT_CONTRACT.md`.
+      PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION; Phase 5/6 remain NOT AUTHORIZED;
+      Migration v4 remains PROHIBITED.
+
+      **Section-22 historical process deviation:** the Section-22 pre-implementation
+      reconciliation gate was NOT executed before the first B5 production mutation as
+      required by the original order. `SECTION_22_PROCESS_DEVIATION: VALID`;
+      `ORIGINAL ORDERING REQUIREMENT: NOT SATISFIED`; `DISCOVERED: BEFORE PUBLICATION`;
+      `LATE RECONCILIATION: EXECUTED / GREEN`; `TECHNICAL IMPACT: NONE DEMONSTRATED`;
+      `SUPERVISOR ADJUDICATION: ACCEPTED_NONBLOCKING_GOVERNANCE_DEBT /
+      PREPUBLICATION_PROCESS_DEVIATION / LATE_GATES_GREEN /
+      NO_RETROACTIVE_COMPLIANCE_CLAIM`. The B5-R4 hard stop detected the missing record
+      before publication. The B5-R5 waiver superseded only the pre-push documentary
+      blocker and authorized one normal fast-forward publication of the frozen technical
+      commit unchanged. This closeout records the deviation truthfully; it does not claim
+      that Section 22 was satisfied retroactively or that the original ordering was met.
 - **Historical/superseded checklist token (not current):** the following literal represented
       the pre-acceptance B3/B4.2 state and is preserved only for phase-time contract tests:
       ```text
@@ -641,8 +660,8 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       ```
 - [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED;
       `app.activity_catalog` established and the B3 prerequisite is complete.
-- [x] `app/views/admin/matrizes.py` — PHASE 4-B5 IMPLEMENTED / AWAITING SUPERVISOR REVIEW
-      (candidate; see PHASE 4-B5 bullet above).
+- [x] `app/views/admin/matrizes.py` — PHASE 4-B5 CLOSED / ACCEPTED; see the published
+      technical identity and Section-22 historical record above.
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
@@ -699,18 +718,17 @@ history remain preserved. For B5-P, only the neutral admin-access shared-owner
       `ses_03c92c10affegAmZLZ63tmTjjA`; governance closeout published. This B5-P
       prerequisite is CLOSED / ACCEPTED; its phase-time statement that Matrizes was
       NOT STARTED / NOT AUTHORIZED is B5-P closeout-time history only. For PHASE 4-B5,
-      the Matrizes admin blueprint extraction is now **IMPLEMENTED / AWAITING SUPERVISOR
-      REVIEW** (NOT CLOSED / ACCEPTED): `app.views.admin.matrizes` owns exactly 10 global
+      the Matrizes admin blueprint extraction is now **CLOSED / ACCEPTED** at technical
+      commit `2a122357a79080fa66aa19c00ed5ff8533308f41`, subject
+      `Extract admin matrices blueprint`, parent
+      `ef874b9d14b02656a0f26ea885024a280d49682e`; publication and post-publication
+      verification COMPLETE; external technical acceptance GRANTED. `app.views.admin.matrizes` owns exactly 10 global
       legacy endpoints / 12 route-method pairs and 21 corrected helpers; `main` re-exports
       by identity with zero local bodies; factory keyword-only
       `register_admin_matrizes_blueprint=True`; RBAC 3 view / 7 edit / 2 full;
       `app.auth`/`app.admin_access` unchanged; zero `app -> main`; ensures/SQL/transaction/
       UI/messages/CSRF frozen; void names absent (`SUPERVISOR CONTRACT CORRECTION / NOT A
-      PATH-POOL EXPANSION / NOT A DOMAIN-SCOPE EXPANSION`). Candidate unstaged /
-      uncommitted / unpushed at baseline HEAD `ef874b9d14b02656a0f26ea885024a280d49682e`;
-      future authorized technical subject `Extract admin matrices blueprint`; independent
-      technical review COMPLETE / PASS (READ-ONLY, mutation 0, verdict PASS / SCOPE EXACT /
-      BEHAVIOR PRESERVED); external supervisor review PENDING. Corrected RED
+      PATH-POOL EXPANSION / NOT A DOMAIN-SCOPE EXPANSION`). Corrected RED
       `20 failed / 4 passed / 0 collection errors`; primary
       GREEN `24 passed / 3.74s`; focused expanded `578 passed / 249.33s`; first full
       `1049 passed / 1 failed / 17 deselected / 370.60s`; B5-R3 one-for-one mutable-pool
@@ -719,7 +737,8 @@ history remain preserved. For B5-P, only the neutral admin-access shared-owner
       51 passed / 6.19s + supplemental requisicoes csrf/route/owners 3 passed; routes 131;
       endpoints 130; governed pairs 134; RBAC unmapped 0; actor 402; message catalog 536;
       route inventory byte-identical; CSRF `[8, 8]` owner-only; canonical SQLite opens 0.
-      Frozen identities recorded in the contract.
+      Accepted post-publication bounded lane 59/0/0/22.59s. Frozen identities and the
+      Section-22 process deviation are recorded in the contract.
 PHASE 5: NOT AUTHORIZED. PHASE 6: NOT AUTHORIZED. MIGRATION V4:
 PROHIBITED. No later route cohort beyond PHASE 4-B5 is marked complete or authorized.
 

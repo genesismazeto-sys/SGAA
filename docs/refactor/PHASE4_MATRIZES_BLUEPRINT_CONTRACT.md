@@ -1,38 +1,48 @@
 # PHASE 4-B5 — Matrizes admin blueprint contract
 
 Date: 2026-08-02
-Status: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW** (NOT CLOSED / ACCEPTED; candidate unstaged / uncommitted / unpushed; independent technical review COMPLETE / PASS; external supervisor review/acceptance PENDING)
+Closeout: 2026-08-03
+Status: **CLOSED / ACCEPTED** (technical publication COMPLETE; post-publication verification COMPLETE; external supervisor acceptance GRANTED; governance closeout published). The former pre-publication candidate state (IMPLEMENTED / AWAITING SUPERVISOR REVIEW) is historical / superseded and is preserved only in the phase-time history sections of this and the other governance documents.
 
 ## Status and authority
 
 PHASE 4-B4.2: **CLOSED / ACCEPTED**.
 PHASE 4-B5-A: **DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED**.
-PHASE 4-B5-P: **CLOSED / ACCEPTED** (neutral admin-access shared-owner prerequisite;
-published technical commit `92486f87ea15697282a265cb7a9941678cb9138f`, parent
+PHASE 4-B5-P: **CLOSED / ACCEPTED** and immutable prerequisite history (neutral
+admin-access shared-owner prerequisite; published technical commit
+`92486f87ea15697282a265cb7a9941678cb9138f`, parent
 `a0b56896252a276e562da3842d3d61b078bd9f27`; publication and post-publication
 verification COMPLETE; independent review accepted; governance closeout published).
-PHASE 4-B5: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW** — this contract records the
-Matrizes admin blueprint implementation candidate. It is **NOT CLOSED / ACCEPTED**; no
-technical commit, push or staging has occurred yet, and no review hash, commit, push or
-acceptance is invented here. Independent technical read-only review is **COMPLETE /
-PASS**; external supervisor review/acceptance remains **PENDING**. PHASE 4 remains
+PHASE 4-B5: **CLOSED / ACCEPTED** — the Matrizes admin blueprint extraction is
+technically published at commit `2a122357a79080fa66aa19c00ed5ff8533308f41` (subject
+`Extract admin matrices blueprint`), parent
+`ef874b9d14b02656a0f26ea885024a280d49682e` (`Record acceptance of Phase 4-B5-P`).
+Publication: COMPLETE. Post-publication verification: COMPLETE. External supervisor
+acceptance: GRANTED. Published manifest: exactly 17 paths (11 technical + 6
+governance, but the published artifact is exactly 17 tracked paths). PHASE 4 remains
 **OPEN / INCREMENTAL IMPLEMENTATION** and is not closed. Phase 5 and
 Phase 6 are **NOT AUTHORIZED**. Migration v4 is **PROHIBITED**. No later cohort is
-named or authorized by this contract.
+named or authorized as current work by this contract. The former pre-publication
+IMPLEMENTED / AWAITING SUPERVISOR REVIEW state of this unit is historical and
+superseded; it is preserved only as phase-time history in the canonical governance
+set.
 
-## Baseline and candidate identity
+## Baseline and published technical identity
 
 - Repository: `genesismazeto-sys/SGAA`.
 - Branch: `refactor/architecture-safety-net`.
-- **Baseline / parent (required):** HEAD/upstream/live `ef874b9d14b02656a0f26ea885024a280d49682e`,
+- **Baseline / parent (required):** `ef874b9d14b02656a0f26ea885024a280d49682e`,
   subject `Record acceptance of Phase 4-B5-P`. Required baseline divergence `0/0`.
 - Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
-- **Candidate publication state:** unstaged / uncommitted / unpushed. The future
-  authorized technical subject is `Extract admin matrices blueprint`. Independent
-  technical read-only review is **COMPLETE / PASS**; external supervisor
-  review/acceptance is **PENDING** at the time of this writing and must remain so in
-  these documents until the next operational phase. No commit, push, review hash or
-  acceptance exists yet.
+- **Published technical commit:** `2a122357a79080fa66aa19c00ed5ff8533308f41`,
+  subject `Extract admin matrices blueprint`, parent
+  `ef874b9d14b02656a0f26ea885024a280d49682e`. Publication: COMPLETE.
+  Post-publication verification: COMPLETE. Published manifest: exactly 17 paths.
+- The former pre-publication candidate state (unstaged / uncommitted / unpushed;
+  external supervisor review/acceptance PENDING) is superseded by the accepted
+  publication above and is preserved only as historical phase-time evidence.
+- The authorized governance closeout subject is `Record acceptance of Phase 4-B5`;
+  its identity resolves through Git history. No future technical SHA is claimed here.
 
 ## Authority and boundary
 
@@ -165,6 +175,8 @@ consumers `admin_editar_matriz` and `admin_matriz_nova_atividade` now live in
 - CSRF snapshots prove exactly `[8, 8]` owner-only deltas (shadow-off and shadow-on),
   78 rows each, summaries equal, no non-owner delta: `main.<handler>` →
   `app.views.admin.matrizes.<handler>` for the 8 Matrizes POST handlers only.
+- **Accepted post-publication bounded lane:** `59 passed / 0 failed / 0 errors` in
+  `22.59s`. No other full run is claimed; the final hermetic is exactly 1050/17.
 
 ## Invariants
 
@@ -198,15 +210,18 @@ consumers `admin_editar_matriz` and `admin_matriz_nova_atividade` now live in
   membership expressly authorized; rationale: lower risk/cost and preservation of the
   second FREE for independent review.
 
-## Independent technical review — COMPLETE / PASS
+## Independent technical review — ACCEPTED
 
 - Original request: logical `flash_free`, `opencode` / `opencode/deepseek-v4-flash-free`.
   The wrapper created session `ses_03adb7f27ffeJ1feNSLhrFij5R`, cost 0, exit 1 — a FREE
   technical failure with no usable verdict and no mutation.
+  Classification: **TECHNICAL EXECUTION FAILURE / NO USABLE VERDICT / NO MUTATION**.
 - Single explicit fallback R4 `FALLBACK_FREE_EXECUTION_FAILURE`: selected `flash_normal`,
   actual `opencode-go` / `opencode-go/deepseek-v4-flash`, session
-  `ses_03ad0a15dffeR53I9BqGU6a4tl`, exit 0, cost `0.001000188`, status COMPLETED; no
-  further escalation.
+  `ses_03ad0a15dffeR53I9BqGU6a4tl`, exit 0, cost `0.001000188`, status COMPLETED; mutation
+  0; verdict **PASS / SCOPE EXACT / BEHAVIOR PRESERVED**; blocking findings 0;
+  nonblocking findings 4; no Pro/Luna/GPT escalation. This fallback is the accepted
+  technical review for B5.
 - READ-ONLY mode; mutation 0; index empty before/after; manifest and identities
   initial/final identical.
 - Isolated reviewer gates: `51 passed` in `6.19s`; supplemental requisicoes
@@ -271,29 +286,57 @@ tests/snapshots + 6 governance).
 ## Irreversible boundaries
 
 - Repository mutation crossed only for the exact source/test/governance manifest above.
-- No technical commit or push has occurred yet; independent technical read-only review is
-  COMPLETE / PASS; external supervisor review/acceptance is still pending; do not stage,
-  commit, push or claim acceptance.
-- This documentary delta changes only the six governance paths; it changes no production,
-  test, snapshot, database, migration, schema, route, RBAC, template, static or
-  transaction path.
+- Technical publication is **COMPLETE** at `2a122357a79080fa66aa19c00ed5ff8533308f41`;
+  post-publication verification is **COMPLETE**; external supervisor acceptance is
+  **GRANTED**. PHASE 4-B5 is **CLOSED / ACCEPTED**. The prior pre-publication pending
+  statements (no commit yet; review/acceptance pending; do not stage/commit/push) are
+  superseded phase-time history and no longer govern.
+- This governance closeout delta changes only the six governance paths; it changes no
+  production, test, snapshot, database, migration, schema, route, RBAC, template, static
+  or transaction path.
 - `docs/refactor/PHASE4_MATRIZES_SHARED_OWNER_CONTRACT.md` is NOT modified and remains
   the accepted B5-P record.
 
+## Section 22 mandatory permanent history
+
+The Section-22 pre-implementation reconciliation gate was **NOT executed before the
+first B5 production mutation** as required by the original order. This is a historical
+process deviation recorded literally and unambiguously; the closeout resolves the
+governance debt by recording it truthfully, not by rewriting history.
+
+- `SECTION_22_PROCESS_DEVIATION: VALID`
+- `ORIGINAL ORDERING REQUIREMENT: NOT SATISFIED`
+- `DISCOVERED: BEFORE PUBLICATION`
+- `LATE RECONCILIATION: EXECUTED / GREEN`
+- `TECHNICAL IMPACT: NONE DEMONSTRATED`
+- `SUPERVISOR ADJUDICATION: ACCEPTED_NONBLOCKING_GOVERNANCE_DEBT / PREPUBLICATION_PROCESS_DEVIATION / LATE_GATES_GREEN / NO_RETROACTIVE_COMPLIANCE_CLAIM`
+
+Section 22 was **not** satisfied retroactively, the deviation **did** happen, and the
+original ordering requirement was **not** met. This permanent record supersedes nothing
+in the technical publication; it only records the process deviation truthfully. The
+B5-R4 hard stop correctly detected the missing required Section-22 record in the frozen
+technical commit before publication and withheld publication at that time; the B5-R5
+external-supervisor waiver superseded only the pre-push documentary blocker, did not
+claim retroactive compliance, and authorized publication of the frozen technical commit
+unchanged. Publication was a single normal fast-forward; no force, main/tag/PR activity
+occurred.
+
 ## Final current status
 
-`PHASE4_B5_IMPLEMENTED / AWAITING_SUPERVISOR_REVIEW /
-MATRIZES_BLUEPRINT_ESTABLISHED / EXACT_10_LEGACY_ENDPOINTS /
-EXACT_12_ROUTE_METHOD_PAIRS / EXACT_21_CORRECTED_HELPERS /
-MAIN_IDENTITY_REEXPORTS_PRESERVED / ZERO_LOCAL_MAIN_BODIES_FOR_31 /
-RBAC_3_VIEW_7_EDIT_2_FULL / B5_P_ADMIN_ACCESS_PRESERVED / ZERO_APP_TO_MAIN_EDGE /
+`PHASE4_B5_CLOSED / ACCEPTED / MATRIZES_BLUEPRINT_ESTABLISHED /
+EXACT_10_LEGACY_ENDPOINTS / EXACT_12_ROUTE_METHOD_PAIRS /
+EXACT_21_CORRECTED_HELPERS / RBAC_3_VIEW_7_EDIT_2_FULL /
+B5_P_ADMIN_ACCESS_OWNER_PRESERVED / ZERO_APP_TO_MAIN_EDGE /
 ROUTES_131 / ENDPOINTS_130 / BUSINESS_PAIRS_160 / GOVERNED_PAIRS_134 /
 RBAC_UNMAPPED_ZERO / ACTOR_402_263_139 / MESSAGE_CATALOG_536 /
 ROUTE_INVENTORY_BYTE_IDENTICAL / CSRF_EXACT_8_OWNER_ONLY_DELTAS /
-FULL_HERMETIC_1050_17 / INDEPENDENT_REVIEW_PASS / UNSTAGED_UNCOMMITTED_UNPUSHED /
-AWAITING_SUPERVISOR_REVIEW`.
+FULL_HERMETIC_1050_17 / INDEPENDENT_REVIEW_PASS / TECHNICAL_COMMIT_2A122357 /
+PUBLICATION_VERIFIED / SECTION_22_PROCESS_DEVIATION_RECORDED /
+GOVERNANCE_CLOSEOUT_PUBLISHED`.
 
-PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION. PHASE 4-B5 is NOT CLOSED / ACCEPTED;
-independent technical review is COMPLETE / PASS and external supervisor review/acceptance
-remains pending; do not stage, commit, push or claim acceptance. No later
-cohort is authorized.
+PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION. PHASE 4-B5 is CLOSED / ACCEPTED.
+Phase 5 and Phase 6 are NOT AUTHORIZED. Migration v4 is PROHIBITED. No later cohort is
+named or authorized as current work. The authorized governance closeout subject is
+`Record acceptance of Phase 4-B5`; its identity resolves through Git history. The
+governance closeout publication is recorded as the intended/authorized closeout state;
+no future SHA is claimed.
