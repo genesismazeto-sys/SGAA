@@ -301,7 +301,8 @@ def test_shared_catalog_preserves_future_main_consumers_without_view_dependency(
     for name in ("get_atividade_base", "get_atividade_versao_by_id", "get_next_numero_versao", "_normalize_atividade_grupo", "parse_documentos_json"):
         assert name in _imports_from(MAIN_PATH, "app.activity_catalog")
     main_functions = _top_level_functions(MAIN_PATH)
-    assert "admin_matriz_versoes" in main_functions
+    assert "admin_matriz_versoes" in _imports_from(MAIN_PATH, "app.views.admin.matrizes")
+    assert "admin_matriz_versoes" not in main_functions
     assert "admin_requisicoes" not in main_functions
     assert "admin_requisicoes" in _imports_from(
         MAIN_PATH, "app.views.admin.requisicoes"

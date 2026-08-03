@@ -484,7 +484,9 @@ def test_post_rolls_back_on_link_error(d75d_env, monkeypatch):
     def _broken_set(conn, matriz_id, base_id, versao_id):
         raise Exception("Simulated link failure for rollback test")
 
-    monkeypatch.setattr(main, "_set_versao_da_matriz_para_base", _broken_set)
+    from app.views.admin import matrizes as matrizes_module
+
+    monkeypatch.setattr(matrizes_module, "_set_versao_da_matriz_para_base", _broken_set)
 
     resp = _post_escolher_versao(client, seed["matriz_test_id"], seed["atividade_id"], seed["versao_2_id"])
     assert resp.status_code in (302, 303)

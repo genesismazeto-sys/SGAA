@@ -56,28 +56,34 @@ RELATED_LOCAL_HELPERS = {
 }
 
 # Every main.py top-level function that directly references one of the five
-# helpers as a global (discovered from main.py: lines 2120-2147, 6511-6512,
-# 6578-6579, 7664, 8079-8080).  No wrapper is allowed: each consumer must
-# resolve the canonical app.admin_access identity through its __globals__.
+# helpers as a global.  No wrapper is allowed: each consumer must resolve the
+# canonical app.admin_access identity through its __globals__.
+# The two Matrizes consumers (admin_editar_matriz, admin_matriz_nova_atividade)
+# moved to app.views.admin.matrizes (PHASE 4-B5-R1); the remaining consumers
+# below stay in main.py.
 CONSUMER_NAMES = {
     "enforce_admin_access_control",
     "inject_admin_access_helpers",
-    "admin_editar_matriz",
-    "admin_matriz_nova_atividade",
     "admin_acesso",
     "uploaded_file",
 }
 CONSUMER_HELPER_USES = {
     "enforce_admin_access_control": {"_get_current_admin_access_context", "_admin_can"},
     "inject_admin_access_helpers": {"_get_current_admin_access_context", "_admin_can"},
-    "admin_editar_matriz": {"_get_current_admin_access_context", "_admin_can"},
-    "admin_matriz_nova_atividade": {"_get_current_admin_access_context", "_admin_can"},
     "admin_acesso": {"_load_admin_access_context"},
     "uploaded_file": {"_get_current_admin_access_context", "_admin_can"},
 }
 
-# All Matrizes route handlers must remain locally defined in main.py.  This is
-# a shared-owner extraction, NOT a Matrizes blueprint extraction.
+# The two Matrizes handlers that consume the admin-access context helpers now
+# live in app.views.admin.matrizes and must still resolve the canonical
+# app.admin_access identities through their module globals.
+MATRIZES_MODULE_CONSUMERS = {
+    "admin_editar_matriz": {"_get_current_admin_access_context", "_admin_can"},
+    "admin_matriz_nova_atividade": {"_get_current_admin_access_context", "_admin_can"},
+}
+
+# All Matrizes route handlers moved to app.views.admin.matrizes (PHASE 4-B5-R1).
+# This is now a full Matrizes blueprint extraction.
 MATRIZES_ROUTE_NAMES = {
     "admin_matrizes",
     "admin_adicionar_matriz",
@@ -789,6 +795,17 @@ def test_current_main_consumers_resolve_canonical_identities_for_every_use():
             assert func.__globals__[helper] is getattr(admin_access, helper)
 
 
+def test_matrizes_module_consumers_resolve_canonical_identities_for_every_use():
+    from app import admin_access
+    from app.views.admin import matrizes
+
+    for name, used in MATRIZES_MODULE_CONSUMERS.items():
+        func = inspect.unwrap(getattr(matrizes, name))
+        assert func.__module__ == "app.views.admin.matrizes"
+        for helper in used:
+            assert func.__globals__[helper] is getattr(admin_access, helper)
+
+
 # ---------------------------------------------------------------------------
 # 13. Persist/parse helpers remain local in main and absent from admin_access
 # ---------------------------------------------------------------------------
@@ -802,18 +819,22 @@ def test_persist_and_parse_helpers_remain_local_in_main_and_absent_from_admin_ac
 
 
 # ---------------------------------------------------------------------------
-# 14. Route decorators absent from admin_access; Matrizes handlers stay in main
+# 14. Route decorators absent from admin_access; Matrizes handlers live in the
+#     canonical blueprint module (PHASE 4-B5-R1 extraction)
 # ---------------------------------------------------------------------------
 
 
-def test_matrizes_route_handlers_stay_local_in_main_and_no_routes_in_admin_access():
+def test_matrizes_route_handlers_live_in_blueprint_module_and_no_routes_in_admin_access():
     import main
     from app import admin_access
+    from app.views.admin import matrizes
 
     assert not MATRIZES_ROUTE_NAMES & _top_level_bodies(Path(admin_access.__file__))
-    assert MATRIZES_ROUTE_NAMES <= _top_level_functions(MAIN_PATH)
+    assert not MATRIZES_ROUTE_NAMES & _top_level_functions(MAIN_PATH)
+    assert MATRIZES_ROUTE_NAMES <= _top_level_functions(Path(matrizes.__file__))
 
     for endpoint in MATRIZES_ROUTE_NAMES:
         view = main.app.view_functions.get(endpoint)
         assert view is not None, endpoint
-        assert view.__module__ == "main", endpoint
+        assert view is getattr(matrizes, endpoint), endpoint
+        assert view.__module__ == "app.views.admin.matrizes", endpoint

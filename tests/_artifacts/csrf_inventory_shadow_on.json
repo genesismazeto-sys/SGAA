@@ -691,7 +691,7 @@
     {
       "route": "/admin/adicionar_matriz",
       "method": "POST",
-      "view_function": "main.admin_adicionar_matriz",
+      "view_function": "app.views.admin.matrizes.admin_adicionar_matriz",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -2048,7 +2048,7 @@
     {
       "route": "/admin/editar_matriz/<int:matriz_id>",
       "method": "POST",
-      "view_function": "main.admin_editar_matriz",
+      "view_function": "app.views.admin.matrizes.admin_editar_matriz",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -2224,7 +2224,7 @@
     {
       "route": "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao",
       "method": "POST",
-      "view_function": "main.admin_matriz_nova_versao_card",
+      "view_function": "app.views.admin.matrizes.admin_matriz_nova_versao_card",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -2243,7 +2243,7 @@
     {
       "route": "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
       "method": "POST",
-      "view_function": "main.admin_matriz_nova_atividade",
+      "view_function": "app.views.admin.matrizes.admin_matriz_nova_atividade",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -2262,7 +2262,7 @@
     {
       "route": "/admin/matrizes/<int:matriz_id>/excluir",
       "method": "POST",
-      "view_function": "main.admin_excluir_matriz",
+      "view_function": "app.views.admin.matrizes.admin_excluir_matriz",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -2287,7 +2287,7 @@
     {
       "route": "/admin/matrizes/<int:matriz_id>/versoes/definir",
       "method": "POST",
-      "view_function": "main.admin_matriz_versoes_definir",
+      "view_function": "app.views.admin.matrizes.admin_matriz_versoes_definir",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -2319,7 +2319,7 @@
     {
       "route": "/admin/matrizes/<int:matriz_id>/versoes/remover",
       "method": "POST",
-      "view_function": "main.admin_matriz_versoes_remover",
+      "view_function": "app.views.admin.matrizes.admin_matriz_versoes_remover",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -2351,7 +2351,7 @@
     {
       "route": "/admin/matrizes/excluir",
       "method": "POST",
-      "view_function": "main.admin_excluir_matrizes",
+      "view_function": "app.views.admin.matrizes.admin_excluir_matrizes",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,

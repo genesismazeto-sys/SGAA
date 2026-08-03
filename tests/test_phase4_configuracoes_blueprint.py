@@ -543,6 +543,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
         "__init__.py",
         "atividades.py",
         "configuracoes.py",
+        "matrizes.py",
         "requisicoes.py",
         "versioning.py",
     }

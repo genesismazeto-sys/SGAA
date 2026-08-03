@@ -74,6 +74,19 @@ CSRF_MUTATING_PAIRS = {
     "/admin/processar_requisicao/<int:req_id>": "admin_processar_requisicao",
 }
 
+# PHASE 4-B5-R1: the 8 Matrizes POST handlers extracted to app.views.admin.matrizes.
+# They appear as additional owner-only deltas in the regenerated CSRF snapshots.
+MATRIZES_MUTATING_PAIRS = {
+    "/admin/adicionar_matriz": "admin_adicionar_matriz",
+    "/admin/editar_matriz/<int:matriz_id>": "admin_editar_matriz",
+    "/admin/matrizes/excluir": "admin_excluir_matrizes",
+    "/admin/matrizes/<int:matriz_id>/excluir": "admin_excluir_matriz",
+    "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>": "admin_matriz_nova_atividade",
+    "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao": "admin_matriz_nova_versao_card",
+    "/admin/matrizes/<int:matriz_id>/versoes/definir": "admin_matriz_versoes_definir",
+    "/admin/matrizes/<int:matriz_id>/versoes/remover": "admin_matriz_versoes_remover",
+}
+
 
 def _canonical_module():
     from app.views.admin import requisicoes
@@ -430,10 +443,22 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         deltas = [
             pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]
         ]
-        assert len(deltas) == 5
-        assert {new_row["route"] for _, new_row in deltas} == set(CSRF_MUTATING_PAIRS)
+        # PHASE 4-B5-R1: the same snapshot regenerated after the Matrizes
+        # extraction gains exactly 8 additional owner-only deltas (main ->
+        # app.views.admin.matrizes).  The historical 5 requisicoes deltas
+        # remain owner-only and unchanged.
+        assert len(deltas) == 13
+        matrizes_deltas = [
+            pair for pair in deltas if pair[1]["route"] in MATRIZES_MUTATING_PAIRS
+        ]
+        requisicoes_deltas = [
+            pair for pair in deltas if pair[1]["route"] not in MATRIZES_MUTATING_PAIRS
+        ]
+        assert len(requisicoes_deltas) == 5
+        assert len(matrizes_deltas) == 8
+        assert {new_row["route"] for _, new_row in requisicoes_deltas} == set(CSRF_MUTATING_PAIRS)
 
-        for old_row, new_row in deltas:
+        for old_row, new_row in requisicoes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
             assert old_row["view_function"] == f"main.{expected_func}"
             assert (
@@ -448,6 +473,18 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
                 "ok_fetch_token",
                 "ok_api_csrf_contract",
             }
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in matrizes_deltas:
+            expected_func = MATRIZES_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.matrizes.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
             old_other = {k: v for k, v in old_row.items() if k != "view_function"}
             new_other = {k: v for k, v in new_row.items() if k != "view_function"}
             assert old_other == new_other
@@ -560,7 +597,13 @@ def test_b1_b2_b3_b41_shared_owners_remain_intact():
 def test_no_matriz_aluno_or_dashboard_route_was_moved():
     import main
 
-    for endpoint in ("admin_matrizes", "admin_matriz_versoes", "admin_dashboard", "admin_meus_dados"):
+    # PHASE 4-B5-R1: the Matrizes handlers moved to app.views.admin.matrizes;
+    # the remaining legacy endpoints stay in main.
+    for endpoint in ("admin_matrizes", "admin_matriz_versoes"):
+        assert endpoint in main.app.view_functions
+        assert main.app.view_functions[endpoint].__module__ == "app.views.admin.matrizes"
+
+    for endpoint in ("admin_dashboard", "admin_meus_dados"):
         assert endpoint in main.app.view_functions
         assert main.app.view_functions[endpoint].__module__ == "main"
 
