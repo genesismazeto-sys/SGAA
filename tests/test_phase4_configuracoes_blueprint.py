@@ -581,7 +581,14 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
     assert all(path.endswith(".py") for path in relative_paths)
     assert all("__pycache__" not in Path(path).parts for path in relative_paths)
     assert all(
-        path in {"main.py", "app/auth.py", "app/db_maintenance.py", "app/settings.py", "app/uploads.py"}
+        path in {
+            "main.py",
+            "app/academics.py",
+            "app/auth.py",
+            "app/db_maintenance.py",
+            "app/settings.py",
+            "app/uploads.py",
+        }
         or path.startswith("app/views/")
         for path in relative_paths
     )

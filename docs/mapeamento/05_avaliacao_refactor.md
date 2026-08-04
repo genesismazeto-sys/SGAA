@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -662,6 +662,62 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `app.activity_catalog` established and the B3 prerequisite is complete.
 - [x] `app/views/admin/matrizes.py` — PHASE 4-B5 CLOSED / ACCEPTED; see the published
       technical identity and Section-22 historical record above.
+- **PHASE 4-B6-A — DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED (read-only
+      diagnosis).** The neutral Alunos/Turmas/Cursos shared-owner diagnosis and supervisor
+      correction identified exactly the nine shared symbols below and **excluded
+      `periodo_corrente`**, which remains local in `main` and AST-identical to parent. No
+      route, factory, endpoint, RBAC, CSRF or schema movement was diagnosed for B6-P.
+- **PHASE 4-B6-P — Alunos/Turmas/Cursos neutral shared-owner prerequisite — IMPLEMENTED /
+      AWAITING SUPERVISOR REVIEW (must never become CLOSED / ACCEPTED; publication permitted
+      only after independent review PASS, bounded gates, selective per-path staging and a
+      live-remote race check; technical publication, when completed, does not constitute
+      external supervisor acceptance; post-publication next action is external supervisor
+      review).** At required parent `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`;
+      protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Exactly 9 shared symbols moved
+      to neutral owners 3/5/1: `app.academics` (3: `build_turma_aluno_matricula`,
+      `resequence_turma_aluno_matriculas`, `resequence_turma_aluno_matriculas_for_ids`);
+      `app.user_accounts` (5: `_access_defaults_map`, `_default_password_for_user_type`,
+      `create_usuario_with_default_access`, `create_usuario_with_default_password`,
+      `normalize_usuario_access_for_user_type`); `app.web.request` (1: `_is_ajax_request`).
+      `main` re-exports all nine by identity with zero local bodies/wrappers/duplicates; all
+      moved bodies AST-equivalent to parent. `app.views.core` imports
+      `normalize_usuario_access_for_user_type` directly from `app.user_accounts`; residual lazy
+      map exactly `aluno_url`/`get_db_connection`/`logger`; login
+      `normalize -> conn.commit() -> refreshed SELECT` preserved; `periodo_corrente` stays local
+      AST-identical. Owner imports isolated from `main`; no new owner→`main` edge/cycle. Zero B6
+      route movement; no blueprint/factory/endpoint/RBAC/CSRF ownership migration. Historical
+      TDD/scanner-owner chronology preserved (not rewritten): structural RED `13 failed / 31
+      passed`; structural GREEN `44 passed`; focused `203 passed / 2 failed` (scanner-owner
+      findings, catalog RED 535 / key absent → R1 GREEN 536). R1 literal
+      `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED / MESSAGE_SCANNER_OWNER_RECONCILIATION /
+      NO_RETROACTIVE_GENERIC_AUTHORITY` (message catalog RED 535 key `msg_4642b1608cf6a126` absent →
+      GREEN 536, default `"Turma sem código para gerar matrícula."`, source `app/academics.py`, no
+      duplicate; scanner provenance literal: the moved `ValueError` message usage/source owner
+      changed from `main.py` to `app/academics.py` while key and exact default text remained
+      unchanged — the message itself did not change). R3 literal `PRE_REVIEW_SCOPE_EXPANSION /
+      ONE_FOR_ONE_TEST_POOL_SUBSTITUTION_PLUS_FOUR_ADDITIONS / STALE_GOVERNANCE_TEST_RECONCILIATION /
+      MESSAGE_SCANNER_ALLOWLIST_RECONCILIATION / NO_RETROACTIVE_GENERIC_AUTHORITY`
+      (`test_residual_shared_helpers.py` unchanged read-only gate; first full 1061/5/17; five-node
+      recovery 5/5; coupled lane 77/77; fresh final full collected 1083 = 1066 passed + 17 deselected /
+      0 failed / 0 errors / 328.77s / exit 0 / `CANONICAL_SQLITE_OPENS=0`). Earlier focused 206
+      passed / 117.65s / exit 0 (first harness exit 1 = recoverable MSYS `/c`→`D:/c` basetemp defect;
+      native `C:/` rerun passed; R1 CSRF nodes 2/2; B6-P CSRF delta `[0,0]`). Fresh invariants:
+      routes 131; endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped 0; actor 402 =
+      263 allowed + 139 denied; message catalog 536; route inventory byte-identical 20814 bytes /
+      `6e32148c…49fa`; CSRF shadows each 288509 bytes / `4b16f1b4…769`; canonical database 544768 /
+      `a3a55e63…70fe9`, WAL/SHM/journal absent, opens 0; protected residual 17420 / `7388cfbc…bb0e`.
+      Scope ceiling 18 (6 production + 6 tests + 6 governance), path 19 hard stop; exact 12-path
+      non-governance dirty manifest + six governance documents = 18. Contract:
+      `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_SHARED_OWNER_CONTRACT.md`. PHASE 4 remains OPEN /
+      INCREMENTAL IMPLEMENTATION; **PHASE 4-B6, Phase 5 and Phase 6 are NOT AUTHORIZED; Migration v4
+      is PROHIBITED; B6 route extraction remains NOT AUTHORIZED.** Publication gate (stable
+      process wording): IAsup freezes/adjudicates the 18-path candidate and obtains independent
+      Flash FREE-first read-only review; publication is permitted only after that review PASS,
+      bounded gates, selective per-path staging and a live-remote race check against parent
+      `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`. The authorized subject is
+      `Extract B6 shared neutral owners`; commit and publication identity resolves through Git
+      history. Technical publication, when completed, does not constitute external supervisor
+      acceptance; the post-publication next action is external supervisor review.
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)

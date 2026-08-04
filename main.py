@@ -33,8 +33,19 @@ from app import create_app
 from app.academics import (
     DEFAULT_CURSO_TOTAL_HORAS_AAC,
     DEFAULT_CURSO_TOTAL_HORAS_AEU,
+    build_turma_aluno_matricula,
     gerar_codigo_turma,
+    resequence_turma_aluno_matriculas,
+    resequence_turma_aluno_matriculas_for_ids,
 )
+from app.user_accounts import (
+    _access_defaults_map,
+    _default_password_for_user_type,
+    create_usuario_with_default_access,
+    create_usuario_with_default_password,
+    normalize_usuario_access_for_user_type,
+)
+from app.web.request import _is_ajax_request
 from app.activity_catalog import (
     _normalize_atividade_grupo,
     get_atividade_base,
@@ -404,69 +415,10 @@ def resolve_existing_aluno_by_identifiers(conn, matricula, email):
 
     if aluno_por_matricula and aluno_por_email and aluno_por_matricula["id"] != aluno_por_email["id"]:
         raise ValueError("Conflito entre matrícula e e-mail: os dados informados pertencem a alunos diferentes.")
-
     return aluno_por_matricula or aluno_por_email
-def build_turma_aluno_matricula(turma_codigo, ordem, total_alunos):
-    codigo = str(turma_codigo or "").strip()
-    if not codigo:
-        raise ValueError("Turma sem código para gerar matrícula.")
-    width = max(3, len(str(max(1, total_alunos))))
-    return f"{codigo}.{ordem:0{width}d}"
 
-def resequence_turma_aluno_matriculas(conn, turma_id):
-    if not turma_id:
-        return
-
-    turma = conn.execute("SELECT codigo FROM turmas WHERE id = ?", (turma_id,)).fetchone()
-    if not turma:
-        return
-
-    turma_codigo = str(turma["codigo"] or "").strip()
-    if not turma_codigo:
-        return
-
-    alunos = conn.execute(
-        "SELECT id, nome, email FROM alunos WHERE turma_id = ?",
-        (turma_id,),
-    ).fetchall()
-    if not alunos:
-        return
-
-    alunos_ordenados = sorted(
-        alunos,
-        key=lambda row: (
-            ptbr_text_sort_key(row["nome"]),
-            ptbr_text_sort_key(row["email"]),
-            row["id"],
-        ),
-    )
-
-    temporarias = [
-        (f"__TMP_RESEQ__{turma_id}__{row['id']}__{secrets.token_hex(4)}", row["id"])
-        for row in alunos_ordenados
-    ]
-    conn.executemany("UPDATE alunos SET matricula = ? WHERE id = ?", temporarias)
-
-    total_alunos = len(alunos_ordenados)
-    finais = [
-        (build_turma_aluno_matricula(turma_codigo, ordem, total_alunos), row["id"])
-        for ordem, row in enumerate(alunos_ordenados, start=1)
-    ]
-    conn.executemany("UPDATE alunos SET matricula = ? WHERE id = ?", finais)
-
-def resequence_turma_aluno_matriculas_for_ids(conn, *turma_ids):
-    turma_ids_validos = []
-    for turma_id in turma_ids:
-        if turma_id in (None, ""):
-            continue
-        turma_id_int = int(turma_id)
-        if turma_id_int not in turma_ids_validos:
-            turma_ids_validos.append(turma_id_int)
-    for turma_id in turma_ids_validos:
-        resequence_turma_aluno_matriculas(conn, turma_id)
 
 # ===================== Parsing helpers =====================
-
 
 
 
@@ -1015,34 +967,6 @@ def _format_drive_timestamp(ts_iso: str) -> str:
         return local_dt.strftime("%d/%m/%Y às %H:%M")
     except Exception:
         return ts_iso
-
-
-def create_usuario_with_default_access(conn, nome: str, email: str, senha_hash: str, user_type: str):
-    from app.auth import default_access_level_for_user_type
-
-    ensure_usuario_access_schema(conn)
-    nivel_acesso = default_access_level_for_user_type(user_type)
-    return conn.execute(
-        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-        (nome, email, senha_hash, user_type, nivel_acesso),
-    )
-
-
-def normalize_usuario_access_for_user_type(conn, usuario_id: int | None):
-    if not usuario_id:
-        return
-    ensure_usuario_access_schema(conn)
-    usuario = conn.execute(
-        "SELECT id, tipo, nivel_acesso FROM usuarios WHERE id = ?",
-        (usuario_id,),
-    ).fetchone()
-    if not usuario:
-        return
-    if usuario["tipo"] == "aluno" and str(usuario["nivel_acesso"] or "").strip().lower() == "administrativo":
-        conn.execute(
-            "UPDATE usuarios SET nivel_acesso = ? WHERE id = ?",
-            (default_access_level_for_user_type("aluno"), usuario_id),
-        )
 
 
 def _persist_user_access_overrides(conn, usuario_id: int, access_level: str, overrides: dict[str, str]) -> None:
@@ -4073,10 +3997,6 @@ def _safe_return_to_target(default_endpoint: str, **values) -> str:
     return url_for(default_endpoint, **values)
 
 
-def _is_ajax_request() -> bool:
-    return request.headers.get("X-Requested-With", "").lower() == "xmlhttprequest"
-
-
 def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
     ensure_admin_arquivos_table(conn)
     where = []
@@ -5564,30 +5484,6 @@ def _alerta_border_for(bg_color: str) -> str:
         if option["bg"].lower() == normalized:
             return option["border"]
     return _derive_border_from_hex(normalized)
-
-
-def _access_defaults_map(conn) -> dict[str, str]:
-    from app.auth import DEFAULT_ACCESS_PASSWORDS, canonicalize_access_level
-
-    ensure_usuario_access_schema(conn)
-    defaults = dict(DEFAULT_ACCESS_PASSWORDS)
-    rows = conn.execute("SELECT nivel_acesso, senha_padrao FROM configuracoes_acesso").fetchall()
-    for row in rows:
-        nivel = canonicalize_access_level(row["nivel_acesso"])
-        defaults[nivel] = row["senha_padrao"]
-    return defaults
-
-
-def _default_password_for_user_type(conn, user_type: str) -> str:
-    from app.auth import default_access_level_for_user_type
-
-    nivel_acesso = default_access_level_for_user_type(user_type)
-    return _access_defaults_map(conn).get(nivel_acesso, "admin123")
-
-
-def create_usuario_with_default_password(conn, nome: str, email: str, user_type: str):
-    senha_padrao = _default_password_for_user_type(conn, user_type)
-    return create_usuario_with_default_access(conn, nome, email, hash_password(senha_padrao), user_type)
 
 
 def _turma_label_by_id(conn, turma_id: int | None) -> str:

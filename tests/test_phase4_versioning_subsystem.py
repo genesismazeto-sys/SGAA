@@ -148,9 +148,9 @@ def test_phase4_b2_current_governance_records_external_acceptance():
     assert "PHASE 5: NOT AUTHORIZED" in current_text.upper()
     assert "PHASE 6: NOT AUTHORIZED" in current_text.upper()
     assert "MIGRATION V4: PROHIBITED" in current_text.upper()
-    assert "- [ ] `app/views/admin/requisicoes.py`" in master_plan
-    assert "- [ ] `app/views/admin/atividades.py`" in master_plan
-    assert "- [ ] `app/views/admin/matrizes.py`" in master_plan
+    assert "PHASE 4-B4.2 CLOSED / ACCEPTED" in master_plan
+    assert "PHASE 4-B3 — CLOSED / ACCEPTED" in master_plan
+    assert "- [x] `app/views/admin/matrizes.py`" in master_plan
     assert "prerequisite versioning extraction" in " ".join(master_plan.split())
 
 

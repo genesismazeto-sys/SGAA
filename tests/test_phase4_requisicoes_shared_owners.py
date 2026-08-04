@@ -251,7 +251,7 @@ def test_b41_governance_records_exact_scope_and_preserves_later_prohibitions():
         )
     ).upper()
     assert "PHASE 4-B4.2: CLOSED / ACCEPTED" in current
-    assert "PHASE 4-B5-P: IMPLEMENTED / AWAITING SUPERVISOR REVIEW" in current
+    assert "PHASE 4-B5 CLOSED / ACCEPTED" in current
     assert "PHASE 4: OPEN / INCREMENTAL IMPLEMENTATION" in current
     assert "PHASE 5" in current and "NOT AUTHORIZED" in current
     assert "PHASE 6" in current and "NOT AUTHORIZED" in current

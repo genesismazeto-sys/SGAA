@@ -13,6 +13,7 @@ from app.auth import (
     default_access_level_for_user_type,
 )
 from app.security.passwords import check_password, hash_password, is_legacy_password_hash
+from app.user_accounts import normalize_usuario_access_for_user_type
 from utils.messages import flash
 
 
@@ -23,9 +24,6 @@ def _get_main_helpers():
         "aluno_url": main.aluno_url,
         "get_db_connection": main.get_db_connection,
         "logger": main.logger,
-        "normalize_usuario_access_for_user_type": getattr(
-            main, "normalize_usuario_access_for_user_type", lambda *_a, **_k: None
-        ),
     }
 
 
@@ -33,7 +31,6 @@ def login():
     helpers = _get_main_helpers()
     aluno_url = helpers["aluno_url"]
     get_db_connection = helpers["get_db_connection"]
-    normalize_usuario_access_for_user_type = helpers["normalize_usuario_access_for_user_type"]
     logger = helpers["logger"]
 
     context = {

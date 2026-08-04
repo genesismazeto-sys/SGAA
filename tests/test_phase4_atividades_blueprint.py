@@ -542,8 +542,8 @@ def test_b3_r3_governance_closeout_is_canonical():
 
     plan = current_records["plan"]
     assert "- [x] `app/views/admin/atividades.py` (+ catálogo versionado) — CLOSED / ACCEPTED" in plan
-    assert "- [ ] `app/views/admin/requisicoes.py`" in plan
-    assert "- [ ] `app/views/admin/matrizes.py`" in plan
+    assert "PHASE 4-B4.2 CLOSED / ACCEPTED" in plan
+    assert "- [x] `app/views/admin/matrizes.py`" in plan
 
     for name in ("handoff", "state", "contract"):
         block = current_records[name]

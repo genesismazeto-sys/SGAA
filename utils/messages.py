@@ -429,6 +429,7 @@ def _should_keep_frontend_literal(text: str) -> bool:
 def _iter_backend_files() -> list[Path]:
     files = [
         PROJECT_ROOT / "main.py",
+        PROJECT_ROOT / "app" / "academics.py",
         PROJECT_ROOT / "app" / "auth.py",
         PROJECT_ROOT / "app" / "db_maintenance.py",
         PROJECT_ROOT / "app" / "settings.py",
