@@ -1,34 +1,33 @@
 # PHASE 4-B6 — Alunos/Turmas/Cursos admin blueprint contract
 
 Date: 2026-08-04
-Status: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**
+Status: **CLOSED / ACCEPTED — GOVERNANCE CLOSEOUT PUBLISHED**
 
 ## 1. Status and authority
 
 - PHASE 4-B6-P: **CLOSED / ACCEPTED**.
-- PHASE 4-B6-R1: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**.
-- PHASE 4-B6: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**.
+- PHASE 4-B6-R1: **CLOSED / ACCEPTED** as incorporated supervisor correction.
+- PHASE 4-B6: **CLOSED / ACCEPTED**.
 - PHASE 4: **OPEN / INCREMENTAL IMPLEMENTATION**; it is not closed.
 - Phase 5: **NOT AUTHORIZED**.
 - Phase 6: **NOT AUTHORIZED**.
 - Migration v4: **PROHIBITED**.
 - Arquivos / Alertas / Reportes are not included and must not begin under this contract.
 
-This contract records an implemented, qualified candidate. It does **not** close or accept
-PHASE 4-B6. External supervisor review remains required.
+This contract records the accepted, published Phase 4-B6 blueprint. Technical commit `3d9660a99e6944ff94a3991a353ecf3aaf300987`, subject `Extract admin alunos turmas cursos blueprint`. Technical publication: **COMPLETE**. Post-publication verification: **COMPLETE**. External supervisor acceptance: **GRANTED**. Governance closeout: published by R3.
 
 ## 2. Baseline, branch and publication boundary
 
 - Repository: `genesismazeto-sys/SGAA`.
 - Workspace: `D:\OneDrive\Programação\SGAA_clean_baseline`.
 - Branch: `refactor/architecture-safety-net`.
-- Required parent/live feature: `cab4c61bdf7a1eef361a80f426dda558b11e9201`,
-  subject `Record acceptance of Phase 4-B6-P`.
+- Accepted technical commit: `3d9660a99e6944ff94a3991a353ecf3aaf300987`,
+  subject `Extract admin alunos turmas cursos blueprint`.
 - Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
-- Authorized technical subject: `Extract admin alunos turmas cursos blueprint`.
-- Technical commit and normal fast-forward publication are pending the frozen-candidate
-  review and post-review bounded gate. No amend, rebase, squash, force push, main push,
-  tag or PR is authorized.
+- Technical publication: **COMPLETE**.
+- Post-publication verification: **COMPLETE**.
+- External supervisor acceptance: **GRANTED**.
+- Governance closeout: being published by this R3 commit.
 
 ## 3. Supervisor R1 correction — `periodo_corrente`
 
@@ -268,14 +267,17 @@ a hard stop.
 
 ## 12. Current decision
 
-`PHASE4_B6_IMPLEMENTED / ALUNOS_TURMAS_CURSOS_BLUEPRINT_ESTABLISHED /
+`PHASE4_B6_CLOSED / ACCEPTED / ALUNOS_TURMAS_CURSOS_BLUEPRINT_ESTABLISHED /
 EXACT_17_ENDPOINTS / EXACT_24_ROUTE_METHOD_PAIRS / EXACT_10_PRIVATE_HELPERS /
 RBAC_6_VIEW_13_EDIT_5_FULL / B6_P_NEUTRAL_OWNERS_PRESERVED /
 PERIODO_CORRENTE_MAIN_LOCAL / R1_EXACT_THREE_DEAD_CONTEXT_REMOVALS /
 MAIN_IDENTITY_REEXPORTS / ZERO_LOCAL_MAIN_B6_BODIES / ZERO_APP_TO_MAIN /
 MESSAGE_CATALOG_536 / CSRF_B6_11_OWNER_ONLY /
 HISTORICAL_CSRF_CONTRACTS_RECONCILED / ROUTE_INVENTORY_BYTE_IDENTICAL /
-FULL_HERMETIC_GREEN / AWAITING_SUPERVISOR_REVIEW`.
+FULL_HERMETIC_GREEN / TECHNICAL_PUBLICATION_COMPLETE /
+POST_PUBLICATION_VERIFICATION_COMPLETE /
+EXTERNAL_SUPERVISOR_ACCEPTANCE_GRANTED /
+GOVERNANCE_CLOSEOUT_PUBLISHED`.
 
-PHASE 4-B6 is not CLOSED / ACCEPTED. Phase 4 remains open. Phase 5, Phase 6 and the
+PHASE 4-B6 is CLOSED / ACCEPTED. Phase 4 remains open. Phase 5, Phase 6 and the
 Arquivos / Alertas / Reportes cohort remain unauthorized; Migration v4 remains prohibited.

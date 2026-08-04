@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 CLOSED / ACCEPTED
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -721,11 +721,7 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       not rewritten. The governance-only closeout subject is `Record acceptance of Phase 4-B6-P`;
       its identity resolves through Git history. External acceptance does not authorize
       PHASE 4-B6; no next cohort may start without a separate supervisor order.
-- **PHASE 4-B6-R1 / PHASE 4-B6 — Alunos/Turmas/Cursos admin blueprint — IMPLEMENTED /
-      AWAITING SUPERVISOR REVIEW; not CLOSED / ACCEPTED.** Parent/live feature
-      `cab4c61bdf7a1eef361a80f426dda558b11e9201` (`Record acceptance of Phase 4-B6-P`);
-      protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; future authorized subject
-      `Extract admin alunos turmas cursos blueprint`. `app.views.admin.alunos_turmas_cursos`
+- **PHASE 4-B6-R1 / PHASE 4-B6 — Alunos/Turmas/Cursos admin blueprint — CLOSED / ACCEPTED.** Accepted technical commit `3d9660a99e6944ff94a3991a353ecf3aaf300987`, subject `Extract admin alunos turmas cursos blueprint`; protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Technical publication: COMPLETE. Post-publication verification: COMPLETE. External supervisor acceptance: GRANTED. Governance closeout published by R3. `app.views.admin.alunos_turmas_cursos`
       owns exactly 17 endpoints / 24 route-method pairs / 10 helpers; `main` has zero local
       B6 bodies and 27 identity re-exports; accepted registrar and factory default/exact
       opt-out; RBAC 6 view / 13 edit / 5 full; B6-P neutral owners preserved; zero
@@ -752,8 +748,10 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       + six governance; path 17 hard stop. Contract:
       `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_BLUEPRINT_CONTRACT.md`. PHASE 4 remains OPEN;
       Phase 5/6 NOT AUTHORIZED; Migration v4 PROHIBITED; no Arquivos / Alertas / Reportes work.
-- [x] `app/views/admin/alunos_turmas_cursos.py` — implemented B6 candidate awaiting
-      supervisor review; not closed/accepted and not yet published at governance-freeze time.
+- [x] `app/views/admin/alunos_turmas_cursos.py` — PHASE 4-B6 CLOSED / ACCEPTED at technical commit
+      `3d9660a99e6944ff94a3991a353ecf3aaf300987`; technical publication, post-publication
+      verification and external supervisor acceptance COMPLETE; governance closeout published
+      by R3.
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
 - [ ] `app/views/admin/acesso.py` — NOT IMPLEMENTED; the combined Acesso work is not complete
