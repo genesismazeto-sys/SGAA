@@ -1,18 +1,18 @@
 # PHASE 4-B6-P — Alunos/Turmas/Cursos neutral shared-owner contract
 
 Date: 2026-08-04
-Status: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW** (must never become CLOSED /
-ACCEPTED; publication permitted only after an independent read-only review PASS,
-bounded gates, selective per-path staging and a live-remote race check; technical
-publication, when completed, does not constitute external supervisor acceptance;
-post-publication next action is external supervisor review)
+Status: **CLOSED / ACCEPTED**. Technical publication COMPLETE; post-publication
+recovery COMPLETE; post-publication verification COMPLETE; external supervisor
+acceptance GRANTED.
 
 ## Status and authority
 
+PHASE 4-B4.2: **CLOSED / ACCEPTED**.
+PHASE 4-B5-P: **CLOSED / ACCEPTED**.
 PHASE 4-B5: **CLOSED / ACCEPTED** (published; immutable prerequisite history).
-PHASE 4-B6-A: **DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED**.
-PHASE 4-B6-P: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW** and must never
-become CLOSED / ACCEPTED.
+PHASE 4-B6-A: **DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE REQUIRED**
+(historical prerequisite diagnosis).
+PHASE 4-B6-P: **CLOSED / ACCEPTED**.
 PHASE 4-B6: **NOT AUTHORIZED**. PHASE 4 remains **OPEN / INCREMENTAL
 IMPLEMENTATION** and is not closed. Phase 5 and Phase 6 are **NOT AUTHORIZED**.
 Migration v4 is **PROHIBITED**. No commit SHA is invented here; the
@@ -32,17 +32,36 @@ and is AST-identical to parent. No route, factory, endpoint, RBAC, CSRF or schem
 movement was diagnosed for B6-P. DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE
 REQUIRED.
 
-## Baseline and candidate parent (required)
+## Accepted publication identities
 
 - Repository: `genesismazeto-sys/SGAA`.
 - Branch: `refactor/architecture-safety-net`.
-- Parent (required): `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`
-  (`Record acceptance of Phase 4-B5`). This is also the live remote HEAD.
+- Accepted technical commit: `0b003c5f00e5e6181c9b9a5f96d8572b8488323f`,
+  subject `Extract B6 shared neutral owners`, parent
+  `1bf5173949b0bf0bdce15d1b87d6ed15d535158c` (`Record acceptance of Phase 4-B5`).
+- Accepted recovery commit: `5af7fc70547fccbfed42ebaf5ca353365371c892`,
+  subject `Repair B6-P post-publication governance state`.
+- Technical publication COMPLETE; post-publication recovery COMPLETE;
+  post-publication verification COMPLETE; external supervisor acceptance GRANTED.
 - Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.
-- Pre-publication freeze fact (preserved): at freeze, the candidate was NOT
-  committed and NOT pushed; the authorized subject is `Extract B6 shared neutral
-  owners`, and commit and publication identity resolves through Git history. No
-  SHA is invented here.
+- Historical pre-publication freeze fact (preserved): at freeze, the candidate was
+  NOT committed and NOT pushed. That state is superseded by the accepted technical
+  and recovery publication identities above.
+
+## Accepted evidence and post-publication recovery
+
+- Exactly 9 shared symbols; neutral owners 3/5/1; `main` identity re-exports;
+  zero local `main` bodies for the nine; `periodo_corrente` unchanged; zero B6
+  route movement; message catalog 536.
+- Routes 131; endpoints 130; business pairs 160; governed pairs 134; RBAC unmapped
+  0; actor 402 = 263 allowed + 139 denied; route inventory and CSRF snapshots
+  byte-identical.
+- Full hermetic: 1066 passed, 17 deselected, 0 failed, 0 errors,
+  `CANONICAL_SQLITE_OPENS=0`.
+- Independent review: PASS; blocking findings 0.
+- Post-publication recovery qualification: 1 passed / 0 failed.
+- Bounded post-publication qualification: 162 passed / 0 failed / 0 errors.
+- Published-tree bounded verification: 162 passed / 0 failed / 0 errors.
 
 ## Ownership: exact nine-symbol closure, neutral owners 3/5/1
 
@@ -127,6 +146,17 @@ NO_RETROACTIVE_GENERIC_AUTHORITY`.
   and explicit `app/academics.py` allowlist; historical technical assertions,
   route/RBAC/schema/transaction behavior remain intact.
 
+## Permanent process-deviation record
+
+`PREPUBLICATION_BOUNDED_GATE_INVOCATION_ERROR /
+DISCOVERED_POST_PUBLICATION / NO_RETROACTIVE_GREEN_CLAIM`.
+
+The intended pre-publication command `python -m sgaa_canonical_db_guard -m pytest ...`
+did **not** execute pytest. Its exit 0 and empty stdout are not represented as a
+successful test lane. The defect was detected after technical publication and
+recovered through real post-publication gates using
+`python -m pytest -p sgaa_canonical_db_guard ...`. History is not rewritten.
+
 ## Historical TDD / scanner-owner chronology (preserved, not rewritten)
 
 - Initial structural RED: `13 failed / 31 passed` (owner modules absent; `main`
@@ -191,8 +221,7 @@ Governance (6):
 - `docs/DOCUMENTATION_INDEX.md`
 - `docs/mapeamento/05_avaliacao_refactor.md`
 - `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`
-- `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_SHARED_OWNER_CONTRACT.md` (new, this
-  closeout)
+- `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_SHARED_OWNER_CONTRACT.md`
 
 Adding the exact six governance documents yields exactly 18 changed paths.
 `tests/test_residual_shared_helpers.py` remains unchanged and is a read-only gate,
@@ -207,35 +236,27 @@ or database path.
   staged, NOT committed and NOT pushed.
 - No Alunos/Turmas/Cursos route moved; `app/views/admin/alunos_turmas_cursos.py`
   remains absent; B6 blueprint extraction remains NOT AUTHORIZED.
-- No canonical SQLite opening, test execution or Git mutation occurred in this
-  closeout.
+- R6 changes governance only. No production, test, snapshot, database or schema
+  mutation is authorized; governance/read-only gates run with zero canonical
+  SQLite opens.
 
 ## Final current status
 
-`PHASE4_B6_P_IMPLEMENTED / AWAITING_SUPERVISOR_REVIEW / EXACT_NINE_SHARED_SYMBOLS /
-NEUTRAL_OWNERS_3_5_1 / MAIN_IDENTITY_REEXPORTS_PRESERVED /
-ZERO_LOCAL_MAIN_BODIES_FOR_NINE / CORE_DIRECT_IMPORT_REDUCTION /
-RESIDUAL_LAZY_MAP_ALUNO_URL_DB_LOGGER / PERIODO_CORRENTE_LOCAL_AST_IDENTICAL /
-TRANSACTION_NEUTRALITY_PRESERVED / ZERO_ROUTE_MOVEMENT /
-B6_ROUTE_EXTRACTION_NOT_AUTHORIZED / ROUTES_131 / ENDPOINTS_130 /
-BUSINESS_PAIRS_160 / GOVERNED_PAIRS_134 / RBAC_UNMAPPED_ZERO /
-ACTOR_402_263_139 / MESSAGE_CATALOG_536 / ROUTE_INVENTORY_BYTE_IDENTICAL /
-CSRF_SHADOWS_BYTE_IDENTICAL / FULL_HERMETIC_1066_17 /
-CANONICAL_SQLITE_OPENS_ZERO /
-TECHNICAL_REVIEW_AND_PUBLICATION_GOVERNED_BY_GIT_EVIDENCE /
-EXTERNAL_SUPERVISOR_ACCEPTANCE_PENDING`.
+`PHASE4_B6_P_CLOSED / ACCEPTED /
+NEUTRAL_SHARED_OWNER_PREREQUISITE_ESTABLISHED / EXACT_9_SHARED_SYMBOLS /
+OWNERS_3_5_1 / MESSAGE_SCANNER_RECONCILED /
+POST_PUBLICATION_RECOVERY_COMPLETE /
+PREPUBLICATION_GATE_INVOCATION_ERROR_RECORDED /
+NO_RETROACTIVE_GREEN_CLAIM / GOVERNANCE_CLOSEOUT_AUTHORIZED`.
 
 PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION. PHASE 4-B6 is NOT AUTHORIZED;
 Phase 5 and Phase 6 are NOT AUTHORIZED; Migration v4 is PROHIBITED.
 
-## Publication gate (stable process wording)
+## Publication and acceptance closeout
 
-IAsup freezes/adjudicates the 18-path candidate and obtains an independent Flash
-FREE-first read-only review. Publication is permitted only after that review
-PASS, bounded gates, selective per-path staging and a live-remote race check
-against parent `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`. The authorized subject
-is `Extract B6 shared neutral owners`; commit and publication identity resolves
-through Git history. Technical publication, when completed, does not constitute
-external supervisor acceptance; the post-publication next action is external
-supervisor review. B6 remains NOT AUTHORIZED; protected `main` remains
+The technical commit and recovery commit above are published and externally
+accepted. R6 authorizes the governance-only closeout subject
+`Record acceptance of Phase 4-B6-P`; its identity resolves through Git history.
+This closeout does not authorize PHASE 4-B6 or any Alunos/Turmas/Cursos blueprint
+extraction. Protected `main` remains
 `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`.

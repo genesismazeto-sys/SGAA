@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -667,12 +667,13 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       correction identified exactly the nine shared symbols below and **excluded
       `periodo_corrente`**, which remains local in `main` and AST-identical to parent. No
       route, factory, endpoint, RBAC, CSRF or schema movement was diagnosed for B6-P.
-- **PHASE 4-B6-P — Alunos/Turmas/Cursos neutral shared-owner prerequisite — IMPLEMENTED /
-      AWAITING SUPERVISOR REVIEW (must never become CLOSED / ACCEPTED; publication permitted
-      only after independent review PASS, bounded gates, selective per-path staging and a
-      live-remote race check; technical publication, when completed, does not constitute
-      external supervisor acceptance; post-publication next action is external supervisor
-      review).** At required parent `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`;
+- **PHASE 4-B6-P — Alunos/Turmas/Cursos neutral shared-owner prerequisite — CLOSED /
+      ACCEPTED.** Accepted technical commit
+      `0b003c5f00e5e6181c9b9a5f96d8572b8488323f` (`Extract B6 shared neutral owners`),
+      parent `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`; accepted recovery commit
+      `5af7fc70547fccbfed42ebaf5ca353365371c892` (`Repair B6-P post-publication
+      governance state`). Technical publication COMPLETE; post-publication recovery
+      COMPLETE; post-publication verification COMPLETE; external supervisor acceptance GRANTED;
       protected `main` `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Exactly 9 shared symbols moved
       to neutral owners 3/5/1: `app.academics` (3: `build_turma_aluno_matricula`,
       `resequence_turma_aluno_matriculas`, `resequence_turma_aluno_matriculas_for_ids`);
@@ -710,14 +711,16 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       non-governance dirty manifest + six governance documents = 18. Contract:
       `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_SHARED_OWNER_CONTRACT.md`. PHASE 4 remains OPEN /
       INCREMENTAL IMPLEMENTATION; **PHASE 4-B6, Phase 5 and Phase 6 are NOT AUTHORIZED; Migration v4
-      is PROHIBITED; B6 route extraction remains NOT AUTHORIZED.** Publication gate (stable
-      process wording): IAsup freezes/adjudicates the 18-path candidate and obtains independent
-      Flash FREE-first read-only review; publication is permitted only after that review PASS,
-      bounded gates, selective per-path staging and a live-remote race check against parent
-      `1bf5173949b0bf0bdce15d1b87d6ed15d535158c`. The authorized subject is
-      `Extract B6 shared neutral owners`; commit and publication identity resolves through Git
-      history. Technical publication, when completed, does not constitute external supervisor
-      acceptance; the post-publication next action is external supervisor review.
+      is PROHIBITED; B6 route extraction remains NOT AUTHORIZED.** Accepted evidence: full
+      hermetic 1066 passed / 17 deselected / 0 failed / 0 errors / canonical opens 0;
+      independent review PASS / blocking findings 0; recovery node 1 passed; bounded
+      post-publication 162 passed; published-tree bounded verification 162 passed. Permanent
+      process record: `PREPUBLICATION_BOUNDED_GATE_INVOCATION_ERROR /
+      DISCOVERED_POST_PUBLICATION / NO_RETROACTIVE_GREEN_CLAIM`; the command
+      `python -m sgaa_canonical_db_guard -m pytest ...` did not execute pytest, and history is
+      not rewritten. The governance-only closeout subject is `Record acceptance of Phase 4-B6-P`;
+      its identity resolves through Git history. External acceptance does not authorize
+      PHASE 4-B6; no next cohort may start without a separate supervisor order.
 - [ ] `app/views/admin/alunos_turmas_cursos.py` (ou um por entidade)
 - [ ] `app/views/admin/arquivos_alertas_reportes.py`
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
