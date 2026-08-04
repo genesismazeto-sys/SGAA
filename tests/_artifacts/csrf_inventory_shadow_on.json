@@ -623,7 +623,7 @@
     {
       "route": "/admin/adicionar_aluno",
       "method": "POST",
-      "view_function": "main.admin_adicionar_aluno",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_adicionar_aluno",
       "template_related": [
         "admin_adicionar_aluno.html"
       ],
@@ -723,7 +723,7 @@
     {
       "route": "/admin/adicionar_turma",
       "method": "POST",
-      "view_function": "main.admin_adicionar_turma",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_adicionar_turma",
       "template_related": [
         "admin_adicionar_turma.html"
       ],
@@ -858,7 +858,7 @@
     {
       "route": "/admin/alterar_status_alunos",
       "method": "POST",
-      "view_function": "main.admin_alterar_status_alunos",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_alterar_status_alunos",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -1784,7 +1784,7 @@
     {
       "route": "/admin/cursos/<int:curso_id>/editar",
       "method": "POST",
-      "view_function": "main.admin_editar_curso",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_editar_curso",
       "template_related": [
         "admin_editar_curso.html"
       ],
@@ -1818,7 +1818,7 @@
     {
       "route": "/admin/cursos/adicionar",
       "method": "POST",
-      "view_function": "main.admin_adicionar_curso",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_adicionar_curso",
       "template_related": [
         "admin_adicionar_curso.html"
       ],
@@ -1852,7 +1852,7 @@
     {
       "route": "/admin/deletar_aluno/<int:usuario_id>",
       "method": "POST",
-      "view_function": "main.admin_deletar_aluno",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_deletar_aluno",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -1923,7 +1923,7 @@
     {
       "route": "/admin/deletar_curso/<int:curso_id>",
       "method": "POST",
-      "view_function": "main.admin_deletar_curso",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_deletar_curso",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -1955,7 +1955,7 @@
     {
       "route": "/admin/deletar_turma/<int:turma_id>",
       "method": "POST",
-      "view_function": "main.admin_deletar_turma",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_deletar_turma",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -1980,7 +1980,7 @@
     {
       "route": "/admin/editar_aluno/<int:usuario_id>",
       "method": "POST",
-      "view_function": "main.admin_editar_aluno",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_editar_aluno",
       "template_related": [
         "admin_editar_aluno.html"
       ],
@@ -2108,7 +2108,7 @@
     {
       "route": "/admin/editar_turma/<int:turma_id>",
       "method": "POST",
-      "view_function": "main.admin_editar_turma",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_editar_turma",
       "template_related": [
         "admin_editar_turma.html"
       ],
@@ -9634,7 +9634,7 @@
     {
       "route": "/admin/turmas/importar",
       "method": "POST",
-      "view_function": "main.admin_turmas_importar",
+      "view_function": "app.views.admin.alunos_turmas_cursos.admin_turmas_importar",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,

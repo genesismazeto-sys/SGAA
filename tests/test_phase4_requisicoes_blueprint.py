@@ -87,6 +87,35 @@ MATRIZES_MUTATING_PAIRS = {
     "/admin/matrizes/<int:matriz_id>/versoes/remover": "admin_matriz_versoes_remover",
 }
 
+# PHASE 4-B6: the 11 Alunos/Turmas/Cursos POST handlers extracted to
+# app.views.admin.alunos_turmas_cursos.  They appear as additional owner-only
+# deltas in the regenerated CSRF snapshots.
+B6_MUTATING_PAIRS = {
+    "/admin/cursos/adicionar": "admin_adicionar_curso",
+    "/admin/cursos/<int:curso_id>/editar": "admin_editar_curso",
+    "/admin/deletar_curso/<int:curso_id>": "admin_deletar_curso",
+    "/admin/adicionar_aluno": "admin_adicionar_aluno",
+    "/admin/editar_aluno/<int:usuario_id>": "admin_editar_aluno",
+    "/admin/deletar_aluno/<int:usuario_id>": "admin_deletar_aluno",
+    "/admin/alterar_status_alunos": "admin_alterar_status_alunos",
+    "/admin/adicionar_turma": "admin_adicionar_turma",
+    "/admin/editar_turma/<int:turma_id>": "admin_editar_turma",
+    "/admin/deletar_turma/<int:turma_id>": "admin_deletar_turma",
+    "/admin/turmas/importar": "admin_turmas_importar",
+}
+
+# B6 statuses include the two documented exception buckets used by the
+# B6 cohort (admin_alterar_status_alunos is "not_applicable_documented").
+B6_ALLOWED_CSRF_STATUSES = {
+    "ok_rendered_form_token",
+    "ok_dynamic_form_token",
+    "ok_specific_regression_test",
+    "ok_fetch_token",
+    "ok_api_csrf_contract",
+    "not_applicable_documented",
+    "ok_logout_or_safe_exception",
+}
+
 
 def _canonical_module():
     from app.views.admin import requisicoes
@@ -445,18 +474,42 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         ]
         # PHASE 4-B5-R1: the same snapshot regenerated after the Matrizes
         # extraction gains exactly 8 additional owner-only deltas (main ->
-        # app.views.admin.matrizes).  The historical 5 requisicoes deltas
-        # remain owner-only and unchanged.
-        assert len(deltas) == 13
-        matrizes_deltas = [
-            pair for pair in deltas if pair[1]["route"] in MATRIZES_MUTATING_PAIRS
-        ]
+        # app.views.admin.matrizes).  PHASE 4-B6: the Alunos/Turmas/Cursos
+        # extraction adds exactly 11 owner-only deltas (main ->
+        # app.views.admin.alunos_turmas_cursos).  The historical 5 requisicoes
+        # deltas remain owner-only and unchanged.  24 = 5 requisicoes + 8
+        # Matrizes + 11 B6, exhaustively partitioned with no uncategorized
+        # delta.
+        assert len(deltas) == 24
+        deltas_by_route = {
+            new_row["route"]: (old_row, new_row) for old_row, new_row in deltas
+        }
+        assert len(deltas_by_route) == 24
+        requisicoes_routes = set(CSRF_MUTATING_PAIRS)
+        matrizes_routes = set(MATRIZES_MUTATING_PAIRS)
+        b6_routes = set(B6_MUTATING_PAIRS)
+        assert len(requisicoes_routes) == 5
+        assert len(matrizes_routes) == 8
+        assert len(b6_routes) == 11
+        assert not (requisicoes_routes & matrizes_routes)
+        assert not (requisicoes_routes & b6_routes)
+        assert not (matrizes_routes & b6_routes)
+        assert set(deltas_by_route) == (
+            requisicoes_routes | matrizes_routes | b6_routes
+        )
+
         requisicoes_deltas = [
-            pair for pair in deltas if pair[1]["route"] not in MATRIZES_MUTATING_PAIRS
+            pair
+            for route, pair in deltas_by_route.items()
+            if route in requisicoes_routes
         ]
+        matrizes_deltas = [
+            pair for route, pair in deltas_by_route.items() if route in matrizes_routes
+        ]
+        b6_deltas = [pair for route, pair in deltas_by_route.items() if route in b6_routes]
         assert len(requisicoes_deltas) == 5
         assert len(matrizes_deltas) == 8
-        assert {new_row["route"] for _, new_row in requisicoes_deltas} == set(CSRF_MUTATING_PAIRS)
+        assert len(b6_deltas) == 11
 
         for old_row, new_row in requisicoes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
@@ -485,6 +538,26 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
                 == f"app.views.admin.matrizes.{expected_func}"
             )
             assert new_row["method"] == "POST"
+            assert new_row["status"] in {
+                "ok_rendered_form_token",
+                "ok_dynamic_form_token",
+                "ok_specific_regression_test",
+                "ok_fetch_token",
+                "ok_api_csrf_contract",
+            }
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in b6_deltas:
+            expected_func = B6_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.alunos_turmas_cursos.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in B6_ALLOWED_CSRF_STATUSES
             old_other = {k: v for k, v in old_row.items() if k != "view_function"}
             new_other = {k: v for k, v in new_row.items() if k != "view_function"}
             assert old_other == new_other

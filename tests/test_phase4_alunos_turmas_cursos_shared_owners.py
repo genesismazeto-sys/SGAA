@@ -175,6 +175,27 @@ def test_owner_modules_satisfy_allowed_dependency_constraints():
     assert "import main" not in web_request_source
 
 
+def test_b6_module_consumes_accepted_owners_directly_and_stays_canonical():
+    from app import academics, user_accounts
+    from app.views.admin import alunos_turmas_cursos as b6
+    from app.web import request as web_request
+
+    assert b6.__name__ == "app.views.admin.alunos_turmas_cursos"
+    owners = {name: academics for name in ACADEMICS_OWNED}
+    owners.update({name: user_accounts for name in USER_ACCOUNTS_OWNED})
+    owners.update({name: web_request for name in WEB_REQUEST_OWNED})
+    for name, owner in owners.items():
+        assert getattr(b6, name) is getattr(owner, name)
+
+    b6_path = PROJECT_ROOT / "app" / "views" / "admin" / "alunos_turmas_cursos.py"
+    assert ACADEMICS_OWNED <= _import_aliases(b6_path, "app.academics")
+    assert USER_ACCOUNTS_OWNED <= _import_aliases(b6_path, "app.user_accounts")
+    assert WEB_REQUEST_OWNED <= _import_aliases(b6_path, "app.web.request")
+    assert _no_main_import(b6_path)
+    assert "sys.modules" not in _source(b6_path)
+    assert "importlib" not in _source(b6_path)
+
+
 def test_owner_bodies_preserved_without_transaction_ownership():
     from app import user_accounts
 

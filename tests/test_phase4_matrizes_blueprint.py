@@ -19,8 +19,8 @@ The contract covered here (GREEN targets):
   8. ``admin_editar_matriz`` / ``admin_matriz_nova_atividade`` keep the B5-P
      ``app.admin_access`` owner;
   9. route-inventory baseline byte-identical, message catalog == 536, CSRF
-     snapshots show exactly 8 owner-only deltas each, canonical SQLite never
-     opened;
+      snapshots show exactly 8 Matrizes + 11 B6 owner-only deltas each (19
+      total), canonical SQLite never opened;
   10. ``_get_grupos_atividade`` and ``_get_matriz_active_norma_ids`` remain
       absent from ``main`` and from the new module.
 
@@ -141,12 +141,36 @@ CSRF_MUTATING_PAIRS = {
     "/admin/matrizes/<int:matriz_id>/versoes/remover": "admin_matriz_versoes_remover",
 }
 
+# PHASE 4-B6: the 11 Alunos/Turmas/Cursos POST handlers extracted to
+# app.views.admin.alunos_turmas_cursos.  They appear as additional owner-only
+# deltas in the regenerated CSRF snapshots.
+B6_MUTATING_PAIRS = {
+    "/admin/cursos/adicionar": "admin_adicionar_curso",
+    "/admin/cursos/<int:curso_id>/editar": "admin_editar_curso",
+    "/admin/deletar_curso/<int:curso_id>": "admin_deletar_curso",
+    "/admin/adicionar_aluno": "admin_adicionar_aluno",
+    "/admin/editar_aluno/<int:usuario_id>": "admin_editar_aluno",
+    "/admin/deletar_aluno/<int:usuario_id>": "admin_deletar_aluno",
+    "/admin/alterar_status_alunos": "admin_alterar_status_alunos",
+    "/admin/adicionar_turma": "admin_adicionar_turma",
+    "/admin/editar_turma/<int:turma_id>": "admin_editar_turma",
+    "/admin/deletar_turma/<int:turma_id>": "admin_deletar_turma",
+    "/admin/turmas/importar": "admin_turmas_importar",
+}
+
 ALLOWED_CSRF_STATUSES = {
     "ok_rendered_form_token",
     "ok_dynamic_form_token",
     "ok_specific_regression_test",
     "ok_fetch_token",
     "ok_api_csrf_contract",
+}
+
+# B6 statuses include the two documented exception buckets used by the
+# B6 cohort (admin_alterar_status_alunos is "not_applicable_documented").
+B6_ALLOWED_CSRF_STATUSES = ALLOWED_CSRF_STATUSES | {
+    "not_applicable_documented",
+    "ok_logout_or_safe_exception",
 }
 
 BLUEPRINT_NAME = "admin_matrizes_blueprint"
@@ -696,15 +720,47 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         deltas = [pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]]
-        assert len(deltas) == 8
-        assert {new_row["route"] for _, new_row in deltas} == set(CSRF_MUTATING_PAIRS)
+        # PHASE 4-B6: the snapshot regenerated after the Alunos/Turmas/Cursos
+        # extraction gains exactly 11 additional owner-only deltas (main ->
+        # app.views.admin.alunos_turmas_cursos).  The historical 8 Matrizes
+        # deltas remain owner-only and unchanged.  19 = 8 Matrizes + 11 B6,
+        # exhaustively partitioned with no uncategorized delta.
+        assert len(deltas) == 19
+        deltas_by_route = {new_row["route"]: (old_row, new_row) for old_row, new_row in deltas}
+        assert len(deltas_by_route) == 19
+        matrizes_routes = set(CSRF_MUTATING_PAIRS)
+        b6_routes = set(B6_MUTATING_PAIRS)
+        assert len(matrizes_routes) == 8
+        assert len(b6_routes) == 11
+        assert not (matrizes_routes & b6_routes)
+        assert set(deltas_by_route) == matrizes_routes | b6_routes
 
-        for old_row, new_row in deltas:
+        matrizes_deltas = [
+            pair for route, pair in deltas_by_route.items() if route in matrizes_routes
+        ]
+        b6_deltas = [pair for route, pair in deltas_by_route.items() if route in b6_routes]
+        assert len(matrizes_deltas) == 8
+        assert len(b6_deltas) == 11
+
+        for old_row, new_row in matrizes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
             assert old_row["view_function"] == f"main.{expected_func}"
             assert new_row["view_function"] == f"app.views.admin.matrizes.{expected_func}"
             assert new_row["method"] == "POST"
             assert new_row["status"] in ALLOWED_CSRF_STATUSES
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in b6_deltas:
+            expected_func = B6_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.alunos_turmas_cursos.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in B6_ALLOWED_CSRF_STATUSES
             old_other = {k: v for k, v in old_row.items() if k != "view_function"}
             new_other = {k: v for k, v in new_row.items() if k != "view_function"}
             assert old_other == new_other
