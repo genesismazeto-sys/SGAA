@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 CLOSED / ACCEPTED / PHASE 4-B7-A DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE_REQUIRED / PHASE 4-B7-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 CLOSED / ACCEPTED / PHASE 4-B7-A CLOSED / ACCEPTED / PHASE 4-B7-P CLOSED / ACCEPTED
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -764,8 +764,13 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       blueprint via a test-frozen lazy `main` bridge, and by `main.uploaded_file` /
       `main.admin_dashboard` directly. Contract:
       `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`.
-- **PHASE 4-B7-P — Arquivos/Alertas neutral shared-owner prerequisite — IMPLEMENTED /
-      AWAITING SUPERVISOR REVIEW.** Exact 4 shared symbols moved to neutral owners 2/1/1:
+- **PHASE 4-B7-P — Arquivos/Alertas neutral shared-owner prerequisite — CLOSED /
+      ACCEPTED.** Accepted technical commit `1c82a1954250aa5e6654349ce77a50d60f03fe8f`,
+      subject `Extract B7 shared neutral owners`, parent
+      `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`; protected `main`
+      `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Technical publication: COMPLETE.
+      Post-publication bounded verification: COMPLETE. External supervisor technical
+      acceptance: GRANTED. Exact 4 shared symbols moved to neutral owners 2/1/1:
       `app.db_maintenance` owns `ensure_admin_arquivos_table` + `ensure_admin_alertas_table`
       (joining pre-existing `ensure_reportes_table`); new `app.admin_files` owns
       `get_admin_arquivo`; new `app.admin_alerts` owns `list_active_admin_alertas`. `main`
@@ -819,11 +824,17 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `tests/test_phase4_requisicoes_shared_owners.py`, `tests/test_db_schema_maintenance.py`,
       `tests/test_phase4_versioning_subsystem.py`) + governance 6 = 15 paths; path 16 hard
       stop absent further authorization. Contract:
-      `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`. PHASE 4 remains
+      `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`. Routing/reviewer
+      deviation preserved truthfully: the ordered IAsup/IAexec router was not invocable in
+      the implementing harness; implementation was performed directly by Claude, disclosed
+      rather than substituted silently; the external supervisor subsequently performed an
+      independent repository review as part of the PHASE 4-B7-P-R3 acceptance closeout;
+      deviation accepted as nonblocking. PHASE 4 remains
       OPEN / INCREMENTAL IMPLEMENTATION; **PHASE 4-B7 (blueprint route extraction),
       Phase 5 and Phase 6 remain NOT AUTHORIZED; Migration v4 remains PROHIBITED.**
 - [ ] `app/views/admin/arquivos_alertas_reportes.py` — NOT CREATED. Only the PHASE 4-B7-P
-      neutral shared-owner prerequisite is implemented; no route moved.
+      neutral shared-owner prerequisite is implemented and CLOSED / ACCEPTED; no route
+      moved.
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
 - [ ] `app/views/admin/acesso.py` — NOT IMPLEMENTED; the combined Acesso work is not complete
       and no later Configurações cohort is included in accepted B1.

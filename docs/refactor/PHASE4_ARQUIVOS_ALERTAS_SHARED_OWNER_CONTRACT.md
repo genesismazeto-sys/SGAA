@@ -1,22 +1,25 @@
 # PHASE 4-B7-P — Arquivos/Alertas neutral shared-owner contract
 
 Date: 2026-08-04
-Status: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**. Not yet committed or
-published at the time this document was written; freeze, independent review,
-commit and push follow this document within the same authorized phase.
+Status: **CLOSED / ACCEPTED**. Technical publication COMPLETE; post-publication
+bounded verification COMPLETE; external supervisor technical acceptance
+GRANTED; governance closeout published by PHASE 4-B7-P-R3.
 
 ## Status and authority
 
 PHASE 4-B6: **CLOSED / ACCEPTED**.
-PHASE 4-B7-A: **DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE_REQUIRED**
-(accepted).
-PHASE 4-B7-P: **IMPLEMENTED / AWAITING SUPERVISOR REVIEW**.
+PHASE 4-B7-A: **CLOSED / ACCEPTED** (`DIAGNOSIS COMPLETE /
+SHARED_OWNER_PREREQUISITE_REQUIRED`).
+PHASE 4-B7-P: **CLOSED / ACCEPTED**.
 PHASE 4-B7 (Arquivos/Alertas/Reportes blueprint route extraction): **NOT
 AUTHORIZED**. PHASE 4 remains **OPEN / INCREMENTAL IMPLEMENTATION** and is not
 closed. Phase 5 and Phase 6 are **NOT AUTHORIZED**. Migration v4 is
-**PROHIBITED**. The authorized technical/governance subject is `Extract B7
-shared neutral owners`; required parent `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`
-(`Record acceptance of Phase 4-B6`).
+**PROHIBITED**. Accepted technical commit
+`1c82a1954250aa5e6654349ce77a50d60f03fe8f`, subject `Extract B7 shared neutral
+owners`, parent `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`
+(`Record acceptance of Phase 4-B6`); protected `main`
+`340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`. Governance closeout subject
+`Record acceptance of Phase 4-B7-P`; identity resolves through Git history.
 
 This unit is only the neutral shared-owner prerequisite for a future Arquivos/
 Alertas/Reportes cohort. **B7 route/blueprint extraction is NOT AUTHORIZED and
@@ -241,11 +244,21 @@ Read-only gates (unchanged, not part of the mutable pool):
 `tests/test_admin_reportes.py`, `tests/test_admin_aux_sections.py`,
 `tests/test_csrf_inventory_audit.py`.
 
+## Publication and acceptance
+
+Technical commit `1c82a1954250aa5e6654349ce77a50d60f03fe8f` (subject `Extract
+B7 shared neutral owners`, parent `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`)
+was published by normal fast-forward push. Post-publication bounded
+verification (168 passed, 0 failed, 0 errors, exit 0) confirmed the published
+tree. Independent review (self-conducted; ordered DeepSeek V4 Flash router not
+invocable in the implementing harness, disclosed rather than substituted) and
+a subsequent independent repository review performed directly by the external
+supervisor both found zero blocking findings. External supervisor technical
+acceptance is **GRANTED**. Governance closeout published by PHASE 4-B7-P-R3
+(authorized subject `Record acceptance of Phase 4-B7-P`).
+
 ## Next exact action
 
-Freeze the candidate, run independent review (disclosed as not invocable via
-the ordered router in this harness), commit as `Extract B7 shared neutral
-owners` with required parent `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`,
-verify the race gate, and push by normal fast-forward only.
-**PHASE 4-B7 (route/blueprint extraction) remains NOT AUTHORIZED by this
-phase.**
+None for B7-P. Governance closeout complete.
+**PHASE 4-B7 (route/blueprint extraction) remains NOT AUTHORIZED.** No later
+cohort is named or authorized by this closeout.
