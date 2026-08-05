@@ -93,10 +93,7 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
 
 
 EXPECTED_ALUNO_LAZY_KEYS_AFTER_VERSIONING_EXTRACTION = {
-    "ensure_admin_arquivos_table",
-    "get_admin_arquivo",
     "get_student_request_update_alert",
-    "list_active_admin_alertas",
     "mark_student_request_updates_seen",
 }
 

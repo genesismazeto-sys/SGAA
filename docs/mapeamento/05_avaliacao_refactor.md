@@ -386,7 +386,7 @@ Current authorized checklist marker:
       shadow read, diagnóstico) por B2 — CLOSED / ACCEPTED. This prerequisite versioning
       extraction for later Atividades, Matrizes and Requisições cohorts is satisfied.
 
-### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 CLOSED / ACCEPTED
+### Fase 4 — Quebrar `main.py` em blueprints admin — OPEN / INCREMENTAL IMPLEMENTATION / B1-B3, B4-A, B4.1, B4.2, B5-P AND PHASE 4-B5 CLOSED / ACCEPTED / B5-A DIAGNOSIS COMPLETE / PHASE 4-B6-A DIAGNOSIS COMPLETE / PHASE 4-B6-P CLOSED / ACCEPTED / PHASE 4-B6-R1 AND PHASE 4-B6 CLOSED / ACCEPTED / PHASE 4-B7-A DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE_REQUIRED / PHASE 4-B7-P IMPLEMENTED / AWAITING SUPERVISOR REVIEW
 
 Um blueprint por área de negócio, **um PR por blueprint**, sempre com:
 inventário de rotas verde + RBAC atualizado + `pytest` verde.
@@ -752,7 +752,78 @@ inventário de rotas verde + RBAC atualizado + `pytest` verde.
       `3d9660a99e6944ff94a3991a353ecf3aaf300987`; technical publication, post-publication
       verification and external supervisor acceptance COMPLETE; governance closeout published
       by R3.
-- [ ] `app/views/admin/arquivos_alertas_reportes.py`
+- **PHASE 4-B7-A — DIAGNOSIS COMPLETE / SHARED_OWNER_PREREQUISITE_REQUIRED (accepted).**
+      Read-only diagnosis of the Arquivos/Alertas/Reportes cohort: 12 endpoints / 13
+      route-method pairs (5 Arquivos, 4 Alertas, 3 Reportes); RBAC already fully mapped
+      centrally in `app/auth.py` (arquivos/alertas/reportes resource keys). Reportes has
+      zero shared-owner debt (`ensure_reportes_table` already `app.db_maintenance`-owned
+      since Phase 3-B1; `REPORTE_CATEGORY_OPTIONS` already `app.reporting`-owned).
+      Arquivos and Alertas share exactly four symbols consumed outside the cohort:
+      `ensure_admin_arquivos_table`, `get_admin_arquivo`, `ensure_admin_alertas_table`,
+      `list_active_admin_alertas` — consumed by the already-extracted `app/views/aluno.py`
+      blueprint via a test-frozen lazy `main` bridge, and by `main.uploaded_file` /
+      `main.admin_dashboard` directly. Contract:
+      `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`.
+- **PHASE 4-B7-P — Arquivos/Alertas neutral shared-owner prerequisite — IMPLEMENTED /
+      AWAITING SUPERVISOR REVIEW.** Exact 4 shared symbols moved to neutral owners 2/1/1:
+      `app.db_maintenance` owns `ensure_admin_arquivos_table` + `ensure_admin_alertas_table`
+      (joining pre-existing `ensure_reportes_table`); new `app.admin_files` owns
+      `get_admin_arquivo`; new `app.admin_alerts` owns `list_active_admin_alertas`. `main`
+      re-exports all four by identity, zero local bodies; all four moved bodies are
+      AST-equivalent to entry baseline `b6d6e2295e2beeba046cfe1f4c1614f667261ad2:main.py`.
+      `app/views/aluno.py` now imports the three consumed symbols directly from the
+      neutral owners; `aluno._get_main_helpers()` is reduced from 5 keys to exactly
+      `get_student_request_update_alert` / `mark_student_request_updates_seen` (both
+      out-of-scope Requisições dependencies, untouched). Zero route movement: all 12
+      Arquivos/Alertas/Reportes handlers (13 route-method pairs) remain main-local,
+      byte/AST unchanged; `main.uploaded_file` and `main.admin_dashboard` verified
+      AST-unchanged against entry baseline; Reportes ownership unchanged.
+      RED (new `tests/test_phase4_arquivos_alertas_shared_owners.py`, 11 collected):
+      7 failed / 4 passed, exit 1, captured before any production mutation; all seven
+      failures attributable solely to the not-yet-implemented prerequisite. GREEN:
+      11 passed, exit 0. **PHASE 4-B7-P-R2 supplemental-scope correction** (supervisor
+      explicitly authorized in session): the full default suite exposed two additional
+      frozen assertions of the identical pre-B7-P 5-key aluno lazy map outside the
+      originally named pool — `tests/test_db_schema_maintenance.py`
+      (`EXPECTED_ALUNO_LAZY_KEYS_AFTER_VERSIONING_EXTRACTION`, B2 versioning-subsystem
+      residue) and `tests/test_phase4_versioning_subsystem.py`
+      (`REMAINING_ALUNO_MAIN_HELPERS`); both received the identical one-for-one 5→2
+      correction, classification `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED /
+      ALUNO_LAZY_MAP_INVARIANT_RECONCILIATION / NO_RETROACTIVE_GENERIC_AUTHORITY`.
+      **PHASE 4-B7-P-R2 pre-existing environmental failure waiver** (supervisor explicitly
+      authorized in session): full default suite `1103 passed / 3 failed / 17 deselected`,
+      329.53s, exit 1 — **NOT claimed GREEN, NOT claimed 0 failed.** The exact three
+      failures (`tests/test_phase3_final_init_cutover.py::test_seed_tool_uses_factory_owner_without_main_and_is_idempotent`;
+      `tests/test_pytest_runtime_isolation.py::TestSubprocessImportMain::test_import_main_uses_runtime_root`;
+      `tests/test_pytest_runtime_isolation.py::TestMainNoOverwrite::test_import_main_preserves_upload_folder`)
+      were independently reproduced with identical fingerprints on a disposable
+      `git worktree` checkout of unmodified entry baseline
+      `b6d6e2295e2beeba046cfe1f4c1614f667261ad2` under the same interpreter (worktree
+      removed after verification); a Windows console/subprocess-temp-file UTF-8 encoding
+      defect, grep-confirmed to have zero reference to `admin_arquivos`/`admin_alertas`
+      or any of the four B7-P symbols. Classification:
+      `PRE_EXISTING_BASELINE_REPRODUCED / ENVIRONMENTAL_ENCODING_FAILURE /
+      UNRELATED_TO_B7_P / ACCEPTED_NONBLOCKING_RESIDUAL / NO_RETROACTIVE_GREEN_CLAIM`.
+      Neither failing file was modified or added to the mutable pool; that debt remains
+      separate. B7-P-specific/affected focused gates remained 0 failed / 0 errors / exit 0
+      throughout: targeted lane 69 passed/19.97s; global-invariant lane 36 passed/29.72s.
+      Invariants unchanged: routes 131; endpoints 130; business route-method pairs 160;
+      RBAC unmapped 0 (baseline artifact byte-identical, zero `git diff`); route inventory
+      byte-identical (baseline artifact zero `git diff`); message catalog 536; canonical
+      `database.db` 544768 bytes / SHA-256
+      `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` unchanged
+      before/after; WAL/SHM/journal absent both times. Exact manifest: production 5
+      (`app/db_maintenance.py`, `app/admin_files.py` new, `app/admin_alerts.py` new,
+      `app/views/aluno.py`, `main.py`) + tests 4
+      (`tests/test_phase4_arquivos_alertas_shared_owners.py` new,
+      `tests/test_phase4_requisicoes_shared_owners.py`, `tests/test_db_schema_maintenance.py`,
+      `tests/test_phase4_versioning_subsystem.py`) + governance 6 = 15 paths; path 16 hard
+      stop absent further authorization. Contract:
+      `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`. PHASE 4 remains
+      OPEN / INCREMENTAL IMPLEMENTATION; **PHASE 4-B7 (blueprint route extraction),
+      Phase 5 and Phase 6 remain NOT AUTHORIZED; Migration v4 remains PROHIBITED.**
+- [ ] `app/views/admin/arquivos_alertas_reportes.py` — NOT CREATED. Only the PHASE 4-B7-P
+      neutral shared-owner prerequisite is implemented; no route moved.
 - [ ] `app/views/admin/banco_dados.py` (backup/restore/nuvem/oauth callbacks)
 - [ ] `app/views/admin/acesso.py` — NOT IMPLEMENTED; the combined Acesso work is not complete
       and no later Configurações cohort is included in accepted B1.

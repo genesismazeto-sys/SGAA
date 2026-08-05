@@ -218,6 +218,41 @@ def ensure_requisicao_alert_receipts_table(conn) -> None:
     )
 
 
+def ensure_admin_arquivos_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS admin_arquivos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            descricao TEXT,
+            filename TEXT NOT NULL,
+            original_filename TEXT,
+            visivel INTEGER NOT NULL DEFAULT 1,
+            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_arquivos_visivel ON admin_arquivos(visivel)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_arquivos_criado_em ON admin_arquivos(criado_em)")
+
+
+def ensure_admin_alertas_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS admin_alertas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT,
+            mensagem TEXT NOT NULL,
+            bg_color TEXT NOT NULL DEFAULT '#eff6ff',
+            border_color TEXT NOT NULL DEFAULT '#bfdbfe',
+            visivel INTEGER NOT NULL DEFAULT 1,
+            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_alertas_visivel ON admin_alertas(visivel)")
+
+
 _AUTO_SYNC_LOCK = threading.Lock()
 _AUTO_SYNC_STATE = {
     "last_signature": None,

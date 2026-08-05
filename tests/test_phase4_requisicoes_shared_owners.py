@@ -141,10 +141,7 @@ def test_b41_aluno_consumes_matrix_scope_directly_and_drops_only_that_lazy_edge(
     assert isinstance(mapping, ast.Dict)
     lazy_keys = {key.value for key in mapping.keys if isinstance(key, ast.Constant)}
     assert lazy_keys == {
-        "ensure_admin_arquivos_table",
-        "get_admin_arquivo",
         "get_student_request_update_alert",
-        "list_active_admin_alertas",
         "mark_student_request_updates_seen",
     }
 

@@ -56,10 +56,7 @@ SERVICE_OWNERS = {
     "is_versioned_requisicao_snapshot_write_enabled": "app.versioning.snapshots",
 }
 REMAINING_ALUNO_MAIN_HELPERS = {
-    "ensure_admin_arquivos_table",
-    "get_admin_arquivo",
     "get_student_request_update_alert",
-    "list_active_admin_alertas",
     "mark_student_request_updates_seen",
 }
 

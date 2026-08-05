@@ -22,8 +22,14 @@ from flask import (
 )
 
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
+from app.admin_alerts import list_active_admin_alertas
+from app.admin_files import get_admin_arquivo
 from app.auth import aluno_required
-from app.db_maintenance import ensure_reportes_table, ensure_usuario_profile_schema
+from app.db_maintenance import (
+    ensure_admin_arquivos_table,
+    ensure_reportes_table,
+    ensure_usuario_profile_schema,
+)
 from app.matrix_scope import get_effective_matriz_for_turma
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
@@ -51,10 +57,7 @@ def _get_main_helpers():  # lazy import para quebrar o ciclo
     import main  # type: ignore
 
     return {
-        "ensure_admin_arquivos_table": main.ensure_admin_arquivos_table,
-        "get_admin_arquivo": main.get_admin_arquivo,
         "get_student_request_update_alert": main.get_student_request_update_alert,
-        "list_active_admin_alertas": main.list_active_admin_alertas,
         "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
     }
 
@@ -513,7 +516,6 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
 def aluno_dashboard():
     helpers = _get_main_helpers()
     get_student_request_update_alert = helpers["get_student_request_update_alert"]
-    list_active_admin_alertas = helpers["list_active_admin_alertas"]
     mark_student_request_updates_seen = helpers["mark_student_request_updates_seen"]
     default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
@@ -958,9 +960,6 @@ def aluno_meus_dados():
 @bp_aluno.route("/aluno/arquivos")
 @aluno_required
 def aluno_arquivos():
-    helpers = _get_main_helpers()
-    ensure_admin_arquivos_table = helpers["ensure_admin_arquivos_table"]
-
     page, per_page, offset = get_pagination(default_per_page=25)
     q = (request.args.get("q") or "").strip()
     titulo_filter = get_text_query_value("titulo")
@@ -1115,9 +1114,6 @@ def aluno_arquivos():
 @bp_aluno.route("/aluno/arquivos/ver/<int:arquivo_id>")
 @aluno_required
 def aluno_visualizar_arquivo(arquivo_id: int):
-    helpers = _get_main_helpers()
-    get_admin_arquivo = helpers["get_admin_arquivo"]
-
     conn = get_db_connection()
     arquivo = get_admin_arquivo(conn, arquivo_id)
     if not arquivo or not arquivo["visivel"]:
@@ -1129,9 +1125,6 @@ def aluno_visualizar_arquivo(arquivo_id: int):
 @bp_aluno.route("/aluno/arquivos/download/<int:arquivo_id>")
 @aluno_required
 def aluno_baixar_arquivo(arquivo_id: int):
-    helpers = _get_main_helpers()
-    get_admin_arquivo = helpers["get_admin_arquivo"]
-
     conn = get_db_connection()
     arquivo = get_admin_arquivo(conn, arquivo_id)
     if not arquivo or not arquivo["visivel"]:

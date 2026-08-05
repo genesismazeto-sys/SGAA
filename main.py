@@ -154,6 +154,8 @@ from app.admin_access import (
     _get_current_admin_access_context,
     _load_admin_access_context,
 )
+from app.admin_alerts import list_active_admin_alertas
+from app.admin_files import get_admin_arquivo
 import app.cloud_drives as _cd
 from app.backup_settings import (
     _apply_backup_settings_to_app,
@@ -168,6 +170,8 @@ from app.db_maintenance import (
     apply_schema_migrations,
     create_database_snapshot,
     delete_database_snapshot,
+    ensure_admin_alertas_table,
+    ensure_admin_arquivos_table,
     ensure_atividade_versioning_schema,
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
@@ -1244,57 +1248,6 @@ def validar_integridade_versionamento_atividades(conn, *, raise_on_error: bool =
 
 
 
-
-def ensure_admin_arquivos_table(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS admin_arquivos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            titulo TEXT NOT NULL,
-            descricao TEXT,
-            filename TEXT NOT NULL,
-            original_filename TEXT,
-            visivel INTEGER NOT NULL DEFAULT 1,
-            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_arquivos_visivel ON admin_arquivos(visivel)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_arquivos_criado_em ON admin_arquivos(criado_em)")
-
-
-def get_admin_arquivo(conn, arquivo_id: int):
-    ensure_admin_arquivos_table(conn)
-    return conn.execute("SELECT * FROM admin_arquivos WHERE id = ?", (arquivo_id,)).fetchone()
-
-
-def ensure_admin_alertas_table(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS admin_alertas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            titulo TEXT,
-            mensagem TEXT NOT NULL,
-            bg_color TEXT NOT NULL DEFAULT '#eff6ff',
-            border_color TEXT NOT NULL DEFAULT '#bfdbfe',
-            visivel INTEGER NOT NULL DEFAULT 1,
-            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_alertas_visivel ON admin_alertas(visivel)")
-
-
-def list_active_admin_alertas(conn):
-    ensure_admin_alertas_table(conn)
-    return conn.execute(
-        """
-        SELECT id, titulo, mensagem, bg_color, border_color, visivel, criado_em
-          FROM admin_alertas
-         WHERE visivel = 1
-      ORDER BY datetime(criado_em) DESC, id DESC
-        """
-    ).fetchall()
 
 # ===================== App / Config =====================
 
