@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -24,11 +25,15 @@ def _run_cli(*args: object, fixture_path: Path = FIXTURE_PATH) -> subprocess.Com
         str(fixture_path),
         *[str(arg) for arg in args],
     ]
+    environment = os.environ.copy()
+    environment["PYTHONUTF8"] = "1"
     return subprocess.run(
         command,
         cwd=ROOT,
+        env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
 

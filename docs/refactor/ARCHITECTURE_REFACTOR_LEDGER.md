@@ -711,3 +711,66 @@ contratos por unidade.
 tocados aqui; sua reescrita pertence à adoção parte 2, dentro da UT-2, junto com a
 aposentadoria das asserções leitoras de governança. Nenhum caminho de produção, teste,
 snapshot ou banco foi alterado.
+
+## UT-1 — Suíte verde (encoding UTF-8 em subprocess/arquivo temporário no Windows)
+
+**Data:** 2026-08-07. **Autoridade:** `docs/refactor/EXECUTION_PROTOCOL.md` v1.1 FINAL, §2 UT-1,
+com extensão de escopo autorizada explicitamente em UT-1-R1. **Não gerou contrato de fase nem
+commit de governança separado.**
+
+**Escopo original (3 nós nomeados):**
+`test_phase3_final_init_cutover.py::test_seed_tool_uses_factory_owner_without_main_and_is_idempotent`,
+`test_pytest_runtime_isolation.py::TestSubprocessImportMain::test_import_main_uses_runtime_root`,
+`test_pytest_runtime_isolation.py::TestMainNoOverwrite::test_import_main_preserves_upload_folder`.
+Causa raiz: `subprocess.run`/`Path.write_text` sem `encoding="utf-8"` explícito caem em
+`locale.getpreferredencoding()` (cp1252 nesta máquina), divergente do UTF-8 exigido pelo caminho
+do projeto (contém "ç") ou pelo `PYTHONUTF8="1"` do processo filho.
+
+**Quarto ponto (achado pela suíte completa, incorporado por autorização humana UT-1-R1):**
+`test_d73d_normative_importer_dryrun.py::test_invalid_fixture_aborts_without_partial_insertion`,
+mesma classe de defeito no helper compartilhado `_run_cli`. Reproduzido contra o HEAD de entrada
+`2c99f1641387ee115f519ee1517523cd1ecd28c2` com o diff da UT-1 removido via `git stash` — confirmado
+pré-existente, não introduzido por esta UT. Classificação:
+`PRE_EXISTING_BASELINE_REPRODUCED / SAME_UTF8_ENCODING_DEFECT_CLASS / DISCOVERED_BY_UT1_FULL_SUITE
+/ AUTHORIZED_UT1_SCOPE_EXPANSION`.
+
+**Correção do quarto ponto — duas rodadas.** A primeira correção (`encoding="utf-8"` apenas no
+decode do lado pai) foi rejeitada pela revisão adversarial: em ambiente sem
+`PYTHONIOENCODING`/`PYTHONUTF8` (locale ambiente `cp1252`, confirmado), o processo filho grava em
+cp1252 enquanto o pai decodifica como UTF-8 — `subprocess._readerthread` engole o
+`UnicodeDecodeError` resultante, deixando `result.stdout`/`result.stderr` como `None` em vez de
+levantar exceção, o que transformou a falha do nó-alvo de um `AssertionError` legível em
+`TypeError: argument of type 'NoneType' is not iterable`, e regrediu os quatro testes irmãos do
+mesmo arquivo que usam o `_run_cli` compartilhado. Classificação:
+`MATERIAL_FINDING / SAME_FAMILY_SUBSTITUTE_REVIEW / RETURNED_TO_IMPLEMENTATION`. A correção final
+pina também o lado do filho (`environment["PYTHONUTF8"] = "1"` mais `env=environment`),
+espelhando o padrão já aprovado em `test_phase3_final_init_cutover.py:329-341`. A segunda rodada
+de revisão, rodada explicitamente sem `PYTHONIOENCODING`/`PYTHONUTF8` no shell do revisor para
+validar o ambiente real, confirmou o mecanismo determinístico (`PYTHONUTF8=1` fixa a codificação
+de stdio do interpretador filho independentemente de tty/pipe) e a ausência de acoplamento de
+ordem de teste (`environment = os.environ.copy()` é cópia local por chamada).
+
+**Desvio de governança declarado e não-genérico:** `DeepSeek V4 Pro` está indisponível neste
+harness de execução. Toda revisão adversarial desta UT foi feita por um substituto Opus 5,
+explicitamente rotulado como não-independente em cada rodada. Classificação:
+`INDEPENDENT_CROSS_FAMILY_REVIEW_UNAVAILABLE / DISCLOSED / NONBLOCKING_FOR_TEST_ONLY_ENCODING_PATCH
+/ NO_GENERIC_PRECEDENT`. Autorizado apenas para UT-1; não estabelece precedente para as UTs
+seguintes, que permanecem sob o roteamento de modelos original da §6.
+
+**Evidência final.** Total de quatro pontos de correção em três arquivos de teste, todos
+adicionando `encoding="utf-8"` explícito (mais o pareamento `PYTHONUTF8` do lado do filho no
+quarto ponto). Nenhuma asserção alterada, nenhuma exceção suprimida, nenhum teste marcado
+skip/xfail, nenhum arquivo de produção tocado. Suíte completa final, ambiente padrão (sem
+`PYTHONIOENCODING`/`PYTHONUTF8` no shell): `1106 passed / 0 failed / 0 errors / 17 deselected /
+352,06s / exit 0`. Invariantes: rotas 131; endpoints 130; RBAC unmapped 0; actor matrix 402;
+catálogo de mensagens 536; `hooks_main` 7; `route_inventory_baseline.json` byte-idêntico;
+`database.db` 544768 bytes / SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9`
+inalterado; sem resíduo `-wal`/`-shm`/`-journal`. A antiga isenção ambiental de três falhas
+conhecidas está **retirada** — não há exceção de encoding aceita após esta UT.
+
+**Escopo do commit.** Exatamente quatro caminhos de teste (`tests/test_phase3_final_init_cutover.py`,
+`tests/test_pytest_runtime_isolation.py`, `tests/test_d73d_normative_importer_dryrun.py`) mais os
+dois documentos de governança (`docs/refactor/EXECUTION_PROTOCOL.md` §10/§11,
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, este bloco). `AGENT_HANDOFF.md`,
+`PROJECT_STATE.md` e `docs/DOCUMENTATION_INDEX.md` não tocados — permanecem para a Adoção parte 2,
+dentro da UT-2. Um único commit técnico; nenhum commit de governança separado.

@@ -225,7 +225,7 @@ finally:
         script = tmp_path / "_import_test.py"
         content = self.SCRIPT.replace("PROJECT_ROOT_PLACEHOLDER", repr(str(PROJECT_ROOT)))
         content = content.replace("RUNTIME_PLACEHOLDER", repr(str(runtime)))
-        script.write_text(content)
+        script.write_text(content, encoding="utf-8")
         result = subprocess.run(
             [CANONICAL_PYTHON, "-B", str(script)],
             capture_output=True,
@@ -338,7 +338,7 @@ finally:
         script = tmp_path / "_no_overwrite_test.py"
         content = self.SCRIPT.replace("PROJECT_ROOT_PLACEHOLDER", repr(str(PROJECT_ROOT)))
         content = content.replace("RUNTIME_PLACEHOLDER", repr(str(runtime)))
-        script.write_text(content)
+        script.write_text(content, encoding="utf-8")
         result = subprocess.run(
             [CANONICAL_PYTHON, "-B", str(script)],
             capture_output=True,

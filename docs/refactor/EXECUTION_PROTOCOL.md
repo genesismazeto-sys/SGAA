@@ -649,7 +649,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 
 | Data | UT em curso | Achado | Ação |
 |---|---|---|---|
-| | | | |
+| 2026-08-07 | UT-1 | Quarto defeito de encoding UTF-8 pré-existente do Windows, da mesma classe dos três nós nomeados, descoberto pela suíte completa em `tests/test_d73d_normative_importer_dryrun.py::test_invalid_fixture_aborts_without_partial_insertion` (helper `_run_cli`). Reproduzido contra o HEAD de entrada `2c99f1641387ee115f519ee1517523cd1ecd28c2` com o diff da UT-1 removido via `git stash`, confirmando que não foi introduzido por esta UT. | Incorporado explicitamente à UT-1 por autorização humana (UT-1-R1); nenhuma nova UT criada. Classificação: `PRE_EXISTING_BASELINE_REPRODUCED / SAME_UTF8_ENCODING_DEFECT_CLASS / DISCOVERED_BY_UT1_FULL_SUITE / AUTHORIZED_UT1_SCOPE_EXPANSION`. |
 
 ---
 
@@ -658,7 +658,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | UT | Nome | Commit | Executor | Revisor | Veredito | rotas/endpoints/rbac | hooks main | Suíte | Aposentados | Data |
 |---|---|---|---|---|---|---|---|---|---|---|
 | — | Adoção parte 1 | | — | — | — | — | 7 | — | nenhum | |
-| UT-1 | Suíte verde (encoding) | | | | | | 7 | | nenhum | |
+| UT-1 | Suíte verde (encoding) — 4 pontos (3 originais + 1 achado pela suíte, UT-1-R1) | | Sonnet 5 | Opus 5 (substituto, não-independente — DeepSeek V4 Pro indisponível neste harness) | PASS (rodada 2; rodada 1 FAIL com achado material corrigido) | 131/130/0 | 7 | 1106 passed/0 failed/17 deselected | nenhum | 2026-08-07 |
 | UT-2 | Composition root + Adoção parte 2 | | | | | | 7 | | 5 arq. governança | |
 | UT-3 | Hooks de app | | | | | | 1 | | nenhum | |
 | UT-4 | Containment de path | | | | | | 1 | | nenhum | |
