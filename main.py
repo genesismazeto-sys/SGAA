@@ -1283,40 +1283,11 @@ def aluno_url(endpoint: str, **values):
     resolved_endpoint = f"aluno.{endpoint}" if USE_ALUNO_BLUEPRINT else endpoint
     return url_for(resolved_endpoint, **values)
 
-# Config via ambiente (com defaults seguros)
-# `app.secret_key`, cookies de sessão, lifetime e flags CSRF já são aplicados
-# centralmente em `app/__init__.py::create_app`. Não sobrescreva aqui.
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
-Compress(app)
-# Garante recarregamento de templates em dev
-app.config["TEMPLATES_AUTO_RELOAD"] = not app.config.get("IS_PRODUCTION", False)
-try:
-    app.jinja_env.auto_reload = not app.config.get("IS_PRODUCTION", False)
-except Exception:
-    pass
-try:
-    # Garanta que o searchpath está correto e único
-    app.jinja_loader.searchpath = [_TEMPLATES_DIR]
-except Exception:
-    pass
-
-# Caminho robusto do banco, resolvido canonicamente por app.db.
-app.config["DATABASE_PATH"] = DATABASE
-app.config["LOCAL_BACKUP_DIR"] = os.getenv(
-    "APP_LOCAL_BACKUP_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups", "local"),
-)
-app.config["CLOUD_BACKUP_DIR"] = os.getenv(
-    "APP_CLOUD_BACKUP_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups", "cloud_sync"),
-)
-app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = int(
-    os.getenv("APP_CLOUD_SYNC_INTERVAL_SECONDS", "600")
-)
-app.config["EXTERNAL_BACKUP_URL"] = os.getenv("APP_EXTERNAL_BACKUP_URL", "")
-app.config["EXTERNAL_BACKUP_TOKEN"] = os.getenv("APP_EXTERNAL_BACKUP_TOKEN", "")
-app.config["EXTERNAL_BACKUP_ENABLED"] = os.getenv("APP_EXTERNAL_BACKUP_ENABLED", "0") in ("1", "true", "True")
-bind_backup_settings_runtime_app(app)
+# Config via ambiente: `app.secret_key`, cookies de sessão, lifetime, flags
+# CSRF, MAX_CONTENT_LENGTH, compressão, templates, DATABASE_PATH, diretórios
+# de backup e EXTERNAL_BACKUP_* são todos aplicados centralmente em
+# `app/__init__.py::create_app` (UT-2 unificou o composition root). Não
+# redefina nada disso aqui.
 
 
 REPORTE_STATUS_OPTIONS = (
@@ -1597,12 +1568,12 @@ def _maybe_sync_database_snapshot(force: bool = False, conn=None):
 
 
 
-# Headers de segurança básicos em todas as respostas
+# Sincronização/upload de snapshot do banco pós-resposta. Dono transitório:
+# main (UT-2 isolou este bloco de add_security_headers; os cabeçalhos de
+# segurança agora são exclusivamente de app.__init__._apply_security_headers).
+# Removido na UT-5, quando o I/O de backup migra para app/backup/.
 @app.after_request
-def add_security_headers(resp):
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    resp.headers.setdefault("Referrer-Policy", "no-referrer-when-downgrade")
+def _legacy_post_response_backup_sync(resp):
     try:
         if request.endpoint != "static" and resp.status_code < 500:
             sync_result = _maybe_sync_database_snapshot(force=False)

@@ -659,7 +659,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 |---|---|---|---|---|---|---|---|---|---|---|
 | — | Adoção parte 1 | | — | — | — | — | 7 | — | nenhum | |
 | UT-1 | Suíte verde (encoding) — 4 pontos (3 originais + 1 achado pela suíte, UT-1-R1) | | Sonnet 5 | Opus 5 (substituto, não-independente — DeepSeek V4 Pro indisponível neste harness) | PASS (rodada 2; rodada 1 FAIL com achado material corrigido) | 131/130/0 | 7 | 1106 passed/0 failed/17 deselected | nenhum | 2026-08-07 |
-| UT-2 | Composition root + Adoção parte 2 | | | | | | 7 | | 5 arq. governança | |
+| UT-2 | Composition root + Adoção parte 2 | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 7 | 1110 passed/0 failed/0 errors/17 deselected | 5 arq. leitores de governança / 6 funções leitoras autorizadas | 2026-08-07 |
 | UT-3 | Hooks de app | | | | | | 1 | | nenhum | |
 | UT-4 | Containment de path | | | | | | 1 | | nenhum | |
 | UT-5 | Fase 5 → `app/backup/` | | | | | | **0** | | nenhum | |

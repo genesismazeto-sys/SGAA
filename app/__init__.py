@@ -11,7 +11,8 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from werkzeug.routing import BuildError
 
 from presets_api import bp_presets
-from app.db import close_db_connection
+from app.backup_settings import bind_backup_settings_runtime_app
+from app.db import DATABASE, close_db_connection
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
 from app.views.admin.atividades import bp_admin_atividades
@@ -132,6 +133,27 @@ def create_app(
     app.config["BACKUP_RESTORE_MAX_CONTENT_LENGTH"] = int(
         os.getenv("APP_BACKUP_RESTORE_MAX_CONTENT_LENGTH", str(128 * 1024 * 1024))
     )
+
+    # Caminho robusto do banco, resolvido canonicamente por app.db, e
+    # diretórios/config de backup local/nuvem (UT-2: dono único).
+    app.config["DATABASE_PATH"] = DATABASE
+    app.config["LOCAL_BACKUP_DIR"] = os.getenv(
+        "APP_LOCAL_BACKUP_DIR",
+        os.path.join(project_root, "backups", "local"),
+    )
+    app.config["CLOUD_BACKUP_DIR"] = os.getenv(
+        "APP_CLOUD_BACKUP_DIR",
+        os.path.join(project_root, "backups", "cloud_sync"),
+    )
+    app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = int(
+        os.getenv("APP_CLOUD_SYNC_INTERVAL_SECONDS", "600")
+    )
+    app.config["EXTERNAL_BACKUP_URL"] = os.getenv("APP_EXTERNAL_BACKUP_URL", "")
+    app.config["EXTERNAL_BACKUP_TOKEN"] = os.getenv("APP_EXTERNAL_BACKUP_TOKEN", "")
+    app.config["EXTERNAL_BACKUP_ENABLED"] = os.getenv(
+        "APP_EXTERNAL_BACKUP_ENABLED", "0"
+    ) in ("1", "true", "True")
+    bind_backup_settings_runtime_app(app)
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_SAMESITE", "Lax")

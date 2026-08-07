@@ -4,17 +4,27 @@
 
 1. **Canonical repository state** — `git` commit/tree facts are the single source
    of truth. Chat memory and unsaved documentation carry zero authority.
-2. **This index** — defines the mandatory reading order, documents the authority
+2. **`docs/refactor/EXECUTION_PROTOCOL.md`** — operational authority for all
+   remaining refactor work (UT-1 onward): scope, order, invariants, model
+   routing, stop criteria, and the closed test-retirement table. Adopted
+   2026-08-07 (v1.1 FINAL); supersedes per-phase contract governance for
+   remaining work. Does not revoke closed contracts — B1–B7-P remain valid
+   history (item 7 below).
+3. **This index** — defines the mandatory reading order, documents the authority
    hierarchy, and records closeout rules.
-3. **Project state** (`PROJECT_STATE.md`) — authoritative current-state block at
-   the top; historical blocks beneath are preserved but superseded by newer
-   blocks or phase closeouts.
-4. **Master plan** (`docs/mapeamento/05_avaliacao_refactor.md`) — the incremental
+4. **Project state** (`PROJECT_STATE.md`) — live current-state block. From
+   UT-2 onward it is **rewritten (not appended), at most ≤40 lines, once per
+   unit of work**: branch, HEAD, last/current/next UT, live invariants, and
+   the latest full-suite result. Historical narrative predating UT-2 is not
+   preserved here — it lives only in the ledger (item 6 below).
+5. **Master plan** (`docs/mapeamento/05_avaliacao_refactor.md`) — the incremental
    refactor plan; frozen Phase 0–6 decomposition with completion matrix and
-   formal decisions.
-5. **Architecture refactor ledger** (`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`)
+   formal decisions. Superseded as scope authority for remaining work by
+   `EXECUTION_PROTOCOL.md` §2 (item 2 above); retained as historical plan.
+6. **Architecture refactor ledger** (`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`)
    — normalized table of every refactor phase, commits, status, and residual risk.
-6. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3/4 contracts) — per-phase scope, decisions,
+   Historical record; append-only.
+7. **Phase contracts** (`docs/refactor/REF_*.md` and named Phase 3/4 contracts) — per-phase scope, decisions,
    and closeout evidence. The canonical Phase 3 authority, intentionally revised
    through the B11 single-init cutover, is
    `docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md`. Standalone REF contracts exist for: REF-0TF, REF-0TF-A,
@@ -52,7 +62,7 @@
       neutral owners 2/1/1 across `app.db_maintenance`, `app.admin_files`
       (new) and `app.admin_alerts` (new); zero route movement; PHASE 4-B7
       route extraction NOT AUTHORIZED).
-7. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
+8. **Historical snapshot custody** (`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`)
     — autonomous administrative/governance track for the 17 historical database
     snapshot artifacts; R1, R2 and R3 CLOSED / ACCEPTED; **R4 EXECUTED**; **R5 CLOSED / ACCEPTED**;
     **R6 CLOSED / ACCEPTED WITH DECLARED POST-MUTATION NONCONFORMITY**
@@ -68,12 +78,15 @@
     security-complete custody NOT CLAIMED;
     does not integrate any architectural
     implementation phase.
-8. **Agent handoff** (`AGENT_HANDOFF.md`) — current operational handoff for the
-   next executor; the top block is operationally canonical but is **not** a
-   substitute for the repository canon.
-9. **Supporting evidence** — tests and artifacts under `tests/` (especially
-   `tests/_artifacts/`) and tools under `tools/`.
-10. **Legacy / historical** — older blocks, superseded contracts, and historical
+9. **Agent handoff** (`AGENT_HANDOFF.md`) — **HISTORICAL / FROZEN** as of the
+   `EXECUTION_PROTOCOL.md` v1.1 governance adoption (2026-08-07). No new
+   writes; the live operational state is `PROJECT_STATE.md` (item 4). The
+   preserved top block remains a historical operational record but is
+   **not** a substitute for the repository canon and is not read by the
+   active governance cycle.
+10. **Supporting evidence** — tests and artifacts under `tests/` (especially
+    `tests/_artifacts/`) and tools under `tools/`.
+11. **Legacy / historical** — older blocks, superseded contracts, and historical
     architecture snapshots preserved for audit trail; they do not govern current
     work.
 

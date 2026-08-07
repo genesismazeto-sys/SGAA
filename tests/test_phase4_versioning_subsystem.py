@@ -92,65 +92,6 @@ def _top_level_functions(path: Path) -> set[str]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
 
-
-def test_phase4_b2_current_governance_records_external_acceptance():
-    handoff = HANDOFF_PATH.read_text(encoding="utf-8").split(
-        "## Historical state — PHASE 4-B2", 1
-    )[1].split("## Historical state — PHASE 4-B1", 1)[0]
-    project_state = PROJECT_STATE_PATH.read_text(encoding="utf-8").split(
-        "## Historical authoritative state — PHASE 4-B2", 1
-    )[1].split("## Historical authoritative state — PHASE 4-B1", 1)[0]
-    documentation_index = DOCUMENTATION_INDEX_PATH.read_text(encoding="utf-8").split(
-        "- Accepted technical commits:", 1
-    )[0]
-    master_plan = MASTER_PLAN_PATH.read_text(encoding="utf-8").split(
-        "### Fase 4 —", 1
-    )[1].split("### Fase 5 —", 1)[0]
-    ledger_lines = ARCHITECTURE_LEDGER_PATH.read_text(encoding="utf-8").splitlines()
-    ledger = "\n".join(
-        line
-        for line in ledger_lines
-        if line.startswith(("| PHASE4-B2 |", "| Fase 4 |", "| Fase 5 |", "| Fase 6 |"))
-    )
-    contract = VERSIONING_CONTRACT_PATH.read_text(encoding="utf-8")
-    current_records = (
-        handoff,
-        project_state,
-        documentation_index,
-        master_plan,
-        ledger,
-        contract,
-    )
-
-    accepted_commit = "17e468ad938e873e1f9e9c303808ad31b9f3806b"
-    for record in current_records:
-        assert "PHASE 4-B2" in record or "PHASE4-B2" in record
-        assert "CLOSED / ACCEPTED" in record
-        assert accepted_commit in record
-        assert "post-publication" in record.lower()
-        assert "complete" in record.lower()
-
-    current_text = "\n".join(current_records).lower()
-    for stale_claim in (
-        "stage is pending",
-        "staging is pending",
-        "commit is pending",
-        "push is pending",
-        "review addendum is pending",
-    ):
-        assert stale_claim not in current_text
-
-    assert "PHASE 4" in handoff and "OPEN / INCREMENTAL IMPLEMENTATION" in handoff
-    assert "PHASE 4-B3: NOT AUTHORIZED" in current_text.upper()
-    assert "PHASE 5: NOT AUTHORIZED" in current_text.upper()
-    assert "PHASE 6: NOT AUTHORIZED" in current_text.upper()
-    assert "MIGRATION V4: PROHIBITED" in current_text.upper()
-    assert "PHASE 4-B4.2 CLOSED / ACCEPTED" in master_plan
-    assert "PHASE 4-B3 — CLOSED / ACCEPTED" in master_plan
-    assert "- [x] `app/views/admin/matrizes.py`" in master_plan
-    assert "prerequisite versioning extraction" in " ".join(master_plan.split())
-
-
 def test_versioning_package_import_isolated_from_main_and_side_effects(tmp_path):
     runtime = tmp_path / "isolated-versioning-import"
     code = r'''

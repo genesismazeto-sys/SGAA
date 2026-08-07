@@ -774,3 +774,80 @@ dois documentos de governança (`docs/refactor/EXECUTION_PROTOCOL.md` §10/§11,
 `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`, este bloco). `AGENT_HANDOFF.md`,
 `PROJECT_STATE.md` e `docs/DOCUMENTATION_INDEX.md` não tocados — permanecem para a Adoção parte 2,
 dentro da UT-2. Um único commit técnico; nenhum commit de governança separado.
+
+## UT-2 — Unificação do composition root + Adoção parte 2
+
+**Data:** 2026-08-07. **Autoridade:** `docs/refactor/EXECUTION_PROTOCOL.md` v1.1 FINAL, §2 UT-2 e
+§13 "Adoção parte 2". **HEAD de entrada:** `ab1614dd525047e862da00baef975e81eca01c6b`.
+**Não gerou contrato de fase nem commit de governança separado.**
+
+**Escopo concluído.** `app/__init__.py::create_app` passa a ser o dono único da configuração de
+runtime da aplicação. O bloco de configuração pós-`create_app` de `main.py` foi removido: o
+`Compress(app)` duplicado (já registrado em `app/__init__.py:198`), o `MAX_CONTENT_LENGTH`, o
+`TEMPLATES_AUTO_RELOAD`/`jinja_env.auto_reload`, a fixação do `jinja_loader.searchpath`, o
+`DATABASE_PATH`, os diretórios `LOCAL_BACKUP_DIR`/`CLOUD_BACKUP_DIR`, o
+`CLOUD_SYNC_INTERVAL_SECONDS`, as chaves `EXTERNAL_BACKUP_*` e a chamada
+`bind_backup_settings_runtime_app(app)` migraram para `create_app`, resolvendo o `project_root`
+canonicamente em vez de por `os.path.dirname(os.path.abspath(__file__))` de `main`. `main.py`
+retém apenas um comentário normativo proibindo a redefinição desses valores.
+
+**Cabeçalhos de segurança — dono único.** O `add_security_headers` de `main` foi dissolvido. Os
+cabeçalhos passam a ser exclusivamente de `app.__init__._apply_security_headers`. Consequência
+canônica: `Referrer-Policy` = `strict-origin-when-cross-origin` em todas as respostas, superando o
+`no-referrer-when-downgrade` que `main` aplicava via `setdefault`. `X-Content-Type-Options:
+nosniff` e `X-Frame-Options: SAMEORIGIN` permanecem.
+
+**`_legacy_post_response_backup_sync` preservado.** O corpo de sincronização/upload de snapshot do
+banco que convivia dentro do antigo `add_security_headers` foi isolado num `after_request` próprio
+de `main`, renomeado para `_legacy_post_response_backup_sync`. Dono transitório declarado: `main`.
+Removido na **UT-5**, quando o I/O de backup migra para `app/backup/`. Não é dívida silenciosa.
+
+**Consequência de ordenação de CSRF.** Com a remoção do `Compress(app)` duplicado de `main`, a
+ordem relativa dos `after_request` muda e a injeção `_inject_csrf_into_html`, executada dentro de
+`_apply_security_headers`, passa a operar sobre corpos HTML não comprimidos — isto é, torna-se
+efetivamente ativa. Classificação: `CSRF_ORDER_CHANGE = SAFE_AND_INTENDED`, explicitamente aceita
+pelas duas revisões independentes. O custo de CPU da injeção agora ativa foi adjudicado **dentro**
+da UT-2 e não constitui achado fora de escopo.
+
+**Desvio de logging.** `app/__init__.py:306` e `main.py:1254` mantêm cada um seu
+`logging.getLogger(__name__)`, preservando um logger `"main"` distinto do logger `"app"`. A
+unificação do composition root não unificou a hierarquia de loggers. Classificação: `ACCEPT` —
+desvio consciente, logger `"main"` distinto preservado.
+
+**Adoção parte 2 concluída.** `PROJECT_STATE.md` reescrito para a forma de estado vivo (≤40
+linhas), `docs/DOCUMENTATION_INDEX.md` atualizado, `AGENT_HANDOFF.md` não tocado e definitivamente
+histórico/congelado.
+
+**Aposentadoria de testes leitores de governança.** 6 funções aposentadas em 5 arquivos, conforme a
+tabela fechada da §8:
+`test_phase3_schema_startup_transaction_contract.py::test_canonical_contract_document_and_governance_registration`,
+`::test_macro_phase3_acceptance_closeout_is_current_and_bounded`;
+`test_phase4_atividades_blueprint.py::test_b3_r3_governance_closeout_is_canonical`;
+`test_phase4_configuracoes_blueprint.py::test_phase4_b1_governance_closeout_is_canonical`;
+`test_phase4_versioning_subsystem.py::test_b41_governance_records_exact_scope_and_preserves_later_prohibitions`;
+`test_phase4_requisicoes_shared_owners.py::test_phase4_b2_current_governance_records_external_acceptance`.
+Nenhuma asserção de comportamento de produção foi removida. Novo teste de contrato adicionado:
+`tests/test_ut2_composition_root.py`.
+
+**Revisão adversarial — duas revisões independentes, ambas PASS.** `DeepSeek V4 Pro`: PASS, 0
+achados materiais, `CSRF_ORDER_CHANGE = SAFE_AND_INTENDED`, `LOGGING_DEVIATION = ACCEPT`. Segunda
+revisão por `Claude Opus 5` em contexto limpo: PASS, 0 achados materiais, todos os eixos UT-2 PASS.
+O desvio de governança da UT-1 (revisor substituto não-independente) **não** se repete aqui: a
+revisão cross-family exigida pela §6 foi efetivamente executada.
+
+**Evidência final.** Invariantes: rotas 131; endpoints 130; RBAC unmapped 0; actor matrix 402;
+catálogo de mensagens 536; `hooks_main` 7; `route_inventory_baseline.json` byte-idêntico;
+`database.db` 544768 bytes / SHA-256
+`a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` inalterado; sem resíduo
+`-wal`/`-shm`/`-journal`. Inventário de `after_request`: Flask-Compress; `_apply_security_headers`
+(dono `app`); `_legacy_post_response_backup_sync` (dono `main`, transitório até UT-5). Suíte
+completa de qualificação: `1110 passed / 17 deselected / 0 failed / 0 errors / exit 0`.
+
+**Escopo do commit.** 12 caminhos, commit técnico único: `app/__init__.py`, `main.py`,
+`PROJECT_STATE.md`, `docs/DOCUMENTATION_INDEX.md`, `docs/refactor/EXECUTION_PROTOCOL.md` (§11),
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (este bloco), os cinco arquivos de teste leitores
+de governança aposentados e `tests/test_ut2_composition_root.py`. `AGENT_HANDOFF.md` não aparece.
+Nenhum commit de governança separado. §10 não recebeu entrada: nenhum achado fora de escopo
+genuinamente novo surgiu nesta finalização.
+
+**Próxima UT:** UT-3 — migrar os hooks restantes de `app` para o composition root.
