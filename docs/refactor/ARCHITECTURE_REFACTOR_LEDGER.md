@@ -645,3 +645,69 @@ restoration, source change, test, application, pytest or Phase 2-6 work in this 
 - `docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`
 
 **Authorized commit subject:** `Record verified R6 parent ACL hardening outcome`.
+
+## Transição para EXECUTION_PROTOCOL v1.1
+
+**Data:** 2026-08-07. **Tipo:** transição de governança única. **Não é uma UT e não é um
+closeout de fase.** Commit de adoção parte 1, assunto `Adopt execution protocol for remaining
+refactor`, sobre o HEAD de entrada `c3853220189c0d6c279b2f169e0fdc68924c00d1`.
+
+**Motivo.** O aparato de governança por fase (um contrato `.md` dedicado por unidade, um commit
+de closeout separado, manifesto de caminhos com teto numérico e registro de sessão/custo/hash de
+revisor) tornou-se o maior artefato do repositório: 1,41 MB de markdown de governança contra
+0,92 MB de Python de produção, razão 1,54:1. O custo por unidade deixou de ser proporcional ao
+trabalho técnico entregue. A partir desta transição, a autoridade operacional do trabalho
+remanescente passa a ser um documento único, `docs/refactor/EXECUTION_PROTOCOL.md`, com registro
+de aceitação reduzido a uma linha por unidade.
+
+**Autoridade futura de execução.** `docs/refactor/EXECUTION_PROTOCOL.md` (v1.1 FINAL). Escopo,
+ordem, invariantes, roteamento de modelos e critérios de parada do trabalho remanescente são
+definidos por ele. `PROJECT_STATE.md` permanece o estado vivo; este ledger permanece o registro
+histórico. `AGENT_HANDOFF.md` fica congelado como arquivo histórico a partir deste commit.
+
+**Sequência fechada de 14 UTs.**
+
+| UT | Nome | Bloco |
+|---|---|---|
+| UT-1 | Suíte verde (encoding UTF-8 em subprocess) | A — fundação |
+| UT-2 | Unificar composition root (config + headers) + adoção parte 2 | A |
+| UT-3 | Migrar os hooks de app para o composition root | A |
+| UT-4 | Containment de path em `_best_effort_remove_admin_arquivo_file` | B — runtime e ciclos |
+| UT-5 | Fase 5: I/O fora do `after_request`, pacote `app/backup/` | B |
+| UT-6 | Fechar ciclo `app → main` | B |
+| UT-7 | Helpers `matrizes` → `activity_catalog` | B |
+| UT-8 | Coorte Banco de Dados (20 rotas) | C — coortes |
+| UT-9 | Coorte Acesso (6 rotas) | C |
+| UT-10 | Coorte Arquivos (5 rotas) | D — fechamento condicional |
+| UT-11 | Coorte Alertas (4 rotas) | D |
+| UT-12 | Coorte Reportes (3 rotas) | D |
+| UT-13 | Dashboard + demo + meus_dados (3 rotas) | D |
+| UT-14 | Infra: `uploaded_file`, `health`, `favicon` (3 rotas) | D |
+
+Diferidas e não autorizadas: D-1 (dividir `app/db_maintenance.py`), D-2 (RBAC declarativo /
+aposentar `LegacyRouteSpec`), D-3 (purga dos re-exports de `main`). Permanecem proibidos
+`app/repositories/`, migration v4, o pacote `app/db/`, adicionar símbolos a
+`app/admin_access.py` e fundir Arquivos/Alertas/Reportes num único módulo.
+
+**PLATEAU ESTRUTURAL — declarável ao fim da UT-9.** `main.py` sem nenhum hook de app
+(`before_request`, `after_request`, `context_processor`, `errorhandler`); `create_app()` como
+único sítio de instalação de extensão Flask e de definição de chave de `app.config`; zero
+`import main` em `app/`, `services/` e `utils/`; nenhuma escrita em disco, banco ou rede dentro
+de hook de requisição; toda rota registrada resolvendo para exatamente um requisito de RBAC ou
+exceção aprovada; route inventory e actor matrix verdes; suíte completa 0 failed / 0 errors.
+
+**REFACTOR ESTRUTURAL COMPLETO — declarável ao fim da UT-14.** Os critérios do plateau, mais:
+`main.py` sem nenhum `@app.route`; cada coorte de domínio com exatamente um módulo dono e
+nenhuma coorte dividida entre `main.py` e `app/`.
+
+**Contratos históricos.** PHASE 4-B1, B2, B3, B4-A, B4.1, B4.2, B5-P, B5, B6-A, B6-P, B6-R1,
+B6, B7-A e B7-P **permanecem contratos históricos válidos**. Esta transição não os revoga, não
+os reescreve e não reabre nenhuma de suas aceitações. Ela apenas cessa a produção de novos
+contratos por unidade.
+
+**Escopo desta transição.** Exatamente três caminhos: `docs/refactor/EXECUTION_PROTOCOL.md`
+(novo), `AGENT_HANDOFF.md` (prepend de banner histórico, nenhuma outra alteração) e este ledger
+(append no fim do arquivo). `PROJECT_STATE.md` e `docs/DOCUMENTATION_INDEX.md` **não** são
+tocados aqui; sua reescrita pertence à adoção parte 2, dentro da UT-2, junto com a
+aposentadoria das asserções leitoras de governança. Nenhum caminho de produção, teste,
+snapshot ou banco foi alterado.

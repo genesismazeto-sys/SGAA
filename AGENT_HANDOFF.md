@@ -1,3 +1,5 @@
+> **HISTÓRICO — congelado em 2026-08-07 pela v1.1 do EXECUTION_PROTOCOL. Nenhuma escrita nova. Estado vivo: PROJECT_STATE.md. Autoridade operacional: docs/refactor/EXECUTION_PROTOCOL.md.**
+
 # Agent Handoff
 
 ## Current state — PHASE 4-B7-P-R3 CLOSED / ACCEPTED — GOVERNANCE CLOSEOUT PUBLISHED
