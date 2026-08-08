@@ -198,3 +198,45 @@ def test_admin_arquivos_filter_schema_and_typed_filters(client):
 
     assert titulo_a in html
     assert titulo_b not in html
+
+
+def test_best_effort_remove_admin_arquivo_file_rejects_parent_traversal(tmp_path, monkeypatch):
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir(parents=True, exist_ok=True)
+    outside_file = tmp_path / "outside-file.pdf"
+    outside_file.write_bytes(b"outside")
+
+    monkeypatch.setitem(main.app.config, "UPLOAD_FOLDER", str(upload_root))
+
+    main._best_effort_remove_admin_arquivo_file(os.path.join("..", "outside-file.pdf"))
+
+    assert outside_file.exists(), "helper deleted a file outside UPLOAD_FOLDER via parent traversal"
+
+
+def test_best_effort_remove_admin_arquivo_file_rejects_absolute_external_path(tmp_path, monkeypatch):
+    upload_root = tmp_path / "uploads"
+    upload_root.mkdir(parents=True, exist_ok=True)
+    external_dir = tmp_path / "external"
+    external_dir.mkdir(parents=True, exist_ok=True)
+    secret_file = external_dir / "secret.pdf"
+    secret_file.write_bytes(b"secret")
+
+    monkeypatch.setitem(main.app.config, "UPLOAD_FOLDER", str(upload_root))
+
+    main._best_effort_remove_admin_arquivo_file(str(secret_file))
+
+    assert secret_file.exists(), "helper deleted a file outside UPLOAD_FOLDER via absolute path"
+
+
+def test_best_effort_remove_admin_arquivo_file_removes_nested_in_root_file(tmp_path, monkeypatch):
+    upload_root = tmp_path / "uploads"
+    nested_dir = upload_root / "admin_arquivos"
+    nested_dir.mkdir(parents=True, exist_ok=True)
+    nested_file = nested_dir / "x.pdf"
+    nested_file.write_bytes(b"legitimate")
+
+    monkeypatch.setitem(main.app.config, "UPLOAD_FOLDER", str(upload_root))
+
+    main._best_effort_remove_admin_arquivo_file(os.path.join("admin_arquivos", "x.pdf"))
+
+    assert not nested_file.exists(), "helper failed to clean up a legitimate in-root file"

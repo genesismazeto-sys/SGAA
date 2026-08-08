@@ -945,3 +945,17 @@ não-materiais das revisões são matéria adjudicada dentro do escopo da UT-3, 
 arquitetura diferida nova.
 
 **Próxima UT:** UT-4 — containment de path.
+
+## UT-4 — Containment de path
+
+**Data:** 2026-08-08. **HEAD de entrada:** `fa52a05a4ce07b4c56e1d4827b2c7d69c6c35f5c`.
+`_best_effort_remove_admin_arquivo_file` foi endurecida com a contenção `_path_within_root` já
+existente. **Mudança de comportamento declarada:** travessia de diretório pai (`..`) é
+rejeitada; caminhos absolutos externos à raiz são rejeitados; limpeza legítima aninhada
+permanece preservada. Nenhum teste aposentado. `DeepSeek V4 Pro`: PASS / 0 achados materiais.
+`Claude Opus 5`: PASS / 0 achados materiais. Suíte completa: 1129 passed / 17 deselected / 0
+failed / 0 errors. Invariantes: rotas 131 / endpoints 130 / RBAC unmapped 0 / actor matrix 402 /
+catálogo de mensagens 536 / hooks_main 1. `database.db` inalterado em 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
+
+**Próxima UT:** UT-5 — Fase 5: I/O fora do after_request.

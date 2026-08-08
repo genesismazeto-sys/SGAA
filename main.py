@@ -3591,6 +3591,12 @@ def _best_effort_remove_admin_arquivo_file(rel_path):
         if not upload_root:
             return
         file_path = os.path.normpath(os.path.join(upload_root, rel_path))
+        if not _path_within_root(file_path, upload_root):
+            logger.warning(
+                f"Remocao ignorada: caminho de arquivo admin '{rel_path}' resolvido para "
+                f"'{file_path}' fora de UPLOAD_FOLDER '{upload_root}'"
+            )
+            return
         if os.path.isfile(file_path):
             os.remove(file_path)
     except Exception as exc:
