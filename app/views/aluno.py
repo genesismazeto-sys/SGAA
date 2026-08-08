@@ -51,14 +51,17 @@ from app.versioning import (
 )
 from utils.messages import flash
 
-# Importa helpers diretamente de main, mas apenas quando necessário, para evitar
-# ciclo de import no load inicial do módulo.
-def _get_main_helpers():  # lazy import para quebrar o ciclo
-    import main  # type: ignore
+# UT-6: os helpers de alerta de atualização passaram a ter dono canônico em
+# app/requisitions.py; o nome da função é mantido por contrato de teste.
+def _get_main_helpers():
+    from app.requisitions import (
+        get_student_request_update_alert,
+        mark_student_request_updates_seen,
+    )
 
     return {
-        "get_student_request_update_alert": main.get_student_request_update_alert,
-        "mark_student_request_updates_seen": main.mark_student_request_updates_seen,
+        "get_student_request_update_alert": get_student_request_update_alert,
+        "mark_student_request_updates_seen": mark_student_request_updates_seen,
     }
 
 

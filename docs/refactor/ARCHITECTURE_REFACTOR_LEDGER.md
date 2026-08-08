@@ -988,4 +988,30 @@ endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 
 **0**. `database.db` inalterado em 544768 bytes / SHA-256
 `bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
 
-**Próxima UT:** UT-6 — fechar o ciclo app → main. NÃO INICIADA.
+## UT-6 — Fechar ciclo app → main
+
+**Data:** 2026-08-08. **HEAD de entrada:** `1b0a0c3b3f05b7e6e2f52fb1e475ce9d21f192a8`. Resultado
+estrutural: dependências reversas arquiteturais 3 → 0; arestas literais de import de `main` 2 → 0;
+SCC reversa contendo `main` eliminada. Ownership: `app/web/urls.py` passa a possuir `aluno_url` e
+`USE_ALUNO_BLUEPRINT`; `app/requisitions.py` passa a possuir os helpers de alerta de atualização de
+solicitação do aluno e as constantes `AUTO_ALERT_YELLOW_*`; `utils/messages.py` resolve a conexão de
+banco diretamente pelo dono canônico `app.db`, sem consultar `main` via `sys.modules`. `main`
+preserva reexports de compatibilidade por identidade para todos os símbolos movidos. Catálogo de
+mensagens: 536; dono do uso movido preservado sob `app/requisitions.py`.
+
+Suíte de contrato nova da UT-6: 68/68. Zero testes aposentados; uma extensão autorizada de allowlist
+do scanner de mensagens (inclusão de `app/requisitions.py`). `DeepSeek V4 Pro`: PASS / 0 achados
+materiais. `Claude Opus 5`: PASS / 0 achados materiais (revisão genuinamente independente).
+
+Achados diferidos: detector AST da UT-6 não captura formas simples de alias estaticamente
+resolúveis (`NON_MATERIAL_FUTURE_HARDENING`); `tests/test_ref_0c_b1_p0_access_context_transactions.py`
+faz patch de um alvo obsoleto `main.get_db_connection` (`PRE_EXISTING_TEST_DEBT`). Ambos registrados
+em §10 de `EXECUTION_PROTOCOL.md`, sem UT nova criada.
+
+Suíte completa: 1227 collected / 1210 passed / 17 deselected / 0 failed / 0 errors. Invariantes:
+rotas 131 / endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 /
+hooks_main 0. Chamadores de compatibilidade de `main.init_db`: 72 (inalterado; nenhum arquivo
+candidato da UT-6 introduziu novo chamador). `database.db` inalterado em 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
+
+**Próxima UT:** UT-7 — helpers matrizes → activity_catalog. NÃO INICIADA.

@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import re
-import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -432,6 +431,9 @@ def _iter_backend_files() -> list[Path]:
         PROJECT_ROOT / "app" / "academics.py",
         PROJECT_ROOT / "app" / "auth.py",
         PROJECT_ROOT / "app" / "db_maintenance.py",
+        # UT-6: novo dono canonico do alerta de atualizacao do aluno
+        # (get_student_request_update_alert saiu de main.py).
+        PROJECT_ROOT / "app" / "requisitions.py",
         PROJECT_ROOT / "app" / "settings.py",
         PROJECT_ROOT / "app" / "uploads.py",
         # UT-3: novos donos canonicos de sinks de mensagem movidos de main.py
@@ -913,10 +915,12 @@ def ensure_message_overrides_schema(conn) -> None:
 
 
 def _get_runtime_db_connection():
-    main_module = sys.modules.get("main")
-    if main_module is not None and hasattr(main_module, "get_db_connection"):
-        return main_module.get_db_connection()
+    """Seam de conexão em runtime.
 
+    UT-6: a resolução via ``sys.modules["main"]`` foi removida; ``app.db`` é o
+    único dono canônico da conexão.  O import segue local à função para manter
+    ``utils.messages`` importável a frio, sem carregar a camada de dados.
+    """
     from app.db import get_db_connection as _get_db_connection
 
     return _get_db_connection()

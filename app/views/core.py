@@ -1,3 +1,5 @@
+import logging
+
 from flask import current_app, redirect, render_template, request, session, url_for
 
 from app.auth import (
@@ -12,18 +14,28 @@ from app.auth import (
     canonicalize_access_level,
     default_access_level_for_user_type,
 )
+from app.db import get_db_connection
 from app.security.passwords import check_password, hash_password, is_legacy_password_hash
 from app.user_accounts import normalize_usuario_access_for_user_type
+from app.web.urls import aluno_url
 from utils.messages import flash
+
+# Canal de logging compartilhado com o módulo de composição (nome do canal, não
+# uma dependência de módulo).
+logger = logging.getLogger("main")
 
 
 def _get_main_helpers():
-    import main  # type: ignore
+    """Resolve os helpers compartilhados a partir dos seus donos canônicos.
 
+    UT-6: o nome da função é mantido por contrato, mas a resolução deixou de
+    passar pelo módulo de composição — ``aluno_url`` vem de ``app.web.urls``,
+    ``get_db_connection`` de ``app.db`` e ``logger`` do canal ``"main"``.
+    """
     return {
-        "aluno_url": main.aluno_url,
-        "get_db_connection": main.get_db_connection,
-        "logger": main.logger,
+        "aluno_url": aluno_url,
+        "get_db_connection": get_db_connection,
+        "logger": logger,
     }
 
 

@@ -595,6 +595,7 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
             "app/academics.py",
             "app/auth.py",
             "app/db_maintenance.py",
+            "app/requisitions.py",
             "app/settings.py",
             "app/uploads.py",
             # UT-3: canonical owners of the message sinks moved out of main.py

@@ -92,7 +92,16 @@ from app.requisition_policy import (
     can_student_delete_requisition,
     can_student_edit_requisition,
 )
-from app.requisitions import auto_indefer_devolvidas
+# UT-6: app/requisitions.py passou a ser o dono canônico do alerta de
+# atualização do aluno e das cores do alerta automático.  Os nomes seguem
+# reexportados aqui apenas por compatibilidade (identidade preservada).
+from app.requisitions import (
+    AUTO_ALERT_YELLOW_BG,
+    AUTO_ALERT_YELLOW_BORDER,
+    auto_indefer_devolvidas,
+    get_student_request_update_alert,
+    mark_student_request_updates_seen,
+)
 from app.settings import (
     _normalize_optional_iso_date,
     get_app_settings,
@@ -127,6 +136,9 @@ from app.web.filters import (
     get_text_query_value,
 )
 from app.web.pagination import get_pagination, wants_pagination
+# UT-6: app/web/urls.py é o dono canônico da resolução de URL do aluno; main
+# apenas reexporta os nomes (identidade preservada).
+from app.web.urls import USE_ALUNO_BLUEPRINT, aluno_url
 # UT-3: hooks Flask cujos donos canônicos passaram a ser app/web/*.  São
 # importados aqui apenas para registro no app composto e compatibilidade de
 # re-export (identidade preservada; nenhum corpo é redefinido em main.py).
@@ -868,48 +880,6 @@ def _parse_access_overrides_from_form(form) -> dict[str, str]:
     return overrides
 
 
-def get_student_request_update_alert(conn, aluno_id: int | None):
-    if not aluno_id:
-        return None
-
-    rows = conn.execute(
-        """
-        SELECT id
-          FROM requisicoes
-         WHERE aluno_id = ?
-           AND aluno_update_notified_at IS NOT NULL
-           AND aluno_update_seen_at IS NULL
-      ORDER BY COALESCE(aluno_update_notified_at, data_processamento, data_solicitacao) DESC,
-               id DESC
-        """,
-        (aluno_id,),
-    ).fetchall()
-    if not rows:
-        return None
-
-    return {
-        "requisicao_ids": [row["id"] for row in rows],
-        "alerta": {
-            "mensagem": resolve_user_message("Houve atualizações nas suas solicitações."),
-            "bg_color": AUTO_ALERT_YELLOW_BG,
-            "border_color": AUTO_ALERT_YELLOW_BORDER,
-            "href": aluno_url("aluno_minhas_requisicoes"),
-        },
-    }
-
-
-def mark_student_request_updates_seen(conn, requisicao_ids: list[int] | None):
-    if not requisicao_ids:
-        return
-
-    placeholders = ", ".join("?" for _ in requisicao_ids)
-    seen_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute(
-        f"UPDATE requisicoes SET aluno_update_seen_at = ? WHERE id IN ({placeholders})",
-        (seen_at, *requisicao_ids),
-    )
-
-
 def _admin_request_alert_kind(access_level: str | None) -> str | None:
     normalized = canonicalize_access_level(access_level, default_access_level_for_user_type("admin"))
     if normalized == "admin_total":
@@ -1131,7 +1101,6 @@ except Exception as _e:
 # Diretórios e app principal
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATES_DIR = os.path.join(_APP_DIR, "templates")
-USE_ALUNO_BLUEPRINT = True
 
 
 
@@ -1158,10 +1127,6 @@ app.register_error_handler(404, not_found)
 app.register_error_handler(500, internal_error)
 app.register_error_handler(RequestEntityTooLarge, handle_large_upload)
 
-
-def aluno_url(endpoint: str, **values):
-    resolved_endpoint = f"aluno.{endpoint}" if USE_ALUNO_BLUEPRINT else endpoint
-    return url_for(resolved_endpoint, **values)
 
 # Config via ambiente: `app.secret_key`, cookies de sessão, lifetime, flags
 # CSRF, MAX_CONTENT_LENGTH, compressão, templates, DATABASE_PATH, diretórios
@@ -3723,9 +3688,6 @@ ALERTA_COLOR_OPTIONS = [
     {"label": "Roxo", "bg": "#ede9fe", "border": "#8872c4"},
     {"label": "Ciano", "bg": "#cffafe", "border": "#3aaab8"},
 ]
-
-AUTO_ALERT_YELLOW_BG = "#fef4c0"
-AUTO_ALERT_YELLOW_BORDER = "#c9a227"
 
 
 def _normalize_hex_color(value: str | None, fallback: str | None = None) -> str:
