@@ -2,6 +2,24 @@
 
 All database-backed assertions use the fixture-controlled versioned environment.
 The configuration-failure tests intentionally avoid access-context/database loading.
+
+UT-3 NOTE (monkeypatch retarget completed):
+``enforce_admin_access_control`` and its collaborators now live in
+``app.web.authz_gate``; ``main`` only re-exports them by identity for Flask
+registration. Because the moved implementation resolves ``session``-adjacent
+dependencies through ``authz_gate.__globals__``, the direct calls and the
+``_get_current_admin_access_context`` / ``logger`` patches below target
+``app.web.authz_gate`` -- patching the re-exported ``main`` alias would rebind a
+name the executed function never reads and silently void these proofs.
+
+``main.get_db_connection`` / ``main.ensure_usuario_access_schema`` deliberately
+stay patched on ``main``: they were never resolved through the gate's globals
+(the gate reaches the database only via ``_get_current_admin_access_context``,
+which is itself replaced by a failing stub here). They guard the *other*
+main-owned code still on the executed request path -- notably the
+``_legacy_post_response_backup_sync`` after_request hook -- so retargeting them
+would change, not preserve, what is proven. Same for
+``main._maybe_sync_database_snapshot``, which remains main-owned.
 """
 from __future__ import annotations
 
@@ -19,6 +37,7 @@ if BASE not in sys.path:
 
 import main
 from app import auth
+from app.web import authz_gate
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -184,13 +203,13 @@ def test_login_logout_and_automatic_options_retain_current_behavior():
 
 def test_testing_missing_configuration_raises_before_access_context(monkeypatch):
     monkeypatch.setattr(auth, "get_admin_permission_requirement", lambda *_: None)
-    monkeypatch.setattr(main, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
+    monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
     monkeypatch.setitem(main.app.config, "IS_PRODUCTION", False)
     monkeypatch.setitem(main.app.config, "APP_ENV", "testing")
     with main.app.test_request_context("/admin/dashboard"):
         _set_admin_session()
         with pytest.raises(auth.AdminAuthorizationConfigurationError):
-            main.enforce_admin_access_control()
+            authz_gate.enforce_admin_access_control()
 
 
 def test_development_missing_configuration_uses_same_hard_failure(monkeypatch):
@@ -200,18 +219,18 @@ def test_development_missing_configuration_uses_same_hard_failure(monkeypatch):
     with main.app.test_request_context("/admin/dashboard"):
         _set_admin_session()
         with pytest.raises(auth.AdminAuthorizationConfigurationError):
-            main.enforce_admin_access_control()
+            authz_gate.enforce_admin_access_control()
 
 
 def test_production_shadow_audits_once_without_denying_or_loading_context(monkeypatch):
     events = []
     monkeypatch.setattr(auth, "get_admin_permission_requirement", lambda *_: None)
-    monkeypatch.setattr(main, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
-    monkeypatch.setattr(main.logger, "error", lambda message, *args: events.append((message, args)))
+    monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
+    monkeypatch.setattr(authz_gate.logger, "error", lambda message, *args: events.append((message, args)))
     monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
     with main.app.test_request_context("/admin/dashboard?token=must-not-log"):
         _set_admin_session("consultivo")
-        assert main.enforce_admin_access_control() is None
+        assert authz_gate.enforce_admin_access_control() is None
     assert len(events) == 1
     message, fields = events[0]
     assert message.startswith("event=admin_rbac_missing_configuration")
@@ -234,8 +253,10 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
     def unexpected_access(*_args, **_kwargs):
         pytest.fail("production shadow classification loaded access context or database state")
 
-    monkeypatch.setattr(main.logger, "error", failing_logger)
-    monkeypatch.setattr(main, "_get_current_admin_access_context", unexpected_access)
+    monkeypatch.setattr(authz_gate.logger, "error", failing_logger)
+    monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", unexpected_access)
+    # Still patched on ``main``: these guard the main-owned code that remains on
+    # the executed request path, not the gate (see module docstring).
     monkeypatch.setattr(main, "get_db_connection", unexpected_access)
     monkeypatch.setattr(main, "ensure_usuario_access_schema", unexpected_access)
     monkeypatch.setattr(
@@ -305,12 +326,12 @@ def test_missing_configuration_classifier_does_not_open_or_mutate_database_state
     # The hook must stop before access-context loading; therefore it neither opens
     # a connection nor can commit/rollback a caller-owned transaction.
     monkeypatch.setattr(auth, "get_admin_permission_requirement", lambda *_: None)
-    monkeypatch.setattr(main, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
+    monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
     monkeypatch.setitem(main.app.config, "IS_PRODUCTION", False)
     with main.app.test_request_context("/admin/dashboard"):
         _set_admin_session()
         with pytest.raises(auth.AdminAuthorizationConfigurationError):
-            main.enforce_admin_access_control()
+            authz_gate.enforce_admin_access_control()
         from flask import g
 
         assert "db" not in g

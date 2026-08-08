@@ -238,6 +238,20 @@ def test_central_admin_access_denied_uses_canonical_ajax_helper():
     assert "_is_ajax_request()" in source
 
 
+def test_admin_access_denied_response_future_canonical_owner_is_authz_gate():
+    """UT-3 RED: main._admin_access_denied_response's canonical owner becomes
+    app.web.authz_gate._admin_access_denied_response, by direct object
+    identity (no wrapper/body duplication). At RED stage app.web.authz_gate
+    does not exist, so this import is the intended failure.
+    """
+    import importlib
+
+    import main
+
+    authz_gate = importlib.import_module("app.web.authz_gate")
+    assert main._admin_access_denied_response is authz_gate._admin_access_denied_response
+
+
 # ---- Behavior preservation / consumer resolution ----
 
 

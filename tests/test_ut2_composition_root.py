@@ -115,7 +115,14 @@ def test_after_request_inventory_matches_post_ut2_shape():
     assert len(hooks) == 3, f"unexplained extra after_request hook(s): {hooks}"
 
 
-def test_hooks_main_count_unchanged_at_seven():
+# UT-3 supersedes this postcondition: enforce_admin_access_control,
+# inject_admin_access_helpers, inject_editable_message_templates, not_found,
+# internal_error and handle_large_upload move to app/web/authz_gate.py,
+# app/web/context.py and app/web/errors.py (see tests/test_ut3_app_hooks.py).
+# Only the transitional `_legacy_post_response_backup_sync` after_request hook
+# stays main-owned. This test intentionally goes RED against the pre-UT-3
+# tree and must return GREEN once that migration lands.
+def test_hooks_main_count_reduced_to_one_after_ut3():
     app = main.app
     main_hooks = [
         f.__name__
@@ -134,16 +141,8 @@ def test_hooks_main_count_unchanged_at_seven():
         for fn in (h or {}).values()
         if fn.__module__ == "main"
     ]
-    assert len(main_hooks) == 7, main_hooks
-    assert set(main_hooks) == {
-        "enforce_admin_access_control",
-        "inject_admin_access_helpers",
-        "inject_editable_message_templates",
-        "not_found",
-        "internal_error",
-        "handle_large_upload",
-        "_legacy_post_response_backup_sync",
-    }
+    assert len(main_hooks) == 1, main_hooks
+    assert set(main_hooks) == {"_legacy_post_response_backup_sync"}
 
 
 # ═══════════════════════════════════════════════════════════════════

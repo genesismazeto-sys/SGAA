@@ -77,7 +77,7 @@ from app.db import (
     get_preferred_matriz_for_curso,
     init_db,
 )
-from app.presentation import format_date_ptbr
+from app.presentation import _format_bytes_label, format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.matrix_scope import (
     MATRIZ_STATUS_META,
@@ -127,6 +127,23 @@ from app.web.filters import (
     get_text_query_value,
 )
 from app.web.pagination import get_pagination, wants_pagination
+# UT-3: hooks Flask cujos donos canônicos passaram a ser app/web/*.  São
+# importados aqui apenas para registro no app composto e compatibilidade de
+# re-export (identidade preservada; nenhum corpo é redefinido em main.py).
+from app.web.authz_gate import (
+    _admin_access_denied_response,
+    _audit_missing_admin_authorization_configuration,
+    enforce_admin_access_control,
+)
+from app.web.context import (
+    inject_admin_access_helpers,
+    inject_editable_message_templates,
+)
+from app.web.errors import (
+    handle_large_upload,
+    internal_error,
+    not_found,
+)
 from app.auth import (
     ACCESS_RESOURCE_GROUPS,
     ACCESS_RESOURCE_ORDER,
@@ -1251,7 +1268,7 @@ def validar_integridade_versionamento_atividades(conn, *, raise_on_error: bool =
 
 # ===================== App / Config =====================
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("main")
 logger.setLevel(logging.INFO)
 _log_fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 try:
@@ -1278,6 +1295,24 @@ USE_ALUNO_BLUEPRINT = True
 app = create_app(register_aluno_blueprint=USE_ALUNO_BLUEPRINT)
 app.add_template_global(resolve_user_message, name="user_message")
 
+# UT-3: registro funcional explícito (sem decorator) dos hooks cujos donos
+# canônicos agora são app/web/*.  O registro explícito mantém a ordem
+# determinística exigida pelo contrato de arquitetura:
+#   before_request     -> csrf_protect (flask_wtf, registrado em create_app)
+#                         e só depois enforce_admin_access_control;
+#   context_processor  -> inject_admin_access_helpers e depois
+#                         inject_editable_message_templates;
+#   error_handler      -> 404/500/413 (o handler de CSRFError continua sendo
+#                         de app/__init__.py).
+# after_request permanece inalterado (Compress, _apply_security_headers @ app,
+# _legacy_post_response_backup_sync @ main).
+app.before_request(enforce_admin_access_control)
+app.context_processor(inject_admin_access_helpers)
+app.context_processor(inject_editable_message_templates)
+app.register_error_handler(404, not_found)
+app.register_error_handler(500, internal_error)
+app.register_error_handler(RequestEntityTooLarge, handle_large_upload)
+
 
 def aluno_url(endpoint: str, **values):
     resolved_endpoint = f"aluno.{endpoint}" if USE_ALUNO_BLUEPRINT else endpoint
@@ -1301,18 +1336,6 @@ REPORTE_STATUS_OPTIONS = (
 
 
 
-
-
-def _format_bytes_label(size_bytes):
-    if size_bytes in (None, ""):
-        return "-"
-    size = float(size_bytes)
-    units = ("B", "KB", "MB", "GB")
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
-            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
-        size /= 1024
-    return f"{int(size_bytes)} B"
 
 
 def _get_runtime_backup_settings(conn=None):
@@ -1585,109 +1608,6 @@ def _legacy_post_response_backup_sync(resp):
     except Exception as exc:
         logger.warning("Falha ao sincronizar snapshot do banco para nuvem: %s", exc)
     return resp
-
-def _admin_access_denied_response(resource: str, required_scope: str):
-    message = resolve_user_message(
-        f"Seu perfil não possui acesso {permission_scope_label(required_scope).lower()} para {ACCESS_RESOURCES_META.get(resource, {}).get('label', 'este módulo')}."
-    )
-    if _is_ajax_request():
-        return jsonify({
-            "ok": False,
-            "error": "forbidden",
-            "resource": resource,
-            "required_scope": required_scope,
-            "message": message,
-        }), 403
-    flash(message, "error")
-    return redirect(url_for("admin_dashboard"))
-
-
-def _audit_missing_admin_authorization_configuration(classification: dict[str, object]) -> None:
-    """Production-only shadow evidence; never include request payload or secrets."""
-    try:
-        logger.error(
-            "event=admin_rbac_missing_configuration endpoint=%s method=%s rule=%s "
-            "access_level=%s rollout_mode=production_shadow",
-            classification.get("endpoint"),
-            classification.get("method"),
-            classification.get("rule"),
-            session.get("access_level"),
-        )
-    except Exception:
-        # Shadow auditing must never turn a missing-policy observation into a
-        # production request failure.  Do not recurse into logging or expose
-        # request data through another fallback channel.
-        return
-
-
-@app.before_request
-def enforce_admin_access_control():
-    classification = classify_governed_admin_request(
-        request.endpoint,
-        request.url_rule,
-        request.method,
-    )
-    if session.get("user_type") != "admin":
-        return None
-    if not classification["governed"]:
-        return None
-    kind = classification["kind"]
-    if kind == "exemption":
-        return None
-    if kind in {"missing_configuration", "invalid_configuration"}:
-        if app.config.get("IS_PRODUCTION"):
-            _audit_missing_admin_authorization_configuration(classification)
-            return None
-        raise AdminAuthorizationConfigurationError(
-            "Resolved governed endpoint lacks exactly one RBAC requirement or approved exemption: "
-            f"{classification.get('endpoint')} {classification.get('method')}"
-        )
-    requirement = classification["requirement"]
-    if requirement is None:  # Defensive invariant; classifier keeps this unreachable.
-        raise AdminAuthorizationConfigurationError("Governed request classifier returned no requirement")
-    resource, required_scope = requirement
-    auth_context = _get_current_admin_access_context(force_reload=True)
-    g.admin_permission_requirement = {"resource": resource, "scope": required_scope}
-    if _admin_can(resource, required_scope, auth_context):
-        return None
-    return _admin_access_denied_response(resource, required_scope)
-
-
-@app.context_processor
-def inject_admin_access_helpers():
-    requirement = get_admin_permission_requirement(request.endpoint or "", request.method)
-    auth_context = _get_current_admin_access_context() if session.get("user_type") == "admin" else {
-        "is_admin": False,
-        "access_level": None,
-        "access_level_label": None,
-        "overrides": {},
-        "effective_scopes": {},
-        "scope_groups": [],
-    }
-    current_resource = requirement[0] if requirement else None
-    current_scope = requirement[1] if requirement else None
-
-    return {
-        "auth_context": auth_context,
-        "auth_current_resource": current_resource,
-        "auth_current_required_scope": current_scope,
-        "auth_current_can_edit": _admin_can(current_resource, "edit", auth_context) if current_resource else False,
-        "auth_current_can_full": _admin_can(current_resource, "full", auth_context) if current_resource else False,
-        "auth_can": lambda resource, scope="view": _admin_can(resource, scope, auth_context),
-        "auth_scope": lambda resource: auth_context.get("effective_scopes", {}).get(resource, "none"),
-        "auth_scope_label": permission_scope_label,
-    }
-
-
-@app.context_processor
-def inject_editable_message_templates():
-    try:
-        templates = frontend_message_templates(get_db_connection())
-    except Exception:
-        templates = {}
-    return {
-        "app_frontend_messages": templates,
-    }
 
 # ===================== Rotas Aluno: Arquivos =====================
 
@@ -5164,30 +5084,6 @@ def favicon():
         return send_from_directory(static_dir, "favicon.ico")
     # evita quebrar se não existir
     return ("", 204)
-
-@app.errorhandler(404)
-def not_found(e):
-    try:
-        return render_template("404.html"), 404
-    except Exception:
-        # fallback simples caso o template 404.html não exista
-        return ("<h1>404</h1><p>Página não encontrada.</p>", 404)
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.exception("Erro interno do servidor")
-    try:
-        return (render_template("500.html"), 500)
-    except Exception:
-        return ("<h1>500</h1><p>Erro interno do servidor.</p>", 500)
-
-@app.errorhandler(RequestEntityTooLarge)
-def handle_large_upload(e):
-    limit_bytes = request.max_content_length or app.config.get("MAX_CONTENT_LENGTH")
-    flash(f"Arquivo muito grande. Tamanho máximo: {_format_bytes_label(limit_bytes)}.", "error")
-    # tenta redirecionar de volta para a página anterior
-    ref = request.headers.get('Referer') or url_for('index')
-    return redirect(ref)
 
 # ===================== Run =====================
 

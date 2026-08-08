@@ -61,17 +61,30 @@ RELATED_LOCAL_HELPERS = {
 # The two Matrizes consumers (admin_editar_matriz, admin_matriz_nova_atividade)
 # moved to app.views.admin.matrizes (PHASE 4-B5-R1); the remaining consumers
 # below stay in main.py.
+#
+# UT-3 moves enforce_admin_access_control -> app.web.authz_gate and
+# inject_admin_access_helpers -> app.web.context (see
+# tests/test_ut3_app_hooks.py). Those two are no longer expected as main.py
+# consumers; their canonical-owner identity is asserted separately by
+# test_moved_admin_access_consumers_resolve_canonical_identities_in_future_owner_modules
+# below, against their future owner modules.
 CONSUMER_NAMES = {
-    "enforce_admin_access_control",
-    "inject_admin_access_helpers",
     "admin_acesso",
     "uploaded_file",
 }
 CONSUMER_HELPER_USES = {
-    "enforce_admin_access_control": {"_get_current_admin_access_context", "_admin_can"},
-    "inject_admin_access_helpers": {"_get_current_admin_access_context", "_admin_can"},
     "admin_acesso": {"_load_admin_access_context"},
     "uploaded_file": {"_get_current_admin_access_context", "_admin_can"},
+}
+
+# UT-3 future owners for the moved pair, keyed by function name.
+MOVED_CONSUMER_HELPER_USES = {
+    "enforce_admin_access_control": {"_get_current_admin_access_context", "_admin_can"},
+    "inject_admin_access_helpers": {"_get_current_admin_access_context", "_admin_can"},
+}
+MOVED_CONSUMER_OWNER_MODULE = {
+    "enforce_admin_access_control": "app.web.authz_gate",
+    "inject_admin_access_helpers": "app.web.context",
 }
 
 # The two Matrizes handlers that consume the admin-access context helpers now
@@ -791,6 +804,27 @@ def test_current_main_consumers_resolve_canonical_identities_for_every_use():
     for name, used in consumers.items():
         func = inspect.unwrap(getattr(main, name))
         assert func.__module__ == "main"
+        for helper in used:
+            assert func.__globals__[helper] is getattr(admin_access, helper)
+
+
+def test_moved_admin_access_consumers_resolve_canonical_identities_in_future_owner_modules():
+    """UT-3 RED: enforce_admin_access_control/inject_admin_access_helpers must
+    resolve the canonical app.admin_access identities from their future owner
+    modules (app.web.authz_gate / app.web.context), not from main.
+
+    At RED stage neither owner module exists yet, so this import itself is
+    the intended failure -- not a weaker "string import present" check.
+    """
+    import importlib
+
+    from app import admin_access
+
+    for name, used in MOVED_CONSUMER_HELPER_USES.items():
+        module_name = MOVED_CONSUMER_OWNER_MODULE[name]
+        owner_module = importlib.import_module(module_name)
+        func = inspect.unwrap(getattr(owner_module, name))
+        assert func.__module__ == module_name
         for helper in used:
             assert func.__globals__[helper] is getattr(admin_access, helper)
 

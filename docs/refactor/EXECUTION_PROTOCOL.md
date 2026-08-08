@@ -321,8 +321,21 @@ RBAC unmapped .......... 0
 actor matrix ........... 402
 catálogo de mensagens .. 536
 route_inventory_baseline.json .. byte-idêntico
-database.db ............ SHA-256 inalterado
+database.db ............ 544768 bytes / SHA-256 inalterado dentro da UT
+                       baseline canônico vigente (desde a UT-3):
+                       bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818
+                       user_version 3; schema_migrations v1/v2/v3; sem -wal/-shm/-journal
 ```
+
+**Transição de baseline de banco — autorizada pelo humano na UT-3.** O baseline anterior
+`a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` está **APOSENTADO /
+PRÉ-v2-v3** e não é mais o invariante ativo. Uma sondagem de startup de revisor executou
+legitimamente as migrações v2/v3 já existentes contra o banco v1. A perícia estabeleceu apenas
+escrituração de migração — `schema_migrations` ganhou v2 e v3 e `user_version` foi de 1 para 3 —
+sem mutação de dado de negócio: `atividades` 32/32 e `atividade_versao` 63/63 logicamente
+idênticos; as migrações de startup passam a ser registradas e ignoradas nas execuções seguintes.
+O hash antigo permanece válido **apenas** como registro histórico nas evidências de fase
+anteriores; nenhuma restauração dele é autorizada.
 
 ### Inventário de hook por módulo dono
 
@@ -660,7 +673,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | — | Adoção parte 1 | | — | — | — | — | 7 | — | nenhum | |
 | UT-1 | Suíte verde (encoding) — 4 pontos (3 originais + 1 achado pela suíte, UT-1-R1) | | Sonnet 5 | Opus 5 (substituto, não-independente — DeepSeek V4 Pro indisponível neste harness) | PASS (rodada 2; rodada 1 FAIL com achado material corrigido) | 131/130/0 | 7 | 1106 passed/0 failed/17 deselected | nenhum | 2026-08-07 |
 | UT-2 | Composition root + Adoção parte 2 | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 7 | 1110 passed/0 failed/0 errors/17 deselected | 5 arq. leitores de governança / 6 funções leitoras autorizadas | 2026-08-07 |
-| UT-3 | Hooks de app | | | | | | 1 | | nenhum | |
+| UT-3 | Hooks de app — donos canônicos `app.web.authz_gate` / `app.web.context` / `app.web.errors`; `_format_bytes_label` para `app.presentation`; pai de entrada `7468a0f3502a7f51537fc9e537d401b4e1dc6f1c`; R1 corrigiu UT3-01 (identidade do logger de entrypoint direto) com teste de regressão dedicado; actor matrix 402; catálogo 536; `database.db` 544768 bytes / `bda97645…a30818`, user_version 3, schema_migrations v1/v2/v3 (transição de baseline autorizada pelo humano) | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 1 | 1126 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-4 | Containment de path | | | | | | 1 | | nenhum | |
 | UT-5 | Fase 5 → `app/backup/` | | | | | | **0** | | nenhum | |
 | UT-6 | Fechar ciclo app→main | | | | | | 0 | | 3 asserções lazy map | |

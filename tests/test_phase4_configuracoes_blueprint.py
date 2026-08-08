@@ -413,9 +413,13 @@ def test_browser_and_ajax_denial_contracts_remain_unchanged(
     monkeypatch, path, scope, expected_required
 ):
     import main
+    from app.web import authz_gate
 
+    # UT-3: the before_request gate moved to app.web.authz_gate and resolves the
+    # access-context helper through that module's globals, so the stub has to be
+    # installed there (main only re-exports the gate for registration).
     monkeypatch.setattr(
-        main,
+        authz_gate,
         "_get_current_admin_access_context",
         lambda force_reload=False: _access_context(configuracoes_scope=scope),
     )
@@ -448,9 +452,11 @@ def test_browser_and_ajax_denial_contracts_remain_unchanged(
 
 def test_post_csrf_behavior_remains_enforced(monkeypatch):
     import main
+    from app.web import authz_gate
 
+    # UT-3: see test_browser_and_ajax_denial_contracts_remain_unchanged.
     monkeypatch.setattr(
-        main,
+        authz_gate,
         "_get_current_admin_access_context",
         lambda force_reload=False: _access_context(configuracoes_scope="full"),
     )
@@ -501,6 +507,7 @@ def test_settings_helpers_preserve_persistence_and_normalization():
 
 def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
     import main
+    from app.web import authz_gate
     from utils.messages import message_key_for_default, resolve_user_message
 
     module = _canonical_module()
@@ -510,8 +517,9 @@ def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
     key = message_key_for_default(default)
     override = "Aluno não localizado pelo teste da Fase 4."
     monkeypatch.setattr(module, "get_db_connection", lambda: conn)
+    # UT-3: see test_browser_and_ajax_denial_contracts_remain_unchanged.
     monkeypatch.setattr(
-        main,
+        authz_gate,
         "_get_current_admin_access_context",
         lambda force_reload=False: _access_context(mensagens_scope="full"),
     )
@@ -589,6 +597,12 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
             "app/db_maintenance.py",
             "app/settings.py",
             "app/uploads.py",
+            # UT-3: canonical owners of the message sinks moved out of main.py
+            # (_admin_access_denied_response -> authz_gate,
+            # handle_large_upload -> errors).  app/web/context.py is absent on
+            # purpose: it forwards an already-resolved catalog and owns no sink.
+            "app/web/authz_gate.py",
+            "app/web/errors.py",
         }
         or path.startswith("app/views/")
         for path in relative_paths

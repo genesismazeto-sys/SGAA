@@ -851,3 +851,97 @@ Nenhum commit de governança separado. §10 não recebeu entrada: nenhum achado 
 genuinamente novo surgiu nesta finalização.
 
 **Próxima UT:** UT-3 — migrar os hooks restantes de `app` para o composition root.
+
+## UT-3 — Migração dos hooks de app para os donos canônicos em `app/web/`
+
+**Data:** 2026-08-08. **Autoridade:** `docs/refactor/EXECUTION_PROTOCOL.md` v1.1 FINAL, §2 UT-3
+e §4 (inventário de hook por módulo dono). **HEAD de entrada:**
+`7468a0f3502a7f51537fc9e537d401b4e1dc6f1c`. **Não gerou contrato de fase nem commit de
+governança separado.**
+
+**Escopo concluído — migração de dono canônico de hook.** Três módulos novos passam a deter os
+corpos que viviam em `main.py`: `app/web/authz_gate.py` (`enforce_admin_access_control`,
+`_admin_access_denied_response`, `_audit_missing_admin_authorization_configuration`),
+`app/web/context.py` (`inject_admin_access_helpers`, `inject_editable_message_templates`) e
+`app/web/errors.py` (`not_found`, `internal_error`, `handle_large_upload`). `main.py` deixa de
+declarar esses corpos e passa a registrá-los funcionalmente contra o app composto, sem
+decorator. `_format_bytes_label` migra para `app.presentation` e `main` o reexporta por
+identidade. As duas únicas alterações de corpo em toda a migração são a substituição de
+`app.config` por `current_app.config` em `enforce_admin_access_control` e `handle_large_upload`;
+todos os demais corpos são byte-idênticos ao pré-UT-3.
+
+**`hooks_main` 7 → 1.** O único hook Flask que permanece de `main` é
+`_legacy_post_response_backup_sync` (dono transitório declarado na UT-2, removido na UT-5). A
+medição varreu `before_request`, `after_request`, `context_processor`, `errorhandler`,
+`teardown_request`, `teardown_appcontext`, `url_value_preprocessor` e `url_defaults`, em todos
+os escopos (app e os oito blueprints): nenhuma registração duplicada ou oculta de `main`.
+
+**Ordem preservada.** `before_request`: `csrf_protect`@`flask_wtf.csrf` e só depois
+`enforce_admin_access_control`@`app.web.authz_gate` — CSRF-antes-de-RBAC permanece
+determinístico porque `create_app()` executa antes do registro explícito. `context_processor`:
+`inject_admin_access_helpers` antes de `inject_editable_message_templates`, ambos em
+`app.web.context`. `errorhandler`: 404/500/413 em `app.web.errors`; `CSRFError` continua de
+`app`. `after_request` inalterado: Flask-Compress, `_apply_security_headers`@`app`,
+`_legacy_post_response_backup_sync`@`main`.
+
+**Compatibilidade por identidade.** `main._admin_access_denied_response` **é** o mesmo objeto
+que `app.web.authz_gate._admin_access_denied_response`, e `main._format_bytes_label` **é**
+`app.presentation._format_bytes_label`. `inspect.getsource` resolve para o arquivo canônico e
+contém `_is_ajax_request()`. Nenhum wrapper, nenhum corpo duplicado.
+
+**Catálogo de mensagens.** `utils.messages::_iter_backend_files()` foi estendido com
+`app/web/authz_gate.py` e `app/web/errors.py`; `app/web/context.py` permanece ausente por não
+possuir sink próprio. O catálogo continua em **536**: o diferencial contra o HEAD de entrada
+acusou zero chave nova ou perdida e zero mudança de texto padrão — apenas quatro mensagens
+trocaram de arquivo de atribuição, de `main.py` para os novos donos.
+
+**Fronteiras preservadas.** `app/admin_access.py` com zero diff e exatamente cinco definições
+de topo. Nenhuma aresta `app/web/* -> main`, verificada estaticamente e em interpretador limpo.
+`route_inventory_baseline.json` byte-idêntico.
+
+**Revisão adversarial e R1.** Primeira revisão `DeepSeek V4 Pro`: PASS. Primeira revisão fresca
+`Claude Opus 5`: encontrou **UT3-01** — `main.py` usava `logging.getLogger(__name__)`, que sob
+`python main.py` vira o logger "__main__", enquanto os módulos migrados
+vinculam-se a `logging.getLogger("main")`; no entrypoint publicado a evidência
+de shadow-audit de RBAC e os tracebacks 500 de `internal_error` não alcançariam o
+`RotatingFileHandler`. **Correção R1:** `logging.getLogger(__name__)` →
+`logging.getLogger("main")`, uma única linha. Teste de regressão dedicado
+adicionado: `tests/test_ut3_r1_direct_entrypoint_logger.py`, que executa `main.py` com semântica
+real de `__name__ == "__main__"` via `runpy.run_path`, neutraliza `init_db` e
+`Flask.run`, redireciona `APP_LOG_DIR` para `tmp_path` e fixa a identidade de objeto do logger
+resultante — não asserções de texto-fonte. `DeepSeek V4 Pro` R1: PASS. Segunda revisão fresca
+`Claude Opus 5` R1: **PASS / 0 achados materiais**, com teste de mutação confirmando que
+reverter a linha R1 torna 4 dos 5 casos vermelhos.
+
+**Reconciliação de rotas.** Uma sondagem manual anterior reportou 130/129. A reconciliação
+reproduziu a discrepância exata: a varredura manual omitia `/favicon.ico`, a última rota
+autônoma de `main.py`. A medição canônica é **131/130**, idêntica à do HEAD de entrada.
+
+**Transição de baseline de banco — autorizada pelo humano.** O baseline
+`a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` está **APOSENTADO /
+PRÉ-v2-v3**. Uma sondagem de startup de revisor executou legitimamente as migrações v2/v3 já
+existentes contra o banco v1: `schema_migrations` ganhou v2 e v3, `user_version` foi de 1 para
+3, e nenhuma mutação de dado de negócio foi encontrada — `atividades` 32/32 e `atividade_versao`
+63/63 logicamente idênticos. Novo baseline canônico autorizado: 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`, `integrity_check` ok,
+`foreign_key_check` vazio, sem resíduo `-wal`/`-shm`/`-journal` antes e depois da suíte completa.
+
+**Evidência final.** Invariantes: rotas 131; endpoints 130; RBAC unmapped 0; actor matrix 402;
+catálogo de mensagens 536; `hooks_main` 1; `route_inventory_baseline.json` byte-idêntico. Suíte
+completa de qualificação: `1126 passed / 17 deselected / 0 failed / 0 errors / exit 0`.
+
+**Escopo do commit.** 16 caminhos, commit técnico único: 13 caminhos candidatos revisados e
+congelados por hash (`main.py`, `app/presentation.py`, `utils/messages.py`,
+`app/web/authz_gate.py`, `app/web/context.py`, `app/web/errors.py`,
+`tests/test_ut3_app_hooks.py`, `tests/test_ut3_r1_direct_entrypoint_logger.py`,
+`tests/test_phase4_alunos_turmas_cursos_shared_owners.py`,
+`tests/test_phase4_configuracoes_blueprint.py`, `tests/test_phase4_matrizes_shared_owners.py`,
+`tests/test_ref_0c_c_b1_fail_closed_shadow_gate.py`, `tests/test_ut2_composition_root.py`) mais
+3 de governança (`PROJECT_STATE.md`, `docs/refactor/EXECUTION_PROTOCOL.md` §4 e §11,
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` — este bloco). `AGENT_HANDOFF.md` e
+`docs/DOCUMENTATION_INDEX.md` não aparecem. `database.db` não aparece: é untracked/ignorado.
+§10 não recebeu entrada — UT3-01, a transição de baseline de banco e os seis achados
+não-materiais das revisões são matéria adjudicada dentro do escopo da UT-3, não dívida de
+arquitetura diferida nova.
+
+**Próxima UT:** UT-4 — containment de path.

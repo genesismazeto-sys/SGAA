@@ -434,6 +434,10 @@ def _iter_backend_files() -> list[Path]:
         PROJECT_ROOT / "app" / "db_maintenance.py",
         PROJECT_ROOT / "app" / "settings.py",
         PROJECT_ROOT / "app" / "uploads.py",
+        # UT-3: novos donos canonicos de sinks de mensagem movidos de main.py
+        # (_admin_access_denied_response -> authz_gate, handle_large_upload -> errors).
+        PROJECT_ROOT / "app" / "web" / "authz_gate.py",
+        PROJECT_ROOT / "app" / "web" / "errors.py",
     ]
     views_dir = PROJECT_ROOT / "app" / "views"
     if views_dir.is_dir():
