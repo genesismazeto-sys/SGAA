@@ -677,7 +677,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | UT-2 | Composition root + Adoção parte 2 | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 7 | 1110 passed/0 failed/0 errors/17 deselected | 5 arq. leitores de governança / 6 funções leitoras autorizadas | 2026-08-07 |
 | UT-3 | Hooks de app — donos canônicos `app.web.authz_gate` / `app.web.context` / `app.web.errors`; `_format_bytes_label` para `app.presentation`; pai de entrada `7468a0f3502a7f51537fc9e537d401b4e1dc6f1c`; R1 corrigiu UT3-01 (identidade do logger de entrypoint direto) com teste de regressão dedicado; actor matrix 402; catálogo 536; `database.db` 544768 bytes / `bda97645…a30818`, user_version 3, schema_migrations v1/v2/v3 (transição de baseline autorizada pelo humano) | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 1 | 1126 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-4 | Containment de path | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 1 | 1129 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
-| UT-5 | Fase 5 → `app/backup/` | | | | | | **0** | | nenhum | |
+| UT-5 | Fase 5 → `app/backup/` | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | **0** | 1142 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-6 | Fechar ciclo app→main | | | | | | 0 | | 3 asserções lazy map | |
 | UT-7 | Helpers matrizes→catalog | | | | | | 0 | | nenhum | |
 | UT-8 | Coorte Banco de Dados | | | | | | 0 | | nenhum | |

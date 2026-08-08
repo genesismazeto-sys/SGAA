@@ -2,13 +2,13 @@
 
 Branch: `refactor/architecture-safety-net`
 HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
-UT-4 entry parent: `fa52a05a4ce07b4c56e1d4827b2c7d69c6c35f5c`
+UT-5 entry parent: `9b6cce5019319394264ee76bc3c67b20dc7e83b9`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-4 (path containment) — qualified; both independent
+Last completed UT: UT-5 (backup I/O removed from request cycle) — qualified; both independent
 reviews PASS (DeepSeek V4 Pro; Claude Opus 5). 0 material findings.
-Next UT: UT-5 (Fase 5: I/O fora do after_request)
+Next UT: UT-6 (close app → main cycle)
 
 ## Invariants (last measured)
 
@@ -17,13 +17,14 @@ Next UT: UT-5 (Fase 5: I/O fora do after_request)
 - RBAC unmapped: 0
 - actor matrix: 402
 - message catalog: 536
-- hooks_main: 1
+- hooks_main: 0
+- after_request: 2 non-main handlers (flask_compress; app._apply_security_headers)
 
 ## Latest full-suite status
 
-UT-4 qualification: 1129 passed / 17 deselected / 0 failed / 0 errors.
-Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 (UT-4 row) and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-4 block).
+UT-5 qualification: 1142 passed / 17 deselected / 0 failed / 0 errors.
+Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 (UT-5 row) and
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-5 block).
 
 ## Database baseline
 

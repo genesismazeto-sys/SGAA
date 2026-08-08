@@ -178,14 +178,35 @@ def test_zero_lazy_bridge_and_explicit_bootstrap_binding_position():
 
 
 def test_complete_one_argument_caller_and_application_context_contract():
+    # UT-5 ownership correction: `_save_drive_config` is no longer a main-owned
+    # body, so it can no longer appear as a main-local direct-call scope. The
+    # pre-UT-5 expectation below listed it alongside the two genuinely
+    # main-retained callers, which directly contradicts the UT-5 assertions that
+    # main must NOT define `_save_drive_config`
+    # (see test_cloud_retention_restore_and_runtime_consumers_remain_in_main).
+    # The caller contract is corrected, not retired: the one-argument
+    # `ensure_backup_settings_schema(conn)` call shape is still proved for every
+    # remaining main-owned caller, and the `_save_drive_config` caller proof
+    # simply moves to its new canonical owner below.
     assert _direct_call_scopes(main, "ensure_backup_settings_schema") == (
         "save_backup_settings",
         "save_retention_policy",
-        "_save_drive_config",
     )
     assert _direct_call_scopes(app_db, "ensure_backup_settings_schema") == (
         "init_db",
     )
+
+    # The retired main-local scope must reappear at the canonical owner -- the
+    # call is relocated, never dropped -- and main's compatibility surface must
+    # be an identity alias rather than a divergent re-implementation.
+    from app.backup import orchestrator as backup_orchestrator
+
+    assert _direct_call_scopes(
+        backup_orchestrator, "ensure_backup_settings_schema"
+    ) == ("_save_drive_config",)
+    assert "_save_drive_config" in _top_level_function_names(backup_orchestrator)
+    assert "_save_drive_config" not in _top_level_function_names(main)
+    assert main._save_drive_config is backup_orchestrator._save_drive_config
 
     runtime_source = inspect.getsource(backup_settings)
     assert "current_app" not in runtime_source
@@ -678,17 +699,47 @@ def test_runtime_orchestrator_has_no_directory_network_cloud_or_oauth_effects():
     assert not any(fragment in source.lower() for fragment in forbidden)
 
 
+
+# UT-5 retargets this control's ownership split: get_retention_policy,
+# _save_drive_config, _get_runtime_backup_settings and _maybe_upload_to_drives
+# move from main to app.backup.orchestrator (see tests/test_ut5_backup_package.py
+# for the full canonical-symbol list). save_backup_settings, save_retention_policy
+# and _restore_database_from_source stay main-owned. No ownership assertion is
+# deleted -- the previously main-retained set is split into a main-retained
+# subset (still asserted <=) and a future-orchestrator-owned subset (asserted
+# absent from main and present as bodies on app.backup.orchestrator).
+FUTURE_ORCHESTRATOR_OWNED_NAMES = frozenset(
+    {
+        "get_retention_policy",
+        "_save_drive_config",
+        "_get_runtime_backup_settings",
+        "_maybe_upload_to_drives",
+    }
+)
+
+
 def test_cloud_retention_restore_and_runtime_consumers_remain_in_main():
     main_names = _top_level_function_names(main)
     assert {
         "save_backup_settings",
-        "get_retention_policy",
         "save_retention_policy",
-        "_save_drive_config",
-        "_get_runtime_backup_settings",
-        "_maybe_upload_to_drives",
         "_restore_database_from_source",
     } <= main_names
+
+    still_in_main = FUTURE_ORCHESTRATOR_OWNED_NAMES & main_names
+    assert not still_in_main, (
+        f"UT-5 expects {sorted(FUTURE_ORCHESTRATOR_OWNED_NAMES)} to move to "
+        f"app.backup.orchestrator; still main-owned: {sorted(still_in_main)}"
+    )
+
+    from app.backup import orchestrator as backup_orchestrator
+
+    orchestrator_names = _top_level_function_names(backup_orchestrator)
+    assert FUTURE_ORCHESTRATOR_OWNED_NAMES <= orchestrator_names, (
+        f"app.backup.orchestrator missing bodies for: "
+        f"{sorted(FUTURE_ORCHESTRATOR_OWNED_NAMES - orchestrator_names)}"
+    )
+
     assert "ensure_cloud_backup_schema" not in main_names
     assert main.ensure_cloud_backup_schema is app_db.ensure_cloud_backup_schema
 

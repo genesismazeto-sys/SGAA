@@ -438,8 +438,18 @@ def test_backup_local(smoke_env, monkeypatch):
         call_log.append(("apply_retention_to_drive", args, kwargs))
         return {"deleted": [], "errors": []}
 
-    monkeypatch.setattr(main, "maybe_sync_database_to_cloud", _spy_maybe_sync)
-    monkeypatch.setattr(main, "upload_snapshot_to_external_server", _spy_upload_external)
+    # UT-5 RED retarget: maybe_sync_database_to_cloud / upload_snapshot_to_external_server
+    # move behind app.backup.orchestrator; patching the stale main aliases would
+    # silently stop intercepting these calls once the route delegates to the new
+    # owner. Import inside the test body so app.backup absence is a clean,
+    # test-local RED (ModuleNotFoundError) rather than a collection failure for
+    # the whole file. The app.cloud_drives MODULE-object monkeypatches below are
+    # left as-is: they still intercept the same module object regardless of who
+    # calls into it (main today, app.backup.orchestrator after UT-5).
+    from app.backup import orchestrator as backup_orchestrator
+
+    monkeypatch.setattr(backup_orchestrator, "maybe_sync_database_to_cloud", _spy_maybe_sync)
+    monkeypatch.setattr(backup_orchestrator, "upload_snapshot_to_external_server", _spy_upload_external)
     monkeypatch.setattr(main._cd, "refresh_google_if_needed", _spy_refresh_google)
     monkeypatch.setattr(main._cd, "refresh_onedrive_if_needed", _spy_refresh_onedrive)
     monkeypatch.setattr(main._cd, "google_upload", _spy_google_upload)

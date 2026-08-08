@@ -24,6 +24,14 @@ _format_bytes_label / the hooks still live in main.py. Section E is a
 preserved-boundary control and must stay GREEN throughout.
 
 After UT-3 implementation, all assertions below must be GREEN.
+
+UT-5 NOTE (RED, retargeted): section D's ``hooks_main == 1`` postcondition
+was a UT-3-era transitional state (the sole survivor being
+``_legacy_post_response_backup_sync``). UT-5 deletes that hook entirely
+(backup I/O no longer runs on the request lifecycle at all), so the final
+contract is ``hooks_main == 0``. Section D below is inverted to that target
+and is expected to fail against the current tree, which still registers the
+hook.
 """
 from __future__ import annotations
 
@@ -35,7 +43,7 @@ import main
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-MAIN_OWNED_HOOKS_FUTURE = {"_legacy_post_response_backup_sync"}
+MAIN_OWNED_HOOKS_FUTURE: set[str] = set()
 
 
 def _all_main_hooks() -> list[str]:
@@ -138,13 +146,13 @@ def test_error_handler_owners_future_web_errors():
 
 
 # ═══════════════════════════════════════════════════════════════════
-# D. hooks_main == 1, exact main-owned set
+# D. hooks_main == 0 (UT-5 target: no main-owned Flask hooks at all)
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_hooks_main_is_exactly_one_legacy_backup_sync():
+def test_hooks_main_is_exactly_zero():
     main_hooks = _all_main_hooks()
-    assert len(main_hooks) == 1, main_hooks
+    assert len(main_hooks) == 0, main_hooks
     assert set(main_hooks) == MAIN_OWNED_HOOKS_FUTURE, main_hooks
 
 

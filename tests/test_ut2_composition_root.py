@@ -9,6 +9,15 @@ Proves, before implementation, that:
      satisfied.
 
 After UT-2 implementation, all assertions below must be GREEN.
+
+UT-5 NOTE (RED, retargeted): section C's transitional hook
+(`_legacy_post_response_backup_sync`) is a UT-2-era stepping stone, not the
+final shape. UT-5 removes per-request backup I/O entirely -- the hook is
+deleted, not relocated to another request-lifecycle registration -- so
+ordinary HTTP requests never trigger backup orchestration. The assertions in
+section C/D below are inverted to that final (hooks_main == 0) contract and
+are expected to fail against the current tree, which still registers the
+hook.
 """
 from __future__ import annotations
 
@@ -74,7 +83,8 @@ def test_create_app_owns_all_relocated_config_keys():
 
 
 # ═══════════════════════════════════════════════════════════════════
-# C. main owns the isolated legacy backup-sync hook, not add_security_headers
+# C. main no longer owns add_security_headers NOR any backup-sync hook
+#    (UT-5 target: hooks_main == 0)
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -82,24 +92,23 @@ def test_main_no_longer_defines_add_security_headers():
     assert not hasattr(main, "add_security_headers")
 
 
-def test_main_defines_legacy_post_response_backup_sync():
-    assert hasattr(main, "_legacy_post_response_backup_sync")
-    hook = main._legacy_post_response_backup_sync
-    assert hook.__module__ == "main"
-    source = inspect.getsource(hook)
-    assert "_maybe_sync_database_snapshot" in source
-    assert "_run_retention_cleanup" in source
-    assert "_maybe_upload_to_drives" in source
-    assert "headers" not in source
-    assert "Referrer-Policy" not in source
+def test_main_no_longer_defines_legacy_post_response_backup_sync():
+    """UT-5 RED: the transitional after_request hook is removed from main
+    entirely (not relocated to another request-lifecycle registration).
+    Ordinary HTTP requests must not trigger backup orchestration.
+    """
+    assert not hasattr(main, "_legacy_post_response_backup_sync"), (
+        "main still defines _legacy_post_response_backup_sync; UT-5 expects "
+        "hooks_main == 0 (no automatic post-response backup sync)"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
-# D. Post-UT-2 after_request hook inventory (measured by __module__)
+# D. Post-UT-5 after_request hook inventory (measured by __module__)
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_after_request_inventory_matches_post_ut2_shape():
+def test_after_request_inventory_matches_post_ut5_shape():
     hooks = [
         (f.__name__, f.__module__) for f in main.app.after_request_funcs[None]
     ]
@@ -110,19 +119,27 @@ def test_after_request_inventory_matches_post_ut2_shape():
     assert app_hooks == [("_apply_security_headers", "app")], hooks
 
     main_hooks = [h for h in hooks if h[1] == "main"]
-    assert main_hooks == [("_legacy_post_response_backup_sync", "main")], hooks
+    assert main_hooks == [], (
+        f"main still owns after_request hook(s) {main_hooks}; UT-5 expects "
+        "zero main-owned after_request hooks"
+    )
 
-    assert len(hooks) == 3, f"unexplained extra after_request hook(s): {hooks}"
+    assert len(hooks) == 2, f"unexplained after_request hook(s): {hooks}"
 
 
-# UT-3 supersedes this postcondition: enforce_admin_access_control,
-# inject_admin_access_helpers, inject_editable_message_templates, not_found,
-# internal_error and handle_large_upload move to app/web/authz_gate.py,
-# app/web/context.py and app/web/errors.py (see tests/test_ut3_app_hooks.py).
-# Only the transitional `_legacy_post_response_backup_sync` after_request hook
-# stays main-owned. This test intentionally goes RED against the pre-UT-3
-# tree and must return GREEN once that migration lands.
-def test_hooks_main_count_reduced_to_one_after_ut3():
+def test_teardown_appcontext_inventory_has_no_backup_handler():
+    """Preserved boundary control: the only teardown_appcontext registration
+    is the db-connection closer. Pins that no replacement backup mechanism
+    is smuggled in through this alternative request-lifecycle registration
+    point. Must stay GREEN before and after UT-5.
+    """
+    handlers = [
+        (f.__name__, f.__module__) for f in main.app.teardown_appcontext_funcs
+    ]
+    assert handlers == [("close_db_connection", "app.db")], handlers
+
+
+def test_hooks_main_count_reduced_to_zero_after_ut5():
     app = main.app
     main_hooks = [
         f.__name__
@@ -141,8 +158,43 @@ def test_hooks_main_count_reduced_to_one_after_ut3():
         for fn in (h or {}).values()
         if fn.__module__ == "main"
     ]
-    assert len(main_hooks) == 1, main_hooks
-    assert set(main_hooks) == {"_legacy_post_response_backup_sync"}
+    assert len(main_hooks) == 0, main_hooks
+    assert set(main_hooks) == set()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# UT-5 RED C: ordinary HTTP requests must not enter the backup path.
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_health_does_not_invoke_backup_orchestration(monkeypatch):
+    """UT-5 RED: GET /health must not trigger backup/snapshot orchestration.
+
+    Sentinel is installed on ``main.maybe_sync_database_to_cloud`` -- the
+    name ``main._maybe_sync_database_snapshot`` (invoked today by the
+    ``_legacy_post_response_backup_sync`` after_request hook on every
+    non-5xx, non-static response) actually calls at request time. This is a
+    genuinely reached lookup on the current live hook path, not merely a
+    future module that doesn't exist yet: against current HEAD the sentinel
+    IS invoked, proving today's per-request I/O coupling.
+
+    After UT-5 removes the after_request hook, nothing calls this lookup
+    during an ordinary request and the sentinel stays silent.
+    """
+    calls = []
+
+    def _sentinel(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"ok": False, "skipped": True, "reason": "ut5-red-sentinel"}
+
+    monkeypatch.setattr(main, "maybe_sync_database_to_cloud", _sentinel)
+    client = main.app.test_client()
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert calls == [], (
+        "GET /health invoked backup orchestration via "
+        f"main.maybe_sync_database_to_cloud: {calls}"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════

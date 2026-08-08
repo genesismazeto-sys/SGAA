@@ -16,10 +16,21 @@ name the executed function never reads and silently void these proofs.
 stay patched on ``main``: they were never resolved through the gate's globals
 (the gate reaches the database only via ``_get_current_admin_access_context``,
 which is itself replaced by a failing stub here). They guard the *other*
-main-owned code still on the executed request path -- notably the
-``_legacy_post_response_backup_sync`` after_request hook -- so retargeting them
-would change, not preserve, what is proven. Same for
-``main._maybe_sync_database_snapshot``, which remains main-owned.
+code still on the executed request path.
+
+UT-5 NOTE (RED, retargeted): the old patch of ``main._maybe_sync_database_snapshot``
+guarded against the (now-removed) ``_legacy_post_response_backup_sync``
+after_request hook doing real backup I/O during this test. UT-5 deletes that
+hook entirely, so patching ``main._maybe_sync_database_snapshot`` would become
+dead: nothing on the request path calls it anymore, and post-UT-5 the name
+may not even exist on ``main``. The sentinel below targets the lookup the
+*new* orchestrator would actually execute if anything on this ordinary
+request path still triggered backup orchestration --
+``app.backup.orchestrator._maybe_sync_database_snapshot`` -- turning "silently
+becomes a no-op" into "fails loudly if backup orchestration reappears on the
+request path". At RED (current HEAD), ``app.backup`` does not exist yet, so
+this import itself is the expected failure (EXPECTED RED — app.backup
+ABSENT), not a weakened/dead assertion.
 """
 from __future__ import annotations
 
@@ -259,10 +270,19 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
     # the executed request path, not the gate (see module docstring).
     monkeypatch.setattr(main, "get_db_connection", unexpected_access)
     monkeypatch.setattr(main, "ensure_usuario_access_schema", unexpected_access)
+    # UT-5 RED retarget: sentinel on the future canonical owner (see module
+    # docstring). Fails here with ModuleNotFoundError against current HEAD,
+    # which is the expected RED reason (app.backup absent) -- not a stale,
+    # silently-dead patch on a hook that no longer runs.
+    from app.backup import orchestrator as backup_orchestrator
+
     monkeypatch.setattr(
-        main,
+        backup_orchestrator,
         "_maybe_sync_database_snapshot",
-        lambda **_kwargs: {"ok": True, "skipped": True},
+        lambda **_kwargs: pytest.fail(
+            "ordinary request path invoked "
+            "app.backup.orchestrator._maybe_sync_database_snapshot"
+        ),
     )
     monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
     monkeypatch.setitem(main.app.config, "APP_ENV", "production")

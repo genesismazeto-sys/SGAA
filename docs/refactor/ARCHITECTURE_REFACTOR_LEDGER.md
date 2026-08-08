@@ -959,3 +959,33 @@ catálogo de mensagens 536 / hooks_main 1. `database.db` inalterado em 544768 by
 `bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
 
 **Próxima UT:** UT-5 — Fase 5: I/O fora do after_request.
+
+## UT-5 — Backup I/O fora do ciclo de request
+
+**Data:** 2026-08-08. **HEAD de entrada:** `9b6cce5019319394264ee76bc3c67b20dc7e83b9`. A
+orquestração de backup (sync de snapshot, retenção, upload para drives/servidor externo,
+configurações de runtime e resolução segura de manifesto) foi movida para o pacote novo
+`app/backup/` (`orchestrator.py`, `sync.py`, `__init__.py`); `main` reexporta os símbolos
+canonicamente por identidade, nunca por wrapper. O hook `after_request` transitório
+`_legacy_post_response_backup_sync` foi removido de `main.py` inteiramente — nenhuma
+requisição HTTP comum (inclusive `GET /health`) mais dispara orquestração de backup, e o hook
+não foi realocado para `before_request`/`teardown_request`/`teardown_appcontext`, thread,
+timer, `atexit`, signal ou worker. O ciclo automático canonico agora é
+`app.backup.orchestrator.run_backup_cycle`, acionado fora do request via CLI
+`python -m app.backup.sync`. O comportamento manual da tela "Banco de Dados" permanece
+preservado. `app/paths.py` passa a ser o dono canonico de `_path_within_root`
+(`main._path_within_root is app.paths._path_within_root`, mesmo objeto). `hooks_main` 1 →
+**0**.
+
+**Ratchet de dívida do `init_db`.** Uma correção R1 no arnês de teste removeu um chamador
+acidental novo de `main.init_db` introduzido durante a preparação da UT-5; o total de
+chamadores de compatibilidade permanece **72**, e `tests/test_ut5_backup_package.py`
+contribui zero chamadores novos.
+
+`DeepSeek V4 Pro`: PASS / 0 achados materiais. `Claude Opus 5`: PASS / 0 achados materiais.
+Suíte completa: 1142 passed / 17 deselected / 0 failed / 0 errors. Invariantes: rotas 131 /
+endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 / hooks_main
+**0**. `database.db` inalterado em 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
+
+**Próxima UT:** UT-6 — fechar o ciclo app → main. NÃO INICIADA.

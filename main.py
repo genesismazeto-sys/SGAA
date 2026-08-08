@@ -174,6 +174,34 @@ from app.admin_access import (
 from app.admin_alerts import list_active_admin_alertas
 from app.admin_files import get_admin_arquivo
 import app.cloud_drives as _cd
+# UT-5: a orquestração de backup (sync de snapshot, retenção, upload para
+# drives/servidor externo, configurações de runtime e resolução segura de
+# manifesto) passou a ser propriedade canônica de app/backup.  Os nomes abaixo
+# são re-exports por IDENTIDADE -- nunca wrappers:
+#     main.<nome> is app.backup.orchestrator.<nome>
+# O módulo `orchestrator` também é importado como objeto porque os pontos de
+# composição das rotas resolvem a função no momento da chamada; é assim que um
+# patch aplicado ao dono canônico intercepta de fato a rota manual de "Banco de
+# Dados" em vez de esbarrar num alias obsoleto de main.
+from app.backup import orchestrator as _backup_orchestrator
+from app.backup import (
+    _RETENTION_WINDOWS_META,
+    _database_backup_locations,
+    _get_runtime_backup_settings,
+    _maybe_sync_database_snapshot,
+    _maybe_upload_to_drives,
+    _resolve_allowed_backup_manifest_path,
+    _retention_policy_defaults,
+    _run_retention_cleanup,
+    _save_drive_config,
+    _upload_snapshot_if_external_enabled,
+    get_drive_settings,
+    get_retention_policy,
+)
+# UT-5: contenção de caminho é de app/paths.py (mesmo objeto, comportamento
+# inalterado); _best_effort_remove_admin_arquivo_file (UT-4) segue chamando
+# exatamente esta função.
+from app.paths import _path_within_root
 from app.backup_settings import (
     _apply_backup_settings_to_app,
     _backup_settings_defaults,
@@ -556,35 +584,6 @@ _RETENTION_INTERVAL_OPTIONS = [
     ("2190", "a cada 3 meses"),
 ]
 
-_RETENTION_WINDOWS_META = [
-    {"key": "w0", "label": "Últimas 24 h", "period_hours": 24, "default_interval": "2", "default_slots": "12"},
-    {"key": "w1", "label": "Últimos 7 dias", "period_hours": 168, "default_interval": "24", "default_slots": "7"},
-    {"key": "w2", "label": "Últimas 4 semanas", "period_hours": 672, "default_interval": "168", "default_slots": "4"},
-    {"key": "w3", "label": "Últimos 12 meses", "period_hours": 8760, "default_interval": "730", "default_slots": "12"},
-]
-
-
-def _retention_policy_defaults() -> dict[str, str]:
-    defaults = {}
-    for w in _RETENTION_WINDOWS_META:
-        defaults[f"retention_{w['key']}_interval_hours"] = w["default_interval"]
-        defaults[f"retention_{w['key']}_slots"] = w["default_slots"]
-    return defaults
-
-
-def get_retention_policy(conn) -> dict[str, str]:
-    defaults = _retention_policy_defaults()
-    try:
-        rows = conn.execute(
-            "SELECT chave, valor FROM configuracoes_backup WHERE chave LIKE 'retention_%'"
-        ).fetchall()
-        settings = dict(defaults)
-        for row in rows:
-            settings[str(row["chave"])] = str(row["valor"])
-        return settings
-    except sqlite3.OperationalError:
-        return defaults
-
 
 def save_retention_policy(conn, payload: dict) -> dict[str, str]:
     ensure_backup_settings_schema(conn)
@@ -619,98 +618,6 @@ def save_retention_policy(conn, payload: dict) -> dict[str, str]:
             (chave, valor),
         )
     return normalized
-
-
-def _build_retention_policy_windows(settings: dict[str, str]) -> list[dict]:
-    windows = []
-    for w in _RETENTION_WINDOWS_META:
-        windows.append({
-            "period_hours": w["period_hours"],
-            "interval_hours": float(settings.get(f"retention_{w['key']}_interval_hours") or w["default_interval"]),
-            "slots": int(settings.get(f"retention_{w['key']}_slots") or w["default_slots"]),
-        })
-    return windows
-
-
-def _run_retention_cleanup(conn=None) -> dict:
-    temp_conn = None
-    if conn is None:
-        temp_conn = sqlite3.connect(DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
-    try:
-        settings = _get_runtime_backup_settings(conn)
-        retention_settings = get_retention_policy(conn)
-        policy = _build_retention_policy_windows(retention_settings)
-        locations = _database_backup_locations(settings)
-        all_snapshots = list_database_backups(locations)
-        to_delete = apply_retention_policy(all_snapshots, policy)
-        deleted: list[str] = []
-        errors: list[str] = []
-        for mp in to_delete:
-            safe_mp = _resolve_allowed_backup_manifest_path(mp)
-            if not safe_mp or not os.path.exists(safe_mp):
-                continue
-            try:
-                delete_database_snapshot(safe_mp, logger=logger)
-                deleted.append(safe_mp)
-            except Exception as exc:
-                errors.append(str(exc))
-        if deleted:
-            logger.info("Política de retenção removeu %d snapshot(s).", len(deleted))
-        return {"deleted": deleted, "errors": errors}
-    finally:
-        if temp_conn is not None:
-            temp_conn.close()
-
-
-def _drive_settings_defaults() -> dict[str, str]:
-    return {
-        "gdrive_enabled": "0",
-        "gdrive_dest_folder": "Backups/sistema",
-        "gdrive_access_token": "",
-        "gdrive_refresh_token": "",
-        "gdrive_expires_at": "",
-        "gdrive_account_email": "",
-        "gdrive_last_upload_at": "",
-        "gdrive_last_upload_error": "",
-        "onedrive_enabled": "0",
-        "onedrive_dest_folder": "Backups/sistema",
-        "onedrive_access_token": "",
-        "onedrive_refresh_token": "",
-        "onedrive_expires_at": "",
-        "onedrive_account_email": "",
-        "onedrive_last_upload_at": "",
-        "onedrive_last_upload_error": "",
-    }
-
-
-def get_drive_settings(conn) -> dict[str, str]:
-    defaults = _drive_settings_defaults()
-    try:
-        rows = conn.execute(
-            "SELECT chave, valor FROM configuracoes_backup"
-            " WHERE chave LIKE 'gdrive_%' OR chave LIKE 'onedrive_%'"
-        ).fetchall()
-        settings = dict(defaults)
-        for row in rows:
-            settings[str(row["chave"])] = str(row["valor"])
-        return settings
-    except sqlite3.OperationalError:
-        return defaults
-
-
-def _save_drive_config(conn, updates: dict[str, str]) -> None:
-    ensure_backup_settings_schema(conn)
-    for chave, valor in updates.items():
-        conn.execute(
-            """
-            INSERT INTO configuracoes_backup (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
-            """,
-            (chave, str(valor)),
-        )
 
 
 _CLOUD_FOLDER_PROVIDERS = {"google", "onedrive"}
@@ -922,69 +829,6 @@ def _list_backup_logs(conn, *, provider: str | None = None, limit: int = 20):
     sql += " ORDER BY datetime(created_at) DESC, id DESC LIMIT ?"
     params.append(safe_limit)
     return conn.execute(sql, tuple(params)).fetchall()
-
-
-def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
-    """Upload snapshot to enabled cloud drive providers, then apply remote retention."""
-    temp_conn = None
-    if conn is None:
-        temp_conn = sqlite3.connect(DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
-    try:
-        drive_settings = get_drive_settings(conn)
-        retention_settings = get_retention_policy(conn)
-        policy = _build_retention_policy_windows(retention_settings)
-
-        for provider in ("google", "onedrive"):
-            prefix = "gdrive" if provider == "google" else "onedrive"
-            enabled = str(drive_settings.get(f"{prefix}_enabled") or "0") in {"1", "true"}
-            if not enabled or not drive_settings.get(f"{prefix}_access_token"):
-                continue
-
-            dest_folder = drive_settings.get(f"{prefix}_dest_folder") or "Backups/sistema"
-            try:
-                if provider == "google":
-                    token, updates = _cd.refresh_google_if_needed(drive_settings)
-                else:
-                    token, updates = _cd.refresh_onedrive_if_needed(drive_settings)
-
-                if updates:
-                    _save_drive_config(conn, updates)
-                    drive_settings.update(updates)
-                    conn.commit()
-
-                if provider == "google":
-                    _cd.google_upload(token, snapshot_path, dest_folder)
-                else:
-                    _cd.onedrive_upload(token, snapshot_path, dest_folder)
-
-                now_iso = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-                _save_drive_config(conn, {
-                    f"{prefix}_last_upload_at": now_iso,
-                    f"{prefix}_last_upload_error": "",
-                })
-                conn.commit()
-                logger.info("Drive upload [%s] concluído: %s", provider, snapshot_path)
-
-                try:
-                    _cd.apply_retention_to_drive(
-                        provider, token=token, dest_folder=dest_folder,
-                        policy=policy, logger=logger,
-                    )
-                except Exception as exc:
-                    logger.warning("Retenção remota [%s] falhou: %s", provider, exc)
-
-            except Exception as exc:
-                logger.warning("Drive upload [%s] falhou: %s", provider, exc)
-                try:
-                    _save_drive_config(conn, {f"{prefix}_last_upload_error": str(exc)[:200]})
-                    conn.commit()
-                except Exception:
-                    pass
-    finally:
-        if temp_conn is not None:
-            temp_conn.close()
 
 
 def _format_drive_timestamp(ts_iso: str) -> str:
@@ -1304,8 +1148,9 @@ app.add_template_global(resolve_user_message, name="user_message")
 #                         inject_editable_message_templates;
 #   error_handler      -> 404/500/413 (o handler de CSRFError continua sendo
 #                         de app/__init__.py).
-# after_request permanece inalterado (Compress, _apply_security_headers @ app,
-# _legacy_post_response_backup_sync @ main).
+# after_request tem exatamente dois handlers, ambos fora de main (Compress e
+# _apply_security_headers @ app): a UT-5 removeu o hook de backup pós-resposta
+# sem alterar a ordem relativa de registro dos dois sobreviventes.
 app.before_request(enforce_admin_access_control)
 app.context_processor(inject_admin_access_helpers)
 app.context_processor(inject_editable_message_templates)
@@ -1336,51 +1181,6 @@ REPORTE_STATUS_OPTIONS = (
 
 
 
-
-
-def _get_runtime_backup_settings(conn=None):
-    temp_conn = None
-    if conn is None:
-        temp_conn = sqlite3.connect(DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
-    try:
-        try:
-            settings = get_backup_settings(conn)
-        except sqlite3.OperationalError:
-            settings = _backup_settings_defaults()
-        _apply_backup_settings_to_app(settings)
-        return settings
-    finally:
-        if temp_conn is not None:
-            temp_conn.close()
-
-
-def _database_backup_locations(settings=None):
-    settings = settings or _backup_settings_defaults()
-    return {
-        "local": settings.get("local_backup_dir") or app.config.get("LOCAL_BACKUP_DIR"),
-        "cloud": settings.get("cloud_backup_dir") or app.config.get("CLOUD_BACKUP_DIR"),
-    }
-
-
-def _path_within_root(candidate_path: str, root_path: str | None) -> bool:
-    if not candidate_path or not root_path:
-        return False
-    candidate_abs = os.path.abspath(candidate_path)
-    root_abs = os.path.abspath(root_path)
-    try:
-        return os.path.commonpath([candidate_abs, root_abs]) == root_abs
-    except ValueError:
-        return False
-
-
-def _resolve_allowed_backup_manifest_path(manifest_path: str) -> str | None:
-    candidate = os.path.abspath(manifest_path or "")
-    for root in _database_backup_locations(_get_runtime_backup_settings()).values():
-        if _path_within_root(candidate, root):
-            return candidate
-    return None
 
 
 def _build_database_admin_context(conn):
@@ -1491,51 +1291,6 @@ def _build_database_admin_context(conn):
     }
 
 
-def _upload_snapshot_if_external_enabled(snapshot: dict[str, object], settings: dict[str, str]):
-    if str(settings.get("external_backup_enabled") or "0") not in {"1", "true", "True"}:
-        return {"ok": False, "skipped": True, "reason": "external_disabled"}
-
-    server_url = (settings.get("external_backup_url") or "").strip()
-    if not server_url:
-        return {"ok": False, "skipped": True, "reason": "external_url_missing"}
-
-    result = upload_snapshot_to_external_server(
-        str(snapshot["database_path"]),
-        str(snapshot["manifest_path"]),
-        server_url=server_url,
-        token=(settings.get("external_backup_token") or "").strip() or None,
-        logger=logger,
-    )
-    return {"ok": True, "skipped": False, "result": result}
-
-
-def _maybe_sync_database_snapshot(force: bool = False, conn=None):
-    settings = _get_runtime_backup_settings(conn)
-    cloud_root = settings.get("cloud_backup_dir") or app.config.get("CLOUD_BACKUP_DIR")
-    if not cloud_root:
-        return {"ok": False, "skipped": True, "reason": "cloud_backup_disabled"}
-
-    temp_conn = None
-    if conn is None:
-        conn = getattr(g, "db", None)
-    if conn is None and not force:
-        return {"ok": True, "skipped": True, "reason": "no_open_connection"}
-    if conn is None:
-        temp_conn = sqlite3.connect(DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
-    try:
-        return maybe_sync_database_to_cloud(
-            DATABASE,
-            cloud_root,
-            schema_status=get_schema_status(conn),
-            min_interval_seconds=int(settings.get("cloud_sync_interval_seconds") or app.config.get("CLOUD_SYNC_INTERVAL_SECONDS", 300)),
-            force=force,
-            logger=logger,
-        )
-    finally:
-        if temp_conn is not None:
-            temp_conn.close()
 
 
 
@@ -1589,25 +1344,14 @@ def _maybe_sync_database_snapshot(force: bool = False, conn=None):
 
 
 
-
-
-# Sincronização/upload de snapshot do banco pós-resposta. Dono transitório:
-# main (UT-2 isolou este bloco de add_security_headers; os cabeçalhos de
-# segurança agora são exclusivamente de app.__init__._apply_security_headers).
-# Removido na UT-5, quando o I/O de backup migra para app/backup/.
-@app.after_request
-def _legacy_post_response_backup_sync(resp):
-    try:
-        if request.endpoint != "static" and resp.status_code < 500:
-            sync_result = _maybe_sync_database_snapshot(force=False)
-            if sync_result.get("ok") and not sync_result.get("skipped"):
-                _run_retention_cleanup()
-                db_path = (sync_result.get("snapshot") or {}).get("database_path") or ""
-                if db_path:
-                    _maybe_upload_to_drives(db_path, conn=getattr(g, "db", None))
-    except Exception as exc:
-        logger.warning("Falha ao sincronizar snapshot do banco para nuvem: %s", exc)
-    return resp
+# UT-5: o hook transitório `_legacy_post_response_backup_sync` (@app.after_request)
+# foi REMOVIDO daqui. O I/O de backup deixou de correr no ciclo de request:
+# nenhuma requisição HTTP comum (inclusive GET /health) dispara orquestração de
+# backup, e o hook não foi realocado para before_request/teardown_request/
+# teardown_appcontext, thread, timer, atexit, signal ou worker. O ciclo
+# automático canônico agora é app.backup.orchestrator.run_backup_cycle,
+# acionado fora do request por `python -m app.backup.sync`. main não registra
+# mais nenhum hook Flask (hooks_main == 0).
 
 # ===================== Rotas Aluno: Arquivos =====================
 
@@ -3296,9 +3040,9 @@ def admin_banco_dados_backup():
         logger=logger,
         extra_metadata={"requested_by": session.get("user_id")},
     )
-    cloud_result = _maybe_sync_database_snapshot(force=True, conn=conn)
+    cloud_result = _backup_orchestrator._maybe_sync_database_snapshot(force=True, conn=conn)
     try:
-        external_result = _upload_snapshot_if_external_enabled(local_snapshot, settings)
+        external_result = _backup_orchestrator._upload_snapshot_if_external_enabled(local_snapshot, settings)
     except RuntimeError as exc:
         logger.warning("Falha ao enviar snapshot para servidor externo: %s", exc)
         external_result = {"ok": False, "skipped": False, "reason": "external_error", "error": str(exc)}
@@ -3320,11 +3064,11 @@ def admin_banco_dados_backup():
         local_snapshot["database_path"],
     )
     try:
-        _run_retention_cleanup(conn=conn)
+        _backup_orchestrator._run_retention_cleanup(conn=conn)
     except Exception as exc:
         logger.warning("Falha ao aplicar política de retenção após backup: %s", exc)
     try:
-        _maybe_upload_to_drives(local_snapshot["database_path"], conn=conn)
+        _backup_orchestrator._maybe_upload_to_drives(local_snapshot["database_path"], conn=conn)
     except Exception as exc:
         logger.warning("Falha no upload para drives após backup: %s", exc)
     return redirect(url_for("admin_banco_dados"))
@@ -3413,15 +3157,15 @@ def _restore_database_from_source(
 
     conn = get_db_connection()
     init_db()
-    sync_result = _maybe_sync_database_snapshot(force=True, conn=conn)
+    sync_result = _backup_orchestrator._maybe_sync_database_snapshot(force=True, conn=conn)
     try:
-        _run_retention_cleanup(conn=conn)
+        _backup_orchestrator._run_retention_cleanup(conn=conn)
     except Exception as exc:
         logger.warning("Falha ao aplicar política de retenção após restauração: %s", exc)
     try:
         db_path = (sync_result.get("snapshot") or {}).get("database_path") or ""
         if db_path:
-            _maybe_upload_to_drives(db_path, conn=conn)
+            _backup_orchestrator._maybe_upload_to_drives(db_path, conn=conn)
     except Exception as exc:
         logger.warning("Falha no upload para drives após restauração: %s", exc)
 
