@@ -458,26 +458,23 @@ print(json.dumps({
 # ---------------------------------------------------------------------------
 
 
-def test_fetch_overrides_falsy_id_returns_empty_without_ensure_or_query(monkeypatch):
+def test_fetch_overrides_falsy_id_returns_empty_without_ensure_or_query():
     from app import admin_access
 
-    ensure_calls = []
-    monkeypatch.setattr(admin_access, "ensure_usuario_access_schema", lambda conn: ensure_calls.append(conn))
+    assert not hasattr(admin_access, "ensure_usuario_access_schema")
     spy = _SpyConnection([])
 
     for falsy in (None, 0, ""):
         assert admin_access._fetch_user_access_overrides(spy, falsy) == {}
 
-    assert ensure_calls == []
     assert spy.executed == []
 
 
-def test_fetch_overrides_truthy_id_calls_ensure_once_preserves_sql_and_normalizes(monkeypatch):
+def test_fetch_overrides_truthy_id_is_read_only_and_preserves_sql_and_normalizes():
     from app import admin_access
     from app.auth import ACCESS_RESOURCES_META, normalize_permission_scope
 
-    ensure_calls = []
-    monkeypatch.setattr(admin_access, "ensure_usuario_access_schema", lambda conn: ensure_calls.append(conn))
+    assert not hasattr(admin_access, "ensure_usuario_access_schema")
     rows = [
         {"recurso": " matrizes ", "escopo": "Edição"},
         {"recurso": "ALUNOS", "escopo": "leitura"},
@@ -489,7 +486,6 @@ def test_fetch_overrides_truthy_id_calls_ensure_once_preserves_sql_and_normalize
 
     result = admin_access._fetch_user_access_overrides(spy, 7)
 
-    assert ensure_calls == [spy]
     assert spy.executed == [
         ("SELECT recurso, escopo FROM usuarios_permissoes_acesso WHERE usuario_id = ?", (7,))
     ]
@@ -582,10 +578,12 @@ def test_build_access_scope_groups_for_level_matches_canonical_pipeline():
 # ---------------------------------------------------------------------------
 
 
-def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path, monkeypatch):
+def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path):
     import main  # noqa: F401  (module must remain importable; no DB access here)
     from app import admin_access
     from app.auth import ACCESS_LEVEL_META, ACCESS_RESOURCE_GROUPS, merge_resource_scopes
+
+    assert not hasattr(admin_access, "ensure_usuario_access_schema")
 
     conn = sqlite3.connect(str(tmp_path / "admin_access_context.db"), factory=TrackingConnection)
     conn.row_factory = sqlite3.Row
@@ -593,33 +591,27 @@ def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path,
 
     statements: list[str] = []
     conn.set_trace_callback(statements.append)
-    ensure_calls = []
-    monkeypatch.setattr(admin_access, "ensure_usuario_access_schema", lambda c: ensure_calls.append(c))
     try:
         # Falsy id: no ensure, no query, no commit/rollback/close.
         for falsy in (None, 0, ""):
-            ensure_calls.clear()
             statements.clear()
             conn.commit_count = conn.rollback_count = conn.close_count = 0
             result = admin_access._load_admin_access_context(conn, falsy)
             assert result == NON_ADMIN_CONTEXT
-            assert ensure_calls == []
             assert statements == []
             assert conn.commit_count == conn.rollback_count == conn.close_count == 0
             assert conn.in_transaction is False
 
-        # Non-admin result: ensure called once, no overrides query.
+        # Non-admin result: read-only single SELECT, no overrides query.
         conn.execute(
             "INSERT INTO usuarios (id, tipo, nivel_acesso) VALUES (?, ?, ?)",
             (1, "aluno", "usuario"),
         )
         conn.commit()
-        ensure_calls.clear()
         statements.clear()
         conn.commit_count = conn.rollback_count = conn.close_count = 0
         result = admin_access._load_admin_access_context(conn, 1)
         assert result == NON_ADMIN_CONTEXT
-        assert len(ensure_calls) == 1
         norm = _norm_sql(statements)
         # set_trace_callback expands bound parameters, so "?" renders as literal 1.
         assert norm == ["SELECT id, tipo, nivel_acesso FROM usuarios WHERE id = 1"]
@@ -640,7 +632,6 @@ def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path,
             (2, "not_a_resource", "full"),
         )
         conn.commit()
-        ensure_calls.clear()
         statements.clear()
         conn.commit_count = conn.rollback_count = conn.close_count = 0
         result = admin_access._load_admin_access_context(conn, 2)
@@ -655,7 +646,6 @@ def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path,
         assert [group["label"] for group in result["scope_groups"]] == [
             label for label, _ in ACCESS_RESOURCE_GROUPS
         ]
-        assert len(ensure_calls) == 2  # once in _load, once in _fetch_user_access_overrides
         norm = _norm_sql(statements)
         assert set(norm) == {
             "SELECT id, tipo, nivel_acesso FROM usuarios WHERE id = 2",
@@ -663,7 +653,6 @@ def test_load_admin_access_context_behavior_and_transaction_neutrality(tmp_path,
         }
         assert conn.commit_count == conn.rollback_count == conn.close_count == 0
         assert conn.in_transaction is False
-        assert ensure_calls == [conn, conn]
     finally:
         conn.close()
 

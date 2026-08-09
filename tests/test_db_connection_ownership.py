@@ -85,7 +85,7 @@ def test_disposable_connection_preserves_configuration_collation_reuse_and_close
         assert first is second
         assert first.row_factory is sqlite3.Row
         assert first.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-        assert first.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert first.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
         assert first.execute("PRAGMA synchronous").fetchone()[0] == 1
         assert first.execute(
             "SELECT CASE WHEN 'ação' = 'ACAO' COLLATE PTBR_NOACCENT THEN 1 ELSE 0 END"
@@ -99,6 +99,38 @@ def test_disposable_connection_preserves_configuration_collation_reuse_and_close
     assert database_path.is_file()
     assert not database_path.with_name(database_path.name + "-wal").exists()
     assert not database_path.with_name(database_path.name + "-shm").exists()
+
+
+def test_generic_connection_preserves_pre_existing_journal_mode_state_neutrally(monkeypatch, tmp_path):
+    database_path = tmp_path / "phase3a_neutral.db"
+    raw = sqlite3.connect(str(database_path))
+    raw.execute("CREATE TABLE probe (id INTEGER PRIMARY KEY)")
+    raw.execute("PRAGMA journal_mode = DELETE")
+    raw.commit()
+    raw.close()
+    before_bytes = database_path.read_bytes()
+    before_header = (before_bytes[18], before_bytes[19])
+    assert before_header == (1, 1)
+
+    monkeypatch.setattr(app_db, "DATABASE", str(database_path))
+    monkeypatch.setattr(main, "DATABASE", str(database_path))
+    monkeypatch.setitem(main.app.config, "DATABASE_PATH", str(database_path))
+
+    with main.app.app_context():
+        app_db.close_db_connection(None)
+        conn = app_db.get_db_connection()
+        assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
+        main.close_db_connection(None)
+        assert "db" not in g
+
+    after_bytes = database_path.read_bytes()
+    assert after_bytes == before_bytes
+    assert (after_bytes[18], after_bytes[19]) == (1, 1)
+    assert not database_path.with_name(database_path.name + "-wal").exists()
+    assert not database_path.with_name(database_path.name + "-shm").exists()
+    assert not database_path.with_name(database_path.name + "-journal").exists()
 
 
 def test_factory_registers_only_the_canonical_close_lifecycle():

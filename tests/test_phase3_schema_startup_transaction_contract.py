@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APP_DB_PATH = PROJECT_ROOT / "app" / "db.py"
 DB_MAINTENANCE_PATH = PROJECT_ROOT / "app" / "db_maintenance.py"
 BACKUP_SETTINGS_PATH = PROJECT_ROOT / "app" / "backup_settings.py"
+MESSAGES_PATH = PROJECT_ROOT / "utils" / "messages.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CONTRACT_PATH = PROJECT_ROOT / "docs" / "refactor" / "PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
 CONTRACT_RELPATH = "docs/refactor/PHASE3_SCHEMA_STARTUP_TRANSACTION_CONTRACT.md"
@@ -109,6 +110,7 @@ EXPECTED_MAIN_INIT_CALLERS = {
     "tests/test_security.py": ("client",),
     "tests/test_ut8_banco_dados_blueprint.py": ("isolated_env",),
     "tests/test_ut9_acesso_blueprint.py": ("isolated_env",),
+    "tests/test_plateau_c4_request_hook_write_isolation.py": ("_bootstrapped_env",),
     "tests/versioned_test_support.py": ("isolated_versioned_app_env",),
     "tools/smoke_test.py": ("<module>",),
     "tools/smoke_test_admin.py": ("<module>",),
@@ -116,6 +118,7 @@ EXPECTED_MAIN_INIT_CALLERS = {
 }
 
 EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS = {
+    "tests/conftest.py": ("_bootstrap_session_database",),
     "tests/test_atividades_schema_migration_v2.py": (
         "_run_init_on_temp_database",
     ),
@@ -143,6 +146,7 @@ EXPECTED_BOOTSTRAP_EVENTS = (
     "helper:ensure_app_settings_schema",
     "helper:ensure_backup_settings_schema",
     "helper:ensure_cloud_backup_schema",
+    "helper:ensure_message_overrides_schema",
     "table:alunos",
     "table:turmas",
     "table:atividades",
@@ -485,6 +489,7 @@ def _bootstrap_events():
         "ensure_atividade_versioning_schema",
         "get_preferred_matriz_for_curso",
         "apply_schema_migrations",
+        "ensure_message_overrides_schema",
     }
     for node in ast.walk(function):
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
@@ -552,8 +557,12 @@ def test_connection_authority_exports_pragmas_without_main_sync_bridge():
     assert "sqlite3.Row" in connection_source
     assert "PTBR_NOACCENT" in connection_source
     assert "PRAGMA foreign_keys = ON" in connection_source
-    assert "PRAGMA journal_mode = WAL" in connection_source
     assert "PRAGMA synchronous = NORMAL" in connection_source
+    assert "PRAGMA journal_mode = WAL" not in connection_source
+
+    init_db_source = ast.get_source_segment(_read(APP_DB_PATH), _top_level_function(app_tree, "init_db"))
+    assert init_db_source is not None
+    assert init_db_source.count("PRAGMA journal_mode = WAL") == 1
 
     app_db = importlib.import_module("app.db")
     main = importlib.import_module("main")
@@ -581,7 +590,7 @@ def test_single_init_owner_and_exact_compatibility_caller_manifest():
         assert canonical_owner == "app.db.init_db"
         actual_main[path].append(scope)
     assert {path: tuple(scopes) for path, scopes in actual_main.items()} == EXPECTED_MAIN_INIT_CALLERS
-    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 74
+    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 75
 
     actual_app_db = defaultdict(list)
     for path, scope, _, _, expression, imported_binding, canonical_owner in records[
@@ -594,7 +603,7 @@ def test_single_init_owner_and_exact_compatibility_caller_manifest():
     assert {
         path: tuple(scopes) for path, scopes in actual_app_db.items()
     } == EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS
-    assert sum(map(len, EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS.values())) == 5
+    assert sum(map(len, EXPECTED_APP_DB_QUALIFIED_INIT_CALLERS.values())) == 6
 
     actual_imported_owner = defaultdict(list)
     for path, scope, _, _, expression, imported_binding, canonical_owner in records[
@@ -778,6 +787,9 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "_apply_backup_settings_to_app",
             "get_backup_settings",
             "ensure_backup_settings_schema",
+        ),
+        MESSAGES_PATH: (
+            "ensure_message_overrides_schema",
         ),
     }
     neutral = {

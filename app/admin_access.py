@@ -13,13 +13,11 @@ from app.auth import (
     permission_scope_satisfies,
 )
 from app.db import get_db_connection
-from app.db_maintenance import ensure_usuario_access_schema
 
 
 def _fetch_user_access_overrides(conn, usuario_id: int | None) -> dict[str, str]:
     if not usuario_id:
         return {}
-    ensure_usuario_access_schema(conn)
     rows = conn.execute(
         "SELECT recurso, escopo FROM usuarios_permissoes_acesso WHERE usuario_id = ?",
         (usuario_id,),
@@ -67,7 +65,6 @@ def _load_admin_access_context(conn, usuario_id: int | None = None) -> dict[str,
             "scope_groups": [],
         }
 
-    ensure_usuario_access_schema(conn)
     row = conn.execute(
         "SELECT id, tipo, nivel_acesso FROM usuarios WHERE id = ?",
         (usuario_id,),

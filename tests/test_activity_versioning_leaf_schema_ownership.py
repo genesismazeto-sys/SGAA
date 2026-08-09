@@ -1,6 +1,7 @@
 import ast
 import inspect
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -332,8 +333,31 @@ def test_app_db_preserves_b8_leaf_semantics_through_the_b11_final_cutover():
         "_init_db_impl",
         "_sync_database_from_main",
     }
-    for name in {"get_db_connection", "close_db_connection"}:
-        assert _dump(current_functions[name]) == _dump(baseline_functions[name]), name
+
+    baseline_gdc_source = ast.get_source_segment(
+        _baseline(APP_DB_PATH), baseline_functions["get_db_connection"]
+    )
+    current_gdc_source = ast.get_source_segment(
+        _read(APP_DB_PATH), current_functions["get_db_connection"]
+    )
+    assert baseline_gdc_source is not None
+    assert current_gdc_source is not None
+    assert baseline_gdc_source.count('g.db.execute("PRAGMA journal_mode = WAL")') == 1
+    expected_gdc_source = re.sub(
+        r'^[ \t]*g\.db\.execute\("PRAGMA journal_mode = WAL"\)\n',
+        "",
+        baseline_gdc_source,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    assert current_gdc_source == expected_gdc_source, (
+        "get_db_connection differs from the frozen baseline beyond the single "
+        "enumerated C4 deletion: g.db.execute(\"PRAGMA journal_mode = WAL\")"
+    )
+    assert "journal_mode" not in current_gdc_source
+    assert _dump(current_functions["close_db_connection"]) == _dump(
+        baseline_functions["close_db_connection"]
+    ), "close_db_connection"
 
     assert "_get_main_db_helpers" not in current_functions
     assert "_init_db_impl" not in current_functions
@@ -347,6 +371,10 @@ def test_app_db_preserves_b8_leaf_semantics_through_the_b11_final_cutover():
     assert source.index("conn = get_db_connection()") < source.index(
         "apply_early_schema_migrations(conn, logger=logger)"
     ) < source.index("CREATE TABLE IF NOT EXISTS usuarios")
+    assert source.count("PRAGMA journal_mode = WAL") == 1
+    assert source.index("conn = get_db_connection()") < source.index(
+        "PRAGMA journal_mode = WAL"
+    ) < source.index("apply_early_schema_migrations(conn, logger=logger)")
     assert "ALTER TABLE atividades ADD COLUMN" not in source
     assert "UPDATE atividades SET tipo_atividade" not in source
     assert "from main import ensure_atividade_versioning_schema" not in _read(APP_DB_PATH)

@@ -931,7 +931,6 @@ def _get_overrides(conn=None) -> dict[str, str]:
         return dict(g._message_overrides_cache)
 
     current_conn = conn or _get_runtime_db_connection()
-    ensure_message_overrides_schema(current_conn)
     rows = current_conn.execute(f"SELECT chave, texto FROM {MESSAGE_TABLE_NAME}").fetchall()
     overrides = {str(row["chave"]): str(row["texto"]) for row in rows}
 

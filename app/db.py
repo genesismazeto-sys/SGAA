@@ -25,6 +25,7 @@ from app.db_maintenance import (
 )
 from app.security.passwords import hash_password
 from app.text import ptbr_sqlite_collation
+from utils.messages import ensure_message_overrides_schema
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -47,7 +48,6 @@ def get_db_connection():
             pass
         try:
             g.db.execute("PRAGMA foreign_keys = ON")
-            g.db.execute("PRAGMA journal_mode = WAL")
             g.db.execute("PRAGMA synchronous = NORMAL")
         except Exception:
             pass
@@ -185,6 +185,7 @@ def init_db():
     default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
 
     conn = get_db_connection()
+    conn.execute("PRAGMA journal_mode = WAL")
     apply_early_schema_migrations(conn, logger=logger)
 
     conn.execute(
@@ -209,6 +210,7 @@ def init_db():
     ensure_app_settings_schema(conn)
     ensure_backup_settings_schema(conn)
     ensure_cloud_backup_schema(conn)
+    ensure_message_overrides_schema(conn)
 
     conn.execute(
         """

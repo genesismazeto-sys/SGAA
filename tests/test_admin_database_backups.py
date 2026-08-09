@@ -294,8 +294,8 @@ def test_restore_upload_rejects_zip_with_path_traversal(admin_client, tmp_path):
     assert "caminho inseguro" in response.get_data(as_text=True).lower()
 
 
-def test_database_module_requires_explicit_permission_for_consultivo_admin(tmp_path):
-    main.app.config["TESTING"] = True
+def test_database_module_requires_explicit_permission_for_consultivo_admin(tmp_path, monkeypatch):
+    monkeypatch.setitem(main.app.config, "TESTING", True)
     main.app.config["LOCAL_BACKUP_DIR"] = str(tmp_path / "local")
     main.app.config["CLOUD_BACKUP_DIR"] = str(tmp_path / "cloud")
     main.app.config["CLOUD_SYNC_INTERVAL_SECONDS"] = 0

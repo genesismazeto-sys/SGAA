@@ -228,6 +228,29 @@ def _isolate_real_log_writes(monkeypatch):
         temp_handler.close()
 
 
+# ---- Canonical pytest session database bootstrap (C4 Phase-C harness repair) ----
+
+# C4 closed the request-time lazy creation of mensagens_editaveis (F2), so the
+# table exists only after the canonical init_db bootstrap.  The shared pytest
+# runtime DB must therefore pass through init_db exactly once per session, after
+# APP_DATABASE redirection is final and before any test can dispatch a request
+# through main.app.  The bootstrap targets app.db.init_db directly (the
+# canonical DB initializer) so the main.init_db caller ratchet stays at 75 and
+# no request-time lazy repair is ever needed.
+@pytest.fixture(scope="session", autouse=True)
+def _bootstrap_session_database():
+    import app.db as app_db
+    import main
+
+    runtime_db = Path(os.environ["APP_DATABASE"]).resolve()
+    assert runtime_db.is_relative_to(PYTEST_RUNTIME_ROOT.resolve()), (
+        f"session bootstrap must target the pytest runtime root only: {runtime_db}"
+    )
+    with main.app.app_context():
+        app_db.init_db()
+    yield
+
+
 # ---- Session hooks ----
 
 

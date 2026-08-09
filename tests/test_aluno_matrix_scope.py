@@ -35,6 +35,7 @@ def isolated_dashboard_client(tmp_path):
     original_app_db_database = app_db_module.DATABASE
     original_env_database = os.environ.get("APP_DATABASE")
     original_config_database_path = app.config.get("DATABASE_PATH")
+    original_testing = app.config.get("TESTING")
 
     os.environ["APP_DATABASE"] = str(temp_database)
     main.DATABASE = str(temp_database)
@@ -71,6 +72,8 @@ def isolated_dashboard_client(tmp_path):
             os.environ.pop("APP_DATABASE", None)
         else:
             os.environ["APP_DATABASE"] = original_env_database
+
+        app.config["TESTING"] = original_testing
 
 
 def test_aluno_dashboard_clean_db_with_turma_matriz_returns_200(isolated_dashboard_client):

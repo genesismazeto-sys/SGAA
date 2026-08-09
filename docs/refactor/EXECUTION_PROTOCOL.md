@@ -1,12 +1,43 @@
 # SGAA-EJ — PROTOCOLO DE EXECUÇÃO DO REFACTOR (FASE FINAL)
 
-**Versão:** 1.2 — 2026-08-08
+**Versão:** 1.3 — 2026-08-09
 **Autoridade:** substitui a governança por fase (contrato + closeout por unidade) para todo o
 trabalho remanescente. Não revoga contratos fechados (B1–B7-P permanecem como histórico).
 **Condutor:** ChatGPT / GPT-5.6 Sol (sem acesso direto ao código; lê o repositório via GitHub após push).
 **Executores:** GPT-5.6 Sol, Claude Opus 5, Claude Sonnet 5, DeepSeek V4 Pro, DeepSeek V4 Flash.
 
 ### Changelog
+
+**1.3 — 2026-08-09 — CORREÇÃO VERSIONADA DA DEFINIÇÃO DO CRITÉRIO 4 (PLATEAU).** Não altera
+escopo de UT, sequência, arquitetura, invariantes numéricos, comportamento de negócio nem
+roteamento de modelos. Substitui **apenas** o texto ativo do Critério 4 do PLATEAU ESTRUTURAL
+(§3).
+
+Critério 4 na v1.2 — texto histórico, preservado aqui na íntegra:
+
+> "Nenhuma escrita em disco, banco ou rede dentro de hook de requisição."
+
+Sob essa redação literal, a **primeira validação formal do plateau** (pós-UT-9, HEAD
+`230de41b`) resultou corretamente em **6/7 PASS — Critério 4 FAIL**. A emissão síncrona de
+diagnóstico RBAC/CSRF em arquivo local durante a execução de hook é, literalmente, "escrita em
+disco". O validador original **não errou**: aplicou a definição então vigente. Aquele resultado
+permanece **válido sob a v1.2** e está preservado como fato histórico no ledger. Havia ainda,
+naquele momento, bloqueadores de estado de aplicação de fato — escrita de schema/normalização
+de acesso em caminho de leitura de requisição, ensure preguiçoso de `mensagens_editaveis` em
+caminho de leitura, e conversão persistente de `journal_mode` pela conexão genérica — todos
+removidos pela remediação do C4 antes desta versão.
+
+A v1.3 é uma **correção de definição**, não um PASS retroativo silencioso. Ela distingue
+**escrita durável de estado de aplicação** de **observabilidade diagnóstica local
+pré-configurada**. Tudo o que a v1.2 proibia em termos de estado de aplicação, banco e rede
+**continua proibido**; a exceção é estritamente limitada a logging diagnóstico/auditoria
+**local** cujo subsistema foi **integralmente configurado fora do caminho de requisição**. Não
+se autoriza `QueueHandler`/`QueueListener`, thread de logging em segundo plano nem qualquer
+handler com backend de rede: o contrato de logging **síncrono** é preservado.
+
+A segunda validação formal, sob a v1.3, resultou em **7/7 PASS / 0 achados materiais**. As duas
+medições não se contradizem: avaliam textos de critério diferentes sobre o mesmo comportamento,
+que não mudou entre elas.
 
 **1.2 — 2026-08-08 — MODEL ROUTING ONLY.** Muda apenas o roteamento de modelos; não altera
 escopo de UT, arquitetura, invariantes, comportamento de negócio nem mecânica de governança.
@@ -303,7 +334,19 @@ criar o pacote `app/db/` (§5).
    `context_processor` **nem `errorhandler`**. (Satisfeito a partir da UT-5; ver §4.)
 2. `create_app()` é o único lugar que instala extensão Flask ou define chave de `app.config`.
 3. `grep -rn "import main" app/ services/ utils/` retorna vazio.
-4. Nenhuma escrita em disco, banco ou rede dentro de hook de requisição.
+4. **Isolamento de escrita em hook de requisição.** Hooks de requisição não podem executar
+   escritas duráveis de estado de aplicação em banco ou em sistema de arquivos, nem escritas
+   de saída para rede/provedor externo. O único efeito colateral persistente permitido é a
+   emissão de log diagnóstico/auditoria através de um subsistema de logging **local**
+   integralmente configurado **fora** do caminho de requisição. O código de hook pode emitir
+   registros, mas **não pode**: criar, configurar, substituir ou remover handlers; alterar
+   destinos de log; mutar diretamente estado de aplicação no sistema de arquivos; usar logging
+   com backend de rede; executar bootstrap de banco ou de schema; normalizar ou reparar estado
+   persistente; nem converter persistentemente o `journal_mode` do banco. Append e rotação
+   geridos pelo próprio handler sobre o sink diagnóstico local pré-configurado são
+   **observabilidade**, não mutação de estado de aplicação. *(Redação ativa desde a v1.3. A
+   redação literal da v1.2 e a primeira validação formal 6/7 obtida sob ela estão preservadas
+   no Changelog desta versão e no ledger; não são o mesmo texto de critério.)*
 5. Toda rota registrada resolve para exatamente um requisito de RBAC ou exceção aprovada,
    garantido por teste.
 6. Route inventory + actor matrix verdes.
@@ -740,11 +783,22 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | UT-7 | Helpers matrizes→catalog | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1218 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-8 | Coorte Banco de Dados | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1238 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-9 | Coorte Acesso | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1282 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
-| — | **PLATEAU ESTRUTURAL** | | | | | | 0 | | | |
+| — | **PLATEAU ESTRUTURAL** | landing da Fase H (este commit) | Claude Opus 5 | Claude Opus 5 (revalidação formal independente) | **7/7 PASS** (Critério 4 v1.3; 1ª validação formal foi 6/7 sob v1.2) | 131/130/0 | 0 | 1302 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 
 UT-9 — Coorte Acesso: QUALIFICADA / FECHADA neste commit final. Extração: 6 rotas + 3 helpers.
 Suíte final: 1282 collected / 1265 passed / 17 deselected / 0 failed / 0 errors. Invariantes
-finais: 131 / 130 / 0 / 402 / 536 / 0. Plateau: validação formal elegível após a publicação.
+finais: 131 / 130 / 0 / 402 / 536 / 0. Plateau: naquele momento apenas **elegível** para
+validação formal, ainda **não declarado** — valor histórico da UT-9.
+
+**PLATEAU ESTRUTURAL — VALIDADO / PUBLICADO** em 2026-08-09, no commit de landing da Fase H
+(subject `Validate structural plateau request-hook isolation`; pai `230de41b`). Matriz formal
+**7/7 PASS** sob o Critério 4 da v1.3: C1 `hooks_main` PASS / C2 composition root PASS /
+C3 dependência reversa PASS / C4 isolamento de escrita em hook PASS / C5 RBAC PASS /
+C6 inventário de rotas + actor matrix PASS / C7 suíte canônica PASS. Suíte canônica vigente:
+1319 collected / 1302 passed / 17 deselected / 0 failed / 0 errors / 407,40s. Invariantes:
+131 / 130 / 0 / 402 / 536 / 0. **Histórico preservado:** a primeira validação formal, sob o
+Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o ledger. UT-10 não
+iniciada.
 
 | UT-10 | Coorte Arquivos | | | | | | 0 | | 1 | |
 | UT-11 | Coorte Alertas | | | | | | 0 | | nenhum | |

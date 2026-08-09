@@ -1104,3 +1104,101 @@ bytes / SHA canônico inalterado / `user_version` 3 / sem sidecars persistentes.
 primeira execução resolvidas NÃO são achados abertos.
 
 **Próxima UT:** UT-10 — NÃO INICIADA.
+
+## Plateau estrutural — validação formal, correção de definição e publicação
+
+**Data:** 2026-08-09. **HEAD de entrada:** `230de41b3439a60951049e9021d6b0063f3bc2db`
+(publicação da UT-9, subject `Extract admin access routes`). Este bloco é **reconciliação
+histórica**: registra pela primeira vez, na governança, a sequência formal completa. Nenhuma
+entrada de UT anterior é reescrita.
+
+**1. Primeira validação formal do plateau — 6/7 PASS, Critério 4 FAIL.** Executada após a
+publicação da UT-9, sobre o HEAD `230de41b`. Critérios 1, 2, 3, 5, 6 e 7 PASS. **Critério 4
+FAIL** sob a redação literal do Protocolo **v1.2**: *"Nenhuma escrita em disco, banco ou rede
+dentro de hook de requisição."* A medição pré-validação da UT-9 ("7/7 critérios medidos PASS,
+validação formal diferida") **não era** uma declaração de plateau; era medição, e a validação
+formal subsequente a corrigiu. Este FAIL é fato histórico e permanece **válido sob a v1.2**.
+
+**2. Causas-raiz caracterizadas.** Quatro, sendo três de estado de aplicação e uma de definição:
+(a) caminho de leitura de acesso executava `ensure_usuario_access_schema` (DDL + normalização)
+durante hook — `app/admin_access.py::_fetch_user_access_overrides` e `_load_admin_access_context`;
+(b) caminho de leitura de mensagens executava `ensure_message_overrides_schema` preguiçosamente
+— `utils/messages.py::_get_overrides`; (c) `app/db.py::get_db_connection` genérico convertia
+persistentemente `journal_mode` para WAL a cada conexão de requisição; (d) o logging
+diagnóstico **síncrono e local** de RBAC/CSRF emitido durante hook satisfazia literalmente
+"escrita em disco" na redação da v1.2 — conflito de definição, não defeito de comportamento.
+
+**3. Decisão de governança.** Correção **versionada** da definição do Critério 4 autorizada pela
+supervisão (Protocolo **v1.3 — 2026-08-09**, ver Changelog do `EXECUTION_PROTOCOL.md`).
+Logging diagnóstico/auditoria **local pré-configurado fora do caminho de requisição** passa a
+ser classificado como **observabilidade**, não mutação de estado de aplicação. Explicitamente
+**recusados**: `QueueHandler`/`QueueListener`, thread de logging em segundo plano e qualquer
+handler com backend de rede — o contrato de logging **síncrono** foi preservado. Escritas
+duráveis de estado de aplicação em banco/filesystem e escritas de rede/provedor continuam
+proibidas em hook.
+
+**4. Candidato técnico do C4 — 11 caminhos.** Produção (3): `app/admin_access.py` (remoção do
+import e das duas chamadas de `ensure_usuario_access_schema`; leitores passam a ser
+read-only); `app/db.py` (remoção de `PRAGMA journal_mode = WAL` de `get_db_connection`;
+`init_db` passa a possuir WAL e a chamar `ensure_message_overrides_schema`); `utils/messages.py`
+(remoção do ensure preguiçoso em `_get_overrides`). Testes (8): `tests/conftest.py` (bootstrap
+canônico de banco por sessão do pytest, alvo `app.db.init_db`, restrito ao runtime root);
+`tests/test_phase3_schema_startup_transaction_contract.py`, `tests/test_db_connection_ownership.py`,
+`tests/test_activity_versioning_leaf_schema_ownership.py`, `tests/test_phase4_matrizes_shared_owners.py`
+(reconciliação dos contratos exatos afetados); `tests/test_admin_database_backups.py` e
+`tests/test_aluno_matrix_scope.py` (correção de vazamento de estado `TESTING`); e o RED
+congelado novo `tests/test_plateau_c4_request_hook_write_isolation.py`, SHA-256
+`277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
+
+**5. Histórico de qualificação.** RED de qualificação: 36 coletados / **13 falhas arquiteturais
+esperadas** (4, 5, 6, 7, 8, 9, 10, 12, 13, 17, 19, 21, 23) / 23 controles verdes / 0 errors.
+RED pós-implementação: **36/36 passed**. Falha de harness da Fase C: o fechamento da criação
+preguiçosa de `mensagens_editaveis` deixou o banco compartilhado do pytest sem a tabela —
+corrigida com o bootstrap de sessão em `tests/conftest.py`, que atravessa `init_db` exatamente
+uma vez, após a redireção final de `APP_DATABASE` e antes de qualquer dispatch. Primeira suíte
+canônica: **1 failed**, causada por vazamento de estado `TESTING` em duas fontes de baseline;
+reparo estreito nos dois arquivos citados, zero mudança em produção e zero mudança no RED
+congelado. Retry canônico bem-sucedido: **1319 collected / 1302 passed / 17 deselected /
+0 failed / 0 errors / 407,40s**. Qualificação final independente de invariantes do C4:
+**PASS / 0 achados materiais**. Manifesto exato de chamadores: `main.init_db` 74 → **75** e
+`app_db`-qualificado 5 → **6**, ambos os deltas exclusivamente test-side; delta de chamador de
+produção **0**.
+
+**6. Segunda validação formal — 7/7 PASS.** Revalidação estrutural formal independente,
+read-only, sob o Critério 4 do Protocolo **v1.3**: C1 `hooks_main` = 0 PASS; C2 composition
+root PASS (`main.py`: 0 atribuições de config, 0 construtores de extensão, 0
+`register_blueprint`; `create_app` DB-neutro, sem `init_db`); C3 dependência reversa = 0 PASS;
+C4 PASS (submatriz 8A–8G: gate congelado 36/36; 0 SQL write-class em **todos** os slots de hook
+sobre 57 rotas GET e 38 rotas POST admin sob sessão negada; estado deliberadamente stale
+permanece stale; `get_db_connection` sobre banco não-WAL sem delta de header/SHA/sidecar e
+`init_db` estabelecendo WAL; 0 mutação de filesystem de estado de aplicação; identidades de
+handler inalteradas, sinks locais, sem thread/queue/rede; 0 caminho de saída de rede/provedor);
+C5 RBAC unmapped = 0 PASS (Acesso: 1 requisito view + 5 full); C6 PASS (actor matrix 402 =
+263 allowed + 139 denied; route inventory 20814 bytes / `6e32148c…3049fa` byte-idêntico);
+C7 PASS por continuidade de custódia. **criteria_passed = 7/7 · material_findings = 0.**
+
+**7. Publicação.** PLATEAU ESTRUTURAL: **VALIDADO / PUBLICADO** neste commit de landing da
+Fase H (subject `Validate structural plateau request-hook isolation`, pai `230de41b`,
+exatamente 14 caminhos = 11 técnicos + 3 de governança). C4: **FECHADO / ACEITO / PUBLICADO**.
+Invariantes finais: rotas 131 / endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo
+de mensagens 536 / hooks_main 0 / `SCHEMA_VERSION` 3 / migrações v1/v2/v3. Banco: 544768 bytes
+/ SHA canônico inalterado / `user_version` 3 / sem sidecars persistentes. **UT-10: NÃO
+INICIADA.**
+
+**8. Achados diferidos — preservados, NÃO reabertos neste commit.**
+
+FUTURE_HARDENING:
+- logging duplicado no caminho 500;
+- startup WSGI/`FLASK_APP` não suportado/hipotético sem `init_db`.
+
+OUT_OF_SCOPE / dívida arquitetural diferida:
+- escritas de schema/estado de aplicação em tempo de requisição que permanecem **dentro de
+  corpos de rota**, fora do critério de hook (medidas: 29 statements write-class em um único
+  `GET /admin/dashboard`, originados em view functions, não em hooks);
+- dívida de `presets_api.py` (módulo de raiz): `PRAGMA journal_mode = WAL` em conexão própria e
+  resolução via `sys.modules.get("main")` — fora do escopo atual do C3 (`app/`, `services/`,
+  `utils/`) e inalcançável a partir de qualquer hook registrado (o blueprint `presets` não
+  registra hooks).
+
+O plateau é **completude arquitetural contra os sete critérios**, não ausência global de
+dívida arquitetural. Falhas de primeira execução resolvidas NÃO são achados abertos.
