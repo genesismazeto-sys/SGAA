@@ -48,8 +48,8 @@ ADMIN_ACCESS_HELPERS = {
     "_admin_can",
 }
 
-# These two write/form helpers must remain local to main.py and absent from
-# app.admin_access (they are explicitly out of scope for B5-P).
+# These two write/form helpers must be top-level acesso.py ownership; they are
+# explicitly out of scope for app.admin_access (B5-P boundary preserved).
 RELATED_LOCAL_HELPERS = {
     "_persist_user_access_overrides",
     "_parse_access_overrides_from_form",
@@ -59,8 +59,9 @@ RELATED_LOCAL_HELPERS = {
 # helpers as a global.  No wrapper is allowed: each consumer must resolve the
 # canonical app.admin_access identity through its __globals__.
 # The two Matrizes consumers (admin_editar_matriz, admin_matriz_nova_atividade)
-# moved to app.views.admin.matrizes (PHASE 4-B5-R1); the remaining consumers
-# below stay in main.py.
+# moved to app.views.admin.matrizes (PHASE 4-B5-R1); the Acesso consumer
+# (admin_acesso) moved to app.views.admin.acesso (UT-9); the remaining consumer
+# below stays in main.py.
 #
 # UT-3 moves enforce_admin_access_control -> app.web.authz_gate and
 # inject_admin_access_helpers -> app.web.context (see
@@ -69,11 +70,9 @@ RELATED_LOCAL_HELPERS = {
 # test_moved_admin_access_consumers_resolve_canonical_identities_in_future_owner_modules
 # below, against their future owner modules.
 CONSUMER_NAMES = {
-    "admin_acesso",
     "uploaded_file",
 }
 CONSUMER_HELPER_USES = {
-    "admin_acesso": {"_load_admin_access_context"},
     "uploaded_file": {"_get_current_admin_access_context", "_admin_can"},
 }
 
@@ -86,6 +85,13 @@ MOVED_CONSUMER_OWNER_MODULE = {
     "enforce_admin_access_control": "app.web.authz_gate",
     "inject_admin_access_helpers": "app.web.context",
 }
+
+# UT-9: the Acesso consumer moved to app.views.admin.acesso and must still
+# resolve the canonical app.admin_access identities through its module globals.
+ACESSO_MODULE_CONSUMERS = {
+    "admin_acesso": {"_load_admin_access_context"},
+}
+ACESSO_MODULE_OWNER = "app.views.admin.acesso"
 
 # The two Matrizes handlers that consume the admin-access context helpers now
 # live in app.views.admin.matrizes and must still resolve the canonical
@@ -840,14 +846,32 @@ def test_matrizes_module_consumers_resolve_canonical_identities_for_every_use():
             assert func.__globals__[helper] is getattr(admin_access, helper)
 
 
+def test_acesso_module_consumer_resolves_canonical_identity_for_every_use():
+    import importlib
+
+    from app import admin_access
+
+    for name, used in ACESSO_MODULE_CONSUMERS.items():
+        owner_module = importlib.import_module(ACESSO_MODULE_OWNER)
+        func = inspect.unwrap(getattr(owner_module, name))
+        assert func.__module__ == ACESSO_MODULE_OWNER
+        for helper in used:
+            assert func.__globals__[helper] is getattr(admin_access, helper)
+
+
 # ---------------------------------------------------------------------------
-# 13. Persist/parse helpers remain local in main and absent from admin_access
+# 13. Persist/parse helpers are top-level acesso.py ownership, absent from
+#     main.py local definitions and from app/admin_access.py
 # ---------------------------------------------------------------------------
 
 
-def test_persist_and_parse_helpers_remain_local_in_main_and_absent_from_admin_access():
+def test_persist_and_parse_helpers_owned_by_acesso_and_absent_from_main_and_admin_access():
+    import app.views.admin.acesso as acesso_module
+
+    acesso_bodies = _top_level_bodies(Path(acesso_module.__file__))
+    assert RELATED_LOCAL_HELPERS <= acesso_bodies
     main_names = _top_level_functions(MAIN_PATH)
-    assert RELATED_LOCAL_HELPERS <= main_names
+    assert not RELATED_LOCAL_HELPERS & main_names
     admin_bodies = _top_level_bodies(ADMIN_ACCESS_PATH)
     assert not RELATED_LOCAL_HELPERS & admin_bodies
 

@@ -739,8 +739,13 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | UT-6 | Fechar ciclo app→main | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 0 | 1210 passed/0 failed/0 errors/17 deselected | nenhum (3 previstas, mantidas) | 2026-08-08 |
 | UT-7 | Helpers matrizes→catalog | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1218 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-8 | Coorte Banco de Dados | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1238 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
-| UT-9 | Coorte Acesso | | | | | | 0 | | nenhum | |
+| UT-9 | Coorte Acesso | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1282 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | — | **PLATEAU ESTRUTURAL** | | | | | | 0 | | | |
+
+UT-9 — Coorte Acesso: QUALIFICADA / FECHADA neste commit final. Extração: 6 rotas + 3 helpers.
+Suíte final: 1282 collected / 1265 passed / 17 deselected / 0 failed / 0 errors. Invariantes
+finais: 131 / 130 / 0 / 402 / 536 / 0. Plateau: validação formal elegível após a publicação.
+
 | UT-10 | Coorte Arquivos | | | | | | 0 | | 1 | |
 | UT-11 | Coorte Alertas | | | | | | 0 | | nenhum | |
 | UT-12 | Coorte Reportes | | | | | | 0 | | 1 | |

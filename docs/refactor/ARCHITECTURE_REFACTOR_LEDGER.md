@@ -677,7 +677,7 @@ histórico. `AGENT_HANDOFF.md` fica congelado como arquivo histórico a partir d
 | UT-6 | Fechar ciclo `app → main` | B |
 | UT-7 | Helpers `matrizes` → `activity_catalog` | B |
 | UT-8 | Coorte Banco de Dados (20 rotas) | C — coortes |
-| UT-9 | Coorte Acesso (6 rotas) | C |
+| UT-9 | Coorte Acesso (6 rotas) | A |
 | UT-10 | Coorte Arquivos (5 rotas) | D — fechamento condicional |
 | UT-11 | Coorte Alertas (4 rotas) | D |
 | UT-12 | Coorte Reportes (3 rotas) | D |
@@ -1069,4 +1069,38 @@ endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 
 Banco: 544768 bytes / SHA canônico inalterado / `user_version` 3 / sem sidecars persistentes.
 Falhas de primeira execução resolvidas NÃO são achados abertos.
 
-**Próxima UT:** UT-9 — NÃO INICIADA.
+## UT-9 — Coorte Acesso
+
+**Data:** 2026-08-09. **HEAD de entrada (pai de publicação):**
+`7909b2d59b2de987d84dc859a15bede215a3261b`. Before: 6 rotas Acesso e 3 helpers de coorte
+possuídos em `main.py`. After: `app/views/admin/acesso.py` passa a possuir **6 rotas /
+3 helpers / 0 constantes / 9 símbolos totais**. `main`: 9/9 reexports de compatibilidade por
+identidade; zero ownership local dos símbolos movidos. LegacyRouteSpec: 6 specs / 6 pares
+endpoint-method. RBAC: 1 view / 5 full (especial exato `admin_acesso → ("acesso","view")`;
+demais cinco por prefixo `("acesso","full")`). Dependência: `acesso → main` = **0**. Factory:
+`register_admin_acesso_blueprint` default True, registrado via `register_legacy_blueprint`
+(único caminho; sem `add_url_rule` alternativo; sem colisão). `main.py` `@app.route`: 18
+(inalterado). Preservação sensível à segurança: identidades de endpoint inalteradas; semântica
+RBAC exata/de prefixo inalterada; `app/auth.py` inalterado; `app/admin_access.py` inalterado;
+semântica de senha inalterada; semântica de transação/delete/resequence inalterada.
+
+Reconciliação de testes: 5 co-changes de fonte de teste Phase-4/shared-owner; 2 artefatos CSRF;
+novo RED UT-9 de 26 testes; reconciliação do manifest exato `init_db` do Phase-3.
+
+RED de qualificação: 26 coletados / 14 falhas arquiteturais esperadas / 12 controles verdes
+iniciais / 0 errors. RED pós-implementação: 26/26 passed. SHA RED congelado corrigido:
+`e88d9939afd570c6cbcfa7b097946012ee1cf988c379a807c5f76a97fc6fb5f5` (SHA inicial substituído
+por correção de seam green_11 aprovada pela supervisão). Revisão adversarial primária:
+`DeepSeek V4 Pro`: PASS / 0 achados materiais. Primeira suíte completa: 1282 collected /
+1264 passed / 1 failed / 17 deselected / 0 errors. Causa: contrato exato obsoleto do manifest
+de chamadores de `main.init_db` (73). Reparo estreito: 73 → 74 scopes exatos, adicionando
+unicamente o chamador test-side legítimo `tests/test_ut9_acesso_blueprint.py::isolated_env`;
+delta de chamador de produção = 0. Revisão estreita do reparo: `DeepSeek V4 Pro`: PASS /
+0 achados materiais. Retry bem-sucedido da suíte completa: 1282 collected / 1265 passed /
+17 deselected / 0 failed / 0 errors / 352.15s. Invariantes finais: rotas 131 / endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 / hooks_main 0. Banco: 544768
+bytes / SHA canônico inalterado / `user_version` 3 / sem sidecars persistentes. Plateau:
+7/7 critérios medidos PASS; validação formal diferida para após a publicação. Falhas de
+primeira execução resolvidas NÃO são achados abertos.
+
+**Próxima UT:** UT-10 — NÃO INICIADA.

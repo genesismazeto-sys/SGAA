@@ -549,6 +549,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
     sources = list(ADMIN_PACKAGE.glob("*.py"))
     assert {path.name for path in sources} == {
         "__init__.py",
+        "acesso.py",
         "alunos_turmas_cursos.py",
         "atividades.py",
         "banco_dados.py",
