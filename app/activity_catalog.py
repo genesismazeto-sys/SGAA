@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from app.text import normalize_header
+
 
 def parse_documentos_json(raw) -> list[str]:
     """Robustly parse documentos list from various legacy formats.
@@ -63,6 +65,21 @@ def _normalize_atividade_grupo(tipo_atividade: str, grupo: str) -> str:
     if (tipo_atividade or "").strip() == "Extensão Universitária":
         return "NA"
     return (grupo or "").strip()
+
+
+def _canonicalize_tipo_limitacao(value: str) -> str | None:
+    normalized = normalize_header(value).replace("_", " ")
+    if normalized == "total":
+        return "total"
+    if normalized == "semestral":
+        return "semestral"
+    return None
+
+
+def _build_grupo_label(numero: str, descricao: str) -> str:
+    numero = str(numero or "").strip()
+    descricao = str(descricao or "").strip()
+    return f"{numero} - {descricao}" if descricao else numero
 
 
 def get_atividade_base_list(conn) -> list:
@@ -355,6 +372,8 @@ def get_legacy_map_list(conn) -> list:
 __all__ = [
     'parse_documentos_json',
     '_normalize_atividade_grupo',
+    '_canonicalize_tipo_limitacao',
+    '_build_grupo_label',
     'get_atividade_base_list',
     'get_atividade_base',
     'get_versoes_por_base',

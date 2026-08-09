@@ -1015,3 +1015,26 @@ candidato da UT-6 introduziu novo chamador). `database.db` inalterado em 544768 
 `bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`.
 
 **Próxima UT:** UT-7 — helpers matrizes → activity_catalog. NÃO INICIADA.
+
+## UT-7 — Helpers matrizes → activity_catalog
+
+**Data:** 2026-08-08. **HEAD de entrada (pai de publicação):** `d59b80825ea180957de00ced47c5fd55d09660de`.
+Ownership antes: `app/views/admin/atividades.py`; ownership depois: `app/activity_catalog.py`.
+Helpers movidos: `_build_grupo_label` e `_canonicalize_tipo_limitacao` (cópia canônica única em
+`app.activity_catalog`, com ambos em `__all__`). Compatibilidade: `app/views/admin/atividades.py`
+permanece como facade de re-export por identidade (zero corpos locais; `__all__` preservado).
+Direção do consumo: `matrizes → activity_catalog`. Aresta removida: `matrizes → atividades`
+(cross-blueprint). `main.py`: inalterado (byte-idêntico ao HEAD, sem delta).
+
+RED da UT-7: 8 coletados / 3 passed / 5 falhas arquiteturais esperadas / 0 errors. Contrato
+pós-implementação: 8/8 passed. Controles focados: 65/65 phase4; 9/9 consumidores de comportamento.
+Revisão: `DeepSeek V4 Pro`: PASS / 0 achados materiais.
+
+Suíte completa: 1235 collected / 1218 passed / 17 deselected / 0 failed / 0 errors / 341.93s.
+Invariantes finais: rotas 131 / endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de
+mensagens 536 / hooks_main 0. Banco: baseline canônico v3 inalterado — 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818` (sem sidecars).
+Incidente transitório resolvido: sidecars WAL/SHM efêmeros produzidos por sonda de qualificação,
+removidos com segurança, zero delta de bytes no banco.
+
+**Próxima UT:** UT-8 — Banco de Dados. NÃO INICIADA.

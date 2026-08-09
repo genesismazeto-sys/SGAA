@@ -7,6 +7,8 @@ import sqlite3
 from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.activity_catalog import (
+    _build_grupo_label,
+    _canonicalize_tipo_limitacao,
     _normalize_atividade_grupo,
     get_atividade_base,
     get_atividade_versao_by_id,
@@ -33,7 +35,6 @@ from app.web.pagination import get_pagination, wants_pagination
 from utils.messages import flash
 
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
-from app.views.admin.atividades import _build_grupo_label, _canonicalize_tipo_limitacao
 
 
 # ===================== Helpers: D7.2B4 - Vínculo Matriz → atividade_versao =====================

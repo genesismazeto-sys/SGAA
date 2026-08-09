@@ -2,13 +2,20 @@
 
 Branch: `refactor/architecture-safety-net`
 HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
-UT-6 entry parent: `1b0a0c3b3f05b7e6e2f52fb1e475ce9d21f192a8`
+UT-7 entry parent: `d59b80825ea180957de00ced47c5fd55d09660de`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-6 (close app → main cycle) — qualified; both independent reviews
-PASS (DeepSeek V4 Pro; Claude Opus 5). 0 material findings.
-Next UT: UT-7 (helpers matrizes → activity_catalog) — NOT STARTED
+Last completed UT: UT-7 (helpers matrizes → activity_catalog) — qualified.
+UT-7 outcome:
+- canonical owner = `app/activity_catalog.py`
+- `atividades` retains identity facade/re-export
+- `matrizes` consumes `activity_catalog` directly
+- `matrizes` → `atividades` cross-blueprint edge removed
+- `main.py` unchanged
+
+Reviews: DeepSeek V4 Pro — PASS / 0 material findings.
+Next UT: UT-8 (Banco de Dados) — NOT STARTED
 
 ## Invariants (last measured)
 
@@ -25,9 +32,9 @@ Next UT: UT-7 (helpers matrizes → activity_catalog) — NOT STARTED
 
 ## Latest full-suite status
 
-UT-6 qualification: 1227 collected / 1210 passed / 17 deselected / 0 failed / 0 errors.
-Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 (UT-6 row) and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-6 block).
+UT-7 qualification: 1235 collected / 1218 passed / 17 deselected / 0 failed / 0 errors.
+Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 (UT-7 row) and
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-7 block).
 
 ## Database baseline
 

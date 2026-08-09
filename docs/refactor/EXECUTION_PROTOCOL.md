@@ -737,7 +737,7 @@ Símbolos compartilhados movem-se no mesmo commit das rotas.
 | UT-4 | Containment de path | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 1 | 1129 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-5 | Fase 5 → `app/backup/` | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | **0** | 1142 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-6 | Fechar ciclo app→main | | Claude Opus 5 | DeepSeek V4 Pro + Claude Opus 5 | PASS | 131/130/0 | 0 | 1210 passed/0 failed/0 errors/17 deselected | nenhum (3 previstas, mantidas) | 2026-08-08 |
-| UT-7 | Helpers matrizes→catalog | | | | | | 0 | | nenhum | |
+| UT-7 | Helpers matrizes→catalog | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1218 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-08 |
 | UT-8 | Coorte Banco de Dados | | | | | | 0 | | nenhum | |
 | UT-9 | Coorte Acesso | | | | | | 0 | | nenhum | |
 | — | **PLATEAU ESTRUTURAL** | | | | | | 0 | | | |

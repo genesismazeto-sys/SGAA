@@ -21,6 +21,8 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from app.activity_catalog import (
+    _build_grupo_label,
+    _canonicalize_tipo_limitacao,
     _normalize_atividade_grupo,
     get_atividade_base,
     get_atividade_base_list,
@@ -82,15 +84,6 @@ def _canonicalize_tipo_atividade(value: str) -> str | None:
     return None
 
 
-def _canonicalize_tipo_limitacao(value: str) -> str | None:
-    normalized = normalize_header(value).replace("_", " ")
-    if normalized == "total":
-        return "total"
-    if normalized == "semestral":
-        return "semestral"
-    return None
-
-
 def _parse_csv_boolean(value) -> bool | None:
     normalized = normalize_header(value or "").replace("_", " ")
     if normalized in {"", "0", "false", "nao", "não", "no", "n"}:
@@ -111,12 +104,6 @@ def _parse_optional_positive_int(value):
     if parsed <= 0:
         raise ValueError("valor_invalido")
     return parsed
-
-
-def _build_grupo_label(numero: str, descricao: str) -> str:
-    numero = str(numero or "").strip()
-    descricao = str(descricao or "").strip()
-    return f"{numero} - {descricao}" if descricao else numero
 
 
 def _format_preview_limitacao(tem_limitacao: bool, tipo_limitacao: str | None, limite_total, limite_semestral) -> str:
