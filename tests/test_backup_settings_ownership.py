@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import main
 from app import db as app_db
 from app import db_maintenance
+from app.views.admin import banco_dados as banco_dados_module
 
 backup_settings = importlib.import_module("app.backup_settings")
 
@@ -188,7 +189,8 @@ def test_complete_one_argument_caller_and_application_context_contract():
     # `ensure_backup_settings_schema(conn)` call shape is still proved for every
     # remaining main-owned caller, and the `_save_drive_config` caller proof
     # simply moves to its new canonical owner below.
-    assert _direct_call_scopes(main, "ensure_backup_settings_schema") == (
+    assert _direct_call_scopes(main, "ensure_backup_settings_schema") == ()
+    assert _direct_call_scopes(banco_dados_module, "ensure_backup_settings_schema") == (
         "save_backup_settings",
         "save_retention_policy",
     )
@@ -703,11 +705,13 @@ def test_runtime_orchestrator_has_no_directory_network_cloud_or_oauth_effects():
 # UT-5 retargets this control's ownership split: get_retention_policy,
 # _save_drive_config, _get_runtime_backup_settings and _maybe_upload_to_drives
 # move from main to app.backup.orchestrator (see tests/test_ut5_backup_package.py
-# for the full canonical-symbol list). save_backup_settings, save_retention_policy
-# and _restore_database_from_source stay main-owned. No ownership assertion is
-# deleted -- the previously main-retained set is split into a main-retained
-# subset (still asserted <=) and a future-orchestrator-owned subset (asserted
-# absent from main and present as bodies on app.backup.orchestrator).
+# for the full canonical-symbol list). UT-8 relocates save_backup_settings,
+# save_retention_policy and _restore_database_from_source to
+# app/views/admin/banco_dados.py; main re-exports each by identity only. No
+# ownership assertion is deleted -- the previously main-retained subset is
+# asserted on its new canonical owner and its main presence becomes an identity
+# facade, while the future-orchestrator-owned subset stays asserted absent from
+# main and present as bodies on app.backup.orchestrator.
 FUTURE_ORCHESTRATOR_OWNED_NAMES = frozenset(
     {
         "get_retention_policy",
@@ -720,11 +724,26 @@ FUTURE_ORCHESTRATOR_OWNED_NAMES = frozenset(
 
 def test_cloud_retention_restore_and_runtime_consumers_remain_in_main():
     main_names = _top_level_function_names(main)
+    banco_dados_names = _top_level_function_names(banco_dados_module)
     assert {
         "save_backup_settings",
         "save_retention_policy",
         "_restore_database_from_source",
-    } <= main_names
+    } <= banco_dados_names, (
+        "app/views/admin/banco_dados.py must own the backup-settings consumer "
+        "bodies relocated from main"
+    )
+    assert not (
+        {
+            "save_backup_settings",
+            "save_retention_policy",
+            "_restore_database_from_source",
+        }
+        & main_names
+    ), "main must no longer locally define the relocated banco_dados helpers"
+    assert main.save_backup_settings is banco_dados_module.save_backup_settings
+    assert main.save_retention_policy is banco_dados_module.save_retention_policy
+    assert main._restore_database_from_source is banco_dados_module._restore_database_from_source
 
     still_in_main = FUTURE_ORCHESTRATOR_OWNED_NAMES & main_names
     assert not still_in_main, (

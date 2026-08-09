@@ -35,11 +35,13 @@ Contract covered here (GREEN targets):
   9. RBAC exact VIEW 6 / EDIT 13 / FULL 5 for all 24 pairs;
  10. route inventory 20814 bytes, SHA256
      ``6e32148cd1988d5e405c9d11bdbda285359f72d5fc7eca8bd5ef8da9b83049fa`` and
-     live URL contract unchanged; message catalog exactly 536; final CSRF
-     snapshots differ from baseline ``cab4c61`` by exactly 11 B6 POST owner-only
-     deltas in each shadow (same row totals, equal summaries, no non-B6/non-owner
-     delta); protected excluded routes remain outside the cohort; ``auth.py``
-     static baseline unchanged.
+      live URL contract unchanged; message catalog exactly 536; final CSRF
+      snapshots differ from baseline ``cab4c61`` by exactly 22 POST owner-only
+      deltas in each shadow: 11 B6 (main ->
+      app.views.admin.alunos_turmas_cursos) + 11 UT-8 Banco de Dados (main ->
+      app.views.admin.banco_dados), same row totals, equal summaries, no
+      non-owner delta); protected excluded routes remain outside the cohort;
+      ``auth.py`` static baseline unchanged.
 
 All DB work is confined to temporary/in-memory SQLite.  The institutional
 database is never opened and no network is used.
@@ -181,6 +183,23 @@ CSRF_MUTATING_PAIRS = {
     "/admin/editar_turma/<int:turma_id>": "admin_editar_turma",
     "/admin/deletar_turma/<int:turma_id>": "admin_deletar_turma",
     "/admin/turmas/importar": "admin_turmas_importar",
+}
+
+# UT-8: the 11 Banco de Dados POST handlers extracted to
+# app.views.admin.banco_dados.  They appear as additional owner-only deltas in
+# the regenerated CSRF snapshots (main -> app.views.admin.banco_dados).
+BANCO_DADOS_MUTATING_PAIRS = {
+    "/admin/backup/cloud-folder/<provider>": "admin_backup_cloud_folder",
+    "/admin/backup/google/upload": "admin_backup_google_upload",
+    "/admin/backup/onedrive/upload": "admin_backup_onedrive_upload",
+    "/admin/banco-dados/backup": "admin_banco_dados_backup",
+    "/admin/banco-dados/configuracoes": "admin_banco_dados_configuracoes",
+    "/admin/banco-dados/drive-settings": "admin_banco_dados_drive_settings",
+    "/admin/banco-dados/excluir": "admin_banco_dados_excluir",
+    "/admin/banco-dados/oauth/disconnect": "admin_banco_dados_oauth_disconnect",
+    "/admin/banco-dados/restaurar": "admin_banco_dados_restaurar",
+    "/admin/banco-dados/restaurar/upload": "admin_banco_dados_restaurar_upload",
+    "/admin/banco-dados/retencao": "admin_banco_dados_retencao",
 }
 
 EXCLUDED_ENDPOINTS = {"admin_api_aluno_requisicao_scope"}
@@ -846,13 +865,50 @@ def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         deltas = [pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]]
-        assert len(deltas) == 11
-        assert {new_row["route"] for _, new_row in deltas} == set(CSRF_MUTATING_PAIRS)
+        deltas_by_route = {
+            new_row["route"]: (old_row, new_row) for old_row, new_row in deltas
+        }
+        # UT-8: the snapshot regenerated after the Banco de Dados extraction
+        # gains exactly 11 additional owner-only deltas (main ->
+        # app.views.admin.banco_dados).  The historical 11 B6 deltas remain
+        # owner-only and unchanged.  22 = 11 B6 + 11 UT-8, exhaustively
+        # partitioned with no uncategorized delta.
+        b6_routes = set(CSRF_MUTATING_PAIRS)
+        banco_dados_routes = set(BANCO_DADOS_MUTATING_PAIRS)
+        assert len(b6_routes) == 11
+        assert len(banco_dados_routes) == 11
+        assert not (b6_routes & banco_dados_routes)
+        assert len(deltas_by_route) == 22
+        assert set(deltas_by_route) == b6_routes | banco_dados_routes
 
-        for old_row, new_row in deltas:
+        b6_deltas = [
+            pair for route, pair in deltas_by_route.items() if route in b6_routes
+        ]
+        banco_dados_deltas = [
+            pair
+            for route, pair in deltas_by_route.items()
+            if route in banco_dados_routes
+        ]
+        assert len(b6_deltas) == 11
+        assert len(banco_dados_deltas) == 11
+
+        for old_row, new_row in b6_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
             assert old_row["view_function"] == f"main.{expected_func}"
             assert new_row["view_function"] == f"{MODULE_NAME}.{expected_func}"
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in ALLOWED_CSRF_STATUSES
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in banco_dados_deltas:
+            expected_func = BANCO_DADOS_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.banco_dados.{expected_func}"
+            )
             assert new_row["method"] == "POST"
             assert new_row["status"] in ALLOWED_CSRF_STATUSES
             old_other = {k: v for k, v in old_row.items() if k != "view_function"}

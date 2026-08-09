@@ -1082,7 +1082,7 @@
     {
       "route": "/admin/backup/cloud-folder/<provider>",
       "method": "POST",
-      "view_function": "main.admin_backup_cloud_folder",
+      "view_function": "app.views.admin.banco_dados.admin_backup_cloud_folder",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -1106,7 +1106,7 @@
     {
       "route": "/admin/backup/google/upload",
       "method": "POST",
-      "view_function": "main.admin_backup_google_upload",
+      "view_function": "app.views.admin.banco_dados.admin_backup_google_upload",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1138,7 +1138,7 @@
     {
       "route": "/admin/backup/onedrive/upload",
       "method": "POST",
-      "view_function": "main.admin_backup_onedrive_upload",
+      "view_function": "app.views.admin.banco_dados.admin_backup_onedrive_upload",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1170,7 +1170,7 @@
     {
       "route": "/admin/banco-dados/backup",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_backup",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_backup",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1202,7 +1202,7 @@
     {
       "route": "/admin/banco-dados/configuracoes",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_configuracoes",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_configuracoes",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1234,7 +1234,7 @@
     {
       "route": "/admin/banco-dados/drive-settings",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_drive_settings",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_drive_settings",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1266,7 +1266,7 @@
     {
       "route": "/admin/banco-dados/excluir",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_excluir",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_excluir",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1298,7 +1298,7 @@
     {
       "route": "/admin/banco-dados/oauth/disconnect",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_oauth_disconnect",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_oauth_disconnect",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1330,7 +1330,7 @@
     {
       "route": "/admin/banco-dados/restaurar",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_restaurar",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_restaurar",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1362,7 +1362,7 @@
     {
       "route": "/admin/banco-dados/restaurar/upload",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_restaurar_upload",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_restaurar_upload",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,
@@ -1394,7 +1394,7 @@
     {
       "route": "/admin/banco-dados/retencao",
       "method": "POST",
-      "view_function": "main.admin_banco_dados_retencao",
+      "view_function": "app.views.admin.banco_dados.admin_banco_dados_retencao",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,

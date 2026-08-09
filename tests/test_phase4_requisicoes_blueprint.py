@@ -116,6 +116,23 @@ B6_ALLOWED_CSRF_STATUSES = {
     "ok_logout_or_safe_exception",
 }
 
+# UT-8: the 11 Banco de Dados POST handlers extracted to
+# app.views.admin.banco_dados.  They appear as additional owner-only deltas in
+# the regenerated CSRF snapshots (main -> app.views.admin.banco_dados).
+BANCO_DADOS_MUTATING_PAIRS = {
+    "/admin/backup/cloud-folder/<provider>": "admin_backup_cloud_folder",
+    "/admin/backup/google/upload": "admin_backup_google_upload",
+    "/admin/backup/onedrive/upload": "admin_backup_onedrive_upload",
+    "/admin/banco-dados/backup": "admin_banco_dados_backup",
+    "/admin/banco-dados/configuracoes": "admin_banco_dados_configuracoes",
+    "/admin/banco-dados/drive-settings": "admin_banco_dados_drive_settings",
+    "/admin/banco-dados/excluir": "admin_banco_dados_excluir",
+    "/admin/banco-dados/oauth/disconnect": "admin_banco_dados_oauth_disconnect",
+    "/admin/banco-dados/restaurar": "admin_banco_dados_restaurar",
+    "/admin/banco-dados/restaurar/upload": "admin_banco_dados_restaurar_upload",
+    "/admin/banco-dados/retencao": "admin_banco_dados_retencao",
+}
+
 
 def _canonical_module():
     from app.views.admin import requisicoes
@@ -476,26 +493,32 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         # extraction gains exactly 8 additional owner-only deltas (main ->
         # app.views.admin.matrizes).  PHASE 4-B6: the Alunos/Turmas/Cursos
         # extraction adds exactly 11 owner-only deltas (main ->
-        # app.views.admin.alunos_turmas_cursos).  The historical 5 requisicoes
-        # deltas remain owner-only and unchanged.  24 = 5 requisicoes + 8
-        # Matrizes + 11 B6, exhaustively partitioned with no uncategorized
+        # app.views.admin.alunos_turmas_cursos).  UT-8: the Banco de Dados
+        # extraction adds exactly 11 more owner-only deltas (main ->
+        # app.views.admin.banco_dados).  The historical 5 requisicoes deltas
+        # remain owner-only and unchanged.  35 = 5 requisicoes + 8 Matrizes +
+        # 11 B6 + 11 UT-8, exhaustively partitioned with no uncategorized
         # delta.
-        assert len(deltas) == 24
         deltas_by_route = {
             new_row["route"]: (old_row, new_row) for old_row, new_row in deltas
         }
-        assert len(deltas_by_route) == 24
         requisicoes_routes = set(CSRF_MUTATING_PAIRS)
         matrizes_routes = set(MATRIZES_MUTATING_PAIRS)
         b6_routes = set(B6_MUTATING_PAIRS)
+        banco_dados_routes = set(BANCO_DADOS_MUTATING_PAIRS)
         assert len(requisicoes_routes) == 5
         assert len(matrizes_routes) == 8
         assert len(b6_routes) == 11
+        assert len(banco_dados_routes) == 11
         assert not (requisicoes_routes & matrizes_routes)
         assert not (requisicoes_routes & b6_routes)
+        assert not (requisicoes_routes & banco_dados_routes)
         assert not (matrizes_routes & b6_routes)
+        assert not (matrizes_routes & banco_dados_routes)
+        assert not (b6_routes & banco_dados_routes)
+        assert len(deltas_by_route) == 35
         assert set(deltas_by_route) == (
-            requisicoes_routes | matrizes_routes | b6_routes
+            requisicoes_routes | matrizes_routes | b6_routes | banco_dados_routes
         )
 
         requisicoes_deltas = [
@@ -507,9 +530,15 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
             pair for route, pair in deltas_by_route.items() if route in matrizes_routes
         ]
         b6_deltas = [pair for route, pair in deltas_by_route.items() if route in b6_routes]
+        banco_dados_deltas = [
+            pair
+            for route, pair in deltas_by_route.items()
+            if route in banco_dados_routes
+        ]
         assert len(requisicoes_deltas) == 5
         assert len(matrizes_deltas) == 8
         assert len(b6_deltas) == 11
+        assert len(banco_dados_deltas) == 11
 
         for old_row, new_row in requisicoes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
@@ -558,6 +587,25 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
             )
             assert new_row["method"] == "POST"
             assert new_row["status"] in B6_ALLOWED_CSRF_STATUSES
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in banco_dados_deltas:
+            expected_func = BANCO_DADOS_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.banco_dados.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in {
+                "ok_rendered_form_token",
+                "ok_dynamic_form_token",
+                "ok_specific_regression_test",
+                "ok_fetch_token",
+                "ok_api_csrf_contract",
+            }
             old_other = {k: v for k, v in old_row.items() if k != "view_function"}
             new_other = {k: v for k, v in new_row.items() if k != "view_function"}
             assert old_other == new_other

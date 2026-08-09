@@ -1038,3 +1038,35 @@ Incidente transitório resolvido: sidecars WAL/SHM efêmeros produzidos por sond
 removidos com segurança, zero delta de bytes no banco.
 
 **Próxima UT:** UT-8 — Banco de Dados. NÃO INICIADA.
+
+## UT-8 — Banco de Dados
+
+**Data:** 2026-08-09. **HEAD de entrada (pai de publicação):**
+`7c5b319a39639468943ef6c5521a36cc44545615`. Before: 20 rotas Banco de Dados e helpers
+coorte-local possuídos em `main.py`. After: `app/views/admin/banco_dados.py` passa a possuir
+**20 rotas / 24 helpers / 2 constantes / 46 símbolos totais**. `main`: 46/46 reexports de
+compatibilidade por identidade; zero ownership local dos símbolos movidos. LegacyRouteSpec:
+20 specs / 21 pares endpoint-method. RBAC: 2 view / 16 edit / 3 full. Dependência:
+`banco_dados → main` = **0**. Factory: `register_admin_banco_dados_blueprint` default True,
+registrado via `register_legacy_blueprint`. Substituições arquiteturais aprovadas:
+`app.config` → `current_app.config` em 12 sites movidos; acesso dinâmico canônico ao banco via
+`app_db.DATABASE`. Camadas inferiores inalteradas. Não: pacote `app/db`, camada de repository,
+migration v4, redesign de schema, redesign do subsistema de backup.
+
+RED de qualificação: 20 coletados / 10 passed / 10 falhas arquiteturais esperadas / 0 errors.
+RED pós-implementação: 20/20 passed. Lane focada de implementação: 158/158 passed. Revisão
+adversarial primária: `DeepSeek V4 Pro`: PASS / 0 achados materiais. Adjudicação especial do
+chamador `init_db`: 72 → 73 causada unicamente pelo caller `isolated_env` do teste RED
+congelado; a mudança do chamador de produção foi pura realocação de ownership. Primeira suíte
+completa: 1255 collected / 1234 passed / 4 failed / 17 deselected / 0 errors. Causa: quatro
+contratos arquiteturais cumulativos obsoletos do Phase-4 — 3 contratos de delta de ownership
+CSRF e 1 contrato de file-set exato do pacote admin. Reparo de qualificação: exatamente quatro
+arquivos de teste; zero mudanças de byte em produção/snapshot/RED congelado. Repair-focused:
+4/4, 96/96, 27/27. Revisão estreita do reparo: `DeepSeek V4 Pro`: PASS / 0 achados materiais.
+Retry bem-sucedido da suíte completa: 1255 collected / 1238 passed / 17 deselected / 0 failed /
+0 errors / 354.47s. Lane final limitada: 169/169 passed. Invariantes finais: rotas 131 /
+endpoints 130 / RBAC unmapped 0 / actor matrix 402 / catálogo de mensagens 536 / hooks_main 0.
+Banco: 544768 bytes / SHA canônico inalterado / `user_version` 3 / sem sidecars persistentes.
+Falhas de primeira execução resolvidas NÃO são achados abertos.
+
+**Próxima UT:** UT-9 — NÃO INICIADA.
