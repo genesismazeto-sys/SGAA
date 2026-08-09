@@ -42,6 +42,16 @@ ARQUIVOS_ALERTAS_REPORTES_ROUTE_NAMES = {
     "admin_deletar_alerta",
 }
 
+ARQUIVOS_ROUTE_NAMES = {
+    "admin_arquivos",
+    "admin_adicionar_arquivo",
+    "admin_editar_arquivo",
+    "admin_visualizar_arquivo",
+    "admin_deletar_arquivo",
+}
+
+NON_UT10_ROUTE_NAMES = ARQUIVOS_ALERTAS_REPORTES_ROUTE_NAMES - ARQUIVOS_ROUTE_NAMES
+
 EXPECTED_ALUNO_LAZY_KEYS_POST_B7P = {
     "get_student_request_update_alert",
     "mark_student_request_updates_seen",
@@ -200,9 +210,21 @@ def test_b7p_aluno_lazy_map_reduced_to_exactly_two_requisicoes_keys():
     assert lazy_keys == EXPECTED_ALUNO_LAZY_KEYS_POST_B7P
 
 
-def test_b7p_zero_route_movement_all_twelve_handlers_remain_main_local():
+# UT-10: the Arquivos half of the pre-extraction frozen assertion is retired
+# (ownership is now proven by tests/test_ut10_arquivos_blueprint.py); the
+# Alertas/Reportes half is preserved with exact characterization.
+def test_b7p_non_ut10_alertas_reportes_handlers_remain_main_local():
+    assert NON_UT10_ROUTE_NAMES == {
+        "admin_reportes",
+        "admin_reportes_atualizar_status",
+        "admin_reportes_deletar",
+        "admin_alertas",
+        "admin_salvar_alerta",
+        "admin_alternar_alerta",
+        "admin_deletar_alerta",
+    }, "UT-10 retires only the Arquivos half; Alertas/Reportes stay frozen"
     main_functions = _top_level_functions(MAIN_PATH)
-    assert ARQUIVOS_ALERTAS_REPORTES_ROUTE_NAMES <= main_functions
+    assert NON_UT10_ROUTE_NAMES <= main_functions
 
 
 def test_b7p_uploaded_file_unchanged_from_entry_baseline():

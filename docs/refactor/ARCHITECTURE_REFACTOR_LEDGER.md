@@ -1202,3 +1202,72 @@ OUT_OF_SCOPE / dívida arquitetural diferida:
 
 O plateau é **completude arquitetural contra os sete critérios**, não ausência global de
 dívida arquitetural. Falhas de primeira execução resolvidas NÃO são achados abertos.
+
+## UT-10 — Arquivos
+
+**Data:** 2026-08-09. **HEAD de entrada (pai de publicação):**
+`e8f64a8244196b1c7acd634c9f78fbde29d70ef9`.
+
+**Escopo:** 5 rotas Arquivos de `main.py` → `app/views/admin/arquivos.py`
+(coorte de 9 símbolos: 5 rotas + 4 helpers locais movidos, 0 constantes).
+
+**Arquitetura:** LegacyRouteSpec — 5 specs / 6 pares endpoint-method; factory
+opt-out `register_admin_arquivos_blueprint` (default True) registrado via
+`register_legacy_blueprint`; `main` facade 9/9 por identidade; zero ownership
+local dos símbolos movidos em `main.py` (0 defs locais, 0 decorators de rota
+da coorte).
+
+**Preservação sensível à segurança:**
+`_best_effort_remove_admin_arquivo_file` passou a resolver `UPLOAD_FOLDER` via
+`current_app.config` após a extração; `_path_within_root` preservado; recusa de
+traversal `../` e de caminho absoluto externo preservada; exclusão válida de
+arquivo dentro da raiz preservada; chamadores de produção sempre dentro de app
+context.
+
+**Limites:** `uploaded_file` intacto / main-owned; Alertas/Reportes 7/7
+main-owned.
+
+**RED:** 26 testes — 15 esperados RED / 11 baseline GREEN; SHA congelado
+`578ADB5FABD354317AC37F7998C45F59AA0ED89FCF219702FE50AD19EF45760B`.
+
+**Resultado focado da implementação:** 26/26 RED verdes; 56/56 lane primária de
+controle; 123/123 lane de extração vizinha.
+
+**Revisão independente:** PASS / 0 achados materiais.
+
+**Reconciliação hooks_main:** o relatório independente reportou temporariamente
+`hooks_main=1` porque usou ownership por sítio de registro (call site de
+`app.before_request` em `main.py`). A definição canônica por
+`callable.__module__` deu **`hooks_main=0`**. `enforce_admin_access_control`
+owner: `app.web.authz_gate`. Classificação: NON_MATERIAL measurement error;
+candidato inalterado.
+
+**Primeira suíte canônica:** 1345 collected / 1324 passed / 4 failed /
+17 deselected / 0 errors.
+
+**Exatamente quatro lacunas de integração (contratos de teste históricos):**
+1. alunos/turmas/cursos — expectativa cumulativa CSRF 27 → 30;
+2. configurações — inventário exato do pacote `app/views/admin` + `arquivos.py`;
+3. matrizes — expectativa cumulativa CSRF 35 → 38;
+4. requisições — expectativa cumulativa CSRF 40 → 43.
+
+**Classificação:** lacunas de contrato de teste disparadas pela extração
+autorizada da UT-10; nenhum defeito de produção.
+
+**Reparo:** exatamente 4 arquivos de teste históricos cochanged; nenhum
+enfraquecimento de expectativa; os 8 arquivos originais do candidato
+inalterados.
+
+**Qualificação do reparo:** 4/4 lane focada; 96/96 regressão dos quatro
+arquivos; 46/46 integração UT-10 + CSRF.
+
+**Retry canônico final:** 1345 collected / 1328 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 345.89s.
+
+**Invariantes finais:** 131 / 130 / RBAC unmapped 0 / actor matrix 402 /
+catálogo de mensagens 536 / hooks_main 0 / dependências reversas `main` 0 /
+schema 3 / migrações v1-v3.
+
+**Disposição final:** UT-10 CLOSED / ACCEPTED / PUBLISHED.
+
+**Próxima:** UT-11 — NÃO INICIADA.

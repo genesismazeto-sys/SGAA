@@ -186,6 +186,15 @@ ACESSO_MUTATING_PAIRS = {
     "/admin/acesso/senhas-default": "admin_acesso_salvar_senhas_default",
 }
 
+# UT-10: the 3 Arquivos POST handlers extracted to app.views.admin.arquivos.
+# They appear as additional owner-only deltas in the regenerated CSRF
+# snapshots (main -> app.views.admin.arquivos).
+ARQUIVOS_MUTATING_PAIRS = {
+    "/admin/arquivos/adicionar": "admin_adicionar_arquivo",
+    "/admin/arquivos/<int:arquivo_id>/editar": "admin_editar_arquivo",
+    "/admin/arquivos/<int:arquivo_id>/deletar": "admin_deletar_arquivo",
+}
+
 ALLOWED_CSRF_STATUSES = {
     "ok_rendered_form_token",
     "ok_dynamic_form_token",
@@ -754,27 +763,36 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         # extraction adds exactly 11 more owner-only deltas (main ->
         # app.views.admin.banco_dados).  UT-9: the Acesso extraction adds
         # exactly 5 more owner-only deltas (main -> app.views.admin.acesso).
+        # UT-10: the Arquivos extraction adds exactly 3 more owner-only deltas
+        # (main -> app.views.admin.arquivos).
         # The historical 8 Matrizes deltas remain owner-only and unchanged.
-        # 35 = 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9, exhaustively partitioned
-        # with no uncategorized delta.
+        # 38 = 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10, exhaustively
+        # partitioned with no uncategorized delta.
         deltas_by_route = {new_row["route"]: (old_row, new_row) for old_row, new_row in deltas}
         matrizes_routes = set(CSRF_MUTATING_PAIRS)
         b6_routes = set(B6_MUTATING_PAIRS)
         banco_dados_routes = set(BANCO_DADOS_MUTATING_PAIRS)
         acesso_routes = set(ACESSO_MUTATING_PAIRS)
+        arquivos_routes = set(ARQUIVOS_MUTATING_PAIRS)
         assert len(matrizes_routes) == 8
         assert len(b6_routes) == 11
         assert len(banco_dados_routes) == 11
         assert len(acesso_routes) == 5
+        assert len(arquivos_routes) == 3
         assert not (matrizes_routes & b6_routes)
         assert not (matrizes_routes & banco_dados_routes)
         assert not (matrizes_routes & acesso_routes)
+        assert not (matrizes_routes & arquivos_routes)
         assert not (b6_routes & banco_dados_routes)
         assert not (b6_routes & acesso_routes)
+        assert not (b6_routes & arquivos_routes)
         assert not (banco_dados_routes & acesso_routes)
-        assert len(deltas_by_route) == 35
+        assert not (banco_dados_routes & arquivos_routes)
+        assert not (acesso_routes & arquivos_routes)
+        assert len(deltas_by_route) == 38
         assert set(deltas_by_route) == (
             matrizes_routes | b6_routes | banco_dados_routes | acesso_routes
+            | arquivos_routes
         )
 
         matrizes_deltas = [
@@ -789,10 +807,16 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         acesso_deltas = [
             pair for route, pair in deltas_by_route.items() if route in acesso_routes
         ]
+        arquivos_deltas = [
+            pair
+            for route, pair in deltas_by_route.items()
+            if route in arquivos_routes
+        ]
         assert len(matrizes_deltas) == 8
         assert len(b6_deltas) == 11
         assert len(banco_dados_deltas) == 11
         assert len(acesso_deltas) == 5
+        assert len(arquivos_deltas) == 3
 
         for old_row, new_row in matrizes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
@@ -836,6 +860,19 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
             assert (
                 new_row["view_function"]
                 == f"app.views.admin.acesso.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in ALLOWED_CSRF_STATUSES
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in arquivos_deltas:
+            expected_func = ARQUIVOS_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.arquivos.{expected_func}"
             )
             assert new_row["method"] == "POST"
             assert new_row["status"] in ALLOWED_CSRF_STATUSES

@@ -551,6 +551,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
         "__init__.py",
         "acesso.py",
         "alunos_turmas_cursos.py",
+        "arquivos.py",
         "atividades.py",
         "banco_dados.py",
         "configuracoes.py",

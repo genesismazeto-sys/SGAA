@@ -794,13 +794,26 @@ validação formal, ainda **não declarado** — valor histórico da UT-9.
 (subject `Validate structural plateau request-hook isolation`; pai `230de41b`). Matriz formal
 **7/7 PASS** sob o Critério 4 da v1.3: C1 `hooks_main` PASS / C2 composition root PASS /
 C3 dependência reversa PASS / C4 isolamento de escrita em hook PASS / C5 RBAC PASS /
-C6 inventário de rotas + actor matrix PASS / C7 suíte canônica PASS. Suíte canônica vigente:
-1319 collected / 1302 passed / 17 deselected / 0 failed / 0 errors / 407,40s. Invariantes:
-131 / 130 / 0 / 402 / 536 / 0. **Histórico preservado:** a primeira validação formal, sob o
-Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o ledger. UT-10 não
-iniciada.
+C6 inventário de rotas + actor matrix PASS / C7 suíte canônica PASS. Suíte canônica à época
+do plateau (histórica): 1319 collected / 1302 passed / 17 deselected / 0 failed / 0 errors /
+407,40s. Suíte canônica vigente após o landing da UT-10: 1345 collected / 1328 passed /
+17 deselected / 0 failed / 0 errors / 0 skipped / 345,89s. Invariantes: 131 / 130 / 0 / 402 /
+536 / 0. **Histórico preservado:** a primeira validação formal, sob o
+Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o ledger. UT-10:
+CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: NÃO INICIADA.
 
-| UT-10 | Coorte Arquivos | | | | | | 0 | | 1 | |
+**UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
+`Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
+Extração: 5 rotas / 6 pares endpoint-method / 4 helpers locais para
+`app/views/admin/arquivos.py`; facade de compatibilidade `main` 9/9 por identidade; owner
+`app/views/admin/arquivos.py`. Primeira suíte canônica: 1345 / 1324 / 4 failed /
+17 deselected — quatro lacunas de expectativa de teste histórica (3 cumulativas CSRF +
+1 inventário do pacote `app/views/admin`), reconciliadas exatamente em 4 arquivos de teste,
+sem mudança de produção. Retry canônico: 1345 collected / 1328 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 345,89s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
+UT-11: NÃO INICIADA.
+
+| UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | | | | | 0 | | nenhum | |
 | UT-12 | Coorte Reportes | | | | | | 0 | | 1 | |
 | UT-13 | Dashboard + meus_dados | | | | | | 0 | | 2 | |

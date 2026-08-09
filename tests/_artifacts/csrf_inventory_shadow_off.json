@@ -903,7 +903,7 @@
     {
       "route": "/admin/arquivos/<int:arquivo_id>/deletar",
       "method": "POST",
-      "view_function": "main.admin_deletar_arquivo",
+      "view_function": "app.views.admin.arquivos.admin_deletar_arquivo",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -934,7 +934,7 @@
     {
       "route": "/admin/arquivos/<int:arquivo_id>/editar",
       "method": "POST",
-      "view_function": "main.admin_editar_arquivo",
+      "view_function": "app.views.admin.arquivos.admin_editar_arquivo",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -958,7 +958,7 @@
     {
       "route": "/admin/arquivos/adicionar",
       "method": "POST",
-      "view_function": "main.admin_adicionar_arquivo",
+      "view_function": "app.views.admin.arquivos.admin_adicionar_arquivo",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,

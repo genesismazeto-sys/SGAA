@@ -4,13 +4,17 @@ Branch: `refactor/architecture-safety-net`
 HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
 Plateau landing parent: `230de41b3439a60951049e9021d6b0063f3bc2db`
 UT-9 entry parent: `7909b2d59b2de987d84dc859a15bede215a3261b`
+UT-10 entry parent: `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-9 (Acesso) — CLOSED / ACCEPTED / PUBLISHED at `230de41b`.
-Last completed work: C4 request-hook write isolation + STRUCTURAL PLATEAU publication
-(this Phase-H landing commit).
-Next UT: UT-10 — NOT STARTED.
+Last completed UT: UT-10 (Arquivos) — CLOSED / ACCEPTED / PUBLISHED (published by
+this UT-10 landing commit, subject `Extract admin files routes`, entry parent
+`e8f64a82`). Last completed work: UT-10 Arquivos extraction — 5 routes / 6
+endpoint-method pairs / 4 cohort-local helpers moved to
+`app/views/admin/arquivos.py`. Prior landing: C4 request-hook write isolation +
+STRUCTURAL PLATEAU publication (Phase-H landing commit, parent `230de41b`).
+Next UT: UT-11 — NOT STARTED.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -53,6 +57,43 @@ reconciliation. Detail: `EXECUTION_PROTOCOL.md` Changelog v1.3 and the ledger bl
   background logging thread; no network-backed handler)
 - hook network/provider writes: **0**
 
+## UT-10 — Arquivos — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this UT-10 landing commit (subject `Extract admin files routes`,
+entry parent `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
+
+Owner: `app/views/admin/arquivos.py`.
+
+Extracted cohort: 5 routes / 6 endpoint-method pairs / 4 cohort-local helpers
+(9 symbols, 0 constants). Compatibility facade: `main` identity re-exports =
+9/9 (no wrappers, no duplicated implementation).
+
+Boundaries preserved: Alertas/Reportes remain main-owned = 7/7; `uploaded_file`
+remains main-owned; UT-11 NOT STARTED.
+
+Canonical current invariants (measured): routes 131 / distinct endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalog 536 / hooks_main 0 /
+reverse dependencies app/services/utils → main 0 / SCHEMA_VERSION 3 /
+migrations v1/v2/v3 only / after_request[None] exactly
+`flask_compress.flask_compress.after_request` and `app._apply_security_headers`
+/ teardown_appcontext canonical owner `app.db.close_db_connection`.
+
+The first canonical UT-10 suite exposed exactly four historical
+test-expectation integration gaps: 3 cumulative CSRF ownership-count contracts
+(B6 environment 27→30, Matrizes 35→38, Requisições 40→43) and 1 exact
+`app/views/admin` package-inventory contract. These were reconciled exactly,
+with no production change: UT-10 Arquivos adds exactly 3 CSRF owner-only
+transitions (`main.admin_adicionar_arquivo` / `main.admin_editar_arquivo` /
+`main.admin_deletar_arquivo` → `app.views.admin.arquivos.*`); `arquivos.py`
+added to the exact admin-package inventory and the no-main-import audit.
+Canonical retry passed completely.
+
+Canonical full-suite status: 1345 collected / 1328 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 345.89s.
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+
 ## Invariants (last measured)
 
 - routes: 131
@@ -73,11 +114,11 @@ reconciliation. Detail: `EXECUTION_PROTOCOL.md` Changelog v1.3 and the ledger bl
 
 ## Latest full-suite status
 
-Canonical suite: 1319 collected / 1302 passed / 17 deselected / 0 failed / 0 errors / 407.40s.
+Canonical suite: 1345 collected / 1328 passed / 17 deselected / 0 failed / 0 errors / 345.89s.
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10 and plateau blocks).
 
 ## Database baseline
 
