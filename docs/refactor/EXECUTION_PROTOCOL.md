@@ -1,12 +1,29 @@
 # SGAA-EJ — PROTOCOLO DE EXECUÇÃO DO REFACTOR (FASE FINAL)
 
-**Versão:** 1.1 FINAL — 2026-08-07
+**Versão:** 1.2 — 2026-08-08
 **Autoridade:** substitui a governança por fase (contrato + closeout por unidade) para todo o
 trabalho remanescente. Não revoga contratos fechados (B1–B7-P permanecem como histórico).
-**Condutor:** ChatGPT (sem acesso direto ao código; lê o repositório via GitHub após push).
-**Executores:** Claude Opus 5, Claude Sonnet 5, DeepSeek V4 Pro, DeepSeek V4 Flash.
+**Condutor:** ChatGPT / GPT-5.6 Sol (sem acesso direto ao código; lê o repositório via GitHub após push).
+**Executores:** GPT-5.6 Sol, Claude Opus 5, Claude Sonnet 5, DeepSeek V4 Pro, DeepSeek V4 Flash.
 
 ### Changelog
+
+**1.2 — 2026-08-08 — MODEL ROUTING ONLY.** Muda apenas o roteamento de modelos; não altera
+escopo de UT, arquitetura, invariantes, comportamento de negócio nem mecânica de governança.
+Adiciona **GPT-5.6 Sol**, preferido para supervisão/arquitetura/arbitragem (IAsup); torna
+**DeepSeek V4 Flash** o executor padrão (IAexec) quando compatível, com permissão explícita
+para editar produção e testes; mantém **DeepSeek V4 Pro** como escalada barata e revisão
+adversarial; mantém **Claude Sonnet 5** como executor/revisor alternativo; reduz **Claude
+Opus 5** a revisão independente crítica, arquitetura excepcional e desempate; introduz
+rastreabilidade provider/modelo/versão/fallback. Regras ativas que proibiam Flash de editar
+ou de revisar são removidas.
+
+**1.2 R1 (2026-08-08) — correção oficial de especificações de modelo.** Preenche as
+especificações oficiais do GPT-5.6 Sol (contexto 1.050.000 tokens; saída máx. 128K; alias
+`gpt-5.6`; entrada USD 5,00 / cache USD 0,50 / saída USD 30,00 por MTok). Atualiza os preços
+oficiais do DeepSeek V4 Pro (cache-miss USD 0,435 / cache-hit USD 0,003625 / saída USD 0,87
+por MTok) e registra o cache-hit do V4 Flash (USD 0,0028). Remove os valores antigos de Pro
+(1,74 / 3,48). Nenhuma mudança de política de roteamento.
 
 **1.1 FINAL — correção documental (2026-08-07)** — duas inconsistências de gate/contagem,
 ambas corrigidas **por medição direta**, sem mudança de escopo, ordem, propriedade ou critério:
@@ -228,17 +245,19 @@ Gate: **zero hooks pertencentes a `main`** (§4, gate executável). CLI executá
 `mark_student_request_updates_seen` → `app/requisitions.py`.
 Gate: `grep -rn "import main" app/ services/ utils/` vazio.
 
-**UT-7 — Helpers `matrizes` → `activity_catalog`.** Inventário: Flash. **Implementação: Sonnet 5.**
+**UT-7 — Helpers `matrizes` → `activity_catalog`.** Inventário: Flash. **Implementação: Flash (padrão); escalada Pro conforme §6.**
 Mover `_build_grupo_label` e `_canonicalize_tipo_limitacao` para `app/activity_catalog.py`.
 Gate: `grep -n "from app.views.admin.atividades import" app/views/admin/matrizes.py` vazio.
 
 ### Bloco C — coortes de rota
 
-**UT-8 — Banco de Dados.** Sonnet 5 `xhigh`. 20 rotas → `app/views/admin/banco_dados.py`.
+**UT-8 — Banco de Dados.** Flash (padrão quando viável); Pro revisão adversarial; Sol
+arquitetura/arbitragem final pelo tamanho. 20 rotas → `app/views/admin/banco_dados.py`.
 Padrão `LegacyRouteSpec`. ~1.400 linhas saem de `main.py`. Consome `_format_bytes_label` de
 `app/presentation.py` (movido na UT-3).
 
-**UT-9 — Acesso.** Sonnet 5 `xhigh` + **revisão dupla**. 6 rotas → `app/views/admin/acesso.py`.
+**UT-9 — Acesso.** Sol (arquitetura/supervisão de alto risco); Pro revisão adversarial; Opus
+segunda revisão genuinamente cega. Safeguards de RBAC inalterados. 6 rotas → `app/views/admin/acesso.py`.
 **Maior risco de RBAC do repositório:** `get_admin_permission_requirement` usa
 `endpoint.startswith("admin_acesso")` para conceder escopo `full`. Nenhum endpoint renomeado.
 
@@ -251,14 +270,14 @@ Só necessário para `REFACTOR ESTRUTURAL COMPLETO`. Módulos pequenos e separad
 
 | UT | Coorte | Owner | Rotas | Modelo |
 |---|---|---|---:|---|
-| UT-10 | Arquivos | `app/views/admin/arquivos.py` | 5 | Sonnet 5 |
-| UT-11 | Alertas | `app/views/admin/alertas.py` | 4 | Sonnet 5 |
-| UT-12 | Reportes | `app/views/admin/reportes.py` | 3 | Sonnet 5 |
-| UT-13 | Dashboard + demo + meus_dados | `app/views/admin/dashboard.py` | 3 | Opus 5 |
-| UT-14 | Infra | `app/views/files.py` (`uploaded_file`); `health` e `favicon` em `create_app`, como `/csrf-token` | 3 | Opus 5 `xhigh`, revisão dupla |
+| UT-10 | Arquivos | `app/views/admin/arquivos.py` | 5 | Flash (padrão); Pro revisão adversarial |
+| UT-11 | Alertas | `app/views/admin/alertas.py` | 4 | Flash (padrão); Pro revisão adversarial |
+| UT-12 | Reportes | `app/views/admin/reportes.py` | 3 | Flash (padrão); Pro revisão adversarial; Sol só para ambiguidade/escalada |
+| UT-13 | Dashboard + demo + meus_dados | `app/views/admin/dashboard.py` | 3 | Flash ou Pro conforme inventário; Sol revisão arquitetural/arbitragem |
+| UT-14 | Infra | `app/views/files.py` (`uploaded_file`); `health` e `favicon` em `create_app`, como `/csrf-token` | 3 | Sol (arquitetura/supervisão de alto risco); Pro revisão adversarial; Opus segunda revisão cega |
 
 UT-13 leva `_build_admin_dashboard_turma_cards` (267 linhas), `periodo_corrente` e os
-formatadores do dashboard. UT-14 é Opus porque `uploaded_file` (106 linhas) contém autorização
+formatadores do dashboard. UT-14 é Sol porque `uploaded_file` (106 linhas) contém autorização
 aluno/admin e guarda de path traversal.
 
 → **REFACTOR ESTRUTURAL COMPLETO declarável aqui.**
@@ -409,53 +428,89 @@ enquanto 8 arquivos de teste o abrirem por caminho.
 
 ---
 
-## 6. OS QUATRO MODELOS — CAPACIDADE E ROTEAMENTO
+## 6. OS CINCO MODELOS — CAPACIDADE E ROTEAMENTO
 
 ### 6.1 Ficha técnica
 
-| | **Claude Opus 5** | **Claude Sonnet 5** | **DeepSeek V4 Pro** | **DeepSeek V4 Flash** |
-|---|---|---|---|---|
-| ID | `claude-opus-5` | `claude-sonnet-5` | `deepseek-v4-pro` | `deepseek-v4-flash` |
-| Contexto | 1M | 1M | 1M | 1M |
-| Saída máx. | 128K | 128K | 384K | 384K (65K no OpenRouter) |
-| Preço in/out (USD/MTok) | 5 / 25 | 3 / 15 (2/10 até 31/08) | 1,74 / 3,48 | 0,14 / 0,28 |
-| SWE-bench Verified | topo de linha | quase-Opus | 80,6 | — |
-| Effort | `low`…`max` | `low`…`max` | thinking mode | `high` / `xhigh` |
-| Licença | API Anthropic | API Anthropic | MIT, aberto | MIT, aberto |
-| Forte em | trabalho agêntico longo, refactor multi-arquivo, decisão arquitetural | código em volume a custo médio | revisão adversarial independente, caça a bugs | varredura mecânica barata em contexto enorme |
-| Fraco em | custo | tokenizer novo — reestimar orçamento | julgamento arquitetural | **muito verboso**; tier gratuito historicamente inutilizável como revisor |
+| | **GPT-5.6 Sol** | **Claude Opus 5** | **Claude Sonnet 5** | **DeepSeek V4 Pro** | **DeepSeek V4 Flash** |
+|---|---|---|---|---|---|
+| ID | `gpt-5.6-sol` | `claude-opus-5` | `claude-sonnet-5` | `deepseek-v4-pro` | `deepseek-v4-flash` |
+| Alias | `gpt-5.6` | — | — | — | — |
+| Contexto | 1.050.000 tokens | 1M | 1M | 1M | 1M |
+| Saída máx. | 128K | 128K | 128K | 384K | 384K (65K no OpenRouter) |
+| Preço in/out (USD/MTok) | 5,00 in (0,50 cached) / 30,00 out | 5 / 25 | 3 / 15 (2/10 até 31/08) | 0,435 in (0,003625 cached) / 0,87 out | 0,14 in (0,0028 cached) / 0,28 out |
+| SWE-bench Verified | — | topo de linha | quase-Opus | 80,6 | — |
+| Effort | — | `low`…`max` | `low`…`max` | thinking mode | `high` / `xhigh` |
+| Licença | OpenAI / ChatGPT | API Anthropic | API Anthropic | MIT, aberto | MIT, aberto |
+| Forte em | supervisão, arquitetura, adjudicação, trabalho cross-cutting difícil, alta criticidade | trabalho agêntico longo, refactor multi-arquivo, decisão arquitetural | código em volume a custo médio | revisão adversarial independente, caça a bugs | varredura mecânica barata em contexto enorme, execução mecânica |
+| Fraco em | custo quando usado para volume/rotina | custo | tokenizer novo — reestimar orçamento | julgamento arquitetural | **muito verboso**; exige supervisão em trabalho de alto risco |
+
+> Especificações do GPT-5.6 Sol conforme documentação oficial atual da OpenAI (R1,
+> 2026-08-08). Campos sem valor oficial informado (SWE-bench, Effort) permanecem `—`.
 
 ### 6.2 Regra de roteamento
 
+**Princípio canônico:** USE O MODELO MAIS BARATO CONFIÁVELMENTE SUFICIENTE PARA A TAREFA.
+**DeepSeek V4 Flash é o executor padrão (IAexec) quando compatível.** NÃO existe escada de
+escalada obrigatória. O supervisor pode rotear diretamente para um modelo mais forte quando
+risco ou complexidade claramente exigirem. Roteamento por adequação, risco e capacidade
+demonstrada — não por hierarquia fixa.
+
+Roteamento típico:
+- inventário / diagnóstico simples → **Flash**
+- patch/refactor limitado → **Flash**
+- Flash insuficiente / raciocínio cross-file mais difícil / diversificação de família → **Pro**
+- arquitetura significativa / supervisão / adjudicação / conflito de achados → **Sol**
+- revisão independente crítica de alto risco → **Sol ou Opus** conforme risco/independência
+
 | Tarefa | Modelo | Por quê |
 |---|---|---|
-| Decidir arquitetura, revisar este protocolo | **Opus 5** `high` | Julgamento |
-| UT que toca RBAC, auth, CSRF, uploads ou path handling | **Opus 5** `xhigh` | Erro caro e invisível a teste verde |
-| UT que toca composition root ou hooks de app | **Opus 5** `xhigh` | Ordem de registro e efeito global |
-| Extração mecânica de coorte | **Sonnet 5** `xhigh` | Volume; padrão provado 6× |
-| Testes de contrato | **Sonnet 5** | Volume |
-| **Revisão adversarial de todo diff** | **DeepSeek V4 Pro** | Família diferente = independência real; 80,6 SWE-bench a 1/7 do custo de saída do Opus |
-| 2ª revisão (**UT-2, UT-3, UT-4, UT-5, UT-9, UT-14**) | **Opus 5** + **V4 Pro** | Dois vieses |
-| Inventário: call sites, diff de snapshot, contagem de rotas, `grep`, prova de zero-referência-por-caminho | **V4 Flash** | 1M de contexto por $0,14/MTok |
+| Supervisão, arquitetura, ownership, adjudicação, conflito de achados | **GPT-5.6 Sol** | Julgamento preferido; substitui Opus como padrão premium normal |
+| UT que toca RBAC, auth, CSRF, uploads ou path handling | **Sol** | Erro caro e invisível a teste verde |
+| UT que toca composition root ou hooks de app | **Sol** | Ordem de registro e efeito global |
+| Extração mecânica de coorte / refactor bounded | **Flash (padrão)** | Volume; mais barato e suficiente quando compatível |
+| Testes de contrato | **Flash (padrão)**; Sonnet como alternativa | Volume |
+| Implementação difícil quando modelos mais baratos não são adequados | **Sol** | Qualidade |
+| **Revisão adversarial de todo diff** | **Pro (padrão)**; **Sol** para adjudicação difícil/alto risco | Família diferente = independência real; escalada barata |
+| 2ª revisão (quando exigida por risco/protocolo) | **Sol ou Opus** | Independência/criticidade genuína; Opus reservado |
+| Revisão independente crítica de altíssima consequência (RBAC/infra) | **Opus 5** | Segunda opinião cega |
+| Inventário: call sites, diff de snapshot, contagem de rotas, `grep`, prova de zero-referência-por-caminho | **Flash** | 1M de contexto por $0,14/MTok |
 
-**Regras do Flash — vinculantes:**
-- **Flash nunca edita arquivo de produção nem de teste.** Inventaria e reporta; outro modelo
-  implementa. Vale inclusive para movimentos de 10 linhas (UT-7).
-- Sempre com **saída estruturada obrigatória** (JSON). Emite ~2,1× mais tokens que a mediana
-  da categoria; sem esquema, o preço baixo evapora.
-- **Nunca revisor de mérito.** O ledger registra `deepseek-v4-flash-free` devolvendo
-  "UNUSABLE DELIVERY / NO VERDICT" em B2 e B3.
-- Nunca decide nada.
+**DeepSeek V4 Flash — regras (IAexec padrão):**
+- Flash é o **executor padrão (IAexec) quando compatível**.
+- Flash **pode**: inventariar; diagnosticar; desenhar/implementar RED; editar testes; editar
+  produção; executar refactors bounded; extração mecânica; trabalho cross-file pequeno/médio;
+  revisão técnica rotineira; checagens de custódia/invariantes.
+- Flash **não deve ser o único revisor** para trabalho de alto risco ou arquitetonicamente
+  ambíguo; nesses casos, Pro (padrão) ou Sol/Opus conforme §6.2.
+- Preferir a **versão V4 Flash atual comprovada** disponível no provider selecionado. Falhas
+  de rota antiga/gratuita **não** se generalizam em banimento permanente de capacidade do
+  Flash atual.
+- **Formato de saída:** varreduras/inventários verificáveis por máquina: preferir JSON ou
+  tabela estruturada fixa; implementação/revisão: usar o formato mais adequado à evidência;
+  **não** forçar JSON quando prejudicar a clareza.
 
-**Custo esperado:** UT de coorte ≈ $1,50–4,00 (Sonnet 5) + $0,30–0,80 (V4 Pro) + $0,05 (Flash).
-UT acima de ~$15 indica recorte errado, não modelo errado.
+**Rota FREE vs paga do V4 Flash — fallback explícito:**
+Quando existir rota FREE do V4 Flash comprovadamente compatível:
+1. preferir a rota FREE primeiro;
+2. se indisponível, falhando tecnicamente, limitada de contexto/orçamento, de versão incerta
+   ou operacionalmente incompatível: cair automaticamente para o V4 Flash normal/pago;
+3. **não** pular direto para Pro/Sol/Opus enquanto o Flash pago continuar adequado;
+4. escalar além do Flash apenas quando a tarefa exigir.
+Sem fallback silencioso. Quando a identidade do modelo for material para a qualificação,
+registrar: provider efetivamente usado; modelo efetivo; identificador de modelo/versão quando
+disponível; rota FREE vs paga quando material; motivo do fallback. Não afirmar que uma rota de
+agregador é o Flash mais recente/atual sem verificação real.
+
+**Custo esperado:** UT de coorte ≈ Flash (padrão) + Pro (revisão) + Sol/Opus (arbitragem,
+apenas quando necessário). UT acima de ~$15 indica recorte errado, não modelo errado.
 
 ### 6.3 Regra de dados (não negociável)
 
 O repositório contém `database.db` com dados reais de alunos e `documentos_alunos/`.
 
 - **Nunca** colar conteúdo de banco, dump com linhas, ou arquivo de `documentos_alunos/`,
-  `uploads/` ou `logs/` em nenhum dos quatro modelos. Schema (DDL) e código, sim; linhas, não.
+  `uploads/` ou `logs/` em nenhum dos cinco modelos. Schema (DDL) e código, sim; linhas, não.
 - Vale igualmente para Anthropic e DeepSeek. A distinção relevante não é o fornecedor — é que
   dado pessoal de aluno não entra em prompt nenhum.
 - Antes de qualquer push, confirmar que `database.db` e `documentos_alunos/` não estão no diff.
@@ -466,12 +521,12 @@ O repositório contém `database.db` com dados reais de alunos e `documentos_alu
 
 ```
 1. INVENTÁRIO      (Flash)     → arquivos, símbolos, call sites, rotas, zero-referência-por-caminho
-2. PLANO           (Opus 5)    → recorte, riscos, gate específico. ≤1 página.
-3. RED             (Sonnet 5)  → testes que falham porque a mudança ainda não existe
-4. IMPLEMENTAÇÃO   (§6.2)
+2. PLANO           (Sol para trabalho arquitetural; Flash/Pro permitidos para planejamento mecânico limitado) → recorte, riscos, gate específico. ≤1 página.
+3. RED             (Flash padrão quando compatível) → testes que falham porque a mudança ainda não existe
+4. IMPLEMENTAÇÃO   (§6.2 — IAexec selecionado; Flash padrão quando compatível)
 5. GREEN           (executor)  → suíte focada verde
-6. REVISÃO         (V4 Pro)    → obrigatória, adversarial, read-only
-6b. 2ª REVISÃO     (Opus 5)    → UT-2, UT-3, UT-4, UT-5, UT-9, UT-14
+6. REVISÃO         (Pro padrão; Sol para adjudicação difícil/alto risco) → obrigatória, adversarial, read-only
+6b. 2ª REVISÃO     (quando exigida por risco/protocolo; Sol ou Opus conforme independência/criticidade)
 7. SUÍTE COMPLETA  (humano)    → pytest inteiro (~330s), 0 failed / 0 errors
 8. INVARIANTES     (Flash)     → tabelas da §4
 9. COMMIT          (humano)    → 1 commit técnico. Sem commit de governança separado.
@@ -492,10 +547,11 @@ Testes aposentados: <lista ou "nenhum">.
 
 **Inventário (Flash)**
 ```
-Tarefa: inventário read-only. NÃO edite arquivos. NÃO opine.
+Tarefa: inventário — etapa de leitura; NÃO edite arquivos durante o inventário. NÃO opine.
 Escopo: UT-N — <uma linha>
 
-Retorne EXCLUSIVAMENTE este JSON:
+Retorne preferencialmente JSON ou tabela estruturada fixa (varredura verificável por máquina);
+use o formato mais adequado à evidência quando JSON prejudicar a clareza (ver §6.2).
 {
   "arquivos_afetados": ["caminho:motivo"],
   "simbolos_movidos": [{"nome":"","de":"arquivo:linha","para":"arquivo"}],
@@ -507,10 +563,10 @@ Retorne EXCLUSIVAMENTE este JSON:
   "mensagens_de_usuario_em_modulo_novo": ["texto"],
   "riscos_detectados": ["texto curto"]
 }
-Sem prosa fora do JSON.
+Sem prosa fora do formato escolhido.
 ```
 
-**Plano (Opus 5)**
+**Plano arquitetural (GPT-5.6 Sol ou modelo selecionado conforme §6)**
 ```
 Papel: arquiteto responsável por esta unidade.
 Leia EXECUTION_PROTOCOL.md §1 (estado), §4 (invariantes), §5 (estrutura de arquivo).
@@ -526,7 +582,7 @@ Em no máximo uma página:
 Não escreva código.
 ```
 
-**Implementação (Sonnet 5 / Opus 5)**
+**Implementação (IAexec selecionado conforme §6; Flash padrão quando compatível)**
 ```
 Papel: executor. Comportamento idêntico — mover, não mudar.
 Unidade: UT-N. Plano aprovado: <colar>
@@ -546,7 +602,7 @@ Entregue: diff unificado por arquivo + gate rodando verde.
 Achados fora do recorte: LISTAR ao final sob "FORA DE ESCOPO", sem alterar.
 ```
 
-**Revisão adversarial (V4 Pro) — obrigatória**
+**Revisão adversarial (Pro padrão; Sol para adjudicação difícil) — obrigatória**
 ```
 Papel: revisor independente. READ-ONLY. Você não escreveu isto e não deve aprová-lo.
 Unidade: UT-N. Diff: <colar>. Invariantes: <colar §4>.
