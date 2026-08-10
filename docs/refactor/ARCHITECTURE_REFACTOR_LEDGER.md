@@ -1271,3 +1271,72 @@ schema 3 / migrações v1-v3.
 **Disposição final:** UT-10 CLOSED / ACCEPTED / PUBLISHED.
 
 **Próxima:** UT-11 — NÃO INICIADA.
+
+## UT-11 — Alertas
+
+**Data:** 2026-08-09. **HEAD de entrada (pai de publicação):**
+`a0092149c2c596f90932b8f83991a33e1f98c32c`.
+
+**Escopo:** 4 rotas Alertas de `main.py` → `app/views/admin/alertas.py`.
+Suporte movido: 3 funções helper (`_normalize_hex_color`,
+`_derive_border_from_hex`, `_alerta_border_for`) e 1 constante
+(`ALERTA_COLOR_OPTIONS`). Total de símbolos movidos: **8**.
+
+**Arquitetura:** LegacyRouteSpec — 4 specs / 4 pares endpoint-method; factory
+opt-out `register_admin_alertas_blueprint` (default True) registrado via
+`register_legacy_blueprint`; `main` facade 8/8 por identidade; zero ownership
+local dos símbolos movidos em `main.py` (0 defs de rota/helper, 0 assignment
+da constante, 0 decorators `@app.route` da coorte).
+
+**Preservação comportamental — MOVE, DO NOT CHANGE:** SQL /
+SELECT/INSERT/UPDATE/DELETE, construção de filtros, paginação, ordenação,
+template, nomes de request/form/query, redirects, flash strings, sítios de
+chamada de `ensure_admin_alertas_table(conn)`, timing de `conn.commit`,
+normalização hex/fallback, derivação de borda e valores/ordem/estrutura de
+`ALERTA_COLOR_OPTIONS` preservados exatamente.
+
+**Limites:** Reportes 3/3 main-owned; `ensure_admin_alertas_table` permanece
+em `app.db_maintenance`; `list_active_admin_alertas` permanece em
+`app.admin_alerts`; Dashboard intocado; Arquivos permanece extraído
+(`app.views.admin.arquivos`).
+
+**CSRF:** exatamente 3 transições owner-only (`admin_salvar_alerta`,
+`admin_alternar_alerta`, `admin_deletar_alerta` →
+`app.views.admin.alertas.*`). Reconciliação cumulativa histórica: 30 → 33 /
+38 → 41 / 43 → 46. Inventário do pacote admin: + `alertas.py` apenas.
+
+**RED original:** 28 testes — 16 RED / 12 GREEN.
+
+**Estado inicial da implementação:** todos os 16 contratos RED verdes; porém
+2 controles GREEN codificavam estado pré-extração, e um GREEN histórico da
+UT-10 tornou-se obsoleto para a ownership tardia de Alertas.
+**Classificação: TEST_CONTRACT_SEAM** — nenhum defeito de produção, nenhuma
+mudança de arquitetura, nenhuma reabertura de produção da UT-10.
+
+**SHAs de teste:** UT-11 antigo `32207A773E28F74601A8700D71D955D64CE21986007C11F9C89A9FF846ABCD95`
+→ substituto `C0BE5F1593106A3F9A948EE0124A8EBF9E395422478708C762C286374BFB1905`;
+UT-10 antigo `578ADB5FABD354317AC37F7998C45F59AA0ED89FCF219702FE50AD19EF45760B`
+→ substituto `E24648784C21ABC495E3B45954AE7011DBDB5ECD95487015597F4DD864BBCC07`.
+
+**Semântica dos seams state-aware:** o loader guardado distingue alvo
+ausente/presente real; o controle CSRF distingue ownership coerente pré/pós
+sem derivar expectativas do snapshot; o contrato histórico UT-10 mantém
+Reportes permanentemente main-owned enquanto permite Alertas mover-se apenas
+quando seu alvo canônico real existe; compatibilidade `main` exige identidade,
+nunca wrappers.
+
+**Qualificação focada dos seams:** UT-11 28/28; UT-10 26/26; cross-unit
+65/65; primary 107/107; historical 73/73; neighbor/C4 185/185.
+
+**Revisão independente:** PASS / 0 achados materiais.
+
+**Suíte canônica final:** 1373 collected / 1356 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 368.73s.
+
+**Invariantes finais:** 131 / 130 / RBAC unmapped 0 / actor matrix 402 /
+catálogo de mensagens 536 / hooks_main 0 / dependências reversas `main` 0 /
+schema 3 / migrações v1-v3.
+
+**Disposição final:** UT-11 CLOSED / ACCEPTED / PUBLISHED.
+
+**Próxima:** UT-12 — NÃO INICIADA.

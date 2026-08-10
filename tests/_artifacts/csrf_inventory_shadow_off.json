@@ -757,7 +757,7 @@
     {
       "route": "/admin/alertas/<int:alerta_id>/alternar",
       "method": "POST",
-      "view_function": "main.admin_alternar_alerta",
+      "view_function": "app.views.admin.alertas.admin_alternar_alerta",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -788,7 +788,7 @@
     {
       "route": "/admin/alertas/<int:alerta_id>/deletar",
       "method": "POST",
-      "view_function": "main.admin_deletar_alerta",
+      "view_function": "app.views.admin.alertas.admin_deletar_alerta",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -826,7 +826,7 @@
     {
       "route": "/admin/alertas/salvar",
       "method": "POST",
-      "view_function": "main.admin_salvar_alerta",
+      "view_function": "app.views.admin.alertas.admin_salvar_alerta",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": true,

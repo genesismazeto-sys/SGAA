@@ -796,11 +796,14 @@ validação formal, ainda **não declarado** — valor histórico da UT-9.
 C3 dependência reversa PASS / C4 isolamento de escrita em hook PASS / C5 RBAC PASS /
 C6 inventário de rotas + actor matrix PASS / C7 suíte canônica PASS. Suíte canônica à época
 do plateau (histórica): 1319 collected / 1302 passed / 17 deselected / 0 failed / 0 errors /
-407,40s. Suíte canônica vigente após o landing da UT-10: 1345 collected / 1328 passed /
-17 deselected / 0 failed / 0 errors / 0 skipped / 345,89s. Invariantes: 131 / 130 / 0 / 402 /
+407,40s. Suíte canônica vigente após o landing da UT-10 (histórica): 1345 collected /
+1328 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 345,89s. Suíte canônica
+vigente após o landing da UT-11: 1373 collected / 1356 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 368,73s. Invariantes: 131 / 130 / 0 / 402 /
 536 / 0. **Histórico preservado:** a primeira validação formal, sob o
 Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o ledger. UT-10:
-CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: NÃO INICIADA.
+CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: CLOSED / ACCEPTED /
+PUBLISHED (ver bloco UT-11 abaixo). UT-12: NÃO INICIADA.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -813,8 +816,19 @@ sem mudança de produção. Retry canônico: 1345 collected / 1328 passed / 17 d
 0 failed / 0 errors / 0 skipped / 345,89s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
 UT-11: NÃO INICIADA.
 
+**UT-11 — Coorte Alertas: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
+Extract admin alerts routes; pai de entrada 0092149c2c596f90932b8f83991a33e1f98c32c).
+Extração: 4 rotas / 4 pares endpoint-method / 3 helpers / 1 constante para
+pp/views/admin/alertas.py; facade de compatibilidade main 8/8 por identidade; owner
+pp/views/admin/alertas.py. Seam de contrato de teste (TEST_CONTRACT_SEAM): dois GREEN da
+UT-11 e um GREEN histórico da UT-10 codificavam estado pré-extração; corrigidos para
+state-aware exatos, sem defeito de produção e sem reabertura da UT-10 (SHAs substitutos
+registrados no ledger). Suíte canônica final: 1373 collected / 1356 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 368,73s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
+UT-12: NÃO INICIADA.
+
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
-| UT-11 | Coorte Alertas | | | | | | 0 | | nenhum | |
+| UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-12 | Coorte Reportes | | | | | | 0 | | 1 | |
 | UT-13 | Dashboard + meus_dados | | | | | | 0 | | 2 | |
 | UT-14 | Infra | | | | | | 0 | | 1 | |
