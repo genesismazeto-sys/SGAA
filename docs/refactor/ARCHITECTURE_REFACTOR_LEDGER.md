@@ -1507,3 +1507,51 @@ schema 3 / migrações v1-v3.
 **Disposição final:** UT-13 CLOSED / ACCEPTED / PUBLISHED.
 
 **Próxima:** UT-14 — NÃO INICIADA.
+
+## FINAL RESIDUAL CENSUS / ROADMAP RECONCILIATION
+
+**Data:** 2026-08-10. **Tipo:** governance-only patch; zero production, test, database, or
+behavior change. **HEAD de entrada:** `b632edf90e2397abb145edc5d47e5a89bd48f078`.
+**Protocolo:** v1.4. **Não é uma UT e não é um closeout de fase.**
+
+**Census — read-only.** Inventário AST de `main.py` contra o HEAD de entrada. Rotas com
+`@app.route` restantes em `main.py`: exatamente **5** — `admin_demo_clientes_form_pack`,
+`admin_meus_dados`, `uploaded_file`, `health`, `favicon`. UT-13 extraiu apenas Dashboard
+(1 rota); `admin_demo_clientes_form_pack` e `admin_meus_dados` permanecem main-owned.
+`admin_meus_dados` é explicitamente NÃO parte da UT-13 — hard boundary registrado no próprio
+bloco UT-13.
+
+**GOVERNANCE_ROADMAP_CONFLICT.** O old live roadmap definia UT-13 = Dashboard + demo +
+meus_dados (3 rotas) e UT-14 = Infra. Como UT-13 extraiu apenas Dashboard (1 rota), o
+roadmap original não pode satisfazer o Criterion 8 (zero `@app.route` após final completion).
+A premissa original de 3 rotas em UT-13 tornou-se factualmente falsa.
+
+**Supervisor acceptance com correções.** Roadmap revisado aceito: UT-14 Meus Dados (1 rota,
+GET+POST, `app/views/admin/meus_dados.py`), UT-15 Demo (1 rota, GET only,
+`app/views/admin/demo.py`), UT-16 Residual Main Ownership (0 rotas; elimina apenas
+duplicações main-locais não-facade que impeçam o Criterion 9; inventário read-only
+obrigatório antes do RED), UT-17 Infra (3 rotas: `uploaded_file` →
+`app/views/files.py`; `health`/`favicon` → `create_app`). REFACTOR ESTRUTURAL COMPLETO
+declarável apenas após UT-17 e apenas se Criteria 1-9 todos PASS.
+
+**Census de candidatos UT-16 (evidência/input, NÃO autorização automática de deleção):**
+`_coerce_aluno_snapshot_scalar`, `_build_aluno_requisicao_snapshot_display`,
+`UPPER_CODE_RE`, `proximo_numero_turma`, `_login_attempts`, `_APP_DIR`, `_TEMPLATES_DIR`,
+`aluno_required`. Cada símbolo deve ser provado como duplicado/morto/ownership dividido
+antes de alteração. `validar_integridade_versionamento_atividades` explicitamente NÃO
+incluído automaticamente — pode permanecer main-owned a menos que o inventário da UT-16
+prove que o Criterion 9 exige realocação. Re-exports de identidade de compatibilidade
+permanecem fora de escopo. D-3 permanece diferido. Nenhuma limpeza geral.
+
+**Arquivos alterados:** exatamente 3 de governança — `PROJECT_STATE.md`,
+`docs/refactor/EXECUTION_PROTOCOL.md`, `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
+Arquivos alterados durante o census: 0. Nenhum arquivo de produção, teste, banco ou
+documentação histórica alterado.
+
+**Critérios e invariantes preservados.** Criterion 4 v1.3 inalterado. Database/schema policy
+inalterada. Invariantes numéricos inalterados. Model-routing policy inalterada.
+UT-10/11/12/13 não reabertas. O registro histórico de que o roadmap antigo originalmente
+agrupava Dashboard + demo + meus_dados está preservado em §1 (snapshot datado) e no
+changelog v1.4 — não foi reescrito.
+
+**Próxima:** UT-14 — Meus Dados — NÃO INICIADA / NEXT.

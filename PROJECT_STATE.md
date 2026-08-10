@@ -20,13 +20,13 @@ remains candidate for separate future work. Prior landings: UT-12 Reportes
 extraction (parent `4820e4d3`); UT-11 Alertas extraction (parent `a0092149`);
 UT-10 Arquivos extraction (parent `e8f64a82`); C4 request-hook write isolation
 + STRUCTURAL PLATEAU publication (Phase-H landing commit, parent `230de41b`).
-Next UT: UT-14 — NOT STARTED.
+Next UT: UT-14 — Meus Dados — NOT STARTED / NEXT.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
 Published by this Phase-H landing commit (subject `Validate structural plateau request-hook
 isolation`, parent `230de41b`). Governing criteria text: `docs/refactor/EXECUTION_PROTOCOL.md`
-§3, **Protocol v1.3 — 2026-08-09**.
+§3, **Protocol v1.4 — 2026-08-10**.
 
 | # | Criterion | Verdict |
 |---|---|---|
@@ -98,7 +98,7 @@ Canonical full-suite status: 1345 collected / 1328 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 345.89s.
 
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
-ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
 ## UT-11 — Alertas — CLOSED / ACCEPTED / PUBLISHED
 
@@ -149,7 +149,7 @@ Canonical full-suite status: 1373 collected / 1356 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 368.73s.
 
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
-ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
 ## UT-12 — Reportes — CLOSED / ACCEPTED / PUBLISHED
 
@@ -192,7 +192,7 @@ Canonical full-suite status: 1399 collected / 1382 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 377.54s.
 
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
-ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
 ## UT-13 — Dashboard — CLOSED / ACCEPTED / PUBLISHED
 
@@ -291,7 +291,32 @@ CSRF: Dashboard owner deltas = 0; historical cumulative totals remain
 35 / 43 / 48; both canonical snapshots byte-identical to HEAD.
 
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
-ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
+
+## FINAL RESIDUAL CENSUS / ROADMAP RECONCILIATION — ACCEPTED
+
+HEAD: `b632edf90e2397abb145edc5d47e5a89bd48f078`. Census type: read-only.
+Files altered during census: 0. Protocol v1.4 — 2026-08-10.
+
+The post-UT-13 census measured exactly 5 remaining `@app.route` handlers in
+`main.py`: `admin_demo_clientes_form_pack`, `admin_meus_dados`, `uploaded_file`,
+`health`, `favicon`. This falsified the old live roadmap assumption that UT-13
+resolved dashboard + demo + meus_dados (3 routes). UT-13 extracted Dashboard
+only; demo and meus_dados remain main-owned. Criterion 8 (zero `@app.route` after
+final completion) therefore requires additional UTs to resolve the residual 5
+routes. The residual census also identified main-local non-route symbols that
+may affect Criterion 9; these are catalogued as evidence/input for UT-16.
+
+Revised remaining roadmap (governance-only; no production change):
+- UT-14 — Meus Dados: `admin_meus_dados` → `app/views/admin/meus_dados.py` (1 route, GET+POST)
+- UT-15 — Demo: `admin_demo_clientes_form_pack` → `app/views/admin/demo.py` (1 route, GET only)
+- UT-16 — Residual Main Ownership: eliminate main-local non-facade duplication preventing Criterion 9
+- UT-17 — Infra: `uploaded_file` → `app/views/files.py`; `health`/`favicon` → `create_app` (3 routes)
+REFACTOR ESTRUTURAL COMPLETO: declarable only after UT-17 and only if Criteria 1-9 all pass.
+
+Criterion 4 v1.3 unchanged. Database/schema policy unchanged. Invariants unchanged.
+Historical planning records preserved; the old grouping (Dashboard + demo + meus_dados)
+is not rewritten. UT-14 Meus Dados: NOT STARTED / NEXT.
 
 ## Process anomalies — Phase-5 review tooling hygiene
 
@@ -350,5 +375,5 @@ debt. Explicitly still open and NOT to be reopened by the landing commit:
 
 ## Authority
 
-Operational authority: `docs/refactor/EXECUTION_PROTOCOL.md` (v1.3 — 2026-08-09).
+Operational authority: `docs/refactor/EXECUTION_PROTOCOL.md` (v1.4 — 2026-08-10).
 `AGENT_HANDOFF.md` is historical/frozen — no new writes, not read by the cycle.

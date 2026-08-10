@@ -1,12 +1,24 @@
 # SGAA-EJ — PROTOCOLO DE EXECUÇÃO DO REFACTOR (FASE FINAL)
 
-**Versão:** 1.3 — 2026-08-09
+**Versão:** 1.4 — 2026-08-10
 **Autoridade:** substitui a governança por fase (contrato + closeout por unidade) para todo o
 trabalho remanescente. Não revoga contratos fechados (B1–B7-P permanecem como histórico).
 **Condutor:** ChatGPT / GPT-5.6 Sol (sem acesso direto ao código; lê o repositório via GitHub após push).
 **Executores:** GPT-5.6 Sol, Claude Opus 5, Claude Sonnet 5, DeepSeek V4 Pro, DeepSeek V4 Flash.
 
 ### Changelog
+
+**1.4 — 2026-08-10 — FINAL ROADMAP RECONCILIATION ONLY.** Não altera escopo de
+produção, comportamento de negócio, database/schema, invariantes, Criterion 4, model-routing
+policy, nem reabre UT-10/11/12/13. Reconciles the measured post-UT-13 residual architecture:
+UT-13 extracted Dashboard only (1 route), leaving `admin_demo_clientes_form_pack` and
+`admin_meus_dados` main-owned. The old roadmap UT-13 = Dashboard + demo + meus_dados (3 routes)
+cannot satisfy Criterion 8 (zero `@app.route` after final completion). The census confirmed
+exactly 5 remaining `main.py` `@app.route` handlers. Residual main-local non-route
+implementations/duplicates were identified as UT-16 input. Revised remaining roadmap:
+UT-14 Meus Dados, UT-15 Demo, UT-16 Residual Main Ownership, UT-17 Infra. REFACTOR
+ESTRUTURAL COMPLETO now declarable only after UT-17. Does not rewrite the historical fact
+that the old roadmap originally grouped Dashboard + demo + meus_dados.
 
 **1.3 — 2026-08-09 — CORREÇÃO VERSIONADA DA DEFINIÇÃO DO CRITÉRIO 4 (PLATEAU).** Não altera
 escopo de UT, sequência, arquitetura, invariantes numéricos, comportamento de negócio nem
@@ -297,21 +309,32 @@ segunda revisão genuinamente cega. Safeguards de RBAC inalterados. 6 rotas → 
 ### Bloco D — fechamento (condicional; decidir após UT-9)
 
 Só necessário para `REFACTOR ESTRUTURAL COMPLETO`. Módulos pequenos e separados —
-**é proibido fundi-los** (§10).
+**é proibido fundi-los** (§10). Reconciliado pelo censo residual pós-UT-13 (v1.4): UT-13
+extraiu apenas Dashboard (1 rota); `admin_demo_clientes_form_pack` e `admin_meus_dados`
+permanecem main-owned e exigem UTs separadas.
 
 | UT | Coorte | Owner | Rotas | Modelo |
 |---|---|---|---:|---|
 | UT-10 | Arquivos | `app/views/admin/arquivos.py` | 5 | Flash (padrão); Pro revisão adversarial |
 | UT-11 | Alertas | `app/views/admin/alertas.py` | 4 | Flash (padrão); Pro revisão adversarial |
 | UT-12 | Reportes | `app/views/admin/reportes.py` | 3 | Flash (padrão); Pro revisão adversarial; Sol só para ambiguidade/escalada |
-| UT-13 | Dashboard + demo + meus_dados | `app/views/admin/dashboard.py` | 3 | Flash ou Pro conforme inventário; Sol revisão arquitetural/arbitragem |
-| UT-14 | Infra | `app/views/files.py` (`uploaded_file`); `health` e `favicon` em `create_app`, como `/csrf-token` | 3 | Sol (arquitetura/supervisão de alto risco); Pro revisão adversarial; Opus segunda revisão cega |
+| UT-13 | Dashboard | `app/views/admin/dashboard.py` | 1 | Flash ou Pro conforme inventário; Sol revisão arquitetural/arbitragem |
+| UT-14 | Meus Dados | `app/views/admin/meus_dados.py` | 1 | Flash (padrão); Pro revisão adversarial |
+| UT-15 | Demo | `app/views/admin/demo.py` | 1 | Flash (padrão); Pro revisão adversarial |
+| UT-16 | Residual Main Ownership | — | 0 | Sol (supervisão/arbitragem); Pro revisão adversarial |
+| UT-17 | Infra | `app/views/files.py` (`uploaded_file`); `health` e `favicon` em `create_app`, como `/csrf-token` | 3 | Sol (arquitetura/supervisão de alto risco); Pro revisão adversarial; Opus segunda revisão cega |
 
-UT-13 leva `_build_admin_dashboard_turma_cards` (267 linhas), `periodo_corrente` e os
-formatadores do dashboard. UT-14 é Sol porque `uploaded_file` (106 linhas) contém autorização
-aluno/admin e guarda de path traversal.
+UT-13 (Dashboard) levou `_build_admin_dashboard_turma_cards` (267 linhas), `periodo_corrente` e
+os formatadores do dashboard. UT-14 (Meus Dados): GET+POST, preserva endpoint name e RBAC
+`meus_dados:view`/`edit`; CSRF e ownership semantics preservados; MOVE, DO NOT CHANGE. UT-15
+(Demo): GET only, endpoint unchanged, Dashboard-scoped RBAC requirement unchanged; não unificado
+ao Dashboard apenas por compartilhar escopo de autorização. UT-16: rotas 0; elimina apenas
+duplicações main-locais não-facade que impeçam o Criterion 9 (inventário read-only obrigatório
+antes do RED; D-3 permanece diferido; sem limpeza geral). UT-17 é Sol porque `uploaded_file`
+(106 linhas) contém autorização aluno/admin e guarda de path traversal.
 
 → **REFACTOR ESTRUTURAL COMPLETO declarável aqui.**
+
 
 ### Diferidas — NÃO autorizadas
 
@@ -352,7 +375,7 @@ criar o pacote `app/db/` (§5).
 6. Route inventory + actor matrix verdes.
 7. Suíte completa: 0 failed / 0 errors.
 
-### REFACTOR ESTRUTURAL COMPLETO — ao fim da UT-14
+### REFACTOR ESTRUTURAL COMPLETO — ao fim da UT-17
 
 Os sete acima, **mais**:
 
@@ -411,7 +434,7 @@ de lista na UT-3, apenas de sítio de registro.
 | Após UT-3 | `csrf_protect`@flask_wtf, `enforce_admin_access_control`@**app.web.authz_gate** | idem UT-2 | `_default_...`, `<lambda>`, `inject_admin_access_helpers`@**app.web.context**, `inject_editable_message_templates`@**app.web.context** | 400→app, 404/500/413→**app.web.errors** | **1** |
 | Após UT-5 | idem UT-3 | `after_request`@compress, `_apply_security_headers`@app | idem UT-3 | idem UT-3 | **0** |
 | Após UT-9 (PLATEAU) | idem | idem | idem | idem | **0** |
-| Após UT-14 (COMPLETO) | idem | idem | idem | idem | **0** |
+| Após UT-17 (COMPLETO) | idem | idem | idem | idem | **0** |
 
 Gate executável, obrigatório de UT-5 em diante:
 
@@ -683,7 +706,7 @@ nem "aposentar por coorte". Item fora desta tabela exige autorização humana e 
 | `test_b7p_reportes_ownership_unchanged` | `test_phase4_arquivos_alertas_shared_owners.py` | UT-12 | specs da coorte Reportes |
 | `test_b7p_admin_dashboard_unchanged_from_entry_baseline` | `test_phase4_arquivos_alertas_shared_owners.py` | UT-13 | specs da coorte Dashboard |
 | `test_periodo_corrente_unchanged_against_baseline_and_still_main_local` | `test_phase4_alunos_turmas_cursos_blueprint.py` | UT-13 | idem |
-| `test_b7p_uploaded_file_unchanged_from_entry_baseline` | `test_phase4_arquivos_alertas_shared_owners.py` | UT-14 | teste de autorização de `uploaded_file` no novo owner |
+| `test_b7p_uploaded_file_unchanged_from_entry_baseline` | `test_phase4_arquivos_alertas_shared_owners.py` | UT-17 | teste de autorização de `uploaded_file` no novo owner |
 
 **A UT-3 não aposenta nada.** `test_central_admin_access_denied_uses_canonical_ajax_helper`
 sobrevive por identidade (`inspect.getsource` segue o objeto ao novo arquivo; corpo inalterado).
@@ -752,7 +775,7 @@ RED/GREEN completo, arquivo de teste com 11 casos, contrato de 13 KB, manifesto 
 revisão externa e commit de closeout — para mover **quatro funções que somam 19 linhas**.
 Símbolos compartilhados movem-se no mesmo commit das rotas.
 
-**Não trocar `LegacyRouteSpec` durante UT-1…UT-14.** Ver D-2.
+**Não trocar `LegacyRouteSpec` durante UT-1…UT-17.** Ver D-2.
 **Não criar o pacote `app/db/` nem adicionar a `app/admin_access.py`.** Ver §5.
 **Não criar novo documento de contrato por fase.** Ver §9.
 **Não autorizar Migration v4 nem `app/repositories/`.**
@@ -809,7 +832,8 @@ Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o led
 CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: CLOSED / ACCEPTED /
 PUBLISHED (ver bloco UT-11 abaixo). UT-12: CLOSED / ACCEPTED / PUBLISHED (ver bloco
 UT-12 abaixo). UT-13: CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-13 abaixo).
-UT-14: NÃO INICIADA.
+UT-14: Meus Dados — NÃO INICIADA / NEXT. UT-15: Demo — NÃO INICIADA.
+UT-16: Residual Main Ownership — NÃO INICIADA. UT-17: Infra — NÃO INICIADA.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -866,13 +890,16 @@ removeu apenas as asserções positivas contraditórias; RED congelado final
 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`; nenhum byte de produção
 alterado pelo achado. Suíte canônica final: 1429 collected / 1412 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 357,96s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
-UT-14: NÃO INICIADA.
+UT-14: Meus Dados — NÃO INICIADA / NEXT.
 
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-12 | Coorte Reportes | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1382 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-13 | Coorte Dashboard | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1412 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
-| UT-14 | Infra | | | | | | 0 | | 1 | |
+| UT-14 | Meus Dados | | | | | | 0 | | — | |
+| UT-15 | Demo | | | | | | 0 | | — | |
+| UT-16 | Residual Main Ownership | | | | | | 0 | | — | |
+| UT-17 | Infra | | | | | | 0 | | 1 | |
 | — | **REFACTOR ESTRUTURAL COMPLETO** | | | | | | 0 | | | |
 
 ---
@@ -891,8 +918,11 @@ UT-14: NÃO INICIADA.
 | UT-8 | **Fase 4-B8** (`app/views/admin/banco_dados.py`) |
 | UT-9 | **Fase 4-B9** (`app/views/admin/acesso.py`) |
 | UT-10…UT-12 | **Fase 4-B7**, redefinida: três módulos separados, não um fundido |
-| UT-13 | Resolve o "dashboard.py e admin_meus_dados ownership remain unresolved" do ledger |
-| UT-14 | Resíduo da **Fase 6** |
+| UT-13 | Dashboard (`admin_dashboard`) apenas; demo e meus_dados permaneciam main-owned (UT-14/UT-15 separadas) |
+| UT-14 | Meus Dados (`admin_meus_dados`) — novo, separado do Dashboard pelo censo residual v1.4 |
+| UT-15 | Demo (`admin_demo_clientes_form_pack`) — novo, separado do Dashboard pelo censo residual v1.4 |
+| UT-16 | Residual Main Ownership — novo, pré-requisito para Criterion 9 |
+| UT-17 | Resíduo da **Fase 6** (Infra: `uploaded_file`, `health`, `favicon`) |
 | D-1 | Resíduo de **Fase 3** (ownership de manutenção) |
 | — | Migration v4: permanece **PROIBIDA** |
 
