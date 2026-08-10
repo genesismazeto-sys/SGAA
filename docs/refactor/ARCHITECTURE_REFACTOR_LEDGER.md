@@ -1408,3 +1408,102 @@ DEVIATION / REVIEW_TOOLING_HYGIENE.
 **Disposição final:** UT-12 CLOSED / ACCEPTED / PUBLISHED.
 
 **Próxima:** UT-13 — NÃO INICIADA.
+
+## UT-13 — Dashboard
+
+**Data:** 2026-08-10. **HEAD de entrada (pai de publicação):**
+`2e0afa34ed1b927014ac35875668bbdc132743ad`.
+
+**Escopo:** `admin_dashboard` apenas — de `main.py` →
+`app/views/admin/dashboard.py`. Suporte movido: 9 funções helper
+(`_build_admin_dashboard_turma_cards`, `periodo_corrente`,
+`_format_dashboard_hours`, `_format_dashboard_average`,
+`_format_dashboard_days`, `_calculate_pending_response_metrics`,
+`get_admin_new_request_alert`, `mark_admin_new_request_alert_seen`,
+`_admin_request_alert_kind`). Total de símbolos movidos: **10** (1 rota / 9
+helpers). Sem constante local de coorte no alvo.
+
+**Arquitetura:** LegacyRouteSpec — 1 spec / 1 par endpoint-method (GET
+`/admin/dashboard`, endpoint `admin_dashboard`, sem par HEAD); factory opt-out
+`register_admin_dashboard_blueprint` (default True) registrado via
+`register_legacy_blueprint` (exatamente 1 chamada); `main` facade 10/10 por
+identidade; zero ownership local dos símbolos movidos em `main.py` (0 defs, 0
+decorators `@app.route` da coorte); alvo com zero `@app.route`, zero imports/seams
+de `main`.
+
+**Preservação comportamental — MOVE, DO NOT CHANGE:** SQL / ordenação de query /
+filtros / contagens / cálculos de métrica / template e contexto / leituras de
+session / cache `g._adm_dash_metrics` + `g._adm_dash_ts` (30s) / timing de
+`conn.commit` / comportamento de `auto_indefer_devolvidas` / comportamento de
+request-alert (resolução de kind, shape do payload, fallbacks, lookup de
+receipts, INSERT OR IGNORE, namespacing de receipts, seen behavior,
+`resolve_user_message`) / comportamento de `list_active_admin_alertas` / closure
+de turma-cards (`periodo_corrente`, `get_effective_matriz_for_turma`,
+`ensure_turmas_matriz_schema`, estrutura de saída, lógica de attainment, Total
+Geral, formatação, fallbacks, `DEFAULT_CURSO_TOTAL_HORAS_AAC`/`AEU`) / métricas
+de resposta pendente (shape, parsing de tempo, overdue, reset_at, fallbacks)
+preservados exatamente. Dívida pré-existente de escrita/bootstrap em request
+path permanece dívida e não foi remediada.
+
+**Limites:** `admin_demo_clientes_form_pack` permanece main-owned;
+`admin_meus_dados` permanece main-owned (hard boundary nos dois estados) e NÃO
+é parte da UT-13 — permanece candidato a trabalho futuro separado. Donos
+canônicos compartilhados preservados: `list_active_admin_alertas` →
+app.admin_alerts; `ensure_requisicao_alert_receipts_table` →
+app.db_maintenance; `ensure_turmas_matriz_schema` → app.db;
+`get_effective_matriz_for_turma` → app.matrix_scope;
+`DEFAULT_CURSO_TOTAL_HORAS_AAC/AEU` → app.academics; `auto_indefer_devolvidas`
+→ app.requisitions; `get_response_time_settings` → app.settings;
+`_parse_optional_processing_datetime` → app.requisition_policy;
+`canonicalize_access_level`/`default_access_level_for_user_type`/`admin_required`
+→ app.auth; `resolve_user_message` → utils.messages. Owners sequenciais:
+Arquivos `app.views.admin.arquivos`; Alertas `app.views.admin.alertas`;
+Reportes `app.views.admin.reportes`; Dashboard `app.views.admin.dashboard`.
+
+**CSRF:** sem mudança de snapshot. Delta de owner Dashboard: **0** (GET-only).
+Totais históricos permanecem 35 / 43 / 48. Inventário do pacote admin:
++ `dashboard.py` apenas, com a mesma auditoria (sem `import main` /
+`__import__` / eval / exec / sys.modules / importlib).
+
+**RED:** 30 testes — 14 RED / 16 GREEN; 0 skip; 0 xfail.
+
+**Cronologia RED:** RED inicial: 30 testes / 14 RED / 16 GREEN, SHA
+`3ba52bf3743588348242a144f462c3c7e656ef242bf18da17c9a2c4b5fe8ad6f`. Achado: o
+`test_red_j` exigia incorretamente os vizinhos main-owned
+(`admin_demo_clientes_form_pack`, `admin_meus_dados`) dentro de instâncias
+`create_app`, contradizendo a arquitetura aceita (vizinhos registrados apenas
+em `main.app` via `@app.route`, nunca pela factory — protegido por
+`test_green_16`). Classificação: **RED_CONTRACT_DEFECT**. Correção autorizada
+pelo supervisor: remoção apenas das asserções positivas contraditórias de
+vizinhos na factory; `test_red_j` permanece contrato de factory; nenhum byte de
+produção foi alterado por causa do achado. RED congelado final (SHA):
+`63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`. Status:
+**RESOLVED**.
+
+**Reconciliação de seams históricos:** UT-12 (dois contratos de ownership do
+Dashboard tornados state-aware), Alunos/Turmas (ownership do helper Dashboard
+state-aware, baseline preservado), Alunos/Turmas shared owners (contrato
+`periodo_corrente` state-aware), Requisições (cláusula de ownership do
+Dashboard state-aware), Arquivos/Alertas (equivalência de baseline preservada
+contra o dono real), Configurações (inventário exato do pacote admin +1).
+**Classificação: TEST_CONTRACT_SEAM / LEGITIMATE_UT13_COCHANGE** — nenhum
+enfraquecimento de coorte anterior (Reportes/Alertas/Arquivos). Semântica dos
+seams: alvo real ausente → ownership `main` válida; alvo real presente → todos
+os 10 símbolos exatos target-owned + facade `main` 10/10; ownership misto
+rejeitado; vizinhos main-owned nos dois estados.
+
+**Lanes focadas:** UT-13 30/30; histórica 127/127; baseline 194/194;
+arquitetura 269/269; C4 36/36; comportamento Dashboard 17/17.
+
+**Revisão independente:** PASS / 0 achados materiais.
+
+**Suíte canônica final:** 1429 collected / 1412 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 357.96s.
+
+**Invariantes finais:** 131 / 130 / RBAC unmapped 0 / actor matrix 402 /
+catálogo de mensagens 536 / hooks_main 0 / dependências reversas `main` 0 /
+schema 3 / migrações v1-v3.
+
+**Disposição final:** UT-13 CLOSED / ACCEPTED / PUBLISHED.
+
+**Próxima:** UT-14 — NÃO INICIADA.

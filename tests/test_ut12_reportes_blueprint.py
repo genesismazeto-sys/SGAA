@@ -27,7 +27,8 @@ pre-extraction assertions; their protection migrates here via the RED
 contract (test_red_b / test_red_c / test_red_f / test_red_g / test_red_h /
 test_red_m / test_red_n), while the Dashboard half of the split stays
 characterized as a GREEN control that must survive extraction unchanged
-(test_green_8_dashboard_remains_main_owned).  The implementation phase may
+(test_green_8_dashboard_ownership_state_aware; the Dashboard later-cohort
+ownership became state-aware at UT-13).  The implementation phase may
 retire/reconcile only the Reportes half of the frozen B7-P assertions.
 
 CSRF owner contract (test_red_k): the two mutating Reportes handlers are
@@ -641,7 +642,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     )
 
 
-def test_red_m_target_owns_reportes_routes_dashboard_stays_main():
+def test_red_m_target_owns_reportes_routes_and_dashboard_split_state_aware():
     target = _target_module()
     assert target is not None, (
         "reportes module absent; Reportes-vs-Dashboard split contract unsatisfiable"
@@ -658,11 +659,35 @@ def test_red_m_target_owns_reportes_routes_dashboard_stays_main():
             f"live endpoint {name} must identity-match the target callable"
         )
 
-    for name in DASHBOARD_ROUTE_NAMES:
-        view = main.app.view_functions.get(name)
-        assert view is not None, f"live Dashboard endpoint {name} missing"
+    # UT-13 seam: only the Dashboard later-cohort ownership is state-aware.
+    # Expected state derives from REAL dashboard target availability.
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
+    if dashboard_path.exists():
+        import importlib
+
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        view = main.app.view_functions.get("admin_dashboard")
+        assert view is not None, "live Dashboard endpoint admin_dashboard missing"
+        assert view.__module__ == "app.views.admin.dashboard", (
+            "admin_dashboard must be owned by app.views.admin.dashboard after "
+            f"UT-13 extraction, got {view.__module__!r}"
+        )
+        assert view is dashboard.admin_dashboard, (
+            "live admin_dashboard must identity-match the dashboard target callable"
+        )
+    else:
+        view = main.app.view_functions.get("admin_dashboard")
+        assert view is not None, "live Dashboard endpoint admin_dashboard missing"
         assert view.__module__ == "main", (
-            f"Dashboard {name} must remain main-owned, got {view.__module__!r}"
+            "admin_dashboard must remain main-owned pre-target, "
+            f"got {view.__module__!r}"
+        )
+
+    for name in ("admin_demo_clientes_form_pack", "admin_meus_dados"):
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live Dashboard neighbor endpoint {name} missing"
+        assert view.__module__ == "main", (
+            f"Dashboard neighbor {name} must remain main-owned, got {view.__module__!r}"
         )
 
 
@@ -891,13 +916,38 @@ def test_green_7_reverse_deps_app_services_utils_main_zero():
     )
 
 
-def test_green_8_dashboard_remains_main_owned():
-    for name in DASHBOARD_ROUTE_NAMES:
-        view = main.app.view_functions.get(name)
-        assert view is not None, f"live Dashboard endpoint {name} missing"
+def test_green_8_dashboard_ownership_state_aware():
+    # UT-13 seam: the Dashboard cohort is target-owned when
+    # app/views/admin/dashboard.py exists; the neighbors stay main-owned in
+    # both states.
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
+    if dashboard_path.exists():
+        import importlib
+
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        view = main.app.view_functions.get("admin_dashboard")
+        assert view is not None, "live Dashboard endpoint admin_dashboard missing"
+        assert view is dashboard.admin_dashboard, (
+            "live admin_dashboard must identity-match the dashboard target"
+        )
+        assert view.__module__ == "app.views.admin.dashboard", (
+            "admin_dashboard must be owned by app.views.admin.dashboard after "
+            f"UT-13 extraction, got {view.__module__!r}"
+        )
+    else:
+        view = main.app.view_functions.get("admin_dashboard")
+        assert view is not None, "live Dashboard endpoint admin_dashboard missing"
         assert view.__module__ == "main", (
-            f"Dashboard {name} must remain main-owned (UT-13), "
+            "admin_dashboard must remain main-owned pre-target, "
             f"got {view.__module__!r}"
+        )
+
+    for name in ("admin_demo_clientes_form_pack", "admin_meus_dados"):
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live Dashboard neighbor endpoint {name} missing"
+        assert view.__module__ == "main", (
+            f"Dashboard neighbor {name} must remain main-owned (UT-13 hard "
+            f"boundary), got {view.__module__!r}"
         )
 
 

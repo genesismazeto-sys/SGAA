@@ -280,9 +280,35 @@ def test_b7p_uploaded_file_unchanged_from_entry_baseline():
 
 
 def test_b7p_admin_dashboard_unchanged_from_entry_baseline():
+    # UT-13 seam: the entry-baseline behavioral equivalence protection is
+    # preserved; only ownership/location evolves.  Post-target the comparison
+    # targets app/views/admin/dashboard.py and the main identity facade is
+    # proven exact.
     baseline_main = _baseline_text("main.py")
     baseline_dashboard = _find_function(baseline_main, "admin_dashboard")
-    current_dashboard = _find_function(_read_text(MAIN_PATH), "admin_dashboard")
+
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
+    if dashboard_path.exists():
+        import importlib
+        import main
+
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        view = main.app.view_functions.get("admin_dashboard")
+        assert view is not None, "live Dashboard endpoint admin_dashboard missing"
+        assert view.__module__ == "app.views.admin.dashboard", (
+            "admin_dashboard must be owned by app.views.admin.dashboard after "
+            f"extraction, got {view.__module__!r}"
+        )
+        assert view is dashboard.admin_dashboard, (
+            "live admin_dashboard must identity-match the dashboard target"
+        )
+        assert main.admin_dashboard is dashboard.admin_dashboard, (
+            "main.admin_dashboard must identity-re-export dashboard.admin_dashboard"
+        )
+        current_dashboard = _find_function(_read_text(dashboard_path), "admin_dashboard")
+    else:
+        current_dashboard = _find_function(_read_text(MAIN_PATH), "admin_dashboard")
+
     assert _dump_body(baseline_dashboard) == _dump_body(current_dashboard)
     assert ast.dump(baseline_dashboard.args) == ast.dump(current_dashboard.args)
 

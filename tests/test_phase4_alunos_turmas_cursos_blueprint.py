@@ -28,7 +28,8 @@ Contract covered here (GREEN targets):
      are equivalent modulo removal of ``@app.route`` and exactly the R1 dead
      keyword deletions; the exact ten helper bodies remain literally
      AST-equivalent;
-  8. ``periodo_corrente`` body unchanged against ``cab4c61`` and still main-local;
+  8. ``periodo_corrente`` body unchanged against ``cab4c61`` with a
+     state-aware owner (main pre-UT-13, app.views.admin.dashboard post-UT-13);
      ``_build_admin_dashboard_turma_cards`` still resolves/calls it; the exact
      three moved handlers carry no ``periodo_corrente`` reference and no
      template in ``templates/**`` contains the token;
@@ -792,14 +793,33 @@ def test_r1_three_dead_keywords_removed_exactly_and_no_fourth():
         ), f"helper body drift for {name}"
 
 
-def test_periodo_corrente_unchanged_against_baseline_and_still_main_local():
+def test_periodo_corrente_unchanged_against_baseline_and_state_aware_owner():
     baseline_tree = _baseline_main_tree()
-    current_tree = _tree(MAIN_PATH)
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
 
-    assert _function_body_dump(current_tree, "periodo_corrente") == _function_body_dump(
-        baseline_tree, "periodo_corrente"
-    )
-    assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
+    # UT-13 seam: expected owner derives from REAL dashboard target
+    # availability; the body must keep proving MOVE-VERBATIM against the
+    # baseline regardless of which owner is current.
+    if dashboard_path.exists():
+        dashboard_tree = _tree(dashboard_path)
+        assert _function_body_dump(dashboard_tree, "periodo_corrente") == _function_body_dump(
+            baseline_tree, "periodo_corrente"
+        )
+        assert "periodo_corrente" not in _top_level_functions(MAIN_PATH)
+        import importlib
+        import main
+
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        assert main.periodo_corrente is dashboard.periodo_corrente, (
+            "main.periodo_corrente must identity-re-export "
+            "dashboard.periodo_corrente"
+        )
+    else:
+        current_tree = _tree(MAIN_PATH)
+        assert _function_body_dump(current_tree, "periodo_corrente") == _function_body_dump(
+            baseline_tree, "periodo_corrente"
+        )
+        assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
 
     module = _canonical_module()
     assert "periodo_corrente" not in _top_level_functions(Path(module.__file__))
@@ -808,13 +828,26 @@ def test_periodo_corrente_unchanged_against_baseline_and_still_main_local():
 
 def test_build_admin_dashboard_turma_cards_still_resolves_and_calls_periodo_corrente():
     baseline_tree = _baseline_main_tree()
-    current_tree = _tree(MAIN_PATH)
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
 
-    assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
-    assert "_build_admin_dashboard_turma_cards" in _top_level_functions(MAIN_PATH)
-    assert _function_body_dump(
-        current_tree, "_build_admin_dashboard_turma_cards"
-    ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
+    # UT-13 seam: the body comparison must target the REAL current owner
+    # (dashboard.py once it exists, main.py before extraction).
+    if dashboard_path.exists():
+        dashboard_tree = _tree(dashboard_path)
+        assert "periodo_corrente" in _top_level_functions(dashboard_path)
+        assert "_build_admin_dashboard_turma_cards" in _top_level_functions(dashboard_path)
+        assert _function_body_dump(
+            dashboard_tree, "_build_admin_dashboard_turma_cards"
+        ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
+        assert "periodo_corrente" not in _top_level_functions(MAIN_PATH)
+        assert "_build_admin_dashboard_turma_cards" not in _top_level_functions(MAIN_PATH)
+    else:
+        current_tree = _tree(MAIN_PATH)
+        assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
+        assert "_build_admin_dashboard_turma_cards" in _top_level_functions(MAIN_PATH)
+        assert _function_body_dump(
+            current_tree, "_build_admin_dashboard_turma_cards"
+        ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
 
     import main
 

@@ -100,11 +100,28 @@ def test_no_local_main_function_for_the_nine():
     assert not NINE_SYMBOLS & _top_level_functions(MAIN_PATH)
 
 
-def test_periodo_corrente_stays_in_main():
-    assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
+def test_periodo_corrente_ownership_state_aware():
+    # UT-13 seam: periodo_corrente moved to app.views.admin.dashboard once the
+    # target exists; before extraction it stays main-local.  Expected state
+    # derives from REAL target availability.
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
     assert "periodo_corrente" not in _top_level_functions(ACADEMICS_PATH)
     assert "periodo_corrente" not in _top_level_functions(USER_ACCOUNTS_PATH)
     assert "periodo_corrente" not in _top_level_functions(WEB_REQUEST_PATH)
+    if dashboard_path.exists():
+        assert "periodo_corrente" in _top_level_functions(dashboard_path)
+        assert "periodo_corrente" not in _top_level_functions(MAIN_PATH)
+        import importlib
+        import main
+
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        assert main.periodo_corrente is dashboard.periodo_corrente, (
+            "main.periodo_corrente must identity-re-export "
+            "dashboard.periodo_corrente"
+        )
+    else:
+        assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
+        assert "periodo_corrente" not in _top_level_functions(dashboard_path)
 
 
 def test_main_reexports_all_nine_by_identity():

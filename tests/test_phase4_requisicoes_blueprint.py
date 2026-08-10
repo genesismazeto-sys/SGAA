@@ -889,7 +889,8 @@ def test_b1_b2_b3_b41_shared_owners_remain_intact():
         assert getattr(main, name) is getattr(atividades, name)
 
 
-def test_no_matriz_aluno_or_dashboard_route_was_moved():
+def test_no_matriz_aluno_route_was_moved_and_dashboard_ownership_state_aware():
+    import importlib
     import main
 
     # PHASE 4-B5-R1: the Matrizes handlers moved to app.views.admin.matrizes;
@@ -898,9 +899,20 @@ def test_no_matriz_aluno_or_dashboard_route_was_moved():
         assert endpoint in main.app.view_functions
         assert main.app.view_functions[endpoint].__module__ == "app.views.admin.matrizes"
 
-    for endpoint in ("admin_dashboard", "admin_meus_dados"):
-        assert endpoint in main.app.view_functions
-        assert main.app.view_functions[endpoint].__module__ == "main"
+    # UT-13 seam: only the Dashboard clause is state-aware; the neighbor
+    # admin_meus_dados stays main-owned in both states.
+    dashboard_path = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
+    if dashboard_path.exists():
+        dashboard = importlib.import_module("app.views.admin.dashboard")
+        assert main.app.view_functions["admin_dashboard"].__module__ == (
+            "app.views.admin.dashboard"
+        )
+        assert main.app.view_functions["admin_dashboard"] is dashboard.admin_dashboard, (
+            "live admin_dashboard must identity-match the dashboard target"
+        )
+    else:
+        assert main.app.view_functions["admin_dashboard"].__module__ == "main"
+    assert main.app.view_functions["admin_meus_dados"].__module__ == "main"
 
     for endpoint in (
         "aluno.aluno_dashboard",

@@ -556,6 +556,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
         "atividades.py",
         "banco_dados.py",
         "configuracoes.py",
+        "dashboard.py",
         "matrizes.py",
         "requisicoes.py",
         "versioning.py",

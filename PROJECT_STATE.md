@@ -7,18 +7,20 @@ UT-9 entry parent: `7909b2d59b2de987d84dc859a15bede215a3261b`
 UT-10 entry parent: `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`
 UT-11 entry parent: `a0092149c2c596f90932b8f83991a33e1f98c32c`
 UT-12 entry parent: `4820e4d3a46a1a3564c730d384b86aa989d752c9`
+UT-13 entry parent: `2e0afa34ed1b927014ac35875668bbdc132743ad`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-12 (Reportes) — CLOSED / ACCEPTED / PUBLISHED (published by
-this UT-12 landing commit, subject `Extract admin reports routes`, entry parent
-`4820e4d3`). Last completed work: UT-12 Reportes extraction — 3 routes / 3
-endpoint-method pairs / 1 helper function / 1 cohort-local constant (5 moved
-symbols) moved to `app/views/admin/reportes.py`. Prior landings: UT-11 Alertas
-extraction (parent `a0092149`); UT-10 Arquivos extraction (parent `e8f64a82`);
-C4 request-hook write isolation + STRUCTURAL PLATEAU publication (Phase-H
-landing commit, parent `230de41b`).
-Next UT: UT-13 — NOT STARTED.
+Last completed UT: UT-13 (Dashboard) — CLOSED / ACCEPTED / PUBLISHED (published by
+this UT-13 landing commit, subject `Extract admin dashboard route`, entry parent
+`2e0afa34`). Last completed work: UT-13 Dashboard extraction — 1 route / 1
+endpoint-method pair / 9 helper functions (10 moved symbols total) moved to
+`app/views/admin/dashboard.py`; `admin_meus_dados` is NOT part of UT-13 and
+remains candidate for separate future work. Prior landings: UT-12 Reportes
+extraction (parent `4820e4d3`); UT-11 Alertas extraction (parent `a0092149`);
+UT-10 Arquivos extraction (parent `e8f64a82`); C4 request-hook write isolation
++ STRUCTURAL PLATEAU publication (Phase-H landing commit, parent `230de41b`).
+Next UT: UT-14 — NOT STARTED.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -192,6 +194,105 @@ Canonical full-suite status: 1399 collected / 1382 passed / 17 deselected /
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
 ACCEPTED / PUBLISHED. Protocol remains: v1.3.
 
+## UT-13 — Dashboard — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this UT-13 landing commit (subject `Extract admin dashboard route`,
+entry parent `2e0afa34ed1b927014ac35875668bbdc132743ad`).
+
+Owner: `app/views/admin/dashboard.py`.
+
+Extracted cohort: 1 route (`admin_dashboard`, GET `/admin/dashboard`) /
+1 endpoint-method pair / 9 helper functions (`_build_admin_dashboard_turma_cards`,
+`periodo_corrente`, `_format_dashboard_hours`, `_format_dashboard_average`,
+`_format_dashboard_days`, `_calculate_pending_response_metrics`,
+`get_admin_new_request_alert`, `mark_admin_new_request_alert_seen`,
+`_admin_request_alert_kind`) — 10 moved symbols total. Compatibility facade:
+`main` identity re-exports = 10/10 (no wrappers, no duplicated implementation).
+Factory: `register_admin_dashboard_blueprint` default = true, registered through
+exactly one `register_legacy_blueprint`; opt-out removes exactly
+`admin_dashboard`. LegacyRouteSpecs: 1; endpoint/method pairs: 1 (no HEAD pair).
+
+Behavior: MOVE, DO NOT CHANGE — SQL / query ordering / filters / counts /
+metric calculations / template and context / session reads / `g._adm_dash_metrics`
+and `g._adm_dash_ts` 30-second cache / `conn.commit` timing /
+`auto_indefer_devolvidas` behavior / request-alert behavior /
+`list_active_admin_alertas` behavior / turma-card closure (periodo_corrente,
+`get_effective_matriz_for_turma`, `ensure_turmas_matriz_schema`, attainment,
+Total Geral, formatters, `DEFAULT_CURSO_TOTAL_HORAS_AAC/AEU`) / pending-response
+metrics preserved. Pre-existing request-path write/bootstrap behavior remains
+debt and was not remediated.
+
+Neighbors explicitly remain main-owned (hard boundary, both states):
+`admin_demo_clientes_form_pack` and `admin_meus_dados`.
+`admin_meus_dados` is NOT part of UT-13 and remains candidate for separate
+future work. Canonical dependency owners preserved (`list_active_admin_alertas`
+→ app.admin_alerts; `ensure_requisicao_alert_receipts_table` →
+app.db_maintenance; `ensure_turmas_matriz_schema` → app.db;
+`get_effective_matriz_for_turma` → app.matrix_scope;
+`DEFAULT_CURSO_TOTAL_HORAS_AAC/AEU` → app.academics; `auto_indefer_devolvidas`
+→ app.requisitions; `get_response_time_settings` → app.settings;
+`_parse_optional_processing_datetime` → app.requisition_policy;
+`canonicalize_access_level`/`default_access_level_for_user_type`/`admin_required`
+→ app.auth; `resolve_user_message` → utils.messages).
+
+Sequential owners: Arquivos `app.views.admin.arquivos`; Alertas
+`app.views.admin.alertas`; Reportes `app.views.admin.reportes`; Dashboard
+`app.views.admin.dashboard`.
+
+Canonical current invariants (measured): routes 131 / distinct endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalog 536 / hooks_main 0 /
+reverse dependencies app/services/utils → main 0 / SCHEMA_VERSION 3 /
+migrations v1/v2/v3 only / after_request[None] exactly
+`flask_compress.flask_compress.after_request` and `app._apply_security_headers`
+/ teardown_appcontext canonical owner `app.db.close_db_connection`.
+
+UT-13 historical seam reconciliation (supervisor-classified TEST_CONTRACT_SEAM /
+LEGITIMATE_UT13_COCHANGE — no production defect, no architecture change, no
+UT-12/UT-11/UT-10 reopening, not UT12_REOPEN / PRODUCTION_FIX / BUSINESS_CHANGE):
+the UT-12 Dashboard ownership contracts
+(`test_red_m_target_owns_reportes_routes_dashboard_stays_main` →
+`test_red_m_target_owns_reportes_routes_and_dashboard_split_state_aware`,
+`test_green_8_dashboard_remains_main_owned` →
+`test_green_8_dashboard_ownership_state_aware`), the Alunos/Turmas Dashboard
+helper ownership contracts
+(`test_periodo_corrente_unchanged_against_baseline_and_still_main_local` →
+`test_periodo_corrente_unchanged_against_baseline_and_state_aware_owner`),
+the Alunos/Turmas shared-owner `periodo_corrente` contract
+(`test_periodo_corrente_stays_in_main` →
+`test_periodo_corrente_ownership_state_aware`), the Requisicoes Dashboard
+ownership clause
+(`test_no_matriz_aluno_or_dashboard_route_was_moved` →
+`test_no_matriz_aluno_route_was_moved_and_dashboard_ownership_state_aware`),
+the Arquivos/Alertas Dashboard baseline ownership
+(`test_b7p_admin_dashboard_unchanged_from_entry_baseline`, name kept) and the
+Configuracoes exact admin package inventory (+ `dashboard.py` only) were
+reconciled narrowly. Replacement semantics: real dashboard target absent →
+historical main ownership valid; real target present → all 10 Dashboard symbols
+exact target-owned + main identity facade 10/10; mixed ownership rejected;
+neighbors remain main-owned in both states. Reportes/Alertas/Arquivos
+protections were not weakened.
+
+UT-13 RED correction (RED_CONTRACT_DEFECT / RESOLVED): the initial UT-13 RED
+(SHA `3ba52bf3743588348242a144f462c3c7e656ef242bf18da17c9a2c4b5fe8ad6f`)
+contained a contradictory factory-neighbor requirement — `test_red_j` demanded
+the main-owned neighbors `admin_demo_clientes_form_pack` and
+`admin_meus_dados` inside `create_app` instances, contradicting the accepted
+architecture (neighbors are registered only on `main.app` via `@app.route` and
+are never factory-registered, as `test_green_16` correctly protects).
+Supervisor-authorized narrow correction removed exactly the contradictory
+positive-neighbor factory assertions; no production byte was changed by or
+because of this finding. Final frozen RED SHA:
+`63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`.
+
+Canonical full-suite status: 1429 collected / 1412 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 357.96s.
+
+CSRF: Dashboard owner deltas = 0; historical cumulative totals remain
+35 / 43 / 48; both canonical snapshots byte-identical to HEAD.
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+
 ## Process anomalies — Phase-5 review tooling hygiene
 
 Two stray untracked review-tooling scripts from the prior independent-review
@@ -221,11 +322,13 @@ not require suite repetition. No candidate or DB byte changed.
 
 ## Latest full-suite status
 
-Canonical suite: 1399 collected / 1382 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 377.54s.
+Canonical suite: 1429 collected / 1412 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 357.96s.
+Frozen UT-13 RED `tests/test_ut13_dashboard_blueprint.py`: 30/30 passed;
+frozen SHA-256 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`.
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13 and plateau blocks).
 
 ## Database baseline
 

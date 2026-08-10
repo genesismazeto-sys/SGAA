@@ -801,12 +801,15 @@ do plateau (histórica): 1319 collected / 1302 passed / 17 deselected / 0 failed
 vigente após o landing da UT-11 (histórica): 1373 collected / 1356 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 368,73s. Suíte canônica vigente após o landing da UT-12:
 1399 collected / 1382 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 377,54s.
+Suíte canônica vigente após o landing da UT-13:
+1429 collected / 1412 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 357,96s.
 Invariantes: 131 / 130 / 0 / 402 /
 536 / 0. **Histórico preservado:** a primeira validação formal, sob o
 Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o ledger. UT-10:
 CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: CLOSED / ACCEPTED /
 PUBLISHED (ver bloco UT-11 abaixo). UT-12: CLOSED / ACCEPTED / PUBLISHED (ver bloco
-UT-12 abaixo). UT-13: NÃO INICIADA.
+UT-12 abaixo). UT-13: CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-13 abaixo).
+UT-14: NÃO INICIADA.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -844,10 +847,31 @@ Arquivos/Alertas/Dashboard preservadas). Suíte canônica final: 1399 collected 
 17 deselected / 0 failed / 0 errors / 0 skipped / 377,54s. Invariantes finais: 131 / 130 /
 0 / 402 / 536 / 0. UT-13: NÃO INICIADA.
 
+**UT-13 — Coorte Dashboard: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
+`Extract admin dashboard route`; pai de entrada `2e0afa34ed1b927014ac35875668bbdc132743ad`).
+Extração: 1 rota (`admin_dashboard`, GET `/admin/dashboard`) / 1 par endpoint-method /
+9 helpers para `app/views/admin/dashboard.py`; facade de compatibilidade `main` 10/10 por
+identidade; owner `app/views/admin/dashboard.py`; factory opt-out
+`register_admin_dashboard_blueprint` (default True); LegacyRouteSpec 1 spec / 1 par.
+Vizinhos excluídos (hard boundary): `admin_demo_clientes_form_pack` e `admin_meus_dados`
+permanecem main-owned; `admin_meus_dados` não faz parte da UT-13 (trabalho futuro separado).
+Seam de contrato de teste (TEST_CONTRACT_SEAM / LEGITIMATE_UT13_COCHANGE): contratos
+históricos de ownership do Dashboard em UT-12 / Alunos-Turmas / shared owners /
+Requisições / Arquivos-Alertas / Configurações tornaram-se state-aware (alvo real ausente →
+ownership `main`; alvo real presente → 10 símbolos exatos target-owned + facade `main`
+10/10; ownership misto rejeitado; vizinhos main-owned nos dois estados). Correção RED
+(RED_CONTRACT_DEFECT / RESOLVED): o RED inicial (SHA `3ba52bf3…`) exigia vizinhos
+main-owned dentro de instâncias `create_app` no `test_red_j`; correção estreita autorizada
+removeu apenas as asserções positivas contraditórias; RED congelado final
+`63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`; nenhum byte de produção
+alterado pelo achado. Suíte canônica final: 1429 collected / 1412 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 357,96s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
+UT-14: NÃO INICIADA.
+
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-12 | Coorte Reportes | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1382 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
-| UT-13 | Dashboard + meus_dados | | | | | | 0 | | 2 | |
+| UT-13 | Coorte Dashboard | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1412 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-14 | Infra | | | | | | 0 | | 1 | |
 | — | **REFACTOR ESTRUTURAL COMPLETO** | | | | | | 0 | | | |
 
