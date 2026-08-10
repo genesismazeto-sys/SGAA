@@ -232,16 +232,43 @@ def test_b7p_aluno_lazy_map_reduced_to_exactly_two_requisicoes_keys():
 # UT-10: the Arquivos half of the pre-extraction frozen assertion is retired
 # (ownership is now proven by tests/test_ut10_arquivos_blueprint.py).  UT-11:
 # the Alertas half is likewise retired (ownership is now proven by
-# tests/test_ut11_alertas_blueprint.py); only the Reportes half remains
-# frozen main-local with exact characterization.
-def test_b7p_non_ut11_reportes_handlers_remain_main_local():
-    assert REPORTES_ROUTE_NAMES == {
-        "admin_reportes",
-        "admin_reportes_atualizar_status",
-        "admin_reportes_deletar",
-    }, "UT-11 retires only the Alertas half; Reportes stay frozen"
-    main_functions = _top_level_functions(MAIN_PATH)
-    assert REPORTES_ROUTE_NAMES <= main_functions
+# tests/test_ut11_alertas_blueprint.py).  UT-12: the Reportes half is now
+# retired here and protected by tests/test_ut12_reportes_blueprint.py.
+# Post-UT12, Reportes handlers must be target-owned by
+# app.views.admin.reportes with an exact main identity facade (5/5, no
+# wrappers).  This is a state-invariant contract: if the target is absent
+# (pre-extraction) the handlers remain main-owned as a valid fallback.
+def test_b7p_reportes_target_owned_with_main_identity_compatibility():
+    import importlib
+    import main
+
+    reportes_path = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
+    if reportes_path.exists():
+        reportes = importlib.import_module("app.views.admin.reportes")
+        for name in REPORTES_ROUTE_NAMES:
+            view = main.app.view_functions.get(name)
+            assert view is not None, f"live endpoint {name} missing"
+            assert view.__module__ == "app.views.admin.reportes", (
+                f"{name} must be owned by app.views.admin.reportes after "
+                f"extraction, got {view.__module__!r}"
+            )
+            assert view is getattr(reportes, name), (
+                f"live endpoint {name} must identity-match the reportes target"
+            )
+            assert getattr(main, name) is getattr(reportes, name), (
+                f"main.{name} must identity-re-export reportes.{name}"
+            )
+        assert main._reporte_status_badge_type is reportes._reporte_status_badge_type, (
+            "main._reporte_status_badge_type must identity-re-export "
+            "reportes._reporte_status_badge_type"
+        )
+        assert main.REPORTE_STATUS_OPTIONS is reportes.REPORTE_STATUS_OPTIONS, (
+            "main.REPORTE_STATUS_OPTIONS must identity-re-export "
+            "reportes.REPORTE_STATUS_OPTIONS"
+        )
+    else:
+        main_functions = _top_level_functions(MAIN_PATH)
+        assert REPORTES_ROUTE_NAMES <= main_functions
 
 
 def test_b7p_uploaded_file_unchanged_from_entry_baseline():
@@ -260,7 +287,12 @@ def test_b7p_admin_dashboard_unchanged_from_entry_baseline():
     assert ast.dump(baseline_dashboard.args) == ast.dump(current_dashboard.args)
 
 
-def test_b7p_reportes_ownership_unchanged():
+# UT-12: Reportes shared canonical owners (ensure_reportes_table in
+# app.db_maintenance and REPORTE_CATEGORY_OPTIONS in app.reporting) remain
+# unchanged and are NOT part of the moved cohort.  The former B7-P frozen
+# ownership protection is replaced by the UT-12 RED
+# (tests/test_ut12_reportes_blueprint.py).
+def test_b7p_reportes_shared_owners_stay_canonical():
     db_maintenance_functions = _top_level_functions(DB_MAINTENANCE_PATH)
     assert "ensure_reportes_table" in db_maintenance_functions
 

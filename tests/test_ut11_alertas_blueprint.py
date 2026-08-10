@@ -720,7 +720,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     )
 
 
-def test_red_m_target_owns_alertas_routes_reportes_stay_main():
+def test_red_m_target_owns_alertas_routes_reportes_conditional_on_owner():
     target = _target_module()
     assert target is not None, (
         "alertas module absent; Alertas-vs-Reportes split contract unsatisfiable"
@@ -737,18 +737,41 @@ def test_red_m_target_owns_alertas_routes_reportes_stay_main():
             f"live endpoint {name} must identity-match the target callable"
         )
 
-    main_source = MAIN_PATH.read_text(encoding="utf-8-sig")
-    defined = _top_level_defs(main_source)
-    for name in NON_UT11_MAIN_OWNED_HANDLERS:
-        assert name in defined, (
-            f"{name} must remain locally defined in main.py (Reportes stay "
-            "main-owned through UT-11)"
-        )
-        reportes_view = main.app.view_functions.get(name)
-        assert reportes_view is not None, f"live endpoint {name} missing"
-        assert reportes_view.__module__ == "main", (
-            f"{name} must remain main-owned, got {reportes_view.__module__!r}"
-        )
+    # Reportes: main-owned only while their canonical owner does not exist
+    # (pre-UT12). Once the real Reportes target exists, they must be
+    # target-owned by app.views.admin.reportes with exact main identity
+    # compatibility (UT-12 TEST_CONTRACT_SEAM).
+    reportes_path = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
+    if reportes_path.exists():
+        import importlib as _importlib
+
+        reportes = _importlib.import_module("app.views.admin.reportes")
+        for name in NON_UT11_MAIN_OWNED_HANDLERS:
+            view = main.app.view_functions.get(name)
+            assert view is not None, f"live endpoint {name} missing"
+            assert inspect.unwrap(view).__module__ == "app.views.admin.reportes", (
+                f"{name} must be owned by app.views.admin.reportes, "
+                f"got {inspect.unwrap(view).__module__!r}"
+            )
+            assert view is getattr(reportes, name), (
+                f"live endpoint {name} must identity-match the reportes target"
+            )
+            assert getattr(main, name) is getattr(reportes, name), (
+                f"main.{name} must identity-re-export reportes.{name}"
+            )
+    else:
+        main_source = MAIN_PATH.read_text(encoding="utf-8-sig")
+        defined = _top_level_defs(main_source)
+        for name in NON_UT11_MAIN_OWNED_HANDLERS:
+            assert name in defined, (
+                f"{name} must remain locally defined in main.py (Reportes stay "
+                "main-owned through UT-11)"
+            )
+            reportes_view = main.app.view_functions.get(name)
+            assert reportes_view is not None, f"live endpoint {name} missing"
+            assert reportes_view.__module__ == "main", (
+                f"{name} must remain main-owned, got {reportes_view.__module__!r}"
+            )
 
 
 def test_red_n_blueprint_identity_and_dotless_live_endpoints():
@@ -1015,19 +1038,35 @@ def test_green_7_reverse_deps_app_services_utils_main_zero():
     )
 
 
-def test_green_8_reportes_remain_main_owned_three_of_three():
-    source = MAIN_PATH.read_text(encoding="utf-8-sig")
-    defined = _top_level_defs(source)
-    for name in NON_UT11_MAIN_OWNED_HANDLERS:
-        assert name in defined, (
-            f"{name} must still be locally defined in main.py "
-            "(Reportes stay main-owned through UT-11)"
-        )
-        view = main.app.view_functions.get(name)
-        assert view is not None, f"live endpoint {name} missing"
-        assert view.__module__ == "main", (
-            f"{name} must remain main-owned, got {view.__module__!r}"
-        )
+def test_green_8_reportes_conditional_on_owner():
+    reportes_path = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
+    if reportes_path.exists():
+        import importlib as _ilib
+
+        reportes = _ilib.import_module("app.views.admin.reportes")
+        for name in NON_UT11_MAIN_OWNED_HANDLERS:
+            view = main.app.view_functions.get(name)
+            assert view is not None, f"live endpoint {name} missing"
+            assert view.__module__ == "app.views.admin.reportes", (
+                f"{name} must be owned by app.views.admin.reportes, "
+                f"got {view.__module__!r}"
+            )
+            assert getattr(main, name, None) is getattr(reportes, name), (
+                f"main.{name} must identity-re-export reportes.{name}"
+            )
+    else:
+        source = MAIN_PATH.read_text(encoding="utf-8-sig")
+        defined = _top_level_defs(source)
+        for name in NON_UT11_MAIN_OWNED_HANDLERS:
+            assert name in defined, (
+                f"{name} must remain locally defined in main.py "
+                "(Reportes stay main-owned while reportes.py is absent)"
+            )
+            view = main.app.view_functions.get(name)
+            assert view is not None, f"live endpoint {name} missing"
+            assert view.__module__ == "main", (
+                f"{name} must remain main-owned, got {view.__module__!r}"
+            )
 
 
 def test_green_9_arquivos_remains_extracted_and_shared_owners_not_moved():

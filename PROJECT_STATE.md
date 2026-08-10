@@ -6,17 +6,19 @@ Plateau landing parent: `230de41b3439a60951049e9021d6b0063f3bc2db`
 UT-9 entry parent: `7909b2d59b2de987d84dc859a15bede215a3261b`
 UT-10 entry parent: `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`
 UT-11 entry parent: `a0092149c2c596f90932b8f83991a33e1f98c32c`
+UT-12 entry parent: `4820e4d3a46a1a3564c730d384b86aa989d752c9`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-11 (Alertas) — CLOSED / ACCEPTED / PUBLISHED (published by
-this UT-11 landing commit, subject `Extract admin alerts routes`, entry parent
-`a0092149`). Last completed work: UT-11 Alertas extraction — 4 routes / 4
-endpoint-method pairs / 3 helper functions / 1 cohort-local constant (8 moved
-symbols) moved to `app/views/admin/alertas.py`. Prior landing: UT-10 Arquivos
-extraction (parent `e8f64a82`); C4 request-hook write isolation + STRUCTURAL
-PLATEAU publication (Phase-H landing commit, parent `230de41b`).
-Next UT: UT-12 — NOT STARTED.
+Last completed UT: UT-12 (Reportes) — CLOSED / ACCEPTED / PUBLISHED (published by
+this UT-12 landing commit, subject `Extract admin reports routes`, entry parent
+`4820e4d3`). Last completed work: UT-12 Reportes extraction — 3 routes / 3
+endpoint-method pairs / 1 helper function / 1 cohort-local constant (5 moved
+symbols) moved to `app/views/admin/reportes.py`. Prior landings: UT-11 Alertas
+extraction (parent `a0092149`); UT-10 Arquivos extraction (parent `e8f64a82`);
+C4 request-hook write isolation + STRUCTURAL PLATEAU publication (Phase-H
+landing commit, parent `230de41b`).
+Next UT: UT-13 — NOT STARTED.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -147,6 +149,58 @@ Canonical full-suite status: 1373 collected / 1356 passed / 17 deselected /
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
 ACCEPTED / PUBLISHED. Protocol remains: v1.3.
 
+## UT-12 — Reportes — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this UT-12 landing commit (subject `Extract admin reports routes`,
+entry parent `4820e4d3a46a1a3564c730d384b86aa989d752c9`).
+
+Owner: `app/views/admin/reportes.py`.
+
+Extracted cohort: 3 routes / 3 endpoint-method pairs / 1 helper function /
+1 cohort-local constant (`REPORTE_STATUS_OPTIONS`) — 5 moved symbols total.
+Compatibility facade: `main` identity re-exports = 5/5 (no wrappers, no copied
+constant). Factory: `register_admin_reportes_blueprint` default = true.
+
+Canonical shared owners preserved: `REPORTE_CATEGORY_OPTIONS` remains in
+`app.reporting`; `ensure_reportes_table` remains in `app.db_maintenance`.
+
+Boundaries preserved: Dashboard remains main-owned; Alertas remains
+`app.views.admin.alertas`; Arquivos remains `app.views.admin.arquivos`;
+UT-13 NOT STARTED.
+
+Canonical current invariants (measured): routes 131 / distinct endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalog 536 / hooks_main 0 /
+reverse dependencies app/services/utils → main 0 / SCHEMA_VERSION 3 /
+migrations v1/v2/v3 only / after_request[None] exactly
+`flask_compress.flask_compress.after_request` and `app._apply_security_headers`
+/ teardown_appcontext canonical owner `app.db.close_db_connection`.
+
+UT-12 test-contract seam (supervisor-authorized TEST_CONTRACT_SEAM /
+LEGITIMATE_UT12_COCHANGE — no production defect, no architecture change, no
+UT-10/UT-11 reopening): historical UT-10/UT-11/B7-P contracts correctly
+encoded Reportes main residency in their original states but became stale when
+UT-12 legitimately extracted Reportes. The supervisor explicitly authorized
+narrow state-aware reconciliation. Replacement semantics: real reportes target
+absent → historical main ownership expected; real target present → exact
+`app.views.admin.reportes` ownership; main compatibility requires identity;
+mixed ownership rejected; Arquivos, Alertas and Dashboard protections
+preserved. Not: UT10_REOPEN / UT11_REOPEN / PRODUCTION_FIX / ARCHITECTURE_CHANGE.
+
+Canonical full-suite status: 1399 collected / 1382 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 377.54s.
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.3.
+
+## Process anomalies — Phase-5 review tooling hygiene
+
+Two stray untracked review-tooling scripts from the prior independent-review
+phase (`measure_invariants.py`, `verify_rbac_matrix.py`) were found and removed
+before the canonical full suite. Classification: NON_MATERIAL PROCESS
+DEVIATION / REVIEW_TOOLING_HYGIENE. They were not candidate files, did not
+affect any qualified byte, were not present during the canonical suite, and do
+not require suite repetition. No candidate or DB byte changed.
+
 ## Invariants (last measured)
 
 - routes: 131
@@ -167,11 +221,11 @@ ACCEPTED / PUBLISHED. Protocol remains: v1.3.
 
 ## Latest full-suite status
 
-Canonical suite: 1373 collected / 1356 passed / 17 deselected / 0 failed / 0 errors / 368.73s.
+Canonical suite: 1399 collected / 1382 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 377.54s.
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12 and plateau blocks).
 
 ## Database baseline
 

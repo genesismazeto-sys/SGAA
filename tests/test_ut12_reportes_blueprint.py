@@ -1,39 +1,46 @@
-"""UT-10 RED — Arquivos cohort extraction contract.
+"""UT-12 RED — Reportes cohort extraction contract.
 
-Future canonical owner: ``app/views/admin/arquivos.py``.
+Future canonical owner: ``app/views/admin/reportes.py``.
 
-Authoritative relocated-symbol manifest (9 symbols):
-- 5 routes (LegacyRouteSpec-preserving);
-- 4 cohort-exclusive helpers;
-- 0 cohort-exclusive constants.
+Authoritative relocated-symbol manifest (5 symbols):
+- 3 routes (LegacyRouteSpec-preserving);
+- 1 cohort-exclusive helper (``_reporte_status_badge_type``);
+- 1 cohort-exclusive constant (``REPORTE_STATUS_OPTIONS``).
 
 This file contains exactly 26 collected tests:
-- tests ``test_red_a``..``test_red_o`` are FUTURE ARCHITECTURAL CONTRACT
+- tests ``test_red_a``..``test_red_n`` are FUTURE ARCHITECTURAL CONTRACT
   assertions; while the target module is absent they fail with plain
   AssertionError only (no ImportError / ModuleNotFoundError / AttributeError /
   TypeError / fixture or collection error);
-- tests ``test_green_1``..``test_green_11`` characterize CURRENT behavior and
+- tests ``test_green_1``..``test_green_12`` characterize CURRENT behavior and
   invariant controls that implementation is forbidden to change.
 
 Collection-safety rule: the future module is imported only through a guarded
 loader after its file existence is established; sentinels are used instead of
-exception-based RED signals. No parametrization changes the collected count.
+exception-based RED signals.  No parametrization changes the collected count.
 
-B7-P retirement substitution (EXECUTION_PROTOCOL.md §8, UT-10 row):
-``test_b7p_zero_route_movement_all_twelve_handlers_remain_main_local`` in
-tests/test_phase4_arquivos_alertas_shared_owners.py is the frozen pre-
-extraction assertion; the Arquivos half of it is replaced here by the RED
-contract (test_red_b / test_red_c / test_red_f / test_red_g / test_red_n),
-while the Alertas/Reportes half is preserved and re-characterized as a
-GREEN control that must survive extraction unchanged
-(test_green_8_non_ut10_handlers_remain_main_owned). The implementation phase
-may retire/reconcile only the Arquivos half of the frozen B7-P assertion.
+B7-P retirement substitution (EXECUTION_PROTOCOL.md §8, UT-12 row):
+``test_b7p_reportes_ownership_unchanged`` and
+``test_b7p_non_ut11_reportes_handlers_remain_main_local`` in
+tests/test_phase4_arquivos_alertas_shared_owners.py are the frozen
+pre-extraction assertions; their protection migrates here via the RED
+contract (test_red_b / test_red_c / test_red_f / test_red_g / test_red_h /
+test_red_m / test_red_n), while the Dashboard half of the split stays
+characterized as a GREEN control that must survive extraction unchanged
+(test_green_8_dashboard_remains_main_owned).  The implementation phase may
+retire/reconcile only the Reportes half of the frozen B7-P assertions.
 
-CSRF owner contract (test_red_k): the three mutating Arquivos handlers are
+CSRF owner contract (test_red_k): the two mutating Reportes handlers are
 currently encoded in both canonical CSRF inventories as main-owned; after
-extraction they must be ``app.views.admin.arquivos.<function>``. The
+extraction they must be ``app.views.admin.reportes.<function>``.  The
 snapshots are read-only here; regeneration is a coherent-pair step of the
 implementation phase, never part of RED.
+
+Shared canonical owners are NOT moved into the target:
+``ensure_reportes_table`` (app.db_maintenance) and ``REPORTE_CATEGORY_OPTIONS``
+(app.reporting) stay where they are; the routes retain their exact
+schema-ensure behavior (UT-12 is MOVE, DO NOT CHANGE — no C4/schema
+cleanup, no migration v4).
 """
 
 from __future__ import annotations
@@ -58,46 +65,37 @@ import main
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "arquivos.py"
-TARGET_REL = "app/views/admin/arquivos.py"
-TARGET_MODULE_NAME = "app.views.admin.arquivos"
+TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
+TARGET_REL = "app/views/admin/reportes.py"
+TARGET_MODULE_NAME = "app.views.admin.reportes"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CREATE_APP_PATH = PROJECT_ROOT / "app" / "__init__.py"
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
-FROZEN_ENTRY_AUTH_SHA256 = (
-    "f5aac76c78252cd9c3d48ae3d1a438a1fdc2bc008d12dd60c9bab336e26b51ce"
-)
-
 ROUTE_NAMES = (
-    "admin_arquivos",
-    "admin_adicionar_arquivo",
-    "admin_editar_arquivo",
-    "admin_visualizar_arquivo",
-    "admin_deletar_arquivo",
+    "admin_reportes",
+    "admin_reportes_atualizar_status",
+    "admin_reportes_deletar",
 )
 
-HELPER_NAMES = (
-    "_redirect_admin_arquivos_return",
-    "_list_admin_arquivos_rows",
-    "_save_admin_arquivo_payload",
-    "_best_effort_remove_admin_arquivo_file",
-)
+HELPER_NAMES = ("_reporte_status_badge_type",)
 
-CONSTANT_NAMES: tuple[str, ...] = ()
+CONSTANT_NAMES = ("REPORTE_STATUS_OPTIONS",)
 
 MOVED_SYMBOLS = ROUTE_NAMES + HELPER_NAMES + CONSTANT_NAMES
 
 ROUTE_MATRIX = (
-    ("/admin/arquivos", "admin_arquivos", ("GET",)),
-    ("/admin/arquivos/adicionar", "admin_adicionar_arquivo", ("POST",)),
+    ("/admin/reportes", "admin_reportes", ("GET",)),
     (
-        "/admin/arquivos/<int:arquivo_id>/editar",
-        "admin_editar_arquivo",
-        ("GET", "POST"),
+        "/admin/reportes/<int:reporte_id>/status",
+        "admin_reportes_atualizar_status",
+        ("POST",),
     ),
-    ("/admin/arquivos/<int:arquivo_id>/visualizar", "admin_visualizar_arquivo", ("GET",)),
-    ("/admin/arquivos/<int:arquivo_id>/deletar", "admin_deletar_arquivo", ("POST",)),
+    (
+        "/admin/reportes/<int:reporte_id>/deletar",
+        "admin_reportes_deletar",
+        ("POST",),
+    ),
 )
 
 EXPECTED_PAIRS = frozenset(
@@ -105,70 +103,46 @@ EXPECTED_PAIRS = frozenset(
 )
 
 RBAC_MATRIX = {
-    "admin_arquivos": ("arquivos", "view"),
-    "admin_adicionar_arquivo": ("arquivos", "edit"),
-    "admin_editar_arquivo": ("arquivos", "edit"),
-    "admin_visualizar_arquivo": ("arquivos", "view"),
-    "admin_deletar_arquivo": ("arquivos", "full"),
+    "admin_reportes": ("reportes", "view"),
+    "admin_reportes_atualizar_status": ("reportes", "edit"),
+    "admin_reportes_deletar": ("reportes", "full"),
 }
 
-COHORT_RULE_PREFIXES = ("/admin/arquivos",)
+SCOPE_COUNTS = {"view": 1, "edit": 1, "full": 1}
 
-# Non-UT10 handlers that must remain main-owned through UT-10: Reportes (3)
-# always; Alertas (4) only while app/views/admin/alertas.py does not exist
-# (UT-11 legitimately moves them to their own canonical owner). Frozen
-# substitute for the non-Arquivos half of
-# test_b7p_zero_route_movement_all_twelve_handlers...
-NON_UT10_MAIN_OWNED_HANDLERS = (
-    "admin_alertas",
-    "admin_salvar_alerta",
-    "admin_alternar_alerta",
-    "admin_deletar_alerta",
-    "admin_reportes",
-    "admin_reportes_atualizar_status",
-    "admin_reportes_deletar",
+COHORT_RULE_PREFIXES = ("/admin/reportes",)
+
+DASHBOARD_ROUTE_NAMES = (
+    "admin_dashboard",
+    "admin_demo_clientes_form_pack",
+    "admin_meus_dados",
 )
 
-REPORTES_MAIN_OWNED_HANDLERS = (
-    "admin_reportes",
-    "admin_reportes_atualizar_status",
-    "admin_reportes_deletar",
+TWO_POST_URLS = (
+    "/admin/reportes/1/status",
+    "/admin/reportes/1/deletar",
 )
 
-ALERTAS_MAIN_OWNED_HANDLERS = (
-    "admin_alertas",
-    "admin_salvar_alerta",
-    "admin_alternar_alerta",
-    "admin_deletar_alerta",
-)
-
-THREE_POST_URLS = (
-    "/admin/arquivos/adicionar",
-    "/admin/arquivos/1/editar",
-    "/admin/arquivos/1/deletar",
-)
-
-ARQUIVOS_POST_ROUTE_ENDPOINTS = {
-    "/admin/arquivos/adicionar": "admin_adicionar_arquivo",
-    "/admin/arquivos/<int:arquivo_id>/editar": "admin_editar_arquivo",
-    "/admin/arquivos/<int:arquivo_id>/deletar": "admin_deletar_arquivo",
+REPORTES_POST_ROUTE_ENDPOINTS = {
+    "/admin/reportes/<int:reporte_id>/status": "admin_reportes_atualizar_status",
+    "/admin/reportes/<int:reporte_id>/deletar": "admin_reportes_deletar",
 }
 
-FROZEN_ARQUIVOS_ROW_SHAPE = {
-    "/admin/arquivos/<int:arquivo_id>/deletar": {
+FROZEN_REPORTE_STATUS_OPTIONS = (
+    "Novo",
+    "Em análise",
+    "Resolvido",
+)
+
+FROZEN_REPORTES_ROW_SHAPE = {
+    "/admin/reportes/<int:reporte_id>/deletar": {
         "csrf_in_html": None,
         "evidence": [
             {
                 "kind": "dynamic_form",
-                "page": "/admin/arquivos",
+                "page": "/admin/reportes",
                 "attr": "data-delete-url",
-                "action": "/admin/arquivos/1/deletar",
-                "token_mode": "helper_or_hidden",
-            },
-            {
-                "kind": "dynamic_form",
-                "page": "/admin/arquivos",
-                "action": "/admin/arquivos/0/deletar",
+                "action": "/admin/reportes/1/deletar",
                 "token_mode": "helper_or_hidden",
             },
         ],
@@ -180,62 +154,28 @@ FROZEN_ARQUIVOS_ROW_SHAPE = {
         "notes": [],
         "requires_login": "admin",
         "risk": [],
-        "route": "/admin/arquivos/<int:arquivo_id>/deletar",
+        "route": "/admin/reportes/<int:reporte_id>/deletar",
         "status": "ok_dynamic_form_token",
         "template_related": [],
         "token_counts_per_form": [],
     },
-    "/admin/arquivos/<int:arquivo_id>/editar": {
+    "/admin/reportes/<int:reporte_id>/status": {
         "csrf_in_html": None,
-        "evidence": [
-            {
-                "kind": "dynamic_form",
-                "page": "/admin/arquivos",
-                "action": "/admin/arquivos/0/editar",
-                "token_mode": "helper_or_hidden",
-            }
-        ],
-        "fetch_sends_token": None,
-        "has_dynamic_form": True,
-        "has_fetch_post": False,
-        "has_post_form": False,
-        "method": "POST",
-        "notes": [],
-        "requires_login": "admin",
-        "risk": [],
-        "route": "/admin/arquivos/<int:arquivo_id>/editar",
-        "status": "ok_dynamic_form_token",
-        "template_related": [],
-        "token_counts_per_form": [],
-    },
-    "/admin/arquivos/adicionar": {
-        "csrf_in_html": True,
-        "evidence": [
-            {
-                "kind": "rendered_form",
-                "page": "/admin/arquivos",
-                "action": "/admin/arquivos/adicionar",
-                "token_count": 1,
-            }
-        ],
+        "evidence": [],
         "fetch_sends_token": None,
         "has_dynamic_form": False,
         "has_fetch_post": False,
-        "has_post_form": True,
+        "has_post_form": False,
         "method": "POST",
-        "notes": [],
+        "notes": [
+            "tests/test_release_admin_actions_csrf.py::test_release_admin_post_actions_require_active_csrf_token",
+        ],
         "requires_login": "admin",
         "risk": [],
-        "route": "/admin/arquivos/adicionar",
-        "status": "ok_rendered_form_token",
+        "route": "/admin/reportes/<int:reporte_id>/status",
+        "status": "ok_specific_regression_test",
         "template_related": [],
-        "token_counts_per_form": [
-            {
-                "page": "/admin/arquivos",
-                "action": "/admin/arquivos/adicionar",
-                "token_counts": [1],
-            }
-        ],
+        "token_counts_per_form": [],
     },
 }
 
@@ -245,12 +185,6 @@ FROZEN_ARQUIVOS_ROW_SHAPE = {
 
 
 def _target_module():
-    """Return the future module, or None while its file does not exist.
-
-    The import is performed only after file existence is established, so a
-    missing target yields None (asserted by callers) instead of an
-    ImportError-based RED signal.
-    """
     if not TARGET_PATH.exists():
         return None
     import importlib
@@ -309,7 +243,7 @@ def _cohort_route_decorators(source: str) -> list[str]:
             ):
                 continue
             rule = str(decorator.args[0].value)
-            if rule.startswith(COHORT_RULE_PREFIXES):
+            if any(rule.startswith(prefix) for prefix in COHORT_RULE_PREFIXES):
                 hits.append(rule)
     return hits
 
@@ -405,38 +339,47 @@ def _all_main_hooks() -> list[str]:
 
 
 # ===========================================================================
-# RED — future architectural contract (A..O)
+# RED — future architectural contract (A..N)
 # ===========================================================================
 
 
 def test_red_a_target_module_file_exists():
     assert TARGET_PATH.exists(), (
-        "app/views/admin/arquivos.py does not exist yet; UT-10 must create it"
+        "app/views/admin/reportes.py does not exist yet; UT-12 must create it"
     )
 
 
-def test_red_b_target_owns_exact_nine_symbols_zero_constants():
+def test_red_b_target_owns_exact_five_symbols_one_constant():
     target = _target_module()
-    assert target is not None, "arquivos module absent; 9-symbol ownership contract unsatisfiable"
+    assert target is not None, (
+        "reportes module absent; 5-symbol ownership contract unsatisfiable"
+    )
 
     source = Path(target.__file__).read_text(encoding="utf-8-sig")
     top_level = _top_level_defs(source)
     assigned = _top_level_assignments(source)
 
     assert top_level == set(ROUTE_NAMES) | set(HELPER_NAMES), (
-        f"target top-level functions must be exactly the 9 moved callables; "
+        f"target top-level functions must be exactly the 4 moved callables; "
         f"missing={sorted((set(ROUTE_NAMES) | set(HELPER_NAMES)) - top_level)} "
         f"extra={sorted(top_level - (set(ROUTE_NAMES) | set(HELPER_NAMES)))}"
     )
-    assert not (set(CONSTANT_NAMES) - assigned), (
-        "the Arquivos cohort moves zero constants; none may be defined or "
-        "redefined inside the target"
+    assert "REPORTE_STATUS_OPTIONS" in assigned, (
+        "target must define REPORTE_STATUS_OPTIONS as a top-level assignment"
     )
+    for name in ROUTE_NAMES + HELPER_NAMES:
+        obj = getattr(target, name, None)
+        assert obj is not None, f"target.{name} missing"
+        if callable(obj):
+            assert inspect.unwrap(obj).__module__ == TARGET_MODULE_NAME, (
+                f"target.{name} must be defined in app.views.admin.reportes, "
+                f"got {inspect.unwrap(obj).__module__!r}"
+            )
 
 
-def test_red_c_five_routes_admin_decorated_no_route_decorators():
+def test_red_c_three_routes_admin_decorated_no_route_decorators():
     target = _target_module()
-    assert target is not None, "arquivos module absent; route-ownership contract unsatisfiable"
+    assert target is not None, "reportes module absent; route-ownership contract unsatisfiable"
 
     source = Path(target.__file__).read_text(encoding="utf-8-sig")
     tree = ast.parse(source)
@@ -458,21 +401,21 @@ def test_red_c_five_routes_admin_decorated_no_route_decorators():
     )
 
 
-def test_red_d_exactly_five_specs_six_pairs_frozen_matrix():
+def test_red_d_exactly_three_specs_three_pairs_frozen_matrix():
     target = _target_module()
-    assert target is not None, "arquivos module absent; LegacyRouteSpec contract unsatisfiable"
+    assert target is not None, "reportes module absent; LegacyRouteSpec contract unsatisfiable"
 
     specs = getattr(target, "LEGACY_ROUTE_SPECS", None)
     assert isinstance(specs, tuple), "target must expose an immutable LEGACY_ROUTE_SPECS tuple"
-    assert len(specs) == 5, f"expected 5 LegacyRouteSpecs, got {len(specs)}"
+    assert len(specs) == 3, f"expected 3 LegacyRouteSpecs, got {len(specs)}"
 
     encoded = {(spec.rule, spec.endpoint, spec.methods) for spec in specs}
     assert encoded == EXPECTED_PAIRS, (
         f"spec set mismatch: missing={sorted(EXPECTED_PAIRS - encoded)} "
         f"extra={sorted(encoded - EXPECTED_PAIRS)}"
     )
-    assert sum(len(spec.methods) for spec in specs) == 6, (
-        "specs must represent exactly 6 endpoint/method pairs"
+    assert sum(len(spec.methods) for spec in specs) == 3, (
+        "specs must represent exactly 3 endpoint/method pairs"
     )
     assert {spec.view_func for spec in specs} == {
         getattr(target, name) for name in ROUTE_NAMES
@@ -482,13 +425,13 @@ def test_red_d_exactly_five_specs_six_pairs_frozen_matrix():
     )
 
 
-def test_red_e_spec_endpoints_resolve_two_view_three_edit_one_full():
+def test_red_e_spec_endpoints_resolve_one_view_one_edit_one_full():
     target = _target_module()
-    assert target is not None, "arquivos module absent; RBAC-from-specs contract unsatisfiable"
+    assert target is not None, "reportes module absent; RBAC-from-specs contract unsatisfiable"
 
     specs = getattr(target, "LEGACY_ROUTE_SPECS", None)
-    assert isinstance(specs, tuple) and len(specs) == 5, (
-        "RBAC derivation requires the frozen five LegacyRouteSpecs"
+    assert isinstance(specs, tuple) and len(specs) == 3, (
+        "RBAC derivation requires the frozen three LegacyRouteSpecs"
     )
 
     scope_counts = {"view": 0, "edit": 0, "full": 0}
@@ -499,53 +442,58 @@ def test_red_e_spec_endpoints_resolve_two_view_three_edit_one_full():
                 f"{spec.endpoint} {method} must resolve a requirement"
             )
             resource, scope = requirement
-            assert resource == "arquivos", (
-                f"{spec.endpoint} must be governed by the arquivos resource, got {resource}"
+            assert resource == "reportes", (
+                f"{spec.endpoint} must be governed by the reportes resource, got {resource}"
             )
             assert scope in scope_counts, f"unexpected scope {scope} for {spec.endpoint}"
             scope_counts[scope] += 1
-    assert scope_counts == {"view": 2, "edit": 3, "full": 1}, (
-        "frozen endpoint identities must derive exactly 2 view / 3 edit / 1 full, "
+    assert scope_counts == SCOPE_COUNTS, (
+        "frozen endpoint identities must derive exactly 1 view / 1 edit / 1 full, "
         f"got {scope_counts}"
     )
-    assert get_admin_permission_requirement("admin_arquivos", "GET") == ("arquivos", "view"), (
-        "admin_arquivos GET must resolve to (arquivos, view)"
+    assert get_admin_permission_requirement("admin_reportes", "GET") == ("reportes", "view"), (
+        "admin_reportes GET must resolve to (reportes, view)"
     )
 
 
 def test_red_f_main_has_no_local_ownership_and_no_cohort_route_decorators():
     source = MAIN_PATH.read_text(encoding="utf-8-sig")
     defined = _top_level_defs(source)
+    assigned = _top_level_assignments(source)
 
     assert not (set(ROUTE_NAMES) | set(HELPER_NAMES)) & defined, (
         "main.py must no longer locally define moved callables: "
         f"{sorted((set(ROUTE_NAMES) | set(HELPER_NAMES)) & defined)}"
     )
+    assert "REPORTE_STATUS_OPTIONS" not in assigned, (
+        "main.py must no longer locally assign REPORTE_STATUS_OPTIONS for the "
+        "Reportes implementation (identity re-export only)"
+    )
     assert _cohort_route_decorators(source) == [], (
-        "main.py must no longer register any Arquivos @app.route decorator"
+        "main.py must no longer register any Reportes @app.route decorator"
     )
 
 
-def test_red_g_main_facade_nine_of_nine_identity_no_wrappers():
+def test_red_g_main_facade_five_of_five_identity_no_wrappers():
     target = _target_module()
-    assert target is not None, "arquivos module absent; main compatibility contract unsatisfiable"
+    assert target is not None, "reportes module absent; main compatibility contract unsatisfiable"
 
     for name in MOVED_SYMBOLS:
         assert hasattr(main, name), f"main.{name} missing from the compatibility facade"
         assert getattr(main, name) is getattr(target, name), (
-            f"main.{name} must be the identical object exported by arquivos "
-            "(identity re-export, no wrapper)"
+            f"main.{name} must be the identical object exported by reportes "
+            "(identity re-export, no wrapper, no copied constant)"
         )
+
 
 def test_red_h_target_has_no_main_backedge():
     target = _target_module()
-    assert target is not None, "arquivos module absent; no-back-edge contract unsatisfiable"
+    assert target is not None, "reportes module absent; no-back-edge contract unsatisfiable"
 
     source = Path(target.__file__).read_text(encoding="utf-8-sig")
     edges = _main_back_edges(source)
     assert edges == [], (
-        "target must not import main (including dynamic-import equivalents): "
-        f"{edges}"
+        f"target must not import main (including dynamic-import equivalents): {edges}"
     )
 
 
@@ -561,12 +509,12 @@ def test_red_i_factory_declares_keyword_and_single_registration_path():
         arg.arg: default
         for arg, default in zip(create_app.args.kwonlyargs, create_app.args.kw_defaults)
     }
-    assert "register_admin_arquivos_blueprint" in kw_pairs, (
-        "create_app must accept register_admin_arquivos_blueprint"
+    assert "register_admin_reportes_blueprint" in kw_pairs, (
+        "create_app must accept register_admin_reportes_blueprint"
     )
-    default = kw_pairs["register_admin_arquivos_blueprint"]
+    default = kw_pairs["register_admin_reportes_blueprint"]
     assert isinstance(default, ast.Constant) and default.value is True, (
-        "register_admin_arquivos_blueprint must default to True"
+        "register_admin_reportes_blueprint must default to True"
     )
 
     registration_calls = [
@@ -576,21 +524,21 @@ def test_red_i_factory_declares_keyword_and_single_registration_path():
         and isinstance(call.func, ast.Name)
         and call.func.id == "register_legacy_blueprint"
         and any(
-            isinstance(arg, ast.Name) and arg.id == "bp_admin_arquivos"
+            isinstance(arg, ast.Name) and arg.id == "bp_admin_reportes"
             for arg in call.args
         )
     ]
     assert len(registration_calls) == 1, (
-        "create_app must register bp_admin_arquivos exactly once through "
+        "create_app must register bp_admin_reportes exactly once through "
         "register_legacy_blueprint"
     )
 
 
-def test_red_j_factory_default_registers_five_opt_out_registers_none():
+def test_red_j_factory_default_registers_three_opt_out_registers_none():
     from app import create_app
 
     signature = inspect.signature(create_app)
-    param = signature.parameters.get("register_admin_arquivos_blueprint")
+    param = signature.parameters.get("register_admin_reportes_blueprint")
     assert param is not None, (
         "factory parameter missing; default/opt-out contract unsatisfiable"
     )
@@ -605,27 +553,27 @@ def test_red_j_factory_default_registers_five_opt_out_registers_none():
     opt_out_app = create_app(
         register_presets_blueprint=False,
         register_aluno_blueprint=False,
-        register_admin_arquivos_blueprint=False,
+        register_admin_reportes_blueprint=False,
     )
 
     default_rules = {
         (rule.rule, rule.endpoint) for rule in default_app.url_map.iter_rules()
     }
     assert _cohort_rules(default_app) == EXPECTED_PAIRS, (
-        "default factory must register exactly the 5 frozen routes / 6 pairs"
+        "default factory must register exactly the 3 frozen routes / 3 pairs"
     )
     assert _cohort_rules(opt_out_app) == frozenset(), (
-        "opt-out factory must register none of the 5 cohort endpoints"
+        "opt-out factory must register none of the 3 cohort endpoints"
     )
     assert not any(
-        rule.endpoint.startswith("admin_arquivos_blueprint.") or "." in rule.endpoint
+        rule.endpoint.startswith("admin_reportes_blueprint.") or "." in rule.endpoint
         for rule in default_app.url_map.iter_rules()
         if rule.endpoint in ROUTE_NAMES
     ), "no namespaced endpoint variant may exist"
     assert len(default_rules) > 0, "default factory sanity check"
 
 
-def test_red_k_csrf_snapshots_show_exactly_three_arquivos_owner_only_deltas():
+def test_red_k_csrf_snapshots_show_exactly_two_reportes_owner_only_deltas():
     snapshot_dir = PROJECT_ROOT / "tests" / "_artifacts"
     for suffix in ("shadow_off", "shadow_on"):
         snapshot_path = snapshot_dir / f"csrf_inventory_{suffix}.json"
@@ -640,37 +588,37 @@ def test_red_k_csrf_snapshots_show_exactly_three_arquivos_owner_only_deltas():
         )
 
         partition = [
-            row for row in rows if row["route"] in ARQUIVOS_POST_ROUTE_ENDPOINTS
+            row for row in rows if row["route"] in REPORTES_POST_ROUTE_ENDPOINTS
         ]
-        assert len(partition) == 3, (
-            "exactly three Arquivos POST rows per snapshot, "
+        assert len(partition) == 2, (
+            "exactly two Reportes POST rows per snapshot, "
             f"got {len(partition)} in {suffix}"
         )
 
         for row in partition:
-            endpoint = ARQUIVOS_POST_ROUTE_ENDPOINTS[row["route"]]
-            expected_owner = f"app.views.admin.arquivos.{endpoint}"
+            endpoint = REPORTES_POST_ROUTE_ENDPOINTS[row["route"]]
+            expected_owner = f"app.views.admin.reportes.{endpoint}"
             assert row["view_function"] == expected_owner, (
-                f"Arquivos owner delta unsatisfied in {suffix}: route={row['route']} "
+                f"Reportes owner delta unsatisfied in {suffix}: route={row['route']} "
                 f"observed={row['view_function']!r} expected={expected_owner!r} "
                 "(currently main.<function>, must become "
-                "app.views.admin.arquivos.<function>)"
+                "app.views.admin.reportes.<function>)"
             )
             shape = dict(row)
             shape.pop("view_function")
-            assert shape == FROZEN_ARQUIVOS_ROW_SHAPE[row["route"]], (
-                f"only view_function may change for Arquivos partition row "
+            assert shape == FROZEN_REPORTES_ROW_SHAPE[row["route"]], (
+                f"only view_function may change for Reportes partition row "
                 f"{row['route']} in {suffix}"
             )
 
         unrelated = [
             row["route"]
             for row in rows
-            if "app.views.admin.arquivos" in row["view_function"]
-            and row["route"] not in ARQUIVOS_POST_ROUTE_ENDPOINTS
+            if "app.views.admin.reportes" in row["view_function"]
+            and row["route"] not in REPORTES_POST_ROUTE_ENDPOINTS
         ]
         assert unrelated == [], (
-            f"owner delta must be confined to the three Arquivos rows: {unrelated}"
+            f"owner delta must be confined to the two Reportes rows: {unrelated}"
         )
 
 
@@ -688,37 +636,46 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
         for path in messages._iter_backend_files()
     }
     assert TARGET_REL in backend_paths, (
-        "app/views/admin/arquivos.py must be inside backend message-scanner "
+        "app/views/admin/reportes.py must be inside backend message-scanner "
         "coverage once created (no scanner-registration change expected)"
     )
 
 
-def test_red_m_admin_arquivos_resolves_cohort_helpers_from_target_globals():
+def test_red_m_target_owns_reportes_routes_dashboard_stays_main():
     target = _target_module()
     assert target is not None, (
-        "arquivos module absent; cohort-helper resolution contract unsatisfiable"
+        "reportes module absent; Reportes-vs-Dashboard split contract unsatisfiable"
     )
 
-    view = inspect.unwrap(target.admin_arquivos)
-    assert view.__module__ == TARGET_MODULE_NAME, (
-        "admin_arquivos function module owner must be app.views.admin.arquivos, "
-        f"got {view.__module__!r}"
-    )
-    loader = view.__globals__.get("_list_admin_arquivos_rows")
-    assert loader is target._list_admin_arquivos_rows, (
-        "admin_arquivos must resolve the cohort helper "
-        "_list_admin_arquivos_rows from its own globals"
-    )
+    for name in ROUTE_NAMES:
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live endpoint {name} missing"
+        assert inspect.unwrap(view).__module__ == TARGET_MODULE_NAME, (
+            f"{name} must be owned by app.views.admin.reportes after extraction, "
+            f"got {inspect.unwrap(view).__module__!r}"
+        )
+        assert view is getattr(target, name), (
+            f"live endpoint {name} must identity-match the target callable"
+        )
+
+    for name in DASHBOARD_ROUTE_NAMES:
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live Dashboard endpoint {name} missing"
+        assert view.__module__ == "main", (
+            f"Dashboard {name} must remain main-owned, got {view.__module__!r}"
+        )
 
 
 def test_red_n_blueprint_identity_and_dotless_live_endpoints():
     target = _target_module()
-    assert target is not None, "arquivos module absent; blueprint identity contract unsatisfiable"
+    assert target is not None, (
+        "reportes module absent; blueprint identity contract unsatisfiable"
+    )
 
-    blueprint = getattr(target, "bp_admin_arquivos", None)
-    assert blueprint is not None, "target must expose bp_admin_arquivos"
-    assert blueprint.name == "admin_arquivos_blueprint", (
-        f"blueprint name must be admin_arquivos_blueprint, got {blueprint.name!r}"
+    blueprint = getattr(target, "bp_admin_reportes", None)
+    assert blueprint is not None, "target must expose bp_admin_reportes"
+    assert blueprint.name == "admin_reportes_blueprint", (
+        f"blueprint name must be admin_reportes_blueprint, got {blueprint.name!r}"
     )
 
     live = {
@@ -726,7 +683,7 @@ def test_red_n_blueprint_identity_and_dotless_live_endpoints():
         for rule in main.app.url_map.iter_rules()
         if rule.endpoint in ROUTE_NAMES
     }
-    assert len(live) == 5, "exactly five live Arquivos endpoints required"
+    assert len(live) == 3, "exactly three live Reportes endpoints required"
     for name in ROUTE_NAMES:
         assert live[name] is getattr(target, name), (
             f"live endpoint {name} must identity-match the target callable"
@@ -735,63 +692,10 @@ def test_red_n_blueprint_identity_and_dotless_live_endpoints():
     namespaced = [
         endpoint
         for endpoint in main.app.view_functions
-        if endpoint.startswith("admin_arquivos_blueprint.")
+        if endpoint.startswith("admin_reportes_blueprint.")
     ]
     assert namespaced == [], (
-        f"no admin_arquivos_blueprint.* namespaced endpoint may exist: {namespaced}"
-    )
-
-
-def test_red_o_extracted_helper_security_contract_under_app_context(tmp_path, monkeypatch):
-    target = _target_module()
-    assert target is not None, (
-        "arquivos module absent; extracted-helper security/owner contract "
-        "unsatisfiable"
-    )
-
-    helper = getattr(target, "_best_effort_remove_admin_arquivo_file", None)
-    assert callable(helper), (
-        "target must own _best_effort_remove_admin_arquivo_file"
-    )
-    assert inspect.unwrap(helper).__module__ == TARGET_MODULE_NAME, (
-        "helper module owner must be app.views.admin.arquivos, "
-        f"got {inspect.unwrap(helper).__module__!r}"
-    )
-    assert main._best_effort_remove_admin_arquivo_file is helper, (
-        "main must re-export the helper by identity (no wrapper)"
-    )
-
-    upload_root = tmp_path / "uploads"
-    upload_root.mkdir(parents=True, exist_ok=True)
-
-    outside_file = tmp_path / "outside-file.pdf"
-    outside_file.write_bytes(b"outside")
-
-    external_dir = tmp_path / "external"
-    external_dir.mkdir(parents=True, exist_ok=True)
-    secret_file = external_dir / "secret.pdf"
-    secret_file.write_bytes(b"secret")
-
-    nested_dir = upload_root / "admin_arquivos"
-    nested_dir.mkdir(parents=True, exist_ok=True)
-    nested_file = nested_dir / "x.pdf"
-    nested_file.write_bytes(b"legitimate")
-
-    monkeypatch.setitem(main.app.config, "UPLOAD_FOLDER", str(upload_root))
-
-    with main.app.app_context():
-        helper(os.path.join("..", "outside-file.pdf"))
-        helper(str(secret_file))
-        helper(os.path.join("admin_arquivos", "x.pdf"))
-
-    assert outside_file.exists(), (
-        "helper must refuse ../ traversal and keep the external file"
-    )
-    assert secret_file.exists(), (
-        "helper must refuse an absolute external path and keep the file"
-    )
-    assert not nested_file.exists(), (
-        "helper must delete a legitimate in-root nested file"
+        f"no admin_reportes_blueprint.* namespaced endpoint may exist: {namespaced}"
     )
 
 
@@ -801,6 +705,25 @@ def test_red_o_extracted_helper_security_contract_under_app_context(tmp_path, mo
 
 
 def test_green_1_detector_self_control():
+    loaded = _target_module()
+    if TARGET_PATH.exists():
+        assert loaded is not None, (
+            "guarded loader must return the real target module once "
+            "app/views/admin/reportes.py exists"
+        )
+        assert loaded.__name__ == TARGET_MODULE_NAME, (
+            "guarded loader must resolve the real imported target module, "
+            f"got {loaded!r}"
+        )
+        assert not hasattr(loaded, "_ut12_synthetic_future_production"), (
+            "guarded loader must never expose a synthesized fake module"
+        )
+    else:
+        assert loaded is None, (
+            "guarded loader must return None while app/views/admin/reportes.py "
+            "is absent"
+        )
+
     nested_source = "def outer():\n    def inner():\n        return 1\n"
     assert _top_level_defs(nested_source) == {"outer"}, (
         "top-level scanner must not count nested defs"
@@ -848,40 +771,32 @@ def test_green_1_detector_self_control():
     )
 
 
-def test_green_2_live_route_matrix_five_routes_six_pairs():
+def test_green_2_live_route_matrix_three_routes_three_pairs():
     rules = [
         rule
         for rule in main.app.url_map.iter_rules()
         if rule.endpoint in ROUTE_NAMES
     ]
-    assert len(rules) == 5, f"expected 5 live cohort rules, got {len(rules)}"
+    assert len(rules) == 3, f"expected 3 live cohort rules, got {len(rules)}"
     assert _cohort_rules(main.app) == EXPECTED_PAIRS, (
-        "live url_map must match the frozen 6-pair matrix"
+        "live url_map must match the frozen 3-pair matrix"
     )
 
 
 def test_green_3_rbac_exact_matches_and_live_endpoint_set():
     for endpoint, (resource, scope) in RBAC_MATRIX.items():
-        method = (
-            "POST"
-            if endpoint not in {"admin_arquivos", "admin_visualizar_arquivo"}
-            else "GET"
-        )
+        method = "GET" if endpoint == "admin_reportes" else "POST"
         assert get_admin_permission_requirement(endpoint, method) == (resource, scope), (
             f"{endpoint} {method} must resolve to ({resource}, {scope})"
         )
-    assert get_admin_permission_requirement("admin_editar_arquivo", "POST") == (
-        "arquivos",
-        "edit",
-    ), "admin_editar_arquivo POST must resolve to (arquivos, edit)"
 
     live_endpoints = {
         endpoint
         for endpoint in main.app.view_functions
-        if endpoint.startswith("admin_") and "arquivo" in endpoint
+        if endpoint.startswith("admin_reportes")
     }
     assert live_endpoints == set(ROUTE_NAMES), (
-        "exactly the five frozen admin Arquivos endpoints must be live; "
+        "exactly the three frozen admin reportes endpoints must be live; "
         f"no unrelated endpoint admitted; got {sorted(live_endpoints)}"
     )
 
@@ -928,7 +843,7 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
         "scanner must recursively cover every app/views/**/*.py file: "
         f"uncovered={sorted(views_files - backend_paths)}"
     )
-    assert "app/views/admin/acesso.py" in backend_paths, (
+    assert "app/views/admin/arquivos.py" in backend_paths, (
         "sanity: an existing admin view module must be inside scanner coverage"
     )
 
@@ -976,109 +891,100 @@ def test_green_7_reverse_deps_app_services_utils_main_zero():
     )
 
 
-def test_green_8_reportes_main_owned_and_alertas_conditional_on_owner():
-    source = MAIN_PATH.read_text(encoding="utf-8-sig")
-    defined = _top_level_defs(source)
-
-    # Reportes: main-owned only while their canonical owner does not exist.
-    # Once app/views/admin/reportes.py exists, they must be owned exactly by
-    # that module and main must expose them through the identity facade only.
-    reportes_path = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
-    if reportes_path.exists():
-        import importlib
-
-        reportes = importlib.import_module("app.views.admin.reportes")
-        for name in REPORTES_MAIN_OWNED_HANDLERS:
-            assert getattr(main, name, None) is getattr(reportes, name, None), (
-                f"main.{name} must identity-re-export reportes.{name} "
-                "(no wrapper, no local definition)"
-            )
-            view = main.app.view_functions.get(name)
-            assert view is not None, f"live endpoint {name} missing"
-            assert view.__module__ == "app.views.admin.reportes", (
-                f"{name} must be owned by app.views.admin.reportes, "
-                f"got {view.__module__!r}"
-            )
-    else:
-        for name in REPORTES_MAIN_OWNED_HANDLERS:
-            assert name in defined, (
-                f"{name} must still be locally defined in main.py "
-                "while app/views/admin/reportes.py is absent"
-            )
-            view = main.app.view_functions.get(name)
-            assert view is not None, f"live endpoint {name} missing"
-            assert view.__module__ == "main", (
-                f"{name} must remain main-owned, got {view.__module__!r}"
-            )
-
-    # Alertas: main-owned only while their canonical owner does not exist.
-    # Once app/views/admin/alertas.py exists, they must be owned exactly by
-    # that module and main must expose them through the identity facade only.
-    alertas_path = PROJECT_ROOT / "app" / "views" / "admin" / "alertas.py"
-    if alertas_path.exists():
-        import importlib
-
-        alertas = importlib.import_module("app.views.admin.alertas")
-        for name in ALERTAS_MAIN_OWNED_HANDLERS:
-            assert getattr(main, name, None) is getattr(alertas, name, None), (
-                f"main.{name} must identity-re-export alertas.{name} "
-                "(no wrapper, no local definition)"
-            )
-            view = main.app.view_functions.get(name)
-            assert view is not None, f"live endpoint {name} missing"
-            assert view.__module__ == "app.views.admin.alertas", (
-                f"{name} must be owned by app.views.admin.alertas, "
-                f"got {view.__module__!r}"
-            )
-    else:
-        for name in ALERTAS_MAIN_OWNED_HANDLERS:
-            assert name in defined, (
-                f"{name} must still be locally defined in main.py "
-                "while app/views/admin/alertas.py is absent"
-            )
-            view = main.app.view_functions.get(name)
-            assert view is not None, f"live endpoint {name} missing"
-            assert view.__module__ == "main", (
-                f"{name} must remain main-owned, got {view.__module__!r}"
-            )
+def test_green_8_dashboard_remains_main_owned():
+    for name in DASHBOARD_ROUTE_NAMES:
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live Dashboard endpoint {name} missing"
+        assert view.__module__ == "main", (
+            f"Dashboard {name} must remain main-owned (UT-13), "
+            f"got {view.__module__!r}"
+        )
 
 
-def test_green_9_uploaded_file_boundary_main_owned_outside_cohort():
-    assert "uploaded_file" not in MOVED_SYMBOLS, (
-        "uploaded_file must never be part of the Arquivos cohort"
+def test_green_9_arquivos_and_alertas_remain_extracted_shared_owners_not_moved():
+    arquivos_routes = (
+        "admin_arquivos",
+        "admin_adicionar_arquivo",
+        "admin_editar_arquivo",
+        "admin_visualizar_arquivo",
+        "admin_deletar_arquivo",
     )
-    assert "uploaded_file" in _top_level_defs(MAIN_PATH.read_text(encoding="utf-8-sig")), (
-        "uploaded_file must remain locally defined in main.py"
+    for name in arquivos_routes:
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live endpoint {name} missing"
+        assert view.__module__ == "app.views.admin.arquivos", (
+            f"{name} must remain owned by app.views.admin.arquivos, "
+            f"got {view.__module__!r}"
+        )
+
+    alertas_routes = (
+        "admin_alertas",
+        "admin_salvar_alerta",
+        "admin_alternar_alerta",
+        "admin_deletar_alerta",
     )
-    view = main.app.view_functions.get("uploaded_file")
-    assert view is not None, "live endpoint uploaded_file missing"
-    assert view.__module__ == "main", (
-        f"uploaded_file must remain main-owned, got {view.__module__!r}"
+    for name in alertas_routes:
+        view = main.app.view_functions.get(name)
+        assert view is not None, f"live endpoint {name} missing"
+        assert view.__module__ == "app.views.admin.alertas", (
+            f"{name} must remain owned by app.views.admin.alertas, "
+            f"got {view.__module__!r}"
+        )
+
+    assert "ensure_reportes_table" not in MOVED_SYMBOLS, (
+        "ensure_reportes_table is a shared canonical owner, not part of "
+        "the Reportes moved cohort"
     )
-    rules = [
-        rule
-        for rule in main.app.url_map.iter_rules()
-        if rule.endpoint == "uploaded_file"
-    ]
-    assert len(rules) == 1 and rules[0].rule == "/uploads/<path:filename>", (
-        "uploaded_file rule must stay /uploads/<path:filename>"
+    assert "REPORTE_CATEGORY_OPTIONS" not in MOVED_SYMBOLS, (
+        "REPORTE_CATEGORY_OPTIONS is a shared canonical owner "
+        "(app.reporting), not part of the Reportes moved cohort"
+    )
+    ensure = getattr(main, "ensure_reportes_table", None)
+    assert ensure is not None and ensure.__module__ == "app.db_maintenance", (
+        f"ensure_reportes_table must stay owned by app.db_maintenance, "
+        f"got {getattr(ensure, '__module__', None)!r}"
     )
 
 
-def test_green_10_csrf_governance_three_posts_400_get_redirects():
+def test_green_10_reportes_helper_and_constant_behavior_characterization():
+    badge = main._reporte_status_badge_type
+    assert badge(None) == "warning", "None must map to warning"
+    assert badge("") == "warning", "empty string must map to warning"
+    assert badge("  ") == "warning", "whitespace-only must map to warning"
+    assert badge("Novo") == "danger", "Novo must map to danger"
+    assert badge("Em análise") == "warning", "Em analise must map to warning"
+    assert badge("Resolvido") == "success", "Resolvido must map to success"
+    assert badge("qualquer outro") == "danger", "unknown non-empty must map to danger"
+    assert badge("  Resolvido  ") == "success", "whitespace-padded Resolvido must map to success"
+
+    assert main.REPORTE_STATUS_OPTIONS == FROZEN_REPORTE_STATUS_OPTIONS, (
+        "REPORTE_STATUS_OPTIONS values/order must stay frozen"
+    )
+    assert isinstance(main.REPORTE_STATUS_OPTIONS, tuple), (
+        "REPORTE_STATUS_OPTIONS must be a tuple"
+    )
+    assert len(main.REPORTE_STATUS_OPTIONS) == 3, (
+        "REPORTE_STATUS_OPTIONS must keep exactly 3 entries"
+    )
+    assert main.REPORTE_STATUS_OPTIONS[0] == "Novo", (
+        "first status option must be Novo"
+    )
+
+
+def test_green_11_csrf_governance_two_posts_400_get_redirects():
     app = main.app
     original_csrf = app.config.get("WTF_CSRF_ENABLED")
     app.config["WTF_CSRF_ENABLED"] = True
     try:
-        for url in THREE_POST_URLS:
+        for url in TWO_POST_URLS:
             response = app.test_client().post(url)
             assert response.status_code == 400, (
-                f"unsafe Arquivos method {url} must be CSRF-governed (400 "
+                f"unsafe Reportes method {url} must be CSRF-governed (400 "
                 f"without token), got {response.status_code}"
             )
-        response = app.test_client().get("/admin/arquivos")
+        response = app.test_client().get("/admin/reportes")
         assert response.status_code in (302, 303), (
-            "Arquivos GET must remain outside CSRF and redirect "
+            "Reportes GET must remain outside CSRF and redirect "
             f"unauthenticated, got {response.status_code}"
         )
     finally:
@@ -1088,24 +994,76 @@ def test_green_10_csrf_governance_three_posts_400_get_redirects():
             app.config["WTF_CSRF_ENABLED"] = original_csrf
 
 
-def test_green_11_auth_and_admin_access_unchanged_controls():
-    data = (PROJECT_ROOT / "app" / "auth.py").read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    assert digest == FROZEN_ENTRY_AUTH_SHA256, (
-        "app/auth.py must remain byte-identical to the UT-10 ENTRY frozen "
-        f"hash {FROZEN_ENTRY_AUTH_SHA256}; got {digest}"
-    )
+def test_green_12_csrf_partition_tracked_disjoint_and_cumulative_expectation():
+    # Future cumulative totals (documented expectation, not re-implemented
+    # here): alunos/turmas/cursos contract 33 -> 35; matrizes 41 -> 43;
+    # requisicoes 46 -> 48. The Reportes partition below proves exactly 2
+    # owner-only rows, disjoint from every already-moved cohort.
+    #
+    # Expected owner state is derived from REAL target availability, not from
+    # the snapshot itself: while reportes.py is absent the two rows must be
+    # main-owned (entry state); once it exists they must all be target-owned
+    # (post-extraction state). The two rows must move as ONE coherent
+    # cohort -- mixed main/target ownership is rejected.
+    target_owns = TARGET_PATH.exists()
+    expected_owners = {
+        route: (
+            f"app.views.admin.reportes.{REPORTES_POST_ROUTE_ENDPOINTS[route]}"
+            if target_owns
+            else f"main.{REPORTES_POST_ROUTE_ENDPOINTS[route]}"
+        )
+        for route in REPORTES_POST_ROUTE_ENDPOINTS
+    }
 
-    import app.admin_access as admin_access_module
+    snapshot_dir = PROJECT_ROOT / "tests" / "_artifacts"
+    for suffix in ("shadow_off", "shadow_on"):
+        snapshot_path = snapshot_dir / f"csrf_inventory_{suffix}.json"
+        report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
+        rows = report["rows"]
+        assert len(rows) == 78, f"snapshot {suffix} must keep 78 rows"
 
-    source = Path(admin_access_module.__file__).read_text(encoding="utf-8-sig")
-    top_level = _top_level_defs(source)
-    assert top_level == {
-        "_fetch_user_access_overrides",
-        "_build_access_scope_groups_for_level",
-        "_load_admin_access_context",
-        "_get_current_admin_access_context",
-        "_admin_can",
-    }, f"app/admin_access.py must keep exactly the five canonical helpers; got {top_level}"
+        partition = [
+            row for row in rows if row["route"] in REPORTES_POST_ROUTE_ENDPOINTS
+        ]
+        assert len(partition) == 2, (
+            "Reportes mutating partition must be exactly 2 rows, "
+            f"got {len(partition)} in {suffix}"
+        )
+        for row in partition:
+            assert row["method"] == "POST", (
+                f"Reportes tracked row {row['route']} must be POST"
+            )
+            expected = expected_owners[row["route"]]
+            assert row["view_function"] == expected, (
+                f"Reportes row {row['route']} must be owned coherently by "
+                f"{expected!r}, got {row['view_function']!r}"
+            )
+            shape = dict(row)
+            shape.pop("view_function")
+            assert shape == FROZEN_REPORTES_ROW_SHAPE[row["route"]], (
+                f"only view_function may differ for Reportes partition row "
+                f"{row['route']} in {suffix}"
+            )
 
+        owners = {row["view_function"] for row in partition}
+        assert len(owners) == len(partition), (
+            "the two Reportes rows must carry two distinct endpoints "
+            f"in {suffix}"
+        )
+        assert all(vf.startswith("main.") for vf in owners) or all(
+            vf.startswith("app.views.admin.reportes.") for vf in owners
+        ), (
+            "Reportes rows must belong to ONE coherent owner state (all "
+            f"main.* or all app.views.admin.reportes.*), got {sorted(owners)}"
+        )
 
+        moved_routes = {
+            row["route"]
+            for row in rows
+            if row["view_function"].startswith("app.views.admin.")
+            and row["route"] not in REPORTES_POST_ROUTE_ENDPOINTS
+        }
+        assert {row["route"] for row in partition}.isdisjoint(moved_routes), (
+            "Reportes cohort must be disjoint from all OTHER already-moved "
+            f"cohorts in {suffix}"
+        )

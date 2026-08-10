@@ -1340,3 +1340,71 @@ schema 3 / migrações v1-v3.
 **Disposição final:** UT-11 CLOSED / ACCEPTED / PUBLISHED.
 
 **Próxima:** UT-12 — NÃO INICIADA.
+
+## UT-12 — Reportes
+
+**Data:** 2026-08-10. **HEAD de entrada (pai de publicação):**
+`4820e4d3a46a1a3564c730d384b86aa989d752c9`.
+
+**Escopo:** 3 rotas Reportes de `main.py` → `app/views/admin/reportes.py`.
+Suporte movido: 1 função helper (`_reporte_status_badge_type`) e 1 constante
+(`REPORTE_STATUS_OPTIONS`). Total de símbolos movidos: **5**.
+
+**Arquitetura:** LegacyRouteSpec — 3 specs / 3 pares endpoint-method; factory
+opt-out `register_admin_reportes_blueprint` (default True) registrado via
+`register_legacy_blueprint`; `main` facade 5/5 por identidade; zero ownership
+local dos símbolos movidos em `main.py` (0 defs de rota/helper, 0 assignment
+da constante, 0 decorators `@app.route` da coorte).
+
+**Preservação comportamental — MOVE, DO NOT CHANGE:** SQL / joins / filtros /
+intervalos de data / ordenação / paginação / template e contexto / chaves de
+request/form / uso de session / redirects / flash strings / validação de
+status / admin_id / atualizado_em / timing de `conn.commit` /
+`format_date_ptbr` / sítios de chamada de `ensure_reportes_table(conn)` /
+mapeamento e fallback de badge / valores/ordem/estrutura de
+`REPORTE_STATUS_OPTIONS` preservados exatamente.
+
+**Limites:** `REPORTE_CATEGORY_OPTIONS` permanece em `app.reporting`;
+`ensure_reportes_table` permanece em `app.db_maintenance`; Dashboard intocado /
+main-owned; Alertas permanece extraído (`app.views.admin.alertas`); Arquivos
+permanece extraído (`app.views.admin.arquivos`).
+
+**CSRF:** exatamente 2 transições owner-only (`admin_reportes_atualizar_status`,
+`admin_reportes_deletar` → `app.views.admin.reportes.*`). Reconciliação
+cumulativa histórica: 33 → 35 / 41 → 43 / 46 → 48. Inventário do pacote admin:
++ `reportes.py` apenas.
+
+**RED:** 26 testes — 14 RED / 12 GREEN; SHA congelado
+`702278E59B8E734B6FDB9DE8313C97D4A43EB917057815D43F6F05E7C2629B0B`.
+
+**Reconciliação de ownership histórica:** B7-P — residência obsoleta
+Reportes-main aposentada/substituída por proteção state-aware; UT-10 —
+ownership de Reportes tornada state-aware; UT-11 — dois seams de ownership de
+Reportes tornados state-aware. **Classificação: TEST_CONTRACT_SEAM /
+LEGITIMATE_UT12_COCHANGE** — nenhum enfraquecimento de coorte anterior.
+Semântica dos seams: alvo real ausente → ownership histórica `main`; alvo real
+presente → ownership exata `app.views.admin.reportes`; compatibilidade `main`
+exige identidade; ownership misto rejeitado; proteções Arquivos/Alertas/
+Dashboard preservadas.
+
+**Qualificação focada:** UT-12 26/26; cross-unit 91/91; primary 169/169;
+historical 73/73; neighbor/C4 185/185.
+
+**Revisão independente:** PASS / 0 achados materiais.
+
+**Suíte canônica final:** 1399 collected / 1382 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 377.54s.
+
+**Invariantes finais:** 131 / 130 / RBAC unmapped 0 / actor matrix 402 /
+catálogo de mensagens 536 / hooks_main 0 / dependências reversas `main` 0 /
+schema 3 / migrações v1-v3.
+
+**Nota de processo não-material (Fase 5):** dois scripts helper untracked
+obsoletos da revisão independente anterior (`measure_invariants.py`,
+`verify_rbac_matrix.py`) foram removidos antes da execução da suíte canônica;
+bytes do candidato e banco inalterados. Classificação: NON_MATERIAL PROCESS
+DEVIATION / REVIEW_TOOLING_HYGIENE.
+
+**Disposição final:** UT-12 CLOSED / ACCEPTED / PUBLISHED.
+
+**Próxima:** UT-13 — NÃO INICIADA.

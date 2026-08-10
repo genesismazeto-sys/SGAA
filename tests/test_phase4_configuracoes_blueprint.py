@@ -559,6 +559,7 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
         "matrizes.py",
         "requisicoes.py",
         "versioning.py",
+        "reportes.py",
     }
 
     for path in sources:

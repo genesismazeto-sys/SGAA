@@ -9503,7 +9503,7 @@
     {
       "route": "/admin/reportes/<int:reporte_id>/deletar",
       "method": "POST",
-      "view_function": "main.admin_reportes_deletar",
+      "view_function": "app.views.admin.reportes.admin_reportes_deletar",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
@@ -9528,7 +9528,7 @@
     {
       "route": "/admin/reportes/<int:reporte_id>/status",
       "method": "POST",
-      "view_function": "main.admin_reportes_atualizar_status",
+      "view_function": "app.views.admin.reportes.admin_reportes_atualizar_status",
       "template_related": [],
       "requires_login": "admin",
       "has_post_form": false,
