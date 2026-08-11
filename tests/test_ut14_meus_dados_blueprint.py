@@ -92,6 +92,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "meus_dados.py"
 TARGET_REL = "app/views/admin/meus_dados.py"
 TARGET_MODULE_NAME = "app.views.admin.meus_dados"
+DEMO_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "demo.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CREATE_APP_PATH = PROJECT_ROOT / "app" / "__init__.py"
 ADMIN_PACKAGE = PROJECT_ROOT / "app" / "views" / "admin"
@@ -169,6 +170,14 @@ def _target_module():
     import importlib
 
     return importlib.import_module(TARGET_MODULE_NAME)
+
+
+def _demo_target_module():
+    if not DEMO_TARGET_PATH.exists():
+        return None
+    import importlib
+
+    return importlib.import_module("app.views.admin.demo")
 
 
 def _top_level_defs(source: str) -> set[str]:
@@ -609,9 +618,16 @@ def test_red_j_factory_default_registers_two_pairs_opt_out_registers_none():
     )
     for app_ in (default_app, opt_out_app):
         live_endpoints = {rule.endpoint for rule in app_.url_map.iter_rules()}
-        assert "admin_demo_clientes_form_pack" not in live_endpoints, (
-            "demo is a main-owned hard boundary and must never leak into a "
-            "factory-created app"
+        demo_registered = "admin_demo_clientes_form_pack" in live_endpoints
+        # UT-15 seam: Demo is a main-owned hard boundary pre-target (never
+        # factory-registered); once app/views/admin/demo.py exists it becomes
+        # factory-registered by default.  Neither factory app below opts the
+        # Demo blueprint out, so presence must follow the real target.
+        assert demo_registered is DEMO_TARGET_PATH.exists(), (
+            "UT-15 seam: Demo factory presence must follow the real demo.py "
+            "target availability (absent -> main-owned/not registered; "
+            "present -> default factory registers it), got "
+            f"registered={demo_registered!r}"
         )
         assert not any(
             "." in rule.endpoint
@@ -708,10 +724,21 @@ def test_red_m_target_owns_live_symbol_coherently_neighbors_stay_elsewhere():
 
     demo = main.app.view_functions.get("admin_demo_clientes_form_pack")
     assert demo is not None, "live demo endpoint missing"
-    assert demo.__module__ == "main", (
-        "admin_demo_clientes_form_pack must remain main-owned in both states, "
-        f"got {demo.__module__!r}"
-    )
+    demo_target = _demo_target_module()
+    if demo_target is not None:
+        assert inspect.unwrap(demo).__module__ == "app.views.admin.demo", (
+            "admin_demo_clientes_form_pack must be owned by "
+            "app.views.admin.demo once the real demo.py target exists, "
+            f"got {inspect.unwrap(demo).__module__!r}"
+        )
+        assert demo is demo_target.admin_demo_clientes_form_pack, (
+            "live demo endpoint must identity-match the demo target callable"
+        )
+    else:
+        assert demo.__module__ == "main", (
+            "admin_demo_clientes_form_pack must remain main-owned pre-target "
+            f"(UT-15 seam), got {demo.__module__!r}"
+        )
 
 
 def test_red_n_blueprint_identity_and_dotless_live_endpoints():
@@ -894,12 +921,17 @@ def test_green_5_message_catalog_schema_and_reverse_dependencies():
 
 
 def test_green_6_sequential_owners_unchanged():
+    demo_expected_module = (
+        "app.views.admin.demo"
+        if DEMO_TARGET_PATH.exists()
+        else "main"
+    )
     expected_owners = {
         "admin_arquivos": "app.views.admin.arquivos",
         "admin_alertas": "app.views.admin.alertas",
         "admin_reportes": "app.views.admin.reportes",
         "admin_dashboard": "app.views.admin.dashboard",
-        "admin_demo_clientes_form_pack": "main",
+        "admin_demo_clientes_form_pack": demo_expected_module,
     }
     for endpoint, module_name in expected_owners.items():
         view = main.app.view_functions.get(endpoint)

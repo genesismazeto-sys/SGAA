@@ -833,8 +833,9 @@ CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: CLOSED / ACCEPTED
 PUBLISHED (ver bloco UT-11 abaixo). UT-12: CLOSED / ACCEPTED / PUBLISHED (ver bloco
 UT-12 abaixo). UT-13: CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-13 abaixo).
 UT-14: Meus Dados — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-14; ver bloco
-UT-14 abaixo). UT-15: Demo — NÃO INICIADA / NEXT.
-UT-16: Residual Main Ownership — NÃO INICIADA. UT-17: Infra — NÃO INICIADA.
+UT-14 abaixo). UT-15: Demo — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-15; ver bloco
+UT-15 abaixo).
+UT-16: Residual Main Ownership — NÃO INICIADA / NEXT. UT-17: Infra — NÃO INICIADA.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -926,14 +927,55 @@ revisão independente 190/190; C4 36/36. Suíte canônica qualificadora (pré-la
 1456 collected / 1439 passed / 17 deselected / 0 failed / 0 errors / 0 skipped /
 368,24s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0. Banco inalterado:
 544768 bytes / `bda97645…a30818`, sem sidecars.
-UT-15: Demo — NÃO INICIADA / NEXT.
+UT-15: Demo — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-15).
+
+**UT-15 — Coorte Demo: CLOSED / ACCEPTED / PUBLISHED** (publicado por este
+commit de landing da UT-15; SHA de landing não inventado). HEAD de entrada: `37316d6dc2f3f55c050152e6b4ae835074ccdac6`.
+Extração: 1 rota (`admin_demo_clientes_form_pack`, GET only
+`/admin/demo/clientes-form-pack`) / 1 par endpoint-method / 0 helpers /
+0 constantes para `app/views/admin/demo.py`; facade de compatibilidade `main`
+1/1 por identidade exata (`main.admin_demo_clientes_form_pack is
+target.admin_demo_clientes_form_pack`); ownership local `main` = 0; owner
+`app/views/admin/demo.py`; factory opt-out `register_admin_demo_blueprint`
+(default True); LegacyRouteSpec 1 spec / 1 par; blueprint
+`admin_demo_blueprint`. MOVE, DO NOT CHANGE: corpo da função preservado
+exatamente (`return render_template("demo_clientes_form_pack.html")`, sem
+contexto, sem redirect, sem DB, sem lógica de sessão). Escopo de autorização
+`dashboard:view` compartilhado é apenas escopo — não move o Demo para
+dashboard.py. RBAC inalterado: GET `dashboard:view`. CSRF: zero transição de
+owner / zero delta de linha mutável; totais cumulativos permanecem 36 / 44 /
+49; 78 linhas; snapshots canônicos repository-unchanged (sem delta
+trackeado; identidade de conteúdo Git-canônica; materialização CRLF/LF de
+checkout não é mutação de artefato); baseline `route_inventory_baseline.json`
+inalterado. Rotas locais restantes em `main.py`: `uploaded_file`, `health`,
+`favicon` (3). Seams históricos autorizados (TEST_CONTRACT_SEAM /
+LEGITIMATE_UT15_COCHANGE): ut14 (red_j/red_m/green_6), ut13 (green_16),
+ut12 (2 sítios de ownership de vizinhos do Dashboard), Configurações
+(inventário exato do pacote + `demo.py` apenas). Seam adicional tardio
+autorizado: ut13 `test_green_8_neighbor_routes_hard_boundary_main_owned`
+(pin histórico antes desconhecido, encontrado na lane de seams da
+implementação; state-aware: Demo ausente → `main`; Demo presente →
+`app.views.admin.demo`; nunca Dashboard-owned). RED congelado 26/26 (SHA
+`7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`; anterior
+`F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274` aposentado
+por MATERIAL_TEST_CONTRACT_DEFECT na semântica de custódia de artefato —
+revisão independente #1 FAIL; sem defeito de produção, sem mutação de
+artefato; adjudicação arquitetural: custódia = identidade de conteúdo
+Git-canônica + ausência de delta trackeado; revisão independente #2 PASS /
+0 achados materiais). Lanes: UT-15 26/26; histórica 106/106; extração
+sequencial/baseline 311/311; permanente + C4 81/81. Suíte canônica
+qualificadora (pré-landing): 1482 collected / 1465 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 413.52s. Invariantes finais: 131 / 130 /
+0 / 402 / 536 / 0. Banco inalterado: 544768 bytes / `bda97645…a30818`, sem
+sidecars.
+UT-16: Residual Main Ownership — NÃO INICIADA / NEXT.
 
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-12 | Coorte Reportes | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1382 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-13 | Coorte Dashboard | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1412 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-14 | Meus Dados | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1439 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
-| UT-15 | Demo | | | | | | 0 | | — | |
+| UT-15 | Demo | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1465 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-10 |
 | UT-16 | Residual Main Ownership | | | | | | 0 | | — | |
 | UT-17 | Infra | | | | | | 0 | | 1 | |
 | — | **REFACTOR ESTRUTURAL COMPLETO** | | | | | | 0 | | | |

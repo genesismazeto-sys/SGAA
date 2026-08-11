@@ -8,22 +8,24 @@ UT-10 entry parent: `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`
 UT-11 entry parent: `a0092149c2c596f90932b8f83991a33e1f98c32c`
 UT-12 entry parent: `4820e4d3a46a1a3564c730d384b86aa989d752c9`
 UT-13 entry parent: `2e0afa34ed1b927014ac35875668bbdc132743ad`
+UT-14 entry parent: `ef7bc0302cc86b4fa37f301be8157363922e51e7`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-14 (Meus Dados) — CLOSED / ACCEPTED / PUBLISHED
-(published by this UT-14 landing commit; landing SHA not invented).
-Last completed work: UT-14
-Meus Dados extraction — 1 route (`admin_meus_dados`, GET + POST
-`/admin/meus_dados`) / 2 business endpoint-method pairs moved to
-`app/views/admin/meus_dados.py`; main keeps an exact identity compatibility
-facade only (`main.admin_meus_dados is target.admin_meus_dados`; main local
-ownership = 0). Prior landings: UT-13 Dashboard extraction (parent `2e0afa34`);
-UT-12 Reportes extraction (parent `4820e4d3`); UT-11 Alertas extraction
-(parent `a0092149`); UT-10 Arquivos extraction (parent `e8f64a82`); C4
-request-hook write isolation + STRUCTURAL PLATEAU publication (Phase-H landing
-commit, parent `230de41b`).
-Next UT: UT-15 — Demo — NOT STARTED / NEXT.
+Last completed UT: UT-15 (Demo) — CLOSED / ACCEPTED / PUBLISHED
+(published by this UT-15 landing commit; landing SHA not invented).
+Last completed work: UT-15
+Demo extraction — 1 route (`admin_demo_clientes_form_pack`, GET only
+`/admin/demo/clientes-form-pack`) / 1 business endpoint-method pair moved to
+`app/views/admin/demo.py`; main keeps an exact identity compatibility
+facade only (`main.admin_demo_clientes_form_pack is
+target.admin_demo_clientes_form_pack`; main local ownership = 0). Prior
+landings: UT-14 Meus Dados extraction (parent `ef7bc030`); UT-13 Dashboard
+extraction (parent `2e0afa34`); UT-12 Reportes extraction (parent `4820e4d3`);
+UT-11 Alertas extraction (parent `a0092149`); UT-10 Arquivos extraction
+(parent `e8f64a82`); C4 request-hook write isolation + STRUCTURAL PLATEAU
+publication (Phase-H landing commit, parent `230de41b`).
+Next UT: UT-16 — Residual Main Ownership — NOT STARTED / NEXT.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -394,6 +396,97 @@ sidecars.
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
 ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
+## UT-15 — Demo — CLOSED / ACCEPTED / PUBLISHED
+
+Entry parent: `37316d6dc2f3f55c050152e6b4ae835074ccdac6`. Published by this
+UT-15 landing commit; landing SHA not invented. Protocol v1.4 — 2026-08-10.
+
+Owner: `app/views/admin/demo.py`.
+
+Extracted cohort: 1 route (`admin_demo_clientes_form_pack`, GET only
+`/admin/demo/clientes-form-pack`) / 1 business endpoint-method pair /
+0 cohort-local helpers / 0 cohort-local constants (only the standard wiring
+assignments `bp_admin_demo` and `LEGACY_ROUTE_SPECS`). Compatibility facade:
+`main` exact identity re-export only — `main.admin_demo_clientes_form_pack is
+target.admin_demo_clientes_form_pack` (no wrapper, no copied implementation);
+main local ownership = 0. Factory: `register_admin_demo_blueprint` default =
+true, registered through exactly one `register_legacy_blueprint`; default
+registration = 1 route / 1 pair; opt-out = 0 cohort routes.
+LegacyRouteSpecs: 1 (`/admin/demo/clientes-form-pack` /
+`admin_demo_clientes_form_pack` / GET). Blueprint name:
+`admin_demo_blueprint`.
+
+Behavior: MOVE, DO NOT CHANGE — function body preserved exactly
+(`return render_template("demo_clientes_form_pack.html")`, no context kwargs,
+no redirect, no DB, no session logic). The shared `dashboard:view`
+authorization scope is authorization only and does NOT move Demo into
+`dashboard.py`.
+
+RBAC unchanged: GET → `dashboard:view`.
+
+CSRF: zero owner transitions / zero mutating-row delta; historical cumulative
+totals remain 36 / 44 / 49; rows remain 78; both canonical snapshots
+repository-unchanged (no tracked delta, Git-canonical content unchanged;
+CRLF/LF checkout materialization alone is not artifact mutation). Route
+inventory baseline `route_inventory_baseline.json` unchanged.
+
+Main remaining local `@app.route` handlers: `uploaded_file`, `health`,
+`favicon` (count 3). Boundaries preserved: Dashboard `app.views.admin.dashboard`;
+Meus Dados `app.views.admin.meus_dados`; Reportes `app.views.admin.reportes`;
+Alertas `app.views.admin.alertas`; Arquivos `app.views.admin.arquivos`; every
+UT-16 residual symbol stays in its current owner. UT-16 NOT STARTED / NEXT.
+
+Sequential owners: Arquivos `app.views.admin.arquivos`; Alertas
+`app.views.admin.alertas`; Reportes `app.views.admin.reportes`; Dashboard
+`app.views.admin.dashboard`; Meus Dados `app.views.admin.meus_dados`; Demo
+`app.views.admin.demo`.
+
+Authorized historical seams (supervisor, classified TEST_CONTRACT_SEAM /
+LEGITIMATE_UT15_COCHANGE): narrow state-aware demo ownership transitions in
+`tests/test_ut14_meus_dados_blueprint.py` (red_j factory presence, red_m
+ownership, green_6 sequential map), `tests/test_ut13_dashboard_blueprint.py`
+(green_16 factory opt-out), `tests/test_ut12_reportes_blueprint.py` (two
+Dashboard-neighbor ownership sites) and
+`tests/test_phase4_configuracoes_blueprint.py` (exact admin package inventory
+gains `demo.py` only). Late authorized additional seam:
+`tests/test_ut13_dashboard_blueprint.py::test_green_8_neighbor_routes_hard_boundary_main_owned`
+— found by the implementation-time seam lane (previously unknown historical
+pin); reconciled state-aware: Demo absent → `main`; Demo present →
+`app.views.admin.demo`; never Dashboard-owned. No UT-10/11/12 reopening.
+
+RED defect / review history: initial UT-15 RED SHA
+`F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274`; first
+independent adversarial review FAIL due to MATERIAL_TEST_CONTRACT_DEFECT in
+the artifact-custody wording/semantics (CRLF/LF normalization described as
+literal byte identity); no production defect, no artifact mutation. Corrected
+custody semantics: Git-canonical repository-content identity + no tracked
+artifact delta. Corrected RED SHA:
+`7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`. Second
+independent review: PASS / 0 material findings.
+
+Frozen RED: `tests/test_ut15_demo_blueprint.py` — 26/26 PASS; SHA-256
+`7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`.
+
+Qualification evidence: UT-15 gate 26/26; historical seam lane 106/106;
+sequential extraction / baseline lane 311/311; permanent + C4 lane 81/81.
+Canonical full suite (qualifying, pre-landing): 1482 collected / 1465 passed
+/ 17 deselected / 0 failed / 0 errors / 0 skipped / 413.52s.
+
+Canonical invariants unchanged: routes 131 / distinct endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalog 536 / hooks_main 0 /
+app/services/utils → main 0 / `main.init_db` callers 76 / SCHEMA_VERSION 3 /
+migrations v1/v2/v3 only / main local `@app.route` handlers 3.
+
+Database unchanged: 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`; no
+sidecars. Artifacts `csrf_inventory_shadow_on.json`,
+`csrf_inventory_shadow_off.json`, `route_inventory_baseline.json`: no tracked
+delta, Git-canonical content unchanged (CRLF/LF materialization from checkout
+normalization is not artifact mutation).
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
+
 HEAD: `b632edf90e2397abb145edc5d47e5a89bd48f078`. Census type: read-only.
 Files altered during census: 0. Protocol v1.4 — 2026-08-10.
 
@@ -439,14 +532,23 @@ not require suite repetition. No candidate or DB byte changed.
 - architectural reverse dependencies (app/services/utils → main): 0
 - literal main import edges: 0
 - `main.init_db` compatibility callers: 76 (75→76 solely the frozen UT-14 RED
-  test's `_prepare_behavior_env`; production caller delta 0)
+  test's `_prepare_behavior_env`; UT-15 introduces no caller; production
+  caller delta 0)
 - `app_db`-qualified `init_db` callers: 6 (5→6 solely `tests/conftest.py::
   _bootstrap_session_database`; production caller delta 0)
 - `SCHEMA_VERSION`: 3 — migrations v1/v2/v3 only (migration v4 remains PROHIBITED)
+- main local `@app.route` handlers: 3 — `uploaded_file`, `health`, `favicon`
 
 ## Latest full-suite status
 
-Canonical suite: 1456 collected / 1439 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 368.24s.
+Canonical suite: 1482 collected / 1465 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 413.52s.
+Frozen UT-15 RED `tests/test_ut15_demo_blueprint.py`: 26/26 passed;
+frozen SHA-256 `7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`
+(retired: `F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274` —
+MATERIAL_TEST_CONTRACT_DEFECT in artifact-custody wording/semantics found by
+independent review; corrected custody semantics: Git-canonical
+repository-content identity + no tracked artifact delta; CRLF/LF checkout
+materialization alone is not artifact mutation).
 Frozen UT-14 RED `tests/test_ut14_meus_dados_blueprint.py`: 27/27 passed;
 frozen SHA-256 `B3E3DFEE8BDC60C8CF55B89EA2CCDAC6F52C9B03B5A55FAC0FBDD23653DEBB5E`.
 Frozen UT-13 RED `tests/test_ut13_dashboard_blueprint.py`: 30/30 passed;
@@ -454,7 +556,7 @@ frozen SHA-256 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13, UT-14 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13, UT-14, UT-15 and plateau blocks).
 
 ## Database baseline
 

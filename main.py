@@ -1108,11 +1108,10 @@ def proximo_numero_turma(conn, ano=None, semestre=None):
 
 
 
-# Demo: clientes-form pack (visual)
-@app.route("/admin/demo/clientes-form-pack")
-@admin_required
-def admin_demo_clientes_form_pack():
-    return render_template("demo_clientes_form_pack.html")
+# UT-15: o cohort "Demo" (1 simbolo: 1 rota, GET only) passou a ser
+# propriedade canonica de app/views/admin/demo.py.  main apenas re-exporta o
+# nome por IDENTIDADE -- nunca wrapper.
+from app.views.admin.demo import admin_demo_clientes_form_pack
 
 # ===================== Rotas Admin: Cursos (NOVO) =====================
 

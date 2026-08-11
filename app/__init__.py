@@ -28,6 +28,7 @@ from app.views.admin.alertas import bp_admin_alertas
 from app.views.admin.reportes import bp_admin_reportes
 from app.views.admin.dashboard import bp_admin_dashboard
 from app.views.admin.meus_dados import bp_admin_meus_dados
+from app.views.admin.demo import bp_admin_demo
 from app.views import core as core_views
 
 
@@ -110,6 +111,7 @@ def create_app(
     register_admin_reportes_blueprint: bool = True,
     register_admin_dashboard_blueprint: bool = True,
     register_admin_meus_dados_blueprint: bool = True,
+    register_admin_demo_blueprint: bool = True,
 ) -> Flask:
     """Cria a app Flask com bootstrap canônico e configurações de segurança.
 
@@ -300,6 +302,8 @@ def create_app(
         register_legacy_blueprint(app, bp_admin_dashboard)
     if register_admin_meus_dados_blueprint:
         register_legacy_blueprint(app, bp_admin_meus_dados)
+    if register_admin_demo_blueprint:
+        register_legacy_blueprint(app, bp_admin_demo)
 
     # Login é o único POST público; usa rate limiting próprio. Exempta CSRF
     # (sessão ainda não está estabelecida no primeiro POST de novo usuário).

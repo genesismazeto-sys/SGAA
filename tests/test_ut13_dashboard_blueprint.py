@@ -109,6 +109,7 @@ TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
 TARGET_REL = "app/views/admin/dashboard.py"
 TARGET_MODULE_NAME = "app.views.admin.dashboard"
 MEUS_DADOS_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "meus_dados.py"
+DEMO_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "demo.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CREATE_APP_PATH = PROJECT_ROOT / "app" / "__init__.py"
 ADMIN_PACKAGE = PROJECT_ROOT / "app" / "views" / "admin"
@@ -951,9 +952,18 @@ def test_green_8_neighbor_routes_hard_boundary_main_owned():
     for name in NEIGHBOR_ROUTE_NAMES:
         view = main.app.view_functions.get(name)
         assert view is not None, f"live neighbor endpoint {name} missing"
-        assert view.__module__ == "main", (
-            f"{name} must remain main-owned in BOTH states (UT-13 hard "
-            f"boundary), got {view.__module__!r}"
+        # UT-15 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT15_COCHANGE):
+        # Demo is never owned by the Dashboard module.  Its owner follows the
+        # real app/views/admin/demo.py target availability: main pre-target,
+        # app.views.admin.demo post-target (main keeps the identity facade).
+        expected_module = (
+            "app.views.admin.demo"
+            if name == "admin_demo_clientes_form_pack" and DEMO_TARGET_PATH.exists()
+            else "main"
+        )
+        assert view.__module__ == expected_module, (
+            f"{name} must be owned by {expected_module!r} (UT-13 hard "
+            f"boundary: never the Dashboard module), got {view.__module__!r}"
         )
 
 
@@ -1371,6 +1381,8 @@ def test_green_16_factory_opt_out_neighbor_leakage_state_aware():
     kwargs = {flag: False for flag in EXISTING_FACTORY_FLAGS}
     if TARGET_PATH.exists():
         kwargs[FUTURE_FACTORY_FLAG] = False
+    if DEMO_TARGET_PATH.exists():
+        kwargs["register_admin_demo_blueprint"] = False
 
     app = create_app(
         register_presets_blueprint=False,
@@ -1380,8 +1392,10 @@ def test_green_16_factory_opt_out_neighbor_leakage_state_aware():
     live_endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
     for name in NEIGHBOR_ROUTE_NAMES:
         assert name not in live_endpoints, (
-            f"{name} must never be registered by the factory: it is a main-owned "
-            "hard boundary and must not leak into a flags-off factory app"
+            f"{name} must never leak into a flags-off factory app (pre-target "
+            "it is main-owned and factory-absent; post-target it must be "
+            "removable through its own factory flag), got a registered "
+            "endpoint"
         )
     assert "admin_dashboard" not in live_endpoints, (
         "the Dashboard cohort endpoint must not be factory-registered while "

@@ -70,6 +70,7 @@ TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "reportes.py"
 TARGET_REL = "app/views/admin/reportes.py"
 TARGET_MODULE_NAME = "app.views.admin.reportes"
 MEUS_DADOS_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "meus_dados.py"
+DEMO_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "demo.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CREATE_APP_PATH = PROJECT_ROOT / "app" / "__init__.py"
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -690,11 +691,13 @@ def test_red_m_target_owns_reportes_routes_and_dashboard_split_state_aware():
         expected_module = (
             "app.views.admin.meus_dados"
             if name == "admin_meus_dados" and MEUS_DADOS_TARGET_PATH.exists()
+            else "app.views.admin.demo"
+            if name == "admin_demo_clientes_form_pack" and DEMO_TARGET_PATH.exists()
             else "main"
         )
         assert view.__module__ == expected_module, (
             f"Dashboard neighbor {name} must be owned by {expected_module!r} "
-            f"(UT-14 state-aware), got {view.__module__!r}"
+            f"(UT-14/UT-15 state-aware), got {view.__module__!r}"
         )
 
 
@@ -955,11 +958,13 @@ def test_green_8_dashboard_ownership_state_aware():
         expected_module = (
             "app.views.admin.meus_dados"
             if name == "admin_meus_dados" and MEUS_DADOS_TARGET_PATH.exists()
+            else "app.views.admin.demo"
+            if name == "admin_demo_clientes_form_pack" and DEMO_TARGET_PATH.exists()
             else "main"
         )
         assert view.__module__ == expected_module, (
             f"Dashboard neighbor {name} must be owned by {expected_module!r} "
-            f"(UT-14 state-aware), got {view.__module__!r}"
+            f"(UT-14/UT-15 state-aware), got {view.__module__!r}"
         )
 
 

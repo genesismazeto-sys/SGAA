@@ -1662,3 +1662,123 @@ implementação.
 este commit de landing da UT-14; SHA de landing não inventado.
 
 **Próxima:** UT-15 — Demo — NÃO INICIADA / NEXT.
+
+## UT-15 — Demo — CLOSEOUT (GOVERNANCE)
+
+**Data:** 2026-08-10. **HEAD de entrada:**
+`37316d6dc2f3f55c050152e6b4ae835074ccdac6`. **IAexec efetivo:**
+opencode-go/deepseek-v4-flash. **Fallback:** nenhum. **Protocolo:** v1.4 —
+2026-08-10. **Fase:** governance-only closeout — zero produção, zero teste,
+zero snapshot, zero banco alterados nesta fase. **Landing:** publica esta UT-15
+por este commit de landing — nenhum SHA de landing inventado.
+
+**Owner canônico:** `app/views/admin/demo.py`.
+
+**Coorte exata:** 1 rota — `admin_demo_clientes_form_pack`, GET only
+`/admin/demo/clientes-form-pack`, 1 par endpoint-method; 0 helpers locais;
+0 constantes locais (apenas o wiring padrão `bp_admin_demo` e
+`LEGACY_ROUTE_SPECS`). Blueprint: `admin_demo_blueprint`.
+
+**MOVE, DO NOT CHANGE:** corpo da função preservado exatamente —
+`return render_template("demo_clientes_form_pack.html")`; sem contexto de
+template (zero kwargs), sem redirect, sem DB, sem lógica de sessão, sem
+tratamento extra de exceção. Diferenças permitidas: localização do módulo;
+imports canônicos (`flask.Blueprint`/`render_template`,
+`app.auth.admin_required`, `app.views.admin.LegacyRouteSpec`/
+`configure_legacy_routes`); wiring Blueprint/LegacyRouteSpec; decorator
+`admin_required` resolvido diretamente de `app.auth` (no original resolvia
+pelo passthrough main-local `admin_required`). Escopo de autorização
+`dashboard:view` compartilhado com o Dashboard é apenas escopo — não move o
+Demo para dashboard.py.
+
+**Factory:** `register_admin_demo_blueprint` default True; registrado por
+exatamente 1 chamada `register_legacy_blueprint`; default = 1 rota / 1 par;
+opt-out = 0 rotas da coorte. LegacyRouteSpec: 1 spec
+(`/admin/demo/clientes-form-pack` / `admin_demo_clientes_form_pack` / GET).
+
+**Facade de identidade `main`:** re-export exato 1/1 —
+`main.admin_demo_clientes_form_pack is
+app.views.admin.demo.admin_demo_clientes_form_pack`; nenhum wrapper; nenhuma
+cópia de corpo; ownership local `main` = 0 (0 defs, 0 decorators
+`@app.route` da coorte); alvo sem backedge de `main` (zero imports diretos/
+dinâmicos/`sys.modules`/`importlib`).
+
+**RBAC inalterado:** GET → `dashboard:view`. `app/auth.py` não tocado.
+
+**CSRF:** zero transição de owner / zero delta de linha mutável; totais
+cumulativos históricos permanecem **36 / 44 / 49**; linhas permanecem **78**;
+ambos os snapshots canônicos repository-unchanged — sem delta trackeado,
+identidade de conteúdo Git-canônica (a materialização CRLF/LF de checkout não
+é mutação de artefato). Baseline `route_inventory_baseline.json`: inalterado.
+
+**Seams históricos autorizados (supervisor; classificação
+TEST_CONTRACT_SEAM / LEGITIMATE_UT15_COCHANGE):** transições state-aware
+estreitas da expectativa de residência demo-em-`main` em exatamente
+`tests/test_ut14_meus_dados_blueprint.py` (red_j presença na factory, red_m
+ownership, green_6 mapa sequencial), `tests/test_ut13_dashboard_blueprint.py`
+(green_16 opt-out de factory), `tests/test_ut12_reportes_blueprint.py` (dois
+sítios de ownership de vizinhos do Dashboard) e
+`tests/test_phase4_configuracoes_blueprint.py` (inventário exato do pacote
+admin ganha `demo.py` apenas). Semântica: alvo real ausente → `main`; alvo
+real presente → `app.views.admin.demo` + facade de identidade 1/1; ownership
+misto rejeitado; nenhum enfraquecimento de Meus Dados/Dashboard/Reportes/
+Alertas/Arquivos; UT-10/11/12/13 não reabertas.
+
+**Seam adicional tardio autorizado (supervisor; TEST_CONTRACT_SEAM /
+LEGITIMATE_UT15_COCHANGE):** `tests/test_ut13_dashboard_blueprint.py::
+test_green_8_neighbor_routes_hard_boundary_main_owned` — pin histórico antes
+desconhecido (ausente da lista de seams autorizada), encontrado pela lane de
+seams na fase de implementação (1 failed na lane histórica). Reconciliação
+estreita state-aware: Demo ausente → `main`; Demo presente →
+`app.views.admin.demo`; Demo NUNCA Dashboard-owned; existência do endpoint
+preservada; `NEIGHBOR_ROUTE_NAMES` intacto. Nenhum outro sítio alterado.
+
+**RED / histórico de revisão (audit trail fiel):** RED inicial SHA-256
+`F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274`. Revisão
+independente #1: **FAIL** — achado material
+**MATERIAL_TEST_CONTRACT_DEFECT**: o controle de custódia de artefato
+normalizava CRLF/LF descrevendo o contrato como identidade literal de bytes
+de worktree. Sem defeito de produção; sem mutação de artefato. Adjudicação
+arquitetural: custódia redefinida precisamente como identidade de conteúdo
+repository-Git (blob hash com clean filter) + ausência de delta trackeado
+(`git diff --exit-code`); self-control discriminante adicionado (mutação
+sintética de bytes detectada pelo mesmo mecanismo). RED corrigido congelado
+SHA-256 `7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`.
+Revisão independente #2: **PASS / 0 achados materiais**. O FAIL não foi
+apagado nem reescrito.
+
+**RED congelado:** `tests/test_ut15_demo_blueprint.py` — 26 testes
+(14 RED A-O / 12 GREEN); 26/26 PASS; SHA-256
+`7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`;
+inalterado nesta fase de governança.
+
+**Lanes e resultados exatos:** gate UT-15 26/26; lane histórica 106/106;
+lane de extração sequencial / baseline 311/311; lane permanente + C4 81/81.
+
+**Revisão independente:** #1 FAIL (única causa: MATERIAL_TEST_CONTRACT_DEFECT
+no RED); #2 PASS / 0 achados materiais.
+
+**Suíte canônica (qualificadora, pré-landing):** 1482 collected / 1465 passed
+/ 17 deselected / 0 failed / 0 errors / 0 skipped / 413.52s.
+
+**Invariantes finais:** rotas 131 / endpoints distintos 130 / RBAC unmapped 0 /
+actor matrix 402 / catálogo de mensagens 536 / hooks_main 0 / dependências
+reversas app/services/utils → `main` 0 / `main.init_db` compatibility callers
+76 (UT-15 não adiciona caller; delta de produção 0) / SCHEMA_VERSION 3 /
+migrações v1/v2/v3 only / rotas locais `@app.route` restantes em `main.py`:
+`uploaded_file`, `health`, `favicon` (3).
+
+**Custódia de banco:** `database.db` 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`;
+sem `-wal` / `-shm` / `-journal` do banco ativo; inalterado nesta fase.
+
+**Custódia de artefatos:** `csrf_inventory_shadow_on.json`,
+`csrf_inventory_shadow_off.json` e `route_inventory_baseline.json` — sem
+delta trackeado; conteúdo Git-canônico inalterado (não descritos como
+byte-idênticos a blobs de HEAD porque a materialização CRLF/LF de
+autocrlf difere; isso não é mutação de artefato).
+
+**Disposição final:** UT-15 CLOSED / ACCEPTED / PUBLISHED — publicação por
+este commit de landing da UT-15; SHA de landing não inventado.
+
+**Próxima:** UT-16 — Residual Main Ownership — NÃO INICIADA / NEXT.

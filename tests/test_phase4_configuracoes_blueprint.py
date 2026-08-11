@@ -547,7 +547,7 @@ def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():
     assert ADMIN_PACKAGE.is_dir()
     sources = list(ADMIN_PACKAGE.glob("*.py"))
-    assert {path.name for path in sources} == {
+    expected_package_files = {
         "__init__.py",
         "acesso.py",
         "alunos_turmas_cursos.py",
@@ -563,6 +563,11 @@ def test_admin_package_has_no_main_import_or_dynamic_equivalent():
         "versioning.py",
         "reportes.py",
     }
+    if (ADMIN_PACKAGE / "demo.py").exists():
+        # UT-15 seam: the exact admin-package inventory gains demo.py only
+        # once the real Demo target exists; no wildcard and no relaxation.
+        expected_package_files.add("demo.py")
+    assert {path.name for path in sources} == expected_package_files
 
     for path in sources:
         source = path.read_text(encoding="utf-8")
