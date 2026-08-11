@@ -616,6 +616,11 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
             # purpose: it forwards an already-resolved catalog and owns no sink.
             "app/web/authz_gate.py",
             "app/web/errors.py",
+            # UT-16 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE): the
+            # scanner now intentionally covers the new canonical message-
+            # bearing owner app/versioning/integrity.py (explicit entry only;
+            # no recursive app/versioning scanning).
+            "app/versioning/integrity.py",
         }
         or path.startswith("app/views/")
         for path in relative_paths

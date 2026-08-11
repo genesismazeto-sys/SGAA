@@ -1782,3 +1782,134 @@ autocrlf difere; isso não é mutação de artefato).
 este commit de landing da UT-15; SHA de landing não inventado.
 
 **Próxima:** UT-16 — Residual Main Ownership — NÃO INICIADA / NEXT.
+
+## UT-16 — Residual Main Ownership — CLOSEOUT (GOVERNANCE)
+
+**Data:** 2026-08-10. **HEAD de entrada:**
+`d217c40ffa676cd023fb327cb36eece52eb6b253`. **IAexec efetivo:**
+opencode-go/deepseek-v4-flash. **Fallback:** nenhum. **Protocolo:** v1.4 —
+2026-08-10. **Fase:** governance-only closeout — zero produção, zero teste,
+zero snapshot, zero banco alterados nesta fase. **Landing:** publica esta UT-16
+por este commit de landing — nenhum SHA de landing inventado.
+
+**Escopo adjudicado (censo UT-16, supervisor):** rotas movidas **0**.
+Grupos de bloqueio Criterion-9 resolvidos:
+
+**Grupo A — Aluno snapshot ownership:** removidas de `main.py` as
+implementações locais `_coerce_aluno_snapshot_scalar` e
+`_build_aluno_requisicao_snapshot_display` (duplicatas mortas divergentes;
+zero consumidores de produção/teste das cópias de main). Owner canônico:
+`app/views/aluno.py`. Nenhuma facade de main retida.
+
+**Grupo B — Cursos/Turmas constant ownership:** removida de `main.py` a
+atribuição local `UPPER_CODE_RE` (duplicata idêntica morta). Owner canônico:
+`app/views/admin/alunos_turmas_cursos.py`. Nenhuma facade retida.
+
+**Grupo C — Versioning integrity ownership:** movido
+`validar_integridade_versionamento_atividades` de `main.py` para
+`app/versioning/integrity.py` por **MOVE, DO NOT CHANGE**. Fingerprint AST
+normalizado canônico: `c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d`
+(reescreve exatamente o do baseline `HEAD:main.py`; verificado independentemente).
+Assinatura `(conn, *, raise_on_error: bool = True) -> list[str]`, SQL,
+mensagens, acúmulo de issues, semântica ValueError e retorno preservados. Sem
+DDL, sem commit/rollback, sem bootstrap, sem acoplamento Flask, sem import de
+main. `main` retém apenas facade de identidade exata:
+`main.validar_integridade_versionamento_atividades is
+app.versioning.integrity.validar_integridade_versionamento_atividades`.
+Cinco consumidores comportamentais existentes chamam via `main` e continuam
+verdes (test_activity_versioning_phase_b_schema.py 13/13).
+
+**Criterion-9 após UT-16: 0 bloqueadores confirmados.**
+
+**Não-escopo explícito (deliberadamente não removido):**
+`proximo_numero_turma`, `_login_attempts`, `_APP_DIR`, `_TEMPLATES_DIR`,
+wrappers/stubs/rebinds de compatibilidade, facades de identidade em geral.
+D-3 permanece diferido. Nenhuma limpeza genérica de main.py; nenhum
+comportamento de rota alterado.
+
+**Scanner de mensagens:** `utils/messages.py::_iter_backend_files()` passa a
+incluir explicitamente `app/versioning/integrity.py` (o validador com
+mensagens de usuário saiu de main.py; `app/versioning/**` não é varrido
+recursivamente). Catálogo de mensagens: **536** — delta semântico zero (as
+strings migraram com a função; nenhuma adição/remoção/alteração).
+
+**Cochanges de teste autorizados (TEST_CONTRACT_SEAM /
+LEGITIMATE_UT16_COCHANGE):**
+- (A) `tests/test_phase4_versioning_subsystem.py` — inventário exato do
+  pacote `app/versioning` ganha `integrity.py` apenas; auditoria preservada
+  (sem `import main`, sem `CREATE TABLE`, sem `ALTER TABLE`, sem ownership de
+  `SCHEMA_VERSION`, domínios proibidos).
+- (B) `tests/test_phase4_configuracoes_blueprint.py` — allow-set exato do
+  scanner de mensagens ganha exatamente `app/versioning/integrity.py`; sem
+  prefixo/wildcard/subset; restrições sorted/unique e catálogo preservadas.
+
+**RED congelado:** `tests/test_ut16_residual_main_ownership.py` — 15 testes;
+15/15 PASS; SHA-256
+`D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`;
+inalterado nesta fase de governança. Nenhum teste aposentado.
+
+**Histórico de revisão (não sanitizado):**
+- Revisão independente R1: **REJECT** — **MATERIAL_PROCESS_DEFECT_WITH_RESIDUAL_PRODUCTION_DAMAGE**:
+  a edição scriptada de main.py usou um índice de linha original/obsoleto
+  após deleções anteriores e removeu acidentalmente `elif user_type == "aluno":`
+  dentro de `uploaded_file` (função de propriedade da UT-17) — dano real de
+  comportamento de autorização antes da correção.
+- Correção: restauração de linha única a partir de HEAD. Provas pós-correção:
+  `uploaded_file` AST match a HEAD = True; source match normalizado a HEAD =
+  True. Auditoria exaustiva de main.py (AST nível de função/atribuição/import/
+  censo de statements): nenhuma segunda vítima colateral; nenhum dano residual.
+- Disposição: **MATERIAL_DEFECT_CORRECTED / NO_RESIDUAL_DAMAGE**.
+- Revisão independente R2: **ACCEPT**.
+- Anomalia de metadados do relatório R2 (registrada fielmente): o campo
+  "EFFECTIVE MODEL / PROVIDER" foi malformado como "FALLBACK" e o relatório
+  continha "FULL SUITE AUTHORIZATION: NO" contraditório; adjudicação do
+  supervisor: **NON_MATERIAL_REPORT_METADATA_DEFECT**; o ACCEPT técnico
+  permaneceu válido; a suíte completa foi explicitamente autorizada depois.
+  Nenhum metadata de provider/modelo do R2 foi inventado.
+
+**Histórico de suíte canônica (ambas as execuções preservadas):**
+- Primeira suíte canônica: 1497 collected / 1479 passed / 17 deselected /
+  0 skipped / 1 failed / 0 errors — falha
+  `tests/test_phase4_configuracoes_blueprint.py::test_backend_message_inventory_recurses_deterministically_without_duplicates`
+  (pin exato do file-set do scanner antes desconhecido; classificação
+  TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE; sem defeito de produção).
+- Após o cochange autorizado — **SUÍTE CANÔNICA FINAL:** 1497 collected /
+  1480 passed / 17 deselected / 0 skipped / 0 failed / 0 errors / 322.69s /
+  exit 0. Reconciliação de contagem: baseline UT-15 1482 + 15 testes RED
+  UT-16 = 1497; nenhum teste aposentado.
+
+**Lanes e resultados exatos:** UT-16 15/15; versioning subsystem 14/14;
+Phase-B versioning behavior 13/13; domínio 63/63; permanente + C4 77/77;
+conjunto comportamental uploaded_file (após correção do defeito material)
+47/47; gate configuracoes (após seam final) 23/23. Disposição final de
+revisão independente: ACCEPT / 0 achados materiais restantes.
+
+**Firewall UT-17:** handlers locais `@app.route` restantes em main.py:
+`uploaded_file`, `health`, `favicon` (3), todos HEAD-idênticos após a
+correção. Notas de cobertura carreadas para o planejamento da UT-17 (gaps
+medidos; NÃO são defeitos da UT-16): (1) ausência de teste explícito de GET
+direto 200 para admin autorizado em `uploaded_file`; (2) ausência de teste
+explícito de aluno acessando arquivo de outro aluno → 403.
+
+**Invariantes finais:** rotas 131 / endpoints distintos 130 / RBAC unmapped 0 /
+actor matrix 402 / catálogo de mensagens 536 / hooks_main 0 / dependências
+reversas app/services/utils → `main` 0 / `main.init_db` compatibility callers
+76 / SCHEMA_VERSION 3 / migrações v1/v2/v3 only / rotas locais em main.py 3.
+
+**Criterion 9:** SATISFIED para todos os bloqueadores residuais da UT-16.
+**Criterion 8:** AINDA NÃO satisfeito (3 handlers `@app.route` permanecem para
+a UT-17). Portanto **REFACTOR ESTRUTURAL COMPLETO: AINDA NÃO DECLARÁVEL.**
+
+**Custódia de banco:** `database.db` 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`;
+sem `-wal` / `-shm` / `-journal`; inalterado nesta fase.
+
+**Custódia de artefatos:** `csrf_inventory_shadow_on.json`,
+`csrf_inventory_shadow_off.json` e `route_inventory_baseline.json` — sem
+delta trackeado; conteúdo Git-canônico inalterado (materialização CRLF/LF de
+checkout não é mutação de artefato).
+
+**Disposição final:** UT-16 CLOSED / ACCEPTED / PUBLISHED — publicação por
+este commit de landing da UT-16; SHA de landing não inventado.
+
+**Próxima:** UT-17 — Infra — NÃO INICIADA / NEXT.

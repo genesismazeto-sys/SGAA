@@ -9,23 +9,29 @@ UT-11 entry parent: `a0092149c2c596f90932b8f83991a33e1f98c32c`
 UT-12 entry parent: `4820e4d3a46a1a3564c730d384b86aa989d752c9`
 UT-13 entry parent: `2e0afa34ed1b927014ac35875668bbdc132743ad`
 UT-14 entry parent: `ef7bc0302cc86b4fa37f301be8157363922e51e7`
+UT-15 entry parent: `37316d6dc2f3f55c050152e6b4ae835074ccdac6`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-15 (Demo) — CLOSED / ACCEPTED / PUBLISHED
-(published by this UT-15 landing commit; landing SHA not invented).
-Last completed work: UT-15
-Demo extraction — 1 route (`admin_demo_clientes_form_pack`, GET only
-`/admin/demo/clientes-form-pack`) / 1 business endpoint-method pair moved to
-`app/views/admin/demo.py`; main keeps an exact identity compatibility
-facade only (`main.admin_demo_clientes_form_pack is
-target.admin_demo_clientes_form_pack`; main local ownership = 0). Prior
-landings: UT-14 Meus Dados extraction (parent `ef7bc030`); UT-13 Dashboard
-extraction (parent `2e0afa34`); UT-12 Reportes extraction (parent `4820e4d3`);
-UT-11 Alertas extraction (parent `a0092149`); UT-10 Arquivos extraction
-(parent `e8f64a82`); C4 request-hook write isolation + STRUCTURAL PLATEAU
-publication (Phase-H landing commit, parent `230de41b`).
-Next UT: UT-16 — Residual Main Ownership — NOT STARTED / NEXT.
+Last completed UT: UT-16 — Residual Main Ownership — CLOSED / ACCEPTED /
+PUBLISHED (published by this UT-16 landing commit; landing SHA not invented).
+Last completed work: UT-16
+0 routes moved. Criterion-9 residual ownership resolved: Group A removed
+main-local `_coerce_aluno_snapshot_scalar` / `_build_aluno_requisicao_snapshot_display`
+(canonical owner `app/views/aluno.py`, no facade); Group B removed main-local
+`UPPER_CODE_RE` (canonical owner
+`app/views/admin/alunos_turmas_cursos.py`, no facade); Group C moved
+`validar_integridade_versionamento_atividades` MOVE-DO-NOT-CHANGE to
+`app/versioning/integrity.py` (fingerprint
+`c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d`) with
+main exact identity facade only. Message scanner explicitly registers
+`app/versioning/integrity.py`; catalog 536. Prior landings: UT-15 Demo
+extraction (parent `37316d6d`); UT-14 Meus Dados (parent `ef7bc030`);
+UT-13 Dashboard (parent `2e0afa34`); UT-12 Reportes (parent `4820e4d3`);
+UT-11 Alertas (parent `a0092149`); UT-10 Arquivos (parent `e8f64a82`);
+C4 request-hook write isolation + STRUCTURAL PLATEAU publication
+(Phase-H landing commit, parent `230de41b`).
+Next UT: UT-17 — Infra — NOT STARTED / NEXT.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -487,6 +493,112 @@ normalization is not artifact mutation).
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
 ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
+## UT-16 — Residual Main Ownership — CLOSED / ACCEPTED / PUBLISHED
+
+Entry parent: `d217c40ffa676cd023fb327cb36eece52eb6b253`. Published by this
+UT-16 landing commit; landing SHA not invented. Protocol v1.4 — 2026-08-10.
+Routes moved: 0.
+
+Criterion-9 blocker groups resolved (supervisor-adjudicated scope):
+- **Group A — Aluno snapshot ownership:** removed main-local
+  `_coerce_aluno_snapshot_scalar` / `_build_aluno_requisicao_snapshot_display`
+  (dead divergent duplicates); canonical owner `app/views/aluno.py`; no main
+  facade retained.
+- **Group B — Cursos/Turmas constant ownership:** removed main-local
+  `UPPER_CODE_RE` (identical duplicate); canonical owner
+  `app/views/admin/alunos_turmas_cursos.py`; no main facade retained.
+- **Group C — Versioning integrity ownership:** moved
+  `validar_integridade_versionamento_atividades` MOVE-DO-NOT-CHANGE from
+  `main.py` to `app/versioning/integrity.py`; canonical normalized AST
+  fingerprint `c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d`;
+  main retains exact identity compatibility facade only
+  (`main.validar_integridade_versionamento_atividades is
+  app.versioning.integrity.validar_integridade_versionamento_atividades`).
+
+Criterion-9 blockers after UT-16: **0**.
+
+Explicit non-scope (deliberately NOT removed): `proximo_numero_turma`,
+`_login_attempts`, `_APP_DIR`, `_TEMPLATES_DIR`, compatibility
+wrappers/stubs/rebinds, identity facades generally. D-3 remains deferred. No
+generic main.py cleanup; no route behavior changed.
+
+Message scanner: `utils/messages.py::_iter_backend_files()` now explicitly
+includes `app/versioning/integrity.py` (message-bearing validator moved out of
+main.py; `app/versioning/**` is not recursively scanned). Catalog: **536**,
+zero semantic delta.
+
+Authorized test-contract cochanges (TEST_CONTRACT_SEAM /
+LEGITIMATE_UT16_COCHANGE):
+- `tests/test_phase4_versioning_subsystem.py` — exact `app/versioning`
+  package inventory gains `integrity.py` only; audit preserved (no import
+  main, no CREATE/ALTER TABLE, no SCHEMA_VERSION, forbidden-domain audit).
+- `tests/test_phase4_configuracoes_blueprint.py` — backend message-scanner
+  explicit allow-set gains exactly `app/versioning/integrity.py`; no
+  prefix/wildcard/subset relaxation; sorted/unique and catalog constraints
+  preserved.
+
+Frozen RED: `tests/test_ut16_residual_main_ownership.py` — 15 tests; SHA-256
+`D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`; final
+gate 15/15; no retired tests.
+
+Review / defect history (not sanitized): Independent Review R1 **REJECT** —
+MATERIAL_PROCESS_DEFECT_WITH_RESIDUAL_PRODUCTION_DAMAGE: scripted main.py
+editing used a stale/original line index after earlier deletions and
+accidentally removed `elif user_type == "aluno":` inside UT-17-owned
+`uploaded_file` (real authorization behavior damage before correction).
+Correction: single-line restoration from HEAD; proofs:
+`uploaded_file` AST match to HEAD = True; normalized source match to HEAD =
+True; exhaustive main.py scope audit found no second collateral victim, no
+residual damage. Disposition: MATERIAL_DEFECT_CORRECTED / NO_RESIDUAL_DAMAGE.
+Independent Review R2 **ACCEPT**. R2 report metadata anomaly (recorded
+truthfully): the "EFFECTIVE MODEL / PROVIDER" field was malformed as
+"FALLBACK" and the report contained a contradictory "FULL SUITE
+AUTHORIZATION: NO"; supervisor adjudicated NON_MATERIAL_REPORT_METADATA_DEFECT;
+technical ACCEPT remained valid; the full suite was explicitly authorized
+afterward. No invented R2 provider/model metadata.
+
+Full-suite history (both runs preserved):
+- First canonical suite: 1497 collected / 1479 passed / 17 deselected /
+  0 skipped / 1 failed / 0 errors — failure
+  `test_phase4_configuracoes_blueprint.py::test_backend_message_inventory_recurses_deterministically_without_duplicates`
+  (previously unknown exact message-scanner file-set pin; classification
+  TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE; no production defect).
+- After the authorized exact-set cochange — FINAL CANONICAL SUITE: 1497
+  collected / 1480 passed / 17 deselected / 0 skipped / 0 failed / 0 errors /
+  322.69s / exit 0. Count reconciliation: 1482 UT-15 baseline + 15 UT-16 RED
+  tests = 1497; no tests retired.
+
+Qualification evidence: UT-16 gate 15/15; versioning subsystem 14/14;
+Phase-B versioning behavior 13/13; domain ownership lane 63/63; permanent/C4
+lane 77/77; uploaded_file behavioral set (after material-defect correction)
+47/47; configuracoes gate (after final seam) 23/23. Independent review final
+disposition: ACCEPT / 0 remaining material findings.
+
+UT-17 firewall: main local `@app.route` handlers remain exactly
+`uploaded_file`, `health`, `favicon` (3), all HEAD-identical after the defect
+correction. Carry-forward planning inputs (measured coverage gaps, NOT UT-16
+defects): (1) no explicit authorized-admin direct GET 200 test for
+`uploaded_file`; (2) no explicit aluno accessing another aluno's file → 403
+test.
+
+Invariants (final): routes 131 / distinct endpoints 130 / RBAC unmapped 0 /
+actor matrix 402 / message catalog 536 / hooks_main 0 / app-services-utils →
+main 0 / `main.init_db` callers 76 / SCHEMA_VERSION 3 / migrations v1/v2/v3
+only / main local routes 3.
+
+Criterion 9: SATISFIED for all UT-16 residual ownership blockers. Criterion
+8: NOT YET SATISFIED (3 `@app.route` handlers remain for UT-17). Therefore
+REFACTOR ESTRUTURAL COMPLETO: NOT YET DECLARABLE.
+
+Database unchanged: 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`; no
+sidecars. Artifacts `csrf_inventory_shadow_on.json`,
+`csrf_inventory_shadow_off.json`, `route_inventory_baseline.json`: no tracked
+delta, Git-canonical content unchanged.
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
+
 HEAD: `b632edf90e2397abb145edc5d47e5a89bd48f078`. Census type: read-only.
 Files altered during census: 0. Protocol v1.4 — 2026-08-10.
 
@@ -541,7 +653,9 @@ not require suite repetition. No candidate or DB byte changed.
 
 ## Latest full-suite status
 
-Canonical suite: 1482 collected / 1465 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 413.52s.
+Canonical suite: 1497 collected / 1480 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 322.69s.
+Frozen UT-16 RED `tests/test_ut16_residual_main_ownership.py`: 15/15 passed;
+frozen SHA-256 `D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`.
 Frozen UT-15 RED `tests/test_ut15_demo_blueprint.py`: 26/26 passed;
 frozen SHA-256 `7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`
 (retired: `F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274` —
@@ -556,7 +670,7 @@ frozen SHA-256 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13, UT-14, UT-15 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13, UT-14, UT-15, UT-16 and plateau blocks).
 
 ## Database baseline
 

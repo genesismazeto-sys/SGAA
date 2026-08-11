@@ -440,6 +440,9 @@ def _iter_backend_files() -> list[Path]:
         # (_admin_access_denied_response -> authz_gate, handle_large_upload -> errors).
         PROJECT_ROOT / "app" / "web" / "authz_gate.py",
         PROJECT_ROOT / "app" / "web" / "errors.py",
+        # UT-16: validador de integridade do versionamento movido de main.py
+        # (contem mensagens de usuario; o scanner nao varre app/versioning/**).
+        PROJECT_ROOT / "app" / "versioning" / "integrity.py",
     ]
     views_dir = PROJECT_ROOT / "app" / "views"
     if views_dir.is_dir():

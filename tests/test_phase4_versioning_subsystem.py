@@ -467,7 +467,16 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
 
 
 def test_versioning_modules_never_import_main_or_own_forbidden_domains():
-    expected = {"__init__.py", "resolver.py", "snapshots.py", "shadow_reads.py"}
+    # UT-16 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE): the exact
+    # app/versioning package inventory gains integrity.py only (the real
+    # canonical owner of validar_integridade_versionamento_atividades).
+    expected = {
+        "__init__.py",
+        "resolver.py",
+        "snapshots.py",
+        "shadow_reads.py",
+        "integrity.py",
+    }
     paths = sorted(VERSIONING_PACKAGE.glob("*.py"))
     assert {path.name for path in paths} == expected
     paths.append(ADMIN_VERSIONING_PATH)

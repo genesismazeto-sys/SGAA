@@ -835,7 +835,8 @@ UT-12 abaixo). UT-13: CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-13 abaixo).
 UT-14: Meus Dados — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-14; ver bloco
 UT-14 abaixo). UT-15: Demo — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-15; ver bloco
 UT-15 abaixo).
-UT-16: Residual Main Ownership — NÃO INICIADA / NEXT. UT-17: Infra — NÃO INICIADA.
+UT-16: Residual Main Ownership — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-16; ver bloco
+UT-16 abaixo). UT-17: Infra — NÃO INICIADA / NEXT.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -968,7 +969,67 @@ qualificadora (pré-landing): 1482 collected / 1465 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 413.52s. Invariantes finais: 131 / 130 /
 0 / 402 / 536 / 0. Banco inalterado: 544768 bytes / `bda97645…a30818`, sem
 sidecars.
-UT-16: Residual Main Ownership — NÃO INICIADA / NEXT.
+UT-16: Residual Main Ownership — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-16).
+
+**UT-16 — Residual Main Ownership: CLOSED / ACCEPTED / PUBLISHED** (publicado
+por este commit de landing da UT-16; SHA de landing não inventado). HEAD de
+entrada: `d217c40ffa676cd023fb327cb36eece52eb6b253`. Rotas movidas: **0**.
+Escopo adjudicado pelo supervisor (censo UT-16): Grupo A — removidas de
+main.py as duplicatas mortas divergentes `_coerce_aluno_snapshot_scalar` /
+`_build_aluno_requisicao_snapshot_display` (owner canônico
+`app/views/aluno.py`; sem facade); Grupo B — removida a atribuição local
+`UPPER_CODE_RE` (owner canônico
+`app/views/admin/alunos_turmas_cursos.py`; sem facade); Grupo C — movido
+`validar_integridade_versionamento_atividades` MOVE-DO-NOT-CHANGE para
+`app/versioning/integrity.py` (fingerprint AST normalizado
+`c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d`), main
+mantém apenas re-export de identidade exata
+(`main.validar_integridade_versionamento_atividades is
+app.versioning.integrity.validar_integridade_versionamento_atividades`).
+Scanner de mensagens: `utils/messages.py::_iter_backend_files()` passa a
+incluir explicitamente `app/versioning/integrity.py` (sem varredura
+recursiva); catálogo 536, delta semântico zero. Cochanges de teste autorizados
+(TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE): (A)
+`tests/test_phase4_versioning_subsystem.py` — inventário exato do pacote
+`app/versioning` ganha `integrity.py` apenas, auditoria preservada; (B)
+`tests/test_phase4_configuracoes_blueprint.py` — allow-set exato do scanner
+de mensagens ganha exatamente `app/versioning/integrity.py`, sem
+prefixo/wildcard/subset, restrições sorted/unique e catálogo preservadas.
+RED congelado 15/15 (SHA
+`D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`).
+Histórico de revisão (não sanitizado): revisão independente R1 **REJECT** —
+MATERIAL_PROCESS_DEFECT_WITH_RESIDUAL_PRODUCTION_DAMAGE (edição scriptada de
+main.py usou índice de linha original após deleções e removeu acidentalmente
+`elif user_type == "aluno":` dentro de `uploaded_file`, função da UT-17;
+correção: restauração de linha única a partir de HEAD; provas: AST match True
+e source match normalizado True; auditoria exaustiva de main.py sem segunda
+vítima colateral; disposição MATERIAL_DEFECT_CORRECTED / NO_RESIDUAL_DAMAGE);
+revisão independente R2 **ACCEPT**. Anomalia de metadados do relatório R2
+(registrada): campo "EFFECTIVE MODEL / PROVIDER" malformado como "FALLBACK" e
+"FULL SUITE AUTHORIZATION: NO" contraditório — adjudicado pelo supervisor como
+NON_MATERIAL_REPORT_METADATA_DEFECT; ACCEPT técnico permaneceu válido; a
+suíte completa foi explicitamente autorizada depois. Primeira suíte canônica:
+1497 collected / 1479 passed / 17 deselected / 1 failed / 0 errors — falha
+`test_phase4_configuracoes_blueprint.py::test_backend_message_inventory_recurses_deterministically_without_duplicates`
+(pin exato do file-set do scanner antes desconhecido; TEST_CONTRACT_SEAM /
+LEGITIMATE_UT16_COCHANGE; sem defeito de produção). Após o cochange
+autorizado — SUÍTE CANÔNICA FINAL: 1497 collected / 1480 passed / 17
+deselected / 0 failed / 0 errors / 0 skipped / 322.69s / exit 0
+(reconciliação: 1482 baseline UT-15 + 15 testes RED UT-16 = 1497; nenhum
+teste aposentado). Lanes: UT-16 15/15; versioning subsystem 14/14; Phase-B
+13/13; domínio 63/63; permanente + C4 77/77; uploaded_file 47/47 (após
+correção); configuracoes 23/23 (após seam final). Criterion-9 blockers: 0.
+Criterion 8: AINDA NÃO satisfeito (3 handlers `@app.route` restantes para a
+UT-17) — REFACTOR ESTRUTURAL COMPLETO ainda NÃO declarável. Firewall UT-17:
+`uploaded_file`, `health`, `favicon` (3), HEAD-idênticos após a correção;
+notas de cobertura carreadas (gaps medidos, não defeitos da UT-16): (1) sem
+teste explícito de GET direto 200 admin autorizado; (2) sem teste explícito
+de aluno acessando arquivo de outro aluno → 403. Invariantes finais: 131 /
+130 / 0 / 402 / 536 / 0. Banco inalterado: 544768 bytes / `bda97645…a30818`,
+sem sidecars. Não-escopo explícito preservado: `proximo_numero_turma`,
+`_login_attempts`, `_APP_DIR`, `_TEMPLATES_DIR`, wrappers/stubs/rebinds,
+facades de identidade; D-3 permanece diferido.
+UT-17: Infra — NÃO INICIADA / NEXT.
 
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
@@ -976,7 +1037,7 @@ UT-16: Residual Main Ownership — NÃO INICIADA / NEXT.
 | UT-13 | Coorte Dashboard | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1412 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-14 | Meus Dados | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1439 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-15 | Demo | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1465 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-10 |
-| UT-16 | Residual Main Ownership | | | | | | 0 | | — | |
+| UT-16 | Residual Main Ownership | | DeepSeek V4 Flash | metadata malformed in R2 report; supervisor adjudicated ACCEPT | PASS | 131/130/0 | 0 | 1480 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-10 |
 | UT-17 | Infra | | | | | | 0 | | 1 | |
 | — | **REFACTOR ESTRUTURAL COMPLETO** | | | | | | 0 | | | |
 
