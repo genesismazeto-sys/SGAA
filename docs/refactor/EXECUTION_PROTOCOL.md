@@ -832,7 +832,8 @@ Critério 4 da v1.2, foi **6/7 PASS com C4 FAIL** — ver Changelog v1.3 e o led
 CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-10 abaixo). UT-11: CLOSED / ACCEPTED /
 PUBLISHED (ver bloco UT-11 abaixo). UT-12: CLOSED / ACCEPTED / PUBLISHED (ver bloco
 UT-12 abaixo). UT-13: CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-13 abaixo).
-UT-14: Meus Dados — NÃO INICIADA / NEXT. UT-15: Demo — NÃO INICIADA.
+UT-14: Meus Dados — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-14; ver bloco
+UT-14 abaixo). UT-15: Demo — NÃO INICIADA / NEXT.
 UT-16: Residual Main Ownership — NÃO INICIADA. UT-17: Infra — NÃO INICIADA.
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
@@ -890,13 +891,48 @@ removeu apenas as asserções positivas contraditórias; RED congelado final
 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`; nenhum byte de produção
 alterado pelo achado. Suíte canônica final: 1429 collected / 1412 passed / 17 deselected /
 0 failed / 0 errors / 0 skipped / 357,96s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0.
-UT-14: Meus Dados — NÃO INICIADA / NEXT.
+UT-14: Meus Dados — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-14).
+
+**UT-14 — Coorte Meus Dados: CLOSED / ACCEPTED / PUBLISHED** (publicado por este
+commit de landing da UT-14; SHA de landing não inventado). HEAD de entrada: `ef7bc0302cc86b4fa37f301be8157363922e51e7`.
+Extração: 1 rota (`admin_meus_dados`, GET + POST `/admin/meus_dados`) / 2 pares
+endpoint-method / 0 helpers / 0 constantes para `app/views/admin/meus_dados.py`; facade
+de compatibilidade `main` 1/1 por identidade exata (`main.admin_meus_dados is
+target.admin_meus_dados`); ownership local `main` = 0; owner
+`app/views/admin/meus_dados.py`; factory opt-out `register_admin_meus_dados_blueprint`
+(default True); LegacyRouteSpec 1 spec / 2 pares; blueprint
+`admin_meus_dados_blueprint`. MOVE, DO NOT CHANGE: corpo da função AST-idêntico
+(decorators normalizados; diferenças permitidas apenas de localização, imports
+canônicos, wiring e decorator `admin_required` resolvido de `app.auth`); 1
+`conn.commit` no caminho de sucesso; `ensure_usuario_profile_schema` a cada GET;
+`session["user_name"]` antes do avatar; ValueError de avatar continua até o commit;
+sem rollback explícito; dívida pré-existente preservada, não remediada; sem
+migration v4. RBAC inalterado: GET `meus_dados:view` / POST `meus_dados:edit`.
+CSRF: 1 transição de owner por snapshot (`main.admin_meus_dados` →
+`app.views.admin.meus_dados.admin_meus_dados`); 78 linhas preservadas; única linha
+alterada, somente `view_function`; shadow_on/off coerentes; baseline
+`route_inventory_baseline.json` byte-idêntico. Totais cumulativos: 36 / 44 / 49.
+Limites: `admin_demo_clientes_form_pack` permanece main-owned (coorte UT-15);
+Dashboard/Reportes/Alertas/Arquivos preservados; símbolos residuais UT-16 fora.
+Seams históricos autorizados (UT-13/UT-12/Requisições): transições de ownership
+state-aware estreitas; nenhum enfraquecimento. Cochanges ratificados
+(LEGITIMATE_UT14_COCHANGE): Matrizes 43→44; Alunos/Turmas 35→36; Configurações
+(inventário + `meus_dados.py` apenas); phase3 manifest `main.init_db` 75→76
+(caller adicionado `tests/test_ut14_meus_dados_blueprint.py::_prepare_behavior_env`;
+nenhum removido/relocado). RED congelado 27/27 (SHA
+`B3E3DFEE8BDC60C8CF55B89EA2CCDAC6F52C9B03B5A55FAC0FBDD23653DEBB5E`). Lanes:
+UT-14 27/27; histórica 77/77; contrato permanente 72/72; cochange/baseline 298/298;
+revisão independente 190/190; C4 36/36. Suíte canônica qualificadora (pré-landing):
+1456 collected / 1439 passed / 17 deselected / 0 failed / 0 errors / 0 skipped /
+368,24s. Invariantes finais: 131 / 130 / 0 / 402 / 536 / 0. Banco inalterado:
+544768 bytes / `bda97645…a30818`, sem sidecars.
+UT-15: Demo — NÃO INICIADA / NEXT.
 
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
 | UT-12 | Coorte Reportes | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1382 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-13 | Coorte Dashboard | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1412 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
-| UT-14 | Meus Dados | | | | | | 0 | | — | |
+| UT-14 | Meus Dados | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1439 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-15 | Demo | | | | | | 0 | | — | |
 | UT-16 | Residual Main Ownership | | | | | | 0 | | — | |
 | UT-17 | Infra | | | | | | 0 | | 1 | |

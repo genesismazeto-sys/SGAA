@@ -212,6 +212,13 @@ REPORTES_MUTATING_PAIRS = {
     "/admin/reportes/<int:reporte_id>/deletar": "admin_reportes_deletar",
 }
 
+# UT-14: the Meus Dados POST handler extracted to app.views.admin.meus_dados.
+# It appears as one additional owner-only delta in the regenerated CSRF
+# snapshots (main -> app.views.admin.meus_dados).
+MEUS_DADOS_MUTATING_PAIRS = {
+    "/admin/meus_dados": "admin_meus_dados",
+}
+
 ALLOWED_CSRF_STATUSES = {
     "ok_rendered_form_token",
     "ok_dynamic_form_token",
@@ -785,10 +792,13 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         # adds exactly 3 more owner-only deltas (main ->
         # app.views.admin.alertas).  UT-12: the Reportes extraction adds
         # exactly 2 more owner-only deltas (main ->
-        # app.views.admin.reportes).
+        # app.views.admin.reportes).  UT-14: the Meus Dados extraction adds
+        # exactly 1 more owner-only delta (main ->
+        # app.views.admin.meus_dados).
         # The historical 8 Matrizes deltas remain owner-only and unchanged.
-        # 43 = 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10 + 3 UT-11
-        # + 2 UT-12, exhaustively partitioned with no uncategorized delta.
+        # 44 = 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10 + 3 UT-11
+        # + 2 UT-12 + 1 UT-14, exhaustively partitioned with no uncategorized
+        # delta.
         deltas_by_route = {new_row["route"]: (old_row, new_row) for old_row, new_row in deltas}
         matrizes_routes = set(CSRF_MUTATING_PAIRS)
         b6_routes = set(B6_MUTATING_PAIRS)
@@ -797,6 +807,7 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         arquivos_routes = set(ARQUIVOS_MUTATING_PAIRS)
         alertas_routes = set(ALERTAS_MUTATING_PAIRS)
         reportes_routes = set(REPORTES_MUTATING_PAIRS)
+        meus_dados_routes = set(MEUS_DADOS_MUTATING_PAIRS)
         assert len(matrizes_routes) == 8
         assert len(b6_routes) == 11
         assert len(banco_dados_routes) == 11
@@ -804,31 +815,40 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         assert len(arquivos_routes) == 3
         assert len(alertas_routes) == 3
         assert len(reportes_routes) == 2
+        assert len(meus_dados_routes) == 1
         assert not (matrizes_routes & b6_routes)
         assert not (matrizes_routes & banco_dados_routes)
         assert not (matrizes_routes & acesso_routes)
         assert not (matrizes_routes & arquivos_routes)
         assert not (matrizes_routes & alertas_routes)
         assert not (matrizes_routes & reportes_routes)
+        assert not (matrizes_routes & meus_dados_routes)
         assert not (b6_routes & banco_dados_routes)
         assert not (b6_routes & acesso_routes)
         assert not (b6_routes & arquivos_routes)
         assert not (b6_routes & alertas_routes)
         assert not (b6_routes & reportes_routes)
+        assert not (b6_routes & meus_dados_routes)
         assert not (banco_dados_routes & acesso_routes)
         assert not (banco_dados_routes & arquivos_routes)
         assert not (banco_dados_routes & alertas_routes)
         assert not (banco_dados_routes & reportes_routes)
+        assert not (banco_dados_routes & meus_dados_routes)
         assert not (acesso_routes & arquivos_routes)
         assert not (acesso_routes & alertas_routes)
         assert not (acesso_routes & reportes_routes)
+        assert not (acesso_routes & meus_dados_routes)
         assert not (arquivos_routes & alertas_routes)
         assert not (arquivos_routes & reportes_routes)
+        assert not (arquivos_routes & meus_dados_routes)
         assert not (alertas_routes & reportes_routes)
-        assert len(deltas_by_route) == 43
+        assert not (alertas_routes & meus_dados_routes)
+        assert not (reportes_routes & meus_dados_routes)
+        assert len(deltas_by_route) == 44
         assert set(deltas_by_route) == (
             matrizes_routes | b6_routes | banco_dados_routes | acesso_routes
             | arquivos_routes | alertas_routes | reportes_routes
+            | meus_dados_routes
         )
 
         matrizes_deltas = [
@@ -858,6 +878,11 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
             for route, pair in deltas_by_route.items()
             if route in reportes_routes
         ]
+        meus_dados_deltas = [
+            pair
+            for route, pair in deltas_by_route.items()
+            if route in meus_dados_routes
+        ]
         assert len(matrizes_deltas) == 8
         assert len(b6_deltas) == 11
         assert len(banco_dados_deltas) == 11
@@ -865,6 +890,7 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         assert len(arquivos_deltas) == 3
         assert len(alertas_deltas) == 3
         assert len(reportes_deltas) == 2
+        assert len(meus_dados_deltas) == 1
 
         for old_row, new_row in matrizes_deltas:
             expected_func = CSRF_MUTATING_PAIRS[new_row["route"]]
@@ -947,6 +973,19 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
             assert (
                 new_row["view_function"]
                 == f"app.views.admin.reportes.{expected_func}"
+            )
+            assert new_row["method"] == "POST"
+            assert new_row["status"] in ALLOWED_CSRF_STATUSES
+            old_other = {k: v for k, v in old_row.items() if k != "view_function"}
+            new_other = {k: v for k, v in new_row.items() if k != "view_function"}
+            assert old_other == new_other
+
+        for old_row, new_row in meus_dados_deltas:
+            expected_func = MEUS_DADOS_MUTATING_PAIRS[new_row["route"]]
+            assert old_row["view_function"] == f"main.{expected_func}"
+            assert (
+                new_row["view_function"]
+                == f"app.views.admin.meus_dados.{expected_func}"
             )
             assert new_row["method"] == "POST"
             assert new_row["status"] in ALLOWED_CSRF_STATUSES

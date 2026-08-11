@@ -1555,3 +1555,110 @@ agrupava Dashboard + demo + meus_dados está preservado em §1 (snapshot datado)
 changelog v1.4 — não foi reescrito.
 
 **Próxima:** UT-14 — Meus Dados — NÃO INICIADA / NEXT.
+
+## UT-14 — Meus Dados — CLOSEOUT (GOVERNANCE)
+
+**Data:** 2026-08-10. **HEAD de entrada:**
+`ef7bc0302cc86b4fa37f301be8157363922e51e7`. **IAexec efetivo:**
+opencode-go/deepseek-v4-flash. **Fallback:** nenhum. **Protocolo:** v1.4 —
+2026-08-10. **Fase:** governance-only closeout — zero produção, zero teste,
+zero snapshot, zero banco alterados nesta fase. **Landing:** publica esta UT-14
+por este commit de landing — nenhum SHA de landing inventado.
+
+**Owner canônico:** `app/views/admin/meus_dados.py`.
+
+**Coorte exata:** 1 rota — `admin_meus_dados`, GET + POST `/admin/meus_dados`,
+2 pares endpoint-method; 0 helpers locais; 0 constantes locais (apenas o wiring
+padrão `bp_admin_meus_dados` e `LEGACY_ROUTE_SPECS`). Blueprint:
+`admin_meus_dados_blueprint`.
+
+**MOVE, DO NOT CHANGE:** corpo da função AST-idêntico ao de `HEAD:main.py` com
+decorators normalizados (diferenças permitidas: localização do módulo; imports
+canônicos; wiring Blueprint/LegacyRouteSpec; decorator `admin_required`
+resolvido diretamente de `app.auth`). Zero diferença de comportamento de
+negócio. Dívida pré-existente preservada e não remediada:
+`ensure_usuario_profile_schema` a cada GET; `session["user_name"]` definido
+antes do manuseio de avatar; ValueError de avatar (extensão inválida) continua
+até o commit; sem rollback explícito; exatamente 1 `conn.commit` no caminho de
+sucesso; strings de flash; contexto de template (`aluno_meus_dados.html`,
+`base_template="base.html"`, `show_student_fields=False`,
+`cancel_url=url_for("admin_dashboard")`, `turmas=[]`). Sem clean-up
+C4/schema; sem migration v4.
+
+**Factory:** `register_admin_meus_dados_blueprint` default True; registrado
+por exatamente 1 chamada `register_legacy_blueprint`; default = 1 rota /
+2 pares; opt-out = 0 rotas da coorte. LegacyRouteSpec: 1 spec
+(`/admin/meus_dados` / `admin_meus_dados` / GET, POST).
+
+**Facade de identidade `main`:** re-export exato 1/1 —
+`main.admin_meus_dados is app.views.admin.meus_dados.admin_meus_dados`;
+nenhum wrapper; ownership local `main` = 0 (0 defs, 0 decorators
+`@app.route` da coorte); alvo sem backedge de `main` (zero imports diretos/
+dinâmicos/`sys.modules`/`importlib`).
+
+**RBAC inalterado:** GET → `meus_dados:view`; POST → `meus_dados:edit`.
+
+**CSRF:** transição de owner única por snapshot canônico
+(`main.admin_meus_dados` → `app.views.admin.meus_dados.admin_meus_dados`);
+única linha alterada; somente o campo `view_function`; 78 linhas preservadas;
+shadow_on/shadow_off coerentes; nenhuma mudança comportamental de CSRF.
+Totais cumulativos de transições de owner: **36 / 44 / 49** (35 / 43 / 48
++ 1 transição owner-only da UT-14). Baseline `route_inventory_baseline.json`:
+byte-idêntico.
+
+**Seams históricos autorizados (supervisor, pré-autorizados, exatamente**
+`tests/test_ut13_dashboard_blueprint.py`,
+`tests/test_ut12_reportes_blueprint.py`,
+`tests/test_phase4_requisicoes_blueprint.py` **; classificação
+TEST_CONTRACT_SEAM / LEGITIMATE_UT14_COCHANGE):** transições state-aware
+estreitas da expectativa de residência meus_dados-em-`main` (alvo real ausente
+→ `main`; alvo real presente → `app.views.admin.meus_dados`); nenhum
+enfraquecimento de contratos Dashboard/Reportes/Requisições; Demo permanece
+main-owned; ownership misto rejeitado; UT-10/11/12/13 não reabertas.
+
+**Cochanges ratificados (supervisor: LEGITIMATE_UT14_COCHANGE — nenhum defeito
+de produção, nenhuma expansão de escopo adicional):**
+- `tests/test_phase4_matrizes_blueprint.py` — transição CSRF cumulativa
+  43 → 44; apenas partição de ownership Meus Dados;
+- `tests/test_phase4_alunos_turmas_cursos_blueprint.py` — transição CSRF
+  cumulativa 35 → 36; apenas partição de ownership Meus Dados;
+- `tests/test_phase4_configuracoes_blueprint.py` — inventário exato do pacote
+  admin ganha apenas `meus_dados.py`; nenhum relaxamento;
+- `tests/test_phase3_schema_startup_transaction_contract.py` — manifest de
+  callers `main.init_db` 75 → 76; caller adicionado:
+  `tests/test_ut14_meus_dados_blueprint.py::_prepare_behavior_env`; nenhum
+  caller removido ou relocado; delta revisado independentemente e aceito.
+
+**RED congelado:** `tests/test_ut14_meus_dados_blueprint.py` — 27 testes
+(15 RED A-O / 12 GREEN); 27/27 PASS; SHA-256
+`B3E3DFEE8BDC60C8CF55B89EA2CCDAC6F52C9B03B5A55FAC0FBDD23653DEBB5E`;
+inalterado nesta fase de governança.
+
+**Lanes e resultados exatos:** gate UT-14 27/27; lane histórica 77/77; lane
+de contrato permanente 72/72; lane histórica de cochange/baseline 298/298;
+revisão independente 190/190; C4 36/36.
+
+**Revisão independente:** PASS / 0 achados materiais.
+
+**Suíte canônica (qualificadora, pré-landing):** 1456 collected / 1439 passed
+/ 17 deselected / 0 failed / 0 errors / 0 skipped / 368.24s.
+
+**Invariantes finais:** rotas 131 / endpoints distintos 130 / RBAC unmapped 0 /
+actor matrix 402 / catálogo de mensagens 536 / hooks_main 0 / dependências
+reversas app/services/utils → `main` 0 / `main.init_db` compatibility callers
+76 (75→76 somente o `_prepare_behavior_env` do RED UT-14; delta de produção 0) /
+SCHEMA_VERSION 3 / migrações v1/v2/v3 only.
+
+**Custódia de banco:** `database.db` 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`;
+sem `-wal` / `-shm` / `-journal` do banco ativo; inalterado nesta fase.
+
+**Custódia de inventário de rotas:** `route_inventory_baseline.json`
+byte-idêntico; snapshots CSRF atualizados apenas no campo `view_function`
+(uma linha por snapshot), conforme a transição de ownership — fase de
+implementação.
+
+**Disposição final:** UT-14 CLOSED / ACCEPTED / PUBLISHED — publicação por
+este commit de landing da UT-14; SHA de landing não inventado.
+
+**Próxima:** UT-15 — Demo — NÃO INICIADA / NEXT.

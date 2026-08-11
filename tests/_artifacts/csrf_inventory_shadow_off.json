@@ -9395,7 +9395,7 @@
     {
       "route": "/admin/meus_dados",
       "method": "POST",
-      "view_function": "main.admin_meus_dados",
+      "view_function": "app.views.admin.meus_dados.admin_meus_dados",
       "template_related": [
         "aluno_meus_dados.html"
       ],

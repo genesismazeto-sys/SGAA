@@ -11,16 +11,19 @@ UT-13 entry parent: `2e0afa34ed1b927014ac35875668bbdc132743ad`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-13 (Dashboard) — CLOSED / ACCEPTED / PUBLISHED (published by
-this UT-13 landing commit, subject `Extract admin dashboard route`, entry parent
-`2e0afa34`). Last completed work: UT-13 Dashboard extraction — 1 route / 1
-endpoint-method pair / 9 helper functions (10 moved symbols total) moved to
-`app/views/admin/dashboard.py`; `admin_meus_dados` is NOT part of UT-13 and
-remains candidate for separate future work. Prior landings: UT-12 Reportes
-extraction (parent `4820e4d3`); UT-11 Alertas extraction (parent `a0092149`);
-UT-10 Arquivos extraction (parent `e8f64a82`); C4 request-hook write isolation
-+ STRUCTURAL PLATEAU publication (Phase-H landing commit, parent `230de41b`).
-Next UT: UT-14 — Meus Dados — NOT STARTED / NEXT.
+Last completed UT: UT-14 (Meus Dados) — CLOSED / ACCEPTED / PUBLISHED
+(published by this UT-14 landing commit; landing SHA not invented).
+Last completed work: UT-14
+Meus Dados extraction — 1 route (`admin_meus_dados`, GET + POST
+`/admin/meus_dados`) / 2 business endpoint-method pairs moved to
+`app/views/admin/meus_dados.py`; main keeps an exact identity compatibility
+facade only (`main.admin_meus_dados is target.admin_meus_dados`; main local
+ownership = 0). Prior landings: UT-13 Dashboard extraction (parent `2e0afa34`);
+UT-12 Reportes extraction (parent `4820e4d3`); UT-11 Alertas extraction
+(parent `a0092149`); UT-10 Arquivos extraction (parent `e8f64a82`); C4
+request-hook write isolation + STRUCTURAL PLATEAU publication (Phase-H landing
+commit, parent `230de41b`).
+Next UT: UT-15 — Demo — NOT STARTED / NEXT.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -293,7 +296,103 @@ CSRF: Dashboard owner deltas = 0; historical cumulative totals remain
 Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
 ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
-## FINAL RESIDUAL CENSUS / ROADMAP RECONCILIATION — ACCEPTED
+## UT-14 — Meus Dados — CLOSED / ACCEPTED / PUBLISHED
+
+Entry parent: `ef7bc0302cc86b4fa37f301be8157363922e51e7`. Published by this
+UT-14 landing commit; landing SHA not invented. Protocol v1.4 — 2026-08-10.
+
+Owner: `app/views/admin/meus_dados.py`.
+
+Extracted cohort: 1 route (`admin_meus_dados`, `GET` + `POST`,
+`/admin/meus_dados`) / 2 business endpoint-method pairs / 0 cohort-local
+helpers / 0 cohort-local constants (only the standard wiring assignments
+`bp_admin_meus_dados` and `LEGACY_ROUTE_SPECS`). Compatibility facade: `main`
+exact identity re-export only — `main.admin_meus_dados is
+target.admin_meus_dados` (no wrapper, no copied implementation); main local
+ownership = 0. Factory: `register_admin_meus_dados_blueprint` default = true,
+registered through exactly one `register_legacy_blueprint`; default
+registration = 1 route / 2 pairs; opt-out = 0 cohort routes.
+LegacyRouteSpecs: 1 (`/admin/meus_dados` / `admin_meus_dados` / GET, POST).
+Blueprint name: `admin_meus_dados_blueprint`.
+
+Behavior: MOVE, DO NOT CHANGE — function body AST-identical to the removed
+`main.py` route with decorators normalized (allowed differences: module
+location, canonical imports, Blueprint/LegacyRouteSpec wiring, decorator
+resolving directly from `app.auth`). SQL / query ordering / exactly one
+success-path `conn.commit` / `ensure_usuario_profile_schema` on every GET /
+`session["user_name"]` set before avatar handling / avatar-ValueError
+continue-toward-commit / no explicit rollback / flash strings / template
+context (`aluno_meus_dados.html`, `base_template="base.html"`,
+`show_student_fields=False`, `cancel_url=url_for("admin_dashboard")`,
+`turmas=[]`) preserved exactly. Pre-existing request-path write/bootstrap
+behavior remains debt, was not remediated, and no C4/schema cleanup and no
+migration v4 were introduced.
+
+RBAC unchanged: GET → `meus_dados:view`; POST → `meus_dados:edit`.
+
+CSRF: exactly one ownership transition in each canonical snapshot
+(`main.admin_meus_dados` → `app.views.admin.meus_dados.admin_meus_dados`);
+single row changed, only the `view_function` field; both snapshots stay at
+78 rows and shadow_on/off remain coherent; no behavioral CSRF change.
+Cumulative owner-transition totals: 36 / 44 / 49 (35 / 43 / 48 + 1 UT-14
+owner-only transition). Route inventory baseline
+`route_inventory_baseline.json`: byte-identical.
+
+Boundaries preserved: `admin_demo_clientes_form_pack` remains main-owned
+(UT-15 cohort); Dashboard `app.views.admin.dashboard`; Reportes
+`app.views.admin.reportes`; Alertas `app.views.admin.alertas`; Arquivos
+`app.views.admin.arquivos`; aluno profile routes and every UT-16 residual
+symbol stay in their current owners. UT-15 NOT STARTED / NEXT.
+
+Sequential owners: Arquivos `app.views.admin.arquivos`; Alertas
+`app.views.admin.alertas`; Reportes `app.views.admin.reportes`; Dashboard
+`app.views.admin.dashboard`; Meus Dados `app.views.admin.meus_dados`.
+
+Authorized historical seams (supervisor pre-authorized, in exactly
+`tests/test_ut13_dashboard_blueprint.py`,
+`tests/test_ut12_reportes_blueprint.py` and
+`tests/test_phase4_requisicoes_blueprint.py` — classified
+TEST_CONTRACT_SEAM / LEGITIMATE_UT14_COCHANGE): narrow state-aware
+meus_dados ownership transitions only (absent → main-owned; present →
+`app.views.admin.meus_dados`); no weakening of any Dashboard/Reportes/
+Requisicoes contract; Demo remains main-owned; mixed ownership rejected;
+UT-10/UT-11/UT-12/UT-13 files not reopened.
+
+Ratified UT-14 cochanges (supervisor-classified LEGITIMATE_UT14_COCHANGE, no
+production defect, no architecture change):
+- `tests/test_phase4_matrizes_blueprint.py` — cumulative CSRF transition
+  43 → 44 (one Meus Dados ownership partition only)
+- `tests/test_phase4_alunos_turmas_cursos_blueprint.py` — cumulative CSRF
+  transition 35 → 36 (one Meus Dados ownership partition only)
+- `tests/test_phase4_configuracoes_blueprint.py` — exact admin package
+  inventory gains `meus_dados.py` only; no unrelated relaxation
+- `tests/test_phase3_schema_startup_transaction_contract.py` — `main.init_db`
+  caller manifest 75 → 76; added caller
+  `tests/test_ut14_meus_dados_blueprint.py::_prepare_behavior_env`; no caller
+  removed or relocated (delta independently reviewed and accepted)
+
+No other scope expansion.
+
+Frozen RED: `tests/test_ut14_meus_dados_blueprint.py` — 27/27 PASS;
+SHA-256 `B3E3DFEE8BDC60C8CF55B89EA2CCDAC6F52C9B03B5A55FAC0FBDD23653DEBB5E`.
+
+Qualification evidence: UT-14 gate 27/27; historical seam lane 77/77;
+permanent contract lane 72/72; historical cochange/baseline lane 298/298;
+independent review lane 190/190; C4 gate 36/36. Canonical full suite
+(qualifying, pre-landing): 1456 collected / 1439 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 368.24s. Independent review: PASS /
+0 material findings.
+
+Canonical invariants unchanged: routes 131 / distinct endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalog 536 / hooks_main 0 /
+app/services/utils → main 0 / SCHEMA_VERSION 3 / migrations v1/v2/v3 only.
+
+Database unchanged: 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`; no
+sidecars.
+
+Structural plateau remains: VALIDATED / PUBLISHED. C4 remains: CLOSED /
+ACCEPTED / PUBLISHED. Protocol remains: v1.4.
 
 HEAD: `b632edf90e2397abb145edc5d47e5a89bd48f078`. Census type: read-only.
 Files altered during census: 0. Protocol v1.4 — 2026-08-10.
@@ -339,21 +438,23 @@ not require suite repetition. No candidate or DB byte changed.
   `app._apply_security_headers`
 - architectural reverse dependencies (app/services/utils → main): 0
 - literal main import edges: 0
-- `main.init_db` compatibility callers: 75 (74→75 solely the frozen C4 RED test's
-  `_bootstrapped_env`; production caller delta 0)
+- `main.init_db` compatibility callers: 76 (75→76 solely the frozen UT-14 RED
+  test's `_prepare_behavior_env`; production caller delta 0)
 - `app_db`-qualified `init_db` callers: 6 (5→6 solely `tests/conftest.py::
   _bootstrap_session_database`; production caller delta 0)
 - `SCHEMA_VERSION`: 3 — migrations v1/v2/v3 only (migration v4 remains PROHIBITED)
 
 ## Latest full-suite status
 
-Canonical suite: 1429 collected / 1412 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 357.96s.
+Canonical suite: 1456 collected / 1439 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 368.24s.
+Frozen UT-14 RED `tests/test_ut14_meus_dados_blueprint.py`: 27/27 passed;
+frozen SHA-256 `B3E3DFEE8BDC60C8CF55B89EA2CCDAC6F52C9B03B5A55FAC0FBDD23653DEBB5E`.
 Frozen UT-13 RED `tests/test_ut13_dashboard_blueprint.py`: 30/30 passed;
 frozen SHA-256 `63a811794f136e087e47b624b1ec1a53f695138464f7a960b6291f9bded41ef2`.
 Frozen C4 gate `tests/test_plateau_c4_request_hook_write_isolation.py`: 36/36 passed;
 frozen SHA-256 `277b0c3a872c540e5e58372d6697777842bd15c825ff20e4e77402b781519dde`.
 Detail: `docs/refactor/EXECUTION_PROTOCOL.md` §11 and
-`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13 and plateau blocks).
+`docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md` (UT-9, UT-10, UT-11, UT-12, UT-13, UT-14 and plateau blocks).
 
 ## Database baseline
 

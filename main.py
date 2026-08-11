@@ -604,6 +604,12 @@ from app.views.admin.dashboard import (
 )
 
 
+# UT-14: o cohort "Meus Dados" (1 simbolo: 1 rota) passou a ser propriedade
+# canonica de app/views/admin/meus_dados.py.  main apenas re-exporta o nome
+# por IDENTIDADE -- nunca wrapper.
+from app.views.admin.meus_dados import admin_meus_dados
+
+
 # ===================== Auth helpers =====================
 
 
@@ -1150,87 +1156,6 @@ def admin_demo_clientes_form_pack():
 
 
 # ===================== Rotas Aluno =====================
-
-
-
-
-
-@app.route("/admin/meus_dados", methods=["GET", "POST"])
-@admin_required
-def admin_meus_dados():
-    conn = get_db_connection()
-    ensure_usuario_profile_schema(conn)
-    usuario_id = session["user_id"]
-    profile = conn.execute(
-        "SELECT nome, email, foto_perfil FROM usuarios WHERE id = ?",
-        (usuario_id,),
-    ).fetchone()
-
-    if not profile:
-        flash("Usuário não encontrado.", "error")
-        return redirect(url_for("admin_dashboard"))
-
-    if request.method == "POST":
-        nome = request.form["nome"]
-        email = request.form["email"]
-        senha = request.form.get("senha")
-
-        try:
-            if senha:
-                hashed_password = hash_password(senha)
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?",
-                    (nome, email, hashed_password, usuario_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
-                    (nome, email, usuario_id),
-                )
-
-            session["user_name"] = nome
-
-            remove_foto = request.form.get("remove_foto") == "1"
-            foto_file = request.files.get("foto_perfil")
-            if remove_foto:
-                conn.execute("UPDATE usuarios SET foto_perfil = NULL WHERE id = ?", (usuario_id,))
-                session.pop("foto_perfil", None)
-            elif foto_file and foto_file.filename:
-                try:
-                    foto_rel = save_upload(
-                        foto_file,
-                        {"png", "jpg", "jpeg"},
-                        prefix="avatar",
-                        subdir=f"avatars/usuario_{usuario_id}",
-                    )
-                    if foto_rel:
-                        conn.execute(
-                            "UPDATE usuarios SET foto_perfil = ? WHERE id = ?",
-                            (foto_rel, usuario_id),
-                        )
-                        session["foto_perfil"] = foto_rel
-                except ValueError:
-                    flash("Foto inválida. Use PNG ou JPG.", "error")
-
-            conn.commit()
-            flash("Seus dados foram atualizados com sucesso.", "success")
-            return redirect(url_for("admin_meus_dados"))
-        except sqlite3.IntegrityError as exc:
-            if "UNIQUE constraint failed: usuarios.email" in str(exc):
-                flash("Erro: Já existe outro usuário com este e-mail.", "error")
-            else:
-                flash(f"Erro ao atualizar dados: {exc}", "error")
-        except Exception as exc:
-            flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
-
-    return render_template(
-        "aluno_meus_dados.html",
-        base_template="base.html",
-        profile=profile,
-        show_student_fields=False,
-        cancel_url=url_for("admin_dashboard"),
-        turmas=[],
-    )
 
 
 

@@ -15,7 +15,10 @@ There is NO cohort-local constant in the frozen target (only the standard
 wiring assignments ``bp_admin_dashboard`` and ``LEGACY_ROUTE_SPECS``).
 
 Explicitly OUTSIDE UT-13 (hard boundary, both states):
-``admin_demo_clientes_form_pack`` and ``admin_meus_dados`` stay main-owned;
+``admin_demo_clientes_form_pack`` stays main-owned; ``admin_meus_dados``
+stayed main-owned throughout UT-13 and is the UT-14 cohort (the meus_dados
+clauses in this file are UT-14 seams, state-aware on the real
+``app/views/admin/meus_dados.py`` target availability);
 ``UPPER_CODE_RE``, ``proximo_numero_turma`` and
 ``validar_integridade_versionamento_atividades`` also stay main-owned.
 
@@ -105,6 +108,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
 TARGET_REL = "app/views/admin/dashboard.py"
 TARGET_MODULE_NAME = "app.views.admin.dashboard"
+MEUS_DADOS_TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "meus_dados.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 CREATE_APP_PATH = PROJECT_ROOT / "app" / "__init__.py"
 ADMIN_PACKAGE = PROJECT_ROOT / "app" / "views" / "admin"
@@ -126,9 +130,11 @@ HELPER_NAMES = (
 
 MOVED_SYMBOLS = ROUTE_NAMES + HELPER_NAMES
 
+# UT-14 seam: admin_meus_dados left the Dashboard neighbor set (it is the
+# UT-14 cohort, governed by tests/test_ut14_meus_dados_blueprint.py);
+# admin_demo_clientes_form_pack remains the hard-boundary neighbor.
 NEIGHBOR_ROUTE_NAMES = (
     "admin_demo_clientes_form_pack",
-    "admin_meus_dados",
 )
 
 ROUTE_MATRIX = (
@@ -1330,13 +1336,24 @@ def test_green_14_csrf_zero_dashboard_partition_and_cumulative_projection():
             row for row in rows if row["route"] == "/admin/meus_dados"
         ]
         assert len(meus_dados_rows) == 1, (
-            "neighbor /admin/meus_dados POST must stay the single tracked row "
+            "admin_meus_dados POST must stay the single tracked row "
             f"in {suffix}"
         )
         assert meus_dados_rows[0]["method"] == "POST"
-        assert meus_dados_rows[0]["view_function"] == "main.admin_meus_dados", (
-            "neighbor admin_meus_dados must remain main-owned in the CSRF "
-            f"inventory in both states, got {meus_dados_rows[0]['view_function']!r}"
+        # UT-14 seam: the meus_dados CSRF owner is state-aware on the real
+        # UT-14 target availability (absent -> main-owned; present ->
+        # app.views.admin.meus_dados.admin_meus_dados).  Snapshots are
+        # read-only here; regeneration is a coherent-pair step of the
+        # UT-14 implementation phase, never part of RED.
+        expected_meus_dados_owner = (
+            "app.views.admin.meus_dados.admin_meus_dados"
+            if MEUS_DADOS_TARGET_PATH.exists()
+            else "main.admin_meus_dados"
+        )
+        assert meus_dados_rows[0]["view_function"] == expected_meus_dados_owner, (
+            "admin_meus_dados CSRF inventory owner must follow the real "
+            "UT-14 target availability: expected "
+            f"{expected_meus_dados_owner!r}, got {meus_dados_rows[0]['view_function']!r}"
         )
 
 

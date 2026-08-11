@@ -110,6 +110,7 @@ EXPECTED_MAIN_INIT_CALLERS = {
     "tests/test_security.py": ("client",),
     "tests/test_ut8_banco_dados_blueprint.py": ("isolated_env",),
     "tests/test_ut9_acesso_blueprint.py": ("isolated_env",),
+    "tests/test_ut14_meus_dados_blueprint.py": ("_prepare_behavior_env",),
     "tests/test_plateau_c4_request_hook_write_isolation.py": ("_bootstrapped_env",),
     "tests/versioned_test_support.py": ("isolated_versioned_app_env",),
     "tools/smoke_test.py": ("<module>",),
@@ -590,7 +591,7 @@ def test_single_init_owner_and_exact_compatibility_caller_manifest():
         assert canonical_owner == "app.db.init_db"
         actual_main[path].append(scope)
     assert {path: tuple(scopes) for path, scopes in actual_main.items()} == EXPECTED_MAIN_INIT_CALLERS
-    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 75
+    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 76
 
     actual_app_db = defaultdict(list)
     for path, scope, _, _, expression, imported_binding, canonical_owner in records[
