@@ -60,8 +60,7 @@ RELATED_LOCAL_HELPERS = {
 # canonical app.admin_access identity through its __globals__.
 # The two Matrizes consumers (admin_editar_matriz, admin_matriz_nova_atividade)
 # moved to app.views.admin.matrizes (PHASE 4-B5-R1); the Acesso consumer
-# (admin_acesso) moved to app.views.admin.acesso (UT-9); the remaining consumer
-# below stays in main.py.
+# (admin_acesso) moved to app.views.admin.acesso (UT-9).
 #
 # UT-3 moves enforce_admin_access_control -> app.web.authz_gate and
 # inject_admin_access_helpers -> app.web.context (see
@@ -69,21 +68,25 @@ RELATED_LOCAL_HELPERS = {
 # consumers; their canonical-owner identity is asserted separately by
 # test_moved_admin_access_consumers_resolve_canonical_identities_in_future_owner_modules
 # below, against their future owner modules.
-CONSUMER_NAMES = {
-    "uploaded_file",
-}
-CONSUMER_HELPER_USES = {
-    "uploaded_file": {"_get_current_admin_access_context", "_admin_can"},
-}
+#
+# UT-17 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE): the last main.py
+# consumer, uploaded_file, moved to app.views.files; the current-main consumer
+# set is now empty and the canonical-helper identity proof for uploaded_file is
+# asserted through the moved-consumer machinery below (no weakening).
+CONSUMER_NAMES: set[str] = set()
+CONSUMER_HELPER_USES: dict[str, set[str]] = {}
 
-# UT-3 future owners for the moved pair, keyed by function name.
+# UT-3 future owners for the moved pair, keyed by function name.  UT-17 adds
+# the moved uploaded_file consumer (owner app.views.files).
 MOVED_CONSUMER_HELPER_USES = {
     "enforce_admin_access_control": {"_get_current_admin_access_context", "_admin_can"},
     "inject_admin_access_helpers": {"_get_current_admin_access_context", "_admin_can"},
+    "uploaded_file": {"_get_current_admin_access_context", "_admin_can"},
 }
 MOVED_CONSUMER_OWNER_MODULE = {
     "enforce_admin_access_control": "app.web.authz_gate",
     "inject_admin_access_helpers": "app.web.context",
+    "uploaded_file": "app.views.files",
 }
 
 # UT-9: the Acesso consumer moved to app.views.admin.acesso and must still

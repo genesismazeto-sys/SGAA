@@ -408,16 +408,26 @@ def test_green_3_non_ut16_residue_remains_expected():
 
 
 def test_green_4_ut17_firewall_three_routes_unchanged():
+    # UT-17 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE): state-aware
+    # transition of the UT-17 firewall.  Pre-target (app/views/files.py
+    # absent) the main local @app.route set is exactly the three UT-17 infra
+    # routes; post-target it is exactly EMPTY (Criterion 8 final state).
     source = MAIN_PATH.read_text(encoding="utf-8-sig")
     rules = _local_route_decorators(source)
-    assert rules == {
-        "/uploads/<path:filename>",
-        "/health",
-        "/favicon.ico",
-    }, (
-        "UT-16 must not touch the UT-17 firewall: main local @app.route set "
-        f"must remain exactly uploaded_file/health/favicon; got {rules}"
-    )
+    if (PROJECT_ROOT / "app" / "views" / "files.py").exists():
+        assert rules == set(), (
+            "UT-17 final state: main local @app.route set must be empty "
+            f"(Criterion 8); got {rules}"
+        )
+    else:
+        assert rules == {
+            "/uploads/<path:filename>",
+            "/health",
+            "/favicon.ico",
+        }, (
+            "UT-16 must not touch the UT-17 firewall: main local @app.route set "
+            f"must remain exactly uploaded_file/health/favicon; got {rules}"
+        )
 
 
 def test_green_5_architecture_invariants():

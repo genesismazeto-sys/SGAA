@@ -271,14 +271,6 @@ def test_b7p_reportes_target_owned_with_main_identity_compatibility():
         assert REPORTES_ROUTE_NAMES <= main_functions
 
 
-def test_b7p_uploaded_file_unchanged_from_entry_baseline():
-    baseline_main = _baseline_text("main.py")
-    baseline_uploaded_file = _find_function(baseline_main, "uploaded_file")
-    current_uploaded_file = _find_function(_read_text(MAIN_PATH), "uploaded_file")
-    assert _dump_body(baseline_uploaded_file) == _dump_body(current_uploaded_file)
-    assert ast.dump(baseline_uploaded_file.args) == ast.dump(current_uploaded_file.args)
-
-
 def test_b7p_admin_dashboard_unchanged_from_entry_baseline():
     # UT-13 seam: the entry-baseline behavioral equivalence protection is
     # preserved; only ownership/location evolves.  Post-target the comparison

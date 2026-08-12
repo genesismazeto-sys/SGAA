@@ -1913,3 +1913,129 @@ checkout não é mutação de artefato).
 este commit de landing da UT-16; SHA de landing não inventado.
 
 **Próxima:** UT-17 — Infra — NÃO INICIADA / NEXT.
+
+## UT-17 — Infra — CLOSED / ACCEPTED / PUBLISHED + REFACTOR ESTRUTURAL COMPLETO — CLOSED / ACCEPTED / PUBLISHED (2026-08-12)
+
+Bloco final cronológico do roadmap técnico (Protocol v1.4 — 2026-08-10).
+Publicado por este commit de landing da UT-17; SHA de landing não inventado.
+HEAD de entrada: `511f1c368cae9b7da54fdc42585c9917dc8ac59d`. Rotas movidas: **3**.
+
+**Transições de ownership (3):**
+- `uploaded_file` — main.py → **`app/views/files.py`** (dono canônico;
+  `uploaded_file(filename)`, rule `/uploads/<path:filename>`, endpoint
+  `uploaded_file`, GET). Registro: `create_app` → `app.add_url_rule` com guard
+  de duplicidade; callable canônico exato. Sem Blueprint, sem LegacyRouteSpec,
+  sem flag de factory, sem namespace, sem backedge app→main. MOVE-DO-NOT-CHANGE:
+  args `58079bef5f8ba39f54d2838c1eb3f292fa1a93a3b23b85930c76aa4196bb91ed`;
+  body `e29270ac0d7c92a5d1015990d33e4ebd3f0125b3078d70b453156c00076bc768`
+  (EXATOS; binding `from flask import current_app as app` preserva a grafia
+  literal do corpo).
+- `health` — main.py → **composição local de create_app** (module `app`,
+  qualname `create_app.<locals>.health`; rule `/health`, endpoint `health`,
+  GET). Comportamento: SELECT 1 → `200 {"status":"ok"}`; exceção → canal de log
+  `"main"` (binding dedicado `health_logger = logging.getLogger("main")`,
+  adaptação lexical autorizada pelo supervisor) → `500 {"status":"error"}`, sem
+  vazamento de detalhe. Fingerprint canônico (substituindo health_logger→logger):
+  `ac74eb097f396d1e2328098507a2d536e43f392d742ad38724e836d5af1ea140`.
+- `favicon` — main.py → **composição local de create_app** (module `app`,
+  qualname `create_app.<locals>.favicon`; rule `/favicon.ico`, endpoint
+  `favicon`, GET). Semântica literal `app.root_path/static/favicon.ico`
+  preservada: presente → 200 via `send_from_directory`; ausente → 204.
+  Fingerprint body: `57cb890b3f6f30007af7dc4bb16efd9ee11b7bd7bc42e092b49af0ac59b61e90`
+  (EXATO).
+
+**main final:** `@app.route` local **3 → 0** (Criterion 8 satisfeito);
+FunctionDefs locais removidos exatamente `uploaded_file`/`health`/`favicon`;
+superfície de compatibilidade = 3 bindings de identidade exata
+(`main.<name> is app.view_functions[<name>]`; `main.uploaded_file is
+app.views.files.uploaded_file`); zero wrappers; delta de statements 0; auditoria
+AST exaustiva vs HEAD limpa (nenhum outro corpo de FunctionDef alterado,
+nenhuma declaração top-level não relacionada removida/alterada). Sem limpeza
+genérica de main; D-3 permanece diferido/não exigido (não é bloqueador).
+
+**Seams históricos autorizados (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE):**
+- (A) `tests/test_ut10_arquivos_blueprint.py::test_green_9_uploaded_file_boundary_main_owned_outside_cohort`
+  — state-aware: ownership transita main→`app.views.files`; fato permanente
+  "uploaded_file nunca fez parte da coorte Arquivos" preservado; unicidade da
+  regra não enfraquecida.
+- (B) `tests/test_phase4_arquivos_alertas_shared_owners.py::test_b7p_uploaded_file_unchanged_from_entry_baseline`
+  — APOSENTADO sob Protocolo §8. **Retired tests: exatamente 1.** Evidência
+  substituta: fingerprint congelado UT-17 + contrato de autorização/segurança
+  no novo owner.
+- (C) `tests/test_phase4_matrizes_shared_owners.py` — `uploaded_file` sai do
+  conjunto de consumidores main de `_get_current_admin_access_context`/
+  `_admin_can` (conjunto main = vazio) e entra na maquinaria moved-consumer com
+  owner `app.views.files` e prova de identidade via `__globals__` (sem
+  enfraquecimento).
+- (D) `tests/test_ut16_residual_main_ownership.py::test_green_4_ut17_firewall_three_routes_unchanged`
+  — state-aware: pré-target exatamente 3 rotas firewall; pós-target exatamente
+  0 rotas locais (estado final do Criterion 8). SHAs do arquivo: publicado
+  congelado `D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`
+  (histórico, nunca reescrito como se o arquivo tivesse permanecido
+  byte-idêntico); pós-seam autorizado
+  `0C6C4429C9E41DC23A00ABB9BF1C0C12DA9752C7D6E0E2AFB37D4F1E6D2A1522`.
+
+**RED congelado UT-17:** `tests/test_ut17_infra_routes.py` — 38 testes;
+38/38 PASS / 0 failed / 0 errors / 0 skipped; SHA-256
+`04DB4E96256EB24C06085AF961500677554D5F5A8256524B7057724EFEDBCD41`; nenhuma
+mutação posterior. Gaps carreados da UT-16 FECHADOS: GET direto 200 admin
+autorizado (coberto); aluno acessando arquivo de outro aluno → 403 (coberto).
+
+**Histórico de revisão (não sanitizado):**
+- Revisão independente R1: **ACCEPT / 0 achados materiais**. R1 também
+  classificou a redação de proveniência de implementação como
+  **NON_MATERIAL_PROCESS_REPORTING_AMBIGUITY** (evidência durável não provou
+  implementação não autorizada nem violação de escopo).
+- Segunda revisão cega R2: veredito original do revisor **REJECT** — alegação:
+  o alias early-bound de `get_db_connection` impediu que um monkeypatch
+  app.db-only interceptasse o health. **Adjudicação do supervisor: REJECT
+  OVERRULED** — o main.py publicado em HEAD já fazia early-bind de
+  `get_db_connection` via `from app.db import get_db_connection`, e a ordem de
+  implementação da UT-17 autorizou explicitamente o import canônico equivalente
+  em `app/__init__.py`; portanto nenhuma regressão de semântica de site de
+  resolução relativa ao baseline foi demonstrada. Classificação:
+  **NON_MATERIAL_TESTABILITY_OBSERVATION / REVIEWER_CONTRACT_OVERREACH**.
+  Disposição final de R2 após adjudicação: **ACCEPT / 0 ACHADOS MATERIAIS**.
+  O REJECT original NÃO é apagado do histórico. Fato de roteamento: Claude
+  Opus 5 solicitado estava indisponível; Codex/família GPT-5 designado pela
+  plataforma executou R2; nenhum uso de GPT-5.6 Luna inventado.
+
+**Suíte canônica final (2 execuções determinísticas):**
+- Run 1: 1534 collected / 1517 passed / 17 deselected / 0 skipped / 0 failed /
+  0 errors / 379.06s.
+- Run 2 (registro canônico): 1534 collected / 1517 passed / 17 deselected /
+  0 skipped / 0 failed / 0 errors / 348.84s / **exit 0**.
+- Reconciliação: baseline UT-16 1497/1480 + 38 RED UT-17 − 1 aposentado =
+  1534/1517; nenhum delta de coleção não explicado; nenhuma manipulação de
+  seleção.
+
+**Critérios 1-9 (gate final):** C1 hooks_main 0 — PASS; C2 create_app único
+composition root — PASS; C3 zero app/services/utils→main e `app/views/files.py`
+sem backedge — PASS; C4 definição v1.3/v1.4 (falha histórica v1.2 preservada
+como verdade histórica) — PASS; C5 RBAC unmapped 0 — PASS; C6 rotas 131 /
+endpoints 130 / actor matrix 402 / inventário canônico inalterado — PASS;
+C7 suíte canônica 0 failed / 0 errors / exit 0 — PASS; C8 main.py sem
+`@app.route` (0) — PASS; C9 um dono canônico por coorte, bloqueadores
+residuais 0 — PASS. **CRITERIA 1-9: PASS.**
+
+**Invariantes finais:** rotas 131 / endpoints 130 / RBAC unmapped 0 / actor
+matrix 402 / catálogo de mensagens 536 / hooks_main 0 / app/services/utils→main
+0 / `main.init_db` callers 76 / SCHEMA_VERSION 3 / migrações v1/v2/v3 only /
+rotas locais main 0. Proibições permanentes preservadas: sem migration v4, sem
+pacote `app/db`, sem camada `app/repositories`.
+
+**Custódia de banco:** `database.db` 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`; sem
+`-wal`/`-shm`/`-journal`; inalterado.
+
+**Custódia de artefatos:** `csrf_inventory_shadow_on.json`,
+`csrf_inventory_shadow_off.json`, `route_inventory_baseline.json` — zero delta
+trackeado; conteúdo Git-canônico inalterado; sem regeneração.
+
+**Disposição final:** UT-17 CLOSED / ACCEPTED / PUBLISHED — TECHNICALLY
+ACCEPTED. **REFACTOR ESTRUTURAL COMPLETO CLOSED / ACCEPTED / PUBLISHED** —
+declaração canônica apenas no landing do commit único (governança + patch
+técnico UT-17) com verificação remota bem-sucedida; cronologia explícita:
+qualificação técnica antes da governança; a governança registra o estado final
+tecnicamente comprovado; publicação canônica somente após o landing. **NÃO
+existe UT-18**; a sequência técnica do roadmap está esgotada após a UT-17.

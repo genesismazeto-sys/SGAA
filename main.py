@@ -725,6 +725,12 @@ _TEMPLATES_DIR = os.path.join(_APP_DIR, "templates")
 app = create_app(register_aluno_blueprint=USE_ALUNO_BLUEPRINT)
 app.add_template_global(resolve_user_message, name="user_message")
 
+# UT-17: facades de identidade exata das rotas de infra, agora de propriedade
+# canônica da composição (create_app) / app.views.files.  Nenhum wrapper.
+uploaded_file = app.view_functions["uploaded_file"]
+health = app.view_functions["health"]
+favicon = app.view_functions["favicon"]
+
 # UT-3: registro funcional explícito (sem decorator) dos hooks cujos donos
 # canônicos agora são app/web/*.  O registro explícito mantém a ordem
 # determinística exigida pelo contrato de arquitetura:
@@ -996,124 +1002,6 @@ from app.views.admin.demo import admin_demo_clientes_form_pack
 
 # ===================== Uploads =====================
 
-@app.route("/uploads/<path:filename>")
-def uploaded_file(filename):
-    """Serve arquivos do diretório de uploads com controle de acesso.
-
-    Regras:
-      - Sem sessão ativa -> redireciona para login.
-            - Admin -> requer escopo `arquivos:view`.
-      - Aluno -> só pode ler:
-          * próprios uploads em `aluno_<aluno_id>/...`
-          * próprio avatar em `avatars/usuario_<user_id>/...`
-          * arquivos publicados em admin_arquivos com visivel = 1
-          * arquivos referenciados em suas próprias requisições
-      - Caso contrário -> 403.
-    """
-    # Normalização + path-traversal guard
-    try:
-        safe_rel = sanitize_student_document_relpath(filename)
-    except ValueError:
-        abort(403)
-
-    user_id = session.get("user_id")
-    user_type = session.get("user_type")
-    if not user_id:
-        # Sem sessão, redireciona em vez de 401 para fluxo natural via browser
-        return redirect(url_for("login"))
-
-    rel_norm = safe_rel.replace("\\", "/")
-    is_student_document_relpath = rel_norm.startswith("aluno_")
-    allowed = False
-    if user_type == "admin":
-        auth_context = _get_current_admin_access_context(force_reload=True)
-        allowed = _admin_can("arquivos", "view", auth_context)
-    elif user_type == "aluno":
-        try:
-            conn = get_db_connection()
-            arow = conn.execute(
-                "SELECT id FROM alunos WHERE usuario_id = ?", (user_id,)
-            ).fetchone()
-            aluno_id = arow["id"] if arow else None
-            if aluno_id and (
-                rel_norm.startswith(f"aluno_{aluno_id}/")
-                or rel_norm.startswith(f"aluno_{aluno_id} - ")
-            ):
-                allowed = True
-            elif rel_norm.startswith(f"avatars/usuario_{user_id}/"):
-                allowed = True
-            else:
-                # Arquivos publicados pelo admin (visíveis ao aluno)
-                row = conn.execute(
-                    "SELECT 1 FROM admin_arquivos WHERE filename = ? AND visivel = 1",
-                    (rel_norm,),
-                ).fetchone()
-                if row:
-                    allowed = True
-                elif aluno_id:
-                    # Anexos vinculados a requisições do próprio aluno
-                    row = conn.execute(
-                        """
-                        SELECT 1 FROM requisicao_arquivos ra
-                          JOIN requisicoes r ON r.id = ra.requisicao_id
-                         WHERE ra.filename = ? AND r.aluno_id = ?
-                         LIMIT 1
-                        """,
-                        (rel_norm, aluno_id),
-                    ).fetchone()
-                    if not row:
-                        # Comprovante legado armazenado direto em requisicoes
-                        row = conn.execute(
-                            "SELECT 1 FROM requisicoes WHERE arquivo_comprovante = ? AND aluno_id = ? LIMIT 1",
-                            (rel_norm, aluno_id),
-                        ).fetchone()
-                    if row:
-                        allowed = True
-        except Exception:
-            allowed = False
-
-    if not allowed:
-        abort(403)
-
-    candidate_paths = []
-    if is_student_document_relpath:
-        docs_root = app.config.get("DOCUMENTOS_ALUNOS_FOLDER")
-        if docs_root:
-            try:
-                candidate_paths.append(resolve_student_document_path(docs_root, rel_norm))
-            except ValueError:
-                abort(403)
-    try:
-        candidate_paths.append(resolve_student_document_path(app.config["UPLOAD_FOLDER"], rel_norm))
-    except ValueError:
-        abort(403)
-
-    target_path = next((path for path in candidate_paths if os.path.isfile(path)), None)
-    if not target_path:
-        abort(404)
-
-    rel_dir = os.path.dirname(target_path)
-    rel_name = os.path.basename(target_path)
-    resp = send_from_directory(
-        rel_dir,
-        rel_name,
-        as_attachment=False,
-    )
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    # Não cachear arquivos sensíveis em proxies/dispositivos compartilhados
-    resp.headers["Cache-Control"] = "private, no-store"
-    return resp
-
-@app.route("/health")
-def health():
-    try:
-        conn = get_db_connection()
-        conn.execute("SELECT 1")
-        return jsonify({"status": "ok"})
-    except Exception:
-        # Evita vazar detalhes internos (paths/driver) no payload público
-        logger.exception("healthcheck falhou")
-        return jsonify({"status": "error"}), 500
 
 # ===================== Autenticação (legado mantido apenas para compat) =====================
 # A view `login()` ativa vive em app/views/core.py. As funções a seguir são
@@ -1182,15 +1070,6 @@ _rebind_legacy_core_exports()
 _rebind_legacy_aluno_exports()
 
 # ===================== Handlers / estáticos auxiliares =====================
-
-@app.route("/favicon.ico")
-def favicon():
-    static_dir = os.path.join(app.root_path, "static")
-    fav_path = os.path.join(static_dir, "favicon.ico")
-    if os.path.exists(fav_path):
-        return send_from_directory(static_dir, "favicon.ico")
-    # evita quebrar se não existir
-    return ("", 204)
 
 # ===================== Run =====================
 

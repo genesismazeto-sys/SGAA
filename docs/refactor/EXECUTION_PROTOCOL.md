@@ -836,7 +836,8 @@ UT-14: Meus Dados — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit d
 UT-14 abaixo). UT-15: Demo — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-15; ver bloco
 UT-15 abaixo).
 UT-16: Residual Main Ownership — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-16; ver bloco
-UT-16 abaixo). UT-17: Infra — NÃO INICIADA / NEXT.
+UT-16 abaixo). UT-17: Infra — CLOSED / ACCEPTED / PUBLISHED (publicado por este commit de landing da UT-17; ver bloco
+UT-17 abaixo). REFACTOR ESTRUTURAL COMPLETO — CLOSED / ACCEPTED / PUBLISHED (ver bloco abaixo).
 
 **UT-10 — Coorte Arquivos: CLOSED / ACCEPTED / PUBLISHED** no commit de landing (subject
 `Extract admin files routes`; pai de entrada `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`).
@@ -1029,7 +1030,65 @@ de aluno acessando arquivo de outro aluno → 403. Invariantes finais: 131 /
 sem sidecars. Não-escopo explícito preservado: `proximo_numero_turma`,
 `_login_attempts`, `_APP_DIR`, `_TEMPLATES_DIR`, wrappers/stubs/rebinds,
 facades de identidade; D-3 permanece diferido.
-UT-17: Infra — NÃO INICIADA / NEXT.
+UT-17: Infra — CLOSED / ACCEPTED / PUBLISHED (ver bloco UT-17 abaixo).
+
+**UT-17 — Coorte Infra: CLOSED / ACCEPTED / PUBLISHED** (publicado por este
+commit de landing da UT-17; SHA de landing não inventado). HEAD de entrada:
+`511f1c368cae9b7da54fdc42585c9917dc8ac59d`. Rotas movidas: **3**.
+- `uploaded_file` (`/uploads/<path:filename>`, endpoint `uploaded_file`, GET)
+  → `app/views/files.py` (dono canônico; sem Blueprint, sem LegacyRouteSpec,
+  sem flag de factory, sem namespace, sem backedge app→main); registro via
+  `create_app` → `app.add_url_rule` com guard de duplicidade. MOVE-DO-NOT-
+  CHANGE: fingerprints args `58079bef…91ed` / body `e29270ac…b768` EXATOS.
+- `health` (`/health`, endpoint `health`, GET) → composição local de
+  `create_app` (module `app`, qualname `create_app.<locals>.health`); canal de
+  log `"main"` via binding dedicado (adaptação lexical autorizada); fingerprint
+  canônico (health_logger→logger) `ac74eb09…ea140`.
+- `favicon` (`/favicon.ico`, endpoint `favicon`, GET) → composição local de
+  `create_app` (module `app`, qualname `create_app.<locals>.favicon`);
+  semântica literal `app.root_path/static` preservada (200/204); fingerprint
+  body `57cb890b…61e90` EXATO.
+main final: `@app.route` local = 0; FunctionDefs locais removidos
+`uploaded_file`/`health`/`favicon`; facades de identidade exata apenas
+(3 bindings; sem wrappers). Sem limpeza genérica de main; D-3 permanece
+diferido/não exigido (não é bloqueador).
+Seams históricos autorizados (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE):
+(A) UT-10 green_9 state-aware; (B) B7-P `test_b7p_uploaded_file_unchanged_from_entry_baseline` APOSENTADO (Protocolo §8) — exatamente 1 teste aposentado, substituído pelo fingerprint congelado + contrato de autorização/segurança; (C) Matrizes consumer → identidade canônica `app.views.files`; (D) UT-16 green_4 state-aware 3→0 rotas (SHA publicado `D55063AC…` preservado como histórico; novo SHA pós-seam `0C6C4429…`). RED congelado 38/38 (SHA
+`04DB4E96256EB24C06085AF961500677554D5F5A8256524B7057724EFEDBCD41`).
+Revisão (não sanitizada): R1 independente ACCEPT / 0 achados materiais
+(+ NON_MATERIAL_PROCESS_REPORTING_AMBIGUITY na redação de proveniência); R2
+cego original REJECT (claim: alias early-bound de `get_db_connection` impediria
+monkeypatch app.db-only) — ADJUDICAÇÃO: REJECT OVERRULED (main.py de HEAD já
+fazia early-bind via `from app.db import get_db_connection`; a autorização de
+implementação da UT-17 permitiu explicitamente o mesmo import canônico em
+`app/__init__.py`; sem regressão de site de resolução demonstrada);
+classificação NON_MATERIAL_TESTABILITY_OBSERVATION / REVIEWER_CONTRACT_OVERREACH;
+disposição final R2: ACCEPT / 0 achados materiais. Fato de roteamento: Claude
+Opus 5 solicitado indisponível; Codex/família GPT-5 designado pela plataforma
+executou R2; nenhum uso de GPT-5.6 Luna inventado.
+Suíte canônica final (2 execuções determinísticas): Run 1 — 1534 collected /
+1517 passed / 17 deselected / 0 skipped / 0 failed / 0 errors / 379.06s.
+Run 2 (registro canônico) — 1534 collected / 1517 passed / 17 deselected /
+0 skipped / 0 failed / 0 errors / 348.84s / exit 0. Reconciliação: 1497/1480
+UT-16 + 38 RED − 1 aposentado = 1534/1517; nenhum delta de coleção não
+explicado. Critérios 1-9: PASS (todos). Invariantes finais: 131 / 130 / 0 /
+402 / 536 / 0; `main.init_db` callers 76; SCHEMA_VERSION 3; migrações v1/v2/v3
+only; rotas locais main 0. Banco inalterado: 544768 bytes / `bda97645…a30818`,
+sem sidecars. Artefatos: zero delta trackeado.
+UT-17 TECHNICALLY ACCEPTED. REFACTOR ESTRUTURAL COMPLETO: ver bloco abaixo.
+
+**REFACTOR ESTRUTURAL COMPLETO — CLOSED / ACCEPTED / PUBLISHED** (publicado
+por este commit de landing da UT-17; SHA de landing não inventado). Todos os
+Critérios 1-9 ativos foram tecnicamente qualificados PASS antes desta
+governança (R1 ACCEPT; R2 final ACCEPT após adjudicação do supervisor; suíte
+canônica 1534/1517/17, 0 failed, 0 errors, exit 0). Cronologia: a qualificação
+técnica ocorreu antes da governança; a governança registra o estado final
+tecnicamente comprovado; a publicação canônica ocorre apenas quando esta
+governança + o patch técnico da UT-17 aterrissarem no commit único e a
+verificação remota for bem-sucedida. NÃO existe UT-18; a sequência técnica do
+roadmap está esgotada após a UT-17. D-1/D-2/D-3 e as demais diferidas
+permanecem diferidas/não exigidas sob o Protocolo v1.4 — não são bloqueadores
+em aberto.
 
 | UT-10 | Coorte Arquivos | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1328 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-09 |
 | UT-11 | Coorte Alertas | | DeepSeek V4 Flash | DeepSeek V4 Pro | PASS | 131/130/0 | 0 | 1356 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-09 |
@@ -1038,8 +1097,8 @@ UT-17: Infra — NÃO INICIADA / NEXT.
 | UT-14 | Meus Dados | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1439 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-10 |
 | UT-15 | Demo | | DeepSeek V4 Flash | DeepSeek V4 Flash (revisão independente) | PASS | 131/130/0 | 0 | 1465 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-10 |
 | UT-16 | Residual Main Ownership | | DeepSeek V4 Flash | metadata malformed in R2 report; supervisor adjudicated ACCEPT | PASS | 131/130/0 | 0 | 1480 passed/0 failed/0 errors/17 deselected | nenhum | 2026-08-10 |
-| UT-17 | Infra | | | | | | 0 | | 1 | |
-| — | **REFACTOR ESTRUTURAL COMPLETO** | | | | | | 0 | | | |
+| UT-17 | Infra | | DeepSeek V4 Flash | R1 independente ACCEPT; R2 original REJECT → override supervisor → ACCEPT (revisor: Codex/família GPT-5 designado pela plataforma; Opus 5 indisponível) | PASS | 131/130/0 | 0 | 1517 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-12 |
+| — | **REFACTOR ESTRUTURAL COMPLETO** | | | R1 ACCEPT; R2 ACCEPT (após adjudicação) | **PASS (Criteria 1-9)** | 131/130/0 | 0 | 1517 passed/0 failed/0 errors/17 deselected | 1 | 2026-08-12 |
 
 ---
 

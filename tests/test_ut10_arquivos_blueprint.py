@@ -1044,17 +1044,47 @@ def test_green_8_reportes_main_owned_and_alertas_conditional_on_owner():
 
 
 def test_green_9_uploaded_file_boundary_main_owned_outside_cohort():
+    # UT-17 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE): the
+    # permanent fact is that uploaded_file was never part of the UT-10
+    # Arquivos cohort; only its ownership/location evolves.  Pre-target the
+    # handler is main-owned; post-target it is exactly app.views.files-owned
+    # with main reduced to an identity facade and the rule kept unique.
     assert "uploaded_file" not in MOVED_SYMBOLS, (
         "uploaded_file must never be part of the Arquivos cohort"
     )
-    assert "uploaded_file" in _top_level_defs(MAIN_PATH.read_text(encoding="utf-8-sig")), (
-        "uploaded_file must remain locally defined in main.py"
-    )
+
+    files_path = PROJECT_ROOT / "app" / "views" / "files.py"
+    target = None
+    if files_path.exists():
+        import importlib
+
+        target = importlib.import_module("app.views.files")
+
+    source = MAIN_PATH.read_text(encoding="utf-8-sig")
     view = main.app.view_functions.get("uploaded_file")
     assert view is not None, "live endpoint uploaded_file missing"
-    assert view.__module__ == "main", (
-        f"uploaded_file must remain main-owned, got {view.__module__!r}"
-    )
+
+    if target is None:
+        assert "uploaded_file" in _top_level_defs(source), (
+            "uploaded_file must remain locally defined in main.py"
+        )
+        assert view.__module__ == "main", (
+            f"uploaded_file must remain main-owned, got {view.__module__!r}"
+        )
+    else:
+        assert "uploaded_file" not in _top_level_defs(source), (
+            "uploaded_file must no longer be locally defined in main.py"
+        )
+        assert view is target.uploaded_file, (
+            "live uploaded_file must identity-match app.views.files.uploaded_file"
+        )
+        assert view.__module__ == "app.views.files", (
+            f"uploaded_file must be owned by app.views.files, got {view.__module__!r}"
+        )
+        assert main.uploaded_file is target.uploaded_file, (
+            "main.uploaded_file must be an exact identity re-export"
+        )
+
     rules = [
         rule
         for rule in main.app.url_map.iter_rules()

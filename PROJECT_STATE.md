@@ -13,9 +13,18 @@ UT-15 entry parent: `37316d6dc2f3f55c050152e6b4ae835074ccdac6`
 Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
-Last completed UT: UT-16 — Residual Main Ownership — CLOSED / ACCEPTED /
-PUBLISHED (published by this UT-16 landing commit; landing SHA not invented).
-Last completed work: UT-16
+Last completed UT: UT-17 — Infra — CLOSED / ACCEPTED / PUBLISHED (published by
+this UT-17 landing commit; landing SHA not invented). UT-17 entry parent:
+`511f1c368cae9b7da54fdc42585c9917dc8ac59d`.
+Last completed work: UT-17
+3 routes moved (`uploaded_file` → `app/views/files.py`; `health`/`favicon` →
+create_app composition-local, como `/csrf-token`); main local `@app.route` = 0.
+REFACTOR ESTRUTURAL COMPLETO — CLOSED / ACCEPTED / PUBLISHED (published by the
+final UT-17 landing commit; landing SHA not invented). Chronology: technical
+qualification occurred before governance; governance records the technically
+proven final state; canonical publication occurs only when this governance +
+the UT-17 technical patch land in the single commit and remote verification
+succeeds. There is NO UT-18; the roadmap technical sequence is exhausted.
 0 routes moved. Criterion-9 residual ownership resolved: Group A removed
 main-local `_coerce_aluno_snapshot_scalar` / `_build_aluno_requisicao_snapshot_display`
 (canonical owner `app/views/aluno.py`, no facade); Group B removed main-local
@@ -31,7 +40,7 @@ UT-13 Dashboard (parent `2e0afa34`); UT-12 Reportes (parent `4820e4d3`);
 UT-11 Alertas (parent `a0092149`); UT-10 Arquivos (parent `e8f64a82`);
 C4 request-hook write isolation + STRUCTURAL PLATEAU publication
 (Phase-H landing commit, parent `230de41b`).
-Next UT: UT-17 — Infra — NOT STARTED / NEXT.
+Next UT: NONE — FINAL ROADMAP COMPLETE.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -622,6 +631,120 @@ Criterion 4 v1.3 unchanged. Database/schema policy unchanged. Invariants unchang
 Historical planning records preserved; the old grouping (Dashboard + demo + meus_dados)
 is not rewritten. UT-14 Meus Dados: NOT STARTED / NEXT.
 
+## UT-17 — Infra — CLOSED / ACCEPTED / PUBLISHED
+
+Entry parent: `511f1c368cae9b7da54fdc42585c9917dc8ac59d`. Published by this
+UT-17 landing commit; landing SHA not invented. Protocol v1.4 — 2026-08-10.
+Routes moved: 3.
+
+Final ownership:
+- `uploaded_file` (`/uploads/<path:filename>`, endpoint `uploaded_file`, GET) →
+  `app/views/files.py`, registered via `create_app` → `app.add_url_rule` with
+  duplicate guard; no Blueprint, no LegacyRouteSpec, no factory flag, no
+  endpoint namespace, no app→main backedge. MOVE-DO-NOT-CHANGE fingerprints:
+  args `58079bef5f8ba39f54d2838c1eb3f292fa1a93a3b23b85930c76aa4196bb91ed`,
+  body `e29270ac0d7c92a5d1015990d33e4ebd3f0125b3078d70b453156c00076bc768`.
+  Security/behavior preserved: anonymous redirect; traversal/containment 403;
+  admin `arquivos:view` authorization; aluno own/foreign ownership; docs vs
+  uploads roots; fail-closed DB; nosniff + `private, no-store` headers. UT-16
+  carried-forward gaps CLOSED by the UT-17 RED: authorized-admin direct GET
+  200 (covered) and aluno accessing another aluno's file → 403 (covered).
+- `health` (`/health`, endpoint `health`, GET) → create_app composition-local
+  (module `app`, qualname `create_app.<locals>.health`); SELECT 1 →
+  `200 {"status":"ok"}`; exception → logger channel "main",
+  `500 {"status":"error"}`, no leak. Canonicalized baseline fingerprint
+  (health_logger→logger): `ac74eb097f396d1e2328098507a2d536e43f392d742ad38724e836d5af1ea140`.
+- `favicon` (`/favicon.ico`, endpoint `favicon`, GET) → create_app
+  composition-local (module `app`, qualname `create_app.<locals>.favicon`);
+  `app.root_path/static/favicon.ico` present → 200, absent → 204. Body
+  fingerprint: `57cb890b3f6f30007af7dc4bb16efd9ee11b7bd7bc42e092b49af0ac59b61e90`.
+
+main final state: local `@app.route` = 0; local FunctionDefs
+`uploaded_file`/`health`/`favicon` removed; compatibility surfaces identity-only
+(`main.<name> is` live canonical callable, no wrappers). No generic main
+cleanup; D-3 remains deferred/non-required under Protocol v1.4 (not a blocker).
+
+Authorized historical seams (TEST_CONTRACT_SEAM / LEGITIMATE_UT17_COCHANGE):
+A. UT-10 `test_green_9_uploaded_file_boundary_main_owned_outside_cohort`
+state-aware canonical-owner transition; B. B7-P
+`test_b7p_uploaded_file_unchanged_from_entry_baseline` retired under Protocol
+§8 — exactly ONE test retired, replacement evidence is the frozen UT-17
+fingerprint + authorization/security contract; C. Matrizes admin_access
+consumer moved from the current-main consumer set to the canonical
+`app.views.files` identity proof; D. UT-16
+`test_green_4_ut17_firewall_three_routes_unchanged` state-aware 3→0 routes.
+No other seam or retirement.
+
+UT-16 SHA handling: published frozen
+`D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297` recorded as
+historical evidence; post-UT17 authorized-seam SHA
+`0C6C4429C9E41DC23A00ABB9BF1C0C12DA9752C7D6E0E2AFB37D4F1E6D2A1522`. The
+published UT-16 SHA is never rewritten as though the file stayed byte-identical.
+
+Frozen UT-17 RED: `tests/test_ut17_infra_routes.py` — 38 tests, final
+38/38 PASS / 0 failed / 0 errors / 0 skipped; SHA-256
+`04DB4E96256EB24C06085AF961500677554D5F5A8256524B7057724EFEDBCD41`; no later
+mutation.
+
+Review history (not sanitized): Independent Review R1 ACCEPT / 0 material
+findings; R1 also classified implementation-provenance wording as
+NON_MATERIAL_PROCESS_REPORTING_AMBIGUITY (durable evidence did not prove either
+unauthorized implementation or a scope violation). Second Blind Review R2
+original verdict REJECT — claim: health early-bound `get_db_connection`
+prevented an app.db-only monkeypatch from intercepting. Supervisor
+adjudication: REJECT OVERRULED — published HEAD main.py already early-bound
+`get_db_connection` via `from app.db import get_db_connection`, and the UT-17
+implementation authorization explicitly allowed the equivalent canonical
+import in `app/__init__.py`; no baseline behavior/resolution-site regression
+demonstrated. Classification: NON_MATERIAL_TESTABILITY_OBSERVATION /
+REVIEWER_CONTRACT_OVERREACH. Final R2 disposition after adjudication:
+ACCEPT / 0 MATERIAL FINDINGS. Reviewer routing fact: requested Claude Opus 5
+was unavailable; platform-assigned Codex / GPT-5 family performed R2; no
+GPT-5.6 Luna usage invented.
+
+Full canonical suite (both final deterministic runs): Run 1 — 1534 collected /
+1517 passed / 17 deselected / 0 skipped / 0 failed / 0 errors / 379.06s.
+Run 2 (canonical recorded) — 1534 collected / 1517 passed / 17 deselected /
+0 skipped / 0 failed / 0 errors / 348.84s / exit 0. Count reconciliation:
+UT-16 baseline 1497/1480 +38 frozen RED tests −1 retired B7-P test = 1534/1517;
+no unexplained collection delta.
+
+Criteria 1-9 final gate: all PASS (C1 hooks_main 0; C2 create_app single
+composition root; C3 zero app/services/utils→main and files.py without
+backedge; C4 v1.3/v1.4 definition, historical v1.2 failure preserved as
+historical truth; C5 RBAC unmapped 0; C6 routes 131/endpoints 130/actor
+matrix 402, inventory unchanged; C7 canonical suite 0/0/exit 0; C8 main local
+`@app.route` = 0; C9 one canonical owner per cohort, 0 residual blockers).
+
+Final invariants: routes 131 / endpoints 130 / RBAC unmapped 0 / actor matrix
+402 / message catalog 536 / hooks_main 0 / app/services/utils→main 0 /
+`main.init_db` callers 76 / SCHEMA_VERSION 3 / migrations v1/v2/v3 only / main
+local routes 0. Permanent prohibitions preserved: no migration v4, no
+`app/db` package, no `app/repositories` layer.
+
+Database unchanged: 544768 bytes / SHA-256
+`bda97645d2f57cc405dee90de183d48cd1b80a0f3794b86c29f1319c05a30818`; no sidecars.
+Artifacts `csrf_inventory_shadow_on.json`, `csrf_inventory_shadow_off.json`,
+`route_inventory_baseline.json`: zero tracked delta, Git-canonical content
+unchanged.
+
+Final structural disposition: REFACTOR ESTRUTURAL COMPLETO CLOSED / ACCEPTED /
+PUBLISHED (see section below). UT-17 TECHNICALLY ACCEPTED. Formal canonical
+declaration occurs at the single landing commit with remote verification.
+
+## REFACTOR ESTRUTURAL COMPLETO — CLOSED / ACCEPTED / PUBLISHED
+
+Declared by this final UT-17 landing commit; landing SHA not invented. All
+active Criteria 1-9 were technically qualified PASS before this governance
+closeout (independent review R1 ACCEPT, R2 final ACCEPT after supervisor
+override; canonical full suite 1534/1517/17, 0 failed, 0 errors, exit 0).
+Chronology: technical qualification occurred before governance; governance
+records the technically proven final state; canonical publication occurs only
+when this governance + the UT-17 technical patch land in the single commit and
+remote verification succeeds. There is NO UT-18; the roadmap technical
+sequence is exhausted after UT-17. D-3 and the other deferrals remain
+deferred/non-required under Protocol v1.4 and are NOT outstanding blockers.
+
 ## Process anomalies — Phase-5 review tooling hygiene
 
 Two stray untracked review-tooling scripts from the prior independent-review
@@ -649,13 +772,24 @@ not require suite repetition. No candidate or DB byte changed.
 - `app_db`-qualified `init_db` callers: 6 (5→6 solely `tests/conftest.py::
   _bootstrap_session_database`; production caller delta 0)
 - `SCHEMA_VERSION`: 3 — migrations v1/v2/v3 only (migration v4 remains PROHIBITED)
-- main local `@app.route` handlers: 3 — `uploaded_file`, `health`, `favicon`
+- main local `@app.route` handlers: 0 (UT-17 final; Criterion 8 satisfied)
 
 ## Latest full-suite status
 
-Canonical suite: 1497 collected / 1480 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 322.69s.
-Frozen UT-16 RED `tests/test_ut16_residual_main_ownership.py`: 15/15 passed;
-frozen SHA-256 `D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`.
+Final canonical suite (UT-17, two deterministic runs): Run 1 — 1534 collected /
+1517 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 379.06s.
+Run 2 (canonical recorded) — 1534 collected / 1517 passed / 17 deselected /
+0 failed / 0 errors / 0 skipped / 348.84s / exit 0. Reconciliation: 1497
+UT-16 baseline + 38 UT-17 RED − 1 retired B7-P = 1534/1517.
+Frozen UT-17 RED `tests/test_ut17_infra_routes.py`: 38/38 passed; frozen
+SHA-256 `04DB4E96256EB24C06085AF961500677554D5F5A8256524B7057724EFEDBCD41`.
+Retired in UT-17: exactly 1 (`test_b7p_uploaded_file_unchanged_from_entry_baseline`).
+Frozen UT-16 RED `tests/test_ut16_residual_main_ownership.py`: published SHA
+`D55063AC2C6063DD76034CBF7AA574A3F58B9C9D4164A3114D6B7454FD07B297`; post-UT17
+authorized-seam SHA `0C6C4429C9E41DC23A00ABB9BF1C0C12DA9752C7D6E0E2AFB37D4F1E6D2A1522`
+(15/15 passed).
+REFACTOR ESTRUTURAL COMPLETO: CLOSED / ACCEPTED / PUBLISHED (canonical at the
+future single landing commit; landing SHA not invented).
 Frozen UT-15 RED `tests/test_ut15_demo_blueprint.py`: 26/26 passed;
 frozen SHA-256 `7311F1A49E13096B643F66BBA7F9C901376832C9A4651B623161D51BDDC4D520`
 (retired: `F7E8BA0B3BBB69B7FB17ED4FC42198A5C1EBA125D24E7E38B6B75D5FC8531274` —

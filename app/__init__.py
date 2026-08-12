@@ -5,14 +5,23 @@ import datetime
 import secrets as _secrets
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, url_for, request, session, abort, render_template, jsonify
+from flask import (
+    Flask,
+    url_for,
+    request,
+    session,
+    abort,
+    render_template,
+    jsonify,
+    send_from_directory,
+)
 from flask_compress import Compress
 from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from werkzeug.routing import BuildError
 
 from presets_api import bp_presets
 from app.backup_settings import bind_backup_settings_runtime_app
-from app.db import DATABASE, close_db_connection
+from app.db import DATABASE, close_db_connection, get_db_connection
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
 from app.views.admin.atividades import bp_admin_atividades
@@ -30,10 +39,15 @@ from app.views.admin.dashboard import bp_admin_dashboard
 from app.views.admin.meus_dados import bp_admin_meus_dados
 from app.views.admin.demo import bp_admin_demo
 from app.views import core as core_views
+from app.views.files import uploaded_file
 
 
 # Singleton CSRF instance for templates / view exemptions
 csrf = CSRFProtect()
+
+# UT-17: dedicated "main"-channel logger for the composition-local health
+# check (supervisor-authorized lexical adaptation; no config change).
+health_logger = logging.getLogger("main")
 
 
 def _is_truthy(value) -> bool:
@@ -331,6 +345,44 @@ def create_app(
             "/csrf-token",
             endpoint="csrf_token_refresh",
             view_func=_csrf_token_endpoint,
+            methods=["GET"],
+        )
+
+    # ----- Infra routes (UT-17: composition-local, like /csrf-token) -----
+    def health():
+        try:
+            conn = get_db_connection()
+            conn.execute("SELECT 1")
+            return jsonify({"status": "ok"})
+        except Exception:
+            # Evita vazar detalhes internos (paths/driver) no payload público
+            health_logger.exception("healthcheck falhou")
+            return jsonify({"status": "error"}), 500
+
+    if "health" not in app.view_functions:
+        app.add_url_rule("/health", endpoint="health", view_func=health, methods=["GET"])
+
+    def favicon():
+        static_dir = os.path.join(app.root_path, "static")
+        fav_path = os.path.join(static_dir, "favicon.ico")
+        if os.path.exists(fav_path):
+            return send_from_directory(static_dir, "favicon.ico")
+        # evita quebrar se não existir
+        return ("", 204)
+
+    if "favicon" not in app.view_functions:
+        app.add_url_rule(
+            "/favicon.ico",
+            endpoint="favicon",
+            view_func=favicon,
+            methods=["GET"],
+        )
+
+    if "uploaded_file" not in app.view_functions:
+        app.add_url_rule(
+            "/uploads/<path:filename>",
+            endpoint="uploaded_file",
+            view_func=uploaded_file,
             methods=["GET"],
         )
 
