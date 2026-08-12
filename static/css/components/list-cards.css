@@ -44,7 +44,10 @@ body{
   background:var(--surface); color:var(--text-primary);
   font-size:var(--font-size-base); font-weight:400; line-height:1;
   text-decoration:none; cursor:pointer; min-width:0;
-  transition:background .15s, color .15s, border-color .15s, box-shadow .15s, transform .12s;
+  /* `transform .12s` removed in DS-3b: no rule in this codebase ever applies a
+     transform to .btn, so it animated nothing. box-shadow stays for now — it is
+     still what standalone demo_impressoes.html relies on. */
+  transition:background .15s, color .15s, border-color .15s, box-shadow .15s;
 }
 .btn:hover{ background:#f3f4f6; }
 /* The raised primary appearance used to be imposed here, on every .btn.primary

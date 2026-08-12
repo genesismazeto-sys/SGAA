@@ -215,6 +215,10 @@ body{
 .btn.primary.btn--raised{
   border-color:var(--btn-primary-strong);
   box-shadow:0 1px 0 rgba(0,0,0,.06);
+  /* The elevation animates from its own owner. Until DS-3b this came from
+     components/list-cards.css widening the base .btn transition, so the
+     variant only animated on pages that happened to load that file. */
+  transition:background .15s, color .15s, border-color .15s, box-shadow .15s;
 }
 .btn.primary.btn--raised:hover{ box-shadow:0 6px 16px rgba(0,51,102,.18); }
 .btn.danger{ color:#b91c1c; border:1px solid #ef4444; background:var(--surface); }
