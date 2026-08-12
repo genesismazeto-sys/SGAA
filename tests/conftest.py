@@ -344,6 +344,16 @@ def pytest_addoption(parser):
         default=False,
         help="Update CSRF inventory canonical snapshots (shadow_off / shadow_on)",
     )
+    visual_group = parser.getgroup("visual-regression")
+    visual_group.addoption(
+        "--visual",
+        action="store_true",
+        default=False,
+        help=(
+            "Run the design-system visual regression gate (needs Playwright and a "
+            "downloaded browser; minutes, not seconds). Skipped by default."
+        ),
+    )
 
 
 def pytest_collection_modifyitems(config, items):

@@ -212,10 +212,64 @@ python tools/ds_css.py --compare before.json
 * It does not see styles applied by JavaScript.
 * A green backend test suite is **not** evidence of visual equivalence.
 
-There is currently **no browser-based pixel-diff harness** in this repository.
-Adding one (Playwright) is proposed for the phase that reworks the `.btn`
-contract, because that phase changes specificity and the static gate cannot
-cover it.
+### 5.1 The browser gate
+
+For anything the static analyser cannot prove — selector changes, specificity
+changes, markup changes — there is a Playwright harness that renders a fixed
+catalogue and compares against versioned baselines.
+
+```bash
+python -m pip install playwright && python -m playwright install chromium
+```
+
+```bash
+python -m pytest tests/test_visual_regression.py --visual
+```
+
+Re-approve the current appearance (a deliberate act — it accepts whatever is on
+screen as correct):
+
+```bash
+python -m tools.visual.harness
+```
+
+* **47 shots**: every admin page, every aluno page, login, 404, the filter
+  popover on 8 list pages, the sort popover, focus-visible and a toast.
+* **Opt-in.** Skipped unless `--visual` is passed, so the canonical suite count
+  and runtime stay stable. Takes ~3 minutes.
+* **Tolerance: ±1 per channel, 0 pixels beyond that.** Repeated captures are
+  byte-identical; across processes the compositor occasionally rounds an edge
+  pixel by 1. Measured: 5 and 7 pixels out of 1,296,000, all delta 1, all on
+  rounded borders. A single pixel changing by 2 fails the gate. This is much
+  stricter than a percentage-of-pixels threshold, which would let a small
+  element change completely as long as it was small enough.
+* On failure, a red-highlighted diff and the actual render are written to
+  `tests/visual/_diff/` (gitignored).
+
+**Determinism is engineered, not assumed:**
+
+| Source of drift | How it is pinned |
+|---|---|
+| Google Fonts | blocked; falls back to the stack's next entry |
+| `lucide@latest` from a CDN | served from a vendored, pinned copy in `tests/visual/vendor/` |
+| Clock | `Date` frozen to 2026-06-15T12:00:00Z |
+| Data | database seeded from scratch each run |
+| Runtime paths | fixed directory — `/admin/banco-dados` renders them |
+| pytest's runtime root | capture runs in a subprocess with `APP_*` stripped |
+| Animation, caret, scrollbars | disabled via injected CSS |
+| Viewport | 1440×900, `deviceScaleFactor` 1 |
+
+**Baselines are machine-specific.** With webfonts blocked, text falls back to a
+system font, so a baseline captured on Windows will not match one captured on
+Linux. On a new machine, regenerate rather than treating the mismatch as a
+regression.
+
+**Coverage is not uniform.** Most `.btn.primary` instances live inside popovers
+and modals that are invisible on page load — of 40 templates using
+`class="btn primary"`, a naive page-only catalogue detected a change to that
+selector on just 4 shots. The filter-popover shots exist specifically to close
+that gap and bring it to 12. When you change a component, check that some shot
+actually renders it before trusting a green run.
 
 ---
 

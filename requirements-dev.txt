@@ -1,3 +1,8 @@
 flake8==7.1.1
 black==24.8.0
 pytest==8.3.3
+
+# Design-system visual regression gate (opt-in: pytest --visual).
+# Also needs a browser binary, installed separately:
+#   python -m playwright install chromium
+playwright==1.62.0
