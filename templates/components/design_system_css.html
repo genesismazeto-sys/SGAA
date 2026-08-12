@@ -1,0 +1,25 @@
+{#
+  Design System — stylesheet load order (single owner)
+
+  CONTRACT
+  - This macro is the ONLY place that decides which design-system
+    stylesheets load and in which order. Do not add <link> tags for
+    design-system CSS anywhere else.
+  - Order is significant: foundation first, then globals, then
+    components. Cascade correctness depends on this list.
+  - `version` is the cache-busting value. It is optional so that
+    entry points which historically shipped unversioned URLs keep
+    their exact current behaviour.
+
+  Templates/pages that need a component stylesheet still link it from
+  their own {% block extra_head %}; those always load after this macro.
+#}
+{%- macro design_system_css(version=None) -%}
+{%- set stylesheets = [
+      'css/foundation/tokens.css',
+      'css/modern-style.css',
+] -%}
+{%- for sheet in stylesheets %}
+    <link rel="stylesheet" href="{{ url_for('static', filename=sheet, v=version) if version else url_for('static', filename=sheet) }}">
+{%- endfor %}
+{%- endmacro -%}

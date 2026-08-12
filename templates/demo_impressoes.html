@@ -7,6 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  {# Standalone page: it does not extend a base template, so it must declare
+     the design-system foundation explicitly. Before tokens.css existed this
+     page relied on list-cards.css re-declaring the global tokens, and 8 tokens
+     it referenced (--field-*, --btn-icon-size-compact) never resolved at all. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/foundation/tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <script src="https://unpkg.com/lucide@latest" defer></script>
   <style>

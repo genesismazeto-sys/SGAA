@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Demo – Form Pack{% endblock %}
 {% block extra_head %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/clientes-form-pack.css') }}">
+  {# This page demonstrates the form pack owned by modern-style.css
+     (.form-cards / .form-row / .field-card / .field-chip / .control).
+     It previously linked css/clientes-form-pack.css, a file that has never
+     existed in this repository — the link 404'd and contributed no styles. #}
 {% endblock %}
 {% block content %}
 <h1 class="main-title">Demo do estilo clientes_form</h1>

@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Erro interno</title>
+  <!-- Error pages intentionally use literal paths (no url_for) so they render
+       with the fewest possible dependencies. Keep this order in sync with
+       templates/components/design_system_css.html. -->
+  <link rel="stylesheet" href="/static/css/foundation/tokens.css" />
   <link rel="stylesheet" href="/static/css/modern-style.css" />
   <style>
     body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f5f6f8; }

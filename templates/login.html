@@ -1,10 +1,11 @@
+{% from 'components/design_system_css.html' import design_system_css %}
 <!DOCTYPE html>
 <html lang="pt-br">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-style.css') }}" />
+    {{ design_system_css() }}
     <script src="{{ url_for('static', filename='js/password-toggle.js') }}" defer></script>
   </head>
   <body>
