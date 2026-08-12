@@ -167,7 +167,7 @@
   <div class="filter-values"></div>
   <div class="menu-actions">
     <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
-    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+    <button class="btn primary btn--raised" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
   </div>
 </div>
 <script id="filter-schema-data" type="application/json">{{ (filter_schema or []) | tojson }}</script>
@@ -278,7 +278,7 @@
         <button class="btn" id="reporte-modal-fechar" type="button">Fechar</button>
         {% if can_reportes_edit %}
           <span class="footer-sep" aria-hidden="true"></span>
-          <button class="btn primary" type="submit" form="rm-status-form">
+          <button class="btn primary btn--raised" type="submit" form="rm-status-form">
             <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar status</span>
           </button>
         {% endif %}

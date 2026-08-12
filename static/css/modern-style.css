@@ -203,6 +203,20 @@ body{
 .btn:hover{ background:#f3f4f6; }
 .btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); }
 .btn.primary:hover{ background:#002244; border-color:#002244; }
+
+/* Raised primary — explicit variant.
+   Adds elevation on top of the canonical primary; it does not restate
+   background or colour, because those are identical to .btn.primary.
+   Owned here with the rest of the button contract, deliberately NOT in
+   components/list-cards.css: until DS-3 this appearance was applied
+   implicitly to every primary button on any page that happened to load
+   that stylesheet. Specificity (0,3,0) beats .btn.primary (0,2,0), so the
+   variant no longer depends on stylesheet load order. */
+.btn.primary.btn--raised{
+  border-color:var(--btn-primary-strong);
+  box-shadow:0 1px 0 rgba(0,0,0,.06);
+}
+.btn.primary.btn--raised:hover{ box-shadow:0 6px 16px rgba(0,51,102,.18); }
 .btn.danger{ color:#b91c1c; border:1px solid #ef4444; background:var(--surface); }
 .btn.danger:hover{ background:#fee2e2; }
 

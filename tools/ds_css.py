@@ -336,6 +336,45 @@ class CssSource:
 
 
 _EXTENDS_RE = re.compile(r"{%-?\s*extends\s+['\"]([^'\"]+)['\"]\s*-?%}")
+_EXTENDS_ANY_RE = re.compile(r"{%-?\s*extends\s+(.+?)\s*-?%}", re.S)
+# `{% extends base_template|default("base_aluno.html") %}` — a runtime-swappable
+# parent. The default literal is the parent used in normal rendering.
+_EXTENDS_DEFAULT_RE = re.compile(r"\|\s*default\(\s*['\"]([^'\"]+)['\"]")
+
+
+def parent_template_name(text: str) -> str | None:
+    """Resolve the parent of a template, including the ``|default(...)`` form.
+
+    Returns ``None`` when the template does not extend anything. Raises
+    :class:`UnresolvableExtends` when it extends something this analyser cannot
+    resolve — silence there would drop the whole page from every gate.
+    """
+    literal = _EXTENDS_RE.search(text)
+    if literal:
+        return literal.group(1)
+    any_extends = _EXTENDS_ANY_RE.search(text)
+    if not any_extends:
+        return None
+    fallback = _EXTENDS_DEFAULT_RE.search(any_extends.group(1))
+    if fallback:
+        return fallback.group(1)
+    raise UnresolvableExtends(any_extends.group(1).strip())
+
+
+class UnresolvableExtends(Exception):
+    """A template extends an expression the analyser cannot statically resolve."""
+
+
+def templates_with_unresolvable_extends() -> list[tuple[str, str]]:
+    """(template, expression) for every template whose parent cannot be resolved."""
+    offenders = []
+    for path in sorted(TEMPLATES_DIR.rglob("*.html")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            parent_template_name(text)
+        except UnresolvableExtends as exc:
+            offenders.append((rel_path(path), str(exc)))
+    return offenders
 _URL_FOR_STATIC_RE = re.compile(
     r"url_for\(\s*['\"]static['\"]\s*,\s*filename\s*=\s*['\"]([^'\"]+)['\"]"
 )
@@ -382,11 +421,11 @@ def _collect_macro_imports(template: Path, seen: frozenset[str] = frozenset()) -
     """Map macro name -> defining template, across the whole inheritance chain."""
     text = template.read_text(encoding="utf-8", errors="replace")
     imports: dict[str, str] = {}
-    extends = _EXTENDS_RE.search(text)
-    if extends and extends.group(1) not in seen:
-        parent = TEMPLATES_DIR / extends.group(1)
+    parent_name = parent_template_name(text)
+    if parent_name and parent_name not in seen:
+        parent = TEMPLATES_DIR / parent_name
         if parent.exists():
-            imports.update(_collect_macro_imports(parent, seen | {extends.group(1)}))
+            imports.update(_collect_macro_imports(parent, seen | {parent_name}))
     for macro_file, names in _FROM_IMPORT_RE.findall(text):
         for name in names.split(","):
             name = name.strip()
@@ -421,13 +460,12 @@ def _expand_macro_calls(head: str, imports: dict[str, str]) -> str:
 def _head_text(template: Path, seen: frozenset[str] = frozenset()) -> str | None:
     """Resolve a template's rendered ``<head>`` text through Jinja inheritance."""
     text = template.read_text(encoding="utf-8", errors="replace")
-    extends = _EXTENDS_RE.search(text)
+    parent_name = parent_template_name(text)
 
-    if not extends:
+    if parent_name is None:
         head = re.search(r"<head\b[^>]*>(.*?)</head>", text, re.S | re.I)
         return head.group(1) if head else None
 
-    parent_name = extends.group(1)
     if parent_name in seen:
         return None
     parent = TEMPLATES_DIR / parent_name

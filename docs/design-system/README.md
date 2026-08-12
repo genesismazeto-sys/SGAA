@@ -133,22 +133,40 @@ for the focus work in a later phase.
 
 ---
 
-## 3. Known divergence you must not "fix"
+## 3. The button contract
 
-`.btn`, `.btn.primary`, `.btn.primary:hover` and `.toolbar` resolve
-**differently** on pages that load `components/list-cards.css` than on pages
-that do not:
+```
+.btn.primary                 canonical primary — #003366, no elevation
+.btn.primary.btn--raised     explicit raised variant — #002244 border,
+                             1px shadow, 0 6px 16px hover glow
+```
+
+Both are owned by `modern-style.css`. The variant wins on **specificity**
+(`0,3,0` vs `0,2,0`), not on load order, so it works regardless of which
+stylesheets a page happens to include.
+
+Use `btn--raised` when you deliberately want an elevated primary button. If you
+just want the standard primary, use `.btn.primary` and nothing else.
+
+> Before DS-3 the raised appearance was imposed by `components/list-cards.css`
+> on *every* primary button of *any* page that loaded it — an accident of
+> cascade order, not a decision. DS-3 preserved the rendering exactly and made
+> the intent explicit. Do not reintroduce a `.btn.primary` rule in a component
+> stylesheet.
+
+### Still divergent by load order (not yet modelled)
+
+`.btn` and `.toolbar` still resolve differently on pages that load
+`list-cards.css`:
 
 | Selector | without list-cards.css | with list-cards.css |
 |---|---|---|
-| `.btn.primary` border | `var(--brand)` `#003366` | `var(--btn-primary-strong)` `#002244`, plus a `box-shadow` |
-| `.btn.primary:hover` | no shadow | `0 6px 16px rgba(0,51,102,.18)` |
 | `.btn` | `height`, `justify-content:center` | adds `min-height`, `min-width:0`, richer transition |
 | `.toolbar .filters` gap | `8px` | `2px` |
 
-This is the **current approved rendering**. It is treated as a compatibility
-contract until someone consciously decides which of the two is correct.
-Do not unify them silently — that is a redesign decision, not a refactor.
+This is the **current approved rendering** and is treated as a compatibility
+contract. Do not unify it silently — deciding which is correct is a product
+decision, not a refactor.
 
 ---
 
@@ -291,7 +309,9 @@ Existing violations are tracked, not yet migrated.
 |---|---|---|
 | **DS-1 ✅** | Token contract. Single owner, load-order macro, analyser + gates. | static cascade equivalence |
 | DS-2 | Extract `foundation/reset.css` + `base.css`; give the standalone demo page an explicit foundation; remove the last duplicated base rules. | static cascade equivalence |
-| DS-3 | Model the `.btn` / `.toolbar` divergence as explicit named variants. **Changes specificity** → needs a browser gate first. | Playwright pixel-diff |
+| **DS-2A ✅** | Playwright visual harness, 47 versioned baselines. | validated both directions |
+| **DS-3 ✅** | `.btn.primary` decoupled from list context into the explicit `.btn--raised` variant. | Playwright, 47/47, zero baseline delta |
+| DS-3b | Same treatment for the remaining `.btn` / `.toolbar` load-order divergence. | Playwright pixel-diff |
 | DS-4 | Repatriate `<style>` blocks from templates into owners, one component family at a time. | browser gate + ratchets |
 | DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
 | DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
@@ -308,4 +328,6 @@ Existing violations are tracked, not yet migrated.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
 * 185 distinct hardcoded colour literals across 585 occurrences.
 * 16 distinct breakpoints with no scale.
-* `.btn` / `.toolbar` dual contract (section 3).
+* `.btn` / `.toolbar` dual contract (section 3) — still load-order dependent.
+* `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
+  styled nowhere, so those buttons silently render as plain `.btn`.

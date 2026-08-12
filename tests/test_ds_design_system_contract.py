@@ -76,6 +76,42 @@ def test_every_page_loads_the_token_foundation_first(pages):
     assert not offenders, f"foundation load-order contract violated: {offenders}"
 
 
+def test_no_template_is_invisible_to_the_analyser():
+    """Every ``{% extends %}`` must be statically resolvable.
+
+    A template whose parent cannot be resolved is silently treated as a
+    non-page: it disappears from the cascade gate, from the token-ownership
+    gate and from any inventory built on ``page_templates()``. That is exactly
+    how ``aluno_reportar.html`` — which extends
+    ``base_template|default("base_aluno.html")`` — escaped the DS-3 consumer
+    inventory and briefly lost its raised button.
+    """
+    offenders = ds.templates_with_unresolvable_extends()
+    assert not offenders, (
+        "templates whose parent the analyser cannot resolve (they would be "
+        f"skipped by every static gate): {offenders}"
+    )
+
+
+def test_analyser_sees_every_full_document_template():
+    """Guards the page count itself against silent shrinkage."""
+    full_documents = {
+        ds.rel_path(p)
+        for p in ds.TEMPLATES_DIR.rglob("*.html")
+        if "<head" in p.read_text(encoding="utf-8", errors="replace").lower()
+        or ds.parent_template_name(p.read_text(encoding="utf-8", errors="replace"))
+    }
+    seen = {ds.rel_path(p) for p in pages_cached()}
+    missed = sorted(full_documents - seen)
+    assert not missed, f"templates that render a document but resolve to no CSS: {missed}"
+
+
+def pages_cached():
+    if not hasattr(pages_cached, "_v"):
+        pages_cached._v = ds.page_templates()
+    return pages_cached._v
+
+
 # ------------------------------------------------------------ OWNERSHIP
 
 # Tokens still declared at :root outside tokens.css. This list may only shrink.

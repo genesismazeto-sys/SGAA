@@ -217,7 +217,7 @@
   <div class="filter-values"></div>
   <div class="menu-actions">
     <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
-    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+    <button class="btn primary btn--raised" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
   </div>
 </div>
 <script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
@@ -335,7 +335,7 @@
     <div class="modal-footer">
       <button class="btn" id="admin-alerta-cancelar" type="button">Cancelar</button>
       {% if can_alertas_edit %}
-        <button class="btn primary" type="submit" form="admin-alerta-form" id="admin-alerta-save"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+        <button class="btn primary btn--raised" type="submit" form="admin-alerta-form" id="admin-alerta-save"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       {% endif %}
     </div>
   </div>

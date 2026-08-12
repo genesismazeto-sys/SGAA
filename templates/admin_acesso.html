@@ -252,7 +252,7 @@
       </div>
     </div>
     <div class="access-defaults-footer">
-      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar senhas padrão") }}</span></button>
+      <button class="btn primary btn--raised" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar senhas padrão") }}</span></button>
     </div>
   </form>
 </section>
@@ -335,7 +335,7 @@
   <div class="filter-values"></div>
   <div class="menu-actions">
     <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> Limpar tudo</button>
-    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
+    <button class="btn primary btn--raised" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> Aplicar</button>
   </div>
 </div>
 <script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
@@ -524,7 +524,7 @@
 
     <div class="access-modal-footer">
       <button class="btn" type="button" id="access-modal-cancel">Cancelar</button>
-      <button class="btn primary" type="submit" form="access-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar acesso</span></button>
+      <button class="btn primary btn--raised" type="submit" form="access-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar acesso</span></button>
     </div>
   </div>
 </div>
@@ -560,7 +560,7 @@
 
     <div class="access-modal-footer">
       <button class="btn" type="button" id="access-password-modal-cancel">Cancelar</button>
-      <button class="btn primary" type="submit" form="access-password-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar senha</span></button>
+      <button class="btn primary btn--raised" type="submit" form="access-password-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar senha</span></button>
     </div>
   </div>
 </div>

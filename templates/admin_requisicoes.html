@@ -550,7 +550,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   <div class="filter-values"></div>
   <div class="menu-actions">
     <button class="btn" id="filter-clear-all" type="button"><i class="lucide" data-lucide="eraser"></i> {{ user_message("Limpar tudo") }}</button>
-    <button class="btn primary" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> {{ user_message("Aplicar") }}</button>
+    <button class="btn primary btn--raised" id="filter-apply" type="button"><i class="lucide" data-lucide="check"></i> {{ user_message("Aplicar") }}</button>
   </div>
 </div>
 <script id="filter-schema-data" type="application/json">{{ (filter_schema or [])|tojson }}</script>
@@ -984,11 +984,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       </div>
       <div class="req-footer-row req-footer-row-confirm" id="m_footer_confirm_row" hidden>
         <button type="button" class="btn" id="m_footer_cancel"><i class="lucide" data-lucide="x"></i><span class="btn-label">Cancelar</span></button>
-        <button type="button" class="btn primary" id="m_footer_confirm"><i class="lucide" data-lucide="check"></i><span class="btn-label">Confirmar</span></button>
+        <button type="button" class="btn primary btn--raised" id="m_footer_confirm"><i class="lucide" data-lucide="check"></i><span class="btn-label">Confirmar</span></button>
       </div>
       <div class="req-footer-row req-footer-row-secondary" id="m_footer_secondary_row" hidden>
         <button type="button" class="btn" id="m_footer_back"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></button>
-        <button type="submit" form="req-form" class="btn primary" id="m_create_submit" hidden><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+        <button type="submit" form="req-form" class="btn primary btn--raised" id="m_create_submit" hidden><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       </div>
     </div>
   </div>
