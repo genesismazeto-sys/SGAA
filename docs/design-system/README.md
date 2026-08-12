@@ -22,6 +22,7 @@ static/css/
                           buttons, cards, list grids, print helpers.
   components/
     list-cards.css      ← list/card grids, toolbars, popovers, status badges.
+                          Owns no global rule. Do not add one.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
 
 templates/components/
@@ -154,19 +155,19 @@ just want the standard primary, use `.btn.primary` and nothing else.
 > the intent explicit. Do not reintroduce a `.btn.primary` rule in a component
 > stylesheet.
 
-### Still divergent by load order (not yet modelled)
+### No remaining load-order divergence
 
-`.btn` and `.toolbar` still resolve differently on pages that load
-`list-cards.css`:
+DS-3b finished the job. `components/list-cards.css` no longer defines `*`,
+`body`, `.btn`, `.btn:hover`, `.badge`, `.toolbar` or `.toolbar .filters`.
+Those duplicated `modern-style.css` and existed only so the stylesheet could
+stand alone for an unrouted demo template, which was removed.
 
-| Selector | without list-cards.css | with list-cards.css |
-|---|---|---|
-| `.btn` | `height`, `justify-content:center` | adds `min-height`, `min-width:0`, richer transition |
-| `.toolbar .filters` gap | `8px` | `2px` |
+The only selectors still shared between the two files are inside
+`@media print` (`body`, `.btn`, `.toolbar` → `display:none`), which is a
+separate concern, not a screen-contract duplication.
 
-This is the **current approved rendering** and is treated as a compatibility
-contract. Do not unify it silently — deciding which is correct is a product
-decision, not a refactor.
+`components/list-cards.css` is now what its header always claimed: list and
+card grids, toolbar composition, popovers and status badges.
 
 ---
 
@@ -311,8 +312,8 @@ Existing violations are tracked, not yet migrated.
 | DS-2 | Extract `foundation/reset.css` + `base.css`; give the standalone demo page an explicit foundation; remove the last duplicated base rules. | static cascade equivalence |
 | **DS-2A ✅** | Playwright visual harness, 47 versioned baselines. | validated both directions |
 | **DS-3 ✅** | `.btn.primary` decoupled from list context into the explicit `.btn--raised` variant. | Playwright, 47/47, zero baseline delta |
-| DS-3b | Same treatment for the remaining `.btn` / `.toolbar` load-order divergence. | Playwright pixel-diff |
-| DS-4 | Repatriate `<style>` blocks from templates into owners, one component family at a time. | browser gate + ratchets |
+| **DS-3b ✅** | Removed the last global rules from the component file; unrouted demo template deleted. | Playwright, 47/47 |
+| DS-4 | Repatriate `<style>` blocks into owners, starting with the modal component: 118 of 136 shared declarations are byte-identical across 6 templates, 18 diverge (widths, paddings, footer alignment) and stay as page overrides. | browser gate + ratchets |
 | DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
 | DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
 | DS-7 | Focus/accessibility contract; wire up `--focus-ring-color`. | browser gate + manual a11y pass |
@@ -323,11 +324,10 @@ Existing violations are tracked, not yet migrated.
 ## 8. Pre-existing defects recorded, not yet fixed
 
 * `--focus-ring-color` and `--btn-primary-light` are defined but never used.
-* `templates/demo_impressoes.html` has **no route** — it is unreachable from
-  the running app. It referenced 8 tokens that never resolved.
+* `templates/demo_impressoes.html` was unreachable (no route) and was removed
+  in DS-3b. It was the only consumer of the `--imp-cols` print-shop default.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
 * 185 distinct hardcoded colour literals across 585 occurrences.
 * 16 distinct breakpoints with no scale.
-* `.btn` / `.toolbar` dual contract (section 3) — still load-order dependent.
 * `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
   styled nowhere, so those buttons silently render as plain `.btn`.

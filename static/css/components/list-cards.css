@@ -7,60 +7,22 @@
   ============================================================= */
 /* ====== COMPONENT TOKENS (owned by this component) ======
    Global tokens come from foundation/tokens.css and must not be
-   redeclared here. Only tokens this component owns belong below. */
+   redeclared here. Only tokens this component owns belong below.
+   --imp-cols has no default on purpose: every list defines its own column
+   grid on its .imp-* container. The former :root default described a print
+   shop (Nº OI / Fornecedor / Metragem) and was only ever used by the
+   unrouted demo template removed in DS-3b. */
 :root{
-  --imp-cols:
-    minmax(80px, 100px)     /* Nº OI */
-    minmax(100px, 120px)    /* Pedido */
-    minmax(150px, 220px)    /* Cliente */
-    minmax(120px, 180px)    /* Arte/Embalagem */
-    minmax(100px, 130px)    /* Execução */
-    minmax(150px, 220px)    /* Fornecedor/Máquina */
-    minmax(80px, 120px)     /* Cores */
-    minmax(100px, 130px)    /* Data prevista */
-    minmax(80px, 120px)     /* Metragem */
-    minmax(100px, 150px);   /* Status */
   --imp-col-gap:12px;
 }
 
-/* ====== BASE ======
-   KNOWN REMAINING DUPLICATION (tracked, deliberate).
-   These two rules are byte-equivalent to the ones in modern-style.css and are
-   therefore inert on every page that loads both. They are kept here because
-   templates/demo_impressoes.html loads this file as its ONLY stylesheet and
-   depends on them. They move to foundation/base.css in the next phase, once
-   that standalone page has an explicit foundation dependency. */
-*{ box-sizing:border-box; }
-body{
-  margin:0; padding:0; background:var(--bg); color:var(--text-primary);
-  font-family:var(--font-sans); font-size:var(--font-size-base);
-}
-
-/* ====== BOTÕES ====== */
-.btn{
-  display:inline-flex; align-items:center; gap:var(--btn-gap);
-  min-height:var(--btn-h); padding:0 var(--btn-px);
-  border:1px solid var(--border-strong); border-radius:var(--radius);
-  background:var(--surface); color:var(--text-primary);
-  font-size:var(--font-size-base); font-weight:400; line-height:1;
-  text-decoration:none; cursor:pointer; min-width:0;
-  /* `transform .12s` removed in DS-3b: no rule in this codebase ever applies a
-     transform to .btn, so it animated nothing. box-shadow stays for now — it is
-     still what standalone demo_impressoes.html relies on. */
-  transition:background .15s, color .15s, border-color .15s, box-shadow .15s;
-}
-.btn:hover{ background:#f3f4f6; }
-/* The raised primary appearance used to be imposed here, on every .btn.primary
-   of any page that loaded this stylesheet. It is now the explicit
-   .btn.primary.btn--raised variant, owned by modern-style.css with the rest of
-   the button contract. Do not reintroduce a .btn.primary rule in this file. */
-
-/* ====== BADGE ====== */
-.badge{ display:inline-block; border-radius:999px; padding:2px 8px; font-size:12px; font-weight:500; }
-
-/* ====== TOOLBAR + INPUT GROUP ====== */
-.toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin:12px 0 16px; }
-.toolbar .filters, .toolbar .actions{ display:flex; align-items:center; gap:2px; }
+/* ====== TOOLBAR + INPUT GROUP ======
+   DS-3b removed *, body, .btn, .btn:hover, .badge, .toolbar and
+   .toolbar .filters/.actions from this file. They duplicated
+   modern-style.css and existed only so this stylesheet could stand alone
+   for that demo template. Inside .app-main the global rules already won on
+   specificity, so removing them changed nothing that renders.
+   This file is now what its header always claimed: list/card grids only. */
 .toolbar-actions-group{ display:flex; align-items:center; gap:var(--btn-gap); }
 .toolbar-actions-shell{ display:flex; align-items:center; }
 
