@@ -501,6 +501,33 @@
 .imp-mapeamento .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
 
 /* ====== PRINT ====== */
+/* ====== TOOLBAR: PER-CONTROL OVERRIDES (relocated in DS-5) ======
+   These 34 declarations were copy-pasted into 6-13 page <style> blocks each
+   (302 duplicated instances) with byte-identical values and, in every case,
+   the comment "Toolbar: override list-cards.css chips (scoped)".
+
+   NAMING DEBT: the ids below (#grp-busca-impressoes, #impressoes-toolbar,
+   #busca-impressoes) come from the print-shop origin of this file, not from
+   anything in SGAA. They are kept verbatim because they are the ids actually
+   present in the markup; converting them to semantic classes would change
+   specificity from (1,0,0) and needs its own phase.
+
+   A page that needs something different still overrides these from its own
+   <style>, which loads after this file. */
+#impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+#impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+
+#grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
+#grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+#busca-impressoes{ padding:0; }
+
+#grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
+#grp-ordenar > .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
+#sort-field{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
+#grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
+
+#filter-btn{ justify-content:center; }
+
 @media print {
   .page-header, .toolbar, .btn, .input-group, .filters { display:none !important; }
   body { margin:0 !important; padding:10px !important; }

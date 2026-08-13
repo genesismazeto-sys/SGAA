@@ -102,7 +102,11 @@ If a rule is shared by two or more pages, it belongs in a stylesheet with a
 named owner. The number of templates carrying `<style>` blocks is capped by a
 ratchet test and may only go **down**.
 
-Enforced by `test_templates_with_style_blocks_does_not_grow`.
+Enforced by `test_templates_with_style_blocks_does_not_grow` and
+`test_cross_template_duplication_does_not_grow`. The second one is the metric
+that actually tracks progress: line counts barely move when duplicated rules
+are written as one-liners, but the count of byte-identical declarations shared
+between templates falls every time a family gets an owner.
 
 ### 2.4 Inline style contract
 
@@ -192,6 +196,18 @@ value inside a single component may stay literal.
 Create `static/css/components/<name>.css`, add it to the page's
 `extra_head`, and keep its selectors disjoint from other component files.
 Document its variants at the top of the file.
+
+**Style a toolbar control**
+`components/list-cards.css` owns the toolbar: the input group, the chips, and
+the per-control overrides for `#grp-busca-impressoes`, `#grp-ordenar`,
+`#sort-field`, `#sort-toggle` and `#filter-btn`. Do not paste those into a
+page. If a page genuinely needs something different, override it from that
+page's own `<style>`, which loads after the component.
+
+> Those ids are inherited from the print-shop origin of the file and mean
+> nothing in SGAA. They are kept verbatim because they are the ids in the
+> markup; turning them into semantic classes changes specificity from
+> `(1,0,0)` and needs its own phase.
 
 **Use a modal**
 Link `components/modal.css` and use `.modal-overlay > .modal-card >
@@ -324,7 +340,8 @@ Existing violations are tracked, not yet migrated.
 | **DS-3 ✅** | `.btn.primary` decoupled from list context into the explicit `.btn--raised` variant. | Playwright, 47/47, zero baseline delta |
 | **DS-3b ✅** | Removed the last global rules from the component file; unrouted demo template deleted. | Playwright, 47/47 |
 | **DS-4 ✅** | Modal core extracted to `components/modal.css`: 27 declarations that were identical across 7 copies. The 60 that legitimately differ (width, max-height, padding, footer alignment, borders) stay as page overrides. | Playwright 58/58 |
-| DS-5 | Repatriate the remaining shared families from template `<style>` blocks. | browser gate + ratchets |
+| **DS-5 ✅** | Toolbar per-control overrides relocated: 34 declarations that were copy-pasted into 6–13 templates each (302 instances, zero divergence). | Playwright 59/59 |
+| DS-6 | Remaining shared families. Measured leaders are all form-adjacent (`.field-card` 48 decls × 4 templates) and wait on the forms owner. | browser gate + ratchets |
 | DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
 | DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
 | DS-7 | Focus/accessibility contract; wire up `--focus-ring-color`. | browser gate + manual a11y pass |

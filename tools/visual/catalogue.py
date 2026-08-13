@@ -85,6 +85,18 @@ def open_modal(modal_id: str):
     return _open
 
 
+def focus_toolbar_search(page) -> None:
+    """Focus the toolbar search box.
+
+    The toolbar input group restyles itself on :focus-within (border, chip
+    background, focus ring). DS-5 relocates the ID-scoped toolbar overrides
+    that sit right next to those rules, so this state needs to be pinned
+    before anything moves.
+    """
+    page.click("#busca-impressoes")
+    page.wait_for_timeout(150)
+
+
 def show_toast(page) -> None:
     page.evaluate(
         """() => {
@@ -215,6 +227,12 @@ SHOTS: list[Shot] = (
             name="state_focus_visible",
             path="/admin/alunos",
             after=focus_first_control,
+            full_page=False,
+        ),
+        Shot(
+            name="state_toolbar_search_focus",
+            path="/admin/alunos",
+            after=focus_toolbar_search,
             full_page=False,
         ),
         Shot(

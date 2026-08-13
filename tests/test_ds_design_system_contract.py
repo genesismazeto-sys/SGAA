@@ -218,6 +218,41 @@ def test_templates_with_style_blocks_does_not_grow():
     )
 
 
+# Byte-identical declarations that appear in more than one template's CSS.
+# This is the metric the consolidation phases actually move: line counts barely
+# budge when duplicated rules are written as one-liners, but this number falls
+# every time a shared family gets a real owner.
+MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 589
+
+
+def test_cross_template_duplication_does_not_grow():
+    from collections import defaultdict
+
+    values: dict[tuple, dict[str, str]] = defaultdict(dict)
+    for path, text in _template_texts():
+        blocks = re.findall(r"<style[^>]*>(.*?)</style>", text, re.S | re.I)
+        blocks += [
+            m.group(1)
+            for m in re.finditer(
+                r"createElement\(['\"]style['\"]\).{0,400}?`(.*?)`", text, re.S
+            )
+        ]
+        for block in blocks:
+            for decl in ds.parse_declarations(block, path.name):
+                values[(decl.context, decl.selector, decl.prop)][path.name] = decl.value
+
+    duplicated = {
+        key: seen
+        for key, seen in values.items()
+        if len(seen) > 1 and len(set(seen.values())) == 1
+    }
+    assert len(duplicated) <= MAX_DUPLICATED_TEMPLATE_DECLARATIONS, (
+        f"{len(duplicated)} byte-identical declarations are duplicated across "
+        f"templates, ceiling is {MAX_DUPLICATED_TEMPLATE_DECLARATIONS}. A rule "
+        "shared by two pages belongs in a stylesheet with a named owner."
+    )
+
+
 def test_static_inline_style_attributes_do_not_grow():
     count = 0
     for _path, text in _template_texts():

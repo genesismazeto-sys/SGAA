@@ -9,14 +9,10 @@
     .cell.left{ justify-content:flex-start; }
     .cell.center{ justify-content:center; }
 
-    #grp-ordenar{ overflow:hidden; gap:8px; padding-left:16px; }
-    #grp-ordenar > .input-chip{
-      padding:0; flex-shrink:0; color:var(--text-tertiary);
-    }
     /* list-cards.css injects background:#f1f5f9 and border-right on .input-chip — override for this toolbar */
-    #impressoes-toolbar .input-chip{ background:transparent; border-right:none; }
+
     /* Toolbar icons: uniform 16×16, same tertiary gray across all filter items */
-    #impressoes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+
     #grp-ordenar #sort-field{
       background:var(--surface);
       border:0;
@@ -27,28 +23,18 @@
       justify-content:space-between;
       padding-right:0;
     }
-    #grp-ordenar #sort-toggle{
-      background:var(--surface);
-      border:0;
-      height:calc(var(--btn-h) - 2px);
-      box-shadow:none; outline:0;
-      color:var(--text-tertiary);
-      padding:0 10px;
-    }
+
     .impresso-card-no-left{ padding-left: 0 !important; }
     .impresso-card-header-no-left{ padding-left: 0 !important; }
 
     /* Search: internal layout matches Mensagens page (gap-based, no chip boxes) */
-    #grp-busca-impressoes{ gap:10px; padding:0 8px 0 16px; }
-    #grp-busca-impressoes .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
-    #busca-impressoes{ padding:0; }
+
     #busca-impressoes::-webkit-search-cancel-button,
     #busca-impressoes::-webkit-search-decoration{ display:none; }
     .busca-clear{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:100%; flex-shrink:0; border:none; background:transparent; cursor:pointer; color:var(--text-tertiary); padding:0; }
     .busca-clear:hover{ background:rgba(0,0,0,0.06); color:var(--text-primary); }
     .busca-clear .lucide{ width:14px; height:14px; }
 
-    #filter-btn{ justify-content:center; }
     /* Filter button active state */
     #filter-btn.is-active{ background:#E6F1FB !important; border:0.5px solid #B5D4F4 !important; color:#0C447C !important; font-weight:500; }
     #filter-btn.is-active i.lucide{ color:#0C447C; }
