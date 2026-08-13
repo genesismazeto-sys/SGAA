@@ -29,7 +29,7 @@
    ============================================================= */
 
 /* =============================================================
-   FORM WIDTH CONTRACT  (F-5B, from measured real renders)
+   FORM WIDTH CONTRACT  (F-5B / F-5C, from measured real renders)
 
    Widths are named in foundation/tokens.css. .form-cards-narrow carries
    --form-w-standard from modern-style.css; everything else opts in.
@@ -43,11 +43,11 @@
        standard  506px    149-270px
        wide      644px    118-120px
        modal     690px     81px     (requisicao, in a 1200px .modal-card)
-       0.78      717.59px  27px     (arquivo,    in a 1020px .modal-card)
+       modal     690px     40px     (arquivo,    in a 1020px .modal-card)
 
-   That last row is not a named width: it is the one value F-5B could not
-   name honestly. It is WIDER than the requisicao form while living in a
-   SMALLER modal card, so no name describes it. F-5C resolves it.
+   The arquivo modal was 0.78 (717.59px) until F-5C: WIDER than the
+   requisicao form while living in a SMALLER modal card, which no name
+   describes. It now carries the canonical modal width.
 
    The wide family is intentional and stays visually distinct: it hosts the
    longest labels in the system ("Limitacao / Tempo limite", 146px of ink)

@@ -24,7 +24,11 @@
 
     .modal-body{ padding:10px 12px; }
     .modal-footer{ justify-content:center; padding:10px 12px; }
-    .modal-card .form-cards-narrow{ width:calc(var(--form-card-w) * 0.78); max-width:calc(100vw - 64px); margin:0 auto; padding-top:8px; display:grid; row-gap:12px; }
+    /* F-5C: was 0.78 (717.59px), an unmotivated singleton — it made this
+       form WIDER than the requisicao form while living in a SMALLER modal
+       card (1020 vs 1200), leaving the tightest label gutter in the system.
+       Now the canonical modal width. padding-top stays 8px on purpose. */
+    .modal-card .form-cards-narrow{ width:var(--form-w-modal); max-width:calc(100vw - 64px); margin:0 auto; padding-top:8px; display:grid; row-gap:12px; }
     .modal-card .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
     .modal-card .field-card{ min-height:var(--btn-h); border-radius:var(--radius); }
     .modal-card .field-card .field-chip{ height:100%; display:grid; place-items:center; }
