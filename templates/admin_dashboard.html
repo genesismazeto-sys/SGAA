@@ -333,9 +333,28 @@
       pointer-events:none;
       min-height:176px;
     }
-    @media (max-width: 900px){
+    /* Track-relative, not viewport-relative (F-6B). .dashboard-turma-row-kpis
+       carries the same repeat(4, minmax(180px,1fr)) as the global .kpi-grid and
+       so has the same 4*180 + 3*24 = 792px minimum, but it used to drop to two
+       columns at a 900px viewport -- a 566px track. That left it overflowing
+       the content column by up to 206px across the 900-1126 band, which is why
+       at a 920px viewport the KPI grid above had already gone 2x2 correctly
+       while this row was still four wide and cut off mid-sentence.
+
+       791 is one pixel below the 792 the four columns need. The container is
+       `track`, declared on .app-track in modern-style.css. The <=640 tier below
+       is unchanged. */
+    @container track (max-width: 791px){
       .dashboard-turma-row-kpis{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
       .dashboard-turma-distribution-card{ grid-column:span 2; }
+    }
+    /* Engines without inline-size container queries. Conservative viewport
+       threshold, identical rule body. See modern-style.css for the derivation. */
+    @supports not (container-type: inline-size){
+      @media (max-width: 1125px){
+        .dashboard-turma-row-kpis{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .dashboard-turma-distribution-card{ grid-column:span 2; }
+      }
     }
     @media (max-width: 640px){
       .dashboard-turma-row-kpis{ grid-template-columns:1fr; }

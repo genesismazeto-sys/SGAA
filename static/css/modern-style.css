@@ -130,11 +130,26 @@ body{
 
 .app-main{ grid-area:main; padding:32px; overflow:auto; scrollbar-gutter:stable both-edges; min-width:0; }
 
+/* The content column, and the query container everything inside it measures
+   itself against (F-6B).
+
+   `container-type:inline-size` is what lets a rule ask how wide the CONTENT
+   COLUMN is rather than how wide the WINDOW is. Those two differ by the whole
+   shell: track = viewport - 240 sidebar - 64 padding - 30 scrollbar gutter, so
+   334px on a classic-scrollbar platform and 304px where scrollbars overlay.
+   Every responsive rule written against the viewport is therefore wrong by an
+   amount that changes with the operating system.
+
+   It contains the inline axis only, and .app-track's inline size was already
+   externally determined (width:100% capped at 1200), so its computed width is
+   unchanged -- measured identical at every viewport in the F-6B matrix. */
 .app-track{
   width:100%;
   max-width:1200px;
   margin:0 auto;
   min-width:0;
+  container-type:inline-size;
+  container-name:track;
 }
 
 /* ===== TÃ­tulos / grids bÃ¡sicos ===== */
@@ -748,8 +763,49 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .progress-bar{ height:100%; background:var(--brand); transition:width .25s ease; }
 .content-block .actions{ display:flex; gap:12px; align-items:center; }
 
-@media (max-width:920px){
+/* =============================================================
+   KPI GRID RESPONSIVE CONTRACT  (F-6B, from a 2-dashboard x 12-viewport matrix)
+
+   The defect it fixes: .kpi-grid's four-column state has a hard intrinsic
+   minimum of 4 x 180 + 3 x 24 = 792px, measured. It used to drop to two
+   columns at a 920px VIEWPORT, which is a 586px track. Between those two
+   numbers the grid could not fit and overflowed its own box: +6px at a 1120
+   viewport, +32 at 1094, +102 at 1024, +166 at 960 -- and then rendered
+   correctly again at 920 and every width below, because that is where the old
+   query finally fired. Broken wide, correct narrow: the responsive curve was
+   not monotonic, on both dashboards identically.
+
+   The threshold could never have been a viewport number. Four columns stop
+   fitting at a 1126px viewport on a classic-scrollbar platform and at 1096 on
+   an overlay-scrollbar one, because the shell eats 334px of the window in the
+   first case and 304px in the second. Any single constant is wrong on one of
+   them. Asking the container removes the constant: 791px is simply one pixel
+   below the 792px the four columns need, and it is right on both platforms.
+
+   Only .kpi-grid moved out of the 920 block. .content-grid and the progresso
+   widgets stayed: they measure 0 overflow at every width, so their viewport
+   queries are conservative rather than wrong, and migrating them would be
+   tidiness dressed up as a fix. The <=640 tiers are untouched.
+   ============================================================= */
+@container track (max-width:791px){
   .kpi-grid{ grid-template-columns:repeat(2, minmax(180px,1fr)); }
+}
+
+/* Fallback for engines without inline-size container queries (pre-2022-23
+   Chrome/Safari/Firefox). Without it those browsers would keep four columns
+   all the way down and silently reproduce the exact band this phase fixed.
+   The viewport threshold is the conservative one: 1125px is the last viewport
+   at which a classic-scrollbar track is still below 792, so it is safe on
+   every platform. It costs overlay-scrollbar users about 30px of
+   four-column range, which is the price of not having a container to ask.
+   Rule body identical to the container rule above, on purpose. */
+@supports not (container-type: inline-size){
+  @media (max-width:1125px){
+    .kpi-grid{ grid-template-columns:repeat(2, minmax(180px,1fr)); }
+  }
+}
+
+@media (max-width:920px){
   .content-grid{ grid-template-columns:1fr; }
   .progresso-header{ flex-direction:column; align-items:stretch; }
   .progresso-summary{ grid-template-columns:repeat(2, minmax(0, 1fr)); }

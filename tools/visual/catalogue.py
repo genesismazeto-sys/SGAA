@@ -381,6 +381,24 @@ SHOTS: list[Shot] = (
         # different toolbar position, so it clamps by a different amount.
         Shot(name="popover_sort_alunos_768", path="/admin/alunos",
              after=open_sort_popover, viewport=(768, 900), full_page=False),
+        # --- dashboard track-relative responsiveness (F-6B) -----------------
+        # page_admin_dashboard and page_aluno_dashboard render at 1440, where
+        # four KPI columns still fit, so nothing pinned the band where they did
+        # not. .kpi-grid needs 792px of track for four columns but used to drop
+        # to two at a 920px VIEWPORT — a 586px track — leaving it overflowing
+        # its own box from 1120 down to 920 and correct again below. Broken
+        # wide, correct narrow.
+        #
+        # 1094 is squarely inside that band. 920 is the old breakpoint, and the
+        # most telling frame in the system: the KPI grid had already snapped to
+        # a correct 2x2 while .dashboard-turma-row-kpis, governed by a SECOND
+        # wrong threshold of 900, was still four wide and cut off mid-sentence.
+        Shot(name="dashboard_admin_1094", path="/admin/dashboard", viewport=(1094, 900)),
+        Shot(name="dashboard_admin_920", path="/admin/dashboard", viewport=(920, 900)),
+        # The aluno dashboard shares .kpi-grid and had the identical defect,
+        # without any of the turma grids.
+        Shot(name="dashboard_aluno_1024", path="/aluno/dashboard", viewport=(1024, 900),
+             role="aluno"),
         Shot(
             name="state_focus_visible",
             path="/admin/alunos",
