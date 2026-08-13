@@ -361,6 +361,26 @@ SHOTS: list[Shot] = (
             after=open_sort_popover,
             full_page=False,
         ),
+        # --- popover viewport clamp (F-6A2) --------------------------------
+        # The eight state_filter_* shots above all render at 1440, where a
+        # 520px popover anchored to its button still fits. Below that it did
+        # not: measured +87 past the viewport's right edge at 900 and +219 at
+        # 768 on /admin/atividades, taking #filter-apply — which sits at the
+        # popover's bottom-right — off screen with it. Nothing pinned that
+        # band. These three shots are the clamp's contract: where it binds the
+        # popover sits exactly 12px inside the right edge, and where it does
+        # not bind the popover stays on its button.
+        #
+        # /admin/atividades has the widest toolbar in the system, so its
+        # Filtrar button sits furthest right and clamps hardest.
+        Shot(name="popover_filter_atividades_900", path="/admin/atividades",
+             after=open_filter_popover, viewport=(900, 900), full_page=False),
+        Shot(name="popover_filter_atividades_768", path="/admin/atividades",
+             after=open_filter_popover, viewport=(768, 900), full_page=False),
+        # Sort shares openPopover with filter but is a different button in a
+        # different toolbar position, so it clamps by a different amount.
+        Shot(name="popover_sort_alunos_768", path="/admin/alunos",
+             after=open_sort_popover, viewport=(768, 900), full_page=False),
         Shot(
             name="state_focus_visible",
             path="/admin/alunos",

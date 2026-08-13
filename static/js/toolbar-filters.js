@@ -143,6 +143,36 @@
     return schema.reduce((total, group) => total + getGroupSelectionCount(group, state[group.param]), 0);
   }
 
+  /* Horizontal viewport clamp, shared by the sort/filter popovers and the
+     selection actions menu.
+
+     The semantics are the selection actions menu's, which has always had them
+     inline and has always stayed on screen. The sort/filter popovers had no
+     clamp at all: they were pinned to their button's left edge and a 520px
+     menu simply ran off the right. Measured on the F-6A1 build, past the
+     viewport's right edge: /admin/atividades filter +219 at 768 and +87 at
+     900; /admin/alunos sort +307 at 900; /admin/requisicoes filter +321 at
+     1024. #filter-apply sits at the popover's bottom-right, so what was
+     off-screen was the button that applies the filter.
+
+     F-6A1 made this unrecoverable rather than merely awkward. Before it, the
+     overflowing toolbar left .app-main with horizontal scroll, so the missing
+     part could be scrolled to; now .app-main measures 0 horizontal overflow at
+     900 and 768 and there is nothing to scroll.
+
+     Vertical is deliberately NOT clamped here. Neither function ever clamped
+     it, the popover scrolls with .app-main so an overrun bottom is still
+     reachable, and mixing it in would change the actions menu's geometry.
+     Recorded as known debt. */
+  const POPOVER_EDGE_MARGIN = 12;
+
+  function clampLeftToViewport(anchorLeft, menuWidth, viewportWidth){
+    return Math.max(
+      POPOVER_EDGE_MARGIN,
+      Math.min(anchorLeft, viewportWidth - menuWidth - POPOVER_EDGE_MARGIN)
+    );
+  }
+
   window.createToolbarQueryHelpers = function createToolbarQueryHelpers(){
     const qs = () => new URLSearchParams(window.location.search);
     const setParams = (params) => {
@@ -153,8 +183,16 @@
       const rect = button.getBoundingClientRect();
       menu.style.position = 'absolute';
       menu.style.top = `${Math.round(window.scrollY + rect.bottom + 6)}px`;
-      menu.style.left = `${Math.round(window.scrollX + rect.left)}px`;
+      // Revealed BEFORE the width is read. While the hidden attribute applies
+      // display:none the menu measures 0 wide, and a clamp given a 0 width
+      // resolves to min(anchorLeft, viewportWidth - 12), which never binds --
+      // the clamp would look present and do nothing. Nothing paints until this
+      // task ends, so there is no flash at the unclamped position, and
+      // .popover is out of flow, so revealing it cannot move the button whose
+      // rect was just measured.
       menu.hidden = false;
+      const left = clampLeftToViewport(rect.left, menu.offsetWidth, window.innerWidth);
+      menu.style.left = `${Math.round(window.scrollX + left)}px`;
       button.setAttribute('aria-expanded', 'true');
     };
     const closePopover = (button, menu) => {
@@ -906,8 +944,13 @@
 
     const openMenu = () => {
       const rect = button.getBoundingClientRect();
+      // Left as-is on purpose. The menu is still hidden here, so offsetWidth is
+      // 0 and this always resolves to the 190 fallback rather than the menu's
+      // real width (measured 226-305px), which under-clamps by the difference.
+      // Correcting it would move this menu, and F-6A2 requires its geometry to
+      // stay put. Recorded as known debt alongside the vertical clamp.
       const menuWidth = Math.max(menu.offsetWidth || 190, 190);
-      const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+      const left = clampLeftToViewport(rect.left, menuWidth, window.innerWidth);
       menu.style.position = 'fixed';
       menu.style.top = `${Math.round(rect.bottom + 6)}px`;
       menu.style.left = `${Math.round(left)}px`;
