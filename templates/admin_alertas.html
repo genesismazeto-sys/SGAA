@@ -3,6 +3,7 @@
 {% block title %}Alertas{% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
@@ -38,11 +39,10 @@
       cursor:pointer;
     }
     .alerta-color-swatch.border-only{ background:#fff; }
-    .modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
-    .modal-overlay[hidden]{ display:none !important; }
-    .modal-card{ background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius); width:min(980px, calc(100vw - 32px)); max-height:min(88vh, 760px); display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25); }
-    .modal-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; }
-    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
+
+    .modal-card{ width:min(980px, calc(100vw - 32px)); max-height:min(88vh, 760px); }
+    .modal-header{ padding:10px 12px; }
+
     #admin-alerta-modal .modal-header #admin-alerta-modal-close{
       display:inline-flex;
       align-items:center;
@@ -52,8 +52,8 @@
       margin:0 4px;
       top:0;
     }
-    .modal-body{ padding:12px 16px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; }
-    .modal-footer{ display:flex; justify-content:center; gap:8px; padding:10px 12px; }
+    .modal-body{ padding:12px 16px; }
+    .modal-footer{ justify-content:center; padding:10px 12px; }
     .alerta-form-layout{ width:min(920px, 100%); margin:0 auto; display:grid; row-gap:12px; }
     .alerta-form-row{ display:grid; grid-template-columns:92px minmax(0, 1fr); align-items:center; column-gap:12px; }
     .alerta-form-row.top{ grid-template-columns:92px minmax(0, 1fr) auto; }

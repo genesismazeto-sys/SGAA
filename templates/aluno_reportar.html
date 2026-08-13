@@ -2,6 +2,7 @@
 {% block title %}Reportar{% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <style>
     /* â”€â”€â”€ Reportes page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -130,17 +131,12 @@
     .imp-rpt-aluno .impresso-card:not(.header) { cursor:pointer; }
 
     /* â”€â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-    .modal-overlay { position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
-    .modal-overlay[hidden] { display:none !important; }
-    .modal-card {
-      background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius);
-      width:min(620px, calc(100vw - 32px)); max-height:min(88vh, 760px);
-      display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25);
-    }
-    .modal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border-strong); }
-    .modal-header h3 { display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
-    .modal-body { padding:14px 16px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; display:grid; row-gap:12px; }
-    .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:10px 14px; border-top:1px solid var(--border-strong); }
+
+    .modal-card{ width:min(620px, calc(100vw - 32px)); max-height:min(88vh, 760px); }
+    .modal-header{ padding:10px 14px; border-bottom:1px solid var(--border-strong); }
+
+    .modal-body{ padding:14px 16px; display:grid; row-gap:12px; }
+    .modal-footer{ justify-content:flex-end; padding:10px 14px; border-top:1px solid var(--border-strong); }
     .reporte-modal-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin:0; }
     .reporte-modal-meta dt { font-weight:600; color:var(--text-primary); }
     .reporte-modal-meta dd { margin:0; color:var(--text-secondary); }

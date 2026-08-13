@@ -23,6 +23,8 @@ static/css/
   components/
     list-cards.css      ← list/card grids, toolbars, popovers, status badges.
                           Owns no global rule. Do not add one.
+    modal.css           ← the shared modal contract (overlay/card/header/
+                          body/footer). Size and placement stay per page.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
 
 templates/components/
@@ -191,6 +193,14 @@ Create `static/css/components/<name>.css`, add it to the page's
 `extra_head`, and keep its selectors disjoint from other component files.
 Document its variants at the top of the file.
 
+**Use a modal**
+Link `components/modal.css` and use `.modal-overlay > .modal-card >
+.modal-header/.modal-body/.modal-footer`. The component sets appearance and
+structure but deliberately not size: give the dialog its own
+`.modal-card{width;max-height}` and its own header/body/footer padding in the
+page, because those legitimately differ per dialog. Never copy the core rules
+into a page again.
+
 **Change how something looks**
 Stop. That is a visual change and needs product sign-off. This document
 covers refactoring, not redesign.
@@ -313,7 +323,8 @@ Existing violations are tracked, not yet migrated.
 | **DS-2A ✅** | Playwright visual harness, 47 versioned baselines. | validated both directions |
 | **DS-3 ✅** | `.btn.primary` decoupled from list context into the explicit `.btn--raised` variant. | Playwright, 47/47, zero baseline delta |
 | **DS-3b ✅** | Removed the last global rules from the component file; unrouted demo template deleted. | Playwright, 47/47 |
-| DS-4 | Repatriate `<style>` blocks into owners, starting with the modal component: 118 of 136 shared declarations are byte-identical across 6 templates, 18 diverge (widths, paddings, footer alignment) and stay as page overrides. | browser gate + ratchets |
+| **DS-4 ✅** | Modal core extracted to `components/modal.css`: 27 declarations that were identical across 7 copies. The 60 that legitimately differ (width, max-height, padding, footer alignment, borders) stay as page overrides. | Playwright 58/58 |
+| DS-5 | Repatriate the remaining shared families from template `<style>` blocks. | browser gate + ratchets |
 | DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
 | DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
 | DS-7 | Focus/accessibility contract; wire up `--focus-ring-color`. | browser gate + manual a11y pass |
@@ -328,6 +339,11 @@ Existing violations are tracked, not yet migrated.
   in DS-3b. It was the only consumer of the `--imp-cols` print-shop default.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
 * 185 distinct hardcoded colour literals across 585 occurrences.
+* `admin_requisicoes.html` builds a `<style>` element in JavaScript and appends
+  it at runtime (~50 lines of form/file-card/button CSS). It is the only place
+  in the codebase that delivers CSS this way. The modal core it duplicated was
+  removed in DS-4; the rest still has no owner.
+* `@media print` rules live in `components/list-cards.css` and have no owner.
 * 16 distinct breakpoints with no scale.
 * `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
   styled nowhere, so those buttons silently render as plain `.btn`.

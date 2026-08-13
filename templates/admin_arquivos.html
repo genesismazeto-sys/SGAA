@@ -4,6 +4,7 @@
 {% block title %}Arquivos (Admin){% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
@@ -18,13 +19,12 @@
     #sort-admin-arquivos{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; gap:6px; flex:1; justify-content:space-between; padding-right:0; }
     #grp-ordenar-admin-arquivos #sort-admin-arquivos-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
     #filter-btn{ justify-content:center; }
-    .modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
-    .modal-overlay[hidden]{ display:none !important; }
-    .modal-card{ background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius); width:min(1020px, calc(100vw - 32px)); max-height:min(88vh, 820px); display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25); }
-    .modal-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; }
-    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
-    .modal-body{ padding:10px 12px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; }
-    .modal-footer{ display:flex; justify-content:center; gap:8px; padding:10px 12px; }
+
+    .modal-card{ width:min(1020px, calc(100vw - 32px)); max-height:min(88vh, 820px); }
+    .modal-header{ padding:10px 12px; }
+
+    .modal-body{ padding:10px 12px; }
+    .modal-footer{ justify-content:center; padding:10px 12px; }
     .modal-card .form-cards-narrow{ width:calc(var(--form-card-w) * 0.78); max-width:calc(100vw - 64px); margin:0 auto; padding-top:8px; display:grid; row-gap:12px; }
     .modal-card .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
     .modal-card .field-card{ min-height:var(--btn-h); border-radius:var(--radius); }

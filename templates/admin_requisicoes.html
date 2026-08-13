@@ -4,6 +4,7 @@
 {% block title %}Requisições{% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
@@ -995,17 +996,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </div>
 
 <script>
-  // Estilos utilitários do modal reaproveitando os da página de Atividades
+  // NOTE: this block injects a stylesheet at runtime. The shared modal core it
+  // used to duplicate now lives in css/components/modal.css, linked in
+  // extra_head; only this page's own sizing/placement overrides remain here.
+  // The rest of this block (form pack, file cards, action buttons) is still
+  // page CSS delivered by JavaScript and has no owner yet.
   (function(){
     const style = document.createElement('style');
     style.textContent = `
-    .modal-overlay{ position: fixed; inset: 0; background: rgba(2,6,23,.45); display: grid; place-items: center; z-index: 40; }
-    .modal-overlay[hidden]{ display: none !important; }
-  .modal-card{ background: var(--surface); color: var(--text-primary); border:0; border-radius: var(--radius); width: min(1200px, calc(100vw - 32px)); max-height: min(90vh, 900px); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(2,6,23,.25); }
-    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:0; }
-    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size: 16px; margin:0; }
-    .modal-body{ padding: 10px 12px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
-  .modal-footer{ display:flex; justify-content:center; gap:8px; padding: 10px 12px; border-top:0; }
+
+  .modal-card{ width: min(1200px, calc(100vw - 32px)); max-height: min(90vh, 900px); }
+    .modal-header{ padding: 10px 12px; border-bottom:0; }
+
+    .modal-body{ padding: 10px 12px; }
+  .modal-footer{ justify-content:center; padding: 10px 12px; border-top:0; }
   .req-footer{ display:grid; gap:10px; justify-items:center; }
   .req-footer-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; width:100%; }
   /* View mode: remove bulky footer gap and add subtle bottom padding under form */

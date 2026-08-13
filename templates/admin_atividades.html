@@ -2,6 +2,7 @@
 {% block title %}Atividades (Admin){% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
@@ -55,12 +56,10 @@
     /* Filter count badge */
     .filter-count-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:14px; padding:1px 6px; margin-left:6px; border-radius:9999px; background:#185FA5; color:#fff; font-size:9px; font-weight:600; line-height:1; }
 
-    .modal-overlay{ position: fixed; inset: 0; background: rgba(2,6,23,.45); display: grid; place-items: center; z-index: 40; }
-    .modal-overlay[hidden]{ display: none !important; }
-    .modal-card{ background: var(--surface); color: var(--text-primary); border:0; border-radius: var(--radius); width: min(900px, calc(100vw - 32px)); max-height: min(80vh, 780px); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(2,6,23,.25); }
-    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:0; }
-    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size: 16px; margin:0; }
-    .modal-body{ padding: 10px 12px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+    .modal-card{ width: min(900px, calc(100vw - 32px)); max-height: min(80vh, 780px); }
+    .modal-header{ padding: 10px 12px; border-bottom:0; }
+
+    .modal-body{ padding: 10px 12px; }
     .modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap: var(--btn-gap); }
     /* ── Grupos modal: estilos de layout/UX escopados ── */
     #grupos-modal .modal-header{ padding:18px 24px 6px; align-items:flex-start; }
@@ -74,7 +73,7 @@
     #grupos-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
     #grupos-modal .grupos-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
     #grupos-modal .grupos-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
-    .modal-footer{ display:flex; justify-content:center; gap:8px; padding:10px 12px; border-top:1px solid var(--border); }
+    .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
     #grupos-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
     .section-title{ font-weight: 600; color: var(--text-secondary); }
     .badge{ display:inline-flex; align-items:center; justify-content:center; height:18px; min-width:18px; padding:0 6px; font-size:11px; border:1px solid var(--border-strong); border-radius:999px; background:var(--surface); color:var(--text-secondary); }

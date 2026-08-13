@@ -4,6 +4,7 @@
 {% block title %}Reportes{% endblock %}
 
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
@@ -38,19 +39,14 @@
     #grp-ordenar #sort-toggle{ background:var(--surface); border:0; height:calc(var(--btn-h) - 2px); box-shadow:none; outline:0; color:var(--text-tertiary); padding:0 10px; }
     #filter-btn{ justify-content:center; }
     /* Modal */
-    .modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.45); display:grid; place-items:center; z-index:40; }
-    .modal-overlay[hidden]{ display:none !important; }
-    .modal-card{
-      background:var(--surface); color:var(--text-primary); border:0; border-radius:var(--radius);
-      width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px);
-      display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,.25);
-    }
-    .modal-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border-strong); }
-    .modal-header h3{ display:flex; align-items:center; gap:8px; font-size:16px; margin:0; min-width:0; }
+
+    .modal-card{ width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px); }
+    .modal-header{ gap:12px; padding:12px 16px; border-bottom:1px solid var(--border-strong); }
+    .modal-header h3{ min-width:0; }
     .modal-header h3 #rm-title-text{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .modal-header-right{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
-    .modal-body{ padding:16px 20px; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; display:grid; row-gap:14px; }
-    .modal-footer{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 14px; border-top:1px solid var(--border-strong); }
+    .modal-body{ padding:16px 20px; display:grid; row-gap:14px; }
+    .modal-footer{ justify-content:space-between; align-items:center; padding:10px 14px; border-top:1px solid var(--border-strong); }
     .modal-footer-actions{ display:flex; gap:8px; align-items:center; }
     /* Meta: 4 colunas (label/valor x2) para aproveitar a largura horizontal */
     .reporte-modal-meta{

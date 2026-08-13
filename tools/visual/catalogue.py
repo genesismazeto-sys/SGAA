@@ -61,6 +61,30 @@ def focus_first_control(page) -> None:
     page.wait_for_timeout(100)
 
 
+def open_modal(modal_id: str):
+    """Reveal a modal deterministically by dropping its `hidden` attribute.
+
+    Every modal in this codebase is a `.modal-overlay` hidden with the `hidden`
+    attribute and shown by `.modal-overlay[hidden]{display:none}`. Unhiding it
+    directly is stable across runs, whereas driving the real trigger depends on
+    per-page JavaScript, seeded rows and menu state. What is under test here is
+    the modal's CSS, and that renders identically either way.
+    """
+
+    def _open(page):
+        page.evaluate(
+            """(id) => {
+                const el = document.getElementById(id);
+                if (!el) throw new Error('modal not found: ' + id);
+                el.removeAttribute('hidden');
+            }""",
+            modal_id,
+        )
+        page.wait_for_timeout(150)
+
+    return _open
+
+
 def show_toast(page) -> None:
     page.evaluate(
         """() => {
@@ -130,7 +154,42 @@ FILTER_POPOVER_PAGES = [
     ("alertas", "/admin/alertas"),
 ]
 
+# Every .modal-overlay in the codebase. The modal core is duplicated across
+# these templates with no owner; these shots are what makes extracting it into
+# components/modal.css verifiable rather than hopeful.
+MODAL_SHOTS = [
+    ("acesso_edit",        "/admin/acesso",            "access-modal",               "admin"),
+    ("acesso_password",    "/admin/acesso",            "access-password-modal",      "admin"),
+    ("alerta",             "/admin/alertas",           "admin-alerta-modal",         "admin"),
+    ("arquivo",            "/admin/arquivos",          "admin-arquivo-modal",        "admin"),
+    ("atividades_grupos",  "/admin/atividades",        "grupos-modal",               "admin"),
+    ("atividades_import",  "/admin/atividades",        "importar-atividades-modal",  "admin"),
+    # admin_matriz_form.html's two modals are omitted on purpose: they are
+    # rendered only when the server passes new_activity_modal /
+    # card_version_menu_data, so they cannot be revealed deterministically from
+    # the client. They also define none of the shared modal core — they carry
+    # their own classes — so they are outside what DS-4 migrates.
+    # admin_acesso.html is omitted for the same reason: it uses a separate
+    # .access-modal-* namespace, not the shared core.
+    ("reporte",            "/admin/reportes",          "reporte-modal",              "admin"),
+    ("requisicao",         "/admin/requisicoes",       "req-modal",                  "admin"),
+    ("requisicao_presets", "/admin/requisicoes",       "req-presets-modal",          "admin"),
+    ("turmas_import",      "/admin/turmas",            "importar-turmas-modal",      "admin"),
+    ("aluno_reporte",      "/aluno/reportar",          "meu-reporte-modal",          "aluno"),
+]
+
 SHOTS: list[Shot] = (
+    [
+        Shot(
+            name=f"modal_{name}",
+            path=path,
+            after=open_modal(modal_id),
+            full_page=False,
+            role=role,
+        )
+        for name, path, modal_id, role in MODAL_SHOTS
+    ]
+    +
     [Shot(name=f"page_{name}", path=path) for name, path in ADMIN_PAGES]
     + [Shot(name=f"page_{name}", path=path, role="aluno") for name, path in ALUNO_PAGES]
     + [

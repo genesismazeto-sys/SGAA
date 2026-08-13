@@ -1,0 +1,47 @@
+/* =============================================================
+   components/modal.css  —  MODAL / DIALOG
+   Owner of the shared modal contract.
+
+   CONTRACT
+     .modal-overlay        full-screen scrim, centres the card
+     .modal-overlay[hidden]  hidden state
+     .modal-card           the dialog surface
+     .modal-header         title row
+     .modal-header h3      title
+     .modal-body           scrolling content region
+     .modal-footer         action row
+
+   This file holds only what is IDENTICAL everywhere. Size and placement
+   are deliberately NOT set here, because they legitimately differ per
+   dialog: .modal-card width ranges from 620px to 1200px, max-height from
+   80vh to 90vh, header/body/footer padding varies, and .modal-footer is
+   centre / space-between / flex-end depending on the dialog. Those stay
+   as page-level overrides next to the markup that needs them.
+
+   Before DS-4 this core was copy-pasted into six page <style> blocks and,
+   in admin_requisicoes.html, injected at runtime by JavaScript with the
+   comment "reaproveitando os da página de Atividades". Do not copy it
+   again — link this file.
+   ============================================================= */
+
+.modal-overlay{
+  position:fixed; inset:0;
+  background:rgba(2,6,23,.45);
+  display:grid; place-items:center;
+  z-index:40;
+}
+.modal-overlay[hidden]{ display:none !important; }
+
+.modal-card{
+  background:var(--surface); color:var(--text-primary);
+  border:0; border-radius:var(--radius);
+  display:flex; flex-direction:column;
+  box-shadow:0 10px 30px rgba(2,6,23,.25);
+}
+
+.modal-header{ display:flex; align-items:center; justify-content:space-between; }
+.modal-header h3{ display:flex; align-items:center; gap:8px; font-size:16px; margin:0; }
+
+.modal-body{ overflow-y:auto; overflow-x:hidden; box-sizing:border-box; }
+
+.modal-footer{ display:flex; gap:8px; }

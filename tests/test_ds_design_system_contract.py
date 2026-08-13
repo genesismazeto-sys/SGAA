@@ -198,8 +198,8 @@ TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
 # Current volume of CSS still living inside templates. These are ceilings:
 # migration phases lower them. Raising one means CSS moved the wrong way.
-MAX_TEMPLATES_WITH_STYLE_BLOCKS = 43
-MAX_STATIC_INLINE_STYLE_ATTRS = 202
+MAX_TEMPLATES_WITH_STYLE_BLOCKS = 42
+MAX_STATIC_INLINE_STYLE_ATTRS = 198
 
 
 def _template_texts():
