@@ -3,7 +3,6 @@
 {% block extra_head %}
   <style>
     /* Replicar estrutura do form de Atividades (admin) */
-    .form-actions{ justify-content:center; }
     .form-cards-narrow{
       width: calc(var(--form-card-w) * 0.55);
       max-width: calc(100vw - 64px);
@@ -214,7 +213,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
   <a class="btn" href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
   {% if page_mode != 'view_readonly' %}
   <button class="btn primary" type="submit"><i class="lucide" data-lucide="{{ 'save' if page_mode == 'edit' else 'send' }}"></i> {{ 'Atualizar' if page_mode == 'edit' else 'Enviar' }}</button>

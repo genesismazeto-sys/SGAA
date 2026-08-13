@@ -3,7 +3,6 @@
 
 {% block extra_head %}
   <style>
-    .form-actions{ justify-content:center; }
     .form-cards-narrow{
       width: calc(var(--form-card-w) * 0.70);
       max-width: calc(100vw - 32px);
@@ -98,7 +97,7 @@
     <input type="hidden" name="limite_horas_total" id="limite_total_hidden" value="{{ request.form.get('limite_horas_total', '') }}">
     <input type="hidden" name="limite_horas_semestral" id="limite_semestral_hidden" value="{{ request.form.get('limite_horas_semestral', '') }}">
 
-    <div class="form-actions">
+    <div class="form-actions center">
       <a class="btn" href="{{ url_for('admin_atividades') }}">Cancelar</a>
       <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
     </div>

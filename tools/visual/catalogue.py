@@ -138,6 +138,65 @@ def disable_form_controls(page) -> None:
     page.wait_for_timeout(150)
 
 
+def invalidate_natively(page) -> None:
+    """Reach `:user-invalid` the way a user does.
+
+    Types a value the browser itself rejects into a type=email control and
+    blurs. `:user-invalid` only applies after interaction, which is exactly why
+    the contract uses it instead of `:invalid` — the latter would flag every
+    empty required field the moment a blank "Adicionar" form opened.
+
+    Kept separate from the aria-invalid shot on purpose: they exercise
+    different selectors and could regress independently.
+    """
+    # Must be TRUSTED input: assigning .value from JS does not mark the control
+    # as user-interacted, so `:user-invalid` never matches and the shot would
+    # silently pin nothing. Playwright's fill/press go through CDP and are
+    # trusted, which is what actually flips the state.
+    field = page.locator('.field-card input[type="email"].control').first
+    field.click()
+    field.fill("nao-e-um-email")
+    page.keyboard.press("Tab")
+    page.wait_for_timeout(250)
+    matched = page.evaluate(
+        """() => !!document.querySelector('.field-card input[type="email"].control:user-invalid')"""
+    )
+    if not matched:
+        raise RuntimeError(":user-invalid did not apply — this shot would pin nothing")
+
+
+def invalidate_via_aria(page) -> None:
+    """Server/application validation: `[aria-invalid="true"]` plus a message.
+
+    This is the path a Flask-rendered error takes. It shares no selector with
+    the `:user-invalid` rule.
+    """
+    page.evaluate(
+        """() => {
+            const el = document.querySelector('.field-card input.control');
+            if (!el) throw new Error('no control on this page');
+            el.setAttribute('aria-invalid', 'true');
+            const row = el.closest('.form-row');
+            const msg = document.createElement('span');
+            msg.className = 'field-error';
+            msg.textContent = 'Já existe um aluno com este nome.';
+            row.appendChild(msg);
+        }"""
+    )
+    page.wait_for_timeout(150)
+
+
+def make_readonly(page) -> None:
+    page.evaluate(
+        """() => {
+            const cs = [...document.querySelectorAll('.field-card input.control')];
+            if (!cs.length) throw new Error('no control on this page');
+            cs.slice(0, 2).forEach(el => el.setAttribute('readonly', 'readonly'));
+        }"""
+    )
+    page.wait_for_timeout(150)
+
+
 def show_toast(page) -> None:
     page.evaluate(
         """() => {
@@ -277,6 +336,14 @@ SHOTS: list[Shot] = (
              after=hover_form_control, full_page=False),
         Shot(name="form_disabled", path="/admin/adicionar_aluno",
              after=disable_form_controls, full_page=False),
+        # The two validation mechanisms are pinned separately: :user-invalid
+        # and [aria-invalid] are different selectors and can regress apart.
+        Shot(name="form_invalid_user", path="/admin/adicionar_aluno",
+             after=invalidate_natively, full_page=False),
+        Shot(name="form_invalid_aria", path="/admin/adicionar_aluno",
+             after=invalidate_via_aria, full_page=False),
+        Shot(name="form_readonly", path="/admin/adicionar_aluno",
+             after=make_readonly, full_page=False),
         # Two different label patterns with two different responsive stories.
         # .row-label (107 uses) is absolutely positioned and has NO responsive
         # rule anywhere; these pin its behaviour as-is.

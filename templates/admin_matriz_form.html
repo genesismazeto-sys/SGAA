@@ -55,7 +55,6 @@
       row-gap: 12px;
     }
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
-    .form-actions{ justify-content:center; }
     .field-card textarea.control{
       min-height: var(--btn-h);
       height: var(--btn-h);
@@ -660,7 +659,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
       {% if not readonly %}
         <button class="btn primary" type="submit" {% if not cursos %}disabled{% endif %}><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>
@@ -772,7 +771,7 @@
       {% endfor %}
     </div>
 
-  <div class="form-actions">
+  <div class="form-actions center">
       <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if readonly else 'Cancelar' }}</a>
       {% if not readonly %}
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>

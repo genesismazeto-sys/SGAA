@@ -3,7 +3,6 @@
 {% block title %}{{ user_message("Meus dados") }}{% endblock %}
 {% block extra_head %}
   <style>
-    .form-actions{ justify-content:center; }
     .form-cards-narrow{
       width: calc(var(--form-card-w) * 0.55);
       max-width: calc(100vw - 64px);
@@ -105,7 +104,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       <a class="btn" href="{{ cancel_url }}">{{ user_message("Cancelar") }}</a>
       <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
     </div>

@@ -46,3 +46,94 @@
 .import-modal-grid{ box-sizing:border-box; display:grid; gap:12px; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
 .import-modal-grid .field-card{ box-sizing:border-box; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
 .input-with-icon{ display:inline-block; position:relative; }  /* was duplicated in 2 templates */
+
+/* =============================================================
+   FIELD STATES  (DS-7, approved from real rendered previews)
+
+   Every rule below is ADDITIVE except the focus-ring width, which is
+   the single approved change to an existing state: 1px -> 2px. The ring
+   COLOUR is unchanged and stays on --field-focus-ring.
+
+   Note on --focus-ring-color: it was NOT wired in here. Its value is
+   rgba(37,99,235,.35), while the field ring is rgba(3,105,161,.22) —
+   adopting it would change the approved colour. It is the value the
+   toggle's focus outline already uses, which is where it belongs.
+
+   State colour is applied to .field-card; the control only inherits.
+   Nothing here touches field geometry: 32px rhythm, 4px radius, card
+   shadow, 40px chip column, divider, chip colour and the borderless
+   inner control are all untouched.
+   ============================================================= */
+
+/* Required — driven by the control's own attribute, so it cannot drift
+   from the real constraint. 95 controls are required; 7 said so. */
+.form-row:has(.control[required]) > .row-label::after,
+.form-row:has(.control[aria-required="true"]) > .row-label::after{
+  content:" *";
+  color:var(--field-invalid-text);
+}
+
+/* Focus — width only, colour preserved */
+.field-card:focus-within{
+  box-shadow:0 0 0 var(--field-focus-ring-w) var(--field-focus-ring);
+}
+
+/* Invalid — :user-invalid, never :invalid, so a freshly opened "Adicionar"
+   form does not present every empty required field as an error.
+   [aria-invalid] covers server-rendered errors. */
+.field-card:has(.control:user-invalid),
+.field-card:has(.control[aria-invalid="true"]){
+  border-color:var(--field-invalid-border);
+  background:var(--field-invalid-bg);
+}
+.field-card:has(.control:user-invalid) .field-chip,
+.field-card:has(.control[aria-invalid="true"]) .field-chip{
+  border-right-color:var(--field-invalid-border);
+  color:var(--field-invalid-text);
+}
+.field-error{
+  display:block;
+  margin-top:4px;
+  font-size:12px;
+  color:var(--field-invalid-text);
+}
+
+/* Disabled — "not applicable" */
+.field-card:has(.control:disabled){
+  background:var(--field-disabled-bg);
+  border-color:var(--field-disabled-border);
+  box-shadow:none;
+}
+.field-card:has(.control:disabled) .control{
+  color:var(--text-tertiary);
+  cursor:not-allowed;
+}
+.field-card:has(.control:disabled) .field-chip{
+  color:var(--border-strong);
+  border-right-color:var(--field-disabled-border);
+}
+
+/* Read-only — "shown, not editable". Deliberately NOT disabled semantics:
+   full readability, still focusable, normal cursor. */
+.field-card:has(.control[readonly]){
+  background:var(--field-readonly-bg);
+}
+.field-card:has(.control[readonly]) .control{
+  color:var(--text-secondary);
+  background:transparent;
+}
+
+/* Responsive labels — the first breakpoint .row-label has ever had.
+   Above 720px it stays in its absolute left column, unchanged. Below,
+   it stacks: previously it was positioned off-viewport and every field
+   rendered with no visible label at all. */
+@media (max-width:720px){
+  .form-cards-narrow .form-row{ display:block; }
+  .form-cards-narrow .row-label{
+    position:static;
+    width:auto;
+    margin:0 0 4px;
+    text-align:left;
+    transform:none;
+  }
+}

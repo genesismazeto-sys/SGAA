@@ -12,7 +12,6 @@
       row-gap: 12px;
     }
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
-    .form-actions{ justify-content:center; }
   </style>
 {% endblock %}
 
@@ -56,7 +55,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
       {% if submit_label %}
       <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>

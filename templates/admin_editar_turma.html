@@ -164,7 +164,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_turmas') }}">Cancelar</a>
       <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
     </div>
@@ -331,7 +331,6 @@
     /* Mantem labels externas alinhadas iguais ao contrato atual */
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     /* Centraliza acoes do formulario nesta pagina */
-    .form-actions{ justify-content:center; }
     /* Ajuste fino de alinhamento do conteudo nos botoes */
     :root{ --btn-icon-nudge-y: -0.75px; --btn-text-nudge-y: 0.5px; }
     .form-actions .btn{ font-weight:400; display:inline-flex; align-items:center; justify-content:center; gap:6px; line-height:1; }

@@ -69,6 +69,15 @@
   --field-chip-hover-bg:#f1f5f9;
   --field-chip-focus-bg:#f1f5f9;
 
+  /* Campo: estados (DS-7) */
+  --field-focus-ring-w:2px;
+  --field-invalid-border:#b91c1c;
+  --field-invalid-bg:#fef2f2;
+  --field-invalid-text:#b91c1c;
+  --field-disabled-bg:#f3f4f6;
+  --field-disabled-border:#e2e8f0;
+  --field-readonly-bg:#f1f5f9;
+
   /* Listas (compartilhado) */
   --list-col-gap:2px;
   --cell-pad-x:12px;

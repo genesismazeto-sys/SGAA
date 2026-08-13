@@ -4,7 +4,6 @@
 
 {% block extra_head %}
   <style>
-    .form-actions{ justify-content:center; }
     .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
     .form-fieldset[disabled]{ opacity:1; }
     .form-cards-narrow{
@@ -112,7 +111,7 @@
       <input type="hidden" name="limite_horas_semestral" id="limite_semestral_hidden" value="{{ request.form.get('limite_horas_semestral', atividade.limite_horas_semestral or '') }}">
     </fieldset>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       {% if readonly %}
         <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_atividades') }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></a>
       {% else %}

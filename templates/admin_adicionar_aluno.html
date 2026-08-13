@@ -110,7 +110,7 @@
   </div>
 
   <!-- Ações -->
-  <div class="form-actions">
+  <div class="form-actions center">
     <a href="{{ return_to or url_for('admin_alunos') }}" class="btn">{{ user_message("Cancelar") }}</a>
     <button type="submit" class="btn primary">
       <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span>
@@ -131,7 +131,6 @@
       row-gap: 12px;
     }
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
-    .form-actions{ justify-content:center; }
   </style>
 {% endblock %}
 

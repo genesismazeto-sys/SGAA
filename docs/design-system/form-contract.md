@@ -1,11 +1,13 @@
-# SGAA-EJ — Form Contract (as of DS-6)
+# SGAA-EJ — Form Contract (as of DS-7)
 
 The state of the form system after ownership consolidation, measured rather
 than asserted. This is the document to read before proposing a forms redesign.
 
-> **Nothing here is a redesign.** DS-6 moved CSS and changed no rendered pixel:
-> 66/66 visual baselines pass unchanged. Where forms differ between pages
-> today, that difference has been *preserved and recorded*, not unified.
+> DS-6 moved CSS and changed no rendered pixel. **DS-7 is the first approved
+> visual change**: required markers, validation, disabled, read-only, a 2px
+> focus ring and responsive labels. 17 baselines were replaced with approved
+> renders; the other 49 are byte-unchanged. Everything not listed as changing
+> keeps its current rendered value.
 
 ---
 
@@ -98,6 +100,54 @@ This is the clearest structural gap in the form system.
 
 ---
 
+## 5b. Native state population (measured, DS-7)
+
+The new disabled and read-only treatments apply wherever those attributes
+genuinely exist in markup. That population was never measured before DS-7, and
+not measuring it is why the expected-delta forecast under-predicted:
+
+| Template | disabled | read-only |
+|---|---:|---:|
+| `admin_editar_aluno.html` | 6 | 6 |
+| `admin_matriz_form.html` | 2 | 9 |
+| `admin_curso_form.html` | 1 | 4 |
+| `aluno_nova_requisicao.html` | 0 | 9 |
+| `aluno_meus_dados.html` | 0 | 2 |
+| `admin_atividades.html` | 0 | 1 |
+| `admin_requisicoes.html` | 0 | 1 |
+| **total** | **9** | **32** |
+
+Before DS-7 all 41 rendered identically to editable fields.
+
+---
+
+## 5c. Deriving expected deltas — do not hand-map
+
+`page_admin_nova_requisicao` was classified in the DS-7 proposal as having *no
+form surface*, because `admin_requisicao_nova.html` contains no `.field-card`.
+The live route in fact renders **14 field cards, 12 row labels and 7 required
+controls**. The forecast was wrong and the visual gate caught it.
+
+Hand-mapping a URL to a template cannot be trusted: routes pick templates at
+runtime (`base_template|default(...)`, a differently-named `render_template`,
+includes, partials). Use the resolved DOM instead:
+
+```bash
+python -m tools.visual.form_surface
+```
+
+It loads every catalogue shot in its own role and counts **visible** matches
+for `.field-card`, `.control`, `.row-label`, `.form-actions`, `required`,
+`:disabled`, `[readonly]` and `.toggle-switch`. Visibility matters: pages such
+as `admin_requisicoes` carry an entire hidden modal form and look like large
+form surfaces while rendering none of it.
+
+Validated against DS-7: predicting "required marker appears where a required
+control and a row-label are both visible" reproduced the 17 changed shots
+exactly — no false positives, no false negatives.
+
+---
+
 ## 6. Accessibility / focus contract
 
 **Exists and is preserved:**
@@ -107,16 +157,27 @@ This is the clearest structural gap in the form system.
   focus ring via `--field-focus-border` / `--field-focus-ring`.
 * Pinned by `form_focus_within` and `form_hover`.
 
-**Missing, and worth knowing before a redesign:**
+**Added in DS-7:**
 
-* **No validation styling at all.** There is no `:invalid`, `:user-invalid`,
-  `aria-invalid` or `.error` rule anywhere in the codebase. Invalid fields look
-  identical to valid ones; the only feedback is the browser's native bubble.
-* **No `:disabled` styling for form controls.** `:disabled` rules exist for
-  some buttons and menu items, never for `.control`. `form_disabled` pins the
-  browser default so a change is at least detected.
-* `--focus-ring-color` is defined but referenced nowhere; fields use
-  `--field-focus-ring` instead.
+* **Validation, two independent paths.** `:user-invalid` for native browser
+  validation and `[aria-invalid="true"]` for server-rendered errors. They are
+  different selectors and are pinned by two separate shots —
+  `form_invalid_user` and `form_invalid_aria` — so they cannot regress
+  together unnoticed. `:invalid` is deliberately not used: it would flag every
+  empty required field the moment a blank form opened.
+* **Disabled** — muted surface, `--text-tertiary`, `not-allowed`.
+* **Read-only** — `--field-readonly-bg` (`#f1f5f9`) with `--text-secondary`.
+  Deliberately *not* disabled semantics: fully readable, still focusable,
+  normal cursor, no textual badge. The first attempt used `#f8fafc`, which was
+  invisible against the white card on the real render.
+* **Focus ring 1px → 2px** via `--field-focus-ring-w`. The ring **colour is
+  unchanged**.
+* **Required marker** generated from the control's own `required` attribute.
+
+`--focus-ring-color` was deliberately **not** wired into fields: its value is
+`rgba(37,99,235,.35)` while the field ring is `rgba(3,105,161,.22)`, so
+adopting it would have changed an approved colour. It is the literal the
+toggle's focus outline already uses, which is where it belongs.
 
 ---
 

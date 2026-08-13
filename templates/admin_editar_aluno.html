@@ -15,7 +15,6 @@
       row-gap: 12px;
     }
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
-    .form-actions{ justify-content:center; }
   </style>
 {% endblock %}
 
@@ -87,7 +86,7 @@
       </div>
     </div>
 
-    <div class="form-actions">
+    <div class="form-actions center">
       {% if readonly %}
         <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_alunos') }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">{{ user_message("Voltar") }}</span></a>
       {% else %}
