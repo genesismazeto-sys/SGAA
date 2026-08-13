@@ -399,6 +399,15 @@ SHOTS: list[Shot] = (
         # without any of the turma grids.
         Shot(name="dashboard_aluno_1024", path="/aluno/dashboard", viewport=(1024, 900),
              role="aluno"),
+        # --- Resumo row wrap (F-6B2) ---------------------------------------
+        # A separate defect from the .kpi-grid one above, at the other end of
+        # the range. The "Resumo" row is five .item children in a nowrap flex
+        # box whose min-content is their sum, 432.56px, so below a 466.56px
+        # track the fifth statistic was cut off by the card edge — 33px at this
+        # width. Nothing pinned it: dashboard_aluno_1024 is far too wide to see
+        # it, and the 768 case is where the supported floor actually sits.
+        Shot(name="dashboard_aluno_768", path="/aluno/dashboard", viewport=(768, 900),
+             role="aluno"),
         Shot(
             name="state_focus_visible",
             path="/admin/alunos",

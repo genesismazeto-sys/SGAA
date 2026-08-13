@@ -173,7 +173,35 @@ body{
   box-shadow:var(--shadow-md);
 }
 .content-block-header{ font-weight:600; margin-bottom:16px; }
-.content-block-body{ display:flex; justify-content:space-between; align-items:center; gap:16px; }
+/* The row wraps (F-6B2). Nowrap made its min-content the SUM of its children:
+   the aluno dashboard "Resumo" carries five .item children whose own minimums
+   are 68-77px each, plus four 16px gaps, so the row could never be narrower
+   than 432.56px. It is handed `track - 34` (the card's padding and border), so
+   below a 466.56px track it simply did not fit and the fifth statistic,
+   "Corrigiveis", was cut off by the card edge: 1px of overflow at an 800px
+   viewport, 33px at 768, 81px at 720.
+
+   Nothing inside an item could give: each item's minimum IS its label's
+   minimum, and the labels had already wrapped as far as they can -- "Total de
+   requisicoes" renders on two lines at 768, so 77.16px is its longest word
+   plus the 12px icon and 6px gap. min-width:0 on .item was measured and does
+   NOT fix this; it lets the items shrink but the labels then overflow their
+   own boxes instead, 8/14/22px at 800/768/720. The row's inability to break
+   was the whole defect.
+
+   No breakpoint, deliberately. The overflow starts at an 800px viewport on a
+   classic-scrollbar platform and at 768 on an overlay-scrollbar one -- the
+   same 466.56px track, two different viewports -- so a media query would have
+   to be wrong on one of them. flex-wrap fires when the content stops fitting
+   its own box, which is the same reasoning as the toolbar in F-6A1 and the
+   dashboard grids in F-6B.
+
+   `gap:16px` already supplies the row gap, so no row-gap declaration is
+   needed. Measured inert on every other live consumer: the two grid-display
+   bodies, the single-child bodies, the requisicao-detalhe body that already
+   declared flex-wrap:wrap inline, and the flex-direction:column one, which
+   has auto height and so never wraps. 1440 is byte-identical. */
+.content-block-body{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
 .content-block-body-corrigir{ display:grid; grid-template-columns:8fr 2fr; align-items:center; column-gap:8px; row-gap:12px; }
 .content-block-body .item{ display:flex; flex-direction:column; gap:2px; }
 .content-block-body .item .value{ font-size:20px; font-weight:600; }
