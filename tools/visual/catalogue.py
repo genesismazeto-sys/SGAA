@@ -233,6 +233,13 @@ ADMIN_PAGES = [
     ("admin_adicionar_aluno", "/admin/adicionar_aluno"),
     ("admin_adicionar_turma", "/admin/adicionar_turma"),
     ("admin_adicionar_curso", "/admin/cursos/adicionar"),
+    # The edit twin of the page above: same four fields, same labels. It had no
+    # visual coverage at all, which is how it came to be the one form in the
+    # system rendering at .form-cards width and clipping its labels from 1366px
+    # down. The id is literal because tools/seed_demo_data.py inserts its three
+    # cursos into a database created from scratch for every run, so curso 1
+    # exists and is the same curso every time.
+    ("admin_editar_curso", "/admin/cursos/1/editar"),
     ("admin_adicionar_atividade", "/admin/adicionar_atividade"),
     ("admin_adicionar_matriz", "/admin/adicionar_matriz"),
     ("admin_nova_requisicao", "/admin/requisicoes/nova"),

@@ -833,7 +833,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     <div class="modal-body">
       <form id="req-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_nova_requisicao') if can_requisicoes_edit else '#' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-cards-narrow">
+        <div class="form-cards-narrow form-cards-narrow--gutter-wide">
           <div class="form-row">
             <label class="row-label">Aluno</label>
             <div class="field-card">
@@ -1008,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   /* F-5B: canonical modal form width. Substituted in place, not relocated:
      this block is injected at runtime and lands last in the cascade, so an
      owned stylesheet could not override it without !important. */
-  .form-cards-narrow{ width: var(--form-w-modal); max-width: calc(100vw - 64px); margin: 0 auto; padding-top: var(--form-top-pad); display: grid; row-gap: 12px; }
+  .form-cards-narrow{ --form-w: var(--form-w-modal); width: var(--form-w); max-width: min(calc(100vw - 64px), calc(100% - var(--form-gutter))); margin-right: auto; margin-left: max(var(--form-gutter), calc((100% - var(--form-w)) / 2)); padding-top: var(--form-top-pad); display: grid; row-gap: 12px; }
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     .field-card.split-2.compact-left{ display:grid; grid-template-columns:40px 90px 40px 1fr; column-gap: var(--list-col-gap, 2px); }
     .field-card.split-2.compact-left .control:first-of-type{ min-width: 70px; }

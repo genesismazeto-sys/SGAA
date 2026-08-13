@@ -880,11 +880,21 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 /* UtilitÃ¡rios de formulÃ¡rio */
 /* Standard form width. Pages needing the wide variant opt in with
    .form-cards-narrow--wide, owned by components/form.css. Modal-hosted forms
-   set --form-w-modal on their own .form-cards-narrow rule. */
+   set --form-w-modal on their own .form-cards-narrow rule.
+
+   --form-w must always name the same width this rule applies, because the
+   centring term below is computed from it. F-5D.
+
+   The margin is not `0 auto`. Centring is still what happens whenever there
+   is room for it — that is the second term of the max() and it resolves to
+   exactly the position `auto` produced — but it may never eat the label
+   gutter. See components/form.css for the measured reasoning. */
 .form-cards-narrow{
-  width:var(--form-w-standard);
-  max-width:calc(100vw - 64px);
-  margin:0 auto;
+  --form-w:var(--form-w-standard);
+  width:var(--form-w);
+  max-width:min(calc(100vw - 64px), calc(100% - var(--form-gutter)));
+  margin-right:auto;
+  margin-left:max(var(--form-gutter), calc((100% - var(--form-w)) / 2));
   padding-top:var(--form-top-pad);
   display:grid;
   row-gap:12px;

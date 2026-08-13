@@ -103,6 +103,16 @@
   --form-w-modal:calc(var(--form-card-w) * 0.75);     /* 690px */
   --form-w-full:var(--form-card-w);                   /* 920px */
 
+  /* Reserved label gutter (F-5D)
+     .row-label is absolutely positioned to the LEFT of the form, outside it.
+     The space it needs is therefore not part of any box the layout knows
+     about, and `margin:0 auto` happily hands half of it to a right margin
+     that holds nothing. --form-gutter is that missing box, stated once:
+     the room a form must keep on its left before it may centre itself.
+     Surfaces whose label column differs override it with a named class in
+     components/form.css. */
+  --form-gutter:calc(var(--form-label-w) + var(--form-gap));  /* 162px */
+
   /* Grade: Atividades */
   --ativ-cols-6:64px 1.3fr 1.2fr 0.8fr 1.1fr auto;
   --ativ-cols-5:64px 1.3fr 1.2fr 0.8fr 1.1fr;

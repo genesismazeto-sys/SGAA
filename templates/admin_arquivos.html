@@ -28,7 +28,7 @@
        form WIDER than the requisicao form while living in a SMALLER modal
        card (1020 vs 1200), leaving the tightest label gutter in the system.
        Now the canonical modal width. padding-top stays 8px on purpose. */
-    .modal-card .form-cards-narrow{ width:var(--form-w-modal); max-width:calc(100vw - 64px); margin:0 auto; padding-top:8px; display:grid; row-gap:12px; }
+    .modal-card .form-cards-narrow{ --form-w:var(--form-w-modal); width:var(--form-w); max-width:min(calc(100vw - 64px), calc(100% - var(--form-gutter))); margin-right:auto; margin-left:max(var(--form-gutter), calc((100% - var(--form-w)) / 2)); padding-top:8px; display:grid; row-gap:12px; }
     .modal-card .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
     .modal-card .field-card{ min-height:var(--btn-h); border-radius:var(--radius); }
     .modal-card .field-card .field-chip{ height:100%; display:grid; place-items:center; }
@@ -177,7 +177,7 @@
       <form id="admin-arquivo-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_editar_arquivo', arquivo_id=edit_arquivo.id) if edit_arquivo else url_for('admin_adicionar_arquivo') }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.args.get('return_to', '') }}">
-        <div class="form-cards-narrow">
+        <div class="form-cards-narrow form-cards-narrow--gutter-compact">
           <div class="visibility-switch-row">
             <label class="toggle-switch" aria-label="Alternar visibilidade do arquivo">
               <input id="admin-arquivo-visivel-switch" type="checkbox" {% if not edit_arquivo or edit_arquivo.visivel %}checked{% endif %}>

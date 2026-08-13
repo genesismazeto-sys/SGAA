@@ -76,7 +76,7 @@
 <h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição') }}</h1>
 
 <form method="post" enctype="multipart/form-data">
-  <div class="form-cards-narrow">
+  <div class="form-cards-narrow form-cards-narrow--gutter-wide">
     {% set t = (tipo_atual or 'Acadêmica Complementar') %}
     <!-- Tipo da Atividade (topo) -->
     <div class="form-row">

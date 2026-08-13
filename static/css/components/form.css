@@ -59,8 +59,64 @@
    uses: below a ~676px viewport these three render 32px wider than the rest.
    That is existing approved behaviour, carried over verbatim. */
 .form-cards-narrow--wide{
-  width:var(--form-w-wide);
-  max-width:calc(100vw - 32px);
+  --form-w:var(--form-w-wide);
+  max-width:min(calc(100vw - 32px), calc(100% - var(--form-gutter)));
+}
+
+/* Modal-hosted form. The width is the same --form-w-modal the two modals
+   already set on their own rules; this exists so --form-w names it for the
+   centring term. */
+.form-cards-narrow--modal{
+  --form-w:var(--form-w-modal);
+}
+
+/* =============================================================
+   RESERVED LABEL GUTTER  (F-5D, from a 23-surface x 16-viewport matrix)
+
+   The defect it fixes: 16 of 23 label-bearing surfaces cut their label
+   text somewhere between 860px and 1366px. DS-7 fixed <=720px by stacking;
+   the band above it was still broken, silently, because the text
+   disappears to the LEFT where nothing scrolls to reveal it.
+
+   Why it happened: the form is centred with `margin:0 auto`, but the label
+   column only exists on the left. Every pixel the track loses is split
+   evenly between a left margin that must hold 150px of label and a right
+   margin that holds nothing. At 1440 /admin/adicionar_aluno carries 315px
+   of right margin holding nothing while the left is what runs out first.
+   The breakpoint was never the problem; the reservation was missing.
+
+       gutter available = (track - form) / 2
+       gutter needed    = widest label ink + --form-gap
+
+   So: floor the left margin at --form-gutter, let the form shrink rather
+   than push the labels out, and keep the centred position for as long as
+   it clears the floor. Nothing moves until the layout genuinely runs out
+   of room, which measures at 1100-1200px on most surfaces. Below 720px the
+   DS-7 stacking contract takes over unchanged and the gutter is moot.
+
+   Measured after: 0 clipped surface-viewport pairs, 0 horizontal overflow,
+   and 14 of 16 surfaces byte-identical at 1440.
+
+   The two overrides below are tuned to the label INK the surface really
+   renders, not to its label box. Reserving the full box would be tidier
+   but would push both modals sideways at 1440, which is a delta nobody
+   asked for. They are classes, not attribute matches, so the reason lives
+   in the markup where the wide label row actually is.
+   ============================================================= */
+
+/* Forms carrying a .row-2col row whose label column is widened to 280px:
+   /aluno/nova-requisicao and the requisicao modal. Widest ink measured
+   177px and 153px; 200 + gap covers both with room, and stays under the
+   centred gutter at 1440 so neither surface moves on the desktop. */
+.form-cards-narrow--gutter-wide{
+  --form-gutter:calc(200px + var(--form-gap));
+}
+
+/* The arquivo modal: short labels ("Nome do arquivo", 103px of ink) in the
+   narrowest modal card in the system (1020px), where the default 162px
+   floor would exceed the 153px the card can offer and shift the form. */
+.form-cards-narrow--gutter-compact{
+  --form-gutter:calc(130px + var(--form-gap));
 }
 .field-card.file-card.has-file .file-name.control{ color:var(--text); }  /* was duplicated in 2 templates */
 .field-card.is-compact{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */
@@ -161,6 +217,26 @@
    it stacks: previously it was positioned off-viewport and every field
    rendered with no visible label at all. */
 @media (max-width:720px){
+  /* Release the reserved gutter (F-5D). Once the label stacks above its
+     control it occupies no space to the left of the form, so reserving it
+     would only narrow the form for nothing. Listed per variant so the release
+     does not depend on this block merely happening to come last.
+
+     max-width is restored to its literal pre-F-5D value rather than left to
+     the token, because the `100% - gutter` term is a constraint that did not
+     exist below 720px before. Adding it here would change the approved <=720
+     render: these pages currently size the form past its own container and
+     let the field cards run off the right of the viewport, and clamping to
+     100% silently fixes that. It IS a defect — see the F-5D report — but it
+     is a different defect from the one this slice was approved to fix, so it
+     is reported rather than folded in. */
+  .form-cards-narrow,
+  .form-cards-narrow--wide,
+  .form-cards-narrow--gutter-wide,
+  .form-cards-narrow--gutter-compact{ --form-gutter:0px; }
+  .form-cards-narrow{ max-width:calc(100vw - 64px); }
+  .form-cards-narrow--wide{ max-width:calc(100vw - 32px); }
+
   .form-cards-narrow .form-row{ display:block; }
   .form-cards-narrow .row-label{
     position:static;
