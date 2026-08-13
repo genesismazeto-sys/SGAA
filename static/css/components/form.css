@@ -220,22 +220,38 @@
   /* Release the reserved gutter (F-5D). Once the label stacks above its
      control it occupies no space to the left of the form, so reserving it
      would only narrow the form for nothing. Listed per variant so the release
-     does not depend on this block merely happening to come last.
-
-     max-width is restored to its literal pre-F-5D value rather than left to
-     the token, because the `100% - gutter` term is a constraint that did not
-     exist below 720px before. Adding it here would change the approved <=720
-     render: these pages currently size the form past its own container and
-     let the field cards run off the right of the viewport, and clamping to
-     100% silently fixes that. It IS a defect — see the F-5D report — but it
-     is a different defect from the one this slice was approved to fix, so it
-     is reported rather than folded in. */
+     does not depend on this block merely happening to come last. */
   .form-cards-narrow,
   .form-cards-narrow--wide,
   .form-cards-narrow--gutter-wide,
   .form-cards-narrow--gutter-compact{ --form-gutter:0px; }
-  .form-cards-narrow{ max-width:calc(100vw - 64px); }
-  .form-cards-narrow--wide{ max-width:calc(100vw - 32px); }
+
+  /* NARROW-VIEWPORT CONTAINMENT (F-5E)
+
+     Both families were sized against `100vw`, which does not know the 240px
+     sidebar exists. At a 640 viewport that resolved to 576px while the real
+     content track was 336px, so the form was sized against a box 240px wider
+     than the one it lives in and every field card ran off the right of the
+     screen: 13 of 15 measured surfaces, up to 300px past the track, worst on
+     .page-m30 pages (another 30px of margin per side) and on the wide family
+     (which used 100vw-32, worse again). .app-main{overflow-x:auto} absorbed
+     it, so it never showed as document overflow -- it just cut every control
+     in half with no affordance.
+
+     The containing block is the only box that knows about the sidebar. Once
+     the stacked-label contract is active the invariant is simply:
+     form width <= actual containing track. The historical 100vw-32 / 100vw-64
+     distinction between wide and standard does not survive that, and is
+     product-approved to end here: a viewport-relative margin is meaningless
+     once the track is the binding box.
+
+     SPECIFICITY IS LOAD-BEARING. These stay bare classes, (0,1,0), which is
+     lower than .modal-card .form-cards-narrow (0,2,0) and earlier in document
+     order than the requisicao modal's runtime block. Both modals therefore
+     keep their own contract and are measurably untouched. Adding so much as
+     `html body` in front pulls the requisicao modal in. */
+  .form-cards-narrow{ max-width:100%; }
+  .form-cards-narrow--wide{ max-width:100%; }
 
   .form-cards-narrow .form-row{ display:block; }
   .form-cards-narrow .row-label{

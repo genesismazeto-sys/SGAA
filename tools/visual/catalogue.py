@@ -356,6 +356,15 @@ SHOTS: list[Shot] = (
         # rule anywhere; these pin its behaviour as-is.
         Shot(name="form_responsive_960", path="/admin/adicionar_aluno", viewport=(960, 900)),
         Shot(name="form_responsive_640", path="/admin/adicionar_aluno", viewport=(640, 900)),
+        # 720 is the exact width at which the stacked-label contract activates
+        # and the narrow containment contract takes over, and nothing pinned
+        # it: form_responsive_640/960 sit either side of it. F-5E found both
+        # families overflowing their track hardest right here (+90 standard,
+        # +228 wide) with no shot to catch it. The wide family had no
+        # responsive coverage at any width at all.
+        Shot(name="form_responsive_720", path="/admin/adicionar_aluno", viewport=(720, 900)),
+        Shot(name="form_responsive_wide_720", path="/admin/adicionar_atividade",
+             viewport=(720, 900)),
         # .field-label (2 templates) does reflow from absolute to block under
         # @media (max-width:1000px); this is the only page that exercises it.
         Shot(name="form_field_label_reflow", path="/admin/demo/clientes-form-pack",
