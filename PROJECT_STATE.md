@@ -1,6 +1,8 @@
 # PROJECT_STATE — live state
 
-Branch: `refactor/architecture-safety-net`
+Active branch: `refactor/design-system-foundation`
+Structural-refactor branch (history, no longer the active line):
+`refactor/architecture-safety-net`
 HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
 Plateau landing parent: `230de41b3439a60951049e9021d6b0063f3bc2db`
 UT-9 entry parent: `7909b2d59b2de987d84dc859a15bede215a3261b`
@@ -40,7 +42,96 @@ UT-13 Dashboard (parent `2e0afa34`); UT-12 Reportes (parent `4820e4d3`);
 UT-11 Alertas (parent `a0092149`); UT-10 Arquivos (parent `e8f64a82`);
 C4 request-hook write isolation + STRUCTURAL PLATEAU publication
 (Phase-H landing commit, parent `230de41b`).
-Next UT: NONE — FINAL ROADMAP COMPLETE.
+Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs on
+the Design System track below, which is NOT a UT and does not extend the UT
+roadmap.
+
+## POST-REFACTOR DESIGN SYSTEM — RESPONSIVE MILESTONE — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this governance landing commit (landing SHA not invented).
+
+**Relationship to the UT roadmap.** The Design System track is a separate line of
+work that began after the structural refactor closed. It is NOT UT-18; there is
+no UT-18. The structural refactor remains **CLOSED / ACCEPTED / PUBLISHED**, and
+nothing in this section modifies, reopens or supersedes any UT verdict, the
+structural plateau, or the C1–C7 criteria recorded below.
+
+**Scope of the Design System track.** Frontend only: `static/css/**`,
+`static/js/**`, presentation-level template markup, the Playwright visual
+catalogue and its baselines. This milestone changed **no** backend route, **no**
+business logic, **no** service, **no** database schema and **no** migration.
+
+**Frontend runtime behaviour WAS intentionally changed by this milestone.** That
+is the point of the work, and governance must not be read as claiming otherwise.
+The deliberate changes are CSS responsive/reflow behaviour (form label gutter and
+narrow-viewport containment, toolbar wrapping, dashboard grid column counts, the
+content-block row wrap) and popover positioning in
+`static/js/toolbar-filters.js`. What did not change is backend behaviour, per the
+scope statement above.
+
+### Reviewed technical chain
+
+Phases, in order, ending the reviewed chain at F-6B2:
+
+| Phase | Commit | Subject |
+|---|---|---|
+| F-5D | `aac630f` | reserve the label gutter instead of centring into it |
+| F-5E | `9db9078` | contain the form in the track it actually lives in |
+| F-6A1 | `0354f55` | let the toolbar wrap in the column it actually has |
+| F-6A2 | `1219a2e` | give the sort/filter popovers the clamp the actions menu already had |
+| F-6B | `85bda75` | let the dashboards measure the column they have, not the window |
+| F-6B2 | `cc82f36` | let the Resumo row break instead of running off the card |
+
+Earlier phases on this track, already published: DS-1, DS-2A, DS-3, DS-3b,
+DS-4, DS-5, DS-6, DS-7, F-5B, F-5C.
+
+### Independent review
+
+**R1 independent adversarial review of `cc82f36`: ACCEPT — zero MATERIAL
+findings.** The review re-derived the container-query boundary, the popover
+clamp arithmetic, the toolbar contract and the content-block blast radius from
+the diff and from measured rendered behaviour rather than from executor reports.
+Non-material observations, pre-existing test debt and out-of-scope debt were
+recorded and deliberately NOT actioned in the governance commit, so the reviewed
+technical tree is exactly the tree that was accepted.
+
+### Cross-engine pre-publication verification
+
+Verified before publication on Chromium 151.0.7922.34, Firefox 153.0 and
+WebKit 26.5 against one shared application state — all PASS on all four checks:
+
+- container-query boundary: 792px actual track → 4 columns, 791px → 2 columns,
+  for `.kpi-grid` (admin and aluno) and `.dashboard-turma-row-kpis`;
+- F-5D absolute label geometry: 0 clipped, 0 pushed off-left, geometry identical
+  with and without `container-type`;
+- F-6A2 popover clamp: exactly 12px inside the viewport where the clamp binds,
+  anchor relationship preserved where it does not;
+- fixed-overlay geometry: real `.modal-overlay` elements inside `.app-track`
+  measure the full viewport at (0,0) and still cover sidebar and header, so
+  `container-type:inline-size` does not become the fixed-position containing
+  block in any of the three engines.
+
+### Measured state at governance time
+
+- visual baselines: **83** (before this governance commit)
+- opt-in browser tests: **90** = 83 visual + 7 dashboard container-contract
+- static Design System gates: **11**
+
+Latest accepted canonical reconciliation:
+
+| Metric | Value |
+|---|---|
+| collected | 1635 |
+| selected | 1618 |
+| passed | 1528 |
+| skipped | 90 |
+| deselected | 17 |
+| failed | 0 |
+| errors | 0 |
+
+Operational Design System documentation: `docs/design-system/README.md` and
+`docs/design-system/form-contract.md`. Outstanding Design System debt is
+recorded there and is explicitly NOT closed by this milestone.
 
 ## STRUCTURAL PLATEAU — VALIDATED / PUBLISHED
 
@@ -774,7 +865,13 @@ not require suite repetition. No candidate or DB byte changed.
 - `SCHEMA_VERSION`: 3 — migrations v1/v2/v3 only (migration v4 remains PROHIBITED)
 - main local `@app.route` handlers: 0 (UT-17 final; Criterion 8 satisfied)
 
-## Latest full-suite status
+## Full-suite status — structural refactor (UT-17 canonical, historical)
+
+These are the UT-17 figures and they stand as the structural-refactor canonical
+record. They are **not** the current suite shape: the Design System track has
+since added opt-in browser tests. For the current reconciliation see
+**POST-REFACTOR DESIGN SYSTEM** above (1635 collected / 1618 selected / 1528
+passed / 90 skipped / 17 deselected / 0 failed / 0 errors).
 
 Final canonical suite (UT-17, two deterministic runs): Run 1 — 1534 collected /
 1517 passed / 17 deselected / 0 failed / 0 errors / 0 skipped / 379.06s.

@@ -139,6 +139,89 @@ Known gap: `--focus-ring-color` is defined but **never referenced**. There is
 no centralised focus contract yet. Do not delete the token — it is the anchor
 for the focus work in a later phase.
 
+### 2.6 Responsive contract
+
+Delivered by DS-7 and the F-5/F-6 phases. The governing idea is that a rule
+should measure **the box it actually lives in**, not the window: the shell eats
+240px of sidebar plus 64px of padding plus the scrollbar gutter, so a viewport
+number is wrong by an amount that changes with the platform.
+
+**Supported width.** `768px` is the current supported floor for the list and
+dashboard contracts below. Behaviour under 768 is not part of this contract.
+A 360–480px phone shell is a **separate product decision** and is not claimed,
+implied or supported here.
+
+**Forms**
+
+* `--form-gutter` reserves the space the absolutely positioned `.row-label`
+  needs to the LEFT of the form. The form's left margin is floored at that
+  gutter and only centres itself when there is room to spare, so the form
+  narrows rather than pushing its labels out of view. Two tuned variants exist
+  as named classes: `.form-cards-narrow--gutter-wide` and
+  `--gutter-compact`.
+* At `max-width:720px` the gutter is released and the form is contained by its
+  own track (`max-width:100%`), not by a `100vw` expression. The historical
+  `100vw-32` / `100vw-64` split does not survive below 720 and is gone there.
+* Label **stacking** below 720 is the DS-7 contract and is unchanged by F-5.
+* Where the shipped contract requires it, form width derives from the available
+  track rather than the raw viewport.
+
+See [form-contract.md](form-contract.md) for the measured detail.
+
+**Toolbars**
+
+* `.app-main .toolbar`, `.filters` and `.actions` all wrap. Wrapping is
+  **intrinsic / container-driven**: it fires exactly when the toolbar exceeds
+  its own content box, which is `.app-track`.
+* **No viewport breakpoint is responsible for toolbar wrapping.** Do not add
+  one — it would have to be re-derived per platform.
+* Filters and actions stay visible and in DOM order; wrap reflows in DOM order,
+  so tab order is unchanged. Nothing is hidden, reordered or scrolled away.
+* The `.app-main` scoping and the separate `row-gap` longhand are load-bearing:
+  a bare `.toolbar{row-gap:8px}` loses to the `gap` shorthand on
+  `.app-main .toolbar`, and using the `gap` shorthand here would overwrite the
+  2px column gap that sets the horizontal rhythm.
+
+**Popovers**
+
+* The sort and filter popovers share the selection actions menu's horizontal
+  viewport clamp: where it binds, the popover sits exactly **12px** inside the
+  viewport edge; where it does not bind, the popover stays anchored to its
+  button.
+* **Vertical clamping is deliberately not implemented.** An overrun bottom edge
+  still scrolls with `.app-main`, so it stays reachable. Deferred debt.
+* `openMenu()`'s hidden-width measurement (it reads `offsetWidth` while the menu
+  is still `display:none` and falls back to 190) is **deferred debt**, kept
+  as-is on purpose so the actions menu's geometry does not move.
+
+**Dashboards**
+
+* `.app-track` is `container-type:inline-size` with `container-name:track`. It
+  is the named query container everything inside the content column measures
+  against.
+* Four KPI columns have a hard intrinsic minimum:
+
+  ```
+  4 × 180px + 3 × 24px = 792px
+  ```
+
+* At an actual track of **≤791px** the grid drops to 2 columns — `.kpi-grid` on
+  both dashboards and `.dashboard-turma-row-kpis` on the admin dashboard.
+  The threshold is the track, never the viewport.
+* An `@supports not (container-type: inline-size)` fallback with an identical
+  rule body exists for engines without inline-size container queries. Its
+  viewport threshold is deliberately conservative, so it switches early rather
+  than late on every platform.
+* Verified on Chromium, Firefox and WebKit that `container-type:inline-size`
+  does **not** make `.app-track` the containing block for absolutely or fixed
+  positioned descendants — the reserved label gutter and the popover/modal
+  geometry are unaffected by it.
+
+**Content block**
+
+* `.content-block-body` may **wrap** when its children no longer fit, instead of
+  running past the card edge. `gap:16px` already supplies the row gap.
+
 ---
 
 ## 3. The button contract
@@ -279,10 +362,13 @@ screen as correct):
 python -m tools.visual.harness
 ```
 
-* **47 shots**: every admin page, every aluno page, login, 404, the filter
-  popover on 8 list pages, the sort popover, focus-visible and a toast.
+* **83 shots**: every admin page, every aluno page, login, 404, the filter
+  popover on 8 list pages, the sort popover, focus-visible, a toast, plus the
+  responsive bands added by the F-5/F-6 phases (form containment at 640/720,
+  toolbar wrap at 768–1366, the popover clamp at 768/900, and the dashboard
+  grids at 768–1094).
 * **Opt-in.** Skipped unless `--visual` is passed, so the canonical suite count
-  and runtime stay stable. Takes ~3 minutes.
+  and runtime stay stable. Takes ~6 minutes.
 * **Tolerance: ±1 per channel, 0 pixels beyond that.** Repeated captures are
   byte-identical; across processes the compositor occasionally rounds an edge
   pixel by 1. Measured: 5 and 7 pixels out of 1,296,000, all delta 1, all on
@@ -317,6 +403,42 @@ selector on just 4 shots. The filter-popover shots exist specifically to close
 that gap and bring it to 12. When you change a component, check that some shot
 actually renders it before trusting a green run.
 
+**`full_page=True` does not reach below the internal fold.** `.app-layout` is
+`height:100vh` and `.app-main` is what scrolls, so the *document* is always
+exactly viewport-height. A "full page" capture therefore captures the viewport
+and nothing more, on every shot in this catalogue. A shot whose target sits
+below that fold must scroll `.app-main` first — `toolbar_acesso_768` does, via
+`scroll_toolbar_into_view`. Anything below the fold on every other shot is
+**not pinned**.
+
+### 5.2 The dashboard container contract
+
+A screenshot cannot pin the container-query threshold, because the visual
+harness injects `scrollbar-width:none` and so renders one scrollbar geometry
+while the contract spans two. These tests sidestep it by setting the query
+container's inline size directly and asserting the resulting column count:
+
+```bash
+python -m pytest tests/test_dashboard_container_contract.py --visual
+```
+
+* **7 tests**: 792 → 4 columns and 791 → 2 columns for `.kpi-grid` on both
+  dashboards and for `.dashboard-turma-row-kpis`, plus a probe asserting that
+  `container-type` has not become a containing block for absolute positioning.
+* Same opt-in flag as the visual gate.
+
+**Opt-in browser total: 90 = 83 visual + 7 dashboard container-contract.**
+Static Design System gates: 11 (`tests/test_ds_design_system_contract.py`, not
+opt-in).
+
+**Cross-engine status: verified.** The responsive contracts in §2.6 were
+verified before publication of the responsive milestone on **Chromium
+151.0.7922.34, Firefox 153.0 and WebKit 26.5** — the 792/791 container
+boundary, the F-5D absolute label geometry, the F-6A2 popover clamp, and the
+fixed-overlay geometry of real modals inside `.app-track`. All four passed on
+all three engines. The committed gates themselves still run Chromium only;
+re-run the cross-engine check by hand when a responsive contract changes.
+
 ---
 
 ## 6. JavaScript-managed styles
@@ -333,35 +455,101 @@ Existing violations are tracked, not yet migrated.
 
 ## 7. Roadmap
 
+### Completed
+
+Ownership phases (DS) moved CSS and proved equivalence. Responsive phases
+(F-5 / F-6) are the first ones that deliberately change rendered behaviour.
+
 | Phase | Scope | Gate |
 |---|---|---|
 | **DS-1 ✅** | Token contract. Single owner, load-order macro, analyser + gates. | static cascade equivalence |
-| DS-2 | Extract `foundation/reset.css` + `base.css`; give the standalone demo page an explicit foundation; remove the last duplicated base rules. | static cascade equivalence |
 | **DS-2A ✅** | Playwright visual harness, 47 versioned baselines. | validated both directions |
 | **DS-3 ✅** | `.btn.primary` decoupled from list context into the explicit `.btn--raised` variant. | Playwright, 47/47, zero baseline delta |
 | **DS-3b ✅** | Removed the last global rules from the component file; unrouted demo template deleted. | Playwright, 47/47 |
 | **DS-4 ✅** | Modal core extracted to `components/modal.css`: 27 declarations that were identical across 7 copies. The 60 that legitimately differ (width, max-height, padding, footer alignment, borders) stay as page overrides. | Playwright 58/58 |
 | **DS-5 ✅** | Toolbar per-control overrides relocated: 34 declarations that were copy-pasted into 6–13 templates each (302 instances, zero divergence). | Playwright 59/59 |
 | **DS-6 ✅** | Form ownership foundation. `components/form.css` created; 92 provably-shared declarations relocated; 72 look-alike declarations proven page-specific and kept. See [form-contract.md](form-contract.md). | Playwright 66/66 |
-| DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
-| DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
-| DS-7 | Focus/accessibility contract; wire up `--focus-ring-color`. | browser gate + manual a11y pass |
+| **DS-7 ✅** | Approved form state contract: validation, disabled, read-only, required marker, 2px focus ring, and `.row-label` stacking at ≤720px. **First approved visual change.** | Playwright, 17 baselines replaced |
+| **F-5B ✅** | Form widths named as tokens; redundant restatements deleted. | Playwright, zero delta |
+| **F-5C ✅** | The arquivo modal takes the canonical modal form width. | Playwright |
+| **F-5D ✅** | Reserved label gutter (`--form-gutter`). Fixed label clipping across the 860–1366 band on 16 of 23 label-bearing surfaces. | Playwright 70/70 |
+| **F-5E ✅** | Narrow-viewport form containment: below 720 the form is bound by its track, not by `100vw`. | Playwright 72/72 |
+| **F-6A1 ✅** | Toolbar wraps, container-driven, no breakpoint. Restores controls clipped from 1344px down. | Playwright 76/76 |
+| **F-6A2 ✅** | Sort/filter popovers get the actions menu's horizontal viewport clamp. | Playwright 79/79 |
+| **F-6B ✅** | `.app-track` becomes the named inline-size query container `track`; dashboard grids switch on the actual track at 792/791, with an `@supports` fallback. | Playwright 82/82 + 7 container-contract |
+| **F-6B2 ✅** | `.content-block-body` wraps instead of running past the card edge. | Playwright 83/83 |
+
+The F-5/F-6 chain closed as the **responsive milestone**: R1 independent
+adversarial review ACCEPT with zero material findings, and cross-engine
+verification on Chromium, Firefox and WebKit (§5.2).
+
+### Not started
+
+| Phase | Scope | Gate |
+|---|---|---|
+| DS-2 | Extract `foundation/reset.css` + `base.css`; give the standalone demo page an explicit foundation; remove the last duplicated base rules. | static cascade equivalence |
 | DS-8 | Dead CSS removal, with consumer evidence. | coverage evidence |
+| — | Static `style=""` → component classes / custom properties. | ratchets |
+| — | Breakpoint scale / tokens for the remaining ad-hoc viewport breakpoints. F-6 removed the viewport constant only where the binding box is the track; the rest still have no scale. | browser gate |
+| — | Centralised focus contract: wire up `--focus-ring-color`. DS-7 shipped the 2px ring, but the token is still unreferenced (§2.5). | browser gate + manual a11y pass |
 
 ---
 
 ## 8. Pre-existing defects recorded, not yet fixed
 
+This is a **register, not a work list.** Nothing here is closed by the
+responsive milestone, and none of it should be picked up incidentally while
+doing something else.
+
+**Ownership / dead code**
+
 * `--focus-ring-color` and `--btn-primary-light` are defined but never used.
 * `templates/demo_impressoes.html` was unreachable (no route) and was removed
   in DS-3b. It was the only consumer of the `--imp-cols` print-shop default.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
+* `templates/components/content_block.html` has no consumers — dead template.
+* `.form-cards-narrow--modal` is declared in `components/form.css` but nothing
+  uses it; both modals set their width through their own page rules.
 * 185 distinct hardcoded colour literals across 585 occurrences.
+* `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
+  styled nowhere, so those buttons silently render as plain `.btn`.
 * `admin_requisicoes.html` builds a `<style>` element in JavaScript and appends
   it at runtime (~50 lines of form/file-card/button CSS). It is the only place
   in the codebase that delivers CSS this way. The modal core it duplicated was
   removed in DS-4; the rest still has no owner.
 * `@media print` rules live in `components/list-cards.css` and have no owner.
-* 16 distinct breakpoints with no scale.
-* `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
-  styled nowhere, so those buttons silently render as plain `.btn`.
+
+**Responsive / layout**
+
+* 16 distinct breakpoints with no scale. F-6 removed the viewport constant only
+  where the binding box is the track.
+* **Vertical popover overflow.** Neither popover opener clamps the vertical
+  axis. An overrun bottom edge still scrolls with `.app-main`, so it stays
+  reachable — which is why it was deferred rather than fixed.
+* **`openMenu()` hidden-width measurement.** It reads `offsetWidth` while the
+  menu is still `display:none`, so it always clamps against the 190 fallback
+  rather than the menu's real width and under-clamps by the difference.
+  Deliberately untouched by F-6A2, which required that menu's geometry to stay
+  put.
+* **Mobile shell / C5.** The 240px sidebar never collapses, so below roughly
+  480px the content track falls under a field card's intrinsic minimum. 768px
+  is the supported floor (§2.6); a 360–480px phone shell is a separate product
+  decision and is **not** supported.
+* **Residual narrow-form geometry below the supported floor.** Between the 720
+  stacking breakpoint and 768, the `--gutter-wide` surfaces are squeezed far
+  enough that field cards can exceed the form box. Measured strictly better
+  than before F-5D at every width in that band, and no baseline covers it.
+
+**Harness**
+
+* `full_page=True` cannot reach below `.app-main`'s internal fold (§5.1), so
+  content below the first viewport is unpinned on every shot except
+  `toolbar_acesso_768`.
+* The container-contract probe checks `position:absolute` only. The
+  higher-consequence `position:fixed` case is covered by the manual
+  cross-engine check (§5.2), not by a committed test.
+* `tools/visual/catalogue.py`'s `login()` waits for `domcontentloaded` after
+  submitting, which can resolve against the pre-POST document. Chromium and
+  Firefox win that race; WebKit loses it from the second browser context on.
+  Harmless today because the committed gates are Chromium-only and use one
+  context, but any future multi-engine or multi-context run must account for it.

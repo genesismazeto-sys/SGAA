@@ -1,4 +1,4 @@
-# SGAA-EJ — Form Contract (as of DS-7)
+# SGAA-EJ — Form Contract (as of F-5E)
 
 The state of the form system after ownership consolidation, measured rather
 than asserted. This is the document to read before proposing a forms redesign.
@@ -8,6 +8,14 @@ than asserted. This is the document to read before proposing a forms redesign.
 > focus ring and responsive labels. 17 baselines were replaced with approved
 > renders; the other 49 are byte-unchanged. Everything not listed as changing
 > keeps its current rendered value.
+>
+> **F-5B → F-5E then changed form width and responsive behaviour** (see §5).
+> F-5B named the widths as tokens, F-5C gave the arquivo modal the canonical
+> modal width, F-5D reserved the label gutter, and F-5E contained the form in
+> its own track below 720px. The **locked anatomy is unchanged** by all of it:
+> field cards, chips, the toggle switch, colours, typography and the DS-7
+> form-state contracts all keep their approved rendered values. What moved is
+> where the form sits and how wide it is.
 
 ---
 
@@ -24,6 +32,11 @@ than asserted. This is the document to read before proposing a forms redesign.
 **37% owned, 62% still in templates.** That is the honest headline. DS-6
 established ownership and removed what was provably duplicated; it did not
 repatriate the long tail, because most of it is genuinely page-specific.
+
+*The declaration counts in this table are the DS-6 measurement and have not been
+re-measured since. F-5B–F-5E added rules to `components/form.css` without moving
+the ownership boundary, so the split is directionally unchanged but the absolute
+numbers are stale. Re-run `tools/ds_css.py` before quoting them.*
 
 Load order (from `templates/components/design_system_css.html`):
 
@@ -57,7 +70,7 @@ them changes that page.
 | Family | Why it is not shared |
 |---|---|
 | `.form-actions` | 11 templates align it `flex-end`. `404.html` renders `.form-actions` **without** that override and is left-aligned today. The visual gate caught exactly this when it was hoisted. |
-| `.form-cards-narrow` | 12 pages, **three** widths (`0.55`, `0.70`, `0.75 × --form-card-w`) and **two** max-widths (`100vw-32px`, `100vw-64px`). |
+| `.form-cards-narrow` | 12 pages, **three** widths (`0.55`, `0.70`, `0.75 × --form-card-w`). *Superseded in part:* F-5B named those three widths as tokens, and F-5E ended the old `100vw-32px` / `100vw-64px` max-width split below 720px — both families are now bound by their own track there. See §5. |
 | `.field-card.file-card` | Styled in only some of the templates that render it. `admin_requisicoes` paints its chip `#000`; `aluno_nova_requisicao` uses `var(--text-tertiary)`. |
 | `.toggle-switch` | Three templates, **two** sizes: 46×24 (`admin_alertas`) and 42×22 (`admin_banco_dados`, `admin_configuracoes`), with matching slider offsets. |
 | `.modal-card textarea.control.auto-grow` | `admin_alertas` uses `line-height:1.35 / padding:6px`; `admin_arquivos` uses `1.2 / 8px`. |
@@ -87,16 +100,39 @@ listed by `tools/ds_css.py`.
 
 ## 5. Responsive behaviour
 
-Two label patterns with two different stories:
+> **Reconciled after DS-7 and F-5D/F-5E.** This section previously recorded that
+> `.row-label` had no responsive rule and that the dominant form layout had no
+> responsive fallback. **That is no longer true** — it was the measured state
+> before DS-7, and it is kept here only as the reason the work happened.
+
+Two label patterns:
 
 | Pattern | Uses | Responsive |
 |---|---:|---|
-| `.row-label` | 107 | **None.** Absolutely positioned via `.form-cards-narrow .row-label{right:calc(100% + var(--form-gap))}` at every viewport. There is no breakpoint rule for it anywhere. |
+| `.row-label` | 107 | **Yes, in two tiers.** Above 720px it stays absolutely positioned via `.form-cards-narrow .row-label{right:calc(100% + var(--form-gap))}`, but the form now reserves `--form-gutter` on its left so the label can no longer be pushed out of view (F-5D). At `max-width:720px` it stacks above its control (DS-7). |
 | `.field-label` | 2 templates | Reflows from absolute to block under `@media (max-width:1000px)`. |
 
-So the dominant form layout has **no responsive fallback**. Pinned by
-`form_responsive_960`, `form_responsive_640` and `form_field_label_reflow`.
-This is the clearest structural gap in the form system.
+**The width contract that goes with it:**
+
+* `--form-gutter` = the room a form must keep on its left before it may centre
+  itself. Default `--form-label-w + --form-gap`; overridden by the named classes
+  `.form-cards-narrow--gutter-wide` and `--gutter-compact`.
+* The form's left margin is `max(gutter, centred position)`, so it centres
+  whenever there is room and parks at the gutter when there is not. The form
+  narrows rather than pushing labels off the left edge, where nothing scrolls to
+  reveal them.
+* Below 720px the gutter is released (stacked labels need no left column) and
+  both families are contained by `max-width:100%` — their own track — instead of
+  a `100vw` expression that does not know the 240px sidebar exists (F-5E).
+
+Pinned by `form_responsive_960`, `form_responsive_720`,
+`form_responsive_wide_720`, `form_responsive_640` and
+`form_field_label_reflow`.
+
+**Supported floor: 768px.** Below the 720px stacking breakpoint the contract
+holds; in the narrow band just above it the `--gutter-wide` surfaces are
+squeezed hard enough that field cards can exceed the form box. That is recorded
+as debt in the [README](README.md) §8 and is not claimed as supported.
 
 ---
 
@@ -206,10 +242,16 @@ Because these have a single owner, a change here lands everywhere at once:
 * **Tokens** — `--form-card-w`, `--form-gap`, `--form-label-w`,
   `--form-top-pad`, `--field-*` (`foundation/tokens.css`).
 
+**Form width (`.form-cards-narrow`) is now safe to change centrally.** F-5B
+named the three widths as tokens, F-5C removed the arquivo modal's divergent
+width, and F-5D/F-5E gave the family one owned width-and-gutter contract (§5).
+Change it in `modern-style.css` / `components/form.css`, not per page — but note
+the two tuned gutter variants and the modals' own `(0,2,0)` rules, which are
+deliberate and must keep winning.
+
 **Not yet safe to change centrally** — each still needs per-page work:
-the action row (`.form-actions`), form width (`.form-cards-narrow`), the file
-control, the toggle switch, and anything inside the `admin_requisicoes`
-runtime-injected block.
+the action row (`.form-actions`), the file control, the toggle switch, and
+anything inside the `admin_requisicoes` runtime-injected block.
 
 ---
 
@@ -217,18 +259,22 @@ runtime-injected block.
 
 If a forms redesign is approved, the highest-value and lowest-risk order is:
 
-1. **Add a validation contract.** Nothing exists; this is additive, so it
-   cannot regress an approved appearance.
-2. **Add a `:disabled` contract for `.control`.** Same argument.
-3. **Give `.row-label` a responsive rule.** The dominant label pattern has none;
-   this is the real defect behind any "forms look broken on a small screen"
-   report.
-4. **Unify `.form-actions` alignment.** One decision (`flex-end` vs the
-   404 default) collapses 11 page overrides into one owned rule.
-5. **Unify `.form-cards-narrow` width** into a small set of named variants
-   (`--form-card-w × 0.55 / 0.70 / 0.75` are already the only three values).
-6. **Unify the toggle switch** to one size.
+Steps 1–3 and 5 are **done**; they are kept here so the order and its reasoning
+stay legible.
 
-Steps 1–3 are additive and could proceed without changing any approved pixel.
-Steps 4–6 are genuine visual changes and need product sign-off; each one has a
-measured before/after and a pinned baseline ready to prove the delta.
+1. ~~**Add a validation contract.**~~ Delivered by DS-7.
+2. ~~**Add a `:disabled` contract for `.control`.**~~ Delivered by DS-7.
+3. ~~**Give `.row-label` a responsive rule.**~~ Delivered by DS-7 (stacking at
+   ≤720px) and F-5D (the reserved gutter above it). This was the real defect
+   behind "forms look broken on a small screen"; see §5 for the shipped
+   contract.
+4. **Unify `.form-actions` alignment.** One decision (`flex-end` vs the
+   404 default) collapses 11 page overrides into one owned rule. **Still open.**
+5. ~~**Unify `.form-cards-narrow` width** into a small set of named variants~~
+   (`--form-card-w × 0.55 / 0.70 / 0.75`). Delivered by F-5B/F-5C, with the
+   gutter and containment contract added by F-5D/F-5E.
+6. **Unify the toggle switch** to one size. **Still open.**
+
+Remaining steps 4 and 6 are genuine visual changes and need product sign-off;
+each one has a measured before/after and a pinned baseline ready to prove the
+delta.
