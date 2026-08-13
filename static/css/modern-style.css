@@ -774,6 +774,67 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .app-main .main-title + .toolbar{ margin-top:4px; }
 .app-main .toolbar .filters{ display:flex; align-items:center; gap:var(--btn-gap); }
 .app-main .toolbar .actions{ display:flex; align-items:center; gap:var(--btn-gap); }
+
+/* =============================================================
+   TOOLBAR WRAP  (F-6A1, from a 19-consumer x 8-viewport matrix)
+
+   The defect it fixes: the three rules above are `nowrap` flex rows, so the
+   toolbar's min-content width is the SUM of its items and it cannot shrink
+   below it. Measured minimum on /admin/atividades: 1042.5px, of which .filters
+   alone is 665.8px. With the content track at `viewport - 334`, that toolbar
+   runs past its column below a 1376px viewport and is genuinely cut off below
+   1344px -- so "+ Adicionar" is already clipped at 1280x800. .app-main's
+   overflow:auto absorbed it into a nested scroll pane, which is why it never
+   showed as document overflow. Below ~1000px it stops being cosmetic: the
+   Filtrar button lands outside the visible box and a normal click no longer
+   opens its popover at all.
+
+   .filters measures 627.8px on 14 of the 19 consumers regardless of page,
+   because the dominant term is the 320px min-width floor on the toolbar search
+   input (see `.app-main .toolbar .filters input` below). That floor is what
+   sets the search box's width at 1440 and is deliberately left alone.
+
+   Wrapping the OUTER row alone is not enough: it leaves .filters as one
+   indivisible 627.8px block against a 434px track at 768. All three levels
+   have to wrap, and then the toolbar's minimum collapses from the sum of a
+   group to the widest single control.
+
+   No breakpoint. flex-wrap is already container-relative -- it fires exactly
+   when the toolbar exceeds its own content box, which IS .app-track -- so this
+   follows the sidebar, the padding, the scrollbar gutter and .page-m30 with no
+   viewport constant to keep in sync. A viewport breakpoint cannot express this
+   constraint: the binding box is 334px narrower than the viewport, which is
+   the same mistake `.kpi-grid`'s 920px query and the pre-F-5E `100vw` form
+   sizing make.
+
+   SPECIFICITY IS LOAD-BEARING. These must stay .app-main-scoped, (0,2,0) and
+   (0,3,0). A bare `.toolbar{row-gap:8px}` at (0,1,0) loses to the
+   `gap:var(--btn-gap)` on `.app-main .toolbar` above and silently keeps the
+   2px row gap: measured wrap:wrap but row-gap:2px, three stacked rows 2px
+   apart. row-gap is a separate longhand on purpose, so the 2px COLUMN gap that
+   sets the horizontal rhythm is untouched.
+
+   Measured after: 0 clipped controls across all 18 routable consumers x
+   1440/1366/1280/1200/1120/1024/900/768 -- 144 surface-viewport pairs, none
+   clipping -- and all 72 pre-existing visual baselines pass untouched, because
+   every one of them renders at a width where the toolbar still fits. On
+   /admin/atividades at 900 and 768 the Filtrar button is now inside the
+   visible box, a normal click reaches it with no scrolling, and aria-expanded
+   goes false -> true -> false.
+
+   Nothing is hidden, reordered or scrolled; wrap reflows in DOM order, so tab
+   order is unchanged (verified: DOM order == visual order on every measured
+   row). The toolbar grows 32 -> 70 -> 110px as it takes rows.
+
+   The sort/filter popovers still overrun the viewport below ~1000px -- they
+   carry `min-width:520px` and, unlike the actions menu, no clamp. That is a
+   separate pre-existing defect, deferred to F-6A2. */
+.app-main .toolbar,
+.app-main .toolbar .filters,
+.app-main .toolbar .actions{
+  flex-wrap:wrap;
+  row-gap:8px;
+}
 .app-main .toolbar .toolbar-actions-shell > .btn{
   padding-right: calc(var(--btn-px) - 4px);
 }

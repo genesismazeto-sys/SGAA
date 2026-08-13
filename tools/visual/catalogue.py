@@ -103,6 +103,37 @@ def focus_toolbar_search(page) -> None:
     page.wait_for_timeout(150)
 
 
+def scroll_toolbar_into_view(page) -> None:
+    """Bring a below-the-fold toolbar into the captured frame.
+
+    ``full_page=True`` does nothing in this application. ``.app-layout`` is
+    ``height:100vh`` and ``.app-main`` is ``overflow:auto``, so the *document*
+    is always exactly viewport-height and the page scrolls INSIDE .app-main:
+    measured on /admin/acesso at 768, documentElement.scrollHeight is 900 while
+    .app-main.scrollHeight is 1545. A "full page" screenshot therefore captures
+    the viewport and nothing more, on every shot in this catalogue.
+
+    /admin/acesso is the only toolbar consumer that renders a long preamble
+    (five profile cards plus the default-password panel) above its toolbar, so
+    at 768 the toolbar sits at y=1264 — 364px below the fold and invisible to
+    the capture. Scrolling .app-main is what actually reveals it.
+
+    Deterministic on purpose: the scroll offset is computed from the toolbar's
+    own position rather than a literal, and nothing here animates
+    (scroll-behavior is never set to smooth in this codebase).
+    """
+    page.evaluate(
+        """() => {
+            const main = document.querySelector('.app-main');
+            const toolbar = document.querySelector('.app-track .toolbar');
+            if (!main || !toolbar) throw new Error('no .app-main/.toolbar to scroll to');
+            main.scrollTop +=
+                toolbar.getBoundingClientRect().top - main.getBoundingClientRect().top - 24;
+        }"""
+    )
+    page.wait_for_timeout(150)
+
+
 def focus_form_control(page) -> None:
     """Focus the first text control inside a .field-card.
 
@@ -380,6 +411,30 @@ SHOTS: list[Shot] = (
             after=focus_toolbar_search,
             full_page=False,
         ),
+        # --- toolbar wrap (F-6A1) -----------------------------------------
+        # Every list page's toolbar was a nowrap flex row whose min-content
+        # width is the sum of its controls, so it ran off the content column
+        # on ordinary laptops with nothing pinning it: the whole catalogue
+        # renders at 1440, where every toolbar still fits. These four widths
+        # are the bands the 19-consumer matrix identified.
+        #
+        # /admin/atividades is the most demanding toolbar in the system
+        # (1042.5px minimum, seven controls). 1366 is where it first runs past
+        # .app-track; 1280 is where it is genuinely cut off, and is an ordinary
+        # laptop resolution.
+        Shot(name="toolbar_atividades_1366", path="/admin/atividades", viewport=(1366, 900)),
+        Shot(name="toolbar_atividades_1280", path="/admin/atividades", viewport=(1280, 900)),
+        # The 823.4px family — alunos, cursos, arquivos, matrizes, alertas,
+        # detalhes-turma all measure identically. One representative pins them.
+        Shot(name="toolbar_alunos_1120", path="/admin/alunos", viewport=(1120, 900)),
+        # /admin/acesso renders its toolbar 364px BELOW THE FOLD at this width,
+        # behind five profile cards and the default-password panel. full_page
+        # cannot reach it — the document is pinned to 100vh and .app-main is
+        # what scrolls — so the shot scrolls .app-main first. See
+        # scroll_toolbar_into_view. It is also the only consumer with an extra
+        # nesting level inside .actions (.access-toolbar-actions).
+        Shot(name="toolbar_acesso_768", path="/admin/acesso", viewport=(768, 900),
+             after=scroll_toolbar_into_view, full_page=False),
         Shot(
             name="state_toast_success",
             path="/admin/alunos",
