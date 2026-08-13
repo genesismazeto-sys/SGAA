@@ -1009,16 +1009,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     .field-card.split-2.compact-left{ display:grid; grid-template-columns:40px 90px 40px 1fr; column-gap: var(--list-col-gap, 2px); }
     .field-card.split-2.compact-left .control:first-of-type{ min-width: 70px; }
-    .field-card.split-2 .control + .field-chip{ border-left:1px solid var(--border-strong); }
     .row-2col{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--btn-gap, 8px); }
-    .field-card.is-compact, .field-card.is-compact .control, .field-card.is-compact .field-chip{ height: 32px; min-height: 32px; }
     #m_comprovantes_container{ display:grid; row-gap: 12px; }
     .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns: 40px 1fr auto; align-items:center; column-gap: var(--list-col-gap, 6px); }
     .field-card.file-card:focus-within{ outline:none; }
     .field-card.file-card .file-input{ display:none; }
     .field-card.file-card > .field-chip{ height: var(--btn-h); min-height: var(--btn-h); }
     .field-card.file-card .file-name.control{ display:flex; align-items:center; min-height: var(--btn-h); padding-right: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .field-card.file-card.has-file .file-name.control{ color: var(--text); }
   .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background: var(--surface-2, #f2f2f2); border: none; border-left: 1px solid var(--border-strong); border-radius: 0; cursor:pointer; color: #000; }
   .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
   /* manter cor preta mesmo com arquivo anexado */

@@ -25,6 +25,7 @@ static/css/
                           Owns no global rule. Do not add one.
     modal.css           ← the shared modal contract (overlay/card/header/
                           body/footer). Size and placement stay per page.
+    form.css            ← shared form compositions. See form-contract.md.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
 
 templates/components/
@@ -341,7 +342,7 @@ Existing violations are tracked, not yet migrated.
 | **DS-3b ✅** | Removed the last global rules from the component file; unrouted demo template deleted. | Playwright, 47/47 |
 | **DS-4 ✅** | Modal core extracted to `components/modal.css`: 27 declarations that were identical across 7 copies. The 60 that legitimately differ (width, max-height, padding, footer alignment, borders) stay as page overrides. | Playwright 58/58 |
 | **DS-5 ✅** | Toolbar per-control overrides relocated: 34 declarations that were copy-pasted into 6–13 templates each (302 instances, zero divergence). | Playwright 59/59 |
-| DS-6 | Remaining shared families. Measured leaders are all form-adjacent (`.field-card` 48 decls × 4 templates) and wait on the forms owner. | browser gate + ratchets |
+| **DS-6 ✅** | Form ownership foundation. `components/form.css` created; 92 provably-shared declarations relocated; 72 look-alike declarations proven page-specific and kept. See [form-contract.md](form-contract.md). | Playwright 66/66 |
 | DS-5 | Static `style=""` → component classes / custom properties. | ratchets |
 | DS-6 | Responsive contract: breakpoint tokens, consolidate 16 ad-hoc breakpoints. | browser gate |
 | DS-7 | Focus/accessibility contract; wire up `--focus-ring-color`. | browser gate + manual a11y pass |

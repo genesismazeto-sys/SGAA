@@ -18,8 +18,14 @@ class Shot:
     role: str = "admin"
     after: Callable | None = None
     """Optional interaction run after navigation, to reach a UI state."""
+    viewport: tuple[int, int] | None = None
+    """Capture at a different size, to pin a responsive breakpoint."""
 
-    def render(self, page, base_url: str) -> None:
+    def render(self, page, base_url: str, default_viewport: dict) -> None:
+        # Always set the viewport, never only when this shot overrides it:
+        # otherwise a resized shot leaks its size into every shot after it.
+        width, height = self.viewport or (default_viewport["width"], default_viewport["height"])
+        page.set_viewport_size({"width": width, "height": height})
         if self.path:
             page.goto(f"{base_url}{self.path}", wait_until="domcontentloaded")
         if self.after is not None:
@@ -94,6 +100,41 @@ def focus_toolbar_search(page) -> None:
     before anything moves.
     """
     page.click("#busca-impressoes")
+    page.wait_for_timeout(150)
+
+
+def focus_form_control(page) -> None:
+    """Focus the first text control inside a .field-card.
+
+    Pins .field-card:focus-within plus input.control:focus, which is the only
+    focus contract the form pack has.
+    """
+    page.evaluate(
+        """() => {
+            const el = document.querySelector('.field-card input.control, .field-card select.control');
+            if (!el) throw new Error('no .field-card control on this page');
+            el.focus();
+        }"""
+    )
+    page.wait_for_timeout(150)
+
+
+def hover_form_control(page) -> None:
+    page.locator(".field-card").first.hover()
+    page.wait_for_timeout(150)
+
+
+def disable_form_controls(page) -> None:
+    """Disable every form control.
+
+    There is no `:disabled` rule for .control anywhere in the codebase, so this
+    captures the browser default. It exists to detect a change, not to protect
+    a designed state — see the accessibility notes in docs/design-system.
+    """
+    page.evaluate(
+        """() => document.querySelectorAll('.field-card .control')
+                    .forEach(el => el.setAttribute('disabled', 'disabled'))"""
+    )
     page.wait_for_timeout(150)
 
 
@@ -229,6 +270,27 @@ SHOTS: list[Shot] = (
             after=focus_first_control,
             full_page=False,
         ),
+        # --- form states (DS-6) -------------------------------------------
+        Shot(name="form_focus_within", path="/admin/adicionar_aluno",
+             after=focus_form_control, full_page=False),
+        Shot(name="form_hover", path="/admin/adicionar_aluno",
+             after=hover_form_control, full_page=False),
+        Shot(name="form_disabled", path="/admin/adicionar_aluno",
+             after=disable_form_controls, full_page=False),
+        # Two different label patterns with two different responsive stories.
+        # .row-label (107 uses) is absolutely positioned and has NO responsive
+        # rule anywhere; these pin its behaviour as-is.
+        Shot(name="form_responsive_960", path="/admin/adicionar_aluno", viewport=(960, 900)),
+        Shot(name="form_responsive_640", path="/admin/adicionar_aluno", viewport=(640, 900)),
+        # .field-label (2 templates) does reflow from absolute to block under
+        # @media (max-width:1000px); this is the only page that exercises it.
+        Shot(name="form_field_label_reflow", path="/admin/demo/clientes-form-pack",
+             viewport=(960, 900)),
+        # The file control is the most structurally complex field variant.
+        Shot(name="form_file_control", path="/aluno/nova-requisicao", role="aluno"),
+        # Toggle switches need no dedicated shot: they are visible on load and
+        # already covered by page_admin_configuracoes, page_admin_banco_dados,
+        # page_admin_alertas and modal_arquivo.
         Shot(
             name="state_toolbar_search_focus",
             path="/admin/alunos",

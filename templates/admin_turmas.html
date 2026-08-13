@@ -23,19 +23,11 @@
     .import-modal-grid .field-card,
     .import-help-panel,
     .import-help-block{ min-width:0; max-width:100%; box-sizing:border-box; }
-    .import-modal-form{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
     .import-modal-grid,
     .import-form-grid{ display:grid; gap:12px; }
     .import-field-label{ position:static; transform:none; width:auto; text-align:left; margin:0 0 4px 0; display:block; font-size:var(--font-size-small); color:var(--text-secondary); font-weight:600; }
     .import-modal-form .field-card{ min-height: var(--btn-h); height: var(--btn-h); border-radius: var(--radius); }
     .import-modal-form .field-card .field-chip{ height:100%; display:grid; place-items:center; }
-    .import-modal-form .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns:40px 1fr auto; align-items:center; column-gap:var(--list-col-gap, 6px); }
-    .import-modal-form .field-card.file-card .file-input{ display:none; }
-    .import-modal-form .field-card.file-card .file-name{ display:flex; align-items:center; min-height:var(--btn-h); padding-right:0; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .import-modal-form .field-card.file-card.has-file .file-name{ color:var(--text-primary); }
-    .import-modal-form .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background:var(--surface-2, #f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; cursor:pointer; color:#000; }
-    .import-modal-form .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
-    .import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }
     .import-help-panel{ display:grid; gap:12px; padding:16px; border:1px solid var(--border-strong); border-radius:var(--radius); background:linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%); box-shadow:var(--shadow-sm); }
     .import-help-head h3{ margin:0; font-size:15px; font-weight:600; color:var(--text-primary); }
     .import-help-head p{ margin:4px 0 0; font-size:13px; color:var(--text-secondary); }

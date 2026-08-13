@@ -1,0 +1,48 @@
+/* =============================================================
+   components/form.css  —  FORM COMPOSITION
+   Owner of the form patterns that every page able to render them already
+   agreed on, byte for byte.
+
+   BOUNDARY
+     modern-style.css  form PRIMITIVES: .form-row, .row-label, .field-card
+                       base, .field-chip, .control, and the hover/focus
+                       contract on those.
+     this file         form COMPOSITIONS that were duplicated across
+                       templates with identical values.
+     the page          everything else, and that is a lot on purpose.
+
+   DELIBERATELY NOT HERE — 72 measured declarations that look duplicated
+   but are NOT safe to hoist, because at least one page that renders the
+   same markup does not carry them:
+     .form-actions       11 templates align it flex-end, but 404.html
+                         renders .form-actions without that override and is
+                         left-aligned today. Hoisting it silently restyles
+                         that page — the visual gate caught exactly this.
+     .field-card.file-card  styled in only some templates that render it.
+     .toggle-switch      three templates, two sizes (46x24 and 42x22).
+     .form-cards-narrow  twelve pages, three widths (0.55 / 0.70 / 0.75 x
+                         --form-card-w) and two max-widths.
+   Those are real differences in the CURRENTLY APPROVED design. Unifying
+   them is a redesign decision. See docs/design-system/README.md.
+
+   Loaded from templates/components/design_system_css.html immediately
+   after modern-style.css, so it overrides the primitives exactly as the
+   page-level copies it replaces used to.
+   ============================================================= */
+.field-card.file-card.has-file .file-name.control{ color:var(--text); }  /* was duplicated in 2 templates */
+.field-card.is-compact{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */
+.field-card.is-compact .control{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */
+.field-card.is-compact .field-chip{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */
+.field-card.split-2 .control + .field-chip{ border-left:1px solid var(--border-strong); }  /* was duplicated in 4 templates */
+.field-card.split-2.compact-left{ grid-template-columns:40px 90px 40px 1fr; }  /* was duplicated in 4 templates */
+.import-modal-form{ box-sizing:border-box; display:flex; flex:1 1 auto; flex-direction:column; max-width:100%; min-height:0; min-width:0; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card{ align-items:center; column-gap:var(--list-col-gap,6px); cursor:pointer; display:grid; grid-template-columns:40px 1fr auto; position:relative; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .chip-right{ align-items:center; background:var(--surface-2,#f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; color:#000; cursor:pointer; display:inline-flex; gap:6px; height:24px; padding:0 10px 0 8px; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .chip-right .lucide{ color:#000; height:16px; width:16px; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .file-input{ display:none; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .file-name{ align-items:center; color:var(--text-secondary); display:flex; min-height:var(--btn-h); overflow:hidden; padding-right:0; text-overflow:ellipsis; white-space:nowrap; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card.has-file .file-name{ color:var(--text-primary); }  /* was duplicated in 2 templates */
+.import-modal-grid{ box-sizing:border-box; display:grid; gap:12px; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
+.import-modal-grid .field-card{ box-sizing:border-box; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
+.input-with-icon{ display:inline-block; position:relative; }  /* was duplicated in 2 templates */

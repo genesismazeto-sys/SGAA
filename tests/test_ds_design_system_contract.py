@@ -222,7 +222,7 @@ def test_templates_with_style_blocks_does_not_grow():
 # This is the metric the consolidation phases actually move: line counts barely
 # budge when duplicated rules are written as one-liners, but this number falls
 # every time a shared family gets a real owner.
-MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 589
+MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 541
 
 
 def test_cross_template_duplication_does_not_grow():

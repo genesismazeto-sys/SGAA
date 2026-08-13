@@ -246,7 +246,7 @@ def capture(out_dir: Path, only: set[str] | None = None) -> list[str]:
                             page.goto(f"{server.base_url}/logout", wait_until="domcontentloaded")
                         current_role = shot.role
 
-                    shot.render(page, server.base_url)
+                    shot.render(page, server.base_url, VIEWPORT)
                     _settle(page)
                     target = out_dir / f"{shot.name}.png"
                     page.screenshot(path=str(target), full_page=shot.full_page)
