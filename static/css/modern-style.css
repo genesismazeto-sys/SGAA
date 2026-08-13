@@ -804,7 +804,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 
 /* ===== FormulÃ¡rios (design system) ===== */
 .form-cards{
-  width:var(--form-card-w);
+  width:var(--form-w-full);
   max-width:calc(100vw - 64px);
   margin:0 auto;
   padding-top:var(--form-top-pad);
@@ -878,8 +878,11 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .field-card .seg .seg-btn.active{ color:#fff; background:var(--brand); }
 
 /* UtilitÃ¡rios de formulÃ¡rio */
+/* Standard form width. Pages needing the wide variant opt in with
+   .form-cards-narrow--wide, owned by components/form.css. Modal-hosted forms
+   set --form-w-modal on their own .form-cards-narrow rule. */
 .form-cards-narrow{
-  width:calc(var(--form-card-w) * 0.55);
+  width:var(--form-w-standard);
   max-width:calc(100vw - 64px);
   margin:0 auto;
   padding-top:var(--form-top-pad);

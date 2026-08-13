@@ -6,14 +6,7 @@
   <style>
     .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
     .form-fieldset[disabled]{ opacity:1; }
-    .form-cards-narrow{
-      width: calc(var(--form-card-w) * 0.70);
-      max-width: calc(100vw - 32px);
-      margin: 0 auto;
-      padding-top: var(--form-top-pad);
-      display: grid;
-      row-gap: 12px;
-    }
+    /* Largura: .form-cards-narrow--wide, em components/form.css (F-5B). */
     .form-cards-narrow .row-label{
       right: calc(100% + var(--form-gap));
       width: var(--form-label-w);
@@ -43,7 +36,7 @@
 <h1 class="main-title">{{ 'Ver Atividade' if readonly else 'Editar Atividade' }}</h1>
 
 <form method="post" data-template-version="editar-atividade-20251012-03">
-  <div class="form-cards-narrow">
+  <div class="form-cards-narrow form-cards-narrow--wide">
     <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
       <div class="form-row">
         <label class="row-label">Tipo</label>

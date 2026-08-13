@@ -89,6 +89,20 @@
   --form-gap:12px;
   --form-label-w:150px;
 
+  /* Form widths, named (F-5B)
+     Every form width in the system is a fraction of --form-card-w. Before
+     F-5B the factors 0.55 / 0.70 / 0.75 / 0.78 were scattered across thirteen
+     template <style> blocks with no name and no owner. These are the exact
+     values that already rendered; they only gained a name.
+       standard  default form, one control per row       506px
+       wide      long labels and/or two-control rows     644px
+       modal     form hosted inside a .modal-card        690px
+       full      form at the full content-column width   920px */
+  --form-w-standard:calc(var(--form-card-w) * 0.55);  /* 506px */
+  --form-w-wide:calc(var(--form-card-w) * 0.70);      /* 644px */
+  --form-w-modal:calc(var(--form-card-w) * 0.75);     /* 690px */
+  --form-w-full:var(--form-card-w);                   /* 920px */
+
   /* Grade: Atividades */
   --ativ-cols-6:64px 1.3fr 1.2fr 0.8fr 1.1fr auto;
   --ativ-cols-5:64px 1.3fr 1.2fr 0.8fr 1.1fr;

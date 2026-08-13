@@ -46,14 +46,7 @@
       color: inherit;
       font-size: 12px;
     }
-    .form-cards-narrow{
-      width: calc(var(--form-card-w) * 0.70);
-      max-width: calc(100vw - 32px);
-      margin: 0 auto;
-      padding-top: var(--form-top-pad);
-      display: grid;
-      row-gap: 12px;
-    }
+    /* Largura: .form-cards-narrow--wide, em components/form.css (F-5B). */
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     .field-card textarea.control{
       min-height: var(--btn-h);
@@ -574,7 +567,7 @@
 {% if active_tab == 'dados' %}
 <form method="POST">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <div class="form-cards-narrow">
+  <div class="form-cards-narrow form-cards-narrow--wide">
     <input type="hidden" name="active_tab" value="dados">
     <div class="form-row">
       <label class="row-label">Curso</label>

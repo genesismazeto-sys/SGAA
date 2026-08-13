@@ -20,8 +20,6 @@
                          that page — the visual gate caught exactly this.
      .field-card.file-card  styled in only some templates that render it.
      .toggle-switch      three templates, two sizes (46x24 and 42x22).
-     .form-cards-narrow  twelve pages, three widths (0.55 / 0.70 / 0.75 x
-                         --form-card-w) and two max-widths.
    Those are real differences in the CURRENTLY APPROVED design. Unifying
    them is a redesign decision. See docs/design-system/README.md.
 
@@ -29,6 +27,41 @@
    after modern-style.css, so it overrides the primitives exactly as the
    page-level copies it replaces used to.
    ============================================================= */
+
+/* =============================================================
+   FORM WIDTH CONTRACT  (F-5B, from measured real renders)
+
+   Widths are named in foundation/tokens.css. .form-cards-narrow carries
+   --form-w-standard from modern-style.css; everything else opts in.
+
+   Measured before naming anything: no form width in this system is driven
+   by its content. Every surface fits, with no label wrap and no control
+   truncation, anywhere from 0.50 to 0.85 x --form-card-w. What the width
+   actually decides is how much room the absolutely positioned .row-label
+   column has to its left. Headroom at 1440, leftmost label ink to the
+   nearest clipping edge:
+       standard  506px    149-270px
+       wide      644px    118-120px
+       modal     690px     81px     (requisicao, in a 1200px .modal-card)
+       0.78      717.59px  27px     (arquivo,    in a 1020px .modal-card)
+
+   That last row is not a named width: it is the one value F-5B could not
+   name honestly. It is WIDER than the requisicao form while living in a
+   SMALLER modal card, so no name describes it. F-5C resolves it.
+
+   The wide family is intentional and stays visually distinct: it hosts the
+   longest labels in the system ("Limitacao / Tempo limite", 146px of ink)
+   and, on the two atividade pages, two-control .split-2 rows.
+   ============================================================= */
+
+/* Wide form. Was three byte-identical page-level copies at 0.70. The
+   max-width is deliberately 100vw-32 and not the 100vw-64 every other form
+   uses: below a ~676px viewport these three render 32px wider than the rest.
+   That is existing approved behaviour, carried over verbatim. */
+.form-cards-narrow--wide{
+  width:var(--form-w-wide);
+  max-width:calc(100vw - 32px);
+}
 .field-card.file-card.has-file .file-name.control{ color:var(--text); }  /* was duplicated in 2 templates */
 .field-card.is-compact{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */
 .field-card.is-compact .control{ height:32px; min-height:32px; }  /* was duplicated in 2 templates */

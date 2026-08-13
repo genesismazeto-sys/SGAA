@@ -139,16 +139,7 @@
     .page-m30{ margin: 0 30px; }
     /* Gap padrao entre cards (ajustavel globalmente) */
     :root{ --card-gap: 2px; }
-    /* Clona form-cards e reduz a largura total para cerca de 40% do atual
-       A regra de largura em modern-style usa --form-card-w; aqui forcamos menor. */
-    .form-cards-narrow{
-      width: calc(var(--form-card-w) * 0.55);
-      max-width: calc(100vw - 64px);
-      margin: 0 auto;
-      padding-top: var(--form-top-pad);
-      display: grid;
-      row-gap: 12px;
-    }
+    /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B). */
     .turma-alunos-actions .btn.secondary.small{
       display: inline-grid;
       place-items: center;

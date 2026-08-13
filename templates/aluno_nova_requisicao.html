@@ -3,14 +3,7 @@
 {% block extra_head %}
   <style>
     /* Replicar estrutura do form de Atividades (admin) */
-    .form-cards-narrow{
-      width: calc(var(--form-card-w) * 0.55);
-      max-width: calc(100vw - 64px);
-      margin: 0 auto;
-      padding-top: var(--form-top-pad);
-      display: grid;
-      row-gap: 12px;
-    }
+    /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B). */
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
   /* Card dividido com esquerda compacta */
   .field-card.split-2.compact-left{ display:grid; grid-template-columns:40px 90px 40px 1fr; column-gap: var(--list-col-gap, 2px); }
