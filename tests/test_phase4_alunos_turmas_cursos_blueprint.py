@@ -939,8 +939,57 @@ def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
         assert len(old_rows) == len(new_rows) == 78
-        assert old_snapshot["summary"] == new_snapshot["summary"]
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
+
+        # PRE_EXISTING_TEST_DESIGN_DEBT: this used to be a single whole-summary
+        # equality (`old_snapshot["summary"] == new_snapshot["summary"]`),
+        # which made it impossible to land any legitimate summary.page_statuses
+        # change without editing this test. Replaced with discriminant checks
+        # that require every summary field unchanged except one explicitly
+        # authorized page status. The underlying brittleness is not fixed by
+        # this task; only the one current, legitimate delta is recorded.
+        #
+        # course_detail_fix_status_delta (7911e57): templates/
+        # admin_detalhes_curso.html was missing, so GET /admin/cursos/2
+        # 500'd; adding the template flips its recorded
+        # summary.page_statuses status. This is a CURRENT summary delta, not
+        # a historical CSRF inventory ROW delta -- the row partition below
+        # remains exactly 36 and is untouched by it.
+        old_summary = old_snapshot["summary"]
+        new_summary = new_snapshot["summary"]
+        assert set(old_summary) == set(new_summary) == {
+            "total_mutating_routes", "status_counts", "high_risk_routes", "page_statuses",
+        }
+        assert old_summary["total_mutating_routes"] == new_summary["total_mutating_routes"]
+        assert old_summary["status_counts"] == new_summary["status_counts"]
+        assert old_summary["high_risk_routes"] == new_summary["high_risk_routes"]
+
+        old_page_statuses = old_summary["page_statuses"]
+        new_page_statuses = new_summary["page_statuses"]
+        assert len(old_page_statuses) == len(new_page_statuses)
+        assert (
+            [p["path"] for p in old_page_statuses]
+            == [p["path"] for p in new_page_statuses]
+        )
+        page_status_deltas = [
+            (old_p, new_p)
+            for old_p, new_p in zip(old_page_statuses, new_page_statuses)
+            if old_p != new_p
+        ]
+        assert len(page_status_deltas) == 1, (
+            "exactly one summary.page_statuses delta is currently authorized: "
+            "the course-detail fix status change"
+        )
+        course_detail_fix_old, course_detail_fix_new = page_status_deltas[0]
+        assert (
+            course_detail_fix_old["path"]
+            == course_detail_fix_new["path"]
+            == "/admin/cursos/2"
+        )
+        assert course_detail_fix_old["label"] == course_detail_fix_new["label"]
+        assert course_detail_fix_old["role"] == course_detail_fix_new["role"]
+        assert course_detail_fix_old["status_code"] == 500
+        assert course_detail_fix_new["status_code"] == 200
 
         deltas = [pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]]
         deltas_by_route = {
