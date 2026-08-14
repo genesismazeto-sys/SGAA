@@ -677,11 +677,27 @@ review. These were recorded and deliberately left in the tree.
   `admin_turma_alunos.html` contributes 1 exclusive catalog entry (536→535 if
   deleted); `list.html`, `admin_requisicao_nova.html`, `admin_curso_form.html`
   and `admin_importar_turma.html` are catalogue-neutral.
-* **`admin_detalhes_curso.html` does not exist**, yet `admin_detalhes_curso`
-  (`app/views/admin/alunos_turmas_cursos.py`) renders it, and
-  `admin_visualizar_curso` redirects into `admin_detalhes_curso`. Both live
-  admin routes 500. **Pre-existing functional defect, outside DS-8** — DS-8 is
-  a CSS/template-ownership phase and does not add missing view templates.
+* ~~`admin_detalhes_curso.html` does not exist, yet `admin_detalhes_curso`
+  renders it and `admin_visualizar_curso` redirects into it. Both live admin
+  routes 500. Pre-existing functional defect, outside DS-8.~~ **FIXED / CLOSED**
+  by the post-DS-8 course-detail defect fix (technical commit `7911e57`,
+  governance-ledger reconciliation `63bd7e6`) — an application fix, not a
+  Design System phase; recorded here only for the Design-System-relevant
+  facts: the new `templates/admin_detalhes_curso.html` composes only current,
+  already-live DS vocabulary (`.content-block`/`.content-block-body`/`.item`
+  from `aluno_dashboard.html`'s "Resumo", `card_list.html`'s `cl.header`/
+  `cl.row` from `admin_cursos.html`/`admin_turmas.html`); mechanically
+  verified against the DS-8 removed-selector manifest to resurrect none of
+  the 108 removed selectors or `--btn-primary-light`; adds exactly one new
+  scoped rule, `.imp-curso-turmas` in `components/list-cards.css`, following
+  the same no-default-`--imp-cols` pattern every other list scope already
+  uses; the 87 existing baselines stayed byte-identical, and one new
+  populated-state baseline (`page_admin_curso_detalhes`) raises the total to
+  88; the 768px supported floor remains valid — the new page was measured at
+  1440/1024/900/768 with zero horizontal overflow. Full defect record,
+  including the live user path and canonical evidence, is in
+  `PROJECT_STATE.md`. This entry does not reopen DS-8 or any Design System
+  phase.
 
 **Ownership / dead code**
 

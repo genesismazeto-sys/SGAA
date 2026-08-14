@@ -46,6 +46,119 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## POST-REFACTOR APPLICATION DEFECT — COURSE DETAIL 500 — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this governance landing commit (landing SHA not invented).
+
+**This is an application defect fix, not Design System work.** It is **NOT
+DS-9**, **NOT UT-18**, and does not open, extend or reopen any Design System
+phase or the UT roadmap. It was discovered as carried-forward debt during
+DS-8 (`docs/design-system/README.md` §8) but the fix itself is a missing
+view template plus its test/governance coverage — no CSS, no route, no RBAC,
+no query.
+
+**DEFECT.** The admin course detail page returned HTTP 500 for every valid
+course because `templates/admin_detalhes_curso.html` did not exist, even
+though the handler that rendered it (`admin_detalhes_curso`, in
+`app/views/admin/alunos_turmas_cursos.py`) was otherwise correct and
+unchanged since before the UT structural refactor.
+
+**LIVE USER PATH.** `GET /admin/cursos/<id>/visualizar` → redirect →
+`GET /admin/cursos/<id>` → formerly `500` → now `200`. Reachable directly
+from the "Ver curso" hover action on `admin_cursos.html`.
+
+**ROOT CAUSE.** Missing template only. No route, query or RBAC defect —
+confirmed by the unmodified Phase-4 AST/route/RBAC structural tests.
+
+**Technical commit:** `7911e57945cde4fb589d0b8c2ece16d5003918da` — Add admin
+course detail page.
+**Governance test reconciliation:** `63bd7e6028dd15390f1ab9b7f89da1959709ca87`
+— Reconcile course-detail CSRF governance ledgers.
+
+**Implemented contract:**
+- dedicated course-detail page (`templates/admin_detalhes_curso.html`);
+- consumes only the already-supplied `curso` + `turmas` handler context, no
+  new query;
+- no Python application logic changed — route path, endpoint name, queries,
+  RBAC decorator, invalid-id guard and the `visualizar` redirect are all
+  byte-identical to before;
+- current Design System components reused throughout (see
+  `docs/design-system/README.md` §8 for the DS-relevant detail);
+- one scoped list-layout rule added, `.imp-curso-turmas` in
+  `static/css/components/list-cards.css`.
+
+**Test coverage:** six new functional tests in
+`tests/test_admin_curso_detalhes.py` — populated render, `visualizar`
+redirect-then-render, invalid id (already-correct behaviour pinned), aluno
+access blocked, unauthenticated access blocked, zero-turmas empty state; one
+new visual baseline (`page_admin_curso_detalhes`).
+
+**CSRF golden change.** Both sanctioned CSRF snapshots
+(`tests/_artifacts/csrf_inventory_shadow_off.json` and `shadow_on.json`)
+changed in exactly one field each: `/admin/cursos/2` `status_code`
+`500 → 200` — the single, correct, intended consequence of the fix. The
+three historical governance ledgers that independently assert on those
+snapshots (`test_phase4_alunos_turmas_cursos_blueprint.py`,
+`test_phase4_matrizes_blueprint.py`, `test_phase4_requisicoes_blueprint.py`)
+were reconciled to authorize exactly that one delta, with every historical
+row partition, named category and baseline commit SHA (36 / 44 / 49)
+preserved unchanged. Independent review of the reconciliation: **ACCEPT**,
+zero MATERIAL, zero NON_MATERIAL findings, adversarially tested against 8
+false-green scenarios with zero passes.
+
+**Independent review chain:** implementation R1 —
+`ACCEPT_IMPLEMENTATION_PENDING_GOVERNANCE_RECONCILIATION`, zero MATERIAL;
+governance-ledger reconciliation spot review — **ACCEPT**, zero MATERIAL,
+zero NON_MATERIAL.
+
+### Measured state at governance time
+
+| Metric | Value |
+|---|---|
+| course-detail focused tests | 6/6 |
+| visual baselines | 88/88 (87 unchanged + 1 new), zero regeneration |
+| F-7 popover contract | 38/38 |
+| dashboard container contract | 7/7 |
+| DS static gates | 11/11 |
+| message catalogue | 536 unchanged |
+| cross-engine (new page) | Chromium / Firefox / WebKit — PASS, 0 divergence |
+| supported width (new page) | 1440 / 1024 / 900 / 768 — PASS, 0 horizontal overflow |
+
+Canonical reconciliation:
+
+| Metric | Value |
+|---|---|
+| collected | 1684 |
+| selected | 1667 |
+| passed | 1534 |
+| skipped | 133 |
+| deselected | 17 |
+| failed | 0 |
+| errors | 0 |
+
+### Database custody
+
+The repository-local `database.db` sentinel (SHA-256 `df3bb46a…8bbcdf`, 544768
+bytes, `change_counter` 98, `user_version` 3, `schema_cookie` 157) was
+verified identical across the defect diagnosis, the implementation, the
+governance-ledger reconciliation, and this final governance/publication
+pass. **This is a local custody sentinel for this window only — it does not
+replace the canonical documented `database.db` baseline** recorded under
+"Database baseline" below.
+
+### Carried forward — NOT closed by this fix
+
+Unrelated debt remains open and is not touched or reopened by this entry:
+F-7 findings F1–F5, modal focus containment, the WebKit visual-catalogue
+login race, runtime requisição CSS, the mobile/640 product decision,
+`.btn-primary` unstyled, `admin_turma_form.html`
+(`UNROUTED_BUT_REFERENCED`), the deferred Atividades v1/template cleanup,
+and the broader brittle historical-ledger test-design pattern this fix's
+reconciliation narrowly worked around (`PRE_EXISTING_TEST_DESIGN_DEBT` — the
+three ledgers' all-or-nothing whole-summary equality is fixed for this one
+delta only, not redesigned). See `docs/design-system/README.md` §8 for the
+full register.
+
 ## POST-REFACTOR DESIGN SYSTEM — DS-8 — CLOSED / ACCEPTED / PUBLISHED
 
 Published by this governance landing commit (landing SHA not invented).
