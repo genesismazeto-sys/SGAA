@@ -866,18 +866,23 @@
     actionsButton?.addEventListener('click', () => {
       syncActionsMenu();
       if (actionsMenu.hidden){
-        const rect = actionsButton.getBoundingClientRect();
-        const menuWidth = Math.max(actionsMenu.offsetWidth || 190, 190);
-        const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
-        actionsMenu.style.position = 'fixed';
-        actionsMenu.style.top = `${Math.round(rect.bottom + 6)}px`;
-        actionsMenu.style.left = `${Math.round(left)}px`;
-        actionsMenu.hidden = false;
-        actionsButton.setAttribute('aria-expanded', 'true');
+        // F-7: was a byte-identical copy of the shared clamp, including the 190
+        // hidden-width fallback and both literal 12s. It now uses the owner in
+        // static/js/toolbar-filters.js, which measures the menu after revealing
+        // it and clamps both axes. This page is the one that needed it: its
+        // toolbar sits below five profile cards and the default-password panel,
+        // so an opened menu ran past the bottom edge and took the destructive
+        // Excluir / Redefinir / Nova senha items with it.
+        toolbarQuery.openFixedMenu(actionsButton, actionsMenu);
       } else {
         closeActionsMenu();
       }
     });
+
+    // Same dismissal contract as every other popover: the menu is positioned
+    // once, in viewport coordinates, so a scroll of .app-main underneath it
+    // would otherwise leave it floating away from its button.
+    toolbarQuery.bindDismissOnViewportChange(actionsMenu, closeActionsMenu);
 
     actionsMenu?.addEventListener('click', (event) => {
       event.stopPropagation();

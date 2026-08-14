@@ -528,6 +528,52 @@
 
 #filter-btn{ justify-content:center; }
 
+/* ====== SORT CONTROL FOCUS CONTRACT (F-7) ======
+   The two rules above (#sort-field, #grp-ordenar #sort-toggle) set `outline:0`
+   and `box-shadow:none` UNCONDITIONALLY, so they applied in the focus state too.
+   Measured on all four live id families: the focused presentation was identical
+   to the resting one -- outline none/0px, box-shadow none, unchanged border and
+   background -- while `:focus-visible` matched. A keyboard user had two stops per
+   list page with no indication of where they were. That is WCAG 2.4.7.
+
+   The `.input-group:has(> input, > select):focus-within` rule that rescues the
+   search box cannot help here: an ordenar group contains only buttons, so the
+   :has() never matches.
+
+   WHY THE INDICATOR IS DRAWN INSIDE. Measured group geometry, identical on all
+   four families: the group is 32px tall with `overflow:hidden` and a 1px border,
+   and both controls are 30px tall, so each has exactly 1.0px of slack top and
+   bottom -- the toggle also has 1.0px on the right. Anything drawn OUTSIDE the
+   button is therefore clipped away in full. `outline-offset:-2px` paints the
+   ring within the button's own border box, which is the one place the group's
+   overflow cannot reach. Widening the group or relaxing its overflow would move
+   resting geometry, which F-7 may not do.
+
+   Everything else matches the focus treatment this codebase already ships in six
+   places (the toggle switches and the dashboard alerta cards): `outline:2px
+   solid` in the focus colour. Those six hardcode the literal rgba(37,99,235,.35);
+   this is the first consumer of the token that holds it, which is what the
+   roadmap reserved --focus-ring-color for. Only the offset differs, and only
+   because of the clip measured above.
+
+   SPECIFICITY IS LOAD-BEARING. The suppressors are (1,0,0) on the field and
+   (2,0,0) on the toggle -- and three of the four families declare their own
+   copies from a page <style> block, which loads AFTER this file. Specificity is
+   what wins that, not order: :is(group) :is(control):focus-visible is (2,1,0),
+   above every one of them. The structural rule below it is (0,4,0) and cannot
+   beat a suppressor; it exists so a future ordenar group that does NOT copy the
+   suppressor still gets an unclipped indicator instead of a clipped UA default. */
+:is(#grp-ordenar, #grp-ordenar-acesso, #grp-ordenar-admin-arquivos, #grp-ordenar-aluno-arquivos)
+  :is(#sort-field, #sort-toggle,
+      #sort-acesso, #sort-acesso-toggle,
+      #sort-admin-arquivos, #sort-admin-arquivos-toggle,
+      #sort-aluno-arquivos, #sort-aluno-arquivos-toggle):focus-visible,
+.input-group[id^="grp-ordenar"] > .btn:focus-visible,
+.input-group[id^="grp-ordenar"] > .input-chip:focus-visible{
+  outline:2px solid var(--focus-ring-color);
+  outline-offset:-2px;
+}
+
 @media print {
   .page-header, .toolbar, .btn, .input-group, .filters { display:none !important; }
   body { margin:0 !important; padding:10px !important; }

@@ -160,17 +160,116 @@
      part could be scrolled to; now .app-main measures 0 horizontal overflow at
      900 and 768 and there is nothing to scroll.
 
-     Vertical is deliberately NOT clamped here. Neither function ever clamped
-     it, the popover scrolls with .app-main so an overrun bottom is still
-     reachable, and mixing it in would change the actions menu's geometry.
-     Recorded as known debt. */
+     F-7 adds the vertical axis. The premise the earlier deferral rested on --
+     "the popover scrolls with .app-main so an overrun bottom is still
+     reachable" -- was measured and is false. .app-layout is height:100vh and
+     .app-main owns the scroll, so window.scrollY is 0 and the document never
+     scrolls: openPopover writes viewport coordinates into an absolutely
+     positioned element whose containing block is the initial containing block
+     (viewport-anchored), and openMenu writes them into a fixed one. Either way
+     the popover is pinned to the SCREEN while its anchor scrolls away underneath
+     it. Measured on /admin/acesso: scrolling .app-main 120px moved the button
+     -120px and the popover 0px, growing the 6px anchor gap to 126px and leaving
+     the bottom overflow completely unchanged.
+
+     And on the path that actually reaches the control -- scroll the toolbar into
+     view, which is the only way to click it at these heights -- .app-main is
+     already at its maximum scroll, so there is no scroll left to spend. What was
+     off screen was #filter-apply, #filter-clear-all and the destructive
+     access-action-* items: +105px at 1366x768 and +77px at 1440x900, which is
+     the harness's own viewport. */
   const POPOVER_EDGE_MARGIN = 12;
+  /* The distance a popover sits below its anchor when nothing clamps it. Was an
+     inline 6 in both openers; named so the clamp and the contract test refer to
+     the same number. */
+  const POPOVER_ANCHOR_GAP = 6;
 
   function clampLeftToViewport(anchorLeft, menuWidth, viewportWidth){
     return Math.max(
       POPOVER_EDGE_MARGIN,
       Math.min(anchorLeft, viewportWidth - menuWidth - POPOVER_EDGE_MARGIN)
     );
+  }
+
+  /* Deliberately the same shape as clampLeftToViewport, and deliberately in
+     VIEWPORT coordinates for both callers. The two openers use different
+     positioning schemes, so each converts the result into its own coordinate
+     space afterwards -- openPopover adds window.scrollY (absolute against the
+     initial containing block), openMenu adds nothing (fixed). Sharing the
+     arithmetic but not the conversion is what keeps this correct in the one
+     regime where the document DOES scroll: below a 773px viewport the shell
+     exceeds the window and window.scrollY stops being 0.
+
+     The Math.max floor matters for the degenerate case: a popover taller than
+     the viewport cannot satisfy both edges, and starting it 12px from the TOP
+     keeps the most content reachable, with .menu-list / .filter-values
+     supplying their own internal scroll. */
+  function clampTopToViewport(anchorTop, menuHeight, viewportHeight){
+    return Math.max(
+      POPOVER_EDGE_MARGIN,
+      Math.min(anchorTop, viewportHeight - menuHeight - POPOVER_EDGE_MARGIN)
+    );
+  }
+
+  /* A popover is positioned once, at open, and never repositioned. That is the
+     established design and F-7 keeps it: continuous tracking would mean a
+     scroll listener writing geometry on every frame, for a menu the user is
+     about to dismiss anyway.
+
+     The consequence is that when the surface underneath scrolls, the only
+     coherent outcomes are to move the popover or to dismiss it. The filter
+     popover has always dismissed; F-7 makes sort and the actions menu do the
+     same, which is what stops them being left floating over unrelated content
+     while still reporting aria-expanded="true".
+
+     Scrolls that originate INSIDE the popover are exempt. .menu-list and
+     .filter-values are their own scroll panes with max-height:260px, and a
+     capture-phase document listener sees their scroll events too -- without this
+     guard, scrolling the sort field list would close the menu the user is
+     reading. */
+  function bindDismissOnViewportChange(menu, close){
+    if (!menu || typeof close !== 'function') return;
+    const dismiss = (event) => {
+      if (menu.hidden) return;
+      if (event && event.target instanceof Node && menu.contains(event.target)) return;
+      close();
+    };
+    window.addEventListener('resize', dismiss);
+    document.addEventListener('scroll', dismiss, true);
+  }
+
+  /* Open a FIXED-position menu under its button, clamped on both axes.
+     Module scope because it has two consumers, not one:
+     initToolbarSelectionActionsMenu below, and the page-local actions menu in
+     admin_acesso.html, which predates that helper and carried a byte-identical
+     copy of this arithmetic -- including the 190 fallback and the two literal
+     12s. Correcting the clamp in one place and leaving the copy behind would
+     have left the defect exactly where it is worst: /admin/acesso is the only
+     consumer whose toolbar sits below a long preamble, so it is the only page
+     where these menus overrun at all.
+
+     Reveal-before-measure, and parked at the viewport origin first, for the
+     reasons openPopover documents: a hidden element measures 0x0, and a
+     shrink-to-fit box measured at its final position is constrained by the very
+     edge the clamp is about to move it away from. position:fixed is set before
+     the reveal so the menu is never in flow. Nothing paints until this task
+     ends, so there is no flash at the parked position. */
+  function openFixedMenu(button, menu){
+    if (!button || !menu) return;
+    const rect = button.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = '0px';
+    menu.style.left = '0px';
+    menu.hidden = false;
+    const width = Math.max(menu.offsetWidth, 190);
+    const height = menu.offsetHeight;
+    // Fixed positioning is already in viewport coordinates: no conversion.
+    const left = clampLeftToViewport(rect.left, width, window.innerWidth);
+    const top = clampTopToViewport(rect.bottom + POPOVER_ANCHOR_GAP, height,
+                                   window.innerHeight);
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    button.setAttribute('aria-expanded', 'true');
   }
 
   window.createToolbarQueryHelpers = function createToolbarQueryHelpers(){
@@ -182,17 +281,33 @@
       if (!button || !menu) return;
       const rect = button.getBoundingClientRect();
       menu.style.position = 'absolute';
-      menu.style.top = `${Math.round(window.scrollY + rect.bottom + 6)}px`;
-      // Revealed BEFORE the width is read. While the hidden attribute applies
-      // display:none the menu measures 0 wide, and a clamp given a 0 width
-      // resolves to min(anchorLeft, viewportWidth - 12), which never binds --
-      // the clamp would look present and do nothing. Nothing paints until this
-      // task ends, so there is no flash at the unclamped position, and
-      // .popover is out of flow, so revealing it cannot move the button whose
-      // rect was just measured.
+      // Revealed BEFORE the size is read. While the hidden attribute applies
+      // display:none the menu measures 0x0, and a clamp given a 0 size resolves
+      // to min(anchor, viewport - 12), which never binds -- the clamp would look
+      // present and do nothing. Nothing paints until this task ends, so there is
+      // no flash at the unclamped position, and .popover is out of flow, so
+      // revealing it cannot move the button whose rect was just measured.
+      //
+      // Parked at the containing block's origin for the measurement. A
+      // shrink-to-fit box measured at its final position would be constrained by
+      // the very edge the clamp is about to move it away from; measuring with
+      // the whole viewport available gives the width the box actually wants, and
+      // the clamp then guarantees it fits there.
+      menu.style.top = '0px';
+      menu.style.left = '0px';
       menu.hidden = false;
-      const left = clampLeftToViewport(rect.left, menu.offsetWidth, window.innerWidth);
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
+      // Clamp in viewport coordinates, then convert. rect.* and innerWidth /
+      // innerHeight are viewport-relative; this element is positioned against
+      // the initial containing block, so the scroll offsets are what map one to
+      // the other. They are 0 in the ordinary shell and non-zero only when the
+      // document itself scrolls.
+      const left = clampLeftToViewport(rect.left, width, window.innerWidth);
+      const top = clampTopToViewport(rect.bottom + POPOVER_ANCHOR_GAP, height,
+                                     window.innerHeight);
       menu.style.left = `${Math.round(window.scrollX + left)}px`;
+      menu.style.top = `${Math.round(window.scrollY + top)}px`;
       button.setAttribute('aria-expanded', 'true');
     };
     const closePopover = (button, menu) => {
@@ -201,7 +316,12 @@
       button.setAttribute('aria-expanded', 'false');
     };
 
-    return { qs, setParams, openPopover, closePopover };
+    // openFixedMenu and bindDismissOnViewportChange are exposed here rather than
+    // as new globals: pages that drive a popover themselves already take this
+    // object, and admin_acesso.html's page-local actions menu needs both in
+    // order to stop carrying its own copy of the clamp.
+    return { qs, setParams, openPopover, closePopover,
+             openFixedMenu, bindDismissOnViewportChange };
   };
 
   window.initToolbarSortMenu = function initToolbarSortMenu(config){
@@ -343,6 +463,10 @@
         closePopover(sortFieldBtn, sortMenu);
       }
     });
+
+    if (sortFieldBtn && sortMenu){
+      bindDismissOnViewportChange(sortMenu, () => closePopover(sortFieldBtn, sortMenu));
+    }
 
     return { sortFieldBtn, sortMenu, sortToggle, sortLabel, dirLabel, dirValue, list };
   };
@@ -644,11 +768,12 @@
       if (event.key === 'Escape' && !filterMenu.hidden) closeMenu();
     });
 
-    const closeOnViewportChange = () => {
-      if (!filterMenu.hidden) closeMenu();
-    };
-    window.addEventListener('resize', closeOnViewportChange);
-    document.addEventListener('scroll', closeOnViewportChange, true);
+    // Was an inline resize + capture-scroll pair here. Now shared with the sort
+    // and actions popovers, and gaining the internal-scroll exemption: the
+    // .filter-values pane is max-height:260px with its own scrollbar, and the
+    // capture-phase listener used to see its scroll events and dismiss the menu
+    // the user was scrolling.
+    bindDismissOnViewportChange(filterMenu, closeMenu);
   };
 
   window.initToolbarFilterMenu = function initToolbarFilterMenu(config){
@@ -942,21 +1067,12 @@
       button.setAttribute('aria-expanded', 'false');
     };
 
-    const openMenu = () => {
-      const rect = button.getBoundingClientRect();
-      // Left as-is on purpose. The menu is still hidden here, so offsetWidth is
-      // 0 and this always resolves to the 190 fallback rather than the menu's
-      // real width (measured 226-305px), which under-clamps by the difference.
-      // Correcting it would move this menu, and F-6A2 requires its geometry to
-      // stay put. Recorded as known debt alongside the vertical clamp.
-      const menuWidth = Math.max(menu.offsetWidth || 190, 190);
-      const left = clampLeftToViewport(rect.left, menuWidth, window.innerWidth);
-      menu.style.position = 'fixed';
-      menu.style.top = `${Math.round(rect.bottom + 6)}px`;
-      menu.style.left = `${Math.round(left)}px`;
-      menu.hidden = false;
-      button.setAttribute('aria-expanded', 'true');
-    };
+    // Was an inline copy of this arithmetic that read offsetWidth while the menu
+    // was still display:none, so it measured 0 and always fell back to 190 --
+    // against a real rendered width of 212-395px. The menu therefore came to
+    // rest flush against the viewport's right edge, 0px of margin where the
+    // shared clamp intends 12. See openFixedMenu.
+    const openMenu = () => openFixedMenu(button, menu);
 
     const syncMenu = () => {
       const selectedRows = rowSelectionApi.getSelectedRows();
@@ -993,6 +1109,8 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !menu.hidden) closeMenu();
     });
+
+    bindDismissOnViewportChange(menu, closeMenu);
 
     selectAllAction.addEventListener('click', () => {
       rowSelectionApi.toggleAllRows();

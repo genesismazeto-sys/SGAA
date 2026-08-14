@@ -453,18 +453,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const itmDel    = document.getElementById('reportes-action-delete');
   if (!actBtn || !actMenu) return;
 
+  // F-7: the popover positioning owner. Was a copy of the shared clamp here,
+  // with a `|| 200` hidden-width fallback that always won because a hidden menu
+  // measures 0.
+  const popoverHelpers = window.createToolbarQueryHelpers?.() || {};
+
   function closeMenu(){ actMenu.hidden = true; actBtn.setAttribute('aria-expanded','false'); }
   function openMenu(){
-    const r = actBtn.getBoundingClientRect();
-    const w = Math.max(actMenu.offsetWidth || 200, 200);
-    actMenu.style.position = 'fixed';
-    actMenu.style.top  = `${Math.round(r.bottom + 6)}px`;
-    actMenu.style.left = `${Math.round(Math.max(12, Math.min(r.left, window.innerWidth - w - 12)))}px`;
-    actMenu.hidden = false;
-    actBtn.setAttribute('aria-expanded','true');
+    popoverHelpers.openFixedMenu?.(actBtn, actMenu);
     syncItems();
     window.lucide?.createIcons?.();
   }
+  popoverHelpers.bindDismissOnViewportChange?.(actMenu, closeMenu);
   function syncItems(){
     const rows = rowSelectionApi ? rowSelectionApi.getSelectedRows() : [];
     const hasRows = rows.length > 0;

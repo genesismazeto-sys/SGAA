@@ -67,6 +67,33 @@ def focus_first_control(page) -> None:
     page.wait_for_timeout(100)
 
 
+def focus_sort_field(page) -> None:
+    """Tab to the sort field button, so its :focus-visible ring renders.
+
+    Must be a real Tab: calling .focus() moves focus without arming
+    :focus-visible, and the ring is exactly what this shot exists to pin.
+
+    Before F-7 the two sort controls set `outline:0` and `box-shadow:none`
+    unconditionally, so a keyboard user saw nothing at all here.
+    """
+    page.evaluate("() => { if (document.activeElement && document.activeElement.blur) "
+                  "document.activeElement.blur(); }")
+    for _ in range(60):
+        page.keyboard.press("Tab")
+        if page.evaluate("() => document.activeElement === document.querySelector('#sort-field')"):
+            page.wait_for_timeout(100)
+            return
+    raise RuntimeError("never reached #sort-field by keyboard — this shot would pin nothing")
+
+
+def open_actions_menu(page) -> None:
+    """Open the toolbar's selection actions menu."""
+    page.click(".toolbar-actions-shell > .btn[aria-haspopup='menu']")
+    page.wait_for_timeout(150)
+    if page.evaluate("() => document.querySelector('.popover.toolbar-actions-menu').hidden"):
+        raise RuntimeError("actions menu did not open — this shot would pin nothing")
+
+
 def open_modal(modal_id: str):
     """Reveal a modal deterministically by dropping its `hidden` attribute.
 
@@ -414,6 +441,35 @@ SHOTS: list[Shot] = (
             after=focus_first_control,
             full_page=False,
         ),
+        # --- popover viewport containment, vertical axis (F-7) --------------
+        # The first shots in this catalogue where viewport HEIGHT is the load-
+        # bearing dimension, which is why they carry it in their names.
+        #
+        # /admin/acesso is the only consumer that renders a long preamble above
+        # its toolbar — five profile cards plus the default-password panel — so
+        # it is the only page where an opened popover ran past the bottom edge.
+        # Measured before F-7 at 1366x768: the filter popover overran by 105px,
+        # taking #filter-apply and #filter-clear-all off screen, and the actions
+        # menu by 179px, taking Excluir, Redefinir and Nova senha with it. The
+        # earlier deferral assumed .app-main could be scrolled to reach them; it
+        # cannot, because the popover is positioned in viewport coordinates and
+        # does not move when .app-main scrolls.
+        Shot(name="popover_filter_acesso_1366x768", path="/admin/acesso",
+             after=open_filter_popover, viewport=(1366, 768), full_page=False),
+        Shot(name="popover_actions_acesso_1366x768", path="/admin/acesso",
+             after=open_actions_menu, viewport=(1366, 768), full_page=False),
+        # The actions menu had NO baseline at any width. It is the consumer whose
+        # width was measured while it was still display:none, so the clamp always
+        # saw the 190px fallback instead of the real 212-395px and the menu came
+        # to rest flush against the viewport's right edge. This pins the restored
+        # 12px margin at the harness's own viewport.
+        Shot(name="popover_actions_alunos_1440", path="/admin/alunos",
+             after=open_actions_menu, full_page=False),
+        # The sort control pair's focus ring (F-7). state_focus_visible above
+        # lands on the first focusable control on the page, which is not one of
+        # these two.
+        Shot(name="state_sort_focus_visible", path="/admin/alunos",
+             after=focus_sort_field, full_page=False),
         # --- form states (DS-6) -------------------------------------------
         Shot(name="form_focus_within", path="/admin/adicionar_aluno",
              after=focus_form_control, full_page=False),

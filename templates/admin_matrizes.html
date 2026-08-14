@@ -236,17 +236,17 @@
       actionsButton.setAttribute('aria-expanded', 'false');
     }
 
+    // F-7: the popover positioning owner. Was a byte-identical copy of the
+    // shared clamp here, including the `|| 190` hidden-width fallback that made
+    // it measure 0 and under-clamp by the difference.
+    const popoverHelpers = window.createToolbarQueryHelpers?.() || {};
+
     function openActionsMenu(){
       if (!actionsButton || !actionsMenu) return;
-      const rect = actionsButton.getBoundingClientRect();
-      const menuWidth = Math.max(actionsMenu.offsetWidth || 190, 190);
-      const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
-      actionsMenu.style.position = 'fixed';
-      actionsMenu.style.top = `${Math.round(rect.bottom + 6)}px`;
-      actionsMenu.style.left = `${Math.round(left)}px`;
-      actionsMenu.hidden = false;
-      actionsButton.setAttribute('aria-expanded', 'true');
+      popoverHelpers.openFixedMenu?.(actionsButton, actionsMenu);
     }
+
+    popoverHelpers.bindDismissOnViewportChange?.(actionsMenu, closeActionsMenu);
 
     function toggleRowSelection(row){
       if (!row) return;

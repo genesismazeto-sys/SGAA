@@ -135,9 +135,34 @@ These must not regress:
 * `.sr-only-focusable` (the skip link) keeps working.
 * `@media (prefers-reduced-motion:reduce)` keeps disabling transitions.
 
-Known gap: `--focus-ring-color` is defined but **never referenced**. There is
-no centralised focus contract yet. Do not delete the token — it is the anchor
-for the focus work in a later phase.
+**The sort control focus contract (F-7).** `#sort-field` and its direction
+toggle set `outline:0` and `box-shadow:none` unconditionally, so those applied
+in the focus state too: measured on all four live id families, the focused
+presentation was identical to the resting one while `:focus-visible` matched. A
+keyboard user had two invisible stops on every list page. The
+`.input-group:has(> input, > select):focus-within` rule that rescues the search
+box cannot help — an ordenar group contains only buttons.
+
+The indicator is drawn **inside** the control, `outline-offset:-2px`. Measured
+group geometry, identical on all four families: the group is 32px tall with
+`overflow:hidden` and a 1px border while both controls are 30px tall, so each has
+exactly 1.0px of slack top and bottom and the toggle 1.0px on the right.
+Anything drawn outside the button is clipped away in full.
+
+Everything else matches the treatment already shipped in six places (the toggle
+switches, the dashboard alerta cards): `outline:2px solid` in the focus colour.
+Those six hardcode `rgba(37,99,235,.35)`; **F-7 is the first consumer of
+`--focus-ring-color`, the token that holds exactly that value.** Only the offset
+differs, and only because of the clip above.
+
+Specificity is load-bearing: the suppressors are `(1,0,0)` on the field and
+`(2,0,0)` on the toggle, and three of the four families declare their own copies
+from a page `<style>` block that loads *after* the component. The owned rule is
+`:is(group) :is(control):focus-visible` at `(2,1,0)`, which wins on specificity
+rather than order.
+
+This is a focus contract for the sort controls, not a global one. The rest of
+the system's focus states are unchanged.
 
 ### 2.6 Responsive contract
 
@@ -184,15 +209,46 @@ See [form-contract.md](form-contract.md) for the measured detail.
 
 **Popovers**
 
-* The sort and filter popovers share the selection actions menu's horizontal
-  viewport clamp: where it binds, the popover sits exactly **12px** inside the
-  viewport edge; where it does not bind, the popover stays anchored to its
-  button.
-* **Vertical clamping is deliberately not implemented.** An overrun bottom edge
-  still scrolls with `.app-main`, so it stays reachable. Deferred debt.
-* `openMenu()`'s hidden-width measurement (it reads `offsetWidth` while the menu
-  is still `display:none` and falls back to 190) is **deferred debt**, kept
-  as-is on purpose so the actions menu's geometry does not move.
+* Sort, filter and the actions menus share one clamp on **both axes**. Where it
+  binds, the popover sits exactly **12px** inside the viewport edge; where it
+  does not bind, the popover stays on its button with the usual 6px gap.
+* **Both axes are clamped (F-7).** The vertical axis was previously deferred on
+  the premise that "an overrun bottom edge still scrolls with `.app-main`, so it
+  stays reachable". **That premise was measured and is false.** `.app-layout` is
+  `height:100vh` and `.app-main` owns the scroll, so `window.scrollY` is 0 and
+  the document never scrolls: `openPopover` writes viewport coordinates into an
+  absolutely positioned element whose containing block is the initial containing
+  block, and `openFixedMenu` writes them into a fixed one. Either way the popover
+  is pinned to the *screen* while its anchor scrolls away underneath. Measured on
+  /admin/acesso: scrolling `.app-main` by 120px moved the button −120px and the
+  popover 0px, growing the 6px gap to 126px and leaving the overflow unchanged.
+  And on the only path that reaches the control at those heights — scroll the
+  toolbar into view — `.app-main` is already at maximum scroll. What was off
+  screen was `#filter-apply`, `#filter-clear-all` and the destructive
+  `access-action-*` items.
+* **Popovers are positioned once and dismissed on viewport change.** They are not
+  re-positioned while open; continuous tracking would write geometry every frame
+  for a menu about to be dismissed. So a `.app-main` scroll or a window resize
+  closes them. The filter popover always did this; F-7 gives sort and the actions
+  menus the same contract, which is what stops them floating over unrelated
+  content while still reporting `aria-expanded="true"`. Scrolls originating
+  *inside* a popover are exempt — `.menu-list` and `.filter-values` are their own
+  `max-height:260px` scroll panes.
+* **Both axes are clamped against the REAL rendered box.** Every opener reveals
+  the menu before measuring it, parked at the containing block's origin so a
+  shrink-to-fit box is not constrained by the edge the clamp is about to move it
+  away from. `openMenu()`'s hidden-width fallback is gone: it read `offsetWidth`
+  while the menu was still `display:none`, measured 0 and resolved to 190 against
+  a real width of 212–395px, which is why the actions menu came to rest flush
+  against the viewport edge with 0px of margin instead of 12.
+* **One owner, four former copies.** `static/js/toolbar-filters.js` owns the
+  clamp. `admin_acesso`, `admin_matrizes`, `admin_reportes` and
+  `admin_requisicoes` each carried a byte-identical copy of it — with a 190 or
+  200 fallback and their own literal 12s — and now call
+  `openFixedMenu` / `bindDismissOnViewportChange` from the shared helpers object.
+  `admin_atividades`'s per-row "more" menu is deliberately **not** in this family:
+  it is a row context menu with its own 8px margin that already measures after
+  reveal and already flips above its anchor.
 
 **Dashboards**
 
@@ -362,11 +418,23 @@ screen as correct):
 python -m tools.visual.harness
 ```
 
-* **83 shots**: every admin page, every aluno page, login, 404, the filter
+* **87 shots**: every admin page, every aluno page, login, 404, the filter
   popover on 8 list pages, the sort popover, focus-visible, a toast, plus the
   responsive bands added by the F-5/F-6 phases (form containment at 640/720,
   toolbar wrap at 768–1366, the popover clamp at 768/900, and the dashboard
-  grids at 768–1094).
+  grids at 768–1094), plus the four F-7 states: the filter popover and the
+  actions menu vertically clamped on /admin/acesso at 1366×768, the actions menu
+  at 1440 (it had no baseline at any width), and the sort control's focus ring.
+  The two F-7 acesso shots are the first in this catalogue where viewport
+  **height** is the load-bearing dimension, which is why they carry it in their
+  names.
+
+  One caveat worth knowing: `page_admin_mensagens` renders the *source line
+  number* of every message literal, computed at runtime by AST-walking the
+  templates. Editing any template that carries one shifts those numbers and
+  changes that baseline — F-7 moved one origin from `admin_acesso.html:1090` to
+  `:1095`. It is a content delta, not a layout one, but it means that shot is
+  coupled to line numbers across the whole template tree.
 * **Opt-in.** Skipped unless `--visual` is passed, so the canonical suite count
   and runtime stay stable. Takes ~6 minutes.
 * **Tolerance: ±1 per channel, 0 pixels beyond that.** Repeated captures are
@@ -427,17 +495,51 @@ python -m pytest tests/test_dashboard_container_contract.py --visual
   `container-type` has not become a containing block for absolute positioning.
 * Same opt-in flag as the visual gate.
 
-**Opt-in browser total: 90 = 83 visual + 7 dashboard container-contract.**
-Static Design System gates: 11 (`tests/test_ds_design_system_contract.py`, not
-opt-in).
+### 5.3 The popover reachability contract
+
+```bash
+python -m pytest tests/test_popover_reachability_contract.py --visual
+```
+
+38 tests. Neither the screenshot catalogue nor the static analyser can pin these:
+one behaviour only appears after the user scrolls `.app-main` and opens a menu
+whose bottom edge would fall past the viewport, the other only exists while a
+control holds keyboard focus. They assert that every actionable control in an
+opened popover is on screen, that resting geometry is untouched where no clamp
+binds, that no popover is ever left detached from its anchor, that both sort
+controls present differently when focused from the keyboard on all four id
+families, and that all **eleven** actions menus clamp against their real width.
+
+Five of those eleven sit behind `initToolbarRowSelection`, which returns
+undefined when a list renders zero rows — and the demo seed produces no rows for
+them. That gate predates F-7. Rather than skip five of eleven consumers, those
+cases invoke the shared opener directly: since F-7 every one of these menus
+reaches the viewport through that one function, so the geometry contract is still
+exercised on the page's real markup.
+
+**Opt-in browser total: 132 = 87 visual + 7 dashboard container-contract + 38
+popover-contract.** Static Design System gates: 11
+(`tests/test_ds_design_system_contract.py`, not opt-in).
 
 **Cross-engine status: verified.** The responsive contracts in §2.6 were
 verified before publication of the responsive milestone on **Chromium
 151.0.7922.34, Firefox 153.0 and WebKit 26.5** — the 792/791 container
 boundary, the F-5D absolute label geometry, the F-6A2 popover clamp, and the
 fixed-overlay geometry of real modals inside `.app-track`. All four passed on
-all three engines. The committed gates themselves still run Chromium only;
-re-run the cross-engine check by hand when a responsive contract changes.
+all three engines.
+
+F-7 was re-verified on the same three engines, with **full agreement and no
+divergence**: the vertical clamp lands on a 12px bottom margin with zero controls
+off screen; non-binding popovers keep their 5.9px measured anchor gap; sort,
+filter and actions all dismiss on `.app-main` scroll with `aria-expanded`
+returning to `false`; the sort controls' `outline:solid/2px/-2px` renders
+unclipped and `:focus-visible` matches after a real Tab on every engine
+(including WebKit); and the actions menu measures 305px — not the old 190
+fallback — landing 12px inside the right edge.
+
+The committed gates themselves still run Chromium only; re-run the cross-engine
+check by hand when a responsive contract changes. Note that any such run must
+work around `login()`'s navigation race, which WebKit loses 11 times in 12 (§8).
 
 ---
 
@@ -478,6 +580,7 @@ Ownership phases (DS) moved CSS and proved equivalence. Responsive phases
 | **F-6A2 ✅** | Sort/filter popovers get the actions menu's horizontal viewport clamp. | Playwright 79/79 |
 | **F-6B ✅** | `.app-track` becomes the named inline-size query container `track`; dashboard grids switch on the actual track at 792/791, with an `@supports` fallback. | Playwright 82/82 + 7 container-contract |
 | **F-6B2 ✅** | `.content-block-body` wraps instead of running past the card edge. | Playwright 83/83 |
+| **F-7 ✅** | Popover reachability on both axes, dismissal on viewport change, real-width measurement, and a visible `:focus-visible` ring on the sort controls. Reopened the F-6A2 vertical deferral on new evidence: the popover does **not** scroll with `.app-main`. | Playwright 87/87 + 7 container-contract + 38 popover-contract, cross-engine on all three |
 
 The F-5/F-6 chain closed as the **responsive milestone**: R1 independent
 adversarial review ACCEPT with zero material findings, and cross-engine
@@ -491,7 +594,7 @@ verification on Chromium, Firefox and WebKit (§5.2).
 | DS-8 | Dead CSS removal, with consumer evidence. | coverage evidence |
 | — | Static `style=""` → component classes / custom properties. | ratchets |
 | — | Breakpoint scale / tokens for the remaining ad-hoc viewport breakpoints. F-6 removed the viewport constant only where the binding box is the track; the rest still have no scale. | browser gate |
-| — | Centralised focus contract: wire up `--focus-ring-color`. DS-7 shipped the 2px ring, but the token is still unreferenced (§2.5). | browser gate + manual a11y pass |
+| — | Centralised focus contract. F-7 wired `--focus-ring-color` into the sort controls (§2.5) and proved the rest of the tab order already presents a focus state, so what remains is consolidation rather than a defect. Modals declare `aria-modal="true"` with no focus containment — that one is a real gap. | browser gate + manual a11y pass |
 
 ---
 
@@ -503,7 +606,8 @@ doing something else.
 
 **Ownership / dead code**
 
-* `--focus-ring-color` and `--btn-primary-light` are defined but never used.
+* `--btn-primary-light` is defined but never used. (`--focus-ring-color` is now
+  referenced — F-7 wired it into the sort control focus contract, §2.5.)
 * `templates/demo_impressoes.html` was unreachable (no route) and was removed
   in DS-3b. It was the only consumer of the `--imp-cols` print-shop default.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
@@ -523,14 +627,11 @@ doing something else.
 
 * 16 distinct breakpoints with no scale. F-6 removed the viewport constant only
   where the binding box is the track.
-* **Vertical popover overflow.** Neither popover opener clamps the vertical
-  axis. An overrun bottom edge still scrolls with `.app-main`, so it stays
-  reachable — which is why it was deferred rather than fixed.
-* **`openMenu()` hidden-width measurement.** It reads `offsetWidth` while the
-  menu is still `display:none`, so it always clamps against the 190 fallback
-  rather than the menu's real width and under-clamps by the difference.
-  Deliberately untouched by F-6A2, which required that menu's geometry to stay
-  put.
+* ~~**Vertical popover overflow.**~~ Fixed by F-7. The deferral's premise — that
+  an overrun bottom edge stays reachable because it scrolls with `.app-main` —
+  was measured and found false; see §2.6.
+* ~~**`openMenu()` hidden-width measurement.**~~ Fixed by F-7, which had to
+  measure the same opener for the vertical axis anyway.
 * **Mobile shell / C5.** The 240px sidebar never collapses, so below roughly
   480px the content track falls under a field card's intrinsic minimum. 768px
   is the supported floor (§2.6); a 360–480px phone shell is a separate product
