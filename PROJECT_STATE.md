@@ -46,6 +46,113 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## POST-REFACTOR DESIGN SYSTEM — DS-8 — CLOSED / ACCEPTED / PUBLISHED
+
+Published by this governance landing commit (landing SHA not invented).
+
+**Relationship to the UT roadmap.** DS-8 is a post-refactor Design System phase
+on the same frontend track as F-7 and the responsive milestone below. It is
+**NOT UT-18**; there is no UT-18. The structural refactor remains **CLOSED /
+ACCEPTED / PUBLISHED** and nothing here modifies, reopens or supersedes any UT
+verdict, the structural plateau, or the C1–C7 criteria.
+
+**DS-8 technical commit:** `2c69d06c6e2191b0e442f60b15d7859474da05d6`
+(parent `95d7c90d62e1581a430664ee71ef025ee299166f`, the F-7 governance landing).
+This commit's tree is byte-identical to the technical work first landed as
+`ebd8bab46a51149313d54cc196a40f2349b76687` — R1 (below) reviewed that tree;
+after R1, only the commit **message** was amended to correct cascade
+aggregates that had been captured mid-experiment (tree SHA before/after amend:
+identical; `git diff ebd8bab 2c69d06`: empty). Do not refer to `ebd8bab` as
+the current DS-8 commit.
+
+**Scope.** Dead CSS removal with consumer evidence, plus one dead template.
+Four files changed, deletion only:
+
+- `static/css/modern-style.css`
+- `static/css/components/form.css`
+- `static/css/foundation/tokens.css`
+- `templates/components/content_block.html` (deleted)
+
+No selector was reordered, renamed, moved, reformatted or consolidated; no
+baseline was regenerated. Backend behaviour, business logic, services, schema
+and migrations: unchanged.
+
+**Result.** 108 selectors deleted across 113 (context, selector) keys, plus
+one property (`--btn-primary-light`) removed from a surviving `:root`.
+`modern-style.css` 1623 → 1281 lines (−342, −21.1%). Total Design System CSS
+2683 → 2333 lines (−350, −13.0%).
+
+**`admin_turma_form.html` was authorized for deletion and was NOT deleted.**
+It has no routed consumer, but `utils/messages.py::_iter_frontend_files()`
+scans `templates/**/*.html` by directory and this template contributes 3
+message-catalog entries; deleting it drops the catalog 536 → 533, restoring it
+returns 536. Reclassified `UNROUTED_BUT_REFERENCED`, not dead, and withheld.
+
+### Independent review
+
+**R1 independent adversarial review of the DS-8 tree: ACCEPT — zero MATERIAL
+findings.** The review re-derived deadness by two independent methods (static
+class-token scan across 347 files and live-DOM query against the pre-deletion
+tree across 40 surface/viewport/overlay states — 0 of the 108 deleted
+selectors matched any element), re-ran `tools/ds_css.py`'s cascade-equivalence
+gate directly rather than trusting the executor's summary, and re-derived the
+message-catalog counts for both the deleted template and the withheld one.
+Non-material observations and future-hardening items were recorded and
+deliberately NOT actioned, so the reviewed technical tree is exactly the tree
+that was accepted. Findings carried forward are recorded in
+`docs/design-system/README.md` §8.
+
+### Cross-engine pre-publication verification
+
+Verified on **Chromium 151.0.7922.34, Firefox 153.0 and WebKit 26.5**, 23
+production surfaces per engine (list, report, dashboard, form/modal,
+requisições) — **0 geometry/computed-style deltas parent-vs-DS-8 on any
+engine**, 0 horizontal overflow. A WebKit login-race artifact in the shared
+visual harness (pre-existing, present on both trees, recorded in
+`docs/design-system/README.md` §8) was worked around out-of-tree without
+modifying `tools/visual/catalogue.py`.
+
+### Measured state at governance time
+
+- visual baselines: **87**, zero regenerated
+- cascade equivalence (`tools/ds_css.py`, DS-8 vs its parent):
+  0 ORDER VIOLATED, 0 RESOLUTION CHANGED, 0 RESOLUTION ADDED, 26,076
+  RESOLUTION LOST (all traced to the deleted manifest), 59 TOKEN CHANGED (all
+  `--btn-primary-light`)
+
+Canonical reconciliation:
+
+| Metric | Value |
+|---|---|
+| collected | 1677 |
+| selected | 1660 |
+| passed | 1528 |
+| skipped | 132 |
+| deselected | 17 |
+| failed | 0 |
+| errors | 0 |
+
+### Database custody
+
+The repository-local `database.db` sentinel (SHA-256 `df3bb46a…8bbcdf`, 544768
+bytes, `change_counter` 98, `user_version` 3, `schema_cookie` 157) was verified
+identical at entry and exit of both the R1 review and this governance pass.
+**This is a local custody sentinel for this review window only — it does not
+replace the canonical documented `database.db` baseline** recorded under
+"Database baseline" below. During R1, a read-only SQLite connection against
+this WAL-mode database materialised two untracked, gitignored sidecars
+(`database.db-wal`, `database.db-shm`); the database content was never
+touched (byte-identical hash, unmoved `change_counter`) and the sidecars were
+removed before this governance commit.
+
+### R1 findings carried forward — NOT closed by DS-8
+
+See `docs/design-system/README.md` §8 for the full register, including the
+`admin_turma_form.html` reclassification, the Atividades v1 family, the
+catalogue-aware proof required before deleting the remaining deferred
+templates, and the pre-existing `admin_detalhes_curso.html` missing-template
+defect (outside DS-8 scope — DS-8 is CSS/template-ownership, not view work).
+
 ## POST-REFACTOR DESIGN SYSTEM — F-7 — CLOSED / ACCEPTED / PUBLISHED
 
 Published by this governance landing commit (landing SHA not invented).

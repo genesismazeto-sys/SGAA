@@ -604,17 +604,17 @@ Ownership phases (DS) moved CSS and proved equivalence. Responsive phases
 | **F-6B ✅** | `.app-track` becomes the named inline-size query container `track`; dashboard grids switch on the actual track at 792/791, with an `@supports` fallback. | Playwright 82/82 + 7 container-contract |
 | **F-6B2 ✅** | `.content-block-body` wraps instead of running past the card edge. | Playwright 83/83 |
 | **F-7 ✅** | Popover reachability on both axes, dismissal on viewport change, measure-after-reveal instead of the hidden-width fallback, and a visible `:focus-visible` ring on the sort controls. Reopened the F-6A2 vertical deferral on new evidence: the popover does **not** scroll with `.app-main`. **R1 independent review: ACCEPT, zero MATERIAL findings**; F1–F5 carried forward in §8. | Playwright 87/87 + 7 container-contract + 38 popover-contract, cross-engine PASS on Chromium / Firefox / WebKit |
+| **DS-8 ✅** | Dead CSS removal with two-method consumer evidence (static class-token scan + live-DOM query across every route/viewport). 108 selectors deleted across 113 (context, selector) keys, plus the `--btn-primary-light` token and `templates/components/content_block.html`. `admin_turma_form.html` was authorized for deletion but proven **not** dead — it is scanned by `utils/messages.py`'s directory glob and contributes 3 message-catalog entries — so it was withheld and reclassified `UNROUTED_BUT_REFERENCED`. `modern-style.css` 1623→1281 lines (−21.1%); total DS CSS 2683→2333 (−13.0%). **R1 independent review: ACCEPT, zero MATERIAL findings.** | Playwright 87/87, zero baseline regeneration; cascade equivalence 0 ORDER VIOLATED / 0 RESOLUTION CHANGED / 0 RESOLUTION ADDED; cross-engine PASS on Chromium / Firefox / WebKit |
 
 The F-5/F-6 chain closed as the **responsive milestone**: R1 independent
 adversarial review ACCEPT with zero material findings, and cross-engine
-verification on Chromium, Firefox and WebKit (§5.2).
+verification on Chromium, Firefox and WebKit (§5.2). DS-8 closed the same way.
 
 ### Not started
 
 | Phase | Scope | Gate |
 |---|---|---|
 | DS-2 | Extract `foundation/reset.css` + `base.css`; give the standalone demo page an explicit foundation; remove the last duplicated base rules. | static cascade equivalence |
-| DS-8 | Dead CSS removal, with consumer evidence. | coverage evidence |
 | — | Static `style=""` → component classes / custom properties. | ratchets |
 | — | Breakpoint scale / tokens for the remaining ad-hoc viewport breakpoints. F-6 removed the viewport constant only where the binding box is the track; the rest still have no scale. | browser gate |
 | — | Centralised focus contract. F-7 wired `--focus-ring-color` into the sort controls (§2.5) and proved the rest of the tab order already presents a focus state, so what remains is consolidation rather than a defect. Modals declare `aria-modal="true"` with no focus containment — that one is a real gap. | browser gate + manual a11y pass |
@@ -660,16 +660,43 @@ reviewed technical tree is exactly the tree that was accepted.
   F-7 implementation defect. **F-7 does not close the broader focus-contrast
   problem.**
 
+**DS-8 — carried forward, not actioned**
+
+DS-8 (§7) returned **ACCEPT with zero MATERIAL findings** from independent
+review. These were recorded and deliberately left in the tree.
+
+* **`admin_turma_form.html` — `UNROUTED_BUT_REFERENCED`, not dead.** It has no
+  routed consumer, but `utils/messages.py::_iter_frontend_files()` scans
+  `templates/**/*.html` by directory, and this template contributes 3 message-
+  catalog entries. Deleting it drops the catalog 536→533; restoring it returns
+  536. A name-reference check alone would have missed this.
+* **The Atividades v1 template family** was likewise classified
+  `UNROUTED_BUT_REFERENCED` rather than dead and was not deleted.
+* **Other deferred templates need the same catalogue-aware proof before
+  deletion, not name-reference analysis alone.** Measured directly:
+  `admin_turma_alunos.html` contributes 1 exclusive catalog entry (536→535 if
+  deleted); `list.html`, `admin_requisicao_nova.html`, `admin_curso_form.html`
+  and `admin_importar_turma.html` are catalogue-neutral.
+* **`admin_detalhes_curso.html` does not exist**, yet `admin_detalhes_curso`
+  (`app/views/admin/alunos_turmas_cursos.py`) renders it, and
+  `admin_visualizar_curso` redirects into `admin_detalhes_curso`. Both live
+  admin routes 500. **Pre-existing functional defect, outside DS-8** — DS-8 is
+  a CSS/template-ownership phase and does not add missing view templates.
+
 **Ownership / dead code**
 
-* `--btn-primary-light` is defined but never used. (`--focus-ring-color` is now
-  referenced — F-7 wired it into the sort control focus contract, §2.5.)
+* ~~`--btn-primary-light` is defined but never used.~~ Removed by DS-8 (zero
+  `var()` uses). `--focus-ring-color` is the live token — F-7 wired it into the
+  sort control focus contract, §2.5.
 * `templates/demo_impressoes.html` was unreachable (no route) and was removed
   in DS-3b. It was the only consumer of the `--imp-cols` print-shop default.
 * `templates/aluno_minhas_requisicoes.html` defines `--col-id`, never used.
-* `templates/components/content_block.html` has no consumers — dead template.
-* `.form-cards-narrow--modal` is declared in `components/form.css` but nothing
-  uses it; both modals set their width through their own page rules.
+* ~~`templates/components/content_block.html` has no consumers — dead
+  template.~~ Removed by DS-8. Proven catalogue-neutral first: the message
+  catalog is 536 before and after its deletion.
+* ~~`.form-cards-narrow--modal` is declared in `components/form.css` but
+  nothing uses it.~~ Removed by DS-8. Both modals still set their width
+  through their own page rules.
 * 185 distinct hardcoded colour literals across 585 occurrences.
 * `class="btn btn-primary"` (hyphen) appears in 5 places but `.btn-primary` is
   styled nowhere, so those buttons silently render as plain `.btn`.
