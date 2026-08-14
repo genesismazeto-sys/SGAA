@@ -46,9 +46,114 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
-## POST-REFACTOR DESIGN SYSTEM — RESPONSIVE MILESTONE — CLOSED / ACCEPTED / PUBLISHED
+## POST-REFACTOR DESIGN SYSTEM — F-7 — CLOSED / ACCEPTED / PUBLISHED
 
 Published by this governance landing commit (landing SHA not invented).
+
+**Relationship to the UT roadmap.** F-7 is a post-refactor Design System phase on
+the same frontend track as the responsive milestone below. It is **NOT UT-18**;
+there is no UT-18. The structural refactor remains **CLOSED / ACCEPTED /
+PUBLISHED** and nothing here modifies, reopens or supersedes any UT verdict, the
+structural plateau, or the C1–C7 criteria.
+
+**F-7 implementation commit:**
+`5e25bce44594e9a9cb6dfae60c865fa9e9284645`
+(parent `0835ac180a9f71ef0e283acff0f83254806c208f`, the responsive-milestone
+governance landing). The implementation tree was frozen at that commit and was
+NOT modified by this governance commit.
+
+**Scope.** Frontend only, four items:
+
+1. **Popover vertical reachability.** Sort, filter and the actions menus are now
+   clamped on the vertical axis as well as the horizontal one, 12px inside the
+   viewport edge where the clamp binds.
+2. **Popover close-on-scroll behaviour.** All three dismiss on a `.app-main`
+   scroll or a window resize instead of remaining pinned to the screen while
+   their anchor scrolls away. Scrolls originating inside a popover are exempt.
+3. **Actions-menu rendered-width measurement.** Every opener now reveals the menu
+   before measuring it, retiring the hidden-width fallback that measured a
+   `display:none` element.
+4. **Sort focus visibility.** `#sort-field` and its direction toggle expose a
+   visible `:focus-visible` indicator on all four live id-families.
+
+Backend behaviour, business logic, services, schema and migrations: unchanged.
+Frontend runtime behaviour was intentionally changed, which is the point of the
+work.
+
+**Why the previously deferred vertical clamp was reopened.** The responsive
+milestone deferred it on the stated premise that an overrun bottom edge stays
+reachable because it scrolls with `.app-main`. That premise was measured and is
+false: the document never scrolls, so the popover is pinned to the screen while
+its anchor moves. The deferral was reopened on that new evidence, not on taste.
+
+### Independent review
+
+**R1 independent adversarial review of `5e25bce4`: ACCEPT — zero MATERIAL
+findings.** The review re-derived the scroll model, the coordinate conversion,
+the clamp arithmetic, the focus specificity and the baseline causation from the
+diff and from measured rendered behaviour rather than from executor reports, and
+challenged all four page-template migrations individually. Findings F1–F5 below
+were recorded and deliberately NOT actioned, so the reviewed technical tree is
+exactly the tree that was accepted.
+
+### Cross-engine pre-publication verification
+
+Verified on **Chromium 151.0.7922.34, Firefox 153.0 and WebKit 26.5**, driven
+through the production click paths — **all PASS on all three engines, no
+divergence**:
+
+- binding vertical clamp: 12px bottom margin, zero actionable controls off screen;
+- non-binding geometry: the 6px anchor relationship preserved (measured 5.9px);
+- dismissal on `.app-main` scroll, with `aria-expanded` returning to `false`;
+- internal-menu scroll exemption, tested against a forced-scrollable pane;
+- sort focus indicator visible and unclipped;
+- actions-menu real-width horizontal containment.
+
+### Measured state at governance time
+
+- visual baselines: **87** (83 carried forward, 4 added by F-7)
+- opt-in browser tests: **132** = 87 visual + 7 dashboard container-contract +
+  38 F-7 popover-reachability
+- static Design System gates: **11**
+
+Canonical reconciliation:
+
+| Metric | Value |
+|---|---|
+| collected | 1677 |
+| selected | 1660 |
+| passed | 1528 |
+| skipped | 132 |
+| deselected | 17 |
+| failed | 0 |
+| errors | 0 |
+
+One pre-existing baseline was re-approved: `page_admin_mensagens`, 44 of
+1,296,000 pixels inside a single 7×8px box, with zero differing pixels outside
+it. That page renders the runtime-computed source line number of each message
+literal; F-7 added five lines above one literal in `admin_acesso.html`, moving
+its reported origin from `:1090` to `:1095`. R1 proved causation from the file
+history and classified it JUSTIFIED_INCIDENTAL_CONTENT_DELTA. No other baseline
+changed, which is itself the evidence that resting geometry did not move.
+
+### R1 findings carried forward — NOT closed by F-7
+
+| ID | Class | Finding |
+|---|---|---|
+| F1 | NON_MATERIAL | `admin_reportes` and `admin_requisicoes` call `syncItems()` after `openFixedMenu()`, so their clamp can briefly measure the previous content state. No production reachability failure was reproduced. Small future hardening candidate. |
+| F2 | PRE_EXISTING_TEST_DEBT | Five zero-row actions-menu consumers are exercised through the shared opener rather than a seeded real click path. At least one seeded-row end-to-end case would improve consumer-wiring coverage. |
+| F3 | NON_MATERIAL | Sort/actions dismissal is capture-phase and therefore also fires on unrelated page scrollers. Over-eager but not functionally wrong. |
+| F4 | NON_MATERIAL | The `clamp_binds` test heuristic conditionally gates one 12px assertion. |
+| F5 | FUTURE_HARDENING | The approved `--focus-ring-color` produces approximately 1.68:1 contrast against the white button surface, below the 3:1 non-text contrast target. This is inherited Design System convention, not an F-7 implementation defect. |
+
+**F-7 does not close the broader focus-contrast problem, does not implement modal
+focus containment, and claims no phone/mobile or 640px support.** Outstanding
+Design System debt remains recorded in `docs/design-system/README.md` and is
+explicitly NOT closed by this phase.
+
+## POST-REFACTOR DESIGN SYSTEM — RESPONSIVE MILESTONE — CLOSED / ACCEPTED / PUBLISHED
+
+Published by an earlier governance landing commit (landing SHA not invented).
 
 **Relationship to the UT roadmap.** The Design System track is a separate line of
 work that began after the structural refactor closed. It is NOT UT-18; there is

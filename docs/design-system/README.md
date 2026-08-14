@@ -162,7 +162,13 @@ from a page `<style>` block that loads *after* the component. The owned rule is
 rather than order.
 
 This is a focus contract for the sort controls, not a global one. The rest of
-the system's focus states are unchanged.
+the system's focus states are unchanged, and **the broader focus-ring contrast
+question is not closed by it**: the token composited over a white button surface
+measures about 1.68:1, below the 3:1 non-text contrast target. That value is
+inherited convention — six pre-existing `:focus-visible` rules already use the
+same literal — so raising it is a colour decision for a later phase, recorded as
+F5 in §8. Modal focus containment is also still open: several dialogs declare
+`aria-modal="true"` without trapping focus.
 
 ### 2.6 Responsive contract
 
@@ -234,13 +240,22 @@ See [form-contract.md](form-contract.md) for the measured detail.
   content while still reporting `aria-expanded="true"`. Scrolls originating
   *inside* a popover are exempt — `.menu-list` and `.filter-values` are their own
   `max-height:260px` scroll panes.
-* **Both axes are clamped against the REAL rendered box.** Every opener reveals
-  the menu before measuring it, parked at the containing block's origin so a
-  shrink-to-fit box is not constrained by the edge the clamp is about to move it
-  away from. `openMenu()`'s hidden-width fallback is gone: it read `offsetWidth`
-  while the menu was still `display:none`, measured 0 and resolved to 190 against
-  a real width of 212–395px, which is why the actions menu came to rest flush
-  against the viewport edge with 0px of margin instead of 12.
+* **Dimensions are measured after reveal, not from the hidden element.** Every
+  opener reveals the menu before measuring it, parked at the containing block's
+  origin so a shrink-to-fit box is not constrained by the edge the clamp is about
+  to move it away from. `openMenu()`'s hidden-width fallback is gone: it read
+  `offsetWidth` while the menu was still `display:none`, measured 0 and resolved
+  to 190 against a real width of 212–395px, which is why the actions menu came to
+  rest flush against the viewport edge with 0px of margin instead of 12.
+
+  **This is not a universal claim about the final content box.** Two page-local
+  consumers — `admin_reportes` and `admin_requisicoes` — call their own
+  `syncItems()` *after* the opener, so the box the clamp measured can be the
+  previous content state rather than the one that ends up rendered. R1 measured
+  the difference (up to 115px wide, 16px tall) and reproduced no reachability
+  failure: the vertical clamp does not bind on either page at any supported
+  height. It is recorded as F1 in §8 and is a sync-order hardening item, not a
+  defect this phase closes. The other ten consumers sync before opening.
 * **One owner, four former copies.** `static/js/toolbar-filters.js` owns the
   clamp. `admin_acesso`, `admin_matrizes`, `admin_reportes` and
   `admin_requisicoes` each carried a byte-identical copy of it — with a 190 or
@@ -517,6 +532,14 @@ cases invoke the shared opener directly: since F-7 every one of these menus
 reaches the viewport through that one function, so the geometry contract is still
 exercised on the page's real markup.
 
+**Know what that fallback does and does not prove.** It exercises the shared
+positioning function on the page's real markup and viewport, but it bypasses the
+page's own `syncMenu()` / `syncItems()` step, so for those five it measures a
+content state that does not occur in production — R1 measured 305px through the
+fallback against 241px through a real click on the same page. It therefore proves
+the geometry function, not the consumer wiring. Adding one seeded-row end-to-end
+case would close the gap; recorded as F2 in §8.
+
 **Opt-in browser total: 132 = 87 visual + 7 dashboard container-contract + 38
 popover-contract.** Static Design System gates: 11
 (`tests/test_ds_design_system_contract.py`, not opt-in).
@@ -580,7 +603,7 @@ Ownership phases (DS) moved CSS and proved equivalence. Responsive phases
 | **F-6A2 ✅** | Sort/filter popovers get the actions menu's horizontal viewport clamp. | Playwright 79/79 |
 | **F-6B ✅** | `.app-track` becomes the named inline-size query container `track`; dashboard grids switch on the actual track at 792/791, with an `@supports` fallback. | Playwright 82/82 + 7 container-contract |
 | **F-6B2 ✅** | `.content-block-body` wraps instead of running past the card edge. | Playwright 83/83 |
-| **F-7 ✅** | Popover reachability on both axes, dismissal on viewport change, real-width measurement, and a visible `:focus-visible` ring on the sort controls. Reopened the F-6A2 vertical deferral on new evidence: the popover does **not** scroll with `.app-main`. | Playwright 87/87 + 7 container-contract + 38 popover-contract, cross-engine on all three |
+| **F-7 ✅** | Popover reachability on both axes, dismissal on viewport change, measure-after-reveal instead of the hidden-width fallback, and a visible `:focus-visible` ring on the sort controls. Reopened the F-6A2 vertical deferral on new evidence: the popover does **not** scroll with `.app-main`. **R1 independent review: ACCEPT, zero MATERIAL findings**; F1–F5 carried forward in §8. | Playwright 87/87 + 7 container-contract + 38 popover-contract, cross-engine PASS on Chromium / Firefox / WebKit |
 
 The F-5/F-6 chain closed as the **responsive milestone**: R1 independent
 adversarial review ACCEPT with zero material findings, and cross-engine
@@ -601,8 +624,41 @@ verification on Chromium, Firefox and WebKit (§5.2).
 ## 8. Pre-existing defects recorded, not yet fixed
 
 This is a **register, not a work list.** Nothing here is closed by the
-responsive milestone, and none of it should be picked up incidentally while
-doing something else.
+responsive milestone or by F-7, and none of it should be picked up incidentally
+while doing something else.
+
+**F-7 R1 review findings — carried forward, not actioned**
+
+The independent adversarial review of F-7 returned **ACCEPT with zero MATERIAL
+findings**. These five were recorded and deliberately left in the tree, so the
+reviewed technical tree is exactly the tree that was accepted.
+
+* **F1 — `NON_MATERIAL`. Sync-order in two page-local consumers.**
+  `admin_reportes` and `admin_requisicoes` call `syncItems()` *after*
+  `openFixedMenu()`, so the box the clamp measures can be the previous content
+  state. Measured difference: up to 115px wide and 16px tall. No production
+  reachability failure was reproduced — the vertical clamp does not bind on
+  either page at any supported height, and the demo seed cannot reach the
+  divergent state. Fix would be to move the sync above the open call, as
+  `admin_acesso` and the shared helper already do. See §2.6.
+* **F2 — `PRE_EXISTING_TEST_DEBT`. Consumer-wiring coverage.** Five zero-row
+  actions-menu consumers are exercised through the shared opener rather than a
+  seeded real click path, so their *wiring* is unproven even though the geometry
+  function is. One seeded-row end-to-end case would close it. See §5.3.
+* **F3 — `NON_MATERIAL`. Over-eager dismissal.** Sort/actions dismissal is
+  capture-phase, so it also fires on unrelated page scrollers such as the list's
+  horizontal pane. The filter popover has always behaved this way. Over-eager but
+  not functionally wrong: the anchor does not move in those cases, so nothing is
+  mispositioned.
+* **F4 — `NON_MATERIAL`. Conditional assertion.** The `clamp_binds` heuristic in
+  the contract suite gates one 12px assertion; if it ever evaluated false the
+  assertion would skip rather than fail. Not triggered — all consumers bind.
+* **F5 — `FUTURE_HARDENING`. Focus-ring contrast.** `--focus-ring-color`
+  composited over the white button surface is approximately **1.68:1**, below the
+  3:1 non-text contrast target. This is inherited Design System convention — the
+  same literal six pre-existing `:focus-visible` rules already use — and not an
+  F-7 implementation defect. **F-7 does not close the broader focus-contrast
+  problem.**
 
 **Ownership / dead code**
 
