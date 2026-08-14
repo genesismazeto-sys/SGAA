@@ -63,13 +63,6 @@
   max-width:min(calc(100vw - 32px), calc(100% - var(--form-gutter)));
 }
 
-/* Modal-hosted form. The width is the same --form-w-modal the two modals
-   already set on their own rules; this exists so --form-w names it for the
-   centring term. */
-.form-cards-narrow--modal{
-  --form-w:var(--form-w-modal);
-}
-
 /* =============================================================
    RESERVED LABEL GUTTER  (F-5D, from a 23-surface x 16-viewport matrix)
 
