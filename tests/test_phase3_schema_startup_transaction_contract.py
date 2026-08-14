@@ -66,6 +66,7 @@ EXPECTED_MAIN_INIT_CALLERS = {
     "tests/test_admin_atividades_filters.py": ("client",),
     "tests/test_admin_atividades_import.py": ("client",),
     "tests/test_admin_aux_sections.py": ("client",),
+    "tests/test_admin_curso_detalhes.py": ("client",),
     "tests/test_admin_dashboard_request_alert.py": ("client",),
     "tests/test_admin_database_backups.py": (
         "admin_client",
@@ -591,7 +592,7 @@ def test_single_init_owner_and_exact_compatibility_caller_manifest():
         assert canonical_owner == "app.db.init_db"
         actual_main[path].append(scope)
     assert {path: tuple(scopes) for path, scopes in actual_main.items()} == EXPECTED_MAIN_INIT_CALLERS
-    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 76
+    assert sum(map(len, EXPECTED_MAIN_INIT_CALLERS.values())) == 77
 
     actual_app_db = defaultdict(list)
     for path, scope, _, _, expression, imported_binding, canonical_owner in records[

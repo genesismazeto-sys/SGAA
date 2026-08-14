@@ -393,6 +393,21 @@
 .imp-matrizes .badge.status-badge{ line-height:1; }
 
 /* =============================================================
+   Scoped Layout Adjustments: Curso — turmas do curso (.imp-curso-turmas)
+   ============================================================= */
+.imp-curso-turmas { --imp-cols:
+  minmax(56px, 72px)    /* Nº */
+  minmax(88px, 104px)   /* Status */
+  minmax(90px, 120px)   /* Ano/Semestre */
+  minmax(80px, 100px)   /* Alunos */
+};
+.impressoes-cards-scroll.imp-curso-turmas{ width:100%; margin-top:24px; margin-bottom:18px; }
+.imp-curso-turmas .impressoes-cards{ width:100% !important; }
+.imp-curso-turmas .impresso-card{ width:100% !important; max-width:100% !important; }
+.imp-curso-turmas .badge.status-badge{ line-height:1; }
+.imp-curso-turmas-empty{ padding:1rem; text-align:center; color:var(--text-secondary); }
+
+/* =============================================================
   Scoped Layout Adjustments: Arquivos (.imp-arquivos)
   ============================================================= */
 .imp-arquivos { --imp-cols:

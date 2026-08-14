@@ -298,6 +298,13 @@ ADMIN_PAGES = [
     # cursos into a database created from scratch for every run, so curso 1
     # exists and is the same curso every time.
     ("admin_editar_curso", "/admin/cursos/1/editar"),
+    # templates/admin_detalhes_curso.html was missing entirely (500 on every
+    # request); this pins the fix. Curso 1 is deterministic for the same
+    # reason as the edit twin above (app/db.py backfills a "Geral" course into
+    # an empty cursos table before seed_demo_data.py runs), and its one
+    # seeded turma carries one seeded aluno, so the summary and the turmas
+    # breakdown both render populated rather than empty.
+    ("admin_curso_detalhes", "/admin/cursos/1"),
     ("admin_adicionar_atividade", "/admin/adicionar_atividade"),
     ("admin_adicionar_matriz", "/admin/adicionar_matriz"),
     ("admin_nova_requisicao", "/admin/requisicoes/nova"),

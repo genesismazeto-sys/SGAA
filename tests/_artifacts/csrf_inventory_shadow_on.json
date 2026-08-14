@@ -184,7 +184,7 @@
         "label": "/admin/cursos/<int:curso_id>",
         "path": "/admin/cursos/2",
         "role": "admin",
-        "status_code": 500
+        "status_code": 200
       },
       {
         "label": "/admin/cursos/<int:curso_id>/editar",

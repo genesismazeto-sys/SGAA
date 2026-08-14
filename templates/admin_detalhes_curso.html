@@ -1,0 +1,61 @@
+{% import 'components/card_list.html' as cl %}
+{% extends "base.html" %}
+{% block title %}Detalhes do Curso{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set is_active = ((curso.status or '')|string|lower) in ['ativo', 'at', '1', 'true'] %}
+<h1 class="main-title">{{ curso.nome }}</h1>
+
+<section class="content-block">
+  <div class="content-block-body">
+    <div class="item">
+      <span class="value">{{ curso.codigo }}</span>
+      <span class="label"><i class="lucide" data-lucide="barcode"></i>Código</span>
+    </div>
+    <div class="item">
+      <span class="value">{{ curso.duracao_periodos }} períodos</span>
+      <span class="label"><i class="lucide" data-lucide="clock-3"></i>Duração</span>
+    </div>
+    <div class="item">
+      <span class="value">
+        <span class="badge {{ 'success' if is_active else 'danger' }} status-badge status-pill status-{{ 'positive' if is_active else 'neutral' }}">{{ 'Ativo' if is_active else 'Inativo' }}</span>
+      </span>
+      <span class="label"><i class="lucide" data-lucide="toggle-left"></i>Status</span>
+    </div>
+  </div>
+</section>
+
+<div class="impressoes-cards-scroll imp-curso-turmas" id="curso-turmas-scroll-container">
+  <div id="curso-turmas-list" class="impressoes-cards" role="list">
+    {{ cl.header([
+      {'text':'Nº','class':'center'},
+      {'text':'Status','class':'center'},
+      {'text':'Ano/Semestre','class':'center'},
+      {'text':'Alunos','class':'center'},
+    ]) }}
+
+    {% if turmas and turmas|length %}
+      {% for t in turmas %}
+        {% set turma_active = (t.status == 'Ativa') %}
+        {{ cl.row([
+          {'content': t.numero or '—', 'class':'center'},
+          {'content': (t.status or '—'), 'class':'center', 'badge': true, 'badge_type': ('success' if turma_active else 'danger'), 'status_badge': true, 'status_tone': ('positive' if turma_active else 'neutral')},
+          {'content': ((t.semestre ~ 'S-' ~ t.ano) if (t.semestre and t.ano) else '—'), 'class':'center'},
+          {'content': (t.qtd_alunos or 0)|string, 'class':'center'},
+        ]) }}
+      {% endfor %}
+    {% else %}
+      <div class="imp-curso-turmas-empty">Nenhuma turma cadastrada.</div>
+    {% endif %}
+  </div>
+</div>
+
+<a class="btn" href="{{ url_for('admin_cursos') }}">
+  <i class="lucide" data-lucide="arrow-left"></i>
+  <span class="btn-label">Voltar</span>
+</a>
+{% endblock %}
