@@ -46,6 +46,178 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## POST-REFACTOR APPLICATION DEFECT — ADMIN ARQUIVOS EDIT 500 — CLOSED / ACCEPTED
+
+Technical state: **CLOSED / ACCEPTED**.
+
+**This is a post-refactor application defect fix, not structural-refactor or
+Design System work.** The structural refactor remains **CLOSED / ACCEPTED /
+PUBLISHED**. There is no UT-18. C-2 and later census findings remain separate
+and unstarted. This entry does not reopen the structural refactor, Phase 4,
+Arquivos extraction work or any Design System phase.
+
+**DEFECT.** The valid admin edit flow was:
+
+`GET /admin/arquivos/<id>/editar` → redirect →
+`/admin/arquivos?edit_arquivo=<id>` → formerly HTTP `500`.
+
+**ROOT CAUSE.** `app/admin_files.py::get_admin_arquivo` returns a
+`sqlite3.Row`; `app/views/admin/arquivos.py` passed that row as
+`edit_arquivo`; `templates/admin_arquivos.html` serializes `edit_arquivo` with
+Jinja `|tojson`; and `sqlite3.Row` is not JSON serializable. The helper was not
+defective; the defect was at the presentation serialization boundary.
+
+**TECHNICAL COMMIT.** `15b5e92937733e117a8de60502940c8a732e4c06` — **Fix admin
+arquivo edit render**. Parent: `2e7215526ee543432c51a47bac6bb59f49dbf4a0`.
+
+The production change is presentation-boundary-only:
+
+```python
+edit_row = get_admin_arquivo(...)
+edit_arquivo = dict(edit_row) if edit_row is not None else None
+```
+
+The helper return contract remains `sqlite3.Row`, and conversion occurs only
+before template serialization. `None` behavior remains preserved. There was no
+route change, endpoint change, query change, RBAC change, POST edit behavior
+change, template change, schema change or migration change.
+
+**RED / FUNCTIONAL COVERAGE.** `tests/test_admin_arquivos.py` added exactly two
+selected C-1 regression tests:
+
+- valid edit flow follows the redirect to the final render and proves the
+  serialized edit payload;
+- nonexistent edit query id renders `200` with a null edit payload.
+
+| State | Result |
+|---|---|
+| Broken-tree RED | 1 failed / 6 passed |
+| Final focused gate | 7 passed |
+
+The positive RED reproduced the exact `TypeError: Object of type Row is not
+JSON serializable`. The negative control already passed.
+
+**CSRF SNAPSHOT RECONCILIATION.** Both canonical CSRF snapshots were regenerated
+only through the sanctioned `--update-csrf-snapshots` mechanism and became
+byte-identical to each other. Each has SHA-256
+`31668315a5564217865f46f93c94373a4e7d36e978505fc85e47c13eeb2d5ab9`.
+
+The direct C-1 delta is `/admin/arquivos?edit_arquivo=1` `500 → 200`. The
+semantic consequences are narrow and mechanical:
+
+- the edit row gains rendered-form CSRF evidence;
+- `csrf_in_html` becomes `true`;
+- the edit form has `token_count = 1`;
+- edit classification changes from `ok_dynamic_form_token` to
+  `ok_rendered_form_token`;
+- the delete row gains the two dynamic evidences exposed by the rendered page;
+- `ok_dynamic_form_token` changes `14 → 13`;
+- `ok_rendered_form_token` changes `54 → 55`.
+
+There is no risk delta, notes delta, route/method delta, high-risk delta or
+total-mutating-route delta. The `shadow_on` and `shadow_off` C-1 deltas are
+identical.
+
+**HISTORICAL CONTRACT RECONCILIATION.** Narrow reconciliation was required in:
+
+- `tests/test_ut10_arquivos_blueprint.py`;
+- `tests/test_phase4_alunos_turmas_cursos_blueprint.py`;
+- `tests/test_phase4_matrizes_blueprint.py`;
+- `tests/test_phase4_requisicoes_blueprint.py`.
+
+UT-10 frozen historical Arquivos shapes were **not rewritten**. C-1 is handled
+as a separate post-refactor normalization/authorization. Historical baseline
+SHAs remain unchanged:
+
+- B6: `cab4c61bdf7a1eef361a80f426dda558b11e9201`;
+- Matrizes: `ef874b9d14b02656a0f26ea885024a280d49682e`;
+- Requisicoes: `c587098152e97d125f41a2d26f2f414c10ae5676`.
+
+Historical cumulative totals remain `36 / 44 / 49`. The already-authorized
+course-detail `/admin/cursos/2` `500 → 200` exception remains separate and
+unchanged.
+
+Independent governance-contract review: **ACCEPT**, zero MATERIAL, zero
+NON_MATERIAL, zero OUT_OF_SCOPE and zero FUTURE_HARDENING findings. The
+reconciliation rejected the adversarial false-green mutations used by the
+independent review.
+
+**REVIEW CHAIN.**
+
+- implementation independent R1: **ACCEPT**, no MATERIAL findings;
+- snapshot reconciliation: exact C-1-only semantic delta, no unexpected delta;
+- historical governance reconciliation: **RECONCILED**;
+- independent governance reconciliation R1: **ACCEPT**, zero findings;
+- local technical commit qualification: **QUALIFIED**.
+
+### Canonical qualification
+
+Command: `python -m pytest -q`
+
+| Metric | Result |
+|---|---:|
+| collected | 1686 |
+| deselected | 17 |
+| selected | 1669 |
+| passed | 1536 |
+| skipped | 133 |
+| failed | 0 |
+| errors | 0 |
+| duration | 341.01s |
+
+Arithmetic: `1686 - 17 = 1669`; `1536 + 133 = 1669`.
+
+The canonical run was green for `tests/test_admin_arquivos.py` 7/7, the
+UT-10 C-1 reconciliation, the Phase-4 B6, Matrizes and Requisicoes
+reconciliations, UT-15 snapshot custody, UT-16 artifact custody, UT-17
+artifact custody and both CSRF inventory audit parameterizations. No visual
+baseline or Design System changes occurred. The message catalogue remains
+536, and the route, endpoint and RBAC surface remains unchanged.
+
+### Database and sidecar custody
+
+The local custody sentinel for this window is:
+
+| Metric | Value |
+|---|---|
+| `database.db` size | 544768 bytes |
+| `database.db` SHA-256 | `df3bb46a00d2c846f64295e5ef4363aa731fe380b52b5c9d5a7a33a9338bbcdf` |
+| `database.db-wal` | absent |
+| `database.db-shm` | absent |
+| `database.db-journal` | absent |
+
+This is a local custody sentinel for this window only and does not replace the
+canonical historical database baseline.
+
+The eight repository-root pre-D6 WAL/SHM files encountered during TC-1 were
+independently classified as **PRE-EXISTING / IGNORED / NONCANONICAL** historical
+snapshot artifacts. Their exact identity is governed by
+`docs/refactor/HISTORICAL_DATABASE_SNAPSHOT_CUSTODY.md`; they remained
+byte-identical, no cleanup was performed or authorized, and no new runtime
+sidecar appeared.
+
+### Deferred census findings — not actioned
+
+C-1 alone is closed. The remaining census findings remain separate and
+**UNSTARTED**:
+
+- **C-2:** Admin Arquivos row-action JavaScript `ReferenceError` caused by the
+  `canArquivosEdit` / `canArquivosFull` scope mismatch;
+- **C-3:** XLSX import / SheetJS CDN versus CSP allowlist mismatch;
+- **C-4:** provider brand image paths missing in uploads;
+- **C-5:** matrix `NULL` date renders `None`.
+
+None of these is classified as authorized implementation, and C-2 was not
+started.
+
+### Publication status
+
+Technical state: **CLOSED / ACCEPTED**. Publication unit: technical commit
+`15b5e92937733e117a8de60502940c8a732e4c06` plus the forthcoming governance
+landing commit. Remote publication is not complete until normal fast-forward
+push and post-publication verification succeed. No governance commit SHA is
+asserted here.
+
 ## POST-REFACTOR APPLICATION DEFECT — COURSE DETAIL 500 — CLOSED / ACCEPTED / PUBLISHED
 
 Published by this governance landing commit (landing SHA not invented).
