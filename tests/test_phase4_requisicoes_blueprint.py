@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -176,6 +177,269 @@ REPORTES_MUTATING_PAIRS = {
 MEUS_DADOS_MUTATING_PAIRS = {
     "/admin/meus_dados": "admin_meus_dados",
 }
+
+C1_COURSE_DETAIL_PAGE_PATH = "/admin/cursos/2"
+C1_ARQUIVOS_PAGE_PATH = "/admin/arquivos?edit_arquivo=1"
+C1_STATUS_COUNTS_OLD = {
+    "ok_dynamic_form_token": 14,
+    "ok_rendered_form_token": 54,
+}
+C1_STATUS_COUNTS_NEW = {
+    "ok_dynamic_form_token": 13,
+    "ok_rendered_form_token": 55,
+}
+C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
+C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"
+C1_ARQUIVOS_ADICIONAR_ROUTE = "/admin/arquivos/adicionar"
+C1_ARQUIVOS_EDIT_EVIDENCE = [
+    {
+        "action": "/admin/arquivos/1/editar",
+        "kind": "rendered_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_count": 1,
+    },
+    {
+        "action": "/admin/arquivos/0/editar",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+]
+C1_ARQUIVOS_DELETE_EVIDENCE = [
+    {
+        "action": "/admin/arquivos/1/deletar",
+        "attr": "data-delete-url",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+    {
+        "action": "/admin/arquivos/0/deletar",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+]
+C1_ARQUIVOS_EDIT_TOKEN_COUNTS = [
+    {
+        "action": "/admin/arquivos/1/editar",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_counts": [1],
+    }
+]
+C1_ARQUIVOS_ROUTES = frozenset(
+    {C1_ARQUIVOS_EDIT_ROUTE, C1_ARQUIVOS_DELETE_ROUTE}
+)
+
+
+def _assert_c1_status_change(old_entry, new_entry, path):
+    assert old_entry.get("path") == new_entry.get("path") == path
+    old_identity = {k: v for k, v in old_entry.items() if k != "status_code"}
+    new_identity = {k: v for k, v in new_entry.items() if k != "status_code"}
+    assert old_identity == new_identity
+    assert old_entry.get("status_code") == 500
+    assert new_entry.get("status_code") == 200
+
+
+def _assert_c1_reconciled_summary(old_summary, new_summary):
+    assert set(old_summary) == set(new_summary) == {
+        "total_mutating_routes",
+        "status_counts",
+        "high_risk_routes",
+        "page_statuses",
+    }
+    assert old_summary["total_mutating_routes"] == new_summary["total_mutating_routes"]
+    assert old_summary["high_risk_routes"] == new_summary["high_risk_routes"]
+
+    old_counts = old_summary["status_counts"]
+    new_counts = new_summary["status_counts"]
+    assert set(old_counts) == set(new_counts)
+    for status, old_value in C1_STATUS_COUNTS_OLD.items():
+        assert old_counts.get(status) == old_value
+        assert new_counts.get(status) == C1_STATUS_COUNTS_NEW[status]
+    for status in set(old_counts) - set(C1_STATUS_COUNTS_OLD):
+        assert old_counts[status] == new_counts[status]
+
+    old_pages = old_summary["page_statuses"]
+    new_pages = new_summary["page_statuses"]
+    assert len(old_pages) == len(new_pages)
+    old_paths = [page.get("path") for page in old_pages]
+    new_paths = [page.get("path") for page in new_pages]
+    assert old_paths == new_paths
+    page_deltas = [
+        (old_page, new_page)
+        for old_page, new_page in zip(old_pages, new_pages)
+        if old_page != new_page
+    ]
+    expected_paths = {
+        C1_COURSE_DETAIL_PAGE_PATH,
+        C1_ARQUIVOS_PAGE_PATH,
+    }
+    assert sorted(page[0].get("path") for page in page_deltas) == sorted(
+        expected_paths
+    )
+    for expected_path in expected_paths:
+        matches = [
+            pair for pair in page_deltas if pair[0].get("path") == expected_path
+        ]
+        assert len(matches) == 1
+        _assert_c1_status_change(*matches[0], expected_path)
+
+
+def _without_owner(row):
+    return {key: value for key, value in row.items() if key != "view_function"}
+
+
+def _assert_c1_archivos_rows(old_rows, new_rows):
+    assert len(old_rows) == len(new_rows)
+    old_routes = [row.get("route") for row in old_rows]
+    new_routes = [row.get("route") for row in new_rows]
+    assert old_routes == new_routes
+    assert len(old_routes) == len(set(old_routes))
+    old_by_route = {row["route"]: row for row in old_rows}
+    new_by_route = {row["route"]: row for row in new_rows}
+    assert C1_ARQUIVOS_ROUTES <= set(old_by_route) == set(new_by_route)
+
+    old_delete = old_by_route[C1_ARQUIVOS_DELETE_ROUTE]
+    new_delete = new_by_route[C1_ARQUIVOS_DELETE_ROUTE]
+    assert len(old_delete["evidence"]) == 2
+    assert len(new_delete["evidence"]) == 4
+    assert new_delete["evidence"] == old_delete["evidence"] + C1_ARQUIVOS_DELETE_EVIDENCE
+    for key in old_delete:
+        if key not in {"view_function", "evidence"}:
+            assert old_delete[key] == new_delete[key]
+
+    old_edit = old_by_route[C1_ARQUIVOS_EDIT_ROUTE]
+    new_edit = new_by_route[C1_ARQUIVOS_EDIT_ROUTE]
+    assert old_edit["csrf_in_html"] is None
+    assert new_edit["csrf_in_html"] is True
+    assert len(old_edit["evidence"]) == 1
+    assert len(new_edit["evidence"]) == 3
+    assert new_edit["evidence"] == old_edit["evidence"] + C1_ARQUIVOS_EDIT_EVIDENCE
+    assert old_edit["has_post_form"] is False
+    assert new_edit["has_post_form"] is True
+    assert old_edit["status"] == "ok_dynamic_form_token"
+    assert new_edit["status"] == "ok_rendered_form_token"
+    assert old_edit["token_counts_per_form"] == []
+    assert new_edit["token_counts_per_form"] == C1_ARQUIVOS_EDIT_TOKEN_COUNTS
+    for key in old_edit:
+        if key not in {
+            "view_function",
+            "csrf_in_html",
+            "evidence",
+            "has_post_form",
+            "status",
+            "token_counts_per_form",
+        }:
+            assert old_edit[key] == new_edit[key]
+
+    assert _without_owner(old_by_route[C1_ARQUIVOS_ADICIONAR_ROUTE]) == _without_owner(
+        new_by_route[C1_ARQUIVOS_ADICIONAR_ROUTE]
+    )
+
+    normalized_rows = []
+    for old_row, new_row in zip(old_rows, new_rows):
+        normalized = dict(new_row)
+        if old_row["route"] == C1_ARQUIVOS_DELETE_ROUTE:
+            normalized["evidence"] = old_row["evidence"]
+        elif old_row["route"] == C1_ARQUIVOS_EDIT_ROUTE:
+            for key in (
+                "csrf_in_html",
+                "evidence",
+                "has_post_form",
+                "status",
+                "token_counts_per_form",
+            ):
+                normalized[key] = old_row[key]
+        assert _without_owner(old_row) == _without_owner(normalized)
+        normalized_rows.append(normalized)
+    return normalized_rows
+
+
+def _assert_historical_partition_arithmetic(deltas_by_route, expected_total, expected_routes):
+    assert len(deltas_by_route) == expected_total
+    assert set(deltas_by_route) == set(expected_routes)
+
+
+def _assert_c1_adversarial_controls(
+    old_rows,
+    new_rows,
+    old_summary,
+    new_summary,
+    deltas_by_route,
+    expected_total,
+    expected_routes,
+):
+    for invalid_token_count in (0, 2):
+        mutated_rows = deepcopy(new_rows)
+        mutated_edit = next(
+            row for row in mutated_rows if row["route"] == C1_ARQUIVOS_EDIT_ROUTE
+        )
+        rendered = next(
+            evidence
+            for evidence in mutated_edit["evidence"]
+            if evidence.get("kind") == "rendered_form"
+        )
+        rendered["token_count"] = invalid_token_count
+        with pytest.raises(AssertionError):
+            _assert_c1_archivos_rows(old_rows, mutated_rows)
+
+    mutated_rows = deepcopy(new_rows)
+    unrelated = next(
+        row for row in mutated_rows if row["route"] not in C1_ARQUIVOS_ROUTES
+    )
+    unrelated["evidence"] = list(unrelated["evidence"]) + [
+        {"kind": "dynamic_form", "page": "/synthetic-unrelated"}
+    ]
+    with pytest.raises(AssertionError):
+        _assert_c1_archivos_rows(old_rows, mutated_rows)
+
+    mutated_rows = deepcopy(new_rows)
+    adicionar = next(
+        row for row in mutated_rows if row["route"] == C1_ARQUIVOS_ADICIONAR_ROUTE
+    )
+    adicionar["evidence"] = list(adicionar["evidence"]) + [
+        {"kind": "dynamic_form", "page": "/admin/arquivos?edit_arquivo"}
+    ]
+    with pytest.raises(AssertionError):
+        _assert_c1_archivos_rows(old_rows, mutated_rows)
+
+    mutated_summary = deepcopy(new_summary)
+    mutated_summary["status_counts"]["ok_fetch_token"] += 1
+    with pytest.raises(AssertionError):
+        _assert_c1_reconciled_summary(old_summary, mutated_summary)
+
+    mutated_summary = deepcopy(new_summary)
+    mutated_summary["high_risk_routes"] += 1
+    with pytest.raises(AssertionError):
+        _assert_c1_reconciled_summary(old_summary, mutated_summary)
+
+    mutated_summary = deepcopy(new_summary)
+    course_page = next(
+        page
+        for page in mutated_summary["page_statuses"]
+        if page["path"] == C1_COURSE_DETAIL_PAGE_PATH
+    )
+    course_page["status_code"] = 500
+    with pytest.raises(AssertionError):
+        _assert_c1_reconciled_summary(old_summary, mutated_summary)
+
+    mutated_summary = deepcopy(new_summary)
+    course_page = next(
+        page
+        for page in mutated_summary["page_statuses"]
+        if page["path"] == C1_COURSE_DETAIL_PAGE_PATH
+    )
+    course_page["path"] = "/admin/cursos/999"
+    with pytest.raises(AssertionError):
+        _assert_c1_reconciled_summary(old_summary, mutated_summary)
+
+    mutated_partition = dict(deltas_by_route)
+    mutated_partition.pop(next(iter(mutated_partition)))
+    with pytest.raises(AssertionError):
+        _assert_historical_partition_arithmetic(
+            mutated_partition, expected_total, expected_routes
+        )
 
 
 def _canonical_module():
@@ -529,58 +793,13 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         assert len(old_rows) == len(new_rows) == 78
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
-        # PRE_EXISTING_TEST_DESIGN_DEBT: this used to be a single whole-summary
-        # equality (`old_snapshot["summary"] == new_snapshot["summary"]`),
-        # which made it impossible to land any legitimate summary.page_statuses
-        # change without editing this test. Replaced with discriminant checks
-        # that require every summary field unchanged except one explicitly
-        # authorized page status. The underlying brittleness is not fixed by
-        # this task; only the one current, legitimate delta is recorded.
-        #
-        # course_detail_fix_status_delta (7911e57): templates/
-        # admin_detalhes_curso.html was missing, so GET /admin/cursos/2
-        # 500'd; adding the template flips its recorded
-        # summary.page_statuses status. This is a CURRENT summary delta, not
-        # a historical CSRF inventory ROW delta -- the row partition below
-        # remains exactly 49 and is untouched by it.
         old_summary = old_snapshot["summary"]
         new_summary = new_snapshot["summary"]
-        assert set(old_summary) == set(new_summary) == {
-            "total_mutating_routes", "status_counts", "high_risk_routes", "page_statuses",
-        }
-        assert old_summary["total_mutating_routes"] == new_summary["total_mutating_routes"]
-        assert old_summary["status_counts"] == new_summary["status_counts"]
-        assert old_summary["high_risk_routes"] == new_summary["high_risk_routes"]
+        _assert_c1_reconciled_summary(old_summary, new_summary)
 
-        old_page_statuses = old_summary["page_statuses"]
-        new_page_statuses = new_summary["page_statuses"]
-        assert len(old_page_statuses) == len(new_page_statuses)
-        assert (
-            [p["path"] for p in old_page_statuses]
-            == [p["path"] for p in new_page_statuses]
-        )
-        page_status_deltas = [
-            (old_p, new_p)
-            for old_p, new_p in zip(old_page_statuses, new_page_statuses)
-            if old_p != new_p
-        ]
-        assert len(page_status_deltas) == 1, (
-            "exactly one summary.page_statuses delta is currently authorized: "
-            "the course-detail fix status change"
-        )
-        course_detail_fix_old, course_detail_fix_new = page_status_deltas[0]
-        assert (
-            course_detail_fix_old["path"]
-            == course_detail_fix_new["path"]
-            == "/admin/cursos/2"
-        )
-        assert course_detail_fix_old["label"] == course_detail_fix_new["label"]
-        assert course_detail_fix_old["role"] == course_detail_fix_new["role"]
-        assert course_detail_fix_old["status_code"] == 500
-        assert course_detail_fix_new["status_code"] == 200
-
+        reconciled_rows = _assert_c1_archivos_rows(old_rows, new_rows)
         deltas = [
-            pair for pair in zip(old_rows, new_rows) if pair[0] != pair[1]
+            pair for pair in zip(old_rows, reconciled_rows) if pair[0] != pair[1]
         ]
         # PHASE 4-B5-R1: the same snapshot regenerated after the Matrizes
         # extraction gains exactly 8 additional owner-only deltas (main ->
@@ -659,11 +878,20 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         assert not (alertas_routes & reportes_routes)
         assert not (alertas_routes & meus_dados_routes)
         assert not (reportes_routes & meus_dados_routes)
-        assert len(deltas_by_route) == 49
-        assert set(deltas_by_route) == (
+        historical_routes = (
             requisicoes_routes | matrizes_routes | b6_routes | banco_dados_routes
             | acesso_routes | arquivos_routes | alertas_routes | reportes_routes
             | meus_dados_routes
+        )
+        _assert_historical_partition_arithmetic(deltas_by_route, 49, historical_routes)
+        _assert_c1_adversarial_controls(
+            old_rows,
+            new_rows,
+            old_summary,
+            new_summary,
+            deltas_by_route,
+            49,
+            historical_routes,
         )
 
         requisicoes_deltas = [

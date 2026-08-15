@@ -197,7 +197,8 @@ def admin_arquivos():
         visivel_set = set(visivel_filters)
         arquivos = [arquivo for arquivo in arquivos if str(arquivo.get("visivel")) in visivel_set]
 
-    edit_arquivo = get_admin_arquivo(conn, edit_id) if edit_id else None
+    edit_row = get_admin_arquivo(conn, edit_id) if edit_id else None
+    edit_arquivo = dict(edit_row) if edit_row is not None else None
     filter_schema = [
         {
             "param": "titulo",

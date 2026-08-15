@@ -39,6 +39,7 @@ implementation phase, never part of RED.
 from __future__ import annotations
 
 import ast
+from copy import deepcopy
 import hashlib
 import inspect
 import json
@@ -238,6 +239,80 @@ FROZEN_ARQUIVOS_ROW_SHAPE = {
         ],
     },
 }
+
+C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
+C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"
+C1_ARQUIVOS_EDIT_EVIDENCE = [
+    {
+        "action": "/admin/arquivos/1/editar",
+        "kind": "rendered_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_count": 1,
+    },
+    {
+        "action": "/admin/arquivos/0/editar",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+]
+C1_ARQUIVOS_DELETE_EVIDENCE = [
+    {
+        "action": "/admin/arquivos/1/deletar",
+        "attr": "data-delete-url",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+    {
+        "action": "/admin/arquivos/0/deletar",
+        "kind": "dynamic_form",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_mode": "helper_or_hidden",
+    },
+]
+C1_ARQUIVOS_EDIT_TOKEN_COUNTS = [
+    {
+        "action": "/admin/arquivos/1/editar",
+        "page": "/admin/arquivos?edit_arquivo",
+        "token_counts": [1],
+    }
+]
+
+
+def _normalize_ut10_c1_row(row):
+    route = row.get("route")
+    assert route in FROZEN_ARQUIVOS_ROW_SHAPE
+    historical = FROZEN_ARQUIVOS_ROW_SHAPE[route]
+    normalized = dict(row)
+
+    if route == C1_ARQUIVOS_DELETE_ROUTE:
+        assert row["evidence"] == historical["evidence"] + C1_ARQUIVOS_DELETE_EVIDENCE
+        normalized["evidence"] = historical["evidence"]
+    elif route == C1_ARQUIVOS_EDIT_ROUTE:
+        assert row["csrf_in_html"] is True
+        assert row["evidence"] == historical["evidence"] + C1_ARQUIVOS_EDIT_EVIDENCE
+        assert row["has_post_form"] is True
+        assert row["status"] == "ok_rendered_form_token"
+        assert row["token_counts_per_form"] == C1_ARQUIVOS_EDIT_TOKEN_COUNTS
+        normalized.update(
+            {
+                "csrf_in_html": historical["csrf_in_html"],
+                "evidence": historical["evidence"],
+                "has_post_form": historical["has_post_form"],
+                "status": historical["status"],
+                "token_counts_per_form": historical["token_counts_per_form"],
+            }
+        )
+
+    return normalized
+
+
+def _assert_ut10_historical_row_shape(row):
+    normalized = _normalize_ut10_c1_row(row)
+    shape = dict(normalized)
+    shape.pop("view_function")
+    assert shape == FROZEN_ARQUIVOS_ROW_SHAPE[row["route"]]
 
 # ---------------------------------------------------------------------------
 # Guarded loaders / AST scanners (detector self-control lives in green test 1)
@@ -656,12 +731,49 @@ def test_red_k_csrf_snapshots_show_exactly_three_arquivos_owner_only_deltas():
                 "(currently main.<function>, must become "
                 "app.views.admin.arquivos.<function>)"
             )
-            shape = dict(row)
-            shape.pop("view_function")
-            assert shape == FROZEN_ARQUIVOS_ROW_SHAPE[row["route"]], (
+            assert _assert_ut10_historical_row_shape(row) is None, (
                 f"only view_function may change for Arquivos partition row "
                 f"{row['route']} in {suffix}"
             )
+
+        edit_row = next(
+            row for row in partition if row["route"] == C1_ARQUIVOS_EDIT_ROUTE
+        )
+        for invalid_token_count in (0, 2):
+            mutated = deepcopy(edit_row)
+            rendered = next(
+                evidence
+                for evidence in mutated["evidence"]
+                if evidence.get("kind") == "rendered_form"
+            )
+            rendered["token_count"] = invalid_token_count
+            with pytest.raises(AssertionError):
+                _assert_ut10_historical_row_shape(mutated)
+
+        adicionar_row = next(
+            row
+            for row in partition
+            if row["route"] == "/admin/arquivos/adicionar"
+        )
+        mutated_adicionar = deepcopy(adicionar_row)
+        mutated_adicionar["evidence"] = list(mutated_adicionar["evidence"]) + [
+            {"kind": "dynamic_form", "page": "/admin/arquivos?edit_arquivo"}
+        ]
+        with pytest.raises(AssertionError):
+            _assert_ut10_historical_row_shape(mutated_adicionar)
+
+        unrelated_row = deepcopy(
+            next(
+                row
+                for row in rows
+                if row["route"] not in ARQUIVOS_POST_ROUTE_ENDPOINTS
+            )
+        )
+        unrelated_row["evidence"] = list(unrelated_row["evidence"]) + [
+            {"kind": "dynamic_form", "page": "/synthetic-unrelated"}
+        ]
+        with pytest.raises(AssertionError):
+            _assert_ut10_historical_row_shape(unrelated_row)
 
         unrelated = [
             row["route"]
@@ -1137,5 +1249,3 @@ def test_green_11_auth_and_admin_access_unchanged_controls():
         "_get_current_admin_access_context",
         "_admin_can",
     }, f"app/admin_access.py must keep exactly the five canonical helpers; got {top_level}"
-
-

@@ -1,6 +1,9 @@
 import io
+import json
 import os
+import re
 import sys
+from html import unescape
 
 import pytest
 
@@ -131,6 +134,79 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
     finally:
         main.app.config["UPLOAD_FOLDER"] = original_upload_folder
         main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = original_documents_folder
+
+
+def test_admin_arquivos_edit_flow_reaches_render_target_and_exposes_edit_payload(client):
+    """C-1 RED: GET /admin/arquivos/<id>/editar -> 302 -> ?edit_arquivo=<id> -> 200.
+
+    The public edit flow must reach the render target and expose the seeded
+    record as JSON in script#admin-arquivo-edit-data. The unmodified production
+    tree fails this test because the edit target serializes a sqlite3.Row
+    through | tojson (TypeError -> 500).
+    """
+    titulo = "Arquivo Edit Flow Red"
+    original_filename = "edit-flow-red.pdf"
+    filename = "admin_arquivos/edit_flow_red.pdf"
+    descricao = "Descricao edit flow red"
+
+    _login_admin(client)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        main.ensure_admin_arquivos_table(conn)
+        conn.execute("DELETE FROM admin_arquivos WHERE titulo = ?", (titulo,))
+        conn.execute(
+            """
+            INSERT INTO admin_arquivos (titulo, descricao, filename, original_filename, visivel, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (titulo, descricao, filename, original_filename, 1, "2026-03-01 10:00:00"),
+        )
+        conn.commit()
+        arquivo_id = conn.execute(
+            "SELECT id FROM admin_arquivos WHERE titulo = ?", (titulo,)
+        ).fetchone()["id"]
+
+    response = client.get(f"/admin/arquivos/{arquivo_id}/editar", follow_redirects=True)
+
+    assert response.status_code == 200, (
+        "edit flow render target must be HTTP 200; "
+        f"got {response.status_code} for /admin/arquivos?edit_arquivo={arquivo_id}"
+    )
+    html = response.get_data(as_text=True)
+
+    match = re.search(
+        r'<script id="admin-arquivo-edit-data" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match, "script#admin-arquivo-edit-data must be present on the edit render target"
+    payload = json.loads(unescape(match.group(1)))
+    assert payload is not None, "edit payload must not be null for a valid arquivo id"
+    assert payload["id"] == arquivo_id
+    assert payload["titulo"] == titulo
+    assert payload["descricao"] == descricao
+    assert payload["filename"] == filename
+    assert payload["original_filename"] == original_filename
+    assert payload["visivel"] == 1
+
+
+def test_admin_arquivos_edit_flow_nonexistent_id_renders_without_payload(client):
+    """C-1 negative control: an unknown edit target stays 200 with a null payload."""
+    _login_admin(client)
+
+    response = client.get("/admin/arquivos", query_string={"edit_arquivo": 999999})
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    match = re.search(
+        r'<script id="admin-arquivo-edit-data" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match, "script#admin-arquivo-edit-data must be present on the plain list page"
+    payload = json.loads(unescape(match.group(1)))
+    assert payload is None
 
 
 def test_admin_arquivos_filter_schema_and_typed_filters(client):

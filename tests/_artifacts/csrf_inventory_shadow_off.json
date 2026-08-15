@@ -2,8 +2,8 @@
   "summary": {
     "total_mutating_routes": 78,
     "status_counts": {
-      "ok_dynamic_form_token": 14,
-      "ok_rendered_form_token": 54,
+      "ok_dynamic_form_token": 13,
+      "ok_rendered_form_token": 55,
       "not_applicable_documented": 2,
       "ok_api_csrf_contract": 1,
       "ok_fetch_token": 3,
@@ -436,7 +436,7 @@
         "label": "/admin/arquivos?edit_arquivo",
         "path": "/admin/arquivos?edit_arquivo=1",
         "role": "admin",
-        "status_code": 500
+        "status_code": 200
       },
       {
         "label": "/admin/atividades/importar/preview#preview",
@@ -927,6 +927,19 @@
           "page": "/admin/arquivos",
           "action": "/admin/arquivos/0/deletar",
           "token_mode": "helper_or_hidden"
+        },
+        {
+          "kind": "dynamic_form",
+          "page": "/admin/arquivos?edit_arquivo",
+          "attr": "data-delete-url",
+          "action": "/admin/arquivos/1/deletar",
+          "token_mode": "helper_or_hidden"
+        },
+        {
+          "kind": "dynamic_form",
+          "page": "/admin/arquivos?edit_arquivo",
+          "action": "/admin/arquivos/0/deletar",
+          "token_mode": "helper_or_hidden"
         }
       ],
       "status": "ok_dynamic_form_token"
@@ -937,9 +950,17 @@
       "view_function": "app.views.admin.arquivos.admin_editar_arquivo",
       "template_related": [],
       "requires_login": "admin",
-      "has_post_form": false,
-      "csrf_in_html": null,
-      "token_counts_per_form": [],
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [
+        {
+          "page": "/admin/arquivos?edit_arquivo",
+          "action": "/admin/arquivos/1/editar",
+          "token_counts": [
+            1
+          ]
+        }
+      ],
       "has_fetch_post": false,
       "fetch_sends_token": null,
       "has_dynamic_form": true,
@@ -951,9 +972,21 @@
           "page": "/admin/arquivos",
           "action": "/admin/arquivos/0/editar",
           "token_mode": "helper_or_hidden"
+        },
+        {
+          "kind": "rendered_form",
+          "page": "/admin/arquivos?edit_arquivo",
+          "action": "/admin/arquivos/1/editar",
+          "token_count": 1
+        },
+        {
+          "kind": "dynamic_form",
+          "page": "/admin/arquivos?edit_arquivo",
+          "action": "/admin/arquivos/0/editar",
+          "token_mode": "helper_or_hidden"
         }
       ],
-      "status": "ok_dynamic_form_token"
+      "status": "ok_rendered_form_token"
     },
     {
       "route": "/admin/arquivos/adicionar",
