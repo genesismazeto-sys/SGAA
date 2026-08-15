@@ -46,7 +46,7 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
-## POST-REFACTOR APPLICATION DEFECT — ADMIN ARQUIVOS EDIT 500 — CLOSED / ACCEPTED
+## POST-REFACTOR APPLICATION DEFECT — ADMIN ARQUIVOS EDIT 500 — CLOSED / ACCEPTED / PUBLISHED
 
 Technical state: **CLOSED / ACCEPTED**.
 
@@ -212,11 +212,12 @@ started.
 
 ### Publication status
 
-Technical state: **CLOSED / ACCEPTED**. Publication unit: technical commit
-`15b5e92937733e117a8de60502940c8a732e4c06` plus the forthcoming governance
-landing commit. Remote publication is not complete until normal fast-forward
-push and post-publication verification succeed. No governance commit SHA is
-asserted here.
+Technical state: **CLOSED / ACCEPTED / PUBLISHED**. Technical commit
+`15b5e92937733e117a8de60502940c8a732e4c06` was published, and governance
+record `66c51cfd355eb53861ffe2b4e1dd9eb22bf5c766` was published by normal
+fast-forward. Post-publication verification confirmed the live remote at
+`66c51cfd355eb53861ffe2b4e1dd9eb22bf5c766` before this closeout record. C-2,
+C-3, C-4 and C-5 remain separate and **UNSTARTED**.
 
 ## POST-REFACTOR APPLICATION DEFECT — COURSE DETAIL 500 — CLOSED / ACCEPTED / PUBLISHED
 
