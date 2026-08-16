@@ -13,6 +13,7 @@ from app.activity_catalog import (
     get_atividade_base,
     get_atividade_versao_by_id,
     get_next_numero_versao,
+    get_norma_list,
 )
 from app.admin_access import _admin_can, _get_current_admin_access_context
 from app.auth import admin_required
@@ -680,6 +681,116 @@ def _matriz_counts(conn, matriz_id: int) -> tuple[int, int]:
     return counts["Acadêmica Complementar"], counts["Extensão Universitária"]
 
 
+def _get_matriz_norma_context(conn, matriz_id: int) -> dict[str, object]:
+    normas = get_norma_list(conn)
+    linked_ids = {
+        row["norma_id"]
+        for row in conn.execute(
+            "SELECT norma_id FROM matriz_norma WHERE matriz_id = ?",
+            (matriz_id,),
+        ).fetchall()
+    }
+    return {
+        "linked_normas": [row for row in normas if row["id"] in linked_ids],
+        "linked_norma_ids": linked_ids,
+        "available_normas": [row for row in normas if row["status"] == "ativa"],
+        "is_academically_frozen": conn.execute(
+            "SELECT 1 FROM turmas WHERE matriz_id = ? LIMIT 1",
+            (matriz_id,),
+        ).fetchone()
+        is not None,
+    }
+
+
+_MATRIZ_NORMA_ERR_INVALID_PARAMS = "invalid_params"
+_MATRIZ_NORMA_ERR_INACTIVE_NORMA = "inactive_norma"
+_MATRIZ_NORMA_ERR_FROZEN_MATRIX = "frozen_matrix"
+_MATRIZ_NORMA_ERR_PROTECTED_REMOVAL = "protected_norma_removal"
+
+_MATRIZ_NORMA_ERROR_TEXT = {
+    _MATRIZ_NORMA_ERR_INVALID_PARAMS: "Parâmetros inválidos.",
+    _MATRIZ_NORMA_ERR_INACTIVE_NORMA: "Apenas versões com status 'ativa' podem ser vinculadas à matriz.",
+    _MATRIZ_NORMA_ERR_FROZEN_MATRIX: "Parâmetros inválidos.",
+    _MATRIZ_NORMA_ERR_PROTECTED_REMOVAL: "Parâmetros inválidos.",
+}
+
+
+def _parse_matriz_norma_request() -> tuple[bool, set[int] | None, str | None]:
+    if request.form.get("manage_normas_present") != "1":
+        return False, None, None
+
+    requested_ids = set()
+    for raw_value in request.form.getlist("norma_ids"):
+        raw_id = str(raw_value or "").strip()
+        if not raw_id.isdigit():
+            return True, None, _MATRIZ_NORMA_ERR_INVALID_PARAMS
+        requested_ids.add(int(raw_id))
+    return True, requested_ids, None
+
+
+def _prepare_matriz_norma_delta(conn, matriz_id: int, desired_ids: set[int]):
+    current_ids = {
+        row["norma_id"]
+        for row in conn.execute(
+            "SELECT norma_id FROM matriz_norma WHERE matriz_id = ?",
+            (matriz_id,),
+        ).fetchall()
+    }
+    to_add = desired_ids - current_ids
+    to_remove = current_ids - desired_ids
+
+    if to_add:
+        placeholders = ", ".join("?" for _ in to_add)
+        rows = conn.execute(
+            f"SELECT id, status FROM norma_atividade WHERE id IN ({placeholders})",
+            sorted(to_add),
+        ).fetchall()
+        valid_active_ids = {row["id"] for row in rows if row["status"] == "ativa"}
+        if valid_active_ids != to_add:
+            return None, _MATRIZ_NORMA_ERR_INACTIVE_NORMA
+
+    if conn.execute(
+        "SELECT 1 FROM turmas WHERE matriz_id = ? LIMIT 1",
+        (matriz_id,),
+    ).fetchone() is not None and desired_ids != current_ids:
+        return None, _MATRIZ_NORMA_ERR_FROZEN_MATRIX
+
+    if to_remove:
+        placeholders = ", ".join("?" for _ in to_remove)
+        used_version = conn.execute(
+            f"""
+            SELECT 1
+              FROM matriz_atividade_versao_item mavi
+              JOIN atividade_versao av ON av.id = mavi.atividade_versao_id
+             WHERE mavi.matriz_id = ?
+               AND av.norma_id IN ({placeholders})
+             LIMIT 1
+            """,
+            [matriz_id, *sorted(to_remove)],
+        ).fetchone()
+        if used_version is not None:
+            return None, _MATRIZ_NORMA_ERR_PROTECTED_REMOVAL
+
+    return {"to_add": to_add, "to_remove": to_remove}, None
+
+
+def _apply_matriz_norma_delta(conn, matriz_id: int, delta: dict[str, set[int]]) -> None:
+    to_remove = delta["to_remove"]
+    if to_remove:
+        placeholders = ", ".join("?" for _ in to_remove)
+        conn.execute(
+            f"DELETE FROM matriz_norma WHERE matriz_id = ? AND norma_id IN ({placeholders})",
+            [matriz_id, *sorted(to_remove)],
+        )
+
+    to_add = delta["to_add"]
+    if to_add:
+        conn.executemany(
+            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
+            [(matriz_id, norma_id) for norma_id in sorted(to_add)],
+        )
+
+
 def _render_matriz_form(
     conn,
     matriz=None,
@@ -746,6 +857,12 @@ def _render_matriz_form(
         transfer_groups=transfer_groups,
         new_activity_modal=new_activity_modal,
         card_version_menu_data=card_version_menu_data,
+        **(_get_matriz_norma_context(conn, matriz_id) if matriz_id else {
+            "linked_normas": [],
+            "linked_norma_ids": set(),
+            "available_normas": [],
+            "is_academically_frozen": False,
+        }),
         readonly=readonly,
     )
 
@@ -978,34 +1095,57 @@ def admin_editar_matriz(matriz_id: int):
                 flash(error_message, "error")
                 matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
                 return _render_matriz_form(conn, matriz=matriz, active_tab="dados", readonly=readonly)
-            conn.execute(
-                """
-                UPDATE matrizes_atividades
-                SET curso_id = ?,
-                    nome = ?,
-                    versao = ?,
-                    status = ?,
-                    data_inicio_vigencia = ?,
-                    data_fim_vigencia = ?,
-                    horas_aac_obrigatorias = ?,
-                    horas_extensao_obrigatorias = ?,
-                    descricao = ?
-                WHERE id = ?
-                """,
-                (
-                    payload["curso_id"],
-                    payload["nome"],
-                    payload["versao"],
-                    payload["status"],
-                    payload["data_inicio_vigencia"],
-                    payload["data_fim_vigencia"],
-                    payload["horas_aac_obrigatorias"],
-                    payload["horas_extensao_obrigatorias"],
-                    payload["descricao"],
-                    matriz_id,
-                ),
-            )
-            conn.commit()
+            manages_normas, desired_norma_ids, norma_error_code = _parse_matriz_norma_request()
+            norma_delta = None
+            if norma_error_code:
+                error_message = _MATRIZ_NORMA_ERROR_TEXT[norma_error_code]
+            elif manages_normas:
+                norma_delta, norma_error_code = _prepare_matriz_norma_delta(
+                    conn, matriz_id, desired_norma_ids or set()
+                )
+                error_message = (
+                    _MATRIZ_NORMA_ERROR_TEXT[norma_error_code]
+                    if norma_error_code
+                    else None
+                )
+            if error_message:
+                flash(error_message, "error")
+                return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
+            try:
+                conn.execute(
+                    """
+                    UPDATE matrizes_atividades
+                    SET curso_id = ?,
+                        nome = ?,
+                        versao = ?,
+                        status = ?,
+                        data_inicio_vigencia = ?,
+                        data_fim_vigencia = ?,
+                        horas_aac_obrigatorias = ?,
+                        horas_extensao_obrigatorias = ?,
+                        descricao = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        payload["curso_id"],
+                        payload["nome"],
+                        payload["versao"],
+                        payload["status"],
+                        payload["data_inicio_vigencia"],
+                        payload["data_fim_vigencia"],
+                        payload["horas_aac_obrigatorias"],
+                        payload["horas_extensao_obrigatorias"],
+                        payload["descricao"],
+                        matriz_id,
+                    ),
+                )
+                if norma_delta is not None:
+                    _apply_matriz_norma_delta(conn, matriz_id, norma_delta)
+                conn.commit()
+            except sqlite3.IntegrityError:
+                conn.rollback()
+                flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_INVALID_PARAMS], "error")
+                return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
             flash("Matriz atualizada com sucesso.", "success")
             return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
 

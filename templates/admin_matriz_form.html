@@ -652,6 +652,47 @@
       </div>
     </div>
 
+    {% if matriz_id %}
+      <div class="form-row">
+        <label class="row-label">Normas aplicáveis</label>
+        <div class="field-card norma-list">
+          {% if not readonly and not is_academically_frozen %}
+            <input type="hidden" name="manage_normas_present" value="1">
+          {% endif %}
+          {% for norma in available_normas %}
+            <label class="norma-checkbox-row">
+              <input
+                type="checkbox"
+                name="norma_ids"
+                value="{{ norma.id }}"
+                {% if norma.id in linked_norma_ids %}checked{% endif %}
+                {% if readonly or is_academically_frozen %}disabled{% endif %}
+              >
+              <span>
+                <strong>{{ norma.codigo }}</strong>
+                <span> · {{ norma.eixo }} · revisão {{ norma.revisao }} · {{ norma.status }}</span>
+              </span>
+            </label>
+          {% endfor %}
+          {% for norma in linked_normas if norma.status != 'ativa' %}
+            <label class="norma-checkbox-row">
+              <input type="checkbox" name="norma_ids" value="{{ norma.id }}" checked disabled>
+              <span>
+                <strong>{{ norma.codigo }}</strong>
+                <span> · {{ norma.eixo }} · revisão {{ norma.revisao }} · {{ norma.status }} (histórica)</span>
+              </span>
+            </label>
+            {% if not readonly and not is_academically_frozen %}
+              <input type="hidden" name="norma_ids" value="{{ norma.id }}">
+            {% endif %}
+          {% endfor %}
+          {% if not available_normas and not linked_normas %}
+            <span>Nenhuma norma disponível.</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
     <div class="form-actions center">
       <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
       {% if not readonly %}

@@ -129,6 +129,12 @@
 .import-modal-grid .field-card{ box-sizing:border-box; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
 .input-with-icon{ display:inline-block; position:relative; }  /* was duplicated in 2 templates */
 
+/* Norma list inside the matriz edit form (admin_matriz_form.html): a
+   stacked list of checkbox rows inside a .field-card, and the single
+   shared row layout used by both selectable and historical rows. */
+.field-card.norma-list{ display:grid; gap:8px; }
+.norma-checkbox-row{ align-items:flex-start; display:flex; gap:8px; }
+
 /* =============================================================
    FIELD STATES  (DS-7, approved from real rendered previews)
 

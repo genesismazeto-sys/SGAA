@@ -46,6 +46,41 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## NMB — NORMA ↔ MATRIX BINDING — CLOSED / ACCEPTED
+
+NMB (Norma ↔ Matrix Binding) — CLOSED / ACCEPTED. Implementation and
+independent review accepted; canonical gate green after the authorized repair.
+
+- **Matrix is the canonical write owner** of the binding management surface
+  (`app/views/admin/matrizes.py`, `POST /admin/editar_matriz/<int:matriz_id>`);
+  `matriz_norma` remains **many-to-many** — the same Norma may be bound to
+  multiple Matrices (no exclusivity filter).
+- **Unused Matrix** (no Turma assignment) permits Norma-set management;
+  a Matrix assigned to any Turma **freezes academic Norma bindings**
+  (add/remove refused) while descriptive edits remain allowed.
+- Explicit management intent is carried by `manage_normas_present`; absent
+  intent preserves bindings; explicit empty set unbinds; only **active** Normas
+  are new-bindable; inactive historical linked Normas are preserved and
+  round-trip safely through the rendered form.
+- Protected unbind (Norma used by a selected activity version) is **refused
+  atomically**; exact `norma_id` authority; single coherent transaction;
+  **GET does not write**; Matrix-scoped mutation only.
+- **No route, endpoint, RBAC, schema/migration or message-catalogue change**;
+  message-catalogue metadata for the reused user-facing messages was preserved
+  byte-for-byte (536) by moving presentation strings to the route boundary
+  (`_MATRIZ_NORMA_ERROR_TEXT`) and returning internal sentinel codes from the
+  routeless validation helper.
+- Design System ceiling **198 preserved** (the three NMB static inline styles
+  were replaced by `static/css/components/form.css` compositions
+  `.field-card.norma-list` / `.norma-checkbox-row`).
+- CSRF snapshots unchanged (byte- and mtime-identical); `route_inventory_baseline.json`
+  unchanged; full canonical suite green.
+
+Full canonical suite (this window): 1558 passed / 133 skipped / 17 deselected /
+0 failed / 0 errors / 446.94s. Invariants: routes 131 / endpoints 130 /
+RBAC unmapped 0 / actor matrix 402 / message catalogue 536 / hooks_main 0 /
+main `@app.route` 0 / zero `import main` in `app/` `services/` `utils/`.
+
 ## POST-REFACTOR APPLICATION DEFECT — ADMIN ARQUIVOS EDIT 500 — CLOSED / ACCEPTED / PUBLISHED
 
 Technical state: **CLOSED / ACCEPTED**.
