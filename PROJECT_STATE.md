@@ -46,6 +46,44 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## FC-07 — ACTIVITY VERSION COPY-ON-CREATE — CLOSED / ACCEPTED
+
+FC-07 (activity version copy-on-create) — CLOSED / ACCEPTED. Production
+contract, review findings F1–F4, baseline reconciliation and test-only custody
+hardening accepted; published by this landing commit.
+
+- **Contract:** Activity owns version history; the existing new-version route
+  remains canonical owner; `?from=<atividade_versao_id>` selects one exact
+  same-base predecessor; GET is read-only and prefills the editable rule
+  fields; normal "Criar versão" uses the existing version with greatest
+  `numero_versao`; `versao_anterior_id` records lineage; admin-submitted POST
+  values remain authoritative; `codigo_normativo` and `eixo` derive from the
+  selected Norma server-side; the new version receives base-wide
+  `MAX(numero_versao)+1`; the new version remains `rascunho`; the predecessor
+  remains immutable; existing Matrix links remain unchanged. No
+  route/endpoint/schema/migration/RBAC change; no Request/snapshot authority
+  change.
+- **Review findings resolved (F1–F4):** F1 — the three prefill validation
+  messages are legitimate scanner-visible `return-message` entries
+  (`msg_03205429255601e0`, `msg_46c6438260c43d3e`, `msg_91bb2d4061ab3f00`);
+  current canonical message catalogue is **539** (536 was the historical prior
+  baseline; 539 is the current post-FC07 baseline). CSRF consequence: exact +3
+  `/admin/mensagens/<message_key>/reset` actions; both CSRF snapshots updated
+  only for those three legitimate catalogue entries; strict historical custody
+  comparators permit exactly that semantic +3 and reject any fourth/unrelated
+  delta. F2 — default-predecessor test separates `numero_versao` from
+  id/creation order; F3 — base-wide next-number test separates lineage from
+  version-number allocation; F4 — Norma derivation test proves the selected
+  POST Norma controls `norma_id`/`codigo_normativo`/`eixo`; predecessor and
+  Matrix immutability proven.
+- **Technical gates:** canonical suite 1574 passed / 133 skipped / 17
+  deselected / 0 failed / 0 errors. Invariants: routes 131; endpoints 130;
+  RBAC unmapped 0; actor matrix 402; message catalogue 539; Design System 198;
+  route inventory unchanged; main `@app.route` 0; main-owned hooks 0;
+  prohibited import main 0. Independent final status:
+  `FC07_P1_REREVIEW_ACCEPT` / `HISTORICAL_PROOFS_PRESERVED`. Database custody
+  preserved.
+
 ## NMB — NORMA ↔ MATRIX BINDING — CLOSED / ACCEPTED
 
 NMB (Norma ↔ Matrix Binding) — CLOSED / ACCEPTED. Implementation and

@@ -190,6 +190,67 @@ def _delete_upload_relpath(rel_path: str | None) -> None:
         pass
 
 
+def _display_number(value):
+    """Formata número REAL para exibição no formulário (inteiros sem sufixo .0)."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, str | None]:
+    """
+    FC-07 — Resolve o estado inicial do formulário de nova versão.
+
+    `?from=<atividade_versao_id>` copia os campos editáveis do predecessor
+    (mesma atividade-base) e o pré-seleciona como versao_anterior_id.
+
+    Estritamente read-only. Fontes inválidas (malformadas, inexistentes ou de
+    outra atividade-base) retornam o formulário em branco junto da mensagem de
+    erro para flash pelo chamador (mesmo padrão de _render_form no POST).
+    """
+    blank = {
+        "norma_id": "",
+        "grupo": "",
+        "ch_por_evento": "",
+        "limite_semestre": "",
+        "limite_total": "",
+        "observacao_aluno": "",
+        "observacao_admin": "",
+        "vigencia_inicio": "",
+        "vigencia_fim": "",
+        "versao_anterior_id": "",
+    }
+    raw = (from_raw or "").strip()
+    if not raw:
+        return blank, None
+    try:
+        origem_id = int(raw)
+    except (TypeError, ValueError):
+        return blank, "Versão anterior inválida."
+    origem = get_atividade_versao_by_id(conn, origem_id)
+    if not origem:
+        return blank, "Versão anterior não encontrada."
+    if origem["atividade_base_id"] != base_id:
+        return blank, "Versão anterior deve pertencer à mesma atividade-base."
+    return (
+        {
+            "norma_id": str(origem["norma_id"]),
+            "grupo": origem["grupo"] or "",
+            "ch_por_evento": _display_number(origem["ch_por_evento"]),
+            "limite_semestre": _display_number(origem["limite_semestre"]),
+            "limite_total": _display_number(origem["limite_total"]),
+            "observacao_aluno": origem["observacao_aluno"] or "",
+            "observacao_admin": origem["observacao_admin"] or "",
+            "vigencia_inicio": origem["vigencia_inicio"] or "",
+            "vigencia_fim": origem["vigencia_fim"] or "",
+            "versao_anterior_id": str(origem["id"]),
+        },
+        None,
+    )
+
+
 def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: str) -> tuple[dict, dict | None]:
     conn = get_db_connection()
     existing_rows = conn.execute("SELECT id, nome FROM atividades").fetchall()
@@ -1092,12 +1153,20 @@ def admin_catalogo_versao_detalhe(base_id: int):
             and destino["id"] not in transicoes_origem
         ]
     transicoes_historico = get_atividade_transicoes_por_base(conn, base_id)
+    nova_versao_url = url_for("admin_catalogo_nova_versao", base_id=base_id)
+    if versoes:
+        nova_versao_url = url_for(
+            "admin_catalogo_nova_versao",
+            base_id=base_id,
+            **{"from": versoes[0]["id"]},
+        )
     return render_template(
         "admin_catalogo_versao_detalhe.html",
         base=base,
         versoes=versoes,
         substituicao_candidatas=substituicao_candidatas,
         transicoes_historico=transicoes_historico,
+        nova_versao_url=nova_versao_url,
     )
 
 
@@ -1394,21 +1463,24 @@ def admin_catalogo_nova_versao(base_id: int):
         except Exception as exc:
             return _render_form(f"Erro ao criar versão: {exc}")
 
+    prefill, prefill_error = _resolve_nova_versao_prefill(conn, base_id, request.args.get("from"))
+    if prefill_error:
+        flash(prefill_error, "error")
     return render_template(
         "admin_catalogo_versao_form.html",
         base=base,
         normas=normas,
         versoes_anteriores=versoes_anteriores,
-        norma_id="",
-        grupo="",
-        ch_por_evento="",
-        limite_semestre="",
-        limite_total="",
-        observacao_aluno="",
-        observacao_admin="",
-        vigencia_inicio="",
-        vigencia_fim="",
-        versao_anterior_id="",
+        norma_id=prefill["norma_id"],
+        grupo=prefill["grupo"],
+        ch_por_evento=prefill["ch_por_evento"],
+        limite_semestre=prefill["limite_semestre"],
+        limite_total=prefill["limite_total"],
+        observacao_aluno=prefill["observacao_aluno"],
+        observacao_admin=prefill["observacao_admin"],
+        vigencia_inicio=prefill["vigencia_inicio"],
+        vigencia_fim=prefill["vigencia_fim"],
+        versao_anterior_id=prefill["versao_anterior_id"],
         form_action=form_action,
         form_title=form_title,
         submit_label=submit_label,

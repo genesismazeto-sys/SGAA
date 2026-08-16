@@ -340,6 +340,42 @@ def _without_owner(row):
     return {key: value for key, value in row.items() if key != "view_function"}
 
 
+MENSAGENS_RESET_ROUTE = "/admin/mensagens/<message_key>/reset"
+
+FC07_MENSAGENS_RESET_ACTIONS = (
+    "/admin/mensagens/msg_91bb2d4061ab3f00/reset",
+    "/admin/mensagens/msg_46c6438260c43d3e/reset",
+    "/admin/mensagens/msg_03205429255601e0/reset",
+)
+
+
+def _assert_fc07_mensagens_delta(old_row, new_row):
+    """FC-07 F1 authorized snapshot delta: exactly three new /admin/mensagens
+    reset actions for the CATALOGUED_RETURN_MESSAGES identities, in both the
+    evidence and token_counts_per_form lists of the mensagens reset row."""
+    old_evidence = list(old_row.get("evidence") or [])
+    new_evidence = list(new_row.get("evidence") or [])
+    added_evidence = [e for e in new_evidence if e not in old_evidence]
+    assert [e["action"] for e in added_evidence] == list(FC07_MENSAGENS_RESET_ACTIONS), (
+        "FC-07 mensagens evidence delta must be exactly the three authorized "
+        f"reset actions; got {[e['action'] for e in added_evidence]}"
+    )
+    assert all(e.get("token_count") == 1 for e in added_evidence), (
+        "FC-07 mensagens evidence entries must each carry token_count 1"
+    )
+    old_forms = list(old_row.get("token_counts_per_form") or [])
+    new_forms = list(new_row.get("token_counts_per_form") or [])
+    added_forms = [f for f in new_forms if f not in old_forms]
+    assert [f["action"] for f in added_forms] == list(FC07_MENSAGENS_RESET_ACTIONS), (
+        "FC-07 mensagens token_counts_per_form delta must be exactly the three "
+        f"authorized reset actions; got {[f['action'] for f in added_forms]}"
+    )
+    assert all(f.get("token_counts") == [1] for f in added_forms), (
+        "FC-07 mensagens token_counts_per_form entries must each carry "
+        "token_counts [1]"
+    )
+
+
 def _assert_c1_archivos_rows(old_rows, new_rows):
     assert len(old_rows) == len(new_rows)
     old_routes = [row.get("route") for row in old_rows]
@@ -401,6 +437,10 @@ def _assert_c1_archivos_rows(old_rows, new_rows):
                 "token_counts_per_form",
             ):
                 normalized[key] = old_row[key]
+        elif old_row["route"] == MENSAGENS_RESET_ROUTE:
+            _assert_fc07_mensagens_delta(old_row, new_row)
+            normalized["evidence"] = old_row["evidence"]
+            normalized["token_counts_per_form"] = old_row["token_counts_per_form"]
         assert _without_owner(old_row) == _without_owner(normalized)
         normalized_rows.append(normalized)
     return normalized_rows
@@ -964,7 +1004,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 536
+    assert len(catalog) == 539
 
 
 def test_canonical_sqlite_never_opened_during_isolated_flow(tmp_path):

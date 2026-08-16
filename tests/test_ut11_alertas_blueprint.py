@@ -705,8 +705,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 536, (
-        "message catalog count must remain 536 through the extraction; "
+    assert len(catalog) == 539, (
+        "message catalog count must remain 539 through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -973,8 +973,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 536, (
-        "current catalog baseline must be 536"
+    assert len(messages._message_catalog()) == 539, (
+        "current catalog baseline must be 539"
     )
 
     backend_paths = {

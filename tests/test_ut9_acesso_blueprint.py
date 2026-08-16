@@ -803,8 +803,8 @@ def test_red_l_message_scanner_covers_target_module():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 536, (
-        "message catalog count must remain 536 through the extraction; "
+    assert len(catalog) == 539, (
+        "message catalog count must remain 539 through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -1571,8 +1571,8 @@ def test_green_11_delete_cascade_resequencing_and_integrityerror_rollback(isolat
 def test_green_12_message_catalog_536_and_views_recursive_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 536, (
-        "current catalog baseline must be 536"
+    assert len(messages._message_catalog()) == 539, (
+        "current catalog baseline must be 539"
     )
 
     backend_paths = {

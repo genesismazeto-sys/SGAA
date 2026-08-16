@@ -628,8 +628,8 @@ def test_red_j_target_is_scanned_and_catalog_remains_536():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 536, (
-        "message catalog count must remain 536 through the extraction; "
+    assert len(catalog) == 539, (
+        "message catalog count must remain 539 through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -978,8 +978,8 @@ def test_green_9_restore_ordering_pre_snapshot_init_and_orchestrator(isolated_en
 def test_green_10_message_catalog_536_and_views_recursive_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 536, (
-        "current catalog baseline must be 536"
+    assert len(messages._message_catalog()) == 539, (
+        "current catalog baseline must be 539"
     )
 
     backend_paths = {

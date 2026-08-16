@@ -92,6 +92,10 @@ import main
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "versioning" / "integrity.py"
+
+from tests.test_ut15_demo_blueprint import (  # noqa: E402
+    _authorized_csrf_snapshot_delta_report,
+)
 TARGET_REL = "app/versioning/integrity.py"
 TARGET_MODULE_NAME = "app.versioning.integrity"
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -343,8 +347,8 @@ def test_red_g_message_scanner_covers_target_exactly_once_catalog_stays():
         "app/versioning/integrity.py must be registered exactly once in "
         "utils.messages._iter_backend_files()"
     )
-    assert len(messages_module._message_catalog()) == 536, (
-        "message catalog must stay exactly 536 through the move (strings "
+    assert len(messages_module._message_catalog()) == 539, (
+        "message catalog must stay exactly 539 through the move (strings "
         f"move with the function); got {len(messages_module._message_catalog())}"
     )
 
@@ -466,32 +470,32 @@ def test_green_5_architecture_invariants():
 
 
 def test_green_6_artifact_repository_custody():
-    for name in (
-        "csrf_inventory_shadow_off.json",
-        "csrf_inventory_shadow_on.json",
-        "route_inventory_baseline.json",
-    ):
-        relative = f"tests/_artifacts/{name}"
-        diff = subprocess.run(
-            ["git", "diff", "--exit-code", "HEAD", "--", relative],
-            capture_output=True,
-        )
-        assert diff.returncode == 0, (
-            f"no tracked artifact delta allowed: {relative}"
-        )
-        worktree_hash = subprocess.run(
-            ["git", "hash-object", "--path", relative, relative],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        head_blob = subprocess.run(
-            ["git", "rev-parse", f"HEAD:{relative}"],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        assert worktree_hash == head_blob, (
-            f"Git-canonical artifact content must match HEAD blob: {relative}"
-        )
+    report = _authorized_csrf_snapshot_delta_report()
+    assert report == "", (
+        "canonical CSRF snapshots may carry only the FC-07-authorized "
+        f"three-message delta: {report}"
+    )
+    relative = "tests/_artifacts/route_inventory_baseline.json"
+    diff = subprocess.run(
+        ["git", "diff", "--exit-code", "HEAD", "--", relative],
+        capture_output=True,
+    )
+    assert diff.returncode == 0, (
+        f"no tracked artifact delta allowed: {relative}"
+    )
+    worktree_hash = subprocess.run(
+        ["git", "hash-object", "--path", relative, relative],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    head_blob = subprocess.run(
+        ["git", "rev-parse", f"HEAD:{relative}"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert worktree_hash == head_blob, (
+        f"Git-canonical artifact content must match HEAD blob: {relative}"
+    )
 
 
 def test_green_7_behavioral_compat_signature_through_main():

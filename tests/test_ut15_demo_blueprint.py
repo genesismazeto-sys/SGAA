@@ -352,6 +352,134 @@ def _artifact_custody_report(relative: str) -> str:
     return ""
 
 
+FC07_MENSAGENS_RESET_ACTIONS = (
+    "/admin/mensagens/msg_03205429255601e0/reset",
+    "/admin/mensagens/msg_46c6438260c43d3e/reset",
+    "/admin/mensagens/msg_91bb2d4061ab3f00/reset",
+)
+
+MENSAGENS_RESET_ROUTE = "/admin/mensagens/<message_key>/reset"
+
+
+def _mensagens_evidence_entries():
+    return [
+        {
+            "kind": "rendered_form",
+            "page": "/admin/mensagens",
+            "action": action,
+            "token_count": 1,
+        }
+        for action in FC07_MENSAGENS_RESET_ACTIONS
+    ]
+
+
+def _mensagens_token_counts_per_form_entries():
+    return [
+        {
+            "page": "/admin/mensagens",
+            "action": action,
+            "token_counts": [1],
+        }
+        for action in FC07_MENSAGENS_RESET_ACTIONS
+    ]
+
+
+def _canonical_key(entry):
+    return json.dumps(entry, sort_keys=True, ensure_ascii=False)
+
+
+def _apply_fc07_mensagens_additions(head_obj):
+    """Deep copy of the HEAD snapshot semantic object with exactly the three
+    FC-07-authorized /admin/mensagens reset additions applied to the mensagens
+    reset row (evidence + token_counts_per_form); None when the row is
+    absent or ambiguous."""
+    expected = json.loads(json.dumps(head_obj))
+    mensagens_rows = [
+        row
+        for row in expected.get("rows", [])
+        if row.get("route") == MENSAGENS_RESET_ROUTE
+    ]
+    if len(mensagens_rows) != 1:
+        return None
+    row = mensagens_rows[0]
+    row["evidence"] = (
+        list(row.get("evidence") or []) + _mensagens_evidence_entries()
+    )
+    row["token_counts_per_form"] = (
+        list(row.get("token_counts_per_form") or [])
+        + _mensagens_token_counts_per_form_entries()
+    )
+    return expected
+
+
+def _normalize_mensagens_list_ordering(obj):
+    """Deterministic normalization of the ONLY non-semantic ordering in the
+    snapshot: the evidence / token_counts_per_form lists of the mensagens
+    reset row (catalogue-iteration order). All other fields, rows, routes and
+    orderings are compared verbatim."""
+    normalized = json.loads(json.dumps(obj))
+    for row in normalized.get("rows", []):
+        if row.get("route") == MENSAGENS_RESET_ROUTE:
+            row["evidence"] = sorted(
+                row.get("evidence") or [], key=_canonical_key
+            )
+            row["token_counts_per_form"] = sorted(
+                row.get("token_counts_per_form") or [], key=_canonical_key
+            )
+    return normalized
+
+
+def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
+    """Returns "" when the working semantic object equals HEAD with exactly
+    the three authorized additions applied; a description otherwise. The
+    comparison covers the COMPLETE snapshot structure: rows, routes, methods,
+    evidence, token_counts_per_form, summary, status and ownership metadata."""
+    expected = _apply_fc07_mensagens_additions(head_obj)
+    if expected is None:
+        return "HEAD snapshot has no unique mensagens reset row"
+    if _normalize_mensagens_list_ordering(
+        expected
+    ) != _normalize_mensagens_list_ordering(work_obj):
+        return "semantic delta exceeds the exactly-three authorized additions"
+    return ""
+
+
+def _authorized_csrf_snapshot_delta_report() -> str:
+    """Strict snapshot custody: each working canonical CSRF snapshot must be
+    semantically equal to HEAD plus exactly the three FC-07-authorized
+    /admin/mensagens reset additions (exact action family, exact page/kind,
+    token count 1, modeled as exact data), with the complete snapshot
+    structure retained verbatim. Returns "" when it holds; a description
+    otherwise."""
+    problems = []
+    for name in ("csrf_inventory_shadow_off.json", "csrf_inventory_shadow_on.json"):
+        relative = f"tests/_artifacts/{name}"
+        head_result = subprocess.run(
+            ["git", "show", f"HEAD:{relative}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=PROJECT_ROOT,
+        )
+        if head_result.returncode != 0:
+            problems.append(
+                f"{relative}: git show HEAD failed: {head_result.stderr}"
+            )
+            continue
+        try:
+            head_obj = json.loads(head_result.stdout)
+            work_obj = json.loads(
+                (PROJECT_ROOT / relative).read_text(encoding="utf-8-sig")
+            )
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"{relative}: JSON parse failed: {exc}")
+            continue
+        problem = _csrf_snapshot_matches_authorized_delta(head_obj, work_obj)
+        if problem:
+            problems.append(f"{relative}: {problem}")
+    return "; ".join(problems)
+
+
 # ===========================================================================
 # RED — future architectural contract (fails while the target is absent)
 # ===========================================================================
@@ -614,8 +742,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 536, (
-        "message catalog count must remain 536 through the extraction; "
+    assert len(catalog) == 539, (
+        "message catalog count must remain 539 through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -905,14 +1033,11 @@ def test_green_8_csrf_zero_delta_and_snapshot_custody(tmp_path):
             for row in rows
         ), f"no demo view_function may appear in {suffix}"
 
-    for name in ("csrf_inventory_shadow_off.json", "csrf_inventory_shadow_on.json"):
-        relative = f"tests/_artifacts/{name}"
-        report = _artifact_custody_report(relative)
-        assert report == "", (
-            "canonical CSRF snapshots must stay repository-unchanged across "
-            f"UT-15 (no tracked delta, no Git-canonical content change; "
-            f"zero owner-delta cohort): {name} — {report}"
-        )
+    report = _authorized_csrf_snapshot_delta_report()
+    assert report == "", (
+        "canonical CSRF snapshots may carry only the FC-07-authorized "
+        f"three-message delta across UT-15: {report}"
+    )
 
     # Detector self-control: a real content mutation must be flagged by the
     # exact same Git-aware mechanism.  Synthetic bytes only; the canonical
@@ -969,6 +1094,6 @@ def test_green_11_route_inventory_baseline_repository_unchanged():
 def test_green_12_message_catalog_stays_536():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 536, (
-        "current catalog baseline must stay 536"
+    assert len(messages_module._message_catalog()) == 539, (
+        "current catalog baseline must stay 539"
     )

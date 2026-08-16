@@ -232,6 +232,11 @@ def _target_module():
     return importlib.import_module(TARGET_MODULE_NAME)
 
 
+from tests.test_ut15_demo_blueprint import (  # noqa: E402
+    _authorized_csrf_snapshot_delta_report,
+)
+
+
 def _git_artifacts_are_clean() -> str:
     result = subprocess.run(
         ["git", "status", "--short", "--",
@@ -630,8 +635,8 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 536, (
-        "message catalog must stay 536 (no message added/removed by UT-17)"
+    assert len(_message_catalog()) == 539, (
+        "message catalog must stay 539 (no message added/removed by UT-17)"
     )
 
 
@@ -696,8 +701,10 @@ def test_green_9_create_app_flag_surface_frozen():
 
 
 def test_green_10_artifacts_git_canonical_zero_delta():
-    assert _git_artifacts_are_clean() == "", (
-        "canonical artifacts must have zero tracked delta"
+    report = _authorized_csrf_snapshot_delta_report()
+    assert report == "", (
+        "canonical artifacts must carry no tracked delta beyond the "
+        f"FC-07-authorized three-message CSRF delta: {report}"
     )
 
     import json

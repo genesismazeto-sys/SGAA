@@ -685,8 +685,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 536, (
-        "message catalog count must remain 536 through the extraction; "
+    assert len(catalog) == 539, (
+        "message catalog count must remain 539 through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -876,8 +876,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_schema_and_reverse_dependencies():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 536, (
-        "current catalog baseline must be 536"
+    assert len(messages_module._message_catalog()) == 539, (
+        "current catalog baseline must be 539"
     )
 
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
