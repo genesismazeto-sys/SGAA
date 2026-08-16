@@ -94,6 +94,23 @@ def test_repeated_access_context_loads_are_idempotent_and_transaction_neutral(tm
 @pytest.fixture()
 def versioned_env(tmp_path):
     with isolated_versioned_app_env(tmp_path, "p0_transaction_hygiene.db") as env:
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            curso_id = conn.execute(
+                "SELECT curso_id FROM matrizes_atividades WHERE id = 1"
+            ).fetchone()[0]
+            matrix_id = conn.execute(
+                """
+                INSERT INTO matrizes_atividades
+                    (curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
+                VALUES (?, 'P0 unassigned Matrix', 'p0', 'rascunho', 100, 50)
+                RETURNING id
+                """,
+                (curso_id,),
+            ).fetchone()["id"]
+            conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, 1)", (matrix_id,))
+            conn.commit()
+        env["matrix_id"] = matrix_id
         yield env
 
 
@@ -166,7 +183,7 @@ def test_mapped_route_uses_bootstrapped_v2_without_recurring_atividades_ddl(
 
     activity_name = f"P0 versioned activity {uuid.uuid4().hex}"
     response = client.post(
-        "/admin/matrizes/1/atividades/nova/aac",
+        f"/admin/matrizes/{versioned_env['matrix_id']}/atividades/nova/aac",
         data={
             "nome": activity_name,
             "grupo_numero": "7",

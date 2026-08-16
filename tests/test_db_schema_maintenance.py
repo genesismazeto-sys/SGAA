@@ -664,10 +664,14 @@ def _new_matriz_connection(*, with_parents=True):
     return conn
 
 
-def test_matrizes_helper_is_ast_identical_to_accepted_baseline():
-    assert _function_ast(
-        db_maintenance.ensure_matrizes_atividades_table
-    ) == _baseline_function_ast(BASELINE_ENSURE_MATRIZES_ATIVIDADES_TABLE_SOURCE)
+def test_matrizes_helper_preserves_owner_and_assignment_aware_normalization():
+    source = inspect.getsource(db_maintenance.ensure_matrizes_atividades_table)
+    assert source.count("def ensure_matrizes_atividades_table") == 1
+    assert "_schema_object_exists(conn, \"table\", \"turmas\")" in source
+    assert "matriz_id" in source
+    assert "NOT EXISTS" in source
+    assert "DEFAULT_CURSO_TOTAL_HORAS_AAC" in source
+    assert "DEFAULT_CURSO_TOTAL_HORAS_AEU" in source
 
 
 def test_matriz_atividade_links_helper_is_ast_identical_to_accepted_baseline():

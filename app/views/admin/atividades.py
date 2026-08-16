@@ -43,6 +43,12 @@ from app.db_maintenance import (
     ensure_atividade_versioning_schema,
     ensure_matriz_atividade_links_table,
 )
+from app.matrix_scope import (
+    ACADEMIC_GRAPH_FROZEN_MESSAGE,
+    ACADEMIC_VERSION_FROZEN_MESSAGE,
+    is_activity_referenced_by_assigned_matrix,
+    is_activity_version_referenced_by_assigned_matrix,
+)
 from app.uploads import ALLOWED_CSV, save_upload
 from app.text import normalize_header
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -867,6 +873,10 @@ def admin_deletar_atividade(atividade_id):
         )
         return redirect(url_for("admin_atividades"))
 
+    if is_activity_referenced_by_assigned_matrix(conn, atividade_id):
+        flash(ACADEMIC_GRAPH_FROZEN_MESSAGE, "error")
+        return redirect(url_for("admin_atividades"))
+
     try:
         ensure_matriz_atividade_links_table(conn)
         conn.execute("DELETE FROM matrizes_atividades_itens WHERE atividade_id = ?", (atividade_id,))
@@ -1511,7 +1521,12 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
     uso = get_atividade_versao_usage_counts(conn, versao_id)
-    if uso["total"] > 0:
+    if (
+        uso["requisicoes"]
+        or uso["atividade_transicao_origem"]
+        or uso["atividade_transicao_destino"]
+        or is_activity_version_referenced_by_assigned_matrix(conn, versao_id)
+    ):
         flash("Esta versão já está em uso e não pode mais ser editada.", "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
@@ -1713,6 +1728,10 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
 
     if versao["status"] != "rascunho":
         flash("Apenas versões em rascunho podem ser ativadas.", "error")
+        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+
+    if is_activity_version_referenced_by_assigned_matrix(conn, versao_id):
+        flash(ACADEMIC_VERSION_FROZEN_MESSAGE, "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
     norma = get_norma_by_id(conn, versao["norma_id"])

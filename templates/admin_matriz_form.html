@@ -573,7 +573,7 @@
       <label class="row-label">Curso</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
-        <select class="control" name="curso_id" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+        <select class="control" name="curso_id" required {% if readonly %}disabled aria-readonly="true"{% elif is_academically_frozen %}aria-readonly="true" tabindex="-1"{% endif %}>
           <option value="">Selecione um curso</option>
           {% for curso in cursos %}
             <option value="{{ curso.id }}" {{ 'selected' if (matriz.curso_id|string) == (curso.id|string) else '' }}>
@@ -581,6 +581,7 @@
             </option>
           {% endfor %}
         </select>
+        {% if is_academically_frozen and not readonly %}<input type="hidden" name="curso_id" value="{{ matriz.curso_id }}">{% endif %}
       </div>
     </div>
 
@@ -604,11 +605,12 @@
       <label class="row-label">Status</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
-        <select class="control" name="status" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+        <select class="control" name="status" required {% if readonly %}disabled aria-readonly="true"{% elif is_academically_frozen %}aria-readonly="true" tabindex="-1"{% endif %}>
           <option value="rascunho" {{ 'selected' if not matriz or matriz.status == 'rascunho' else '' }}>Rascunho</option>
           <option value="vigente" {{ 'selected' if matriz and matriz.status == 'vigente' else '' }}>Vigente</option>
           <option value="encerrada" {{ 'selected' if matriz and matriz.status == 'encerrada' else '' }}>Encerrada</option>
         </select>
+        {% if is_academically_frozen and not readonly %}<input type="hidden" name="status" value="{{ matriz.status }}">{% endif %}
       </div>
     </div>
 
@@ -616,7 +618,7 @@
       <label class="row-label">Início de vigência</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="calendar-days"></i></div>
-        <input class="control" type="date" name="data_inicio_vigencia" value="{{ matriz.data_inicio_vigencia if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="date" name="data_inicio_vigencia" value="{{ matriz.data_inicio_vigencia or '' if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -624,7 +626,7 @@
       <label class="row-label">Fim de vigência</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="calendar-range"></i></div>
-        <input class="control" type="date" name="data_fim_vigencia" value="{{ matriz.data_fim_vigencia if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="date" name="data_fim_vigencia" value="{{ matriz.data_fim_vigencia or '' if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -705,7 +707,7 @@
 <section class="matriz-tab-panel" aria-labelledby="matriz-transfer-heading">
   <p class="matriz-tab-help">{{ transfer_meta.help_text }}</p>
 
-  <form method="POST" class="matriz-transfer-form{% if readonly %} is-readonly{% endif %}" data-transfer-root data-readonly="{{ '1' if readonly else '0' }}">
+  <form method="POST" class="matriz-transfer-form{% if readonly or is_academically_frozen %} is-readonly{% endif %}" data-transfer-root data-readonly="{{ '1' if readonly or is_academically_frozen else '0' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="active_tab" value="{{ active_tab }}">
     <div class="matriz-transfer-layout">
@@ -742,7 +744,7 @@
           <div class="matriz-transfer-list" data-role="available-list" {% if not transfer_available %}hidden{% endif %}>
             {% for item in transfer_available %}
               <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
-                <input type="checkbox" data-side="available" {% if readonly %}disabled{% endif %}>
+                <input type="checkbox" data-side="available" {% if readonly or is_academically_frozen %}disabled{% endif %}>
                 <span class="matriz-transfer-item-main">
                   <span class="matriz-transfer-item-title">{{ item.nome }}</span>
                   <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
@@ -782,7 +784,7 @@
           <div class="matriz-transfer-list" data-role="selected-list" {% if not transfer_selected %}hidden{% endif %}>
             {% for item in transfer_selected %}
               <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
-                <input type="checkbox" data-side="selected" {% if readonly %}disabled{% endif %}>
+                <input type="checkbox" data-side="selected" {% if readonly or is_academically_frozen %}disabled{% endif %}>
                 <span class="matriz-transfer-item-main">
                   <span class="matriz-transfer-item-title">{{ item.nome }}</span>
                   <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>

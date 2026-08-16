@@ -797,6 +797,15 @@ def test_post_editar_versao_blocked_when_used_in_matriz_item(client):
             "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
             (matriz_id, versao_id),
         )
+        conn.execute(
+            """
+            INSERT INTO turmas (
+                nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
+                ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
+            ) VALUES (?, 2026, 1, 'Noite', 'Ativa', 991, ?, ?, 2026, 1, 2029, 2, ?)
+            """,
+            (f"Turma B5v {token}", curso_id, matriz_id, f"B5V-{token}"),
+        )
         conn.commit()
 
     r = _post_editar_versao(

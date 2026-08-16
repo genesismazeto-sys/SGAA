@@ -1719,12 +1719,29 @@ def ensure_matrizes_atividades_table(conn) -> None:
             conn.execute("UPDATE matrizes_atividades SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = ''")
     except sqlite3.OperationalError:
         pass
+    turma_matrix_column_exists = False
+    if _schema_object_exists(conn, "table", "turmas"):
+        turma_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(turmas)").fetchall()
+        }
+        turma_matrix_column_exists = "matriz_id" in turma_columns
+
+    assigned_matrix_guard = ""
+    if turma_matrix_column_exists:
+        assigned_matrix_guard = " AND NOT EXISTS ("
+        assigned_matrix_guard += "SELECT 1 FROM turmas t WHERE t.matriz_id = matrizes_atividades.id)"
+
     conn.execute(
-        "UPDATE matrizes_atividades SET horas_aac_obrigatorias = ? WHERE horas_aac_obrigatorias IS NULL OR horas_aac_obrigatorias < 0",
+        "UPDATE matrizes_atividades SET horas_aac_obrigatorias = ? "
+        "WHERE (horas_aac_obrigatorias IS NULL OR horas_aac_obrigatorias < 0)"
+        + assigned_matrix_guard,
         (DEFAULT_CURSO_TOTAL_HORAS_AAC,),
     )
     conn.execute(
-        "UPDATE matrizes_atividades SET horas_extensao_obrigatorias = ? WHERE horas_extensao_obrigatorias IS NULL OR horas_extensao_obrigatorias < 0",
+        "UPDATE matrizes_atividades SET horas_extensao_obrigatorias = ? "
+        "WHERE (horas_extensao_obrigatorias IS NULL OR horas_extensao_obrigatorias < 0)"
+        + assigned_matrix_guard,
         (DEFAULT_CURSO_TOTAL_HORAS_AEU,),
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_matrizes_curso ON matrizes_atividades(curso_id)")

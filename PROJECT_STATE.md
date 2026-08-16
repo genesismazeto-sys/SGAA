@@ -86,6 +86,81 @@ errors. Invariants: routes 131; endpoints 130; RBAC unmapped 0; actor matrix
 main `@app.route` 0; main-owned hooks 0; prohibited import main 0. No route,
 endpoint, schema, migration, RBAC, message catalogue or CSRF snapshot change.
 
+## FC-09 — ASSIGNED MATRIX ACADEMIC GRAPH FREEZE — CLOSED / ACCEPTED
+
+FC09_W3_FINAL_REREVIEW_ACCEPT. FC-08 established exact persisted Turma Matrix
+authority; FC-09 now guarantees that once a Matrix is referenced by at least
+one Turma, its academic graph cannot be changed in place through ordinary
+application writes.
+
+- **Core authority:** freeze is usage-based — `EXISTS` Turma referencing
+  Matrix; no separate frozen flag/column. When zero Turmas reference the
+  Matrix again, existing ordinary unassigned management semantics resume,
+  subject to existing rules.
+- **Matrix row freeze:** for an assigned Matrix, protected
+  academic/identity-bearing fields are `curso_id`, `status`,
+  `data_inicio_vigencia`, `data_fim_vigencia`, `horas_aac_obrigatorias` and
+  `horas_extensao_obrigatorias`; descriptive fields `nome`, `versao` and
+  `descricao` remain editable under the accepted contract. Illegal protected
+  edits reject atomically.
+- **Norma:** NMB remains authoritative — assigned Matrix Norma binding set
+  remains frozen. FC-09 does not replace or reopen NMB.
+- **Activity membership:** assigned Matrix activity membership is frozen for
+  both AAC and AEU; no add/remove/replace/explicit-empty semantic mutation.
+- **Exact Activity-Version links:** assigned Matrix exact selections are
+  frozen; a cohort pointing at V1 remains on V1. No V1→V2 relink, link
+  removal or indirect/default newer-version replacement through ordinary
+  Matrix management. Unassigned Matrix retains existing legal management.
+- **Activity-Version rule freeze:** an existing Activity Version selected by
+  any assigned Matrix cannot have its historical academic rule mutated in
+  place. Shared case: assigned Matrix A + unassigned Matrix B both reference
+  V1 ⇒ V1 is frozen. A Version referenced only through an unassigned Matrix
+  is not frozen merely due to that unassigned reference. New Activity
+  Version creation remains permitted; FC-07 copy-on-create remains
+  authoritative.
+- **Deletion / indirect mutation:** assigned Matrix deletion is refused.
+  Bulk Matrix deletion preflights atomically so an earlier unassigned Matrix
+  is not deleted before an assigned Matrix causes rejection. Indirect
+  deletion of catalogue/activity state that would break an assigned
+  historical graph is protected. Create-activity-from-Matrix cannot
+  partially create Activity/Base/Version/map state when attempting to add
+  into an assigned Matrix.
+- **Startup historical stability:** `ensure_matrizes_atividades_table` must
+  not normalize/rewrite protected academic hour targets of assigned
+  Matrices; historical assigned invalid values are preserved rather than
+  silently changed. Unassigned Matrix normalization retains prior behavior;
+  bootstrap safely handles `turmas` table/column absence. This is startup
+  custody protection, not a second application freeze authority.
+- **Review history:** initial independent final review
+  `FC09_FINAL_REVIEW_REJECT` (material findings: startup normalization could
+  mutate assigned Matrix targets; FC09 tests insufficiently discriminating);
+  repair rereview `FC09_FINDINGS_REREVIEW_REJECT` (sole residual: W3
+  bulk-delete test false-green due to sorted persisted IDs); test-only W3
+  repair `U1 < A < U2`; final ultra-targeted independent rereview
+  `FC09_W3_FINAL_REREVIEW_ACCEPT`. Custody hash conflict was separately
+  reconciled as `REPORTING_TRANSCRIPTION_ERROR` with no unauthorized
+  repository mutation.
+- **Final test evidence:** latest canonical after production repair: 1631
+  passed / 133 skipped / 17 deselected / 0 failed / 0 errors. Final W3
+  test-only repair did not change production bytes; post-W3 targeted FC09
+  suite: 31 passed. No full canonical rerun after test-only W3 repair by
+  design.
+- **Invariants:** unchanged — routes 131; endpoints 130; RBAC unmapped 0;
+  actor matrix 402; message catalogue 539; Design System 198; route
+  inventory unchanged; main `@app.route` 0; main-owned hooks 0; prohibited
+  import main 0. No route, endpoint, schema, migration, RBAC, message
+  catalogue or CSRF snapshot delta.
+- **Non-cutover warning:** FC-09 is NOT full versioning cutover and does NOT
+  make request snapshots normative. Still future: request snapshot
+  authority for new requests; pending request rule frozen at creation; admin
+  processing under historical frozen request rule; progress/hours under
+  historical rule; canonical E2E cutover; removal of obsolete legacy
+  authority/shadow/mapping paths. Legacy academic-rule paths have not been
+  removed.
+- **Boundary:** full-database restore remains a global database replacement
+  boundary and was not redesigned by FC-09; FC-09 does not protect against
+  intentional full-database restore.
+
 ## FC-07 — ACTIVITY VERSION COPY-ON-CREATE — CLOSED / ACCEPTED
 
 FC-07 (activity version copy-on-create) — CLOSED / ACCEPTED. Production

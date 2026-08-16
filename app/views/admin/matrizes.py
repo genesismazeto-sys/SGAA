@@ -23,7 +23,12 @@ from app.db_maintenance import (
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
 )
-from app.matrix_scope import MATRIZ_STATUS_META, _matriz_status_label
+from app.matrix_scope import (
+    AcademicGraphFrozenError,
+    MATRIZ_STATUS_META,
+    _matriz_status_label,
+    is_matrix_assigned,
+)
 from app.web.filters import (
     append_conditions_sql,
     append_text_contains_condition,
@@ -123,6 +128,8 @@ def _set_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int, versao_i
     Garante no máximo um vínculo por matriz+base — nunca cria ambiguidade.
     Não commita — responsabilidade do chamador.
     """
+    if is_matrix_assigned(conn, matriz_id):
+        raise AcademicGraphFrozenError("assigned_matrix_version_link")
     conn.execute(
         """
         DELETE FROM matriz_atividade_versao_item
@@ -145,6 +152,8 @@ def _remover_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int) -> i
     Retorna o número de linhas apagadas (0 ou 1).
     Não commita — responsabilidade do chamador.
     """
+    if is_matrix_assigned(conn, matriz_id):
+        raise AcademicGraphFrozenError("assigned_matrix_version_link")
     cur = conn.execute(
         """
         DELETE FROM matriz_atividade_versao_item
@@ -694,11 +703,7 @@ def _get_matriz_norma_context(conn, matriz_id: int) -> dict[str, object]:
         "linked_normas": [row for row in normas if row["id"] in linked_ids],
         "linked_norma_ids": linked_ids,
         "available_normas": [row for row in normas if row["status"] == "ativa"],
-        "is_academically_frozen": conn.execute(
-            "SELECT 1 FROM turmas WHERE matriz_id = ? LIMIT 1",
-            (matriz_id,),
-        ).fetchone()
-        is not None,
+        "is_academically_frozen": is_matrix_assigned(conn, matriz_id),
     }
 
 
@@ -749,10 +754,7 @@ def _prepare_matriz_norma_delta(conn, matriz_id: int, desired_ids: set[int]):
         if valid_active_ids != to_add:
             return None, _MATRIZ_NORMA_ERR_INACTIVE_NORMA
 
-    if conn.execute(
-        "SELECT 1 FROM turmas WHERE matriz_id = ? LIMIT 1",
-        (matriz_id,),
-    ).fetchone() is not None and desired_ids != current_ids:
+    if is_matrix_assigned(conn, matriz_id) and desired_ids != current_ids:
         return None, _MATRIZ_NORMA_ERR_FROZEN_MATRIX
 
     if to_remove:
@@ -948,6 +950,8 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
     activity_type = _matriz_activity_type_for_tab(active_tab)
     if not activity_type:
         return False
+    if is_matrix_assigned(conn, matriz_id):
+        return None
 
     selected_ids = []
     for raw_value in request.form.getlist("selected_activity_ids"):
@@ -1095,6 +1099,21 @@ def admin_editar_matriz(matriz_id: int):
                 flash(error_message, "error")
                 matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
                 return _render_matriz_form(conn, matriz=matriz, active_tab="dados", readonly=readonly)
+
+            protected_fields = (
+                "curso_id",
+                "status",
+                "data_inicio_vigencia",
+                "data_fim_vigencia",
+                "horas_aac_obrigatorias",
+                "horas_extensao_obrigatorias",
+            )
+            if is_matrix_assigned(conn, matriz_id) and any(
+                payload[field] != matriz[field] for field in protected_fields
+            ):
+                flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+                return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
+
             manages_normas, desired_norma_ids, norma_error_code = _parse_matriz_norma_request()
             norma_delta = None
             if norma_error_code:
@@ -1149,8 +1168,11 @@ def admin_editar_matriz(matriz_id: int):
             flash("Matriz atualizada com sucesso.", "success")
             return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
 
-        if _save_matriz_activity_links(conn, matriz_id, active_tab):
+        save_result = _save_matriz_activity_links(conn, matriz_id, active_tab)
+        if save_result is True:
             flash("Lista da matriz atualizada com sucesso.", "success")
+        elif save_result is None:
+            flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
         else:
             flash("Aba de gestão de atividades inválida.", "error")
         return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
@@ -1243,6 +1265,9 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
 
     add_to_matrix = str(request.form.get("add_to_matrix") or "").strip().lower() in {"1", "true", "on", "yes"}
     form_data["add_to_matrix"] = add_to_matrix
+
+    if add_to_matrix and is_matrix_assigned(conn, matriz_id):
+        return _render_modal_error(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX])
 
     try:
         atividade_cursor = conn.execute(
@@ -1437,6 +1462,9 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
             f"v{target_versao['numero_versao']} selecionada para esta matriz.",
             "success",
         )
+    except AcademicGraphFrozenError:
+        conn.rollback()
+        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
     except sqlite3.IntegrityError as exc:
         conn.rollback()
         flash(f"Erro de integridade ao escolher versão: {exc}", "error")
@@ -1463,6 +1491,13 @@ def admin_excluir_matrizes():
         return redirect(url_for("admin_matrizes"))
 
     placeholders = ", ".join("?" for _ in matriz_ids)
+    if conn.execute(
+        f"SELECT 1 FROM turmas WHERE matriz_id IN ({placeholders}) LIMIT 1",
+        matriz_ids,
+    ).fetchone() is not None:
+        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        return redirect(url_for("admin_matrizes"))
+
     conn.execute(f"DELETE FROM matrizes_atividades WHERE id IN ({placeholders})", matriz_ids)
     conn.commit()
     flash("Matrizes excluídas com sucesso.", "success")
@@ -1474,6 +1509,10 @@ def admin_excluir_matriz(matriz_id: int):
     conn = get_db_connection()
     ensure_matrizes_atividades_table(conn)
     ensure_matriz_atividade_links_table(conn)
+
+    if is_matrix_assigned(conn, matriz_id):
+        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        return redirect(url_for("admin_matrizes"))
 
     deleted = conn.execute("DELETE FROM matrizes_atividades WHERE id = ?", (matriz_id,)).rowcount
     conn.commit()
@@ -1604,6 +1643,9 @@ def admin_matriz_versoes_definir(matriz_id: int):
         _set_versao_da_matriz_para_base(conn, matriz_id, base_id, versao_id)
         conn.commit()
         flash("Versão definida com sucesso.", "success")
+    except AcademicGraphFrozenError:
+        conn.rollback()
+        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
     except Exception as exc:
         conn.rollback()
         flash(f"Erro ao definir versão: {exc}", "error")
@@ -1650,6 +1692,9 @@ def admin_matriz_versoes_remover(matriz_id: int):
             flash("Vínculo removido com sucesso.", "success")
         else:
             flash("Não havia vínculo para remover.", "info")
+    except AcademicGraphFrozenError:
+        conn.rollback()
+        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
     except Exception as exc:
         conn.rollback()
         flash(f"Erro ao remover vínculo: {exc}", "error")
