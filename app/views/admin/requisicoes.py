@@ -29,7 +29,9 @@ from app.versioning.snapshots import (
     _has_versioned_requisicao_snapshot,
     is_versioned_requisicao_snapshot_display_enabled,
     prepare_versioned_requisicao_snapshot,
+    read_requisicao_snapshot_for_processing,
     RequisicaoSnapshotError,
+    SnapshotProcessingAuthority,
 )
 from app.web.filters import append_conditions_sql, get_date_range_query, get_multi_query_values
 from app.web.pagination import get_pagination, wants_pagination
@@ -1018,7 +1020,15 @@ def admin_processar_requisicao(req_id):
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
 
+    snapshot_processing = read_requisicao_snapshot_for_processing(requisicao)
     snapshot_diag = _build_admin_requisicao_snapshot_diagnostic(requisicao)
+
+    if (
+        request.method == "POST"
+        and snapshot_processing.authority is SnapshotProcessingAuthority.INVALID_AUTHORITATIVE_SNAPSHOT
+    ):
+        flash(RequisicaoSnapshotError.user_message, "error")
+        return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
     if request.method == "GET":
         return render_template(
@@ -1077,7 +1087,8 @@ def admin_processar_requisicao(req_id):
                 return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
             if (
-                not has_historical_null_matrix
+                snapshot_processing.authority is not SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
+                and not has_historical_null_matrix
                 and has_explicit_matrix
                 and not is_activity_allowed_for_turma_matrix(
                     conn,
@@ -1092,9 +1103,20 @@ def admin_processar_requisicao(req_id):
                 )
                 return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
-        if status in ["Deferida", "Deferida Parcialmente"] and requisicao["tem_limitacao"]:
+        if status in ["Deferida", "Deferida Parcialmente"]:
             horas_a_deferir = float(horas_deferidas) if status == "Deferida Parcialmente" else float(requisicao["horas_solicitadas"])
-            if requisicao["tipo_limitacao"] == "total":
+            snapshot_rule = (
+                snapshot_processing.rule
+                if snapshot_processing.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
+                else None
+            )
+            total_limit = snapshot_rule.limite_total if snapshot_rule else None
+            semester_limit = snapshot_rule.limite_semestre if snapshot_rule else None
+            if snapshot_rule is None and requisicao["tem_limitacao"]:
+                total_limit = requisicao["limite_horas_total"] if requisicao["tipo_limitacao"] == "total" else None
+                semester_limit = requisicao["limite_horas_semestral"] if requisicao["tipo_limitacao"] == "semestral" else None
+
+            if total_limit is not None:
                 horas_ja_deferidas = conn.execute("""
                     SELECT COALESCE(SUM(
                         CASE\x20
@@ -1107,11 +1129,11 @@ def admin_processar_requisicao(req_id):
                     WHERE aluno_id = ? AND atividade_id = ? AND status IN ('Deferida', 'Deferida Parcialmente')
                 """, (requisicao["aluno_id"], requisicao["atividade_id"])).fetchone()[0]
 
-                if horas_ja_deferidas + horas_a_deferir > requisicao["limite_horas_total"]:
-                    flash(f"Erro: O aluno já possui {horas_ja_deferidas}h nesta atividade. Limite total: {requisicao['limite_horas_total']}h. Máximo a deferir agora: {requisicao['limite_horas_total'] - horas_ja_deferidas}h.", "error")
+                if horas_ja_deferidas + horas_a_deferir > total_limit:
+                    flash(f"Erro: O aluno já possui {horas_ja_deferidas}h nesta atividade. Limite total: {total_limit}h. Máximo a deferir agora: {total_limit - horas_ja_deferidas}h.", "error")
                     return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
-            elif requisicao["tipo_limitacao"] == "semestral":
+            if semester_limit is not None:
                 ano_atual = datetime.datetime.now().year
                 semestre_atual = 1 if datetime.datetime.now().month <= 6 else 2
 
@@ -1132,8 +1154,8 @@ def admin_processar_requisicao(req_id):
                     )
                 """, (requisicao["aluno_id"], requisicao["atividade_id"], str(ano_atual), semestre_atual, semestre_atual)).fetchone()[0]
 
-                if horas_ja_deferidas_semestre + horas_a_deferir > requisicao["limite_horas_semestral"]:
-                    flash(f"Erro: Já possui {horas_ja_deferidas_semestre}h neste semestre. Limite semestral: {requisicao['limite_horas_semestral']}h. Máximo agora: {requisicao['limite_horas_semestral'] - horas_ja_deferidas_semestre}h.", "error")
+                if horas_ja_deferidas_semestre + horas_a_deferir > semester_limit:
+                    flash(f"Erro: Já possui {horas_ja_deferidas_semestre}h neste semestre. Limite semestral: {semester_limit}h. Máximo agora: {semester_limit - horas_ja_deferidas_semestre}h.", "error")
                     return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         if status != "Deferida Parcialmente":

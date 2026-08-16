@@ -5,12 +5,16 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from enum import Enum
+from math import isfinite
 
 from app.matrix_scope import get_effective_matriz_for_turma
 from app.versioning import resolver as resolver_service
 
 
 logger = logging.getLogger("main")
+
+REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA = "d6.4.0-v1"
 
 
 class RequisicaoSnapshotError(RuntimeError):
@@ -25,6 +29,156 @@ class PreparedRequisicaoSnapshot:
     codigo_normativo: str
     snapshot_json: str
     payload: dict[str, object]
+
+
+class SnapshotProcessingAuthority(str, Enum):
+    NO_SNAPSHOT = "NO_SNAPSHOT"
+    VALID_AUTHORITATIVE_SNAPSHOT = "VALID_AUTHORITATIVE_SNAPSHOT"
+    INVALID_AUTHORITATIVE_SNAPSHOT = "INVALID_AUTHORITATIVE_SNAPSHOT"
+
+
+@dataclass(frozen=True)
+class AuthoritativeRequisicaoSnapshotRule:
+    atividade_base_id: int
+    atividade_id_legacy: int
+    atividade_versao_id: int
+    atividade_versao_numero: int
+    norma_id: int
+    codigo_normativo: str
+    eixo: str
+    matriz_id_efetiva: int
+    schema_version: str
+    ch_por_evento: float | int | None
+    limite_semestre: float | int | None
+    limite_total: float | int | None
+
+
+@dataclass(frozen=True)
+class RequisicaoSnapshotProcessingRead:
+    authority: SnapshotProcessingAuthority
+    rule: AuthoritativeRequisicaoSnapshotRule | None = None
+    reason: str | None = None
+
+
+_SNAPSHOT_PROCESSING_IDENTITY_FIELDS = (
+    "atividade_base_id",
+    "atividade_id_legacy",
+    "atividade_versao_id",
+    "atividade_versao_numero",
+    "norma_id",
+    "codigo_normativo",
+    "eixo",
+    "matriz_id_efetiva",
+    "schema_version",
+)
+_SNAPSHOT_PROCESSING_RULE_FIELDS = (
+    "ch_por_evento",
+    "limite_semestre",
+    "limite_total",
+)
+
+
+def _snapshot_row_value(row, key):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(key)
+    try:
+        return row[key]
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
+def _strict_positive_int(value):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("positive integer required")
+    return value
+
+
+def _strict_optional_nonnegative_number(value):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("finite nonnegative number required")
+    if not isfinite(float(value)) or value < 0:
+        raise ValueError("finite nonnegative number required")
+    return value
+
+
+def _invalid_snapshot(reason: str) -> RequisicaoSnapshotProcessingRead:
+    return RequisicaoSnapshotProcessingRead(
+        SnapshotProcessingAuthority.INVALID_AUTHORITATIVE_SNAPSHOT,
+        reason=reason,
+    )
+
+
+def _has_versioned_requisicao_snapshot(row) -> bool:
+    return any(
+        _snapshot_row_value(row, key) not in (None, "")
+        for key in (
+            "atividade_versao_id",
+            "codigo_normativo_snapshot",
+            "regra_snapshot_json",
+        )
+    )
+
+
+def read_requisicao_snapshot_for_processing(row) -> RequisicaoSnapshotProcessingRead:
+    """Classify a persisted request and expose only its validated frozen rule."""
+    if not _has_versioned_requisicao_snapshot(row):
+        return RequisicaoSnapshotProcessingRead(SnapshotProcessingAuthority.NO_SNAPSHOT)
+
+    raw_snapshot = _snapshot_row_value(row, "regra_snapshot_json")
+    try:
+        payload = json.loads(raw_snapshot)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _invalid_snapshot("snapshot_json_invalid")
+    if not isinstance(payload, dict):
+        return _invalid_snapshot("snapshot_json_not_object")
+
+    missing = [
+        key
+        for key in (*_SNAPSHOT_PROCESSING_IDENTITY_FIELDS, *_SNAPSHOT_PROCESSING_RULE_FIELDS)
+        if key not in payload
+    ]
+    if missing:
+        return _invalid_snapshot("missing:" + ",".join(missing))
+
+    try:
+        identity = {
+            "atividade_base_id": _strict_positive_int(payload["atividade_base_id"]),
+            "atividade_id_legacy": _strict_positive_int(payload["atividade_id_legacy"]),
+            "atividade_versao_id": _strict_positive_int(payload["atividade_versao_id"]),
+            "atividade_versao_numero": _strict_positive_int(payload["atividade_versao_numero"]),
+            "norma_id": _strict_positive_int(payload["norma_id"]),
+            "matriz_id_efetiva": _strict_positive_int(payload["matriz_id_efetiva"]),
+        }
+        for key in ("codigo_normativo", "eixo", "schema_version"):
+            value = payload[key]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"non-empty text required: {key}")
+            identity[key] = value
+        rules = {
+            key: _strict_optional_nonnegative_number(payload[key])
+            for key in _SNAPSHOT_PROCESSING_RULE_FIELDS
+        }
+    except (TypeError, ValueError):
+        return _invalid_snapshot("snapshot_value_invalid")
+
+    if identity["schema_version"] != REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA:
+        return _invalid_snapshot("unsupported_schema_version")
+
+    if identity["atividade_versao_id"] != _snapshot_row_value(row, "atividade_versao_id"):
+        return _invalid_snapshot("activity_version_identity_mismatch")
+    if identity["atividade_id_legacy"] != _snapshot_row_value(row, "atividade_id"):
+        return _invalid_snapshot("legacy_activity_identity_mismatch")
+    if identity["codigo_normativo"] != _snapshot_row_value(row, "codigo_normativo_snapshot"):
+        return _invalid_snapshot("normative_code_identity_mismatch")
+
+    return RequisicaoSnapshotProcessingRead(
+        SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT,
+        rule=AuthoritativeRequisicaoSnapshotRule(**identity, **rules),
+    )
 
 
 def is_versioned_requisicao_snapshot_display_enabled() -> bool:
@@ -143,7 +297,7 @@ def _build_versioned_requisicao_snapshot_payload(
         "observacao_aluno": rule_row["observacao_aluno"],
         "resolver_status": resolver_result.get("status"),
         "resolver_warnings": list(resolver_result.get("warnings") or []),
-        "schema_version": "d6.4.0-v1",
+        "schema_version": REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA,
         "snapshot_written_at": snapshot_written_at,
         "tipo_atividade_legacy": rule_row["tipo_atividade_legacy"],
         "versao_status": rule_row["versao_status"],
@@ -315,11 +469,14 @@ def _normalize_snapshot_diagnostic_scalar(value):
     return value
 
 def _has_versioned_requisicao_snapshot(row) -> bool:
-    atividade_versao_id = _snapshot_diagnostic_row_value(row, "atividade_versao_id")
-    codigo_normativo_snapshot = _snapshot_diagnostic_row_value(row, "codigo_normativo_snapshot")
-    if atividade_versao_id not in (None, ""):
-        return True
-    return bool(str(codigo_normativo_snapshot or "").strip())
+    return any(
+        _snapshot_diagnostic_row_value(row, key) not in (None, "")
+        for key in (
+            "atividade_versao_id",
+            "codigo_normativo_snapshot",
+            "regra_snapshot_json",
+        )
+    )
 
 def _build_admin_requisicao_snapshot_diagnostic(row) -> dict[str, object] | None:
     if not _has_versioned_requisicao_snapshot(row):
@@ -383,4 +540,9 @@ __all__ = [
     "prepare_versioned_requisicao_snapshot",
     "PreparedRequisicaoSnapshot",
     "RequisicaoSnapshotError",
+    "SnapshotProcessingAuthority",
+    "AuthoritativeRequisicaoSnapshotRule",
+    "RequisicaoSnapshotProcessingRead",
+    "read_requisicao_snapshot_for_processing",
+    "REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA",
 ]

@@ -236,6 +236,66 @@ requests, progress/historical approved-hour calculations, canonical E2E
 cutover and removal of obsolete legacy/shadow/mapping authorities remain
 future work. Versioning is not globally complete.
 
+## FC-11 — REQUEST SNAPSHOT PROCESSING AUTHORITY — CLOSED / ACCEPTED
+
+`FC11_CLOSED_PUBLISHED`. Technical acceptance is final. FC-10 made creation
+snapshots mandatory; FC-11 makes the frozen request snapshot authoritative for
+admin processing and deferment. Processing does not reinterpret a request via
+current legacy activity, current Activity Version, current Norma, current
+Turma Matrix, preferred/latest Matrix, or a newer Activity Version.
+
+### Authority and processing model
+
+The canonical owner is `app/versioning/snapshots.py`. Its authority states are
+`NO_SNAPSHOT`, `VALID_AUTHORITATIVE_SNAPSHOT` and
+`INVALID_AUTHORITATIVE_SNAPSHOT`; corrupt or partial snapshot-shaped data is
+not treated as historical no-snapshot data. The supported schema is exactly
+`d6.4.0-v1`, with one canonical definition shared by writer and reader.
+Missing, null, empty, non-string, typo and future schema values are invalid.
+
+A valid snapshot supplies the frozen `limite_total` and `limite_semestre`.
+`ch_por_evento` is validated but is not newly enforced because the existing
+flow has no per-event cap; FC-11 does not claim to introduce that rule. A
+self-contained M1/V1 request remains processable after V2 exists and after
+legacy limits, live version, Norma or current Matrix changes. No resolver is
+rerun, and current Matrix membership does not invalidate a valid snapshot.
+Aggregation remains by persisted `atividade_id`; no progress or base-wide
+migration is claimed. Partial deferment uses the frozen rule.
+
+Recognizably snapshotted invalid/corrupt requests are rejected before any
+processing mutation for `Pendente`, `Deferida`, `Deferida Parcialmente`,
+`Indeferida`, `Devolvida` and `Encerrada`. Status, hours, observations, dates,
+admin state, notification state and snapshot columns remain unchanged; there
+is no legacy fallback. True no-snapshot compatibility remains, including the
+FC-08 NULL-Matrix behavior. No backfill, manufactured version or processing
+snapshot creation occurs. Snapshot columns are immutable. The snapshot display
+flag is presentation-only.
+
+### Review and evidence
+
+Initial independent review: `FC11_FINAL_REVIEW_REJECT`, finding (1) invalid
+snapshots could mutate non-defer statuses and (2) unsupported schema values
+were accepted. Bounded repair was completed. Targeted independent rereview:
+`FC11_FINDINGS_REREVIEW_ACCEPT`. Technical acceptance is final.
+
+Final executor canonical after repair: 1689 passed / 133 skipped / 17
+deselected / 0 failed / 0 errors. Repair-focused executor: 46 passed.
+Affected regression executor: 219 passed. Final independent targeted
+rereview: 98 passed / 0 failures / 0 errors. No canonical rerun occurred
+after the final rereview by design.
+
+Invariants remain: routes 131, endpoints 130, RBAC unmapped 0, actor matrix
+402, catalogue 539, Design System 198, route inventory unchanged, main
+`@app.route` 0, main-owned hooks 0 and prohibited import main 0. No schema,
+migration, v4, route, endpoint, RBAC, message or CSRF delta.
+
+FC-11 closes processing/deferment authority only, not global cutover. Future
+work remains student progress under historical semantics, dashboard and
+historical approved-hour calculations, canonical E2E cutover, and removal of
+obsolete legacy/shadow/mapping paths. Legacy paths remain and global
+versioning is not complete. `AGENT_HANDOFF.md`, the execution protocol,
+ledger, documentation index and historical contracts are unchanged.
+
 ## FC-07 — ACTIVITY VERSION COPY-ON-CREATE — CLOSED / ACCEPTED
 
 FC-07 (activity version copy-on-create) — CLOSED / ACCEPTED. Production

@@ -455,13 +455,6 @@ def test_admin_processar_requisicao_with_partial_snapshot_payload_does_not_break
 def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(client, monkeypatch):
     seeded = _seed_admin_request(
         label="process-legacy",
-        snapshot_payload=_snapshot_payload(
-            atividade_versao_id=888,
-            atividade_id_legacy=99999,
-            extra={"atividade_base_id": 1234},
-        ),
-        atividade_versao_id=888,
-        codigo_normativo_snapshot="AAC-rev6",
     )
 
     called = []
