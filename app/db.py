@@ -531,14 +531,10 @@ def init_db():
             "SELECT id, curso_id FROM turmas WHERE matriz_id IS NULL OR matriz_id = 0"
         ).fetchall()
         for turma_row in turmas_sem_matriz:
-            matriz = get_preferred_matriz_for_curso(conn, turma_row["curso_id"])
-            if matriz:
-                conn.execute(
-                    "UPDATE turmas SET matriz_id = ? WHERE id = ?",
-                    (matriz["id"], turma_row["id"]),
-                )
+            # Read-only compatibility census: NULL Turmas are never assigned or normalized.
+            get_preferred_matriz_for_curso(conn, turma_row["curso_id"])
     except Exception as exc:
-        logger.warning("População inicial de matriz_id em turmas antigas: %s", exc)
+        logger.warning("Leitura de diagnóstico de matriz_id em turmas antigas: %s", exc)
 
     apply_schema_migrations(conn, logger=logger)
     conn.commit()

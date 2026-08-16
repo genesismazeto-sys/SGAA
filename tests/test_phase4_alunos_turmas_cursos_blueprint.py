@@ -95,6 +95,18 @@ R1_KW_DELETIONS = {
     "admin_detalhes_turma": "periodo_corrente",
 }
 
+# FC-08 is a bounded behavioral tightening in the existing owner: Turma
+# Matrix persistence and its exact assigned-matrix presentation are no longer
+# byte-identical to the historical extraction baseline.
+FC08_BODY_CHANGES = {
+    "admin_adicionar_turma",
+    "admin_editar_turma",
+    "admin_turmas",
+    "admin_detalhes_turma",
+    "_resolve_turma_matriz_id",
+    "_build_admin_dashboard_turma_cards",
+}
+
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
 ROUTE_INVENTORY_BYTES = 20814
@@ -1041,7 +1053,7 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         module_body = _function_body_dump(module_tree, name)
         assert baseline_body is not None, f"baseline main.py has no function {name}"
         assert module_body is not None, f"module has no function {name}"
-        if name in R1_KW_DELETIONS:
+        if name in R1_KW_DELETIONS and name not in FC08_BODY_CHANGES:
             expected = _drop_render_template_kwarg(
                 baseline_tree, name, R1_KW_DELETIONS[name]
             )
@@ -1049,7 +1061,7 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
                 f"moved body differs from baseline beyond the R1 keyword "
                 f"deletion for {name}"
             )
-        else:
+        elif name not in FC08_BODY_CHANGES:
             assert module_body == baseline_body, f"moved body differs from baseline for {name}"
 
 
@@ -1099,6 +1111,8 @@ def test_r1_three_dead_keywords_removed_exactly_and_no_fourth():
 
     # The exact ten helper bodies remain literally AST-equivalent (no R1 kwarg).
     for name in HELPER_NAMES:
+        if name in FC08_BODY_CHANGES:
+            continue
         assert _function_body_dump(module_tree, name) == _function_body_dump(
             baseline_tree, name
         ), f"helper body drift for {name}"
@@ -1147,18 +1161,20 @@ def test_build_admin_dashboard_turma_cards_still_resolves_and_calls_periodo_corr
         dashboard_tree = _tree(dashboard_path)
         assert "periodo_corrente" in _top_level_functions(dashboard_path)
         assert "_build_admin_dashboard_turma_cards" in _top_level_functions(dashboard_path)
-        assert _function_body_dump(
-            dashboard_tree, "_build_admin_dashboard_turma_cards"
-        ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
+        if "_build_admin_dashboard_turma_cards" not in FC08_BODY_CHANGES:
+            assert _function_body_dump(
+                dashboard_tree, "_build_admin_dashboard_turma_cards"
+            ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
         assert "periodo_corrente" not in _top_level_functions(MAIN_PATH)
         assert "_build_admin_dashboard_turma_cards" not in _top_level_functions(MAIN_PATH)
     else:
         current_tree = _tree(MAIN_PATH)
         assert "periodo_corrente" in _top_level_functions(MAIN_PATH)
         assert "_build_admin_dashboard_turma_cards" in _top_level_functions(MAIN_PATH)
-        assert _function_body_dump(
-            current_tree, "_build_admin_dashboard_turma_cards"
-        ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
+        if "_build_admin_dashboard_turma_cards" not in FC08_BODY_CHANGES:
+            assert _function_body_dump(
+                current_tree, "_build_admin_dashboard_turma_cards"
+            ) == _function_body_dump(baseline_tree, "_build_admin_dashboard_turma_cards")
 
     import main
 

@@ -46,6 +46,46 @@ Next UT: NONE — FINAL ROADMAP COMPLETE. Work continuing after this point runs 
 the Design System track below, which is NOT a UT and does not extend the UT
 roadmap.
 
+## FC-08 — TURMA EXPLICIT MATRIX AUTHORITY — CLOSED / ACCEPTED
+
+FC08_F1_F2_FINAL_REREVIEW_ACCEPT. `turmas.matriz_id` is the sole persisted
+academic Matrix authority for a cohort. Resolution requires the exact persisted
+Matrix to belong to the Turma's Curso; no preferred/newest/active fallback
+remains in academic authority. An explicit M1 remains M1 after M2 changes
+recency or status. NULL, invalid and foreign Matrix pointers fail closed for
+new academic scope.
+
+Turma creation and normal full edit require an explicit valid `matriz_id`;
+blank, missing and foreign choices reject atomically. GET and startup do not
+write or backfill. Student catalogue and new student/admin request scope use
+the exact Turma Matrix; canonical `matrix_scope` returns no authority and an
+empty allowed scope when it cannot resolve one.
+
+Historical persisted requests remain processable only when the aluno exists,
+the Turma exists and that existing Turma has `matriz_id IS NULL`. This does
+not reconstruct a Matrix. Missing/dangling aluno-Turma relationships receive
+no exception, and explicit-Matrix historical requests still enforce exact
+Matrix membership. No request, Turma, snapshot or version rebinding occurs.
+
+Student and admin dashboards do not fabricate 160/80 targets without exact
+Matrix authority. Factual approved hours/counts may remain visible, while
+target, denominator and progress semantics are unavailable/non-applicable;
+configured Matrix targets remain authoritative. The versioning resolver
+delegates to canonical `matrix_scope`. FC-08 is not full versioning cutover:
+request snapshot authority, historical-rule authority and legacy academic-rule
+removal remain future functional work.
+
+Follow-up Matrix-freeze debt remains open: selected activity-version links;
+Matrix totals/status/validity/Curso identity fields; Activity-Version rule
+fields; and Matrix deletion/dangling Turma protection. These are not closed by
+FC-08.
+
+Final canonical: 1600 passed / 133 skipped / 17 deselected / 0 failed / 0
+errors. Invariants: routes 131; endpoints 130; RBAC unmapped 0; actor matrix
+402; message catalogue 539; Design System 198; route inventory unchanged;
+main `@app.route` 0; main-owned hooks 0; prohibited import main 0. No route,
+endpoint, schema, migration, RBAC, message catalogue or CSRF snapshot change.
+
 ## FC-07 — ACTIVITY VERSION COPY-ON-CREATE — CLOSED / ACCEPTED
 
 FC-07 (activity version copy-on-create) — CLOSED / ACCEPTED. Production

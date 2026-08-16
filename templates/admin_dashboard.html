@@ -498,14 +498,14 @@
                 <div class="dashboard-turma-progress-head">
                   {% if turma.aac_applicable %}
                   <span class="dashboard-turma-progress-label">AAC <small>{{ turma.aac_hours_fmt }}h</small></span>
-                  <span>{{ turma.aac_pct }}%</span>
+                  <span>{{ turma.aac_pct if turma.aac_pct is not none else '-' }}{% if turma.aac_pct is not none %}%{% endif %}</span>
                   {% else %}
                   <span class="dashboard-turma-progress-label">AAC</span>
                   <span>N/A</span>
                   {% endif %}
                 </div>
                 {% if turma.aac_applicable %}
-                <div class="progress" aria-label="Progresso AAC da turma {{ turma.label }}" data-pct="{{ turma.aac_pct }}">
+                <div class="progress" aria-label="Progresso AAC da turma {{ turma.label }}" data-pct="{{ turma.aac_pct if turma.aac_pct is not none else '' }}">
                   <div class="progress-bar"></div>
                 </div>
                 {% else %}
@@ -516,14 +516,14 @@
                 <div class="dashboard-turma-progress-head">
                   {% if turma.aeu_applicable %}
                   <span class="dashboard-turma-progress-label">AEU <small>{{ turma.aeu_hours_fmt }}h</small></span>
-                  <span>{{ turma.aeu_pct }}%</span>
+                  <span>{{ turma.aeu_pct if turma.aeu_pct is not none else '-' }}{% if turma.aeu_pct is not none %}%{% endif %}</span>
                   {% else %}
                   <span class="dashboard-turma-progress-label">AEU</span>
                   <span>N/A</span>
                   {% endif %}
                 </div>
                 {% if turma.aeu_applicable %}
-                <div class="progress" aria-label="Progresso AEU da turma {{ turma.label }}" data-pct="{{ turma.aeu_pct }}">
+                <div class="progress" aria-label="Progresso AEU da turma {{ turma.label }}" data-pct="{{ turma.aeu_pct if turma.aeu_pct is not none else '' }}">
                   <div class="progress-bar"></div>
                 </div>
                 {% else %}
@@ -534,14 +534,14 @@
                 <div class="dashboard-turma-progress-head">
                   {% if turma.total_applicable %}
                   <span class="dashboard-turma-progress-label">Total <small>{{ turma.ch_total_fmt }}h</small></span>
-                  <span>{{ turma.total_pct }}%</span>
+                  <span>{{ turma.total_pct if turma.total_pct is not none else '-' }}{% if turma.total_pct is not none %}%{% endif %}</span>
                   {% else %}
                   <span class="dashboard-turma-progress-label">Total</span>
                   <span>N/A</span>
                   {% endif %}
                 </div>
                 {% if turma.total_applicable %}
-                <div class="progress" aria-label="Progresso total da turma {{ turma.label }}" data-pct="{{ turma.total_pct }}">
+                <div class="progress" aria-label="Progresso total da turma {{ turma.label }}" data-pct="{{ turma.total_pct if turma.total_pct is not none else '' }}">
                   <div class="progress-bar"></div>
                 </div>
                 {% else %}

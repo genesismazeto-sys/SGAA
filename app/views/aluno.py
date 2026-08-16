@@ -225,6 +225,8 @@ def _list_atividades_for_usuario(
     aluno_scope, matriz = _get_effective_matriz_for_usuario(conn, usuario_id)
     if not aluno_scope:
         return None, None, []
+    if not matriz:
+        return aluno_scope, None, []
 
     query = "SELECT DISTINCT a.* FROM atividades a"
     params: list[Any] = []
@@ -266,7 +268,7 @@ def _is_activity_allowed_for_usuario(
 ) -> bool:
     _, matriz = _get_effective_matriz_for_usuario(conn, usuario_id)
     if not matriz:
-        return True
+        return False
     if current_activity_id and atividade_id == current_activity_id:
         return True
     row = conn.execute(
@@ -520,9 +522,6 @@ def aluno_dashboard():
     helpers = _get_main_helpers()
     get_student_request_update_alert = helpers["get_student_request_update_alert"]
     mark_student_request_updates_seen = helpers["mark_student_request_updates_seen"]
-    default_horas_aac = DEFAULT_CURSO_TOTAL_HORAS_AAC
-    default_horas_aeu = DEFAULT_CURSO_TOTAL_HORAS_AEU
-
     conn = get_db_connection()
     usuario_id = session.get("user_id")
 
@@ -548,12 +547,17 @@ def aluno_dashboard():
     meta_horas_academicas = (
         matriz_aluno["horas_aac_obrigatorias"]
         if matriz_aluno and matriz_aluno["horas_aac_obrigatorias"] is not None
-        else default_horas_aac
+        else None
     )
     meta_horas_extensao = (
         matriz_aluno["horas_extensao_obrigatorias"]
         if matriz_aluno and matriz_aluno["horas_extensao_obrigatorias"] is not None
-        else default_horas_aeu
+        else None
+    )
+    meta_total_horas_fmt = (
+        _format_hours_number(meta_horas_academicas + meta_horas_extensao)
+        if meta_horas_academicas is not None and meta_horas_extensao is not None
+        else "-"
     )
 
     requisicoes_rows = conn.execute(
@@ -738,8 +742,17 @@ def aluno_dashboard():
         total_horas_extensao=total_horas_extensao,
         total_horas_academicas_fmt=_format_hours_number(total_horas_academicas),
         total_horas_extensao_fmt=_format_hours_number(total_horas_extensao),
-        meta_horas_academicas_fmt=_format_hours_number(meta_horas_academicas),
-        meta_horas_extensao_fmt=_format_hours_number(meta_horas_extensao),
+         meta_horas_academicas_fmt=(
+             _format_hours_number(meta_horas_academicas)
+             if meta_horas_academicas is not None
+             else "-"
+         ),
+         meta_horas_extensao_fmt=(
+             _format_hours_number(meta_horas_extensao)
+             if meta_horas_extensao is not None
+             else "-"
+         ),
+         meta_total_horas_fmt=meta_total_horas_fmt,
         meta_horas_academicas=meta_horas_academicas,
         meta_horas_extensao=meta_horas_extensao,
         total_reqs=total_reqs,

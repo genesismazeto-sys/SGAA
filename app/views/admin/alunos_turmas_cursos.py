@@ -31,7 +31,6 @@ from app.db import (
     ensure_turmas_matriz_schema,
     ensure_usuario_access_schema,
     get_db_connection,
-    get_preferred_matriz_for_curso,
 )
 from app.db_maintenance import ensure_matrizes_atividades_table
 from app.matrix_scope import _matriz_option_label, get_effective_matriz_for_turma
@@ -114,13 +113,11 @@ def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
 
 
 def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: int | None):
-    preferred = get_preferred_matriz_for_curso(conn, curso_id)
-    matriz_id = posted_matriz_id or (preferred["id"] if preferred else None)
-    if not matriz_id:
+    if not posted_matriz_id:
         return None, "Selecione uma matriz para a turma."
     matriz = conn.execute(
         "SELECT * FROM matrizes_atividades WHERE id = ? AND curso_id = ?",
-        (matriz_id, curso_id),
+        (posted_matriz_id, curso_id),
     ).fetchone()
     if not matriz:
         return None, "A matriz selecionada não pertence ao curso informado."
@@ -789,24 +786,9 @@ def admin_turmas():
         FROM turmas t
    LEFT JOIN cursos c ON c.id = t.curso_id
    LEFT JOIN alunos a ON a.turma_id = t.id
-   LEFT JOIN matrizes_atividades tm_assigned ON tm_assigned.id = t.matriz_id
-   LEFT JOIN matrizes_atividades tm ON tm.id = COALESCE(
-       tm_assigned.id,
-       (
-           SELECT mp.id
-             FROM matrizes_atividades mp
-            WHERE mp.curso_id = t.curso_id
-         ORDER BY CASE LOWER(COALESCE(mp.status, ''))
-                      WHEN 'ativa' THEN 0
-                      WHEN 'vigente' THEN 0
-                      WHEN 'rascunho' THEN 1
-                      ELSE 2
-                  END,
-                  COALESCE(mp.data_inicio_vigencia, '') DESC,
-                  mp.id DESC
-            LIMIT 1
-       )
-   )
+   LEFT JOIN matrizes_atividades tm
+          ON tm.id = t.matriz_id
+         AND tm.curso_id = t.curso_id
     """
     select_cols = """
         SELECT t.id, t.nome, t.ano, t.semestre, t.turno, t.status, t.numero,
@@ -936,8 +918,7 @@ def admin_adicionar_turma():
     cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()
     default_curso_id = curso_mais_populoso_id() or (cursos[0]["id"] if cursos else None)
     matrizes_by_curso = _matrizes_by_curso(conn)
-    preferred_default = get_preferred_matriz_for_curso(conn, default_curso_id)
-    default_matriz_id = preferred_default["id"] if preferred_default else None
+    default_matriz_id = None
 
     if request.method == "POST":
         curso_id = request.form.get("curso_id", type=int)
@@ -1246,24 +1227,9 @@ def admin_detalhes_turma(turma_id):
                tm.nome AS matriz_nome, tm.versao AS matriz_versao, tm.status AS matriz_status
           FROM turmas t
           LEFT JOIN cursos c ON c.id = t.curso_id
-          LEFT JOIN matrizes_atividades tm_assigned ON tm_assigned.id = t.matriz_id
-          LEFT JOIN matrizes_atividades tm ON tm.id = COALESCE(
-              tm_assigned.id,
-              (
-                  SELECT mp.id
-                    FROM matrizes_atividades mp
-                   WHERE mp.curso_id = t.curso_id
-                ORDER BY CASE LOWER(COALESCE(mp.status, ''))
-                             WHEN 'ativa' THEN 0
-                             WHEN 'vigente' THEN 0
-                             WHEN 'rascunho' THEN 1
-                             ELSE 2
-                         END,
-                         COALESCE(mp.data_inicio_vigencia, '') DESC,
-                         mp.id DESC
-                   LIMIT 1
-              )
-          )
+           LEFT JOIN matrizes_atividades tm
+                  ON tm.id = t.matriz_id
+                 AND tm.curso_id = t.curso_id
          WHERE t.id=?
     """, (turma_id,)).fetchone()
     if not turma:

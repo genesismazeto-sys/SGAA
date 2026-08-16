@@ -218,21 +218,23 @@
   {# === Progresso total de horas (Acad + Ext) vs meta total === #}
   {% set acad = total_horas_academicas or 0 %}
   {% set ext  = total_horas_extensao   or 0 %}
-  {% set meta_acad = meta_horas_academicas or 0 %}
-  {% set meta_ext  = meta_horas_extensao   or 0 %}
+  {% set meta_acad = meta_horas_academicas %}
+  {% set meta_ext  = meta_horas_extensao %}
   {% set total_horas = acad + ext %}
-  {% set meta_total  = meta_acad + meta_ext %}
-  {% set pct_total   = (total_horas * 100 // meta_total) if meta_total > 0 else 0 %}
+  {% set meta_total  = meta_acad + meta_ext if meta_acad is not none and meta_ext is not none else none %}
+  {% set pct_total   = (total_horas * 100 // meta_total) if meta_total is not none and meta_total > 0 else none %}
   {% set total_horas_fmt = total_horas_academicas_fmt if not total_horas_extensao else (total_horas_academicas_fmt ~ ' + ' ~ total_horas_extensao_fmt) %}
 
   <div class="resume-total-wrapper" style="margin-top:10px;width:100%;">
     <div class="resume-total-line" style="display:flex;justify-content:space-between;align-items:center;font:500 12px/1.3 system-ui;color:#555;margin-bottom:6px;">
       <span class="rt-label">Progresso total de horas</span>
-      <span class="rt-val">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total|int if meta_total == (meta_total|int) else meta_total }} h ({{ pct_total }}%)</span>
+      <span class="rt-val">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total_horas_fmt }} h ({% if pct_total is none %}{{ meta_total_horas_fmt }}{% else %}{{ pct_total }}%{% endif %})</span>
     </div>
-    <div class="resume-total-bar" data-pct="{{ pct_total }}" style="height:12px;border-radius:4px;background:#ececec;overflow:hidden;">
-      <span style="display:block;height:100%;width:0;background:linear-gradient(90deg,#8359ff,#5c30e0);transition:width .5s cubic-bezier(.4,0,.2,1);"></span>
-    </div>
+    {% if pct_total is not none %}
+      <div class="resume-total-bar" data-pct="{{ pct_total }}" style="height:12px;border-radius:4px;background:#ececec;overflow:hidden;">
+        <span style="display:block;height:100%;width:0;background:linear-gradient(90deg,#8359ff,#5c30e0);transition:width .5s cubic-bezier(.4,0,.2,1);"></span>
+      </div>
+    {% endif %}
   </div>
 </section>
 
@@ -244,10 +246,10 @@
 {% set total_acad_req = total_horas_academicas or 0 %}
 {% set total_ext_req  = total_horas_extensao   or 0 %}
 {# Totais de referência vindos do curso do aluno #}
-{% set alvo_acad = meta_horas_academicas or 0 %}
-{% set alvo_ext  = meta_horas_extensao   or 0 %}
-{% set pct_acad = 0 if alvo_acad <= 0 else ((total_acad_req * 100 // alvo_acad) if total_acad_req < alvo_acad else 100) %}
-{% set pct_ext  = 0 if alvo_ext  <= 0 else ((total_ext_req  * 100 // alvo_ext ) if total_ext_req  < alvo_ext  else 100) %}
+{% set alvo_acad = meta_horas_academicas %}
+{% set alvo_ext  = meta_horas_extensao %}
+{% set pct_acad = none if alvo_acad is none else ((total_acad_req * 100 // alvo_acad) if total_acad_req < alvo_acad else 100) %}
+{% set pct_ext  = none if alvo_ext is none else ((total_ext_req * 100 // alvo_ext) if total_ext_req < alvo_ext else 100) %}
 
 <div class="kpi-grid aluno-kpi-progress">
   <!-- 1: Progresso Acadêmicas -->
@@ -256,10 +258,14 @@
       <span class="kpi-title">Acadêmicas Complementares</span>
     </div>
     <div class="kpi-value">{{ total_horas_academicas_fmt }}/{{ meta_horas_academicas_fmt }} h</div>
-    <div class="kpi-sub">{{ pct_acad }}% cumprido</div>
-    <div class="progress is-bar" aria-label="Progresso horas acadêmicas" data-pct="{{ pct_acad }}">
-      <div class="progress-bar"></div>
-    </div>
+    {% if alvo_acad is not none %}
+      <div class="kpi-sub">{{ pct_acad }}% cumprido</div>
+      <div class="progress is-bar" aria-label="Progresso horas acadêmicas" data-pct="{{ pct_acad }}">
+        <div class="progress-bar"></div>
+      </div>
+    {% else %}
+      <div class="kpi-sub">-</div>
+    {% endif %}
   </div>
 
   <!-- 2: Pendentes Acadêmicas -->
@@ -280,10 +286,14 @@
       <span class="kpi-title">Extensão Universitária</span>
     </div>
     <div class="kpi-value">{{ total_horas_extensao_fmt }}/{{ meta_horas_extensao_fmt }} h</div>
-    <div class="kpi-sub">{{ pct_ext }}% cumprido</div>
-    <div class="progress is-bar" aria-label="Progresso horas de extensão" data-pct="{{ pct_ext }}">
-      <div class="progress-bar"></div>
-    </div>
+    {% if alvo_ext is not none %}
+      <div class="kpi-sub">{{ pct_ext }}% cumprido</div>
+      <div class="progress is-bar" aria-label="Progresso horas de extensão" data-pct="{{ pct_ext }}">
+        <div class="progress-bar"></div>
+      </div>
+    {% else %}
+      <div class="kpi-sub">-</div>
+    {% endif %}
   </div>
 
   <!-- 4: Pendentes Extensão -->

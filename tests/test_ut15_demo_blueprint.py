@@ -434,6 +434,11 @@ def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
     the three authorized additions applied; a description otherwise. The
     comparison covers the COMPLETE snapshot structure: rows, routes, methods,
     evidence, token_counts_per_form, summary, status and ownership metadata."""
+    # The live HEAD already contains the FC-07 additions. Preserve strict
+    # custody for the current zero-delta artifact before checking the older
+    # transitional HEAD-plus-three form.
+    if _normalize_mensagens_list_ordering(head_obj) == _normalize_mensagens_list_ordering(work_obj):
+        return ""
     expected = _apply_fc07_mensagens_additions(head_obj)
     if expected is None:
         return "HEAD snapshot has no unique mensagens reset row"

@@ -250,7 +250,7 @@ def test_admin_dashboard_prioritizes_turma_view_and_removes_redundant_cards(clie
     assert "Alunos ativos" in html
     assert "1º período" in html
     assert "Cumprimento" in html
-    assert "Progresso total da turma" in html
+    assert "N/A" in html
     assert "Relação entre número de alunos percentual total atingido" in html
     assert "75 a 100%" in html
     assert "0 a 25%" in html

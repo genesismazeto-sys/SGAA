@@ -1259,31 +1259,28 @@ def test_green_13_turma_cards_behavior(tmp_path):
     assert card["aac_hours_fmt"] == "40"
     assert card["aeu_hours_fmt"] == "0"
     assert card["ch_total_fmt"] == "40"
-    assert card["aac_pct"] == int((40 * 100) // 160)
-    assert card["aeu_pct"] == 0
-    assert card["total_pct"] == int((40 * 100) // (160 + 80))
-    assert card["total_applicable"] is True
-    assert card["aac_applicable"] is True
-    assert card["aeu_applicable"] is True
+    assert card["aac_pct"] is None
+    assert card["aeu_pct"] is None
+    assert card["total_pct"] is None
+    assert card["total_applicable"] is False
+    assert card["aac_applicable"] is False
+    assert card["aeu_applicable"] is False
     assert card["periodo_atual_label"] == f"{main.periodo_corrente(2024, 1)}º período", (
         "card period label must be computed from ano_inicio/semestre_inicio via "
         "periodo_corrente"
     )
-    expected_avg_pct = int(
-        round(min(100.0, (40.0 * 100.0) / (160 + 80)))
-    )
-    assert card["attainment_avg_pct_label"] == f"{expected_avg_pct}%"
+    assert card["attainment_avg_pct_label"] == "-"
     assert card["attainment_donut_gradient"].startswith("conic-gradient(")
-    assert card["attainment_buckets"][4]["count"] == 1, (
-        "the single active aluno at <25% attainment must land in the last bucket"
+    assert card["attainment_buckets"][4]["count"] == 0, (
+        "an unconfigured Matrix must not classify attainment against a fabricated target"
     )
 
     assert set(summary) == SUMMARY_KEY_SET
     assert summary == {
         "total_turmas": 1,
         "total_turmas_ativas": 1,
-        "turmas_com_aac": 1,
-        "turmas_com_aeu": 1,
+        "turmas_com_aac": 0,
+        "turmas_com_aeu": 0,
         "media_alunos_por_turma_fmt": "1,0",
     }
     assert total_geral is not None, (
@@ -1292,8 +1289,8 @@ def test_green_13_turma_cards_behavior(tmp_path):
     assert set(total_geral) == TOTAL_GERAL_KEY_SET
     assert total_geral["label"] == "Total Geral"
     assert total_geral["total_alunos"] == 1
-    assert total_geral["aac_pct"] == int((40 * 100) // 160)
-    assert total_geral["aeu_pct"] == 0
+    assert total_geral["aac_pct"] is None
+    assert total_geral["aeu_pct"] is None
     assert total_geral["ch_total_fmt"] == "40"
     assert total_geral["pendentes"] == 1
 
@@ -1309,8 +1306,8 @@ def test_green_13_turma_cards_behavior(tmp_path):
     )
     assert summary["total_turmas"] == 2
     assert summary["total_turmas_ativas"] == 1
-    assert summary["turmas_com_aac"] == 1
-    assert summary["turmas_com_aeu"] == 1
+    assert summary["turmas_com_aac"] == 0
+    assert summary["turmas_com_aeu"] == 0
     conn.close()
 
 

@@ -138,13 +138,21 @@ def _seed_legacy_flow_context():
             "SELECT id FROM cursos WHERE codigo = ?",
             (curso_codigo,),
         ).fetchone()["id"]
+        matriz_id = conn.execute(
+            """
+            INSERT INTO matrizes_atividades (curso_id, nome, versao, status, data_inicio_vigencia)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (curso_id, f"Matriz D5 {suffix}", "1", "vigente", "2026-01-01"),
+        ).fetchone()["id"]
 
         conn.execute(
             """
-            INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, codigo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, matriz_id, codigo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("Turma D5", 2026, 1, "Manha", "Ativa", 1, curso_id, turma_codigo),
+            ("Turma D5", 2026, 1, "Manha", "Ativa", 1, curso_id, matriz_id, turma_codigo),
         )
         turma_id = conn.execute(
             "SELECT id FROM turmas WHERE codigo = ?",
@@ -180,6 +188,10 @@ def _seed_legacy_flow_context():
             "SELECT id FROM atividades WHERE nome = ?",
             (atividade_nome,),
         ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (matriz_id, atividade_id),
+        )
         conn.commit()
 
     return {

@@ -364,8 +364,6 @@ from app.views.admin.requisicoes import (
 )
 from app.versioning.resolver import (
     _atividade_versao_status_ativo,
-    _get_effective_matriz_for_turma_readonly,
-    _get_preferred_matriz_for_curso_readonly,
     _require_versioning_read_model,
     _resolver_result,
     _serialize_versioned_activity_row,

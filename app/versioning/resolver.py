@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.matrix_scope import get_effective_matriz_for_turma
+
 
 _MATRIZ_STATUS_LABELS = {
     "rascunho": "Rascunho",
@@ -64,37 +66,6 @@ def _require_versioning_read_model(conn) -> None:
             + ", ".join(missing)
             + "."
         )
-
-def _get_preferred_matriz_for_curso_readonly(conn, curso_id: int | None):
-    if not curso_id:
-        return None
-    return conn.execute(
-        """
-        SELECT *
-          FROM matrizes_atividades
-         WHERE curso_id = ?
-      ORDER BY CASE LOWER(COALESCE(status, ''))
-                   WHEN 'ativa' THEN 0
-                   WHEN 'vigente' THEN 0
-                   WHEN 'rascunho' THEN 1
-                   ELSE 2
-               END,
-               COALESCE(data_inicio_vigencia, '') DESC,
-               id DESC
-         LIMIT 1
-        """,
-        (curso_id,),
-    ).fetchone()
-
-def _get_effective_matriz_for_turma_readonly(conn, curso_id: int | None, turma_matriz_id: int | None):
-    if turma_matriz_id:
-        row = conn.execute(
-            "SELECT * FROM matrizes_atividades WHERE id = ?",
-            (turma_matriz_id,),
-        ).fetchone()
-        if row:
-            return row
-    return _get_preferred_matriz_for_curso_readonly(conn, curso_id)
 
 def _serialize_versioned_activity_row(row) -> dict[str, object]:
     return {
@@ -288,7 +259,7 @@ def listar_atividades_versionadas_por_turma(conn, turma_id: int) -> dict[str, ob
     if not turma:
         raise LookupError("Turma não encontrada para leitura diagnóstica.")
 
-    matriz = _get_effective_matriz_for_turma_readonly(conn, turma["curso_id"], turma["matriz_id"])
+    matriz = get_effective_matriz_for_turma(conn, turma["curso_id"], turma["matriz_id"])
     if not matriz:
         raise LookupError("Turma sem matriz disponível para leitura diagnóstica.")
 
@@ -558,7 +529,7 @@ def resolver_versao_por_aluno(
                 reason="Aluno não encontrado para resolução.",
             )
 
-        matriz = _get_effective_matriz_for_turma_readonly(
+        matriz = get_effective_matriz_for_turma(
             conn,
             aluno["turma_curso_id"],
             aluno["turma_matriz_id"],
@@ -616,7 +587,7 @@ def resolver_versao(
                     reason="Turma não encontrada para resolução.",
                 )
 
-            matriz = _get_effective_matriz_for_turma_readonly(
+            matriz = get_effective_matriz_for_turma(
                 conn,
                 turma["curso_id"],
                 turma["matriz_id"],

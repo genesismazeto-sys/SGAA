@@ -329,7 +329,7 @@ def test_aluno_detail_with_invalid_snapshot_json_does_not_500(
 
 
 # ---------------------------------------------------------------------------
-# T05 — turma sem matriz explícita: writer no-op; detalhe não mostra bloco.
+# T05 — turma sem matriz explícita: academic request scope fails closed.
 # ---------------------------------------------------------------------------
 
 def test_aluno_create_em_turma_sem_matriz_explicita_nao_carimba_e_nao_mostra_bloco(
@@ -404,17 +404,11 @@ def test_aluno_create_em_turma_sem_matriz_explicita_nao_carimba_e_nao_mostra_blo
         },
         follow_redirects=False,
     )
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
 
     req = _fetch_req(aluno_id, event_name)
-    assert req is not None
-    assert req["atividade_versao_id"] is None
-    assert req["codigo_normativo_snapshot"] is None
-
-    detail = client.get(f"/aluno/requisicoes/{req['id']}")
-    assert detail.status_code == 200
-    detail_html = detail.get_data(as_text=True)
-    assert "Versão normativa registrada" not in detail_html
+    assert req is None
+    assert "não está disponível para a matriz da sua turma" in response.get_data(as_text=True)
 
 
 # ---------------------------------------------------------------------------

@@ -82,6 +82,18 @@ def test_aluno_dashboard_shows_request_update_alert_only_once(client):
             """,
             ("1 - Grupo Teste", "AAC Alerta Atualizacao", None, "Acadêmica Complementar", 0, None, None, None, None),
         ).fetchone()["id"]
+        matriz_id = conn.execute(
+            """
+            INSERT INTO matrizes_atividades (curso_id, nome, versao, status, data_inicio_vigencia)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (curso["id"], "Matriz Alerta Atualizacao", "1", "vigente", "2030-01-01"),
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (matriz_id, atividade_id),
+        )
         turma_codigo = main.gerar_codigo_turma(curso["codigo"], 96)
         turma_id = conn.execute(
             """
@@ -91,7 +103,7 @@ def test_aluno_dashboard_shows_request_update_alert_only_once(client):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """,
-            (turma_codigo, None, None, "Noite", "Ativa", 96, curso["id"], None, 2030, 1, 2033, 2, turma_codigo),
+            (turma_codigo, None, None, "Noite", "Ativa", 96, curso["id"], matriz_id, 2030, 1, 2033, 2, turma_codigo),
         ).fetchone()["id"]
         usuario_id = conn.execute(
             "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?) RETURNING id",

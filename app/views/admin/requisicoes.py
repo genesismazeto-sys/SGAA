@@ -440,9 +440,7 @@ def admin_requisicoes():
                 item.get("turma_matriz_id"),
             )
         allowed_activity_ids, matriz = matrix_scope_cache[cache_key]
-        item["matrix_scope_issue"] = bool(
-            allowed_activity_ids is not None and item.get("atividade_id") not in allowed_activity_ids
-        )
+        item["matrix_scope_issue"] = item.get("atividade_id") not in allowed_activity_ids
         item["matrix_scope_label"] = _matriz_option_label(matriz) if matriz else None
         requisicoes.append(item)
     # Carregar atividades e documentos obrigatórios (para reuso do form do aluno no modal admin)
@@ -637,7 +635,7 @@ def admin_nova_requisicao():
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
     allowed_activity_ids = scope["allowed_activity_ids"]
-    if allowed_activity_ids is not None and atividade_id not in allowed_activity_ids:
+    if atividade_id not in allowed_activity_ids:
         flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
@@ -761,7 +759,7 @@ def admin_editar_requisicao(req_id):
         requisicao["turma_matriz_id"],
     )
     current_atividade_id = requisicao["atividade_id"]
-    if allowed_activity_ids is not None and atividade_id != current_atividade_id and atividade_id not in allowed_activity_ids:
+    if atividade_id != current_atividade_id and atividade_id not in allowed_activity_ids:
         flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
@@ -876,10 +874,8 @@ def admin_api_requisicao(req_id):
         data.get("turma_curso_id"),
         data.get("turma_matriz_id"),
     )
-    data["allowed_activity_ids"] = sorted(allowed_activity_ids) if allowed_activity_ids is not None else None
-    data["current_activity_allowed"] = (
-        True if allowed_activity_ids is None else data.get("atividade_id") in allowed_activity_ids
-    )
+    data["allowed_activity_ids"] = sorted(allowed_activity_ids)
+    data["current_activity_allowed"] = data.get("atividade_id") in allowed_activity_ids
     data["matriz_scope"] = (
         {"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None
     )
@@ -929,6 +925,8 @@ def admin_processar_requisicao(req_id):
         SELECT r.*, a.nome as atividade_nome, a.tipo_atividade AS atividade_tipo_legacy_atual,
                a.tem_limitacao, a.tipo_limitacao,
                a.limite_horas_total, a.limite_horas_semestral, al.nome as aluno_nome,
+               al.id AS aluno_rel_id, al.turma_id AS aluno_turma_id,
+               t.id AS turma_rel_id,
                t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id
         FROM requisicoes r
         JOIN atividades a ON r.atividade_id = a.id
@@ -983,17 +981,37 @@ def admin_processar_requisicao(req_id):
                 flash("Informe um número válido para horas deferidas.", "error")
                 return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
-        if status in ["Deferida", "Deferida Parcialmente"] and not is_activity_allowed_for_turma_matrix(
-            conn,
-            requisicao["atividade_id"],
-            requisicao["turma_curso_id"],
-            requisicao["turma_matriz_id"],
-        ):
-            flash(
-                "A atividade desta requisição não pertence mais a matriz efetiva da turma do aluno.",
-                "error",
+        if status in ["Deferida", "Deferida Parcialmente"]:
+            has_existing_turma = (
+                requisicao["aluno_rel_id"] is not None
+                and requisicao["turma_rel_id"] is not None
             )
-            return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+            has_historical_null_matrix = (
+                has_existing_turma and requisicao["turma_matriz_id"] is None
+            )
+            has_explicit_matrix = (
+                has_existing_turma and requisicao["turma_matriz_id"] is not None
+            )
+
+            if not has_existing_turma:
+                flash("Dados do aluno não encontrados.", "error")
+                return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+
+            if (
+                not has_historical_null_matrix
+                and has_explicit_matrix
+                and not is_activity_allowed_for_turma_matrix(
+                    conn,
+                    requisicao["atividade_id"],
+                    requisicao["turma_curso_id"],
+                    requisicao["turma_matriz_id"],
+                )
+            ):
+                flash(
+                    "A atividade desta requisição não pertence mais a matriz efetiva da turma do aluno.",
+                    "error",
+                )
+                return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         if status in ["Deferida", "Deferida Parcialmente"] and requisicao["tem_limitacao"]:
             horas_a_deferir = float(horas_deferidas) if status == "Deferida Parcialmente" else float(requisicao["horas_solicitadas"])

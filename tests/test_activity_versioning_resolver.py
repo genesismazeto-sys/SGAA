@@ -109,12 +109,35 @@ def _seed_legacy_flow_context():
             (user_email,),
         ).fetchone()["id"]
 
+        curso_id = conn.execute(
+            "INSERT INTO cursos (nome, codigo, duracao_periodos, status) VALUES (?, ?, ?, ?) RETURNING id",
+            (f"Curso Resolver {token}", f"RES{token.upper()}", 8, "ativo"),
+        ).fetchone()["id"]
+        matriz_id = conn.execute(
+            """
+            INSERT INTO matrizes_atividades
+                (curso_id, nome, versao, status, data_inicio_vigencia)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (curso_id, f"Matriz Resolver {token}", "1", "vigente", "2026-01-01"),
+        ).fetchone()["id"]
+        turma_id = conn.execute(
+            """
+            INSERT INTO turmas
+                (nome, status, numero, curso_id, matriz_id, codigo)
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            ("PPA-T11", "Ativa", 11, curso_id, matriz_id, "PPA-T11"),
+        ).fetchone()["id"]
+
         conn.execute(
             """
-            INSERT INTO alunos (nome, matricula, email, turma, usuario_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO alunos (nome, matricula, email, turma, usuario_id, turma_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (f"Aluno Resolver {token}", matricula, user_email, "PPA-T11", usuario_id),
+            (f"Aluno Resolver {token}", matricula, user_email, "PPA-T11", usuario_id, turma_id),
         )
         aluno_id = conn.execute(
             "SELECT id FROM alunos WHERE matricula = ?",
@@ -133,6 +156,10 @@ def _seed_legacy_flow_context():
             "SELECT id FROM atividades WHERE nome = ?",
             (atividade_nome,),
         ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (matriz_id, atividade_id),
+        )
         conn.commit()
 
     return {

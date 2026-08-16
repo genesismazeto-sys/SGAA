@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from app.db import get_preferred_matriz_for_curso
 from app.db_maintenance import (
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
@@ -34,14 +33,12 @@ def get_effective_matriz_for_turma(
     turma_matriz_id: int | None,
 ):
     ensure_matrizes_atividades_table(conn)
-    if turma_matriz_id:
-        row = conn.execute(
-            "SELECT * FROM matrizes_atividades WHERE id = ?",
-            (turma_matriz_id,),
-        ).fetchone()
-        if row:
-            return row
-    return get_preferred_matriz_for_curso(conn, curso_id)
+    if not turma_matriz_id or not curso_id:
+        return None
+    return conn.execute(
+        "SELECT * FROM matrizes_atividades WHERE id = ? AND curso_id = ?",
+        (turma_matriz_id, curso_id),
+    ).fetchone()
 
 
 def is_activity_allowed_for_turma_matrix(
@@ -55,7 +52,7 @@ def is_activity_allowed_for_turma_matrix(
     ensure_matriz_atividade_links_table(conn)
     matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
     if not matriz:
-        return True
+        return False
     row = conn.execute(
         "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
         (matriz["id"], atividade_id),
@@ -71,7 +68,7 @@ def get_allowed_activity_ids_for_turma_matrix(
     ensure_matriz_atividade_links_table(conn)
     matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
     if not matriz:
-        return None, None
+        return set(), None
     activity_ids = {
         row["atividade_id"]
         for row in conn.execute(

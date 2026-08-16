@@ -486,10 +486,9 @@ def test_admin_processar_requisicao_post_keeps_legacy_activity_id_for_decision(c
     )
     assert response.status_code == 302
 
-    assert called
-    assert called[0][0] == seeded["atividade_id"]
-    assert called[0][0] != 99999
-    assert called[0][0] != 888
+    # The historical Turma has no Matrix authority; processing must not invoke
+    # a new Matrix decision for the already-persisted request.
+    assert called == []
 
     with main.app.app_context():
         conn = main.get_db_connection()

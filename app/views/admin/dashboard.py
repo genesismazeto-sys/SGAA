@@ -319,26 +319,42 @@ def _build_admin_dashboard_turma_cards(conn):
             periodo_atual_label = f"{periodo_corrente(row['ano_inicio'], row['semestre_inicio'])}º período"
 
         matriz = get_effective_matriz_for_turma(conn, row["curso_id"], row["matriz_id"])
-        meta_aac = float(
-            matriz["horas_aac_obrigatorias"]
+        meta_aac = (
+            float(matriz["horas_aac_obrigatorias"])
             if matriz and matriz["horas_aac_obrigatorias"] is not None
-            else DEFAULT_CURSO_TOTAL_HORAS_AAC
+            else None
         )
-        meta_aeu = float(
-            matriz["horas_extensao_obrigatorias"]
+        meta_aeu = (
+            float(matriz["horas_extensao_obrigatorias"])
             if matriz and matriz["horas_extensao_obrigatorias"] is not None
-            else DEFAULT_CURSO_TOTAL_HORAS_AEU
+            else None
         )
-        aac_applicable = meta_aac > 0
-        aeu_applicable = meta_aeu > 0
-        meta_aac_total = meta_aac * turma_alunos
-        meta_aeu_total = meta_aeu * turma_alunos
-        aac_pct = int((aac_hours * 100) // meta_aac_total) if aac_applicable and meta_aac_total > 0 else 0
-        aeu_pct = int((aeu_hours * 100) // meta_aeu_total) if aeu_applicable and meta_aeu_total > 0 else 0
-        meta_total_por_aluno = (meta_aac if aac_applicable else 0.0) + (meta_aeu if aeu_applicable else 0.0)
-        meta_total_turma = meta_total_por_aluno * turma_alunos
-        total_applicable = meta_total_por_aluno > 0
-        total_pct = int((ch_total * 100) // meta_total_turma) if total_applicable and meta_total_turma > 0 else 0
+        aac_applicable = meta_aac is not None and meta_aac > 0
+        aeu_applicable = meta_aeu is not None and meta_aeu > 0
+        meta_aac_total = meta_aac * turma_alunos if aac_applicable else None
+        meta_aeu_total = meta_aeu * turma_alunos if aeu_applicable else None
+        aac_pct = (
+            int((aac_hours * 100) // meta_aac_total)
+            if meta_aac_total and meta_aac_total > 0
+            else None
+        )
+        aeu_pct = (
+            int((aeu_hours * 100) // meta_aeu_total)
+            if meta_aeu_total and meta_aeu_total > 0
+            else None
+        )
+        meta_total_por_aluno = (
+            (meta_aac if aac_applicable else 0.0) + (meta_aeu if aeu_applicable else 0.0)
+            if meta_aac is not None and meta_aeu is not None
+            else None
+        )
+        meta_total_turma = meta_total_por_aluno * turma_alunos if meta_total_por_aluno is not None else None
+        total_applicable = meta_total_por_aluno is not None and meta_total_por_aluno > 0
+        total_pct = (
+            int((ch_total * 100) // meta_total_turma)
+            if meta_total_turma and meta_total_turma > 0
+            else None
+        )
 
         attainment_buckets = [
             {"label": bucket["label"], "color": bucket["color"], "count": 0, "share_pct": 0}
@@ -349,7 +365,9 @@ def _build_admin_dashboard_turma_cards(conn):
         for aluno_id in active_student_ids:
             aluno_horas = horas_por_aluno.get(aluno_id, {})
             aluno_total_horas = float(aluno_horas.get("aac_hours", 0) or 0) + float(aluno_horas.get("aeu_hours", 0) or 0)
-            aluno_pct_total = min(100.0, (aluno_total_horas * 100.0) / meta_total_por_aluno) if meta_total_por_aluno > 0 else 0.0
+            if meta_total_por_aluno is None or meta_total_por_aluno <= 0:
+                continue
+            aluno_pct_total = min(100.0, (aluno_total_horas * 100.0) / meta_total_por_aluno)
             attainment_pct_total += aluno_pct_total
 
             if aluno_pct_total >= 100:
@@ -364,7 +382,11 @@ def _build_admin_dashboard_turma_cards(conn):
                 bucket_index = 4
             attainment_buckets[bucket_index]["count"] += 1
 
-        attainment_avg_pct = int(round(attainment_pct_total / turma_alunos_ativos)) if turma_alunos_ativos else 0
+        attainment_avg_pct = (
+            int(round(attainment_pct_total / turma_alunos_ativos))
+            if turma_alunos_ativos and meta_total_por_aluno is not None
+            else None
+        )
         donut_gradient_parts = []
         if turma_alunos_ativos:
             start_pct = 0.0
@@ -394,12 +416,14 @@ def _build_admin_dashboard_turma_cards(conn):
                 "ch_total_fmt": _format_dashboard_hours(ch_total),
                 "aac_applicable": aac_applicable,
                 "aeu_applicable": aeu_applicable,
-                "aac_pct": min(100, aac_pct),
-                "aeu_pct": min(100, aeu_pct),
+                "aac_pct": min(100, aac_pct) if aac_pct is not None else None,
+                "aeu_pct": min(100, aeu_pct) if aeu_pct is not None else None,
                 "total_applicable": total_applicable,
-                "total_pct": min(100, total_pct),
+                "total_pct": min(100, total_pct) if total_pct is not None else None,
                 "attainment_buckets": attainment_buckets,
-                "attainment_avg_pct_label": f"{attainment_avg_pct}%",
+                "attainment_avg_pct_label": (
+                    f"{attainment_avg_pct}%" if attainment_avg_pct is not None else "-"
+                ),
                 "attainment_donut_gradient": attainment_donut_gradient,
                 "pendentes": pendentes,
             }
@@ -431,8 +455,8 @@ def _build_admin_dashboard_turma_cards(conn):
             "total_alunos": total_alunos,
             "aac_applicable": total_aac_applicables > 0,
             "aeu_applicable": total_aeu_applicables > 0,
-            "aac_pct": min(100, int((total_aac_hours * 100) // total_aac_denominador)) if total_aac_denominador > 0 else 0,
-            "aeu_pct": min(100, int((total_aeu_hours * 100) // total_aeu_denominador)) if total_aeu_denominador > 0 else 0,
+            "aac_pct": min(100, int((total_aac_hours * 100) // total_aac_denominador)) if total_aac_denominador > 0 else None,
+            "aeu_pct": min(100, int((total_aeu_hours * 100) // total_aeu_denominador)) if total_aeu_denominador > 0 else None,
             "ch_total_fmt": _format_dashboard_hours(total_ch),
             "pendentes": total_pendentes,
         }

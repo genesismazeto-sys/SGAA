@@ -343,10 +343,7 @@
         option.textContent = item.label;
         matrizSel.appendChild(option);
       });
-      const selectedValue = options.some((item) => String(item.id) === targetId)
-        ? targetId
-        : String(options[0].id);
-      matrizSel.value = selectedValue;
+      matrizSel.value = options.some((item) => String(item.id) === targetId) ? targetId : '';
     };
 
     [anoI, semI].forEach(el=> el && el.addEventListener('input', recompute));

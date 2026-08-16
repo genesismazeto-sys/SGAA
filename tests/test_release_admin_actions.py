@@ -38,15 +38,27 @@ def _seed_operational_entities(conn, token: str) -> dict[str, int]:
     aluno_email = f"release.admin.actions.aluno.{token}@teste.local"
     aluno_matricula = f"REL-ACT-{token}"
 
+    curso_id = conn.execute(
+        "INSERT INTO cursos (nome, codigo, duracao_periodos, status) VALUES (?, ?, ?, ?) RETURNING id",
+        (f"Curso Release Actions {token}", f"RELACT{token.upper()}", 8, "ativo"),
+    ).fetchone()["id"]
+    matriz_id = conn.execute(
+        "INSERT INTO matrizes_atividades (curso_id, nome, versao, status, data_inicio_vigencia) VALUES (?, ?, ?, ?, ?) RETURNING id",
+        (curso_id, f"Matriz Release Actions {token}", "1", "vigente", "2026-01-01"),
+    ).fetchone()["id"]
+    turma_id = conn.execute(
+        "INSERT INTO turmas (nome, status, numero, curso_id, matriz_id, codigo) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+        (f"Turma Release Actions {token}", "Ativa", 1, curso_id, matriz_id, f"RELACT-{token}"),
+    ).fetchone()["id"]
+
     aluno_user_id = conn.execute(
         "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
         ("Aluno Release Acoes", aluno_email, main.hash_password("aluno123"), "aluno", "usuario"),
     ).lastrowid
     aluno_id = conn.execute(
-        "INSERT INTO alunos (usuario_id, nome, matricula, email, status) VALUES (?, ?, ?, ?, ?)",
-        (aluno_user_id, "Aluno Release Acoes", aluno_matricula, aluno_email, "Ativo"),
+        "INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (aluno_user_id, "Aluno Release Acoes", aluno_matricula, aluno_email, turma_id, "Ativo"),
     ).lastrowid
-
     atividade_id = conn.execute(
         """
         INSERT INTO atividades (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao)
@@ -60,6 +72,10 @@ def _seed_operational_entities(conn, token: str) -> dict[str, int]:
                 "Acad\u00eamica Complementar",
         ),
     ).lastrowid
+    conn.execute(
+        "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+        (matriz_id, atividade_id),
+    )
 
     alerta_toggle_id = conn.execute(
         "INSERT INTO admin_alertas (titulo, mensagem, bg_color, border_color, visivel) VALUES (?, ?, ?, ?, ?)",

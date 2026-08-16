@@ -196,10 +196,14 @@ def test_criacao_requisicao_sem_anexo(smoke_env):
         curso = conn.execute("SELECT id, codigo FROM cursos ORDER BY id DESC LIMIT 1").fetchone()
         curso_id = curso["id"]
         curso_codigo = curso["codigo"]
+        matriz_id = conn.execute(
+            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status, data_inicio_vigencia) VALUES (?, ?, ?, ?, ?) RETURNING id",
+            (curso_id, f"Matriz Req {suffix}", "1", "vigente", "2026-01-01"),
+        ).fetchone()["id"]
 
         conn.execute(
-            "INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("Turma Req", 2026, 1, "Manha", "Ativa", 1, curso_id, f"{curso_codigo}-1"),
+            "INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, matriz_id, codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Turma Req", 2026, 1, "Manha", "Ativa", 1, curso_id, matriz_id, f"{curso_codigo}-1"),
         )
         turma = conn.execute("SELECT id FROM turmas ORDER BY id DESC LIMIT 1").fetchone()
 
@@ -209,6 +213,10 @@ def test_criacao_requisicao_sem_anexo(smoke_env):
         )
         atividade = conn.execute("SELECT id FROM atividades ORDER BY id DESC LIMIT 1").fetchone()
         atividade_id = atividade["id"]
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (matriz_id, atividade_id),
+        )
 
         hashed = main.hash_password(aluno_pass)
         conn.execute(
@@ -298,10 +306,14 @@ def test_processamento_requisicao_pendente(smoke_env):
         curso = conn.execute("SELECT id, codigo FROM cursos ORDER BY id DESC LIMIT 1").fetchone()
         curso_id = curso["id"]
         curso_codigo = curso["codigo"]
+        matriz_id = conn.execute(
+            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status, data_inicio_vigencia) VALUES (?, ?, ?, ?, ?) RETURNING id",
+            (curso_id, "Matriz Proc", "1", "vigente", "2026-01-01"),
+        ).fetchone()["id"]
 
         conn.execute(
-            "INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("Turma Proc", 2026, 1, "Manha", "Ativa", 1, curso_id, f"{curso_codigo}-1"),
+            "INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, matriz_id, codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Turma Proc", 2026, 1, "Manha", "Ativa", 1, curso_id, matriz_id, f"{curso_codigo}-1"),
         )
         turma = conn.execute("SELECT id FROM turmas ORDER BY id DESC LIMIT 1").fetchone()
 
@@ -310,6 +322,10 @@ def test_processamento_requisicao_pendente(smoke_env):
             ("1 - Grupo Proc", f"Atividade Proc {secrets.token_hex(4)}", "Desc", 60, "Acadêmica Complementar", 0),
         )
         atividade = conn.execute("SELECT id FROM atividades ORDER BY id DESC LIMIT 1").fetchone()
+        conn.execute(
+            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
+            (matriz_id, atividade["id"]),
+        )
 
         aluno_pass = main.hash_password("aluno123")
         conn.execute(
