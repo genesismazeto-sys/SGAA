@@ -467,9 +467,9 @@ def test_shadow_diagnostic_e2e_create_request_logs_and_is_readable(
             ).fetchone()
             assert req is not None
             assert int(req["atividade_id"]) == atividade_id
-            assert req["atividade_versao_id"] is None
-            assert req["regra_snapshot_json"] is None
-            assert req["codigo_normativo_snapshot"] is None
+            assert req["atividade_versao_id"] == 29
+            assert req["regra_snapshot_json"] is not None
+            assert req["codigo_normativo_snapshot"] == "AAC-rev6"
             before_diag = _shadow_row(conn)
         before_diag_hash = _sha256_file(db_path)
 
@@ -510,9 +510,9 @@ def test_shadow_diagnostic_e2e_create_request_logs_and_is_readable(
             after_diag = _shadow_row(conn)
         after_diag_hash = _sha256_file(db_path)
 
-        assert before["versao_set"] == after_diag["versao_set"]
-        assert before["regra_set"] == after_diag["regra_set"]
-        assert before["codigo_set"] == after_diag["codigo_set"]
+        assert before_diag["versao_set"] == after_diag["versao_set"]
+        assert before_diag["regra_set"] == after_diag["regra_set"]
+        assert before_diag["codigo_set"] == after_diag["codigo_set"]
         assert before_diag["versao_set"] == after_diag["versao_set"]
         assert before_diag["regra_set"] == after_diag["regra_set"]
         assert before_diag["codigo_set"] == after_diag["codigo_set"]

@@ -11,6 +11,7 @@ if BASE not in sys.path:
 
 from app import db as app_db_module
 import main
+from tests.fc10_test_helpers import add_exact_snapshot_authority
 
 
 @pytest.fixture()
@@ -152,6 +153,12 @@ def _seed_base_data():
         conn.execute(
             "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
             (matriz_id, atividade_id),
+        )
+        add_exact_snapshot_authority(
+            conn,
+            matriz_id=matriz_id,
+            atividade_id=atividade_id,
+            prefix="release-req",
         )
 
         conn.commit()

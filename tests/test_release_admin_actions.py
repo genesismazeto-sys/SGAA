@@ -11,6 +11,7 @@ if BASE not in sys.path:
 
 from app import db as app_db_module
 import main
+from tests.fc10_test_helpers import add_exact_snapshot_authority
 
 
 def _login_admin_user(client, user_id: int, user_name: str) -> None:
@@ -75,6 +76,12 @@ def _seed_operational_entities(conn, token: str) -> dict[str, int]:
     conn.execute(
         "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
         (matriz_id, atividade_id),
+    )
+    add_exact_snapshot_authority(
+        conn,
+        matriz_id=matriz_id,
+        atividade_id=atividade_id,
+        prefix="release-admin-actions",
     )
 
     alerta_toggle_id = conn.execute(

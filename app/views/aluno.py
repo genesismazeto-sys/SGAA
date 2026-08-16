@@ -36,7 +36,11 @@ from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
 from app.security.passwords import hash_password
 from app.db import get_db_connection
-from app.student_documents import resolve_student_document_path, save_student_document
+from app.student_documents import (
+    remove_student_document,
+    resolve_student_document_path,
+    save_student_document,
+)
 from app.uploads import ALLOWED_ATTACHMENTS, ALLOWED_REPORTE_SCREENSHOTS
 from app.web.filters import (
     get_date_range_query,
@@ -47,7 +51,8 @@ from app.web.filters import (
 from app.web.pagination import get_pagination, wants_pagination
 from app.versioning import (
     maybe_run_versioned_resolver_shadow_read,
-    maybe_write_versioned_requisicao_snapshot,
+    prepare_versioned_requisicao_snapshot,
+    RequisicaoSnapshotError,
 )
 from utils.messages import flash
 
@@ -1629,14 +1634,22 @@ def aluno_nova_requisicao():
             labels = ["Comprovante"]
 
         data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_document_paths = []
 
         try:
+            prepared_snapshot = prepare_versioned_requisicao_snapshot(
+                conn,
+                flow_origin="aluno_create",
+                aluno_id=aluno_id,
+                atividade_id_legacy=atividade_id,
+            )
             cur = conn.cursor()
             cur.execute(
                 """
                 INSERT INTO requisicoes
-                (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante,
+                 atividade_versao_id, regra_snapshot_json, codigo_normativo_snapshot)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     aluno_id,
@@ -1648,6 +1661,9 @@ def aluno_nova_requisicao():
                     "Pendente",
                     observacao,
                     None,
+                    prepared_snapshot.atividade_versao_id,
+                    prepared_snapshot.snapshot_json,
+                    prepared_snapshot.codigo_normativo,
                 ),
             )
             req_id = cur.lastrowid
@@ -1676,25 +1692,24 @@ def aluno_nova_requisicao():
                         arquivo.filename,
                     )
                     continue
-                try:
-                    saved = save_student_document(
-                        arquivo,
-                        allowed_attachments,
-                        root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
-                        student_id=aluno_id,
-                        student_name=student_name,
-                        category="requisicoes",
-                        prefix=f"req{req_id}",
-                    )
+                saved = save_student_document(
+                    arquivo,
+                    allowed_attachments,
+                    root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
+                    student_id=aluno_id,
+                    student_name=student_name,
+                    category="requisicoes",
+                    prefix=f"req{req_id}",
+                )
+                if saved:
+                    created_document_paths.append(saved)
                     if first_saved is None:
                         first_saved = saved
-                    label_val = labels[idx] if labels and idx < len(labels) else None
-                    conn.execute(
-                        "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) VALUES (?, ?, ?)",
-                        (req_id, label_val, saved),
-                    )
-                except Exception:
-                    current_app.logger.exception("Falha ao salvar arquivo de comprovante")
+                label_val = labels[idx] if labels and idx < len(labels) else None
+                conn.execute(
+                    "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) VALUES (?, ?, ?)",
+                    (req_id, label_val, saved),
+                )
 
             if first_saved:
                 conn.execute(
@@ -1702,14 +1717,8 @@ def aluno_nova_requisicao():
                     (first_saved, req_id),
                 )
 
-            maybe_write_versioned_requisicao_snapshot(
-                conn,
-                flow_origin="aluno_create",
-                aluno_id=aluno_id,
-                atividade_id_legacy=atividade_id,
-                req_id=req_id,
-            )
             conn.commit()
+            created_document_paths.clear()
             try:
                 maybe_run_versioned_resolver_shadow_read(
                     conn,
@@ -1724,7 +1733,31 @@ def aluno_nova_requisicao():
                 )
             flash("Requisição enviada com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
+        except RequisicaoSnapshotError as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                current_app.logger.exception("Falha ao reverter requisição do aluno")
+            for rel_path in created_document_paths:
+                try:
+                    remove_student_document(
+                        current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], rel_path
+                    )
+                except Exception:
+                    current_app.logger.exception("Falha ao compensar arquivo de comprovante")
+            flash(exc.user_message, "error")
         except Exception as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                current_app.logger.exception("Falha ao reverter requisição do aluno")
+            for rel_path in created_document_paths:
+                try:
+                    remove_student_document(
+                        current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], rel_path
+                    )
+                except Exception:
+                    current_app.logger.exception("Falha ao compensar arquivo de comprovante")
             flash(f"Erro ao enviar requisição: {exc}", "error")
             current_app.logger.exception("Erro ao enviar requisição")
 

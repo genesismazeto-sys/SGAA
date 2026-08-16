@@ -171,6 +171,52 @@ def test_admin_create_requisicao_respects_matrix_scope_and_saves_attachment(clie
             "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
             (matriz_id, allowed_id),
         )
+        norma_id = conn.execute(
+            """
+            INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)
+            VALUES (?, 'AAC', ?, ?, 'ativa')
+            RETURNING id
+            """,
+            ("ADMIN-CREATE-AAC", "fc10", "Norma admin create"),
+        ).fetchone()["id"]
+        base_id = conn.execute(
+            """
+            INSERT INTO atividade_base (nome_conceito, descricao, status)
+            VALUES (?, ?, 'ativo')
+            RETURNING id
+            """,
+            ("Base Admin Create", "Base para o teste de criação admin"),
+        ).fetchone()["id"]
+        version_id = conn.execute(
+            """
+            INSERT INTO atividade_versao (
+                atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                ch_por_evento, observacao_aluno, observacao_admin,
+                vigencia_inicio, vigencia_fim, numero_versao, status
+            ) VALUES (?, ?, ?, 'AAC', ?, ?, ?, ?, ?, ?, 1, 'ativa')
+            RETURNING id
+            """,
+            (
+                base_id,
+                norma_id,
+                "ADMIN-CREATE-AAC",
+                "5 - Grupo Admin Create",
+                6,
+                "Obs aluno",
+                "Obs admin",
+                "2028-01-01",
+                "2028-12-31",
+            ),
+        ).fetchone()["id"]
+        conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)", (matriz_id, norma_id))
+        conn.execute(
+            "INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status) VALUES (?, ?, 'mapeada')",
+            (allowed_id, base_id),
+        )
+        conn.execute(
+            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
+            (matriz_id, version_id),
+        )
         turma_id = conn.execute(
             """
             INSERT INTO turmas (

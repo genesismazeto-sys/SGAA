@@ -4,23 +4,31 @@ import datetime
 import json
 import logging
 import os
+from dataclasses import dataclass
 
+from app.matrix_scope import get_effective_matriz_for_turma
 from app.versioning import resolver as resolver_service
 
 
 logger = logging.getLogger("main")
 
 
+class RequisicaoSnapshotError(RuntimeError):
+    """Raised when a normal request cannot receive its mandatory snapshot."""
+
+    user_message = "A atividade selecionada não está disponível " "para a matriz da sua turma."
+
+
+@dataclass(frozen=True)
+class PreparedRequisicaoSnapshot:
+    atividade_versao_id: int
+    codigo_normativo: str
+    snapshot_json: str
+    payload: dict[str, object]
+
+
 def is_versioned_requisicao_snapshot_display_enabled() -> bool:
     return str(os.getenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "0")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-def is_versioned_requisicao_snapshot_write_enabled() -> bool:
-    return str(os.getenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "0")).strip().lower() in {
         "1",
         "true",
         "yes",
@@ -37,13 +45,23 @@ def _load_versioned_requisicao_snapshot_rule_row(
         """
         SELECT av.id AS atividade_versao_id,
                av.atividade_base_id,
+               av.norma_id,
                av.codigo_normativo,
                av.eixo,
                av.grupo,
                av.ch_por_evento,
                av.limite_semestre,
                av.limite_total,
+               av.observacao_aluno,
+               av.observacao_admin,
+               av.documentos_json,
+               av.vigencia_inicio,
+               av.vigencia_fim,
+               av.numero_versao AS atividade_versao_numero,
                av.status AS versao_status,
+               n.id AS norma_persistida_id,
+               n.codigo AS norma_codigo,
+               n.eixo AS norma_eixo,
                ab.nome_conceito AS atividade_base_nome,
                COALESCE(
                    a.nome,
@@ -81,6 +99,7 @@ def _load_versioned_requisicao_snapshot_rule_row(
                ) AS tipo_atividade_legacy
           FROM atividade_versao av
           JOIN atividade_base ab ON ab.id = av.atividade_base_id
+          JOIN norma_atividade n ON n.id = av.norma_id
           LEFT JOIN atividade_legacy_map alm
             ON alm.atividade_base_id = av.atividade_base_id
            AND alm.atividade_id_legacy = ?
@@ -103,79 +122,42 @@ def _build_versioned_requisicao_snapshot_payload(
         .replace("+00:00", "Z")
     )
     return {
-        "atividade_base_id": resolver_result.get("atividade_base_id"),
+        "atividade_base_id": rule_row["atividade_base_id"],
         "atividade_id_legacy": atividade_id_legacy,
-        "atividade_versao_id": resolver_result.get("atividade_versao_id"),
+        "atividade_versao_id": rule_row["atividade_versao_id"],
+        "atividade_versao_numero": rule_row["atividade_versao_numero"],
         "ch_por_evento": rule_row["ch_por_evento"],
-        "codigo_normativo": resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
-        "eixo": resolver_result.get("eixo") or rule_row["eixo"],
+        "codigo_normativo": rule_row["codigo_normativo"],
+        "documentos_json": rule_row["documentos_json"],
+        "eixo": rule_row["eixo"],
         "flow_origin": flow_origin,
         "grupo": rule_row["grupo"],
         "legacy_scope_ok": resolver_result.get("legacy_scope_ok"),
         "limite_semestre": rule_row["limite_semestre"],
         "limite_total": rule_row["limite_total"],
-        "matriz_id_efetiva": resolver_result.get("matriz_id_efetiva"),
+        "matriz_id_efetiva": resolver_result["matriz_id_efetiva"],
         "nome_exibivel": rule_row["nome_exibivel"],
         "nome_legacy": rule_row["nome_legacy"],
+        "norma_id": rule_row["norma_id"],
+        "observacao_admin": rule_row["observacao_admin"],
+        "observacao_aluno": rule_row["observacao_aluno"],
         "resolver_status": resolver_result.get("status"),
         "resolver_warnings": list(resolver_result.get("warnings") or []),
         "schema_version": "d6.4.0-v1",
         "snapshot_written_at": snapshot_written_at,
         "tipo_atividade_legacy": rule_row["tipo_atividade_legacy"],
         "versao_status": rule_row["versao_status"],
+        "vigencia_fim": rule_row["vigencia_fim"],
+        "vigencia_inicio": rule_row["vigencia_inicio"],
     }
 
-def _get_turma_explicit_matriz_id_for_snapshot(conn, aluno_id: int | None) -> int | None:
-    """Returns turma.matriz_id only when explicitly set for the aluno's turma.
-
-    No fallback to preferred matriz for the curso — that is a heuristic that must
-    not silently determine which version gets stamped on a requisição operacional.
-    Used exclusively by the versioned snapshot writer; not by legacy scoping.
-    """
-    if not aluno_id:
-        return None
-    row = conn.execute(
-        """
-        SELECT t.matriz_id
-          FROM alunos a
-          LEFT JOIN turmas t ON t.id = a.turma_id
-         WHERE a.id = ?
-        """,
-        (aluno_id,),
-    ).fetchone()
-    if not row:
-        return None
-    return row["matriz_id"]
-
-def maybe_write_versioned_requisicao_snapshot(
+def prepare_versioned_requisicao_snapshot(
     conn,
     *,
     flow_origin: str,
-    req_id,
     aluno_id,
     atividade_id_legacy,
 ):
-    if not is_versioned_requisicao_snapshot_write_enabled():
-        return None
-
-    # Strict check: turma must have an explicit matriz_id for the versioned stamp.
-    # Fallback to preferred matriz is deliberately excluded — it is a heuristic and
-    # must not silently determine which version gets stamped on a requisição.
-    explicit_matriz_id = _get_turma_explicit_matriz_id_for_snapshot(conn, aluno_id)
-    if not explicit_matriz_id:
-        try:
-            logger.info(
-                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s "
-                "atividade_id_legacy=%s status=turma_without_explicit_matrix",
-                flow_origin,
-                req_id,
-                aluno_id,
-                atividade_id_legacy,
-            )
-        except Exception:
-            pass
-        return None
-
     try:
         resolver_result = resolver_service.resolver_versao_por_aluno(
             conn,
@@ -183,47 +165,34 @@ def maybe_write_versioned_requisicao_snapshot(
             atividade_id_legacy=atividade_id_legacy,
             strict_legacy_scope=True,
         )
-    except Exception:
-        try:
-            logger.exception(
-                "event=versioned_requisicao_snapshot_exception origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s",
-                flow_origin,
-                req_id,
-                aluno_id,
-                atividade_id_legacy,
-            )
-        except Exception:
-            pass
-        return None
+    except Exception as exc:
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message) from exc
 
     if resolver_result.get("status") != "resolved":
-        try:
-            logger.warning(
-                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=%s reason=%s",
-                flow_origin,
-                req_id,
-                aluno_id,
-                atividade_id_legacy,
-                resolver_result.get("status"),
-                resolver_result.get("reason"),
-            )
-        except Exception:
-            pass
-        return resolver_result
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
 
     atividade_versao_id = resolver_result.get("atividade_versao_id")
-    if not atividade_versao_id:
-        try:
-            logger.warning(
-                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=resolved reason=missing_atividade_versao_id",
-                flow_origin,
-                req_id,
-                aluno_id,
-                atividade_id_legacy,
-            )
-        except Exception:
-            pass
-        return resolver_result
+    if not atividade_versao_id or not resolver_result.get("atividade_base_id"):
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+
+    aluno_row = conn.execute(
+        """
+        SELECT t.curso_id, t.matriz_id
+          FROM alunos a
+          JOIN turmas t ON t.id = a.turma_id
+         WHERE a.id = ?
+        """,
+        (aluno_id,),
+    ).fetchone()
+    if not aluno_row:
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+    matriz = get_effective_matriz_for_turma(
+        conn,
+        aluno_row["curso_id"],
+        aluno_row["matriz_id"],
+    )
+    if not matriz or resolver_result.get("matriz_id_efetiva") != matriz["id"]:
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
 
     rule_row = _load_versioned_requisicao_snapshot_rule_row(
         conn,
@@ -231,17 +200,60 @@ def maybe_write_versioned_requisicao_snapshot(
         atividade_id_legacy=atividade_id_legacy,
     )
     if not rule_row:
-        try:
-            logger.warning(
-                "event=versioned_requisicao_snapshot_skip origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s status=resolved reason=missing_rule_row",
-                flow_origin,
-                req_id,
-                aluno_id,
-                atividade_id_legacy,
-            )
-        except Exception:
-            pass
-        return resolver_result
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+
+    def _same_text(left, right):
+        return str(left or "").strip() == str(right or "").strip()
+
+    if (
+        rule_row["atividade_versao_id"] != resolver_result.get("atividade_versao_id")
+        or rule_row["atividade_base_id"] != resolver_result.get("atividade_base_id")
+        or rule_row["norma_id"] != rule_row["norma_persistida_id"]
+        or not _same_text(rule_row["codigo_normativo"], rule_row["norma_codigo"])
+        or not _same_text(rule_row["eixo"], rule_row["norma_eixo"])
+        or not _same_text(resolver_result.get("codigo_normativo"), rule_row["codigo_normativo"])
+        or not _same_text(resolver_result.get("eixo"), rule_row["eixo"])
+        or not _same_text(resolver_result.get("eixo"), rule_row["norma_eixo"])
+        or rule_row["atividade_versao_numero"] is None
+    ):
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+
+    if not conn.execute(
+        """
+        SELECT 1
+          FROM matrizes_atividades_itens
+         WHERE matriz_id = ? AND atividade_id = ?
+        """,
+        (matriz["id"], atividade_id_legacy),
+    ).fetchone():
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+    if not conn.execute(
+        """
+        SELECT 1
+          FROM atividade_legacy_map
+         WHERE atividade_id_legacy = ? AND atividade_base_id = ?
+        """,
+        (atividade_id_legacy, resolver_result["atividade_base_id"]),
+    ).fetchone():
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+    if not conn.execute(
+        """
+        SELECT 1
+          FROM matriz_atividade_versao_item
+         WHERE matriz_id = ? AND atividade_versao_id = ?
+        """,
+        (matriz["id"], atividade_versao_id),
+    ).fetchone():
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+    if not conn.execute(
+        """
+        SELECT 1
+          FROM matriz_norma
+         WHERE matriz_id = ? AND norma_id = ?
+        """,
+        (matriz["id"], rule_row["norma_id"]),
+    ).fetchone():
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
 
     payload = _build_versioned_requisicao_snapshot_payload(
         flow_origin=flow_origin,
@@ -250,34 +262,14 @@ def maybe_write_versioned_requisicao_snapshot(
         rule_row=rule_row,
     )
     snapshot_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    conn.execute(
-        """
-        UPDATE requisicoes
-           SET atividade_versao_id = ?,
-               regra_snapshot_json = ?,
-               codigo_normativo_snapshot = ?
-         WHERE id = ?
-        """,
-        (
-            atividade_versao_id,
-            snapshot_json,
-            resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
-            req_id,
-        ),
+    return PreparedRequisicaoSnapshot(
+        atividade_versao_id=int(atividade_versao_id),
+        codigo_normativo=str(
+            rule_row["codigo_normativo"]
+        ).strip(),
+        snapshot_json=snapshot_json,
+        payload=payload,
     )
-    try:
-        logger.info(
-            "event=versioned_requisicao_snapshot_written origin=%s req_id=%s aluno_id=%s atividade_id_legacy=%s atividade_versao_id=%s codigo_normativo=%s",
-            flow_origin,
-            req_id,
-            aluno_id,
-            atividade_id_legacy,
-            atividade_versao_id,
-            resolver_result.get("codigo_normativo") or rule_row["codigo_normativo"],
-        )
-    except Exception:
-        pass
-    return resolver_result
 
 
 _ADMIN_REQUISICAO_SNAPSHOT_DIAGNOSTIC_FIELDS = (
@@ -388,6 +380,7 @@ def _build_admin_requisicao_snapshot_diagnostic(row) -> dict[str, object] | None
 
 __all__ = [
     "is_versioned_requisicao_snapshot_display_enabled",
-    "is_versioned_requisicao_snapshot_write_enabled",
-    "maybe_write_versioned_requisicao_snapshot",
+    "prepare_versioned_requisicao_snapshot",
+    "PreparedRequisicaoSnapshot",
+    "RequisicaoSnapshotError",
 ]

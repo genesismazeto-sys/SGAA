@@ -184,15 +184,15 @@ def test_direct_app_consumers_and_app_db_have_no_residual_lazy_edges():
     assert "ensure_usuario_profile_schema" not in aluno_keys
     assert not ({
         "maybe_run_versioned_resolver_shadow_read",
-        "maybe_write_versioned_requisicao_snapshot",
+        "prepare_versioned_requisicao_snapshot",
     } & aluno_keys)
     assert (
         aluno_views.maybe_run_versioned_resolver_shadow_read
         is versioning_shadow_reads.maybe_run_versioned_resolver_shadow_read
     )
     assert (
-        aluno_views.maybe_write_versioned_requisicao_snapshot
-        is versioning_snapshots.maybe_write_versioned_requisicao_snapshot
+        aluno_views.prepare_versioned_requisicao_snapshot
+        is versioning_snapshots.prepare_versioned_requisicao_snapshot
     )
     assert {"get_db_connection", "logger", "aluno_url"} <= core_keys
     assert "ensure_usuario_profile_schema" not in db_keys

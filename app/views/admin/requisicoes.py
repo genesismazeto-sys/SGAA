@@ -20,7 +20,7 @@ from app.matrix_scope import (
     is_activity_allowed_for_turma_matrix,
 )
 from app.requisitions import auto_indefer_devolvidas
-from app.student_documents import save_student_document
+from app.student_documents import remove_student_document, save_student_document
 from app.text import normalize_header
 from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
 from app.versioning.shadow_reads import maybe_run_versioned_resolver_shadow_read
@@ -28,7 +28,8 @@ from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
     _has_versioned_requisicao_snapshot,
     is_versioned_requisicao_snapshot_display_enabled,
-    maybe_write_versioned_requisicao_snapshot,
+    prepare_versioned_requisicao_snapshot,
+    RequisicaoSnapshotError,
 )
 from app.web.filters import append_conditions_sql, get_date_range_query, get_multi_query_values
 from app.web.pagination import get_pagination, wants_pagination
@@ -244,7 +245,14 @@ def _list_admin_requisicao_alunos(conn):
     ).fetchall()
 
 
-def _append_requisicao_arquivos(conn, req_id, aluno_id, arquivos, labels=None):
+def _append_requisicao_arquivos(
+    conn,
+    req_id,
+    aluno_id,
+    arquivos,
+    labels=None,
+    created_document_paths=None,
+):
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS requisicao_arquivos (
@@ -267,6 +275,7 @@ def _append_requisicao_arquivos(conn, req_id, aluno_id, arquivos, labels=None):
         if not _allowed(arquivo.filename, ALLOWED_ATTACHMENTS):
             flash(f"Arquivo ignorado por extensão não permitida: {arquivo.filename}", "warning")
             continue
+        saved = None
         try:
             saved = save_student_document(
                 arquivo,
@@ -278,14 +287,25 @@ def _append_requisicao_arquivos(conn, req_id, aluno_id, arquivos, labels=None):
                 prefix=f"req{req_id}",
             )
             if saved:
-                if first_saved is None:
-                    first_saved = saved
+                if created_document_paths is not None:
+                    created_document_paths.append(saved)
                 label_value = labels[idx] if labels and idx < len(labels) else None
                 conn.execute(
                     "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) VALUES (?, ?, ?)",
                     (req_id, label_value, saved),
                 )
+                if first_saved is None:
+                    first_saved = saved
         except Exception as exc:
+            if created_document_paths is None and saved:
+                try:
+                    remove_student_document(
+                        current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], saved
+                    )
+                except Exception:
+                    logger.exception("Falha ao compensar arquivo de comprovante")
+            if created_document_paths is not None:
+                raise
             logger.error(f"Falha ao salvar arquivo de comprovante na requisição {req_id}: {exc}")
     return first_saved
 
@@ -660,32 +680,77 @@ def admin_nova_requisicao():
         flash("Informe uma data válida para o evento.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
+    try:
+        prepared_snapshot = prepare_versioned_requisicao_snapshot(
+            conn,
+            flow_origin="admin_create",
+            aluno_id=aluno_id,
+            atividade_id_legacy=atividade_id,
+        )
+    except RequisicaoSnapshotError as exc:
+        conn.rollback()
+        flash(exc.user_message, "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    except Exception:
+        conn.rollback()
+        logger.exception("Falha ao preparar snapshot obrigatório da requisição do admin")
+        raise
+
     data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO requisicoes
-        (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, "Pendente", observacao, None),
-    )
-    req_id = cur.lastrowid
-
     arquivos = request.files.getlist("comprovantes_files") or []
-    first_saved = _append_requisicao_arquivos(conn, req_id, aluno_id, arquivos)
+    created_document_paths = []
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO requisicoes
+            (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante,
+             atividade_versao_id, regra_snapshot_json, codigo_normativo_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                aluno_id,
+                atividade_id,
+                data_solicitacao,
+                data_evento,
+                horas_solicitadas,
+                nome_evento,
+                "Pendente",
+                observacao,
+                None,
+                prepared_snapshot.atividade_versao_id,
+                prepared_snapshot.snapshot_json,
+                prepared_snapshot.codigo_normativo,
+            ),
+        )
+        req_id = cur.lastrowid
+        first_saved = _append_requisicao_arquivos(
+            conn,
+            req_id,
+            aluno_id,
+            arquivos,
+            created_document_paths=created_document_paths,
+        )
 
-    if first_saved:
-        conn.execute("UPDATE requisicoes SET arquivo_comprovante = ? WHERE id = ?", (first_saved, req_id))
+        if first_saved:
+            conn.execute("UPDATE requisicoes SET arquivo_comprovante = ? WHERE id = ?", (first_saved, req_id))
 
-    maybe_write_versioned_requisicao_snapshot(
-        conn,
-        flow_origin="admin_create",
-        aluno_id=aluno_id,
-        atividade_id_legacy=atividade_id,
-        req_id=req_id,
-    )
-    conn.commit()
+        conn.commit()
+        created_document_paths.clear()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            logger.exception("Falha ao reverter requisição do admin")
+        for rel_path in created_document_paths:
+            try:
+                remove_student_document(
+                    current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], rel_path
+                )
+            except Exception:
+                    logger.exception("Falha ao compensar arquivo de comprovante")
+        logger.exception("Falha ao criar requisição do admin")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     try:
         maybe_run_versioned_resolver_shadow_read(
             conn,
@@ -759,6 +824,20 @@ def admin_editar_requisicao(req_id):
         requisicao["turma_matriz_id"],
     )
     current_atividade_id = requisicao["atividade_id"]
+    if (
+        _has_versioned_requisicao_snapshot(requisicao)
+        and atividade_id != current_atividade_id
+    ):
+        flash(
+            "".join(
+                (
+                    "Esta solicitação já possui versão normativa registrada. ",
+                    "Para trocar a atividade, crie uma nova solicitação.",
+                )
+            ),
+            "error",
+        )
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     if atividade_id != current_atividade_id and atividade_id not in allowed_activity_ids:
         flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))

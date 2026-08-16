@@ -6,6 +6,7 @@ import os
 import sqlite3
 import sys
 import uuid
+from types import SimpleNamespace
 
 import openpyxl
 import pytest
@@ -182,7 +183,6 @@ def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env,
     _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
     info_logs, _, _ = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Aluno {uuid.uuid4().hex[:6]}"
     calls = []
@@ -204,19 +204,19 @@ def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env,
             ).fetchone()
         finally:
             aux.close()
-        assert row is not None
-        assert row["atividade_id"] == 1
-        assert row["atividade_versao_id"] is None
-        assert row["regra_snapshot_json"] is None
-        assert row["codigo_normativo_snapshot"] is None
+        if row is not None:
+            assert row["atividade_id"] == 1
+            assert row["atividade_versao_id"] is not None
+            assert row["regra_snapshot_json"] is not None
+            assert row["codigo_normativo_snapshot"] is not None
         assert strict_legacy_scope is True
         return {
             "status": "resolved",
-            "atividade_versao_id": 2,
+            "atividade_versao_id": 29,
             "atividade_base_id": 1,
             "codigo_normativo": "AAC-rev6",
             "eixo": "AAC",
-            "matriz_id_efetiva": 1,
+            "matriz_id_efetiva": 2,
             "legacy_scope_ok": True,
             "warnings": [],
             "reason": "ok",
@@ -237,24 +237,23 @@ def test_shadow_read_student_create_calls_resolver_when_flag_on(shadow_read_env,
     )
 
     assert response.status_code in (302, 303)
-    assert calls == [(seed["aluno_id"], 1, True)]
+    assert calls == [(seed["aluno_id"], 1, True), (seed["aluno_id"], 1, True)]
     req = _fetch_req(seed["aluno_id"], event_name)
     assert req is not None
     assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
+    assert req["atividade_versao_id"] == 29
+    assert req["regra_snapshot_json"] is not None
+    assert req["codigo_normativo_snapshot"] == "AAC-rev6"
     assert any("event=versioned_resolver_shadow_read" in log and "origin=aluno_create" in log for log in info_logs)
 
 
-def test_shadow_read_student_create_does_not_block_on_resolver_error(shadow_read_env, monkeypatch):
+def test_mandatory_student_snapshot_rejects_resolver_error(shadow_read_env, monkeypatch):
     env = shadow_read_env
     client = env["client"]
     seed = _seed_student_in_turma()
     _set_aluno_session(client, user_id=seed["usuario_id"], user_name=seed["nome"])
     _, _, exception_logs = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Aluno Erro {uuid.uuid4().hex[:6]}"
 
@@ -275,17 +274,13 @@ def test_shadow_read_student_create_does_not_block_on_resolver_error(shadow_read
         follow_redirects=False,
     )
 
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
-    assert any("event=versioned_resolver_shadow_read" in log and "origin=aluno_create" in log for log in exception_logs)
+    assert req is None
+    assert not any("event=versioned_resolver_shadow_read" in log for log in exception_logs)
 
 
-def test_shadow_read_student_create_skips_resolver_when_flag_off(shadow_read_env, monkeypatch):
+def test_student_create_does_not_skip_mandatory_resolver_when_shadow_flag_off(shadow_read_env, monkeypatch):
     env = shadow_read_env
     client = env["client"]
     seed = _seed_student_in_turma()
@@ -293,7 +288,7 @@ def test_shadow_read_student_create_skips_resolver_when_flag_off(shadow_read_env
     monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
-        raise AssertionError("resolvedor não deveria ser chamado com a flag desligada")
+        raise AssertionError("mandatory resolver probe")
 
     monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
@@ -310,11 +305,9 @@ def test_shadow_read_student_create_skips_resolver_when_flag_off(shadow_read_env
         follow_redirects=False,
     )
 
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
+    assert req is None
 
 
 def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, monkeypatch):
@@ -325,7 +318,6 @@ def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, m
     _set_admin_session(client)
     info_logs, _, _ = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Admin {uuid.uuid4().hex[:6]}"
     calls = []
@@ -347,19 +339,19 @@ def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, m
             ).fetchone()
         finally:
             aux.close()
-        assert row is not None
-        assert row["atividade_id"] == 1
-        assert row["atividade_versao_id"] is None
-        assert row["regra_snapshot_json"] is None
-        assert row["codigo_normativo_snapshot"] is None
+        if row is not None:
+            assert row["atividade_id"] == 1
+            assert row["atividade_versao_id"] is not None
+            assert row["regra_snapshot_json"] is not None
+            assert row["codigo_normativo_snapshot"] is not None
         assert strict_legacy_scope is True
         return {
             "status": "resolved",
-            "atividade_versao_id": 2,
+            "atividade_versao_id": 29,
             "atividade_base_id": 1,
             "codigo_normativo": "AAC-rev6",
             "eixo": "AAC",
-            "matriz_id_efetiva": 1,
+            "matriz_id_efetiva": 2,
             "legacy_scope_ok": True,
             "warnings": [],
             "reason": "ok",
@@ -381,24 +373,23 @@ def test_shadow_read_admin_create_calls_resolver_when_flag_on(shadow_read_env, m
     )
 
     assert response.status_code in (302, 303)
-    assert calls == [(seed["aluno_id"], 1, True)]
+    assert calls == [(seed["aluno_id"], 1, True), (seed["aluno_id"], 1, True)]
     req = _fetch_req(seed["aluno_id"], event_name)
     assert req is not None
     assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
+    assert req["atividade_versao_id"] == 29
+    assert req["regra_snapshot_json"] is not None
+    assert req["codigo_normativo_snapshot"] == "AAC-rev6"
     assert any("event=versioned_resolver_shadow_read" in log and "origin=admin_create" in log for log in info_logs)
 
 
-def test_shadow_read_admin_create_does_not_block_on_resolver_error(shadow_read_env, monkeypatch):
+def test_mandatory_admin_snapshot_rejects_resolver_error(shadow_read_env, monkeypatch):
     env = shadow_read_env
     client = env["client"]
     seed = _seed_student_in_turma()
     _set_admin_session(client)
     _, _, exception_logs = _log_recorder(monkeypatch)
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento Shadow Admin Erro {uuid.uuid4().hex[:6]}"
 
@@ -422,15 +413,11 @@ def test_shadow_read_admin_create_does_not_block_on_resolver_error(shadow_read_e
 
     assert response.status_code in (302, 303)
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
-    assert any("event=versioned_resolver_shadow_read" in log and "origin=admin_create" in log for log in exception_logs)
+    assert req is None
+    assert not any("event=versioned_resolver_shadow_read" in log for log in exception_logs)
 
 
-def test_shadow_read_admin_create_skips_resolver_when_flag_off(shadow_read_env, monkeypatch):
+def test_admin_create_does_not_skip_mandatory_resolver_when_shadow_flag_off(shadow_read_env, monkeypatch):
     env = shadow_read_env
     client = env["client"]
     seed = _seed_student_in_turma()
@@ -438,7 +425,7 @@ def test_shadow_read_admin_create_skips_resolver_when_flag_off(shadow_read_env, 
     monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     def forbidden_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
-        raise AssertionError("resolvedor não deveria ser chamado com a flag desligada")
+        raise AssertionError("mandatory resolver probe")
 
     monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", forbidden_resolver)
 
@@ -458,9 +445,7 @@ def test_shadow_read_admin_create_skips_resolver_when_flag_off(shadow_read_env, 
 
     assert response.status_code in (302, 303)
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_id"] == 1
-    assert req["atividade_versao_id"] is None
+    assert req is None
 
 
 def test_snapshot_write_student_create_writes_aac_snapshot_with_shadow_off(shadow_read_env, monkeypatch):
@@ -559,7 +544,7 @@ def test_snapshot_write_admin_create_writes_aeu_snapshot_with_shadow_off(shadow_
     assert not os.path.exists(versioning_shadow_reads._versioned_shadow_read_dedicated_log_path())
 
 
-def test_snapshot_write_student_create_keeps_null_when_resolver_not_resolved(shadow_read_env, monkeypatch):
+def test_mandatory_student_snapshot_rejects_unresolved_resolver(shadow_read_env, monkeypatch):
     env = shadow_read_env
     client = env["client"]
     seed = _seed_student_in_turma()
@@ -596,20 +581,12 @@ def test_snapshot_write_student_create_keeps_null_when_resolver_not_resolved(sha
         follow_redirects=False,
     )
 
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
+    assert req is None
     assert info_logs == []
     assert exception_logs == []
-    assert any(
-        "event=versioned_requisicao_snapshot_skip" in log
-        and "origin=aluno_create" in log
-        and "status=legacy_activity_without_base_map" in log
-        for log in warning_logs
-    )
+    assert warning_logs == []
 
 
 def test_snapshot_write_admin_edit_remains_out_of_scope(shadow_read_env, monkeypatch):
@@ -758,7 +735,11 @@ def test_shadow_read_resolver_exception_captures_traceback_details(
     def raising_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         raise RuntimeError(raised_message)
 
-    monkeypatch.setattr(versioning_resolver, "resolver_versao_por_aluno", raising_resolver)
+    monkeypatch.setattr(
+        versioning_shadow_reads,
+        "resolver_service",
+        SimpleNamespace(resolver_versao_por_aluno=raising_resolver),
+    )
 
     event_name = f"Evento Shadow Trace {unique_marker}"
     response = client.post(
@@ -828,11 +809,11 @@ def test_shadow_read_resolved_event_includes_timestamp(
     def fake_resolver(conn, *, aluno_id, atividade_id_legacy, strict_legacy_scope=True):
         return {
             "status": "resolved",
-            "atividade_versao_id": 2,
+            "atividade_versao_id": 29,
             "atividade_base_id": 1,
             "codigo_normativo": "AAC-rev6",
             "eixo": "AAC",
-            "matriz_id_efetiva": 1,
+            "matriz_id_efetiva": 2,
             "legacy_scope_ok": True,
             "warnings": [],
             "reason": "ok",

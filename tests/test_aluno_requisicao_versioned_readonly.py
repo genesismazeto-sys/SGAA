@@ -184,7 +184,7 @@ def test_aluno_create_with_snapshot_write_flag_on_shows_block_in_detail(
 
 
 # ---------------------------------------------------------------------------
-# T02 — flag OFF (modo atual do workspace): sem bloco.
+# T02 — flag ausente: snapshot obrigatório permanece ativo.
 # ---------------------------------------------------------------------------
 
 def test_aluno_create_with_snapshot_write_flag_off_hides_block_in_detail(
@@ -214,14 +214,14 @@ def test_aluno_create_with_snapshot_write_flag_off_hides_block_in_detail(
 
     req = _fetch_req(seed["aluno_id"], event_name)
     assert req is not None
-    assert req["atividade_versao_id"] is None
-    assert req["regra_snapshot_json"] is None
-    assert req["codigo_normativo_snapshot"] is None
+    assert req["atividade_versao_id"] is not None
+    assert req["regra_snapshot_json"] is not None
+    assert req["codigo_normativo_snapshot"] is not None
 
     detail = client.get(f"/aluno/requisicoes/{req['id']}")
     assert detail.status_code == 200
     detail_html = detail.get_data(as_text=True)
-    assert "Versão normativa registrada" not in detail_html
+    assert "Versão normativa registrada" in detail_html
 
 
 # ---------------------------------------------------------------------------
@@ -672,8 +672,7 @@ def test_d82b_t03_edit_change_activity_allowed_when_no_snapshot(
 
 
 # ---------------------------------------------------------------------------
-# T04 — aluno_create com WRITE ON e resolvedor não-resolvido: cria sem snapshot,
-#        não bloqueia, GET detalhe não quebra.
+# T04 — resolvedor não-resolvido: criação rejeitada sem persistência.
 # ---------------------------------------------------------------------------
 
 def test_d82b_t04_aluno_create_write_on_unresolved_creates_without_snapshot(
@@ -708,21 +707,14 @@ def test_d82b_t04_aluno_create_write_on_unresolved_creates_without_snapshot(
         },
         follow_redirects=False,
     )
-    assert resp.status_code in (302, 303)  # criação não é bloqueada
+    assert resp.status_code == 200
 
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_versao_id"] is None
-    assert req["codigo_normativo_snapshot"] is None
-    assert req["regra_snapshot_json"] is None
-
-    detail = client.get(f"/aluno/requisicoes/{req['id']}")
-    assert detail.status_code == 200
-    assert "Versão normativa registrada" not in detail.get_data(as_text=True)
+    assert req is None
 
 
 # ---------------------------------------------------------------------------
-# T05 — exceção no resolvedor não bloqueia a criação (writer engole e segue).
+# T05 — exceção no resolvedor: criação rejeitada sem persistência.
 # ---------------------------------------------------------------------------
 
 def test_d82b_t05_writer_exception_does_not_block_creation(
@@ -752,15 +744,10 @@ def test_d82b_t05_writer_exception_does_not_block_creation(
         },
         follow_redirects=False,
     )
-    assert resp.status_code in (302, 303)  # não bloqueia e não 500
+    assert resp.status_code == 200
 
     req = _fetch_req(seed["aluno_id"], event_name)
-    assert req is not None
-    assert req["atividade_versao_id"] is None
-    assert req["codigo_normativo_snapshot"] is None
-
-    detail = client.get(f"/aluno/requisicoes/{req['id']}")
-    assert detail.status_code == 200
+    assert req is None
 
 
 # ---------------------------------------------------------------------------

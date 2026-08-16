@@ -9,6 +9,7 @@ if BASE not in sys.path:
 
 from app import db as app_db_module
 import main
+from tests.fc10_test_helpers import add_exact_snapshot_authority
 
 
 @pytest.fixture(scope="module")
@@ -219,6 +220,12 @@ def test_aluno_nova_requisicao_obeys_turma_matrix_scope(client):
             "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
             (matriz_id, allowed_id),
         )
+        snapshot_version_id = add_exact_snapshot_authority(
+            conn,
+            matriz_id=matriz_id,
+            atividade_id=allowed_id,
+            prefix="aluno-matrix-scope",
+        )
         turma_codigo = main.gerar_codigo_turma(curso["codigo"], 77)
         turma_id = conn.execute(
             """
@@ -288,6 +295,19 @@ def test_aluno_nova_requisicao_obeys_turma_matrix_scope(client):
         conn.execute("DELETE FROM alunos WHERE id = ?", (aluno_id,))
         conn.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
         conn.execute("DELETE FROM turmas WHERE id = ?", (turma_id,))
+        version_row = conn.execute(
+            "SELECT atividade_base_id, norma_id FROM atividade_versao WHERE id = ?",
+            (snapshot_version_id,),
+        ).fetchone()
+        conn.execute(
+            "DELETE FROM matriz_atividade_versao_item WHERE atividade_versao_id = ?",
+            (snapshot_version_id,),
+        )
+        conn.execute("DELETE FROM matriz_norma WHERE matriz_id = ?", (matriz_id,))
+        conn.execute("DELETE FROM atividade_legacy_map WHERE atividade_id_legacy = ?", (allowed_id,))
+        conn.execute("DELETE FROM atividade_versao WHERE id = ?", (snapshot_version_id,))
+        conn.execute("DELETE FROM norma_atividade WHERE id = ?", (version_row["norma_id"],))
+        conn.execute("DELETE FROM atividade_base WHERE id = ?", (version_row["atividade_base_id"],))
         conn.execute("DELETE FROM matrizes_atividades WHERE id = ?", (matriz_id,))
         conn.execute("DELETE FROM atividades WHERE id IN (?, ?)", (allowed_id, blocked_id))
         conn.commit()

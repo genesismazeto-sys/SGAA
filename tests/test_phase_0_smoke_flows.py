@@ -14,6 +14,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 from app import db as app_db_module
+from tests.fc10_test_helpers import add_exact_snapshot_authority
 from tests.conftest import PYTEST_RUNTIME_ROOT
 import main
 
@@ -216,6 +217,12 @@ def test_criacao_requisicao_sem_anexo(smoke_env):
         conn.execute(
             "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
             (matriz_id, atividade_id),
+        )
+        add_exact_snapshot_authority(
+            conn,
+            matriz_id=matriz_id,
+            atividade_id=atividade_id,
+            prefix="phase0-request",
         )
 
         hashed = main.hash_password(aluno_pass)

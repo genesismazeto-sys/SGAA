@@ -394,14 +394,14 @@ from app.versioning.shadow_reads import (
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
     _build_versioned_requisicao_snapshot_payload,
-    _get_turma_explicit_matriz_id_for_snapshot,
     _has_versioned_requisicao_snapshot,
     _load_versioned_requisicao_snapshot_rule_row,
     _normalize_snapshot_diagnostic_scalar,
     _snapshot_diagnostic_row_value,
     is_versioned_requisicao_snapshot_display_enabled,
-    is_versioned_requisicao_snapshot_write_enabled,
-    maybe_write_versioned_requisicao_snapshot,
+    prepare_versioned_requisicao_snapshot,
+    PreparedRequisicaoSnapshot,
+    RequisicaoSnapshotError,
 )
 from app.views.admin.versioning import (
     admin_diagnostico_atividades_versionadas,

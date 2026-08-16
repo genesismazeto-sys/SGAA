@@ -46,25 +46,6 @@ def _get_turma(conn, codigo: str):
     return row
 
 
-def _set_snapshot_write_flag(value: str):
-    """Returns a context manager that temporarily sets the snapshot write env var."""
-    import contextlib
-
-    @contextlib.contextmanager
-    def _ctx():
-        original = os.environ.get("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE")
-        try:
-            os.environ["SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE"] = value
-            yield
-        finally:
-            if original is None:
-                os.environ.pop("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", None)
-            else:
-                os.environ["SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE"] = original
-
-    return _ctx()
-
-
 # ---------------------------------------------------------------------------
 # Contrato 1 — Mesma base, matriz AAC-rev5 → resolve AAC-rev5
 # ---------------------------------------------------------------------------
@@ -291,11 +272,10 @@ def test_contrato_4b_writer_nao_grava_atividade_versao_id_quando_ambiguo(version
         )
         conn.commit()
 
-        with _set_snapshot_write_flag("1"):
-            main.maybe_write_versioned_requisicao_snapshot(
+        with pytest.raises(main.RequisicaoSnapshotError):
+            main.prepare_versioned_requisicao_snapshot(
                 conn,
                 flow_origin="test_contrato_4b",
-                req_id=req_id,
                 aluno_id=aluno_id,
                 atividade_id_legacy=1,
             )
@@ -392,11 +372,10 @@ def test_contrato_5_turma_sem_matriz_explicita_nao_carimba(versioned_env):
         ).fetchone()["id"]
         conn.commit()
 
-        with _set_snapshot_write_flag("1"):
-            result = main.maybe_write_versioned_requisicao_snapshot(
+        with pytest.raises(main.RequisicaoSnapshotError):
+            main.prepare_versioned_requisicao_snapshot(
                 conn,
                 flow_origin="test_contrato_5",
-                req_id=req_id,
                 aluno_id=aluno_id,
                 atividade_id_legacy=1,
             )
@@ -405,9 +384,6 @@ def test_contrato_5_turma_sem_matriz_explicita_nao_carimba(versioned_env):
             "SELECT atividade_versao_id FROM requisicoes WHERE id = ?", (req_id,)
         ).fetchone()
 
-    assert result is None, (
-        "Writer deve retornar None quando turma não tem matriz explícita"
-    )
     assert row["atividade_versao_id"] is None, (
         "Turma sem matriz explícita NÃO deve ter atividade_versao_id carimbado. "
         "Fallback para get_preferred_matriz_for_curso é heurística proibida para carimbo operacional."
@@ -460,25 +436,20 @@ def test_contrato_5b_turma_com_matriz_explicita_carimba_corretamente(versioned_e
         ).fetchone()["id"]
         conn.commit()
 
-        with _set_snapshot_write_flag("1"):
-            result = main.maybe_write_versioned_requisicao_snapshot(
-                conn,
-                flow_origin="test_contrato_5b",
-                req_id=req_id,
-                aluno_id=aluno_id,
-                atividade_id_legacy=1,
-            )
+        result = main.prepare_versioned_requisicao_snapshot(
+            conn,
+            flow_origin="test_contrato_5b",
+            aluno_id=aluno_id,
+            atividade_id_legacy=1,
+        )
 
         row = conn.execute(
             "SELECT atividade_versao_id FROM requisicoes WHERE id = ?", (req_id,)
         ).fetchone()
 
-    assert result is not None and result.get("status") == "resolved", (
-        f"Writer deve resolver com sucesso para turma com matriz explícita: {result}"
-    )
-    assert row["atividade_versao_id"] is not None, (
-        "Turma com matriz explícita DEVE ter atividade_versao_id carimbado"
-    )
+    assert result.atividade_versao_id is not None
+    assert result.payload["matriz_id_efetiva"] == turma["matriz_id"]
+    assert row["atividade_versao_id"] is None
 
 
 # ---------------------------------------------------------------------------

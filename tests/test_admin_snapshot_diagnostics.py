@@ -79,7 +79,7 @@ def _seed_admin_request(
         assert curso is not None
 
         turma_numero = (int(token[:6], 16) % 9000) + 1000
-        turma_codigo = main.gerar_codigo_turma(curso["codigo"], turma_numero)
+        turma_codigo = f"{curso['codigo']}-T{turma_numero:02d}-{token}"
         activity_name = f"AAC Snapshot {label} {token}"
         email = f"admin.snapshot.{label}.{token}@teste.local"
         matricula = f"SNAP-{label[:4].upper()}-{token}"
@@ -191,19 +191,15 @@ def test_snapshot_helper_returns_none_without_versioned_columns():
 
 def test_snapshot_display_flag_defaults_off_and_is_independent(monkeypatch):
     monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", raising=False)
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
     monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
 
     assert main.is_versioned_requisicao_snapshot_display_enabled() is False
-    assert main.is_versioned_requisicao_snapshot_write_enabled() is True
     assert main.is_versioned_resolver_shadow_read_enabled() is True
 
     monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
     monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     assert main.is_versioned_requisicao_snapshot_display_enabled() is True
-    assert main.is_versioned_requisicao_snapshot_write_enabled() is False
     assert main.is_versioned_resolver_shadow_read_enabled() is False
 
 

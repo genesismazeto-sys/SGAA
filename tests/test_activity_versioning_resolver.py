@@ -596,7 +596,7 @@ def test_resolver_is_read_only_and_output_has_no_documentos_json(diagnostic_data
     assert after_requisicoes_versionadas == before_requisicoes_versionadas
 
 
-def test_resolver_legacy_flow_still_uses_atividade_id(isolated_legacy_client):
+def test_resolver_legacy_flow_rejects_normal_creation_without_snapshot_authority(isolated_legacy_client):
     seed = _seed_legacy_flow_context()
 
     with isolated_legacy_client.session_transaction() as sess:
@@ -615,13 +615,13 @@ def test_resolver_legacy_flow_still_uses_atividade_id(isolated_legacy_client):
         },
         follow_redirects=False,
     )
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
 
     with main.app.app_context():
         conn = main.get_db_connection()
         req = conn.execute(
             """
-            SELECT atividade_id, atividade_versao_id, status
+            SELECT id
               FROM requisicoes
              WHERE aluno_id = ? AND nome_evento = ?
              ORDER BY id DESC
@@ -630,7 +630,4 @@ def test_resolver_legacy_flow_still_uses_atividade_id(isolated_legacy_client):
             (seed["aluno_id"], "Evento Resolver Legado"),
         ).fetchone()
 
-    assert req is not None
-    assert req["atividade_id"] == seed["atividade_id"]
-    assert req["atividade_versao_id"] is None
-    assert (req["status"] or "").lower() != "indeferido"
+    assert req is None

@@ -307,7 +307,8 @@ def test_phase_d5_legacy_flow_still_uses_atividade_id(isolated_legacy_client):
         },
         follow_redirects=False,
     )
-    assert response.status_code in (302, 303)
+    assert response.status_code == 200
+    assert "não está disponível para a matriz da sua turma" in response.get_data(as_text=True)
 
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -322,7 +323,4 @@ def test_phase_d5_legacy_flow_still_uses_atividade_id(isolated_legacy_client):
             (seed["aluno_id"], "Evento D5 Legado"),
         ).fetchone()
 
-    assert req is not None
-    assert req["atividade_id"] == seed["atividade_id"]
-    assert req["atividade_versao_id"] is None
-    assert (req["status"] or "").lower() != "indeferido"
+    assert req is None

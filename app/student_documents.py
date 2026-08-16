@@ -68,6 +68,15 @@ def resolve_student_document_path(root_folder: str, rel_path: str) -> str:
     return candidate_abs
 
 
+def remove_student_document(root_folder: str, rel_path: str) -> None:
+    """Remove one confined student document, tolerating an absent file."""
+    abs_path = resolve_student_document_path(root_folder, rel_path)
+    try:
+        os.remove(abs_path)
+    except FileNotFoundError:
+        return
+
+
 def sanitize_student_document_filename(
     original_name: str,
     *,
@@ -116,5 +125,12 @@ def save_student_document(
     rel_path = "/".join((rel_dir, final_name))
     abs_path = resolve_student_document_path(root_folder, rel_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-    file_storage.save(abs_path)
+    try:
+        file_storage.save(abs_path)
+    except Exception:
+        try:
+            os.remove(abs_path)
+        except FileNotFoundError:
+            pass
+        raise
     return rel_path

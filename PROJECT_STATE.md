@@ -161,6 +161,81 @@ application writes.
   boundary and was not redesigned by FC-09; FC-09 does not protect against
   intentional full-database restore.
 
+## FC-10 — REQUEST SNAPSHOT CREATION AUTHORITY — CLOSED / ACCEPTED
+
+FC10_CLOSED_PUBLISHED. Technical acceptance is final.
+
+### Authority
+
+For every new normal operational requisition for a real aluno/turma, successful
+creation requires a creation-time snapshot of the exact Turma Matrix, exact
+Matrix-selected Activity Version, exact Norma and academic rule. Student normal
+create and admin normal create are Category A mandatory writers. Historical
+`admin_importar_requisicoes` rows with `aluno_id=NULL` remain the intentional
+Category B legacy/no-snapshot boundary; test and fixture writers are Category C.
+
+`turma.matriz_id` is the sole Matrix authority. The exact persisted
+`matriz_atividade_versao_item` selection determines the Activity Version; no
+preferred/newest/latest fallback exists. An M1/V1 cohort remains M1/V1 even
+when M2/V2 is later available.
+
+### Snapshot contract
+
+Frozen identity includes `atividade_base_id`, `atividade_id_legacy`,
+`atividade_versao_id`, `atividade_versao_numero`, `norma_id`,
+`codigo_normativo`, `eixo`, `grupo`, `matriz_id_efetiva`, `flow_origin`,
+`snapshot_written_at` and `schema_version`. Request columns and JSON identity
+are mutually consistent.
+
+Frozen rule/history values include `grupo`, `ch_por_evento`,
+`limite_semestre`, `limite_total`, `observacao_aluno`, `observacao_admin`,
+`documentos_json`, `vigencia_inicio`, `vigencia_fim`, `numero_versao` and
+`status`, plus normative/base identity. `documentos_json` comes from the exact
+selected Activity Version, including `NULL`.
+
+Snapshot preparation requires the actual persisted `norma_atividade` row.
+Dangling Norma and contradictory Activity Version/Norma/resolver/Matrix
+identity fail closed; no mixed-version fallback or field merging is allowed.
+
+### Creation and immutability
+
+Student/admin normal creation is fail-closed. Attachment writes are tracked and
+compensated after post-file commit or registration failure, leaving no
+`requisicoes` row, `requisicao_arquivos` row or new physical orphan. Partial
+file-save cleanup is owned by `student_documents`; request authority remains
+in the views. `SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE` cannot suppress
+Category A snapshots; unrelated display/shadow controls are not claimed
+retired.
+
+Snapshotted requests retain `atividade_versao_id`,
+`codigo_normativo_snapshot` and `regra_snapshot_json` across ordinary edits;
+activity identity cannot change in place. Historical no-snapshot rows are not
+backfilled, including through GET, edit or startup.
+
+### Review and evidence
+
+Initial independent review: `FC10_FINAL_REVIEW_REJECT`, identifying attachment
+orphans, missing physical Norma acceptance, insufficient mixed-identity checks,
+omitted `documentos_json` and weak W5/W8 discriminators. Bounded repair was
+completed. Targeted independent rereview: `FC10_FINDINGS_REREVIEW_ACCEPT`.
+
+Final executor canonical: 1657 passed / 133 skipped / 17 deselected / 0
+failed / 0 errors. Independent final targeted rereview: 260 passed. FC-10
+standalone: 26 passed. No canonical rerun occurred after that rereview by
+design.
+
+Invariants remain: routes 131, endpoints 130, RBAC unmapped 0, actor matrix
+402, message catalogue 539, Design System 198, route inventory unchanged,
+`main @app.route` 0, main-owned hooks 0 and prohibited import main 0. No
+schema change, migration, v4, route/endpoint/RBAC/message delta or read-side
+processing cutover.
+
+FC-10 is the write-side snapshot authority cutover for new normal requests,
+not the read-side academic-rule cutover. Admin processing/deferment, pending
+requests, progress/historical approved-hour calculations, canonical E2E
+cutover and removal of obsolete legacy/shadow/mapping authorities remain
+future work. Versioning is not globally complete.
+
 ## FC-07 — ACTIVITY VERSION COPY-ON-CREATE — CLOSED / ACCEPTED
 
 FC-07 (activity version copy-on-create) — CLOSED / ACCEPTED. Production

@@ -49,11 +49,10 @@ ROUTE_MATRIX = (
 ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
 SERVICE_OWNERS = {
     "resolver_versao_por_aluno": "app.versioning.resolver",
-    "maybe_write_versioned_requisicao_snapshot": "app.versioning.snapshots",
+    "prepare_versioned_requisicao_snapshot": "app.versioning.snapshots",
     "maybe_run_versioned_resolver_shadow_read": "app.versioning.shadow_reads",
     "is_versioned_resolver_shadow_read_enabled": "app.versioning.shadow_reads",
     "is_versioned_requisicao_snapshot_display_enabled": "app.versioning.snapshots",
-    "is_versioned_requisicao_snapshot_write_enabled": "app.versioning.snapshots",
 }
 REMAINING_ALUNO_MAIN_HELPERS = {
     "get_student_request_update_alert",
@@ -424,19 +423,16 @@ def test_exact_rbac_requirements_remain_unchanged():
 def test_all_versioning_flags_default_off(monkeypatch):
     from app.versioning import (
         is_versioned_requisicao_snapshot_display_enabled,
-        is_versioned_requisicao_snapshot_write_enabled,
         is_versioned_resolver_shadow_read_enabled,
     )
 
     for name in (
         "SGAA_VERSIONED_RESOLVER_SHADOW_READ",
         "SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY",
-        "SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE",
     ):
         monkeypatch.delenv(name, raising=False)
     assert is_versioned_resolver_shadow_read_enabled() is False
     assert is_versioned_requisicao_snapshot_display_enabled() is False
-    assert is_versioned_requisicao_snapshot_write_enabled() is False
 
 
 def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
@@ -450,7 +446,7 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
     }
     assert {
         "maybe_run_versioned_resolver_shadow_read",
-        "maybe_write_versioned_requisicao_snapshot",
+        "prepare_versioned_requisicao_snapshot",
     } <= imported
 
     helper = next(
@@ -463,7 +459,7 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
     keys = {key.value for key in returned.keys if isinstance(key, ast.Constant)}
     assert keys == REMAINING_ALUNO_MAIN_HELPERS
     assert "main.maybe_run_versioned_resolver_shadow_read" not in source
-    assert "main.maybe_write_versioned_requisicao_snapshot" not in source
+    assert "main.prepare_versioned_requisicao_snapshot" not in source
 
 
 def test_versioning_modules_never_import_main_or_own_forbidden_domains():
