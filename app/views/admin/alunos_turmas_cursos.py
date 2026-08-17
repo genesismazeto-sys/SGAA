@@ -36,6 +36,7 @@ from app.db_maintenance import ensure_matrizes_atividades_table
 from app.matrix_scope import _matriz_option_label, get_effective_matriz_for_turma
 from app.security.passwords import hash_password
 from app.text import normalize_header, ptbr_text_sort_key
+from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_CSV, save_upload
 from app.user_accounts import (
     _access_defaults_map,
@@ -1243,43 +1244,26 @@ def admin_detalhes_turma(turma_id):
             u.email,
             a.matricula,
             a.status,
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN act.tipo_atividade = 'Acadêmica Complementar'
-                             AND r.status IN ('Deferida', 'Deferida Parcialmente')
-                        THEN COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS total_aac,
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN act.tipo_atividade = 'Extensão Universitária'
-                             AND r.status IN ('Deferida', 'Deferida Parcialmente')
-                        THEN COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS total_ae
+            a.id AS aluno_id
         FROM alunos a
         JOIN usuarios u ON u.id = a.usuario_id
-        LEFT JOIN requisicoes r ON r.aluno_id = a.id
-        LEFT JOIN atividades act ON act.id = r.atividade_id
         WHERE a.turma_id = ?
-        GROUP BY a.id, u.id, u.nome, u.email, a.matricula, a.status
         """,
         (turma_id,),
     ).fetchall()
+    approved_totals = {}
+    for history in list_approved_request_history(conn, turma_id=turma_id):
+        totals = approved_totals.setdefault(
+            history.aluno_id, {"AAC": 0.0, "AEU": 0.0}
+        )
+        totals[history.eixo] += history.approved_hours
     alunos_normalizados = []
     for row in alunos:
         aluno = {key: row[key] for key in row.keys()}
         aluno["status"] = "Ativo" if str(row["status"] or "").strip().lower() == "ativo" else "Inativo"
-        aluno["total_aac"] = float(row["total_aac"] or 0)
-        aluno["total_ae"] = float(row["total_ae"] or 0)
+        totals = approved_totals.get(row["aluno_id"], {})
+        aluno["total_aac"] = float(totals.get("AAC", 0) or 0)
+        aluno["total_ae"] = float(totals.get("AEU", 0) or 0)
         if status_filters and aluno["status"] not in status_filters:
             continue
         alunos_normalizados.append(aluno)

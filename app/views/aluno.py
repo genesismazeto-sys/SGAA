@@ -31,6 +31,15 @@ from app.db_maintenance import (
     ensure_usuario_profile_schema,
 )
 from app.matrix_scope import get_effective_matriz_for_turma
+from app.versioning.request_history import (
+    APPROVED_STATUSES,
+    SnapshotProcessingAuthority,
+    filter_historical_request_rows,
+    list_approved_request_history,
+    list_exact_matrix_activity_catalogue,
+    read_historical_request,
+    read_request_presentation,
+)
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
@@ -72,17 +81,8 @@ def _get_main_helpers():
 
 bp_aluno = Blueprint("aluno", __name__)
 
-APPROVED_PROGRESS_STATUSES = ("Deferida", "Deferida Parcialmente")
 AAC_ACTIVITY_TYPE = "Acadêmica Complementar"
 EXT_ACTIVITY_TYPE = "Extensão Universitária"
-
-
-def _approved_hours_from_row(row) -> float:
-    raw_value = row["horas_deferidas"] if row["horas_deferidas"] is not None else row["horas_solicitadas"]
-    try:
-        return float(raw_value or 0)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _aluno_url(endpoint_name: str, **values):
@@ -347,11 +347,12 @@ def _format_progresso_grupo(tipo_atividade: str | None, grupo: str | None) -> st
 def _format_progresso_limite(row) -> str:
     if not bool(row["tem_limitacao"]):
         return "-"
-    if row["tipo_limitacao"] == "semestral" and row["limite_horas_semestral"] is not None:
-        return f"{_format_hours_number(row['limite_horas_semestral'])}h/sem"
-    if row["tipo_limitacao"] == "total" and row["limite_horas_total"] is not None:
-        return f"{_format_hours_number(row['limite_horas_total'])}h total"
-    return "-"
+    labels = []
+    if row["limite_horas_semestral"] is not None:
+        labels.append(f"{_format_hours_number(row['limite_horas_semestral'])}h/sem")
+    if row["limite_horas_total"] is not None:
+        labels.append(f"{_format_hours_number(row['limite_horas_total'])}h total")
+    return "; ".join(labels) or "-"
 
 
 def _build_progress_activity(row) -> dict[str, Any]:
@@ -394,73 +395,114 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         return None
 
     aluno_id = aluno_scope["aluno_id"]
-    atividades_por_id: dict[int, dict[str, Any]] = {}
+    atividades_por_id: dict[object, dict[str, Any]] = {}
+    catalogo_por_legacy_id: dict[int, object] = {}
 
     atividades_catalogo = []
     tipos_matriz: set[str] = set()
     if matriz:
-        atividades_catalogo = conn.execute(
-            """
-            SELECT DISTINCT a.*
-              FROM atividades a
-              JOIN matrizes_atividades_itens mai ON mai.atividade_id = a.id
-             WHERE mai.matriz_id = ?
-             ORDER BY a.tipo_atividade, a.grupo, a.nome, a.id
-            """,
-            (matriz["id"],),
-        ).fetchall()
+        atividades_catalogo = list_exact_matrix_activity_catalogue(conn, matriz["id"])
         tipos_matriz = {str(row["tipo_atividade"] or "").strip() for row in atividades_catalogo if row["tipo_atividade"]}
 
     for row in atividades_catalogo or []:
-        atividades_por_id[row["id"]] = _build_progress_activity(row)
+        key = (
+            "catalogue",
+            row["atividade_versao_id"]
+            if row["atividade_versao_id"] is not None
+            else ("legacy", row["id"]),
+        )
+        atividades_por_id[key] = _build_progress_activity(row)
+        catalogo_por_legacy_id.setdefault(row["id"], key)
 
-    atividades_historico = conn.execute(
+    historical_rows = conn.execute(
         """
-        SELECT DISTINCT
-               a.id,
-               a.nome,
-               a.grupo,
-               a.tipo_atividade,
-               a.tem_limitacao,
-               a.tipo_limitacao,
-               a.limite_horas_total,
-               a.limite_horas_semestral
+        SELECT r.*,
+               student.turma_id,
+               live.nome AS live_nome,
+               live.tipo_atividade AS live_tipo_atividade,
+               live.grupo AS live_grupo,
+               live.limite_horas_total AS live_limite_total,
+               live.limite_horas_semestral AS live_limite_semestre
           FROM requisicoes r
-          JOIN atividades a ON a.id = r.atividade_id
+          LEFT JOIN alunos student ON student.id = r.aluno_id
+          LEFT JOIN atividades live ON live.id = r.atividade_id
          WHERE r.aluno_id = ?
-         ORDER BY a.tipo_atividade, a.grupo, a.nome, a.id
+      ORDER BY r.id
         """,
         (aluno_id,),
     ).fetchall()
-    for row in atividades_historico:
-        atividades_por_id.setdefault(row["id"], _build_progress_activity(row))
+    for raw_row in historical_rows:
+        row = read_request_presentation(raw_row)
+        if row.authority is SnapshotProcessingAuthority.NO_SNAPSHOT:
+            key = catalogo_por_legacy_id.get(row.atividade_id, ("legacy", row.atividade_id))
+        else:
+            key = (
+                "historical",
+                row.atividade_versao_id,
+                row.tipo_atividade,
+                row.grupo,
+                row.nome,
+                row.limite_semestre,
+                row.limite_total,
+            )
+        if key in atividades_por_id:
+            continue
+        atividades_por_id[key] = _build_progress_activity(
+            {
+                "id": row.atividade_id,
+                "nome": row.nome,
+                "tipo_atividade": row.tipo_atividade,
+                "grupo": row.grupo,
+                "tem_limitacao": row.limite_total is not None
+                or row.limite_semestre is not None,
+                "tipo_limitacao": (
+                    "semestral" if row.limite_semestre is not None else "total"
+                ),
+                "limite_horas_total": row.limite_total,
+                "limite_horas_semestral": row.limite_semestre,
+            }
+        )
 
     semestre_atual = _semestre_sort_key(_get_semestre(datetime.date.today()))
     semestres_detectados: set[str] = set()
-    requisicoes_aprovadas = conn.execute(
-        """
-        SELECT atividade_id, data_evento, horas_solicitadas, horas_deferidas
-          FROM requisicoes
-         WHERE aluno_id = ?
-           AND status IN (?, ?)
-        """,
-        (aluno_id, *APPROVED_PROGRESS_STATUSES),
-    ).fetchall()
+    requisicoes_aprovadas = list_approved_request_history(conn, aluno_id=aluno_id)
     for row in requisicoes_aprovadas:
-        data_evento = _parse_iso_date(row["data_evento"])
+        data_evento = _parse_iso_date(row.data_evento)
         if not data_evento:
             continue
         semestre = _get_semestre(data_evento)
         if _semestre_sort_key(semestre) > semestre_atual:
             continue
-        horas_validas = row["horas_deferidas"] if row["horas_deferidas"] is not None else row["horas_solicitadas"]
-        try:
-            horas_numericas = float(horas_validas or 0)
-        except (TypeError, ValueError):
-            continue
-        atividade = atividades_por_id.get(row["atividade_id"])
+        horas_numericas = row.approved_hours
+        if row.authority is SnapshotProcessingAuthority.NO_SNAPSHOT:
+            key = catalogo_por_legacy_id.get(row.atividade_id, ("legacy", row.atividade_id))
+        else:
+            key = (
+                "historical",
+                row.atividade_versao_id,
+                row.tipo_atividade,
+                row.grupo,
+                row.nome,
+                row.limite_semestre,
+                row.limite_total,
+            )
+        atividade = atividades_por_id.get(key)
         if atividade is None:
-            continue
+            rule_row = {
+                "id": row.atividade_id,
+                "nome": row.nome,
+                "tipo_atividade": row.tipo_atividade,
+                "grupo": row.grupo,
+                "tem_limitacao": row.limite_total is not None
+                or row.limite_semestre is not None,
+                "tipo_limitacao": (
+                    "semestral" if row.limite_semestre is not None else "total"
+                ),
+                "limite_horas_total": row.limite_total,
+                "limite_horas_semestral": row.limite_semestre,
+            }
+            atividade = _build_progress_activity(rule_row)
+            atividades_por_id[key] = atividade
         semestres_detectados.add(semestre)
         atividade["semestres"][semestre] = round(atividade["semestres"].get(semestre, 0.0) + horas_numericas, 2)
 
@@ -473,7 +515,7 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         }
         total = round(sum(semestre_values.values()), 2)
         semestres_limitados = {}
-        if atividade["tem_limitacao"] and atividade["tipo_limitacao"] == "semestral" and atividade["limite_horas_semestral"] is not None:
+        if atividade["tem_limitacao"] and atividade["limite_horas_semestral"] is not None:
             limite_semestral = float(atividade["limite_horas_semestral"])
             semestres_limitados = {
                 semestre: (valor >= limite_semestral and limite_semestral > 0)
@@ -491,7 +533,6 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         atividade["total_fmt"] = _format_hours_label(total)
         atividade["total_limitado"] = bool(
             atividade["tem_limitacao"]
-            and atividade["tipo_limitacao"] == "total"
             and atividade["limite_horas_total"] is not None
             and atividade["limite_horas_total"] > 0
             and total >= float(atividade["limite_horas_total"])
@@ -567,9 +608,15 @@ def aluno_dashboard():
 
     requisicoes_rows = conn.execute(
         """
-        SELECT r.*, act.nome AS atividade_nome, act.tipo_atividade
+        SELECT r.*, act.nome AS live_nome,
+               act.tipo_atividade AS live_tipo_atividade,
+               act.grupo AS live_grupo,
+               act.limite_horas_total AS live_limite_total,
+               act.limite_horas_semestral AS live_limite_semestral,
+               a.turma_id
         FROM requisicoes r
-        JOIN atividades act ON r.atividade_id = act.id
+        LEFT JOIN atividades act ON r.atividade_id = act.id
+        LEFT JOIN alunos a ON a.id = r.aluno_id
         WHERE r.aluno_id = ?
         ORDER BY r.data_solicitacao DESC
         """,
@@ -579,35 +626,40 @@ def aluno_dashboard():
     requisicoes = []
     for row in requisicoes_rows:
         item = {key: row[key] for key in row.keys()}
-        item["horas_aprovadas"] = _approved_hours_from_row(row)
+        history = read_request_presentation(row)
+        item["atividade_nome"] = history.nome
+        item["tipo_atividade"] = history.tipo_atividade
+        item["grupo"] = history.grupo
+        item["horas_aprovadas"] = history.approved_hours
         requisicoes.append(item)
 
-    horas_por_tipo = conn.execute(
-        """
-        SELECT act.tipo_atividade,
-               SUM(COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)) as total_horas
-        FROM requisicoes r
-        JOIN atividades act ON r.atividade_id = act.id
-        WHERE r.aluno_id = ? AND r.status IN ('Deferida', 'Deferida Parcialmente')
-        GROUP BY act.tipo_atividade
-        """,
-        (aluno_info["id"],),
-    ).fetchall()
+    approved = [
+        req for req in requisicoes if req["status"] in APPROVED_STATUSES
+    ]
+    totals_by_type = {}
+    totals_by_group = {}
+    for req in approved:
+        totals_by_type[req["tipo_atividade"]] = (
+            totals_by_type.get(req["tipo_atividade"], 0.0) + req["horas_aprovadas"]
+        )
+        group_key = (req["grupo"], req["tipo_atividade"])
+        totals_by_group[group_key] = (
+            totals_by_group.get(group_key, 0.0) + req["horas_aprovadas"]
+        )
+    horas_por_tipo = [
+        {"tipo_atividade": key, "total_horas": value}
+        for key, value in totals_by_type.items()
+    ]
+    horas_por_grupo = [
+        {"grupo": key[0], "tipo_atividade": key[1], "total_horas": value}
+        for key, value in totals_by_group.items()
+    ]
 
-    horas_por_grupo = conn.execute(
-        """
-        SELECT act.grupo,
-               act.tipo_atividade,
-               SUM(COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)) as total_horas
-        FROM requisicoes r
-        JOIN atividades act ON r.atividade_id = act.id
-        WHERE r.aluno_id = ? AND r.status IN ('Deferida', 'Deferida Parcialmente')
-        GROUP BY act.grupo, act.tipo_atividade
-        """,
-        (aluno_info["id"],),
-    ).fetchall()
-
-    _, _, atividades_matriz = _list_atividades_for_usuario(conn, usuario_id, "Todas")
+    atividades_matriz = (
+        list_exact_matrix_activity_catalogue(conn, matriz_aluno["id"])
+        if matriz_aluno
+        else []
+    )
     limites_por_grupo = {
         row["grupo"]: row["limite_horas"]
         for row in atividades_matriz
@@ -1330,9 +1382,12 @@ def aluno_minhas_requisicoes():
     dir_sql = "DESC" if dir_ == "desc" else "ASC"
 
     select_cols = (
-        "SELECT r.id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
+        "SELECT r.id, r.aluno_id, r.atividade_id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
         "r.atividade_versao_id, r.codigo_normativo_snapshot, r.regra_snapshot_json, "
         "a.nome AS atividade_nome, a.tipo_atividade, a.grupo AS grupo, "
+        "a.nome AS live_nome, a.tipo_atividade AS live_tipo_atividade, "
+        "a.grupo AS live_grupo, a.limite_horas_total AS live_limite_total, "
+        "a.limite_horas_semestral AS live_limite_semestre, "
         "av.numero_versao AS av_numero_versao, "
         "av.codigo_normativo AS av_codigo_normativo, "
         "av.eixo AS av_eixo, av.grupo AS av_grupo "
@@ -1345,26 +1400,10 @@ def aluno_minhas_requisicoes():
     )
     params: list[Any] = [aluno_id]
     where_parts: list[str] = []
-    if q:
-        like = f"%{q}%"
-        where_parts.append("(LOWER(a.nome) LIKE LOWER(?) OR LOWER(r.status) LIKE LOWER(?) OR LOWER(COALESCE(a.tipo_atividade, '')) LIKE LOWER(?) OR LOWER(COALESCE(a.grupo, '')) LIKE LOWER(?))")
-        params.extend([like, like, like, like])
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where_parts.append(f"COALESCE(r.status, '') IN ({placeholders})")
         params.extend(status_filters)
-    if tipo_filters:
-        placeholders = ", ".join("?" for _ in tipo_filters)
-        where_parts.append(f"COALESCE(a.tipo_atividade, '') IN ({placeholders})")
-        params.extend(tipo_filters)
-    if grupo_filters:
-        placeholders = ", ".join("?" for _ in grupo_filters)
-        where_parts.append(f"COALESCE(a.grupo, '') IN ({placeholders})")
-        params.extend(grupo_filters)
-    if atividade_filters:
-        placeholders = ", ".join("?" for _ in atividade_filters)
-        where_parts.append(f"COALESCE(a.nome, '') IN ({placeholders})")
-        params.extend(atividade_filters)
     if data_evento_min:
         where_parts.append("date(r.data_evento) >= date(?)")
         params.append(data_evento_min)
@@ -1406,27 +1445,37 @@ def aluno_minhas_requisicoes():
         "data_evento": "r.data_evento",
         "horas_solicitadas": "r.horas_solicitadas",
         "horas_deferidas": "COALESCE(r.horas_deferidas, r.horas_solicitadas)",
-        "tipo_atividade": "a.tipo_atividade",
-        "grupo": "a.grupo",
-        "atividade_nome": "a.nome",
         "status": "r.status",
         "processado_em": "r.data_processamento",
     }
+    historical_sort_fields = {
+        "tipo_atividade": "tipo_atividade",
+        "grupo": "grupo",
+        "atividade_nome": "nome",
+    }
     order_col = sort_map.get(sort, "r.data_evento")
     query = select_cols + base_from + where_sql + f" ORDER BY {order_col} {dir_sql}, r.id DESC"
-
-    count_sql = "SELECT COUNT(*) " + base_from + where_sql
-    total = conn.execute(count_sql, params).fetchone()[0]
-
+    rows = conn.execute(query, params).fetchall()
+    selected_rows = filter_historical_request_rows(
+        rows,
+        tipo_filters=tipo_filters,
+        grupo_filters=grupo_filters,
+        atividade_filters=atividade_filters,
+        query=q,
+    )
+    historical_sort = historical_sort_fields.get(sort)
+    if historical_sort:
+        selected_rows.sort(
+            key=lambda item: str(getattr(item[1], historical_sort) or "").casefold(),
+            reverse=dir_sql == "DESC",
+        )
+    total = len(selected_rows)
     apply_limit = wants_pagination()
-    exec_params = list(params)
     if apply_limit:
-        query += " LIMIT ? OFFSET ?"
-        exec_params += [per_page, offset]
+        selected_rows = selected_rows[offset : offset + per_page]
 
-    rows = conn.execute(query, exec_params).fetchall()
     requisicoes = []
-    for r in rows:
+    for r, history in selected_rows:
         versao_row = None
         if r["av_numero_versao"] is not None or r["av_codigo_normativo"] is not None:
             versao_row = {
@@ -1449,9 +1498,9 @@ def aluno_minhas_requisicoes():
                 "horas_solicitadas": r["horas_solicitadas"],
                 "horas_deferidas": r["horas_deferidas"],
                 "status": r["status"],
-                "atividade_nome": r["atividade_nome"],
-                "tipo_atividade": r["tipo_atividade"],
-                "grupo": r["grupo"],
+                "atividade_nome": history.nome,
+                "tipo_atividade": history.tipo_atividade,
+                "grupo": history.grupo,
                 "snapshot": snapshot_display,
                 "can_edit": can_student_edit_requisition(r["status"], r["data_processamento"]),
                 "can_delete": can_student_delete_requisition(r["status"], r["data_processamento"]),
@@ -1460,10 +1509,12 @@ def aluno_minhas_requisicoes():
 
     filter_rows = conn.execute(
         """
-        SELECT DISTINCT COALESCE(a.tipo_atividade, '') AS tipo_atividade,
-                        COALESCE(a.grupo, '') AS grupo,
-                        COALESCE(a.nome, '') AS atividade_nome,
-                        COALESCE(r.status, '') AS status
+        SELECT r.*,
+               a.nome AS live_nome,
+               a.tipo_atividade AS live_tipo_atividade,
+               a.grupo AS live_grupo,
+               a.limite_horas_total AS live_limite_total,
+               a.limite_horas_semestral AS live_limite_semestre
           FROM requisicoes r
           JOIN atividades a ON a.id = r.atividade_id
          WHERE r.aluno_id = ?
@@ -1471,11 +1522,12 @@ def aluno_minhas_requisicoes():
         (aluno_id,),
     ).fetchall()
 
-    tipos_disponiveis = sorted({row["tipo_atividade"] for row in filter_rows if row["tipo_atividade"]})
-    grupos_disponiveis = sorted({row["grupo"] for row in filter_rows if row["grupo"]})
-    atividades_disponiveis = sorted({row["atividade_nome"] for row in filter_rows if row["atividade_nome"]})
+    filter_history = [read_request_presentation(row) for row in filter_rows]
+    tipos_disponiveis = sorted({row.tipo_atividade for row in filter_history if row.tipo_atividade})
+    grupos_disponiveis = sorted({row.grupo for row in filter_history if row.grupo})
+    atividades_disponiveis = sorted({row.nome for row in filter_history if row.nome})
     status_disponiveis = sorted(
-        {row["status"] for row in filter_rows if row["status"]},
+        {row.status for row in filter_history if row.status},
         key=lambda value: [
             "Pendente",
             "Deferida",
@@ -2006,6 +2058,11 @@ def aluno_requisicao_detalhe(req_id: int):
         """
         SELECT r.*,
                a.nome AS atividade_nome, a.tipo_atividade, a.grupo,
+               a.nome AS live_nome,
+               a.tipo_atividade AS live_tipo_atividade,
+               a.grupo AS live_grupo,
+               a.limite_horas_total AS live_limite_total,
+               a.limite_horas_semestral AS live_limite_semestre,
                av.numero_versao AS av_numero_versao,
                av.codigo_normativo AS av_codigo_normativo,
                av.eixo AS av_eixo,
@@ -2038,12 +2095,13 @@ def aluno_requisicao_detalhe(req_id: int):
         regra_snapshot_json=row["regra_snapshot_json"] if "regra_snapshot_json" in row.keys() else None,
         versao_row=versao_row,
     )
+    history = read_request_presentation(row)
 
     detalhe = {
         "id": row["id"],
-        "atividade_nome": row["atividade_nome"],
-        "tipo_atividade": row["tipo_atividade"],
-        "grupo": row["grupo"],
+        "atividade_nome": history.nome,
+        "tipo_atividade": history.tipo_atividade,
+        "grupo": history.grupo,
         "data_evento": row["data_evento"],
         "data_solicitacao": row["data_solicitacao"],
         "status": row["status"],

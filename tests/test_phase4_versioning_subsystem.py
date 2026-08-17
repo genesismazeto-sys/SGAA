@@ -464,14 +464,15 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
 
 def test_versioning_modules_never_import_main_or_own_forbidden_domains():
     # UT-16 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE): the exact
-    # app/versioning package inventory gains integrity.py only (the real
-    # canonical owner of validar_integridade_versionamento_atividades).
+    # FC-12 adds request_history.py as the canonical approved-history reader;
+    # integrity.py remains the UT-16 canonical integrity owner.
     expected = {
         "__init__.py",
         "resolver.py",
         "snapshots.py",
         "shadow_reads.py",
         "integrity.py",
+        "request_history.py",
     }
     paths = sorted(VERSIONING_PACKAGE.glob("*.py"))
     assert {path.name for path in paths} == expected
@@ -504,6 +505,6 @@ def test_versioning_modules_never_import_main_or_own_forbidden_domains():
         assert "CREATE TABLE" not in source
         assert "ALTER TABLE" not in source
         assert "SCHEMA_VERSION" not in source
-        if path.name in {"snapshots.py", "shadow_reads.py"}:
+        if path.name in {"snapshots.py", "shadow_reads.py", "request_history.py"}:
             assert ".commit(" not in source
             assert ".rollback(" not in source

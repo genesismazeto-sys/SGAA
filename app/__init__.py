@@ -22,6 +22,7 @@ from werkzeug.routing import BuildError
 from presets_api import bp_presets
 from app.backup_settings import bind_backup_settings_runtime_app
 from app.db import DATABASE, close_db_connection, get_db_connection
+from app.versioning.request_history import HistoricalRequestAuthorityError
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
 from app.views.admin.atividades import bp_admin_atividades
@@ -533,6 +534,15 @@ def create_app(
             # Nunca falhar o request por causa do enriquecimento de cabeçalhos
             pass
         return response
+
+    @app.errorhandler(HistoricalRequestAuthorityError)
+    def _handle_historical_request_authority_error(error):
+        logger.error(
+            "Historical request authority unavailable request_id=%s reason=%s",
+            error.request_id,
+            error.reason,
+        )
+        return "Registro da solicitação presente, mas leitura indisponível.", 409
 
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(error):

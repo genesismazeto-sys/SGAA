@@ -58,6 +58,7 @@ class RequisicaoSnapshotProcessingRead:
     authority: SnapshotProcessingAuthority
     rule: AuthoritativeRequisicaoSnapshotRule | None = None
     reason: str | None = None
+    payload: dict[str, object] | None = None
 
 
 _SNAPSHOT_PROCESSING_IDENTITY_FIELDS = (
@@ -178,6 +179,7 @@ def read_requisicao_snapshot_for_processing(row) -> RequisicaoSnapshotProcessing
     return RequisicaoSnapshotProcessingRead(
         SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT,
         rule=AuthoritativeRequisicaoSnapshotRule(**identity, **rules),
+        payload=payload,
     )
 
 
@@ -467,16 +469,6 @@ def _normalize_snapshot_diagnostic_scalar(value):
         value = value.strip()
         return value or None
     return value
-
-def _has_versioned_requisicao_snapshot(row) -> bool:
-    return any(
-        _snapshot_diagnostic_row_value(row, key) not in (None, "")
-        for key in (
-            "atividade_versao_id",
-            "codigo_normativo_snapshot",
-            "regra_snapshot_json",
-        )
-    )
 
 def _build_admin_requisicao_snapshot_diagnostic(row) -> dict[str, object] | None:
     if not _has_versioned_requisicao_snapshot(row):

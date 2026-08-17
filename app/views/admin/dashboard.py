@@ -36,6 +36,7 @@ from app.db import (
 )
 from app.db_maintenance import ensure_requisicao_alert_receipts_table
 from app.matrix_scope import get_effective_matriz_for_turma
+from app.versioning.request_history import list_approved_request_history
 from app.requisition_policy import _parse_optional_processing_datetime
 from app.requisitions import (
     AUTO_ALERT_YELLOW_BG,
@@ -232,27 +233,18 @@ def _build_admin_dashboard_turma_cards(conn):
     }
 
     horas_por_turma = {}
-    for row in conn.execute(
-        """
-        SELECT a.turma_id,
-               act.tipo_atividade,
-               SUM(COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)) AS total_horas
-          FROM requisicoes r
-          JOIN alunos a ON a.id = r.aluno_id
-          JOIN atividades act ON act.id = r.atividade_id
-         WHERE a.turma_id IS NOT NULL
-           AND r.status IN ('Deferida', 'Deferida Parcialmente')
-      GROUP BY a.turma_id, act.tipo_atividade
-        """
-    ).fetchall():
+    approved_history = list_approved_request_history(conn)
+    for history in approved_history:
+        if history.turma_id is None:
+            continue
         turma_metrics = horas_por_turma.setdefault(
-            row["turma_id"],
+            history.turma_id,
             {"aac_hours": 0.0, "aeu_hours": 0.0},
         )
-        if row["tipo_atividade"] == "Acadêmica Complementar":
-            turma_metrics["aac_hours"] = float(row["total_horas"] or 0)
-        elif row["tipo_atividade"] == "Extensão Universitária":
-            turma_metrics["aeu_hours"] = float(row["total_horas"] or 0)
+        if history.eixo == "AAC":
+            turma_metrics["aac_hours"] += history.approved_hours
+        elif history.eixo == "AEU":
+            turma_metrics["aeu_hours"] += history.approved_hours
 
     active_student_ids_by_turma = {}
     for row in conn.execute(
@@ -265,29 +257,23 @@ def _build_admin_dashboard_turma_cards(conn):
     ).fetchall():
         active_student_ids_by_turma.setdefault(row["turma_id"], []).append(row["id"])
 
+    active_student_ids = {
+        student_id
+        for student_ids in active_student_ids_by_turma.values()
+        for student_id in student_ids
+    }
     horas_por_aluno = {}
-    for row in conn.execute(
-        """
-        SELECT r.aluno_id,
-               act.tipo_atividade,
-               SUM(COALESCE(r.horas_deferidas, r.horas_solicitadas, 0)) AS total_horas
-          FROM requisicoes r
-          JOIN atividades act ON act.id = r.atividade_id
-          JOIN alunos a ON a.id = r.aluno_id
-         WHERE a.turma_id IS NOT NULL
-           AND a.status = 'Ativo'
-           AND r.status IN ('Deferida', 'Deferida Parcialmente')
-      GROUP BY r.aluno_id, act.tipo_atividade
-        """
-    ).fetchall():
+    for history in approved_history:
+        if history.aluno_id not in active_student_ids:
+            continue
         aluno_metrics = horas_por_aluno.setdefault(
-            row["aluno_id"],
+            history.aluno_id,
             {"aac_hours": 0.0, "aeu_hours": 0.0},
         )
-        if row["tipo_atividade"] == "Acadêmica Complementar":
-            aluno_metrics["aac_hours"] = float(row["total_horas"] or 0)
-        elif row["tipo_atividade"] == "Extensão Universitária":
-            aluno_metrics["aeu_hours"] = float(row["total_horas"] or 0)
+        if history.eixo == "AAC":
+            aluno_metrics["aac_hours"] += history.approved_hours
+        elif history.eixo == "AEU":
+            aluno_metrics["aeu_hours"] += history.approved_hours
 
     turma_cards = []
     total_alunos = 0

@@ -1746,3 +1746,95 @@ debt. Explicitly still open and NOT to be reopened by the landing commit:
 
 Operational authority: `docs/refactor/EXECUTION_PROTOCOL.md` (v1.4 — 2026-08-10).
 `AGENT_HANDOFF.md` is historical/frozen — no new writes, not read by the cycle.
+
+## FC-12 — HISTORICAL APPROVED-HOURS READ AUTHORITY / FUNCTIONAL CUTOVER — CLOSED / ACCEPTED
+
+FC-12 is technically closed and accepted. FC-10 freezes creation-time request
+authority; FC-11 consumes that authority during processing; FC-12 now consumes
+the same frozen authority across material academic reads and request filters.
+
+### Functional authority
+
+For a valid snapshotted request, current legacy activity state no longer controls
+AAC/AEU classification, historical group/name/limits, approved-hour aggregation,
+student progress, student dashboard numerators, admin cohort numerators,
+cohort student-detail totals, or student/admin request-list inclusion,
+exclusion, search, sorting, count, and pagination.
+
+Canonical owner: `app/versioning/request_history.py`, reusing the strict parser
+and classifier in `app/versioning/snapshots.py`. Views orchestrate only
+aggregation, filtering, and presentation; they do not parse snapshot JSON or own
+AAC/AEU mapping.
+
+Authority states remain `NO_SNAPSHOT`, `VALID_AUTHORITATIVE_SNAPSHOT`, and
+`INVALID_AUTHORITATIVE_SNAPSHOT`:
+
+- `VALID_AUTHORITATIVE_SNAPSHOT` uses frozen historical request authority.
+- `NO_SNAPSHOT` uses accepted legacy compatibility only.
+- `INVALID_AUTHORITATIVE_SNAPSHOT` fails closed and never falls back to current
+  academic activity state.
+
+Frozen `eixo` is normative and is cross-checked against frozen legacy type;
+contradictory authority fails closed. Approved hours remain persisted request
+facts: partial approvals use `horas_deferidas`, while full approvals retain the
+accepted deferred/requested semantics. Activity-Version rules do not recompute
+approved hours.
+
+The exact persisted Turma Matrix remains the cohort denominator/requirement
+authority. Historical snapshots remain numerator/classification authority.
+Current progress catalogue resolution is Turma -> exact Matrix -> exact
+Matrix-selected Activity Versions, with no preferred/latest replacement,
+fabricated 160/80 fallback, or historical out-of-catalogue loss.
+
+V1 and V2 requests sharing one legacy activity retain independent frozen
+metadata and are not collapsed or double-counted. Read paths do not backfill,
+manufacture Activity Versions, rewrite snapshot columns, or mutate history.
+
+### Request-filter repair and review history
+
+The initial independent review found a material residual: student/admin request
+lists filtered by current live activity fields before frozen presentation. The
+bounded repair moved canonical historical filtering/search/sort before count,
+pagination, and rendering. Frozen AAC + live AEU remains AAC-only; frozen AEU +
+live AAC remains AEU-only; mixed valid/no-snapshot rows preserve both authority
+categories.
+
+The original T30 three-string residual scan was replaced by an AST-based
+production-owner census plus adversarial behavior tests for every material
+consumer. Final independent rereview accepted:
+
+`FC12_ZERO_MATERIAL_AUTHORITY_RESIDUAL`
+
+No material production read path can reinterpret the academic meaning,
+inclusion/exclusion, classification, grouping, approved totals, historical
+limits, or historical identity of a valid snapshotted request using current
+legacy activity state. This does not mean legacy compatibility, shadow, or
+mapping code has been physically removed.
+
+Review history: initial candidate `FC12_READY_FOR_INDEPENDENT_REVIEW`; initial
+independent review rejected the candidate for the filter residual and false-
+green T30; bounded repair completed; final targeted rereview
+`FC12_FINDINGS_REREVIEW_ACCEPT`. The supplied final rereview evidence records
+107 direct repair/regression checks and 15 invariant guards, with canonical
+evidence independently accepted without rerun.
+
+### Final evidence and invariants
+
+- Repair cases: 8 passed.
+- FC-12 test file: 24 passed.
+- Filter/regression lane: 88 passed.
+- Focused gate: 325 passed.
+- Full canonical: 1713 passed, 133 skipped, 17 deselected, 0 failed, 0 errors.
+- Invariants unchanged: routes 131; endpoints 130; RBAC unmapped 0; actor
+  matrix 402; message catalogue 539; Design System 198; route inventory
+  unchanged; main routes 0; main hooks 0; prohibited main imports 0.
+- No schema, migration, v4, route, endpoint, RBAC, message, or CSRF delta.
+
+Functional academic authority cutover for the ordinary FC-10 -> FC-11 -> FC-12
+versioned lifecycle is accepted. The project is not globally finished: obsolete
+legacy/shadow/mapping authority paths, transitional flags, and true
+no-snapshot compatibility boundaries remain the next cleanup front. AAC -> AEU
+exceptional workflow remains a separate product concern.
+
+This FC-12 state is published by the authorized landing commit; the landing
+SHA is Git-authoritative and is not duplicated here.

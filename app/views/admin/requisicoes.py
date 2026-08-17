@@ -24,6 +24,10 @@ from app.student_documents import remove_student_document, save_student_document
 from app.text import normalize_header
 from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
 from app.versioning.shadow_reads import maybe_run_versioned_resolver_shadow_read
+from app.versioning.request_history import (
+    filter_historical_request_rows,
+    read_request_presentation,
+)
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
     _has_versioned_requisicao_snapshot,
@@ -346,12 +350,18 @@ def admin_requisicoes():
         SELECT r.*,\x20
                a.nome              AS aluno_nome,
                a.matricula         AS aluno_matricula,
+               a.turma             AS aluno_turma_legacy,
                COALESCE(t.codigo, t.nome, a.turma) AS turma_codigo,
                t.curso_id          AS turma_curso_id,
                t.matriz_id         AS turma_matriz_id,
                act.nome            AS atividade_nome,
                act.grupo           AS grupo,
-               act.tipo_atividade  AS tipo_atividade
+               act.tipo_atividade  AS tipo_atividade,
+               act.nome            AS live_nome,
+               act.grupo           AS live_grupo,
+               act.tipo_atividade  AS live_tipo_atividade,
+               act.limite_horas_total AS live_limite_total,
+               act.limite_horas_semestral AS live_limite_semestre
     """
     query = select_cols + base_from
     params = []
@@ -364,18 +374,6 @@ def admin_requisicoes():
         placeholders = ", ".join("?" for _ in turma_filters)
         where.append(f"COALESCE(TRIM(COALESCE(t.codigo, t.nome, a.turma)), '') IN ({placeholders})")
         params.extend(turma_filters)
-    if tipo_filters:
-        placeholders = ", ".join("?" for _ in tipo_filters)
-        where.append(f"COALESCE(TRIM(act.tipo_atividade), '') IN ({placeholders})")
-        params.extend(tipo_filters)
-    if grupo_filters:
-        placeholders = ", ".join("?" for _ in grupo_filters)
-        where.append(f"COALESCE(TRIM(act.grupo), '') IN ({placeholders})")
-        params.extend(grupo_filters)
-    if atividade_filters:
-        placeholders = ", ".join("?" for _ in atividade_filters)
-        where.append(f"COALESCE(TRIM(act.nome), '') IN ({placeholders})")
-        params.extend(atividade_filters)
     if data_solicitacao_min:
         where.append("date(r.data_solicitacao) >= date(?)")
         params.append(data_solicitacao_min)
@@ -416,10 +414,6 @@ def admin_requisicoes():
                 params.append(status_filter)
         if status_clauses:
             where.append("(" + " OR ".join(status_clauses) + ")")
-    if q:
-        like = f"%{q}%"
-        where.append("(a.nome LIKE ? OR a.matricula LIKE ? OR a.turma LIKE ? OR act.nome LIKE ? OR act.grupo LIKE ? OR act.tipo_atividade LIKE ? OR r.status LIKE ?)")
-        params.extend([like, like, like, like, like, like, like])
     where_sql = append_conditions_sql(False, where)
     query += where_sql
     # Ordenação (whitelist para segurança)
@@ -428,31 +422,47 @@ def admin_requisicoes():
         'data_processamento': 'r.data_processamento',
         'aluno_nome': 'a.nome',
         'turma_codigo': 'a.turma',
-        'tipo_atividade': 'act.tipo_atividade',
-        'grupo': 'act.grupo',
-        'atividade_nome': 'act.nome',
         'status': 'r.status'
+    }
+    historical_sort_fields = {
+        'tipo_atividade': 'tipo_atividade',
+        'grupo': 'grupo',
+        'atividade_nome': 'nome',
     }
     col = order_map.get(sort_field, 'r.data_solicitacao')
     direction = 'DESC' if sort_dir == 'desc' else 'ASC'
     query += f" ORDER BY {col} {direction}"
-
-    # total para paginação (conta sem ORDER BY)
-    count_sql = "SELECT COUNT(*) " + base_from + where_sql
-    total = conn.execute(count_sql, params).fetchone()[0]
-
-    # Só aplica LIMIT/OFFSET se o usuário explicitamente paginar (evita quebrar UI sem controles)
+    requisicoes_rows = conn.execute(query, params).fetchall()
+    selected_rows = filter_historical_request_rows(
+        requisicoes_rows,
+        tipo_filters=tipo_filters,
+        grupo_filters=grupo_filters,
+        atividade_filters=atividade_filters,
+        query=q,
+        extra_search_values=lambda row: (
+            row["aluno_nome"],
+            row["aluno_matricula"],
+            row["aluno_turma_legacy"],
+        ),
+    )
+    historical_sort = historical_sort_fields.get(sort_field)
+    if historical_sort:
+        selected_rows.sort(
+            key=lambda item: str(getattr(item[1], historical_sort) or "").casefold(),
+            reverse=direction == "DESC",
+        )
+    total = len(selected_rows)
     apply_limit = wants_pagination()
-    params_exec = list(params)
     if apply_limit:
-        query += " LIMIT ? OFFSET ?"
-        params_exec += [per_page, offset]
+        selected_rows = selected_rows[offset : offset + per_page]
 
-    requisicoes_rows = conn.execute(query, params_exec).fetchall()
     requisicoes = []
     matrix_scope_cache = {}
-    for row in requisicoes_rows:
+    for row, history in selected_rows:
         item = {k: row[k] for k in row.keys()}
+        item["atividade_nome"] = history.nome
+        item["grupo"] = history.grupo
+        item["tipo_atividade"] = history.tipo_atividade
         item["snapshot_versionado_presente"] = _has_versioned_requisicao_snapshot(item)
         cache_key = (item.get("turma_curso_id"), item.get("turma_matriz_id"))
         if cache_key not in matrix_scope_cache:
@@ -500,33 +510,31 @@ def admin_requisicoes():
       ORDER BY LOWER(COALESCE(t.codigo, t.nome, a.turma, '')) ASC
         """
     ).fetchall()
-    tipos_filtro = conn.execute(
+    history_filter_rows = conn.execute(
         """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(act.tipo_atividade), ''), '') AS tipo_atividade
+        SELECT r.*,
+               act.nome AS live_nome,
+               act.grupo AS live_grupo,
+               act.tipo_atividade AS live_tipo_atividade,
+               act.limite_horas_total AS live_limite_total,
+               act.limite_horas_semestral AS live_limite_semestre
           FROM requisicoes r
           JOIN atividades act ON r.atividade_id = act.id
-         WHERE COALESCE(NULLIF(TRIM(act.tipo_atividade), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(act.tipo_atividade, '')) ASC
         """
     ).fetchall()
-    grupos_filtro = conn.execute(
-        """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(act.grupo), ''), '') AS grupo
-          FROM requisicoes r
-          JOIN atividades act ON r.atividade_id = act.id
-         WHERE COALESCE(NULLIF(TRIM(act.grupo), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(act.grupo, '')) ASC
-        """
-    ).fetchall()
-    atividades_filtro = conn.execute(
-        """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(act.nome), ''), '') AS atividade_nome
-          FROM requisicoes r
-          JOIN atividades act ON r.atividade_id = act.id
-         WHERE COALESCE(NULLIF(TRIM(act.nome), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(act.nome, '')) ASC
-        """
-    ).fetchall()
+    history_filters = [read_request_presentation(row) for row in history_filter_rows]
+    tipos_filtro = [
+        {"tipo_atividade": value}
+        for value in sorted({row.tipo_atividade for row in history_filters})
+    ]
+    grupos_filtro = [
+        {"grupo": value}
+        for value in sorted({row.grupo for row in history_filters if row.grupo})
+    ]
+    atividades_filtro = [
+        {"atividade_nome": value}
+        for value in sorted({row.nome for row in history_filters if row.nome})
+    ]
     filter_schema = [
         {
             "param": "data_solicitacao",
@@ -902,7 +910,13 @@ def admin_excluir_requisicao(req_id):
 def admin_detalhes_requisicao(req_id):
     conn = get_db_connection()
     requisicao = conn.execute("""
-        SELECT r.*, u.nome as AdminNome, a.nome as AlunoNome, a.matricula as AlunoMatricula, act.nome as AtividadeNome
+        SELECT r.*, u.nome as AdminNome, a.nome as AlunoNome,
+               a.matricula as AlunoMatricula, act.nome as AtividadeNome,
+               act.nome AS live_nome,
+               act.grupo AS live_grupo,
+               act.tipo_atividade AS live_tipo_atividade,
+               act.limite_horas_total AS live_limite_total,
+               act.limite_horas_semestral AS live_limite_semestre
         FROM requisicoes r
         LEFT JOIN usuarios u ON r.admin_id = u.id
         LEFT JOIN alunos a ON r.aluno_id = a.id
@@ -912,7 +926,9 @@ def admin_detalhes_requisicao(req_id):
     if not requisicao:
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
-    return render_template("admin_detalhes_requisicao.html", requisicao=requisicao)
+    item = {key: requisicao[key] for key in requisicao.keys()}
+    item["AtividadeNome"] = read_request_presentation(requisicao).nome
+    return render_template("admin_detalhes_requisicao.html", requisicao=item)
 
 
 @admin_required
@@ -926,7 +942,13 @@ def admin_api_requisicao(req_id):
         SELECT r.*, a.nome as aluno_nome, a.turma_id as turma_id,
              COALESCE(t.codigo, t.nome, 'Sem turma') as turma_label,
              t.curso_id as turma_curso_id, t.matriz_id as turma_matriz_id,
-               act.nome as atividade_nome, act.grupo as grupo, act.tipo_atividade as tipo_atividade
+               act.nome as atividade_nome, act.grupo as grupo,
+               act.tipo_atividade as tipo_atividade,
+               act.nome AS live_nome,
+               act.grupo AS live_grupo,
+               act.tipo_atividade AS live_tipo_atividade,
+               act.limite_horas_total AS live_limite_total,
+               act.limite_horas_semestral AS live_limite_semestre
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
           LEFT JOIN turmas t ON t.id = a.turma_id
@@ -950,6 +972,10 @@ def admin_api_requisicao(req_id):
             # fallback: sqlite3.Row supports .keys(); if not, map by items
             return dict(row)
     data = row_to_dict(r)
+    history = read_request_presentation(r)
+    data["atividade_nome"] = history.nome
+    data["grupo"] = history.grupo
+    data["tipo_atividade"] = history.tipo_atividade
     allowed_activity_ids, matriz = get_allowed_activity_ids_for_turma_matrix(
         conn,
         data.get("turma_curso_id"),
