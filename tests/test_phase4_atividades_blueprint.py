@@ -88,7 +88,6 @@ CATALOG_HELPERS = (
     "get_norma_by_id",
     "get_versoes_da_base_por_eixo",
     "get_next_numero_versao",
-    "get_ultima_versao_ativa_por_base",
     "get_atividade_versao_by_id",
     "get_atividade_versao_usage_counts",
     "get_atividade_transicoes_por_base",

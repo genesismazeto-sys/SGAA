@@ -24,6 +24,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -315,7 +316,7 @@ def test_d77b_resolver_unaffected_by_visibility_patch(versioned_env):
         assert row is not None
         atividade_id_legacy = row["atividade_id_legacy"]
 
-        result = main.resolver_versao_por_matriz(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=atividade_id_legacy,

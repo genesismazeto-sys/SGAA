@@ -23,7 +23,6 @@ from app.requisitions import auto_indefer_devolvidas
 from app.student_documents import remove_student_document, save_student_document
 from app.text import normalize_header
 from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
-from app.versioning.shadow_reads import maybe_run_versioned_resolver_shadow_read
 from app.versioning.request_history import (
     filter_historical_request_rows,
     read_request_presentation,
@@ -761,16 +760,6 @@ def admin_nova_requisicao():
                     logger.exception("Falha ao compensar arquivo de comprovante")
         logger.exception("Falha ao criar requisição do admin")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
-    try:
-        maybe_run_versioned_resolver_shadow_read(
-            conn,
-            origin="admin_create",
-            aluno_id=aluno_id,
-            atividade_id_legacy=atividade_id,
-            req_id=req_id,
-        )
-    except Exception:
-        logger.exception("Falha ao executar resolvedor versionado em modo sombra no fluxo do admin")
     flash("Requisição criada com sucesso.", "success")
     return redirect(url_for("admin_requisicoes"))
 

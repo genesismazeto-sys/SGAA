@@ -189,18 +189,14 @@ def test_snapshot_helper_returns_none_without_versioned_columns():
     assert main._build_admin_requisicao_snapshot_diagnostic(row) is None
 
 
-def test_snapshot_display_flag_defaults_off_and_is_independent(monkeypatch):
+def test_snapshot_display_flag_defaults_off_and_can_be_enabled(monkeypatch):
     monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", raising=False)
-    monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "1")
 
     assert main.is_versioned_requisicao_snapshot_display_enabled() is False
-    assert main.is_versioned_resolver_shadow_read_enabled() is True
 
     monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     assert main.is_versioned_requisicao_snapshot_display_enabled() is True
-    assert main.is_versioned_resolver_shadow_read_enabled() is False
 
 
 def test_snapshot_helper_curates_payload_and_ignores_sensitive_fields():
@@ -373,8 +369,6 @@ def test_admin_processar_requisicao_with_display_flag_on_shows_legacy_vs_snapsho
     )
 
     monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
     _login_admin(client)
 
     response = client.get(f"/admin/processar_requisicao/{seeded['req_id']}")

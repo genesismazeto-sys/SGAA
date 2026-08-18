@@ -30,6 +30,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -394,7 +395,7 @@ def test_resolver_resolve_apos_definir_vinculo(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        result_antes = main.resolver_versao_por_matriz(
+        result_antes = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],
@@ -410,7 +411,7 @@ def test_resolver_resolve_apos_definir_vinculo(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        result_depois = main.resolver_versao_por_matriz(
+        result_depois = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],
@@ -445,7 +446,7 @@ def test_resolver_retorna_ausencia_apos_remover_vinculo(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        result = main.resolver_versao_por_matriz(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],
@@ -572,7 +573,7 @@ def test_sem_vinculo_resolvedor_nao_usa_primeira_ativa(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        result = main.resolver_versao_por_matriz(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],

@@ -57,7 +57,6 @@ from app.activity_catalog import (
     get_next_numero_versao,
     get_norma_by_id,
     get_norma_list,
-    get_ultima_versao_ativa_por_base,
     get_versoes_da_base_por_eixo,
     get_versoes_por_base,
     parse_documentos_json,
@@ -74,7 +73,6 @@ from app.db import (
     ensure_cloud_backup_schema,
     ensure_turmas_matriz_schema,
     get_db_connection,
-    get_preferred_matriz_for_curso,
     init_db,
 )
 from app.presentation import _format_bytes_label, format_date_ptbr
@@ -361,35 +359,6 @@ from app.views.admin.requisicoes import (
     admin_nova_requisicao,
     admin_processar_requisicao,
     admin_requisicoes,
-)
-from app.versioning.resolver import (
-    _atividade_versao_status_ativo,
-    _require_versioning_read_model,
-    _resolver_result,
-    _serialize_versioned_activity_row,
-    listar_atividades_versionadas_por_matriz,
-    listar_atividades_versionadas_por_turma,
-    resolver_versao,
-    resolver_versao_por_aluno,
-    resolver_versao_por_matriz,
-)
-from app.versioning.shadow_reads import (
-    _append_versioned_shadow_read_event_line,
-    _build_versioned_shadow_read_event_line,
-    _collect_versioned_shadow_read_log_paths,
-    _normalize_shadow_read_int,
-    _normalize_shadow_read_scalar,
-    _parse_shadow_read_bool_filter,
-    _parse_shadow_read_warnings,
-    _parse_versioned_shadow_read_event_line,
-    _read_versioned_shadow_read_events,
-    _resolve_versioned_shadow_read_log_sources,
-    _serialize_shadow_read_log_value,
-    _shadow_read_event_dedup_key,
-    _shadow_read_event_matches_filters,
-    _versioned_shadow_read_dedicated_log_path,
-    is_versioned_resolver_shadow_read_enabled,
-    maybe_run_versioned_resolver_shadow_read,
 )
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,

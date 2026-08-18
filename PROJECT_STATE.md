@@ -1838,3 +1838,49 @@ exceptional workflow remains a separate product concern.
 
 This FC-12 state is published by the authorized landing commit; the landing
 SHA is Git-authoritative and is not duplicated here.
+
+## FC-13 — OBSOLETE AUTHORITY / SHADOW / MAPPING CLEANUP — CLOSED / TECHNICALLY ACCEPTED
+
+Identifier: `FC13-OBSOLETE-AUTHORITY-SHADOW-MAPPING-CLEANUP-1`.
+
+Final technical verdict: `FC13_W19_FINAL_REREVIEW_ACCEPT`.
+
+**FC-13 OBSOLETE EXECUTABLE AUTHORITY CLEANUP TECHNICAL ACCEPTANCE IS FINAL.**
+
+FC-13 removed obsolete executable shadow authority and physically removed its
+retired launchers. It also removed the dead preferred-Matrix startup census and
+helper and the zero-caller generic resolver facade. Active current-write,
+exact-persisted-resolution, and diagnostic purposes remain supported. The
+semantic absence contract now rejects equivalent resurrection through renamed
+flags, inline latest-selection SQL, executable tooling, re-exported facades,
+test-only callers, and unqualified same-name call collisions.
+
+No schema or table was removed. Schema version remains 3, with no migration v4.
+The AAC -> AEU exceptional workflow remains separate and outside FC-13.
+
+### Final accepted evidence
+
+- Full canonical: 1718 passed, 133 skipped, 17 deselected, 0 failed, 0 errors.
+- Final semantic scanner: 48 passed.
+- Routes/endpoints: 131/130.
+- RBAC unmapped: 0.
+- Actor matrix: 402.
+- Message catalogue: 539.
+- Design System inline ceiling: 198.
+- Main routes/hooks/prohibited imports: 0/0/0.
+- Schema version: 3; no v4.
+
+### Final residual and false-green census
+
+- `PROVEN_DEAD_EXECUTABLE_RESIDUAL_COUNT = 0`
+- `PROVEN_DEAD_INERT_FILE_RESIDUAL_COUNT = 0`
+- `TEST_ONLY_RETENTION_COUNT = 0`
+- `SEMANTIC_FALSE_GREEN_CASES = 0`
+- `PACKAGE_REEXPORT_FALSE_GREEN_CASES = 0`
+- `DIRECT_TOOL_EXECUTION_FALSE_GREEN_CASES = 0`
+- `CALLER_OWNERSHIP_FALSE_GREEN_CASES = 0`
+- `TEST_CALLER_FALSE_GREEN_CASES = 0`
+- `SAME_NAME_COLLISION_FALSE_GREEN_CASES = 0`
+
+FC-13 is technically closed and accepted. Publication is performed by the
+single authorized landing commit; the landing SHA remains Git-authoritative.

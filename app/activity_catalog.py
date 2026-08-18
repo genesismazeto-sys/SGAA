@@ -221,20 +221,6 @@ def get_next_numero_versao(conn, base_id: int) -> int:
     return row["next_num"] if row else 1
 
 
-def get_ultima_versao_ativa_por_base(conn, base_id: int):
-    """Retorna a versão ativa de maior numero_versao para uma atividade_base, ou None."""
-    return conn.execute(
-        """
-        SELECT *
-          FROM atividade_versao
-         WHERE atividade_base_id = ? AND status = 'ativa'
-         ORDER BY numero_versao DESC
-         LIMIT 1
-        """,
-        (base_id,),
-    ).fetchone()
-
-
 def get_atividade_versao_by_id(conn, versao_id: int):
     """
     Retorna uma atividade_versao pelo id, ou None se não existir.
@@ -381,7 +367,6 @@ __all__ = [
     'get_norma_by_id',
     'get_versoes_da_base_por_eixo',
     'get_next_numero_versao',
-    'get_ultima_versao_ativa_por_base',
     'get_atividade_versao_by_id',
     'get_atividade_versao_usage_counts',
     'get_atividade_transicoes_por_base',

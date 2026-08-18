@@ -220,22 +220,6 @@ def test_t02_admin_normal_creation_uses_the_same_creation_authority(fc10_env):
     assert row["atividade_versao_id"] == 29
 
 
-def test_t03_removed_write_switch_cannot_disable_student_snapshot(fc10_env, monkeypatch):
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "0")
-    name = f"FC10 T03 {uuid.uuid4().hex}"
-    response = _post_student(fc10_env["client"], _student_seed(), name)
-    assert response.status_code in (302, 303)
-    assert _snapshot(_request_by_name(name))["atividade_versao_id"] == 29
-
-
-def test_t04_removed_write_switch_cannot_disable_admin_snapshot(fc10_env, monkeypatch):
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "false")
-    name = f"FC10 T04 {uuid.uuid4().hex}"
-    response = _post_admin(fc10_env["client"], _student_seed(), name)
-    assert response.status_code in (302, 303)
-    assert _snapshot(_request_by_name(name))["atividade_versao_id"] == 29
-
-
 def test_t05_null_turma_matrix_fails_closed_without_row(fc10_env):
     student = _student_seed()
     with main.app.app_context():

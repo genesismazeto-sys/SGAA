@@ -8,7 +8,6 @@ import sys
 import pytest
 
 from app import academics, backup_settings, db as app_db, db_maintenance, presentation, reporting, requisition_policy, uploads
-from app.versioning import shadow_reads as versioning_shadow_reads
 from app.versioning import snapshots as versioning_snapshots
 from app.views import aluno as aluno_views
 from app.views import core as core_views
@@ -182,14 +181,7 @@ def test_direct_app_consumers_and_app_db_have_no_residual_lazy_edges():
     assert "ensure_reportes_table" not in db_keys
 
     assert "ensure_usuario_profile_schema" not in aluno_keys
-    assert not ({
-        "maybe_run_versioned_resolver_shadow_read",
-        "prepare_versioned_requisicao_snapshot",
-    } & aluno_keys)
-    assert (
-        aluno_views.maybe_run_versioned_resolver_shadow_read
-        is versioning_shadow_reads.maybe_run_versioned_resolver_shadow_read
-    )
+    assert "prepare_versioned_requisicao_snapshot" not in aluno_keys
     assert (
         aluno_views.prepare_versioned_requisicao_snapshot
         is versioning_snapshots.prepare_versioned_requisicao_snapshot
@@ -200,7 +192,6 @@ def test_direct_app_consumers_and_app_db_have_no_residual_lazy_edges():
     assert "ensure_usuario_access_schema" not in db_keys
     assert "ensure_backup_settings_schema" not in db_keys
     assert app_db.logger.name == "app.db"
-    assert main.get_preferred_matriz_for_curso is app_db.get_preferred_matriz_for_curso
     assert main.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert app_db.ensure_usuario_access_schema is db_maintenance.ensure_usuario_access_schema
     assert main.ensure_backup_settings_schema is backup_settings.ensure_backup_settings_schema

@@ -127,8 +127,6 @@ def admin_diagnostico_versioned_shadow_reads():
     dedicated_log_exists = bool(source_info.get("dedicated_exists"))
     log_paths = [str(path) for path in source_info.get("paths_to_read", [])]
     source_mode = str(source_info.get("source_mode") or "fallback_app_log")
-    shadow_read_env_raw = os.getenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ")
-    shadow_read_enabled = shadow_reads.is_versioned_resolver_shadow_read_enabled()
     logger_level = logging.getLevelName(logger.getEffectiveLevel())
     events, log_not_found, raw_count, deduplicated_count, read_source_mode, read_paths = shadow_reads._read_versioned_shadow_read_events(
         limit=limit,
@@ -150,8 +148,6 @@ def admin_diagnostico_versioned_shadow_reads():
             "limit": limit,
             "filters": {key: value for key, value in filters.items() if value is not None},
             "log_not_found": log_not_found,
-            "shadow_read_enabled": shadow_read_enabled,
-            "shadow_read_env_raw": shadow_read_env_raw,
             "dedicated_log_path": dedicated_log_path,
             "dedicated_log_exists": dedicated_log_exists,
             "dedicated_log_in_paths": dedicated_log_path in set(log_paths),

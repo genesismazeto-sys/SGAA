@@ -1,181 +1,22 @@
 from __future__ import annotations
 
 import base64
-import datetime
 import json
 import logging
 import os
 from pathlib import Path
 import re
-import traceback
-
-from app.versioning import resolver as resolver_service
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 logger = logging.getLogger("main")
 
 
-def is_versioned_resolver_shadow_read_enabled() -> bool:
-    return str(os.getenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", "0")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
 def _versioned_shadow_read_dedicated_log_path() -> str:
     log_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(
         os.fspath(PROJECT_ROOT), "logs"
     )
     return os.path.join(log_dir, "versioned_shadow_reads.log")
-
-def _serialize_shadow_read_log_value(value) -> str:
-    if value is None:
-        return "null"
-    text = str(value).strip()
-    return text if text else "null"
-
-def _build_versioned_shadow_read_event_line(
-    *,
-    origin,
-    req_id,
-    aluno_id,
-    atividade_id_legacy,
-    status,
-    atividade_versao_id,
-    codigo_normativo,
-    eixo,
-    warnings,
-    reason,
-    timestamp=None,
-    exception_type=None,
-    exception_message=None,
-    exception_traceback=None,
-) -> str:
-    warnings_json = json.dumps(warnings or [], ensure_ascii=False)
-    base = (
-        "event=versioned_resolver_shadow_read "
-        f"origin={_serialize_shadow_read_log_value(origin)} "
-        f"req_id={_serialize_shadow_read_log_value(req_id)} "
-        f"aluno_id={_serialize_shadow_read_log_value(aluno_id)} "
-        f"atividade_id_legacy={_serialize_shadow_read_log_value(atividade_id_legacy)} "
-        f"status={_serialize_shadow_read_log_value(status)} "
-        f"atividade_versao_id={_serialize_shadow_read_log_value(atividade_versao_id)} "
-        f"codigo_normativo={_serialize_shadow_read_log_value(codigo_normativo)} "
-        f"eixo={_serialize_shadow_read_log_value(eixo)} "
-        f"warnings={warnings_json} "
-        f"reason={_serialize_shadow_read_log_value(reason)}"
-    )
-    suffix_parts: list[str] = []
-    if timestamp:
-        suffix_parts.append(f"timestamp={_serialize_shadow_read_log_value(timestamp)}")
-    if exception_type:
-        suffix_parts.append(f"exception_type={_serialize_shadow_read_log_value(exception_type)}")
-    if exception_message is not None and str(exception_message) != "":
-        encoded_msg = base64.b64encode(str(exception_message).encode("utf-8")).decode("ascii")
-        suffix_parts.append(f"exception_message_b64={encoded_msg}")
-    if exception_traceback is not None and str(exception_traceback) != "":
-        encoded_tb = base64.b64encode(str(exception_traceback).encode("utf-8")).decode("ascii")
-        suffix_parts.append(f"exception_traceback_b64={encoded_tb}")
-    if suffix_parts:
-        return base + " " + " ".join(suffix_parts)
-    return base
-
-def _append_versioned_shadow_read_event_line(event_line: str) -> None:
-    log_path = _versioned_shadow_read_dedicated_log_path()
-    try:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(f"{event_line}\n")
-    except Exception:
-        # Diagnostico em modo sombra nunca deve bloquear o fluxo operacional.
-        try:
-            logger.warning(
-                "event=versioned_resolver_shadow_read_sink_error log_path=%s reason=write_failed",
-                log_path,
-            )
-        except Exception:
-            pass
-
-def maybe_run_versioned_resolver_shadow_read(
-    conn,
-    *,
-    origin: str,
-    aluno_id,
-    atividade_id_legacy,
-    req_id=None,
-):
-    if not is_versioned_resolver_shadow_read_enabled():
-        return None
-
-    try:
-        event_timestamp = datetime.datetime.now().isoformat(timespec="microseconds")
-    except Exception:
-        event_timestamp = None
-
-    try:
-        result = resolver_service.resolver_versao_por_aluno(
-            conn,
-            aluno_id=aluno_id,
-            atividade_id_legacy=atividade_id_legacy,
-            strict_legacy_scope=True,
-        )
-    except Exception as exc:
-        try:
-            exc_type = type(exc).__name__
-        except Exception:
-            exc_type = "Exception"
-        try:
-            exc_message = str(exc)
-        except Exception:
-            exc_message = ""
-        try:
-            exc_traceback = traceback.format_exc()
-        except Exception:
-            exc_traceback = ""
-        event_line = _build_versioned_shadow_read_event_line(
-            origin=origin,
-            req_id=req_id,
-            aluno_id=aluno_id,
-            atividade_id_legacy=atividade_id_legacy,
-            status="error",
-            atividade_versao_id=None,
-            codigo_normativo=None,
-            eixo=None,
-            warnings=[],
-            reason="resolver_exception",
-            timestamp=event_timestamp,
-            exception_type=exc_type,
-            exception_message=exc_message,
-            exception_traceback=exc_traceback,
-        )
-        _append_versioned_shadow_read_event_line(event_line)
-        try:
-            logger.exception(event_line)
-        except Exception:
-            pass
-        return None
-
-    event_line = _build_versioned_shadow_read_event_line(
-        origin=origin,
-        req_id=req_id,
-        aluno_id=aluno_id,
-        atividade_id_legacy=atividade_id_legacy,
-        status=result.get("status"),
-        atividade_versao_id=result.get("atividade_versao_id"),
-        codigo_normativo=result.get("codigo_normativo"),
-        eixo=result.get("eixo"),
-        warnings=result.get("warnings") or [],
-        reason=result.get("reason"),
-        timestamp=event_timestamp,
-    )
-    _append_versioned_shadow_read_event_line(event_line)
-    try:
-        logger.info(event_line)
-    except Exception:
-        pass
-    return result
 
 def _normalize_shadow_read_scalar(value):
     text = str(value or "").strip()
@@ -437,8 +278,3 @@ def _read_versioned_shadow_read_events(
         str(effective_source_info.get("source_mode") or "fallback_app_log"),
         log_paths,
     )
-
-__all__ = [
-    "is_versioned_resolver_shadow_read_enabled",
-    "maybe_run_versioned_resolver_shadow_read",
-]

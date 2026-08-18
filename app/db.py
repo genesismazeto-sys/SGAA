@@ -136,29 +136,6 @@ def ensure_cloud_backup_schema(conn) -> None:
     )
 
 
-def get_preferred_matriz_for_curso(conn, curso_id: int | None):
-    if not curso_id:
-        return None
-    ensure_matrizes_atividades_table(conn)
-    return conn.execute(
-        """
-        SELECT *
-          FROM matrizes_atividades
-         WHERE curso_id = ?
-      ORDER BY CASE LOWER(COALESCE(status, ''))
-                   WHEN 'ativa' THEN 0
-                   WHEN 'vigente' THEN 0
-                   WHEN 'rascunho' THEN 1
-                   ELSE 2
-               END,
-               COALESCE(data_inicio_vigencia, '') DESC,
-               id DESC
-         LIMIT 1
-        """,
-        (curso_id,),
-    ).fetchone()
-
-
 def ensure_turmas_matriz_schema(conn) -> None:
     ensure_matrizes_atividades_table(conn)
     try:
@@ -525,16 +502,6 @@ def init_db():
                     )
     except Exception as exc:
         logger.warning("População inicial de curso_id/codigo em turmas antigas: %s", exc)
-
-    try:
-        turmas_sem_matriz = conn.execute(
-            "SELECT id, curso_id FROM turmas WHERE matriz_id IS NULL OR matriz_id = 0"
-        ).fetchall()
-        for turma_row in turmas_sem_matriz:
-            # Read-only compatibility census: NULL Turmas are never assigned or normalized.
-            get_preferred_matriz_for_curso(conn, turma_row["curso_id"])
-    except Exception as exc:
-        logger.warning("Leitura de diagnóstico de matriz_id em turmas antigas: %s", exc)
 
     apply_schema_migrations(conn, logger=logger)
     conn.commit()

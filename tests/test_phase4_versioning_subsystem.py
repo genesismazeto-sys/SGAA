@@ -50,8 +50,6 @@ ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
 SERVICE_OWNERS = {
     "resolver_versao_por_aluno": "app.versioning.resolver",
     "prepare_versioned_requisicao_snapshot": "app.versioning.snapshots",
-    "maybe_run_versioned_resolver_shadow_read": "app.versioning.shadow_reads",
-    "is_versioned_resolver_shadow_read_enabled": "app.versioning.shadow_reads",
     "is_versioned_requisicao_snapshot_display_enabled": "app.versioning.snapshots",
 }
 REMAINING_ALUNO_MAIN_HELPERS = {
@@ -116,6 +114,7 @@ logger = logging.getLogger("main")
 handler_count_before = len(logger.handlers)
 assert "main" not in sys.modules
 import app.versioning as versioning
+from app.versioning import resolver as resolver_service
 import app.views.admin.versioning as admin_versioning
 assert "main" not in sys.modules
 after = sorted(path.name for path in root.iterdir())
@@ -127,7 +126,7 @@ print(json.dumps({
     "filesystem_delta": [],
     "database_created": False,
     "handler_delta": 0,
-    "service_module": versioning.resolver_versao_por_aluno.__module__,
+    "service_module": resolver_service.resolver_versao_por_aluno.__module__,
     "view_module": admin_versioning.admin_diagnostico_atividades_versionadas.__module__,
 }))
 '''
@@ -165,7 +164,7 @@ print(json.dumps({
     }
 
 
-def test_canonical_service_owners_and_main_identity_exports():
+def test_canonical_service_owners_and_intentional_main_exports():
     import importlib
     import main
 
@@ -173,7 +172,10 @@ def test_canonical_service_owners_and_main_identity_exports():
         module = importlib.import_module(module_name)
         owner = getattr(module, name)
         assert owner.__module__ == module_name
-        assert getattr(main, name) is owner
+        if name == "resolver_versao_por_aluno":
+            assert not hasattr(main, name)
+        else:
+            assert getattr(main, name) is owner
 
     views = importlib.import_module("app.views.admin.versioning")
     for name in ROUTE_NAMES:
@@ -282,23 +284,10 @@ finally:
     assert payload["logger_name"] == "main"
 
 
-def test_shadow_read_event_representation_and_dedup_identity_remain_compatible():
+def test_historical_shadow_event_parser_and_dedup_identity_remain_compatible():
     from app.versioning import shadow_reads
 
-    event_line = shadow_reads._build_versioned_shadow_read_event_line(
-        origin="aluno_create",
-        req_id=17,
-        aluno_id=23,
-        atividade_id_legacy=5,
-        status="resolved",
-        atividade_versao_id=31,
-        codigo_normativo="AAC-rev6",
-        eixo="AAC",
-        warnings=["legacy_scope"],
-        reason="ok",
-        timestamp="2026-08-01T12:34:56.123456",
-    )
-    assert event_line == (
+    event_line = (
         "event=versioned_resolver_shadow_read origin=aluno_create req_id=17 "
         "aluno_id=23 atividade_id_legacy=5 status=resolved atividade_versao_id=31 "
         'codigo_normativo=AAC-rev6 eixo=AAC warnings=["legacy_scope"] reason=ok '
@@ -420,18 +409,10 @@ def test_exact_rbac_requirements_remain_unchanged():
     assert get_admin_permission_requirement(ROUTE_NAMES[2], "GET") == ("banco_dados", "view")
 
 
-def test_all_versioning_flags_default_off(monkeypatch):
-    from app.versioning import (
-        is_versioned_requisicao_snapshot_display_enabled,
-        is_versioned_resolver_shadow_read_enabled,
-    )
+def test_snapshot_display_flag_defaults_off(monkeypatch):
+    from app.versioning import is_versioned_requisicao_snapshot_display_enabled
 
-    for name in (
-        "SGAA_VERSIONED_RESOLVER_SHADOW_READ",
-        "SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    assert is_versioned_resolver_shadow_read_enabled() is False
+    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", raising=False)
     assert is_versioned_requisicao_snapshot_display_enabled() is False
 
 
@@ -444,10 +425,7 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
         if isinstance(node, ast.ImportFrom) and node.module == "app.versioning"
         for alias in node.names
     }
-    assert {
-        "maybe_run_versioned_resolver_shadow_read",
-        "prepare_versioned_requisicao_snapshot",
-    } <= imported
+    assert "prepare_versioned_requisicao_snapshot" in imported
 
     helper = next(
         node
@@ -458,7 +436,6 @@ def test_aluno_direct_imports_and_exact_remaining_lazy_main_dependencies():
     assert isinstance(returned, ast.Dict)
     keys = {key.value for key in returned.keys if isinstance(key, ast.Constant)}
     assert keys == REMAINING_ALUNO_MAIN_HELPERS
-    assert "main.maybe_run_versioned_resolver_shadow_read" not in source
     assert "main.prepare_versioned_requisicao_snapshot" not in source
 
 

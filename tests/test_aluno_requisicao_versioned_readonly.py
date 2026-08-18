@@ -7,7 +7,7 @@ e o chip `vN` apenas em modo read-only, sem nenhum efeito colateral de
 escrita no writer, no resolvedor ou no deferimento admin.
 
 Cenários cobertos:
-  T01 — aluno_create com SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE=ON em
+  T01 — aluno_create com snapshot obrigatório em
         turma com matriz explícita: writer carimba; GET detalhe mostra
         bloco com vN/codigo_normativo/eixo/grupo.
   T02 — flag OFF (modo atual do workspace): GET detalhe não mostra bloco;
@@ -35,6 +35,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from app.versioning import resolver as versioning_resolver
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -139,10 +140,10 @@ def _create_pending_requisicao_legada(aluno_id: int, atividade_id: int, *, nome_
 
 
 # ---------------------------------------------------------------------------
-# T01 — aluno_create com flag ON: writer carimba; detalhe mostra bloco.
+# T01 — aluno_create: writer obrigatório carimba; detalhe mostra bloco.
 # ---------------------------------------------------------------------------
 
-def test_aluno_create_with_snapshot_write_flag_on_shows_block_in_detail(
+def test_aluno_create_with_mandatory_snapshot_shows_block_in_detail(
     versioned_env, monkeypatch
 ):
     env = versioned_env
@@ -151,8 +152,6 @@ def test_aluno_create_with_snapshot_write_flag_on_shows_block_in_detail(
     _login_aluno(
         client, user_id=seed["usuario_id"], user_name=seed["nome"]
     )
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     event_name = f"Evento T01 {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -184,10 +183,10 @@ def test_aluno_create_with_snapshot_write_flag_on_shows_block_in_detail(
 
 
 # ---------------------------------------------------------------------------
-# T02 — flag ausente: snapshot obrigatório permanece ativo.
+# T02 — uma segunda criação confirma o snapshot obrigatório.
 # ---------------------------------------------------------------------------
 
-def test_aluno_create_with_snapshot_write_flag_off_hides_block_in_detail(
+def test_aluno_create_always_persists_snapshot_and_shows_block_in_detail(
     versioned_env, monkeypatch
 ):
     env = versioned_env
@@ -196,7 +195,6 @@ def test_aluno_create_with_snapshot_write_flag_off_hides_block_in_detail(
     _login_aluno(
         client, user_id=seed["usuario_id"], user_name=seed["nome"]
     )
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     event_name = f"Evento T02 {uuid.uuid4().hex[:6]}"
     response = client.post(
@@ -238,13 +236,11 @@ def test_aluno_lista_mostra_chip_quando_snapshot_presente_e_some_quando_ausente(
         client, user_id=seed["usuario_id"], user_name=seed["nome"]
     )
 
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
     legacy_name = f"Evento Legado T03 {uuid.uuid4().hex[:6]}"
     _create_pending_requisicao_legada(
         seed["aluno_id"], 1, nome_evento=legacy_name
     )
 
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
     versioned_name = f"Evento Versionado T03 {uuid.uuid4().hex[:6]}"
     response = client.post(
         "/aluno/nova-requisicao",
@@ -337,8 +333,6 @@ def test_aluno_create_em_turma_sem_matriz_explicita_nao_carimba_e_nao_mostra_blo
 ):
     env = versioned_env
     client = env["client"]
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -424,8 +418,6 @@ def test_aluno_edit_trocando_atividade_id_nao_regenera_snapshot(
     _login_aluno(
         client, user_id=seed["usuario_id"], user_name=seed["nome"]
     )
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     event_name = f"Evento T06 {uuid.uuid4().hex[:6]}"
     create = client.post(
@@ -486,8 +478,6 @@ def test_aluno_edit_trocando_atividade_id_nao_regenera_snapshot(
 # permitidas. Requisições SEM snapshot preservam a troca de atividade legada,
 # mantida a validação de atividade permitida pela matriz.
 #
-# A flag SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE só é ligada dentro de cada
-# teste, via monkeypatch; nunca no ambiente do workspace.
 # ===========================================================================
 
 _GUARD_MESSAGE = "Esta solicitação já possui versão normativa registrada"
@@ -533,8 +523,6 @@ def test_d82b_t01_edit_change_activity_blocked_when_snapshot_present(
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     event_name, req = _create_versioned_pending(client, seed)
     assert req["atividade_id"] == 1
@@ -587,8 +575,6 @@ def test_d82b_t02_edit_nonstructural_fields_allowed_with_snapshot_present(
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     event_name, req = _create_versioned_pending(client, seed)
     original_versao_id = req["atividade_versao_id"]
@@ -638,7 +624,6 @@ def test_d82b_t03_edit_change_activity_allowed_when_no_snapshot(
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.delenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", raising=False)
 
     legacy_name = f"D82B legado {uuid.uuid4().hex[:8]}"
     req_id = _create_pending_requisicao_legada(seed["aluno_id"], 1, nome_evento=legacy_name)
@@ -682,13 +667,11 @@ def test_d82b_t04_aluno_create_write_on_unresolved_creates_without_snapshot(
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     # Força status não-resolvido no resolvedor consumido pelo writer (patch de
     # teste; não altera o código de produção do resolver/writer).
     def _fake_resolver(conn, **kwargs):
-        return main._resolver_result(
+        return resolver_service._resolver_result(
             "version_inactive",
             reason="forçado não-resolvido para T04",
         )
@@ -724,8 +707,6 @@ def test_d82b_t05_writer_exception_does_not_block_creation(
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     def _boom_resolver(conn, **kwargs):
         raise RuntimeError("falha simulada no resolvedor (T05)")
@@ -759,8 +740,6 @@ def test_d82b_t06_regression_display_block_and_chip(versioned_env, monkeypatch):
     client = env["client"]
     seed = _seed_aluno_em_t11()
     _login_aluno(client, user_id=seed["usuario_id"], user_name=seed["nome"])
-    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_WRITE", "1")
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
 
     _event_name, req = _create_versioned_pending(client, seed)
     assert req["atividade_versao_id"] is not None

@@ -326,7 +326,6 @@ def test_app_db_preserves_b8_leaf_semantics_through_the_b11_final_cutover():
         "ensure_app_settings_schema",
         "ensure_cloud_backup_schema",
         "ensure_turmas_matriz_schema",
-        "get_preferred_matriz_for_curso",
     }
     assert baseline_functions.keys() - current_functions.keys() == {
         "_get_main_db_helpers",

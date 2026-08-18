@@ -35,6 +35,27 @@ def _git_root():
         return None
 
 
+def _select_copyable_repository_files(
+    git_root: str,
+    repository_files: list[str],
+    deleted_tracked_files: set[str],
+) -> tuple[list[str], tuple[str, ...]]:
+    missing = tuple(
+        path for path in repository_files if not (Path(git_root) / path).is_file()
+    )
+    unexpected_missing = tuple(
+        path for path in missing if path not in deleted_tracked_files
+    )
+    assert unexpected_missing == (), (
+        "tracked repository paths are unexpectedly missing without a Git deletion: "
+        f"{unexpected_missing}"
+    )
+    return (
+        [path for path in repository_files if path not in deleted_tracked_files],
+        tuple(path for path in missing if path in deleted_tracked_files),
+    )
+
+
 def _disposable_repo_copy(dest):
     git_root = _git_root()
     if git_root is None:
@@ -50,6 +71,22 @@ def _disposable_repo_copy(dest):
     repository_files = [
         f for f in result.stdout.decode("utf-8").strip().split("\0") if f
     ]
+    deleted_result = subprocess.run(
+        ["git", "diff", "HEAD", "--name-only", "--diff-filter=D", "-z"],
+        capture_output=True,
+        check=True,
+        cwd=git_root,
+    )
+    deleted_tracked_files = {
+        path
+        for path in deleted_result.stdout.decode("utf-8").strip().split("\0")
+        if path
+    }
+    repository_files, _intentional_deletions = _select_copyable_repository_files(
+        git_root,
+        repository_files,
+        deleted_tracked_files,
+    )
     for f in repository_files:
         src = os.path.join(git_root, f)
         dst = os.path.join(str(dest_path), f)
@@ -57,6 +94,27 @@ def _disposable_repo_copy(dest):
         shutil.copy2(src, dst)
 
     return dest_path
+
+
+def test_copy_manifest_allows_git_deletion_but_rejects_unexpected_missing(tmp_path):
+    root = tmp_path / "candidate"
+    root.mkdir()
+    (root / "present.py").write_text("value = 1\n", encoding="utf-8")
+
+    selected, deletions = _select_copyable_repository_files(
+        str(root),
+        ["present.py", "intentionally_deleted.py"],
+        {"intentionally_deleted.py"},
+    )
+    assert selected == ["present.py"]
+    assert deletions == ("intentionally_deleted.py",)
+
+    with pytest.raises(AssertionError, match="required.py"):
+        _select_copyable_repository_files(
+            str(root),
+            ["present.py", "required.py"],
+            set(),
+        )
 
 
 def _fingerprint_tree(path):

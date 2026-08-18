@@ -161,7 +161,6 @@ EXPECTED_BOOTSTRAP_EVENTS = (
     "helper:ensure_turmas_matriz_schema",
     "helper:ensure_matriz_atividade_links_table",
     "helper:ensure_atividade_versioning_schema",
-    "helper:get_preferred_matriz_for_curso",
     "helper:apply_schema_migrations",
     "commit",
 )
@@ -363,6 +362,24 @@ class _InitCallerVisitor(ast.NodeVisitor):
         return None
 
 
+def _filter_candidate_python_files(
+    paths: tuple[str, ...],
+    deleted_paths: set[str],
+    *,
+    root: Path = PROJECT_ROOT,
+) -> tuple[str, ...]:
+    unexpected_missing = tuple(
+        path
+        for path in paths
+        if not (root / path).is_file() and path not in deleted_paths
+    )
+    assert unexpected_missing == (), (
+        "tracked Python files are unexpectedly missing without a Git deletion: "
+        f"{unexpected_missing}"
+    )
+    return tuple(path for path in paths if path not in deleted_paths)
+
+
 def _tracked_python_files() -> tuple[str, ...]:
     result = subprocess.run(
         [
@@ -379,7 +396,71 @@ def _tracked_python_files() -> tuple[str, ...]:
         capture_output=True,
         text=True,
     )
-    return tuple(path.replace("\\", "/") for path in result.stdout.splitlines())
+    paths = tuple(path.replace("\\", "/") for path in result.stdout.splitlines())
+    deleted = subprocess.run(
+        [
+            "git",
+            "diff",
+            "HEAD",
+            "--name-only",
+            "--diff-filter=D",
+            "--",
+            "*.py",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    deleted_paths = {
+        path.replace("\\", "/") for path in deleted.stdout.splitlines()
+    }
+    return _filter_candidate_python_files(paths, deleted_paths)
+
+
+def test_tracked_python_enumeration_distinguishes_git_deletion_from_missing_file(tmp_path):
+    existing = tmp_path / "existing.py"
+    existing.write_text("value = 1\n", encoding="utf-8")
+
+    paths = ("existing.py", "intentional.py")
+    assert _filter_candidate_python_files(
+        paths, {"intentional.py"}, root=tmp_path
+    ) == ("existing.py",)
+
+    try:
+        _filter_candidate_python_files(
+            ("existing.py", "unexpected.py"), set(), root=tmp_path
+        )
+    except AssertionError as exc:
+        assert "unexpected.py" in str(exc)
+    else:
+        raise AssertionError("unexpected missing tracked Python file was ignored")
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--cached", "--", "tools/preflight_shadow_read.py"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    deleted = subprocess.run(
+        [
+            "git",
+            "diff",
+            "HEAD",
+            "--name-only",
+            "--diff-filter=D",
+            "--",
+            "tools/preflight_shadow_read.py",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert tracked == ["tools/preflight_shadow_read.py"]
+    assert deleted == ["tools/preflight_shadow_read.py"]
+    assert "tools/preflight_shadow_read.py" not in _tracked_python_files()
 
 
 def _init_callers():
@@ -489,7 +570,6 @@ def _bootstrap_events():
         "ensure_turmas_matriz_schema",
         "ensure_matriz_atividade_links_table",
         "ensure_atividade_versioning_schema",
-        "get_preferred_matriz_for_curso",
         "apply_schema_migrations",
         "ensure_message_overrides_schema",
     }
@@ -664,6 +744,17 @@ def test_app_db_bootstrap_semantic_order_and_single_final_commit():
     assert EXPECTED_BOOTSTRAP_EVENTS.index("helper:apply_schema_migrations") < EXPECTED_BOOTSTRAP_EVENTS.index("commit")
     assert EXPECTED_BOOTSTRAP_EVENTS.count("commit") == 1
 
+    app_tree = _tree(APP_DB_PATH)
+    app_functions, _ = _top_level_names(app_tree)
+    init_source = ast.get_source_segment(
+        _read(APP_DB_PATH), _top_level_function(app_tree, "init_db")
+    )
+    assert init_source is not None
+    assert "get_preferred_matriz_for_curso" not in app_functions
+    assert "get_preferred_matriz_for_curso" not in init_source
+    assert "turmas_sem_matriz" not in init_source
+    assert "UPDATE turmas SET matriz_id" not in init_source
+
 
 def test_schema_migration_metadata_and_historical_baseline_marker():
     tree = _tree(DB_MAINTENANCE_PATH)
@@ -779,7 +870,6 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "ensure_app_settings_schema",
             "ensure_cloud_backup_schema",
             "ensure_turmas_matriz_schema",
-            "get_preferred_matriz_for_curso",
         ),
         BACKUP_SETTINGS_PATH: (
             "_backup_settings_defaults",

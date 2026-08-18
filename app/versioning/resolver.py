@@ -552,81 +552,9 @@ def resolver_versao_por_aluno(
             reason=f"Falha inesperada no resolvedor por aluno: {exc}",
         )
 
-def resolver_versao(
-    conn,
-    *,
-    atividade_id_legacy,
-    aluno_id=None,
-    turma_id=None,
-    matriz_id=None,
-    strict_legacy_scope=True,
-) -> dict[str, object]:
-    try:
-        _require_versioning_read_model(conn)
-
-        if matriz_id:
-            return resolver_versao_por_matriz(
-                conn,
-                matriz_id=matriz_id,
-                atividade_id_legacy=atividade_id_legacy,
-                strict_legacy_scope=strict_legacy_scope,
-            )
-
-        if turma_id:
-            turma = conn.execute(
-                """
-                SELECT id, curso_id, matriz_id
-                  FROM turmas
-                 WHERE id = ?
-                """,
-                (turma_id,),
-            ).fetchone()
-            if not turma:
-                return _resolver_result(
-                    "error",
-                    reason="Turma não encontrada para resolução.",
-                )
-
-            matriz = get_effective_matriz_for_turma(
-                conn,
-                turma["curso_id"],
-                turma["matriz_id"],
-            )
-            if not matriz:
-                return _resolver_result(
-                    "error",
-                    reason="Turma sem matriz efetiva para resolução.",
-                )
-
-            return resolver_versao_por_matriz(
-                conn,
-                matriz_id=matriz["id"],
-                atividade_id_legacy=atividade_id_legacy,
-                strict_legacy_scope=strict_legacy_scope,
-            )
-
-        if aluno_id:
-            return resolver_versao_por_aluno(
-                conn,
-                aluno_id=aluno_id,
-                atividade_id_legacy=atividade_id_legacy,
-                strict_legacy_scope=strict_legacy_scope,
-            )
-
-        return _resolver_result(
-            "error",
-            reason="Informe aluno_id, turma_id ou matriz_id para resolver a versão.",
-        )
-    except Exception as exc:
-        return _resolver_result(
-            "error",
-            reason=f"Falha inesperada no wrapper do resolvedor: {exc}",
-        )
-
 __all__ = [
     "listar_atividades_versionadas_por_matriz",
     "listar_atividades_versionadas_por_turma",
-    "resolver_versao",
     "resolver_versao_por_aluno",
     "resolver_versao_por_matriz",
 ]

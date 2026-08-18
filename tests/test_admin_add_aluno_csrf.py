@@ -233,19 +233,12 @@ def isolated_client_csrf(tmp_path):
             os.environ["APP_DATABASE"] = original_env_database
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_add_aluno_requires_and_accepts_valid_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -324,19 +317,12 @@ def test_admin_add_aluno_requires_and_accepts_valid_csrf(
     assert aluno["status"] == "Ativo"
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_add_aluno_blank_password_uses_default_and_allows_login(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF {suffix}")
@@ -385,21 +371,14 @@ def test_admin_add_aluno_blank_password_uses_default_and_allows_login(
     assert "/aluno/dashboard" in (login_response.headers.get("Location") or "")
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_editar_aluno_password_requires_and_accepts_valid_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     senha_inicial = "Inicial123!"
     senha_nova = "NovaSenha987!"
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     usuario_id, aluno_email, matricula = _seed_aluno_user(suffix, turma_id, senha_inicial, email_prefix="aluno.edit")
@@ -460,21 +439,14 @@ def test_admin_editar_aluno_password_requires_and_accepts_valid_csrf(
     assert "/aluno/dashboard" in (login_response.headers.get("Location") or "")
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_acesso_definir_senha_requires_csrf_and_allows_student_login(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     senha_inicial = "SenhaInicial456!"
     senha_nova = "SenhaNova654!"
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     usuario_id, aluno_email, _ = _seed_aluno_user(suffix, turma_id, senha_inicial, email_prefix="aluno.acesso")
@@ -533,20 +505,13 @@ def test_admin_acesso_definir_senha_requires_csrf_and_allows_student_login(
     assert "/aluno/dashboard" in (login_response.headers.get("Location") or "")
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_acesso_resetar_senha_requires_csrf_and_sets_default_password(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     senha_inicial = "SenhaInicial456!"
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     usuario_id, aluno_email, _ = _seed_aluno_user(suffix, turma_id, senha_inicial, email_prefix="aluno.reset")

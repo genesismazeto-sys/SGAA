@@ -10,6 +10,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from app import db as app_db_module
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -233,7 +234,7 @@ def test_phase_d5_structured_hours_keep_documentos_textual_only(diagnostic_datab
         obs_admin = conn.execute(
             "SELECT COUNT(*) FROM atividade_versao WHERE TRIM(COALESCE(observacao_admin, '')) <> ''"
         ).fetchone()[0]
-        payload = main.listar_atividades_versionadas_por_turma(conn, turma_id)
+        payload = resolver_service.listar_atividades_versionadas_por_turma(conn, turma_id)
 
     assert total == 59
     assert docs_null == 59

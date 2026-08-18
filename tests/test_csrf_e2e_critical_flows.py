@@ -13,7 +13,6 @@ Cobre:
 - POST com csrf_token extraido do HTML deve criar a requisicao
 - Variante com upload de comprovante (multipart real)
 - Variante de admin criando requisicao para aluno
-- Cada teste roda com SGAA_VERSIONED_RESOLVER_SHADOW_READ desligado e =1
 """
 
 from __future__ import annotations
@@ -321,13 +320,6 @@ def isolated_client_e2e(tmp_path):
             os.environ["APP_DATABASE"] = saved["ENV_DATABASE"]
 
 
-def _set_shadow_read(monkeypatch, flag: str | None) -> None:
-    if flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", flag)
-
-
 def _setup_aluno_with_aac(suffix: str):
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -342,9 +334,8 @@ def _setup_aluno_with_aac(suffix: str):
 
 
 @pytest.mark.parametrize("path", ["/aluno/nova-requisicao", "/aluno/nova_requisicao"])
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_aluno_can_create_aac_request_without_csrf_400(
-    isolated_client_e2e, monkeypatch, shadow_read_flag, path
+    isolated_client_e2e, monkeypatch, path
 ):
     """Fluxo real: aluno abre tela, extrai token do HTML final, submete POST.
 
@@ -353,9 +344,7 @@ def test_aluno_can_create_aac_request_without_csrf_400(
     - POST com csrf_token extraido do HTML final -> redirect 302 (sem 400).
     - Requisicao realmente criada no banco temporario para o aluno seedado.
     - Funciona para ambas as variantes do path (com hifen e com underscore).
-    - Funciona com SGAA_VERSIONED_RESOLVER_SHADOW_READ desligado e =1.
     """
-    _set_shadow_read(monkeypatch, shadow_read_flag)
     client = isolated_client_e2e
     suffix = uuid.uuid4().hex[:8]
     usuario_id, aluno_id, atividade_id = _setup_aluno_with_aac(suffix)
@@ -427,12 +416,10 @@ def test_aluno_can_create_aac_request_without_csrf_400(
         assert created["status"] == "Pendente"
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_aluno_can_create_aac_request_with_attachment_without_csrf_400(
-    isolated_client_e2e, monkeypatch, shadow_read_flag
+    isolated_client_e2e, monkeypatch
 ):
     """Mesmo fluxo, agora exercitando o upload real de comprovante multipart."""
-    _set_shadow_read(monkeypatch, shadow_read_flag)
     client = isolated_client_e2e
     suffix = uuid.uuid4().hex[:8]
     usuario_id, aluno_id, atividade_id = _setup_aluno_with_aac(suffix)
@@ -505,12 +492,10 @@ def test_aluno_can_create_aac_request_with_attachment_without_csrf_400(
         )
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_can_create_request_for_student_without_csrf_400(
-    isolated_client_e2e, monkeypatch, shadow_read_flag
+    isolated_client_e2e, monkeypatch
 ):
     """Admin abre /admin/requisicoes/nova, extrai token, POST cria requisicao."""
-    _set_shadow_read(monkeypatch, shadow_read_flag)
     client = isolated_client_e2e
     suffix = uuid.uuid4().hex[:8]
 
@@ -608,7 +593,6 @@ def test_aluno_aac_post_returns_400_when_session_cleared_between_get_and_post(
     POST, e exige 400 com a mesma mensagem do handler global. Serve como
     regressao caso futuras refatoracoes alterem esse comportamento.
     """
-    monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
     client = isolated_client_e2e
     suffix = uuid.uuid4().hex[:8]
     usuario_id, _aluno_id, atividade_id = _setup_aluno_with_aac(suffix)
@@ -820,9 +804,8 @@ def test_csrf_time_limit_matches_session_lifetime_by_default():
     )
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_can_change_own_password_e2e_real_submit(
-    isolated_client_e2e, monkeypatch, shadow_read_flag
+    isolated_client_e2e, monkeypatch
 ):
     """Sanidade: confirma que o E2E de admin meus_dados continua valido.
 
@@ -830,7 +813,6 @@ def test_admin_can_change_own_password_e2e_real_submit(
     do form e POST direto via action declarado para detectar regressao caso o
     template passe a usar action explicito diferente do path original.
     """
-    _set_shadow_read(monkeypatch, shadow_read_flag)
     client = isolated_client_e2e
     suffix = uuid.uuid4().hex[:8]
     new_password = "NovaSenhaE2E!123"

@@ -10,7 +10,6 @@ Cobre:
   - matriz_atividade_versao_item preserva vínculos válidos após migração
   - atividade_transicao preserva vínculos válidos após migração
   - get_next_numero_versao retorna max+1
-  - get_ultima_versao_ativa_por_base retorna maior numero_versao ativa
   - próximo INSERT preserva AUTOINCREMENT
 """
 from __future__ import annotations
@@ -208,23 +207,7 @@ def test_get_next_numero_versao(env):
 
 
 # ---------------------------------------------------------------------------
-# T09 — get_ultima_versao_ativa_por_base retorna maior numero_versao ativa
-# ---------------------------------------------------------------------------
-
-
-def test_get_ultima_versao_ativa_por_base(env):
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        # Base 1: tem v1 (ativa, T10) e v2 (ativa, T11). Deve retornar v2 (maior num ativa).
-        ultima = main.get_ultima_versao_ativa_por_base(conn, 1)
-        assert ultima is not None, "Base 1 deve ter versão ativa"
-        assert ultima["numero_versao"] == 2, (
-            f"Esperado numero_versao=2, obteve {ultima['numero_versao']}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# T10 — Próximo INSERT preserva AUTOINCREMENT (id > max existente)
+# T09 — Próximo INSERT preserva AUTOINCREMENT (id > max existente)
 # ---------------------------------------------------------------------------
 
 

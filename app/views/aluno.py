@@ -59,7 +59,6 @@ from app.web.filters import (
 )
 from app.web.pagination import get_pagination, wants_pagination
 from app.versioning import (
-    maybe_run_versioned_resolver_shadow_read,
     prepare_versioned_requisicao_snapshot,
     RequisicaoSnapshotError,
 )
@@ -1771,18 +1770,6 @@ def aluno_nova_requisicao():
 
             conn.commit()
             created_document_paths.clear()
-            try:
-                maybe_run_versioned_resolver_shadow_read(
-                    conn,
-                    origin="aluno_create",
-                    aluno_id=aluno_id,
-                    atividade_id_legacy=atividade_id,
-                    req_id=req_id,
-                )
-            except Exception:
-                current_app.logger.exception(
-                    "Falha ao executar resolvedor versionado em modo sombra no fluxo do aluno"
-                )
             flash("Requisição enviada com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
         except RequisicaoSnapshotError as exc:

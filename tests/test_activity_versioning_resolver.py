@@ -10,6 +10,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from app import db as app_db_module
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -93,6 +94,14 @@ def _get_turma_id_by_code(codigo: str) -> int:
     return row["id"]
 
 
+def _get_explicit_matriz_id(conn, turma_id: int) -> int:
+    row = conn.execute(
+        "SELECT matriz_id FROM turmas WHERE id = ?", (turma_id,)
+    ).fetchone()
+    assert row is not None and row["matriz_id"] is not None
+    return int(row["matriz_id"])
+
+
 def _seed_legacy_flow_context():
     token = uuid.uuid4().hex[:8]
     matricula = f"D6R{token.upper()}"
@@ -174,10 +183,11 @@ def test_resolver_ppa_t10_strict_and_permissive(diagnostic_database):
 
     with main.app.app_context():
         conn = main.get_db_connection()
+        matriz_id = _get_explicit_matriz_id(conn, turma_id)
 
-        r1 = main.resolver_versao(
+        r1 = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=1,
             strict_legacy_scope=True,
         )
@@ -186,18 +196,18 @@ def test_resolver_ppa_t10_strict_and_permissive(diagnostic_database):
         assert r1["eixo"] == "AAC"
         assert r1["legacy_scope_ok"] is True
 
-        r6_strict = main.resolver_versao(
+        r6_strict = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=6,
             strict_legacy_scope=True,
         )
         assert r6_strict["status"] == "legacy_activity_not_in_matrix"
         assert r6_strict["legacy_scope_ok"] is False
 
-        r6_perm = main.resolver_versao(
+        r6_perm = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=6,
             strict_legacy_scope=False,
         )
@@ -206,25 +216,25 @@ def test_resolver_ppa_t10_strict_and_permissive(diagnostic_database):
         assert r6_perm["legacy_scope_ok"] is False
         assert "legacy_activity_outside_matrix_scope" in r6_perm["warnings"]
 
-        r8 = main.resolver_versao(
+        r8 = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=8,
             strict_legacy_scope=True,
         )
         assert r8["status"] == "base_without_version_for_matrix"
 
-        r27_strict = main.resolver_versao(
+        r27_strict = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=27,
             strict_legacy_scope=True,
         )
         assert r27_strict["status"] == "legacy_activity_not_in_matrix"
 
-        r27_perm = main.resolver_versao(
+        r27_perm = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=27,
             strict_legacy_scope=False,
         )
@@ -233,17 +243,17 @@ def test_resolver_ppa_t10_strict_and_permissive(diagnostic_database):
         assert r27_perm["legacy_scope_ok"] is False
         assert "legacy_activity_outside_matrix_scope" in r27_perm["warnings"]
 
-        r28_strict = main.resolver_versao(
+        r28_strict = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=28,
             strict_legacy_scope=True,
         )
         assert r28_strict["status"] == "legacy_activity_not_in_matrix"
 
-        r28_perm = main.resolver_versao(
+        r28_perm = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=28,
             strict_legacy_scope=False,
         )
@@ -258,10 +268,11 @@ def test_resolver_ppa_t11_strict_and_permissive(diagnostic_database):
 
     with main.app.app_context():
         conn = main.get_db_connection()
+        matriz_id = _get_explicit_matriz_id(conn, turma_id)
 
-        r1 = main.resolver_versao(
+        r1 = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=1,
             strict_legacy_scope=True,
         )
@@ -269,17 +280,17 @@ def test_resolver_ppa_t11_strict_and_permissive(diagnostic_database):
         assert r1["codigo_normativo"] == "AAC-rev6"
         assert r1["eixo"] == "AAC"
 
-        r6_strict = main.resolver_versao(
+        r6_strict = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=6,
             strict_legacy_scope=True,
         )
         assert r6_strict["status"] == "legacy_activity_not_in_matrix"
 
-        r6_perm = main.resolver_versao(
+        r6_perm = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=6,
             strict_legacy_scope=False,
         )
@@ -288,9 +299,9 @@ def test_resolver_ppa_t11_strict_and_permissive(diagnostic_database):
         assert r6_perm["legacy_scope_ok"] is False
         assert "legacy_activity_outside_matrix_scope" in r6_perm["warnings"]
 
-        r8 = main.resolver_versao(
+        r8 = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=8,
             strict_legacy_scope=True,
         )
@@ -299,9 +310,9 @@ def test_resolver_ppa_t11_strict_and_permissive(diagnostic_database):
         assert r8["eixo"] == "AAC"
 
         for atividade_legacy in (27, 28, 29, 30, 31):
-            resolved = main.resolver_versao(
+            resolved = resolver_service.resolver_versao_por_matriz(
                 conn,
-                turma_id=turma_id,
+                matriz_id=matriz_id,
                 atividade_id_legacy=atividade_legacy,
                 strict_legacy_scope=True,
             )
@@ -326,7 +337,7 @@ def test_resolver_reports_missing_map_and_ambiguous_candidates(diagnostic_databa
         )
         matriz_id = matriz["id"]
 
-        not_mapped = main.resolver_versao_por_matriz(
+        not_mapped = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=matriz_id,
             atividade_id_legacy=999999,
@@ -401,7 +412,7 @@ def test_resolver_reports_missing_map_and_ambiguous_candidates(diagnostic_databa
         )
         conn.commit()
 
-        ambiguous = main.resolver_versao_por_matriz(
+        ambiguous = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=matriz_id,
             atividade_id_legacy=1,
@@ -449,7 +460,7 @@ def test_resolver_reports_matrix_without_norma_and_version_inactive(diagnostic_d
         )
         conn.commit()
 
-        missing_norma = main.resolver_versao_por_matriz(
+        missing_norma = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=matriz_sem_norma,
             atividade_id_legacy=1,
@@ -535,7 +546,7 @@ def test_resolver_reports_matrix_without_norma_and_version_inactive(diagnostic_d
         )
         conn.commit()
 
-        inactive = main.resolver_versao_por_matriz(
+        inactive = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=matriz_inativa,
             atividade_id_legacy=1,
@@ -549,6 +560,7 @@ def test_resolver_is_read_only_and_output_has_no_documentos_json(diagnostic_data
 
     with main.app.app_context():
         conn = main.get_db_connection()
+        matriz_id = _get_explicit_matriz_id(conn, turma_id)
         aluno_row = conn.execute(
             """
             SELECT a.id AS aluno_id
@@ -568,13 +580,13 @@ def test_resolver_is_read_only_and_output_has_no_documentos_json(diagnostic_data
             "SELECT COUNT(*) AS c FROM requisicoes WHERE atividade_versao_id IS NOT NULL"
         ).fetchone()["c"]
 
-        resolved = main.resolver_versao(
+        resolved = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma_id,
+            matriz_id=matriz_id,
             atividade_id_legacy=1,
             strict_legacy_scope=True,
         )
-        resolved_aluno = main.resolver_versao_por_aluno(
+        resolved_aluno = resolver_service.resolver_versao_por_aluno(
             conn,
             aluno_id=aluno_row["aluno_id"],
             atividade_id_legacy=1,

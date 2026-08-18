@@ -44,6 +44,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 
 
 # ---------------------------------------------------------------------------
@@ -1065,8 +1066,8 @@ def test_d7_1_contract_still_holds_after_edit(client):
     assert versao["grupo"] == "Grupo pós-edição"
 
     # O status helper do resolver deve continuar excluindo rascunho do conjunto ativo
-    assert main._atividade_versao_status_ativo(versao["status"]) is False
-    assert main._atividade_versao_status_ativo("rascunho") is False
-    assert main._atividade_versao_status_ativo("inativa") is False
-    assert main._atividade_versao_status_ativo("ativa") is True
-    assert main._atividade_versao_status_ativo("vigente") is True
+    assert resolver_service._atividade_versao_status_ativo(versao["status"]) is False
+    assert resolver_service._atividade_versao_status_ativo("rascunho") is False
+    assert resolver_service._atividade_versao_status_ativo("inativa") is False
+    assert resolver_service._atividade_versao_status_ativo("ativa") is True
+    assert resolver_service._atividade_versao_status_ativo("vigente") is True

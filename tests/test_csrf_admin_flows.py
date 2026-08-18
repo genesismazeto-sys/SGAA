@@ -293,19 +293,12 @@ def isolated_client_csrf(tmp_path):
             os.environ["APP_DATABASE"] = original_env_database
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_pages_post_forms_have_single_csrf_token(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     _seed_aluno_user(suffix, turma_id, "alunoInicial!123", email_prefix="aluno.pages")
@@ -331,22 +324,15 @@ def test_admin_pages_post_forms_have_single_csrf_token(
             assert _count_csrf_tokens(form_block) == 1, f"{page} deve ter exatamente 1 csrf_token por formulario POST"
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_meus_dados_password_change_requires_and_accepts_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     admin_email = f"admin.p0.csrf.{suffix}@teste.local"
     old_password = "admin12345"
     new_password = "NovaSenha!123"
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, _ = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF P0 {suffix}")
@@ -469,19 +455,12 @@ def test_aluno_meus_dados_profile_flow_remains_available(isolated_client_csrf):
         )
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_fetch_mutation_requires_csrf_header(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, _ = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF P0 {suffix}")
@@ -527,21 +506,14 @@ def test_admin_fetch_mutation_requires_csrf_header(
     assert valid.status_code in (302, 303)
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_redefine_student_password_and_student_login(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     senha_inicial = "SenhaInicial!123"
     senha_nova = "SenhaNova!321"
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     aluno_id, aluno_email = _seed_aluno_user(suffix, turma_id, senha_inicial, email_prefix="aluno.redef")
@@ -591,21 +563,14 @@ def test_admin_redefine_student_password_and_student_login(
     assert "/aluno/dashboard" in (login_response.headers.get("Location") or "")
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_add_aluno_blank_password_uses_default_and_not_empty_hash(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
     email = f"aluno.sem.senha.{suffix}@teste.local"
     matricula = f"MATRIC-{suffix}".upper()
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF P0 {suffix}")
@@ -673,19 +638,12 @@ def test_admin_add_aluno_blank_password_uses_default_and_not_empty_hash(
         conn.commit()
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_api_presets_requires_and_accepts_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     aluno_id, _ = _seed_aluno_user(suffix, turma_id, "AlunoPreset!123", email_prefix="aluno.preset")
@@ -720,19 +678,12 @@ def test_admin_api_presets_requires_and_accepts_csrf(
     assert valid.get_json() == {"ok": True}
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_importar_requisicoes_page_and_post_require_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, _ = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF P0 {suffix}")
@@ -758,19 +709,12 @@ def test_admin_importar_requisicoes_page_and_post_require_csrf(
     assert valid.status_code == 200
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_admin_requisicao_edit_requires_and_accepts_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, turma_id = _seed_admin_and_support_turma(suffix)
     aluno_id, _ = _seed_aluno_user(suffix, turma_id, "AlunoReqEdit!123", email_prefix="aluno.reqedit")
@@ -823,19 +767,12 @@ def test_admin_requisicao_edit_requires_and_accepts_csrf(
         assert updated["observacao"] == "Atualizado com token"
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
 def test_logout_get_is_safe_and_post_requires_csrf(
     isolated_client_csrf,
     monkeypatch,
-    shadow_read_flag,
 ):
     client = isolated_client_csrf
     suffix = uuid.uuid4().hex[:8]
-
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
 
     admin_id, _ = _seed_admin_and_support_turma(suffix)
     _login_admin_user(client, admin_id, f"Admin CSRF P0 {suffix}")

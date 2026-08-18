@@ -10,6 +10,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from app import db as app_db_module
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -194,7 +195,7 @@ def test_phase_d1_helper_lists_expected_versioned_activities_for_ppa_t10(diagnos
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        payload = main.listar_atividades_versionadas_por_turma(conn, turma_id)
+        payload = resolver_service.listar_atividades_versionadas_por_turma(conn, turma_id)
 
     assert payload["turma"]["codigo"] == "PPA-T10"
     assert payload["totais"]["geral"] == 28
@@ -227,7 +228,7 @@ def test_phase_d1_helper_lists_expected_versioned_activities_for_ppa_t11(diagnos
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        payload = main.listar_atividades_versionadas_por_turma(conn, turma_id)
+        payload = resolver_service.listar_atividades_versionadas_por_turma(conn, turma_id)
 
     assert payload["turma"]["codigo"] == "PPA-T11"
     assert payload["totais"]["geral"] == 31

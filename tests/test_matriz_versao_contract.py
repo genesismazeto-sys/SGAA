@@ -9,7 +9,7 @@ Prova que a resolução de versão por matriz é determinística e segura:
 4. Ambiguidade (2 versões ativas da mesma base na mesma matriz) → ambiguous_version,
    resolvedor não escolhe "primeira ativa", writer não grava atividade_versao_id.
 5. Turma sem matriz explícita → writer não carimba atividade_versao_id, mesmo que o
-   curso possua uma matriz preferida (fallback heurístico proibido para carimbo).
+   curso possua matrizes (fallback heurístico proibido para carimbo).
 6. Turma com matriz explícita → writer carimba corretamente (controle positivo).
 7. Resolvedor é estritamente read-only (não muta o banco).
 
@@ -27,6 +27,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -59,9 +60,9 @@ def test_contrato_1_matriz_aac_rev5_resolve_versao_correta(versioned_env):
         conn = main.get_db_connection()
         turma = _get_turma(conn, "PPA-T10")
 
-        result = main.resolver_versao(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=turma["id"],
+            matriz_id=turma["matriz_id"],
             atividade_id_legacy=1,
             strict_legacy_scope=True,
         )
@@ -92,11 +93,11 @@ def test_contrato_2_mesma_base_matrizes_diferentes_resolvem_versoes_distintas(ve
         t10 = _get_turma(conn, "PPA-T10")
         t11 = _get_turma(conn, "PPA-T11")
 
-        result_t10 = main.resolver_versao(
-            conn, turma_id=t10["id"], atividade_id_legacy=1, strict_legacy_scope=True,
+        result_t10 = resolver_service.resolver_versao_por_matriz(
+            conn, matriz_id=t10["matriz_id"], atividade_id_legacy=1, strict_legacy_scope=True,
         )
-        result_t11 = main.resolver_versao(
-            conn, turma_id=t11["id"], atividade_id_legacy=1, strict_legacy_scope=True,
+        result_t11 = resolver_service.resolver_versao_por_matriz(
+            conn, matriz_id=t11["matriz_id"], atividade_id_legacy=1, strict_legacy_scope=True,
         )
 
     assert result_t10["status"] == "resolved"
@@ -127,9 +128,9 @@ def test_contrato_3_base_extensao_resolve_aeu_na_matriz_nova(versioned_env):
         conn = main.get_db_connection()
         t11 = _get_turma(conn, "PPA-T11")
 
-        result = main.resolver_versao(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=t11["id"],
+            matriz_id=t11["matriz_id"],
             atividade_id_legacy=27,
             strict_legacy_scope=True,
         )
@@ -188,9 +189,9 @@ def test_contrato_4_ambiguidade_retorna_erro_duro_sem_versao_id(versioned_env):
         )
         conn.commit()
 
-        result = main.resolver_versao(
+        result = resolver_service.resolver_versao_por_matriz(
             conn,
-            turma_id=t11["id"],
+            matriz_id=t11["matriz_id"],
             atividade_id_legacy=1,
             strict_legacy_scope=True,
         )
@@ -295,12 +296,11 @@ def test_contrato_4b_writer_nao_grava_atividade_versao_id_quando_ambiguo(version
 
 def test_contrato_5_turma_sem_matriz_explicita_nao_carimba(versioned_env):
     """
-    Turma com matriz_id=NULL (mesmo com o curso possuindo uma matriz preferida) NÃO
+    Turma com matriz_id=NULL (mesmo com o curso possuindo matrizes) NÃO
     deve produzir carimbo de atividade_versao_id.
 
-    Risco identificado pelo Opus: get_effective_matriz_for_turma cai em
-    get_preferred_matriz_for_curso quando turma.matriz_id é NULL. Para carimbo
-    operacional isso é heurística perigosa que este contrato proíbe.
+    Para carimbo operacional, escolher qualquer matriz do curso quando
+    turma.matriz_id é NULL seria uma heurística perigosa que este contrato proíbe.
 
     Requer patch: _get_turma_explicit_matriz_id_for_snapshot + pre-check no writer.
     """
@@ -312,10 +312,13 @@ def test_contrato_5_turma_sem_matriz_explicita_nao_carimba(versioned_env):
         assert curso is not None, "Curso PPA não encontrado no dataset de referência"
         curso_id = curso["id"]
 
-        # Garantir que o curso TEM matriz preferida (para provar que o fallback existiria).
-        preferred = main.get_preferred_matriz_for_curso(conn, curso_id)
-        assert preferred is not None, (
-            "Curso PPA deve ter matriz preferida para que este teste prove a prevenção do fallback"
+        # Garantir que o curso TEM matriz (para provar que uma escolha heurística existiria).
+        matrix_exists = conn.execute(
+            "SELECT 1 FROM matrizes_atividades WHERE curso_id = ? LIMIT 1",
+            (curso_id,),
+        ).fetchone()
+        assert matrix_exists is not None, (
+            "Curso PPA deve ter matriz para que este teste prove a prevenção do fallback"
         )
 
         # Criar turma SEM matriz_id (NULL).
@@ -386,7 +389,7 @@ def test_contrato_5_turma_sem_matriz_explicita_nao_carimba(versioned_env):
 
     assert row["atividade_versao_id"] is None, (
         "Turma sem matriz explícita NÃO deve ter atividade_versao_id carimbado. "
-        "Fallback para get_preferred_matriz_for_curso é heurística proibida para carimbo operacional."
+        "Escolha automática de matriz do curso é heurística proibida para carimbo operacional."
     )
 
 
@@ -458,8 +461,8 @@ def test_contrato_5b_turma_com_matriz_explicita_carimba_corretamente(versioned_e
 
 def test_contrato_6_resolvedor_e_read_only(versioned_env):
     """
-    resolver_versao, resolver_versao_por_matriz e resolver_versao_por_aluno
-    não devem inserir, atualizar ou deletar qualquer dado no banco.
+    Os resolvedores exatos por matriz e por aluno não devem inserir,
+    atualizar ou deletar qualquer dado no banco.
     """
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -482,16 +485,15 @@ def test_contrato_6_resolvedor_e_read_only(versioned_env):
             "SELECT COUNT(*) AS c FROM requisicoes WHERE atividade_versao_id IS NOT NULL"
         ).fetchone()["c"]
 
-        # Exercitar todos os caminhos públicos do resolvedor.
-        main.resolver_versao(conn, turma_id=t10["id"], atividade_id_legacy=1, strict_legacy_scope=True)
-        main.resolver_versao(conn, turma_id=t10["id"], atividade_id_legacy=1, strict_legacy_scope=False)
-        main.resolver_versao(conn, turma_id=t11["id"], atividade_id_legacy=1, strict_legacy_scope=True)
-        main.resolver_versao(conn, turma_id=t11["id"], atividade_id_legacy=27, strict_legacy_scope=True)
+        # Exercitar todos os caminhos públicos dos resolvedores exatos.
+        resolver_service.resolver_versao_por_matriz(conn, matriz_id=t10["matriz_id"], atividade_id_legacy=1, strict_legacy_scope=True)
+        resolver_service.resolver_versao_por_matriz(conn, matriz_id=t10["matriz_id"], atividade_id_legacy=1, strict_legacy_scope=False)
+        resolver_service.resolver_versao_por_matriz(conn, matriz_id=t11["matriz_id"], atividade_id_legacy=1, strict_legacy_scope=True)
+        resolver_service.resolver_versao_por_matriz(conn, matriz_id=t11["matriz_id"], atividade_id_legacy=27, strict_legacy_scope=True)
         # Atividade fora do escopo (retorna legacy_activity_not_in_matrix) — não deve mutar.
-        main.resolver_versao(conn, turma_id=t10["id"], atividade_id_legacy=27, strict_legacy_scope=True)
+        resolver_service.resolver_versao_por_matriz(conn, matriz_id=t10["matriz_id"], atividade_id_legacy=27, strict_legacy_scope=True)
         if aluno:
-            main.resolver_versao(conn, aluno_id=aluno["id"], atividade_id_legacy=1, strict_legacy_scope=True)
-            main.resolver_versao_por_aluno(conn, aluno_id=aluno["id"], atividade_id_legacy=1, strict_legacy_scope=True)
+            resolver_service.resolver_versao_por_aluno(conn, aluno_id=aluno["id"], atividade_id_legacy=1, strict_legacy_scope=True)
 
         changes_after = conn.total_changes
         reqs_count_after = conn.execute("SELECT COUNT(*) AS c FROM requisicoes").fetchone()["c"]

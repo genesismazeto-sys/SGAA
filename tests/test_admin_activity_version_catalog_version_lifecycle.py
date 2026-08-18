@@ -38,6 +38,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.versioning import resolver as resolver_service
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -650,7 +651,7 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
     # Verifica que resolver inicialmente resolve (antes da remoção de vínculo)
     with main.app.app_context():
         conn = main.get_db_connection()
-        resultado_antes = main.resolver_versao_por_matriz(
+        resultado_antes = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],
@@ -680,7 +681,7 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
     # Resolver retorna ausência de versão para essa base
     with main.app.app_context():
         conn = main.get_db_connection()
-        resultado_depois = main.resolver_versao_por_matriz(
+        resultado_depois = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["atividade_id"],
@@ -881,7 +882,7 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
     # Verifica que versão B resolve antes
     with main.app.app_context():
         conn = main.get_db_connection()
-        resultado_b_antes = main.resolver_versao_por_matriz(
+        resultado_b_antes = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["ativ_b_id"],
@@ -911,7 +912,7 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
     # Verifica que versão B ainda resolve
     with main.app.app_context():
         conn = main.get_db_connection()
-        resultado_b_depois = main.resolver_versao_por_matriz(
+        resultado_b_depois = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
             atividade_id_legacy=seed["ativ_b_id"],

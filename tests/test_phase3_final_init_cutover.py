@@ -182,39 +182,6 @@ def test_app_db_is_sole_init_owner_and_main_exports_owner_identity():
     import main
 
     assert main.init_db is app_db.init_db
-    assert main.get_preferred_matriz_for_curso is app_db.get_preferred_matriz_for_curso
-
-
-def test_preferred_matrix_owner_preserves_exact_selection_contract():
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    try:
-        assert app_db.get_preferred_matriz_for_curso(conn, None) is None
-        assert app_db.get_preferred_matriz_for_curso(conn, 0) is None
-        assert app_db.get_preferred_matriz_for_curso(conn, 1) is None
-
-        rows = (
-            (1, "Other", "1", "arquivada", "2030-01-01"),
-            (1, "Draft", "1", "rascunho", "2031-01-01"),
-            (1, "Active old", "1", "ativa", "2025-01-01"),
-            (1, "Current low id", "1", "vigente", "2026-01-01"),
-            (1, "Current high id", "1", "ATIVA", "2026-01-01"),
-            (2, "Other course", "1", "ativa", "2099-01-01"),
-        )
-        conn.executemany(
-            """
-            INSERT INTO matrizes_atividades
-                (curso_id, nome, versao, status, data_inicio_vigencia)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-
-        selected = app_db.get_preferred_matriz_for_curso(conn, 1)
-        assert isinstance(selected, sqlite3.Row)
-        assert selected["nome"] == "Current high id"
-    finally:
-        conn.close()
 
 
 def test_factory_init_is_complete_explicit_and_does_not_import_main(tmp_path):

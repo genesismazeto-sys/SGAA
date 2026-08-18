@@ -1185,18 +1185,12 @@ def _build_csrf_inventory(tmp_path: Path) -> dict:
         _teardown_isolated_csrf_clients(state)
 
 
-@pytest.mark.parametrize("shadow_read_flag", [None, "1"])
-def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, tmp_path, monkeypatch, shadow_read_flag):
-    if shadow_read_flag is None:
-        monkeypatch.delenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", raising=False)
-    else:
-        monkeypatch.setenv("SGAA_VERSIONED_RESOLVER_SHADOW_READ", shadow_read_flag)
-
+@pytest.mark.parametrize("snapshot_suffix", ["shadow_off", "shadow_on"])
+def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, tmp_path, snapshot_suffix):
     update_snapshots = request.config.getoption("--update-csrf-snapshots", default=False)
 
     artifacts_dir = Path(BASE) / "tests" / "_artifacts"
-    suffix = "shadow_on" if shadow_read_flag else "shadow_off"
-    canonical_path = artifacts_dir / f"csrf_inventory_{suffix}.json"
+    canonical_path = artifacts_dir / f"csrf_inventory_{snapshot_suffix}.json"
 
     if not update_snapshots and not canonical_path.exists():
         raise AssertionError(
@@ -1241,11 +1235,11 @@ def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, 
             unchanged_count = 0
         assert updated_count + unchanged_count == 1
         print(
-            f"Update summary for {suffix}: "
+                f"Update summary for {snapshot_suffix}: "
             f"{updated_count} updated, {unchanged_count} unchanged"
         )
     else:
-        tmp_report_path = tmp_path / f"csrf_inventory_{suffix}.json"
+        tmp_report_path = tmp_path / f"csrf_inventory_{snapshot_suffix}.json"
         tmp_report_path.write_bytes(observed_bytes)
 
         if can_before_bytes is not None:
@@ -1261,7 +1255,7 @@ def test_csrf_inventory_audit_generates_report_and_closes_route_matrix(request, 
                 )
                 diff_text = "".join(diff)
                 raise AssertionError(
-                    f"CSRF inventory snapshot mismatch for {suffix}:\n{diff_text}"
+                    f"CSRF inventory snapshot mismatch for {snapshot_suffix}:\n{diff_text}"
                 )
 
         can_after_stat = canonical_path.stat()
