@@ -1,6 +1,19 @@
 # Architecture Refactor Ledger
 
-## Current authoritative state — PHASE 4-B7-P-R3 CLOSED / ACCEPTED — GOVERNANCE CLOSEOUT PUBLISHED (2026-08-04)
+## Current authoritative state — SGAA-EJ REFACTOR COMPLETE
+
+Active branch: `refactor/design-system-foundation`; current HEAD is
+Git-authoritative. Technical residuals: 0. Latest technical unit: **SCHEMA OWNER
+CLEANUP — CLOSED / ACCEPTED / PUBLISHED**. Canonical evidence: 1736 passed / 133
+skipped / 17 deselected / 0 failed / 0 errors.
+
+Current invariants: routes 131; endpoints 130; RBAC unmapped 0; actor matrix
+402; message catalogue 539; Design System 198 / ceiling 198; main
+routes/hooks/prohibited imports 0/0/0. Schema version 3; migrations v1/v2/v3
+only; no v4. Branch disposition:
+`BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`.
+
+## Historical authoritative snapshot — PHASE 4-B7-P-R3 CLOSED / ACCEPTED — GOVERNANCE CLOSEOUT PUBLISHED (2026-08-04)
 
 PHASE 4-B6 is CLOSED / ACCEPTED (see `PHASE4-B6` row below). PHASE 4-B7-A (read-only
 diagnosis of the Arquivos/Alertas/Reportes cohort) is **CLOSED / ACCEPTED** with
@@ -2039,3 +2052,37 @@ técnico UT-17) com verificação remota bem-sucedida; cronologia explícita:
 qualificação técnica antes da governança; a governança registra o estado final
 tecnicamente comprovado; publicação canônica somente após o landing. **NÃO
 existe UT-18**; a sequência técnica do roadmap está esgotada após a UT-17.
+
+## FINAL-REFACTOR-RESIDUAL-COMPLETION-RECONCILIATION-1
+
+Verdict: `REFACTOR_DOCUMENTATION_CLOSEOUT_ONLY`.
+
+**SGAA-EJ REFACTOR HAS NO REMAINING REAL TECHNICAL RESIDUALS.**
+
+- Technical residual count: 0.
+- Release landing residual count: 0.
+- Accepted compatibility debt count: 8.
+- Future product work count: 9.
+- Branch disposition: `BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`.
+- `TECHNICAL_COMPLETION_REQUIRES_DEPLOYMENT = NO`.
+- Governance: `FINAL_PROJECT_CLOSEOUT_RECORD_REQUIRED`.
+
+Retained compatibility debt is accepted and is not unfinished refactor work:
+legacy atividades storage; Matrix legacy-link storage; `atividade_legacy_map`;
+true `NO_SNAPSHOT` requests; legacy request columns/fields; runtime `ensure_*`
+compatibility callers; `main` compatibility exports/facades; and two active
+route-local feature schemas.
+
+`ACCEPTED_COMPATIBILITY_DEBT_IS_NOT_REFACTOR_RESIDUAL`
+
+Future product/application work remains separate from refactor completion: C-2
+Admin Arquivos JavaScript scope; C-3 SheetJS/CDN vs CSP; C-4 provider brand
+images; C-5 Matrix NULL-date presentation; OneDrive large-file sessions; cloud
+token encryption; phone/mobile shell decision; optional hard-RBAC rollout; and
+optional multi-worker login rate limiting.
+
+The current documentation candidate does not claim its own publication.
+`FINAL_PROJECT_CLOSEOUT_RECORD_REQUIRED` is satisfied only after this unit is
+independently accepted and published. No `main` action, migration v4, physical
+schema cleanup, UT-18, DS-9, or deployment is authorized or required by this
+record.

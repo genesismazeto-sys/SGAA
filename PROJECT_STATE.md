@@ -1,9 +1,33 @@
 # PROJECT_STATE — live state
 
 Active branch: `refactor/design-system-foundation`
+HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
+Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
+Structural refactor: **COMPLETE**.
+Final refactor technical residual count: **0**.
+Latest completed technical unit: **SCHEMA OWNER CLEANUP — CLOSED / ACCEPTED /
+PUBLISHED**.
+Final completion reconciliation: `REFACTOR_DOCUMENTATION_CLOSEOUT_ONLY`.
+
+**SGAA-EJ REFACTOR HAS NO REMAINING REAL TECHNICAL RESIDUALS.**
+
+Current branch disposition:
+`BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`. Deployment remains a
+separate concern and is not required for technical completion.
+
+Current canonical evidence: 1736 passed / 133 skipped / 17 deselected / 0
+failed / 0 errors. Current invariants: routes 131; endpoints 130; RBAC unmapped
+0; actor matrix 402; message catalogue 539; Design System 198 / ceiling 198;
+main routes/hooks/prohibited imports 0/0/0; schema version 3; migrations v1/v2/v3
+only; no v4.
+
+## Historical UT live-summary record
+
+The block below preserves the prior UT-17 live summary as phase-time history;
+it is not the current project summary.
+
 Structural-refactor branch (history, no longer the active line):
 `refactor/architecture-safety-net`
-HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
 Plateau landing parent: `230de41b3439a60951049e9021d6b0063f3bc2db`
 UT-9 entry parent: `7909b2d59b2de987d84dc859a15bede215a3261b`
 UT-10 entry parent: `e8f64a8244196b1c7acd634c9f78fbde29d70ef9`
@@ -12,7 +36,6 @@ UT-12 entry parent: `4820e4d3a46a1a3564c730d384b86aa989d752c9`
 UT-13 entry parent: `2e0afa34ed1b927014ac35875668bbdc132743ad`
 UT-14 entry parent: `ef7bc0302cc86b4fa37f301be8157363922e51e7`
 UT-15 entry parent: `37316d6dc2f3f55c050152e6b4ae835074ccdac6`
-Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
 Rewritten once per UT; history in `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`.
 
 Last completed UT: UT-17 — Infra — CLOSED / ACCEPTED / PUBLISHED (published by
@@ -1960,3 +1983,82 @@ No physical schema object is currently proven dead. No table, column, index, or
 trigger deletion is justified; legacy compatibility storage remains live and
 required. Destructive schema cleanup is not authorized or justified on current
 evidence, and no migration v4 is required.
+
+## SGAA-EJ REFACTOR — FINAL COMPLETION RECONCILIATION
+
+The structural refactor is complete and all mandatory current fronts are
+closed. `TOTAL_REAL_REFACTOR_RESIDUAL_COUNT = 0` and
+`RELEASE_LANDING_RESIDUAL_COUNT = 0`. Current publication of
+`refactor/design-system-foundation` is sufficient for refactor completion; no
+merge, pull request, fast-forward, tag, release branch, deployment, or other
+`main` action is required by current governance. Deployment is separate and is
+not required for technical completion.
+
+No migration v4 is required. No physical schema cleanup is justified. There is
+no UT-18, and no DS-9 is automatically authorized.
+
+**SGAA-EJ REFACTOR HAS NO REMAINING REAL TECHNICAL RESIDUALS.**
+
+Final accepted evidence: 1736 passed / 133 skipped / 17 deselected / 0 failed /
+0 errors. Final invariants: routes 131; endpoints 130; RBAC unmapped 0; actor
+matrix 402; message catalogue 539; Design System 198 / ceiling 198; main
+routes/hooks/prohibited imports 0/0/0; schema version 3; migrations v1/v2/v3
+only; no v4.
+
+### Final reconciliation census
+
+- `PROJECT_STATE_REAL_RESIDUAL_COUNT = 0`
+- `MASTER_PLAN_REAL_RESIDUAL_COUNT = 0`
+- `CURRENT_CANONICAL_DOC_CONTRADICTION_COUNT = 0` (reconciled from 3)
+- `MAIN_REAL_OWNERSHIP_RESIDUAL_COUNT = 0`
+- `ROUTE_EXTRACTION_REAL_RESIDUAL_COUNT = 0`
+- `SHARED_OWNER_REAL_RESIDUAL_COUNT = 0`
+- `VERSIONING_REAL_RESIDUAL_COUNT = 0`
+- `SCHEMA_REAL_RESIDUAL_COUNT = 0`
+- `DESIGN_SYSTEM_REAL_RESIDUAL_COUNT = 0`
+- `TEST_GUARDRAIL_REAL_RESIDUAL_COUNT = 0`
+- `CODE_MARKER_REAL_REFACTOR_RESIDUAL_COUNT = 0`
+- `PROVEN_DEAD_FILE_RESIDUAL_COUNT = 0`
+- `ACCEPTED_COMPATIBILITY_DEBT_COUNT = 8`
+- `FUTURE_PRODUCT_WORK_COUNT = 9`
+- `TOTAL_REAL_REFACTOR_RESIDUAL_COUNT = 0`
+- `RELEASE_LANDING_RESIDUAL_COUNT = 0`
+
+### Accepted compatibility debt
+
+Retained compatibility is not unfinished refactor work:
+
+1. legacy atividades storage;
+2. Matrix legacy-link storage;
+3. `atividade_legacy_map`;
+4. true `NO_SNAPSHOT` requests;
+5. legacy request columns/fields;
+6. runtime `ensure_*` compatibility callers;
+7. `main` compatibility exports/facades;
+8. two active route-local feature schemas.
+
+`ACCEPTED_COMPATIBILITY_DEBT_IS_NOT_REFACTOR_RESIDUAL`
+
+### Future product work separation
+
+The completion audit identified future product/application work that is
+separate from refactor completion: C-2 Admin Arquivos JavaScript scope; C-3
+SheetJS/CDN vs CSP; C-4 provider brand images; C-5 Matrix NULL-date
+presentation; OneDrive large-file sessions; cloud token encryption;
+phone/mobile shell decision; optional hard-RBAC rollout; and optional
+multi-worker login rate limiting. None is required or automatically authorized
+by this closeout.
+
+### Branch and governance disposition
+
+At the accepted audit topology, protected `main` is
+`340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; the current refactor branch HEAD
+is Git-authoritative; ahead/behind versus `main` is 147/0 and fast-forward is
+mechanically possible. The accepted disposition is
+`BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`.
+
+`TECHNICAL_COMPLETION_REQUIRES_DEPLOYMENT = NO`
+
+`FINAL_PROJECT_CLOSEOUT_RECORD_REQUIRED` is satisfied by this documentation
+unit only after independent acceptance and publication. This candidate does
+not claim its own publication.

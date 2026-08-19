@@ -137,7 +137,28 @@
    REF-0TF-A → REF-0TF-B → REF-0C-A → REF-0C-B1-P0 → REF-0C-B1 →
    REF-0C-B2-A → REF-0C-B2 → REF-0C-C-A → REF-0C-C-B1 → REF-0C-D-R1 →
    PHASE_0_SMOKE_FLOW_CONTRACT_AND_EVIDENCE.
-## Canonical current state (2026-08-04)
+## Canonical current state (2026-08-18)
+
+- Refactor: **COMPLETE**.
+- Active branch: `refactor/design-system-foundation`; current HEAD is the
+  Git-authoritative value from `git rev-parse HEAD`.
+- Latest accepted technical unit: **SCHEMA OWNER CLEANUP — CLOSED / ACCEPTED /
+  PUBLISHED**.
+- Technical residuals: **0**.
+- Branch disposition: `BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`.
+- Schema version 3; migrations v1/v2/v3 only; no v4.
+- Canonical evidence: 1736 passed / 133 skipped / 17 deselected / 0 failed /
+  0 errors.
+- Current detail: `PROJECT_STATE.md`; final chronological record:
+  `docs/refactor/ARCHITECTURE_REFACTOR_LEDGER.md`; relevant accepted phase
+  contracts remain indexed above.
+
+## Historical Phase 4 current-state snapshots
+
+The B7/B6 and earlier blocks below are preserved phase-time evidence. Their
+original "current candidate", authorization, and residual language is
+historical wording and does not describe the 2026-08-18 canonical current state
+above.
 
 - **PHASE 4-B7-P current candidate:** CLOSED / ACCEPTED. Accepted technical commit `1c82a1954250aa5e6654349ce77a50d60f03fe8f`, subject `Extract B7 shared neutral owners`, parent `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`. Technical publication COMPLETE; post-publication bounded verification COMPLETE; external supervisor technical acceptance GRANTED. Exact 4 shared symbols moved to neutral owners 2/1/1: `app.db_maintenance` owns `ensure_admin_arquivos_table` + `ensure_admin_alertas_table` (joining the pre-existing `ensure_reportes_table`); new `app.admin_files` owns `get_admin_arquivo`; new `app.admin_alerts` owns `list_active_admin_alertas`. `main` re-exports all four by identity, zero local bodies; all four bodies AST-equivalent to entry baseline `b6d6e2295e2beeba046cfe1f4c1614f667261ad2:main.py`. `aluno._get_main_helpers()` reduced from 5 keys to exactly `{get_student_request_update_alert, mark_student_request_updates_seen}`. Zero route movement: all 12 Arquivos/Alertas/Reportes handlers (13 route-method pairs) remain main-local. `uploaded_file` and `admin_dashboard` AST-unchanged; Reportes ownership unchanged. RED (new `tests/test_phase4_arquivos_alertas_shared_owners.py`, 11 collected): 7 failed / 4 passed, exit 1, all failures attributable to the absent prerequisite. GREEN: 11 passed, exit 0. PHASE 4-B7-P-R2 supplemental-scope correction (supervisor-authorized): two additional frozen 5-key aluno-lazy-map assertions outside the named pool — `tests/test_db_schema_maintenance.py::EXPECTED_ALUNO_LAZY_KEYS_AFTER_VERSIONING_EXTRACTION` and `tests/test_phase4_versioning_subsystem.py::REMAINING_ALUNO_MAIN_HELPERS` — received the identical one-for-one 5→2 correction; classification `PRE_REVIEW_SCOPE_EXPANSION / EXPLICITLY_AUTHORIZED / ALUNO_LAZY_MAP_INVARIANT_RECONCILIATION / NO_RETROACTIVE_GENERIC_AUTHORITY`. PHASE 4-B7-P-R2 environmental waiver (supervisor-authorized): full default suite `1103 passed / 3 failed / 17 deselected`, exit 1, NOT claimed GREEN; the exact three failures (`test_phase3_final_init_cutover.py::test_seed_tool_uses_factory_owner_without_main_and_is_idempotent`, `test_pytest_runtime_isolation.py::TestSubprocessImportMain::test_import_main_uses_runtime_root`, `test_pytest_runtime_isolation.py::TestMainNoOverwrite::test_import_main_preserves_upload_folder`) were independently reproduced with identical fingerprints on a disposable worktree of unmodified entry baseline `b6d6e2295e2beeba046cfe1f4c1614f667261ad2`; classification `PRE_EXISTING_BASELINE_REPRODUCED / ENVIRONMENTAL_ENCODING_FAILURE / UNRELATED_TO_B7_P / ACCEPTED_NONBLOCKING_RESIDUAL / NO_RETROACTIVE_GREEN_CLAIM`; neither file modified or added to the mutable pool. B7-P-specific/affected focused gates: 0 failed / 0 errors / exit 0 throughout. Invariants unchanged: routes 131; endpoints 130; business pairs 160; RBAC unmapped 0; message catalog 536; `database.db` 544768 bytes / SHA-256 `a3a55e63427024476d85d1fce3e0a5efaedcd33624400b2e67a815217d570fe9` unchanged, WAL/SHM/journal absent. Exact manifest: production 5 (`app/db_maintenance.py`, `app/admin_files.py` new, `app/admin_alerts.py` new, `app/views/aluno.py`, `main.py`) + tests 4 (`tests/test_phase4_arquivos_alertas_shared_owners.py` new, `tests/test_phase4_requisicoes_shared_owners.py`, `tests/test_db_schema_maintenance.py`, `tests/test_phase4_versioning_subsystem.py`) + governance 6 = 15 paths; path 16 hard stop absent further authorization. Contract: `docs/refactor/PHASE4_ARQUIVOS_ALERTAS_SHARED_OWNER_CONTRACT.md`. PHASE 4-B7 (blueprint route extraction) remains **NOT AUTHORIZED**. PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION; Phase 5/6 NOT AUTHORIZED; Migration v4 PROHIBITED.
 - **PHASE 4-B6 current candidate (superseded as "current" by the B7-P block above; B6 remains CLOSED / ACCEPTED):** PHASE 4-B6-P remains CLOSED / ACCEPTED. PHASE 4-B6-R1 and PHASE 4-B6 are **CLOSED / ACCEPTED**. Accepted technical commit `3d9660a99e6944ff94a3991a353ecf3aaf300987`, subject `Extract admin alunos turmas cursos blueprint`. Technical publication: COMPLETE. Post-publication verification: COMPLETE. External supervisor acceptance: GRANTED. Governance closeout published by this R3 commit. Canonical owner `app.views.admin.alunos_turmas_cursos` has exactly 17 endpoints / 24 route-method pairs / 10 helpers; `main` has zero local B6 bodies and 27 identity re-exports; RBAC 6/13/5; accepted B6-P neutral owners preserved; factory default/exact opt-out; zero `app -> main`. R1 resolves the original `periodo_corrente` ownership contradiction with only three dead template-context removals (`admin_detalhes_curso`, `admin_turmas`, `admin_detalhes_turma`); `periodo_corrente` remains main-local and unchanged for `_build_admin_dashboard_turma_cards`. History is preserved: RED 25 = 6/19/0; GREEN 28; focused 254; initial full 1093 passed / 2 stale cumulative-CSRF failures / 17 deselected; pre-freeze full collected 1112 = 1095 passed / 17 deselected / 0 failed / 0 errors / 433.87s / exit 0 / canonical opens 0. The selective-staging whitespace gate and B1 ledger compatibility gate caused a bounded correction (SQL-string spaces represented as source `\x20`, only syntactic trailing spaces removed, canonical `| Fase 4 |` restored); the first recovery full was 1093 passed / 2 failed / 17 deselected, the two focused recovery nodes passed, and the repeated final full was 1095 passed / 17 deselected / 0 failed / 0 errors / 318.06s / exit 0 / canonical opens 0. CSRF exact partitions: B6 11, Matrizes 8+11=19, Requisições 5+8+11=24, owner-only and exhaustive. Routes 131; endpoints 130; business pairs 160; governed pairs 134; unmapped 0; actor 402 = 263+139; catalog 536; route inventory byte-identical. Exact candidate ceiling: 10 technical/test + 6 governance = 16. Contract: `docs/refactor/PHASE4_ALUNOS_TURMAS_CURSOS_BLUEPRINT_CONTRACT.md`. Parent/live feature was `cab4c61bdf7a1eef361a80f426dda558b11e9201`; protected `main` remains `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`; technical commit, publication, post-publication verification and external supervisor acceptance are COMPLETE. B6 is CLOSED / ACCEPTED. PHASE 4 remains OPEN / INCREMENTAL IMPLEMENTATION; Phase 5/6 NOT AUTHORIZED; Migration v4 PROHIBITED; no later cohort authorized.
@@ -767,10 +788,12 @@ finding, the later phase document and the ledger supersede the earlier claim.
 ## GitHub branch/HEAD verification
 
 Before any phase execution:
-- Verify branch is `refactor/architecture-safety-net`.
-- Verify HEAD matches the expected starting commit.
+- Verify the active refactor branch is `refactor/design-system-foundation`.
+- Verify current closeout HEAD from Git (`git rev-parse HEAD`); do not hardcode a
+  forthcoming documentation landing SHA.
 - Verify worktree and index are clean.
-- Verify divergence from `origin/refactor/architecture-safety-net` is `0 0`.
+- Verify the remote is `origin/refactor/design-system-foundation` and divergence
+  is `0 0`.
 - Re-prove these invariants before any edit.
 
 ## Explicit rule
