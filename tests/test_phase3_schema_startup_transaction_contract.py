@@ -380,7 +380,7 @@ def _filter_candidate_python_files(
     return tuple(path for path in paths if path not in deleted_paths)
 
 
-def _tracked_python_files() -> tuple[str, ...]:
+def _tracked_python_files(*, root: Path = PROJECT_ROOT) -> tuple[str, ...]:
     result = subprocess.run(
         [
             "git",
@@ -391,7 +391,7 @@ def _tracked_python_files() -> tuple[str, ...]:
             "--",
             "*.py",
         ],
-        cwd=PROJECT_ROOT,
+        cwd=root,
         check=True,
         capture_output=True,
         text=True,
@@ -407,7 +407,7 @@ def _tracked_python_files() -> tuple[str, ...]:
             "--",
             "*.py",
         ],
-        cwd=PROJECT_ROOT,
+        cwd=root,
         check=True,
         capture_output=True,
         text=True,
@@ -415,52 +415,66 @@ def _tracked_python_files() -> tuple[str, ...]:
     deleted_paths = {
         path.replace("\\", "/") for path in deleted.stdout.splitlines()
     }
-    return _filter_candidate_python_files(paths, deleted_paths)
+    return _filter_candidate_python_files(paths, deleted_paths, root=root)
 
 
 def test_tracked_python_enumeration_distinguishes_git_deletion_from_missing_file(tmp_path):
-    existing = tmp_path / "existing.py"
+    repo = tmp_path / "synthetic-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "contract@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Contract Test"],
+        cwd=repo,
+        check=True,
+    )
+
+    existing = repo / "existing.py"
     existing.write_text("value = 1\n", encoding="utf-8")
-
-    paths = ("existing.py", "intentional.py")
-    assert _filter_candidate_python_files(
-        paths, {"intentional.py"}, root=tmp_path
-    ) == ("existing.py",)
-
-    try:
-        _filter_candidate_python_files(
-            ("existing.py", "unexpected.py"), set(), root=tmp_path
-        )
-    except AssertionError as exc:
-        assert "unexpected.py" in str(exc)
-    else:
-        raise AssertionError("unexpected missing tracked Python file was ignored")
+    intentional = repo / "intentional.py"
+    intentional.write_text("value = 2\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "--", "existing.py", "intentional.py"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "synthetic baseline"],
+        cwd=repo,
+        check=True,
+    )
+    intentional.unlink()
 
     tracked = subprocess.run(
-        ["git", "ls-files", "--cached", "--", "tools/preflight_shadow_read.py"],
-        cwd=PROJECT_ROOT,
+        ["git", "ls-files", "--cached", "--", "*.py"],
+        cwd=repo,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.splitlines()
     deleted = subprocess.run(
-        [
-            "git",
-            "diff",
-            "HEAD",
-            "--name-only",
-            "--diff-filter=D",
-            "--",
-            "tools/preflight_shadow_read.py",
-        ],
-        cwd=PROJECT_ROOT,
+        ["git", "diff", "HEAD", "--name-only", "--diff-filter=D", "--", "*.py"],
+        cwd=repo,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    assert tracked == ["tools/preflight_shadow_read.py"]
-    assert deleted == ["tools/preflight_shadow_read.py"]
-    assert "tools/preflight_shadow_read.py" not in _tracked_python_files()
+    assert tracked == ["existing.py", "intentional.py"]
+    assert deleted == ["intentional.py"]
+    assert _tracked_python_files(root=repo) == ("existing.py",)
+
+    try:
+        _filter_candidate_python_files(
+            ("existing.py", "unexpected.py"), set(deleted), root=repo
+        )
+    except AssertionError as exc:
+        assert "unexpected.py" in str(exc)
+    else:
+        raise AssertionError("unexpected missing tracked Python file was ignored")
 
 
 def _init_callers():

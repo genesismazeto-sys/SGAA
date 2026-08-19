@@ -25,6 +25,7 @@ from app.text import normalize_header
 from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
 from app.versioning.request_history import (
     filter_historical_request_rows,
+    list_exact_matrix_activity_catalogue,
     read_request_presentation,
 )
 from app.versioning.snapshots import (
@@ -232,6 +233,11 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
     return {
         "aluno": row,
         "allowed_activity_ids": sorted(allowed_activity_ids) if allowed_activity_ids is not None else None,
+        "activities": (
+            list_exact_matrix_activity_catalogue(conn, matriz["id"])
+            if matriz
+            else []
+        ),
         "matriz_scope": ({"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None),
         "turma_label": turma_label,
     }
@@ -961,17 +967,65 @@ def admin_api_requisicao(req_id):
             # fallback: sqlite3.Row supports .keys(); if not, map by items
             return dict(row)
     data = row_to_dict(r)
+    snapshot = read_requisicao_snapshot_for_processing(r)
+    if snapshot.authority is SnapshotProcessingAuthority.INVALID_AUTHORITATIVE_SNAPSHOT:
+        return jsonify(
+            {
+                "error": "invalid-historical-authority",
+                "activity_authority": "invalid",
+                "allowed_activity_ids": [],
+                "activities": [],
+            }
+        ), 409
     history = read_request_presentation(r)
     data["atividade_nome"] = history.nome
     data["grupo"] = history.grupo
     data["tipo_atividade"] = history.tipo_atividade
-    allowed_activity_ids, matriz = get_allowed_activity_ids_for_turma_matrix(
-        conn,
-        data.get("turma_curso_id"),
-        data.get("turma_matriz_id"),
-    )
+    if snapshot.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT:
+        rule = snapshot.rule
+        matriz = conn.execute(
+            "SELECT * FROM matrizes_atividades WHERE id = ?",
+            (rule.matriz_id_efetiva,),
+        ).fetchone()
+        activities = (
+            list_exact_matrix_activity_catalogue(conn, rule.matriz_id_efetiva)
+            if matriz
+            else []
+        )
+        coherent = any(
+            activity.get("atividade_versao_id") == rule.atividade_versao_id
+            and activity.get("id") == rule.atividade_id_legacy
+            for activity in activities
+        )
+        if not coherent:
+            return jsonify(
+                {
+                    "error": "historical-authority-unavailable",
+                    "activity_authority": "invalid",
+                    "allowed_activity_ids": [],
+                    "activities": [],
+                }
+            ), 409
+        allowed_activity_ids = {activity["id"] for activity in activities}
+        data["activities"] = activities
+        data["activity_authority"] = "historical_snapshot"
+        data["current_activity_allowed"] = True
+    else:
+        allowed_activity_ids, matriz = get_allowed_activity_ids_for_turma_matrix(
+            conn,
+            data.get("turma_curso_id"),
+            data.get("turma_matriz_id"),
+        )
+        data["activities"] = (
+            list_exact_matrix_activity_catalogue(conn, matriz["id"])
+            if matriz
+            else []
+        )
+        data["activity_authority"] = "current_matrix_compatibility"
+        data["current_activity_allowed"] = (
+            data.get("atividade_id") in allowed_activity_ids
+        )
     data["allowed_activity_ids"] = sorted(allowed_activity_ids)
-    data["current_activity_allowed"] = data.get("atividade_id") in allowed_activity_ids
     data["matriz_scope"] = (
         {"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None
     )
@@ -1006,6 +1060,7 @@ def admin_api_aluno_requisicao_scope(aluno_id):
             "turma_id": aluno["turma_id"],
             "turma_label": scope["turma_label"],
             "allowed_activity_ids": scope["allowed_activity_ids"],
+            "activities": scope["activities"],
             "matriz_scope": scope["matriz_scope"],
         }
     )

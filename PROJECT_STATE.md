@@ -1884,3 +1884,47 @@ The AAC -> AEU exceptional workflow remains separate and outside FC-13.
 
 FC-13 is technically closed and accepted. Publication is performed by the
 single authorized landing commit; the landing SHA remains Git-authoritative.
+
+## AAC -> AEU EXCEPTIONAL WORKFLOW — CLOSED / ACCEPTED
+
+Final verdict: `AAC_AEU_FINDINGS_REREVIEW_ACCEPT`.
+
+**AAC→AEU EXCEPTIONAL WORKFLOW TECHNICAL ACCEPTANCE IS FINAL.**
+
+AAC means Acadêmica Complementar; AEU means Extensão Universitária. A legal
+AAC -> AEU transition is explicit `aac_para_aeu` provenance, with a required
+justification, between versions of the same conceptual activity. The exact
+Matrix-selected Activity Version controls current classification: the old
+Matrix preserves AAC and the successor Matrix preserves AEU.
+
+A valid historical request snapshot freezes exact Matrix, Activity Version,
+Norma, and axis authority. Historical admin request processing uses the frozen
+`matriz_id_efetiva`, never the student's current Matrix. Current/new-request
+scope continues to use the student's current exact Matrix. Invalid historical
+authority fails closed; legitimate `NO_SNAPSHOT` compatibility remains
+preserved.
+
+If the historical admin modal cannot load request authority, activity mutation
+fails closed. The mutable legacy client catalogue is not an executable
+fallback. The server owns authority selection; the client renders that result
+and does not independently decide AAC/AEU.
+
+The stale post-FC13 startup-contract test seam was repaired without reopening
+FC-13. It no longer depends on a transient uncommitted Git deletion state. The
+final synthetic isolated-Git contract preserves:
+
+- tracked plus Git-deleted file -> intentional deletion;
+- tracked/modeled plus unexpectedly missing without Git deletion -> fail closed.
+
+Final accepted evidence: AAC lane 13 passed; direct admin regressions 4 passed;
+invariant/governance nodes 11 passed; full canonical 1731 passed, 133 skipped,
+17 deselected, 0 failed, 0 errors.
+
+Final invariants: routes 131; endpoints 130; RBAC unmapped 0; actor matrix 402;
+message catalogue 539; Design System inline styles 198, accepted ceiling 198;
+main routes 0; main hooks 0; prohibited main imports 0; schema version 3;
+migrations v1/v2/v3 only; no v4.
+
+No schema change, migration, or repository database mutation occurred. This
+workflow is published by the authorized landing commit; its SHA remains
+Git-authoritative.

@@ -15,6 +15,10 @@ from app.versioning import resolver as resolver_service
 logger = logging.getLogger("main")
 
 REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA = "d6.4.0-v1"
+_ACTIVITY_TYPE_BY_AXIS = {
+    "AAC": "Acadêmica Complementar",
+    "AEU": "Extensão Universitária",
+}
 
 
 class RequisicaoSnapshotError(RuntimeError):
@@ -265,19 +269,70 @@ def _load_versioned_requisicao_snapshot_rule_row(
         (atividade_id_legacy, atividade_versao_id),
     ).fetchone()
 
+
+def _activity_type_axis(value) -> str | None:
+    normalized = str(value or "").strip()
+    for axis, activity_type in _ACTIVITY_TYPE_BY_AXIS.items():
+        if normalized == activity_type:
+            return axis
+    return None
+
+
+def _load_aac_aeu_snapshot_transition(
+    conn,
+    *,
+    source_version_id: int,
+    activity_base_id: int,
+) -> dict[str, object] | None:
+    rows = conn.execute(
+        """
+        SELECT t.from_atividade_versao_id,
+               t.to_atividade_versao_id,
+               t.tipo_transicao,
+               TRIM(t.justificativa) AS justificativa
+          FROM atividade_transicao t
+          JOIN atividade_versao source
+            ON source.id = t.from_atividade_versao_id
+          JOIN atividade_versao successor
+            ON successor.id = t.to_atividade_versao_id
+         WHERE t.tipo_transicao = 'aac_para_aeu'
+           AND t.from_atividade_versao_id = ?
+           AND source.atividade_base_id = ?
+           AND successor.atividade_base_id = source.atividade_base_id
+           AND source.eixo = 'AAC'
+           AND successor.eixo = 'AEU'
+           AND source.status = 'ativa'
+           AND successor.status = 'ativa'
+           AND COALESCE(TRIM(t.justificativa), '') <> ''
+      ORDER BY t.id
+        """,
+        (source_version_id, activity_base_id),
+    ).fetchall()
+    if len(rows) != 1:
+        return None
+    row = rows[0]
+    return {
+        "from_atividade_versao_id": row["from_atividade_versao_id"],
+        "to_atividade_versao_id": row["to_atividade_versao_id"],
+        "tipo_transicao": row["tipo_transicao"],
+        "justificativa": row["justificativa"],
+    }
+
 def _build_versioned_requisicao_snapshot_payload(
     *,
     flow_origin: str,
     atividade_id_legacy,
     resolver_result,
     rule_row,
+    activity_type: str,
+    aac_aeu_transition: dict[str, object] | None,
 ) -> dict[str, object]:
     snapshot_written_at = (
         datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="microseconds")
         .replace("+00:00", "Z")
     )
-    return {
+    payload = {
         "atividade_base_id": rule_row["atividade_base_id"],
         "atividade_id_legacy": atividade_id_legacy,
         "atividade_versao_id": rule_row["atividade_versao_id"],
@@ -301,11 +356,15 @@ def _build_versioned_requisicao_snapshot_payload(
         "resolver_warnings": list(resolver_result.get("warnings") or []),
         "schema_version": REQUISICAO_SNAPSHOT_SUPPORTED_SCHEMA,
         "snapshot_written_at": snapshot_written_at,
-        "tipo_atividade_legacy": rule_row["tipo_atividade_legacy"],
+        "tipo_atividade_legacy": activity_type,
         "versao_status": rule_row["versao_status"],
         "vigencia_fim": rule_row["vigencia_fim"],
         "vigencia_inicio": rule_row["vigencia_inicio"],
     }
+    if aac_aeu_transition is not None:
+        payload["aac_aeu_transition"] = aac_aeu_transition
+        payload["tipo_atividade_legacy_at_creation"] = rule_row["tipo_atividade_legacy"]
+    return payload
 
 def prepare_versioned_requisicao_snapshot(
     conn,
@@ -411,11 +470,30 @@ def prepare_versioned_requisicao_snapshot(
     ).fetchone():
         raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
 
+    rule_axis = str(rule_row["eixo"] or "").strip().upper()
+    legacy_axis = _activity_type_axis(rule_row["tipo_atividade_legacy"])
+    if rule_axis not in _ACTIVITY_TYPE_BY_AXIS or legacy_axis is None:
+        raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+
+    aac_aeu_transition = None
+    if legacy_axis != rule_axis:
+        if rule_axis != "AAC" or legacy_axis != "AEU":
+            raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+        aac_aeu_transition = _load_aac_aeu_snapshot_transition(
+            conn,
+            source_version_id=int(atividade_versao_id),
+            activity_base_id=int(rule_row["atividade_base_id"]),
+        )
+        if aac_aeu_transition is None:
+            raise RequisicaoSnapshotError(RequisicaoSnapshotError.user_message)
+
     payload = _build_versioned_requisicao_snapshot_payload(
         flow_origin=flow_origin,
         atividade_id_legacy=atividade_id_legacy,
         resolver_result=resolver_result,
         rule_row=rule_row,
+        activity_type=_ACTIVITY_TYPE_BY_AXIS[rule_axis],
+        aac_aeu_transition=aac_aeu_transition,
     )
     snapshot_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return PreparedRequisicaoSnapshot(

@@ -232,35 +232,31 @@ def _list_atividades_for_usuario(
     if not matriz:
         return aluno_scope, None, []
 
-    query = "SELECT DISTINCT a.* FROM atividades a"
-    params: list[Any] = []
-    conditions: list[str] = []
-    scoped_activity_ids: set[int] | None = None
-
-    if matriz:
-        query += " LEFT JOIN matrizes_atividades_itens mai ON mai.atividade_id = a.id AND mai.matriz_id = ?"
-        params.append(matriz["id"])
-        scoped_activity_ids = {
-            row["atividade_id"]
-            for row in conn.execute(
-                "SELECT atividade_id FROM matrizes_atividades_itens WHERE matriz_id = ?",
-                (matriz["id"],),
-            ).fetchall()
-        }
-        if include_activity_id:
-            conditions.append("(mai.id IS NOT NULL OR a.id = ?)")
-            params.append(include_activity_id)
-        else:
-            conditions.append("mai.id IS NOT NULL")
-
+    atividades = list_exact_matrix_activity_catalogue(conn, matriz["id"])
     if tipo_filtro != "Todas":
-        conditions.append("a.tipo_atividade = ?")
-        params.append(tipo_filtro)
+        atividades = [
+            atividade
+            for atividade in atividades
+            if atividade["tipo_atividade"] == tipo_filtro
+        ]
 
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY a.tipo_atividade, a.grupo, a.nome"
-    atividades = conn.execute(query, params).fetchall()
+    listed_ids = {atividade["id"] for atividade in atividades}
+    if include_activity_id and include_activity_id not in listed_ids:
+        current = conn.execute(
+            "SELECT * FROM atividades WHERE id = ?", (include_activity_id,)
+        ).fetchone()
+        if current and (
+            tipo_filtro == "Todas" or current["tipo_atividade"] == tipo_filtro
+        ):
+            atividades.append({key: current[key] for key in current.keys()})
+
+    atividades.sort(
+        key=lambda atividade: (
+            str(atividade.get("tipo_atividade") or ""),
+            str(atividade.get("grupo") or ""),
+            str(atividade.get("nome") or ""),
+        )
+    )
     return aluno_scope, matriz, atividades
 
 

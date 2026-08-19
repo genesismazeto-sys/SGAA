@@ -881,9 +881,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
               <select class="control" id="m_atividade_id_select" name="atividade_id" required aria-label="Atividade">
                 <option value="" data-placeholder="1">Selecione uma atividade</option>
-                {% for a in atividades %}
-                  <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}">{{ a.nome }}</option>
-                {% endfor %}
               </select>
             </div>
           </div>
@@ -1082,7 +1079,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       row.style.display = visible ? 'flex' : 'none';
     }
 
-    const allOptions = Array.from(atvSel.options);
+    let allOptions = Array.from(atvSel.options);
     let allowedActivityIds = null;
     let pinnedActivityId = '';
 
@@ -1148,7 +1145,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
       else if (!atvSel.value && firstVisible){ atvSel.value = firstVisible.value; }
       atvSel.disabled = !firstVisible;
     }
-    function setAllowedActivities(ids, currentId){
+    function replaceActivityOptions(activities){
+      if (!Array.isArray(activities)) return;
+      atvSel.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecione uma atividade';
+      placeholder.setAttribute('data-placeholder', '1');
+      atvSel.appendChild(placeholder);
+      activities.forEach(activity => {
+        const option = document.createElement('option');
+        option.value = String(activity.id || '');
+        option.textContent = String(activity.nome || '');
+        option.setAttribute('data-tipo', String(activity.tipo_atividade || ''));
+        option.setAttribute('data-grupo', String(activity.grupo || ''));
+        option.setAttribute('data-atividade-versao-id', String(activity.atividade_versao_id || ''));
+        atvSel.appendChild(option);
+      });
+      allOptions = Array.from(atvSel.options);
+    }
+    function setAllowedActivities(ids, currentId, activities){
+      replaceActivityOptions(activities);
       allowedActivityIds = Array.isArray(ids) ? new Set(ids.map(v => String(v))) : null;
       pinnedActivityId = currentId ? String(currentId) : '';
       rebuildGruposPorTipo();
@@ -1157,6 +1174,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       loadDescFromSelected();
       syncHidden();
       applyAtividadesFilter();
+    }
+    function failClosedActivityAuthority(){
+      setAllowedActivities([], '', []);
+      atvSel.disabled = true;
+      setScopeHint('Não foi possível carregar os dados autoritativos da atividade.', 'error');
     }
     function bindUploadCards(){
       document.querySelectorAll('[data-upload-card]').forEach(card=>{
@@ -1237,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     async function loadAlunoScope(alunoId){
       if (!alunoId){
-        setAllowedActivities([], '');
+        setAllowedActivities([], '', []);
         setScopeHint('Selecione um aluno para carregar a matriz efetiva da turma.');
         return;
       }
@@ -1245,14 +1267,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const res = await fetch(`/admin/api/aluno/${alunoId}/requisicao-scope`);
         if (!res.ok) throw new Error('aluno-scope-not-found');
         const data = await res.json();
-        setAllowedActivities(data.allowed_activity_ids || null, '');
+        if (!Array.isArray(data.allowed_activity_ids) || !Array.isArray(data.activities)){
+          throw new Error('invalid-aluno-scope');
+        }
+        setAllowedActivities(data.allowed_activity_ids, '', data.activities);
         if (data.matriz_scope?.label){
           setScopeHint(`Turma ${data.turma_label}: ${data.matriz_scope.label}`);
         } else {
           setScopeHint(`Turma ${data.turma_label}: sem matriz vinculada, atividades liberadas conforme cadastro.`);
         }
       }catch(_e){
-        setAllowedActivities([], '');
+        setAllowedActivities([], '', []);
         setScopeHint('Não foi possível carregar o escopo do aluno selecionado.', 'error');
       }
     }
@@ -1264,11 +1289,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
       form.action = action;
       window.lucide?.createIcons?.();
     }
-    function closeModal(){ if (!modal) return; modal.hidden = true; document.body.style.overflow=''; setAllowedActivities(null, ''); }
+    function closeModal(){ if (!modal) return; modal.hidden = true; document.body.style.overflow=''; setAllowedActivities([], '', []); }
 
     window.__openReqModal = openModal;
     window.__renderAnexos = renderAnexos;
     window.__setReqAllowedActivities = setAllowedActivities;
+    window.__failClosedReqActivityAuthority = failClosedActivityAuthority;
     window.__prefillReqForm = function(payload){
       if (!payload) return;
       try{
@@ -1409,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if (anexosContainer) anexosContainer.innerHTML = '';
       alunoSel.value = initialAlunoId ? String(initialAlunoId) : '';
       setScopeHint('Selecione um aluno para carregar a matriz efetiva da turma.');
-      setAllowedActivities([], '');
+      setAllowedActivities([], '', []);
       setSaveButton('Salvar', '{{ url_for("admin_nova_requisicao") }}');
       window.__setReqModalMode('create');
       openModal();
@@ -1551,8 +1577,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const res = await fetch(`/admin/api/requisicao/${targetId}`);
         if (!res.ok){ throw new Error('req-not-found'); }
         const data = await res.json();
+        if (!Array.isArray(data.allowed_activity_ids) || !Array.isArray(data.activities)){
+          throw new Error('invalid-request-activity-authority');
+        }
         if (typeof window.__setReqAllowedActivities === 'function'){
-          window.__setReqAllowedActivities(data.allowed_activity_ids || null, data.atividade_id || '');
+          window.__setReqAllowedActivities(
+            data.allowed_activity_ids,
+            data.atividade_id || '',
+            data.activities
+          );
         }
         const alunoSel = document.getElementById('m_aluno_id_select');
         const scopeHint = document.getElementById('m_scope_hint');
@@ -1613,20 +1646,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
           }catch(_e){}
         }
       }catch(_e){
-        if (typeof window.__setReqAllowedActivities === 'function'){
-          window.__setReqAllowedActivities(null, currentCard?.getAttribute('data-atividade-id') || '');
-        }
+        document.getElementById('req-form')?.reset();
+        window.__failClosedReqActivityAuthority?.();
         const titleEl = document.getElementById('req-modal-title');
         if (titleEl){
           titleEl.innerHTML = mode === 'edit'
             ? '<i class="lucide" data-lucide="pencil"></i> Editar Requisição'
             : '<i class="lucide" data-lucide="file-plus"></i> Requisição';
         }
-        // fallback: use inline payload when API fails
+        // Only unrelated presentation fields may be shown without activity authority.
         const payload = currentCard ? {
-          tipo: currentCard.getAttribute('data-tipo') || '',
-          grupo: currentCard.getAttribute('data-grupo') || '',
-          atividadeId: currentCard.getAttribute('data-atividade-id') || '',
           nomeEvento: currentCard.getAttribute('data-nome-evento') || '',
           horasSolicitadas: currentCard.getAttribute('data-horas-solicitadas') || '',
           dataEvento: currentCard.getAttribute('data-data-evento') || '',
@@ -1637,12 +1666,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const overlay = document.getElementById('req-modal');
         if (overlay && targetId) overlay.dataset.reqId = String(targetId);
         if (typeof window.__openReqModal === 'function'){
-          if (mode === 'edit' && targetId){
-            window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`);
-          }
           const fallbackStatus = currentCard?.getAttribute('data-status') || 'Pendente';
           if (overlay) overlay.dataset.reqStatus = fallbackStatus;
-          setModalMode(mode, fallbackStatus);
+          setModalMode('view', fallbackStatus);
+          window.__failClosedReqActivityAuthority?.();
           window.__openReqModal();
         }
       }
