@@ -1012,17 +1012,7 @@ def admin_grupos_renomear():
             return jsonify({ 'ok': False, 'error': 'numero inválido' }), 400
         novo_label = f"{numero} - {descricao}" if descricao else numero
         conn = get_db_connection()
-        # ensure grupos_def table exists
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS grupos_def (
-                tipo_atividade TEXT NOT NULL,
-                numero INTEGER NOT NULL,
-                descricao TEXT,
-                PRIMARY KEY (tipo_atividade, numero)
-            )
-            """
-        )
+        _ensure_grupos_def_table(conn)
         cur = conn.execute("SELECT id, grupo FROM atividades WHERE tipo_atividade = ? AND grupo IS NOT NULL AND TRIM(grupo) <> ''", (tipo,))
         rows = cur.fetchall()
         def parse_num(s):
@@ -1064,16 +1054,7 @@ def admin_grupos_excluir():
             return jsonify({'ok': False, 'error': 'numero inválido'}), 400
 
         conn = get_db_connection()
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS grupos_def (
-                tipo_atividade TEXT NOT NULL,
-                numero INTEGER NOT NULL,
-                descricao TEXT,
-                PRIMARY KEY (tipo_atividade, numero)
-            )
-            """
-        )
+        _ensure_grupos_def_table(conn)
 
         prefixo = f"{numero}%"
         em_uso = conn.execute(

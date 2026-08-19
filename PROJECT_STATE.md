@@ -1928,3 +1928,35 @@ migrations v1/v2/v3 only; no v4.
 No schema change, migration, or repository database mutation occurred. This
 workflow is published by the authorized landing commit; its SHA remains
 Git-authoritative.
+
+## SCHEMA OWNER CLEANUP — CLOSED / TECHNICALLY ACCEPTED
+
+Final verdict: `SCHEMA_OWNER_CLEANUP_INDEPENDENT_REVIEW_ACCEPT`.
+
+**SCHEMA OWNER CLEANUP TECHNICAL ACCEPTANCE IS FINAL.**
+
+`get_schema_status` is read-only: inspection with an absent
+`schema_migrations` registry and restore-candidate inspection are non-mutating.
+`app/db_maintenance.py::ensure_requisicao_arquivos_table` is the single
+canonical DDL owner for `requisicao_arquivos`; bootstrap, admin, and student
+paths are callers only. `grupos_def` has one defining owner, reused by group
+rename and delete.
+
+Physical schema and compatibility storage are unchanged. Schema version remains
+3 with migrations v1/v2/v3 only; no v4, data migration, or backfill occurred.
+Accepted census deltas are: query/schema side effects 40 -> 39; duplicate schema
+authority 2 -> 0; route-local schema objects 3 -> 2; proven-dead logical paths
+5 -> 0; proven-dead physical objects 0; physical compatibility objects 11
+unchanged; stale current Phase-3 statements 11 -> 0.
+
+Accepted evidence: new contract nodes 6 passed; authorized focused lane 120
+passed; invariant lane 18 passed; full canonical 1736 passed, 133 skipped, 17
+deselected, 0 failed, 0 errors; independent targeted review 77 passed, 0 failed.
+Final invariants: routes 131; endpoints 130; RBAC unmapped 0; actor matrix 402;
+message catalogue 539; Design System 198 / ceiling 198; main
+routes/hooks/prohibited imports 0/0/0.
+
+No physical schema object is currently proven dead. No table, column, index, or
+trigger deletion is justified; legacy compatibility storage remains live and
+required. Destructive schema cleanup is not authorized or justified on current
+evidence, and no migration v4 is required.

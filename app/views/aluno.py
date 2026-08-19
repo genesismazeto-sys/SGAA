@@ -27,6 +27,7 @@ from app.admin_files import get_admin_arquivo
 from app.auth import aluno_required
 from app.db_maintenance import (
     ensure_admin_arquivos_table,
+    ensure_requisicao_arquivos_table,
     ensure_reportes_table,
     ensure_usuario_profile_schema,
 )
@@ -1715,18 +1716,7 @@ def aluno_nova_requisicao():
             )
             req_id = cur.lastrowid
 
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS requisicao_arquivos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    requisicao_id INTEGER NOT NULL,
-                    label TEXT,
-                    filename TEXT,
-                    criado_em TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id)
-                )
-                """
-            )
+            ensure_requisicao_arquivos_table(conn)
 
             first_saved = None
             student_name = session.get("user_name") or f"aluno-{aluno_id}"

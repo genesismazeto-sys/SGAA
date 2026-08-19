@@ -174,6 +174,28 @@ def ensure_reportes_table(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reportes_criado_em ON reportes(criado_em)")
 
 
+def ensure_requisicao_arquivos_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS requisicao_arquivos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requisicao_id INTEGER NOT NULL,
+            label TEXT,
+            filename TEXT,
+            criado_em TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id)
+        )
+        """
+    )
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_req_arquivos_req "
+            "ON requisicao_arquivos(requisicao_id)"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
 def ensure_usuario_profile_schema(conn) -> None:
     usuarios_cols = [row["name"] for row in conn.execute("PRAGMA table_info(usuarios)").fetchall()]
     if "foto_perfil" not in usuarios_cols:
@@ -1325,10 +1347,11 @@ def get_schema_version(conn: sqlite3.Connection) -> int:
 
 
 def get_schema_status(conn: sqlite3.Connection) -> dict[str, object]:
-    ensure_schema_migrations_table(conn)
-    latest = conn.execute(
-        "SELECT version, name, applied_at FROM schema_migrations ORDER BY version DESC LIMIT 1"
-    ).fetchone()
+    latest = None
+    if _schema_object_exists(conn, "table", "schema_migrations"):
+        latest = conn.execute(
+            "SELECT version, name, applied_at FROM schema_migrations ORDER BY version DESC LIMIT 1"
+        ).fetchone()
     return {
         "schema_version": get_schema_version(conn),
         "target_schema_version": SCHEMA_VERSION,

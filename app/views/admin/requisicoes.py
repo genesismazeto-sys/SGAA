@@ -13,7 +13,10 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 from app.activity_catalog import parse_documentos_json
 from app.auth import admin_required
 from app.db import ensure_turmas_matriz_schema, get_db_connection
-from app.db_maintenance import ensure_matriz_atividade_links_table
+from app.db_maintenance import (
+    ensure_matriz_atividade_links_table,
+    ensure_requisicao_arquivos_table,
+)
 from app.matrix_scope import (
     _matriz_option_label,
     get_allowed_activity_ids_for_turma_matrix,
@@ -264,18 +267,7 @@ def _append_requisicao_arquivos(
     labels=None,
     created_document_paths=None,
 ):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS requisicao_arquivos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            requisicao_id INTEGER NOT NULL,
-            label TEXT,
-            filename TEXT,
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id)
-        )
-        """
-    )
+    ensure_requisicao_arquivos_table(conn)
     first_saved = None
     labels = labels or []
     aluno_row = conn.execute("SELECT nome FROM alunos WHERE id = ?", (aluno_id,)).fetchone()

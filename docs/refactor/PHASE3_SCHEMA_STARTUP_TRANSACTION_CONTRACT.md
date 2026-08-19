@@ -1,7 +1,7 @@
 # Phase 3 schema, startup, and transaction contract
 
 **Status:** FINAL / ACCEPTED Macro Phase 3 single-init schema/startup/transaction contract
-**Phase status:** Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 CLOSED / ACCEPTED; Phase 4 NOT AUTHORIZED
+**Phase status:** Macro Phase 3, PHASE 3-B11 and PHASE 3-B11-R1 CLOSED / ACCEPTED; later-phase authorization is governed by current canonical project state
 **B11 identity:** `c9009bf3d68950ad4e0499b65928603e84bee341` (`Unify database initialization ownership`), parent `e63e1a66b9d2ebad7253a0efd2e0a367b89b8b8a` (`Correct B10 governance manifest record`)
 **B11-R1 identity:** `630d4eb448b992bdc3beb28752c30717989312bb` (`Record B11 publication and review closeout`), parent `c9009bf3d68950ad4e0499b65928603e84bee341`
 **Executable contract:** `tests/test_phase3_schema_startup_transaction_contract.py`
@@ -15,13 +15,19 @@ object-identical compatibility import of the canonical owner. The former two-ent
 lazy bridge is removed completely: `app.db` has no import, lookup, callback, or other
 runtime dependency on `main`.
 
-B11 directly owns application settings, cloud backup schema, turma/matrix schema,
-preferred-matrix selection, and its module-local logger. It explicitly binds the
+B11 directly owned application settings, cloud backup schema, turma/matrix schema,
+preferred-matrix selection, and its module-local logger at its closeout. It explicitly binds the
 active Flask app into the historical backup-settings runtime owner before connection
 acquisition. B8 leaf ownership, B9 migration v2, B10 migration v3, route/RBAC/API/UI
 behavior, restore order, seed behavior, and migration registry remain unchanged.
 This revision records exact transaction postconditions rather than imposing a false
 whole-bootstrap rollback contract over independently durable historical units.
+
+Current reconciliation: preferred-matrix startup selection and
+`get_preferred_matriz_for_curso` are retired. Current init retains turma/matrix schema
+ownership without query-driven matrix assignment. `get_schema_status` is observational,
+and `ensure_requisicao_arquivos_table` is the single shared owner of the attachment table
+and index.
 
 ## 2. Current connection authority
 
@@ -197,7 +203,7 @@ SQL details are grouped without changing order:
 11. Create `turmas`; best-effort status index.
 12. Create canonical eleven-column `atividades`.
 13. Create `requisicoes`.
-14. Create `requisicao_arquivos`; best-effort requisition/file indexes.
+14. Call direct `ensure_requisicao_arquivos_table`; create best-effort requisition indexes.
 15. Call direct `ensure_reportes_table`.
 16. Read bootstrap-admin settings and conditionally insert the admin.
 17. Conditionally add `alunos.turma_id` plus index.
@@ -221,10 +227,8 @@ SQL details are grouped without changing order:
 33. Create course/matrix indexes and best-effort unique turma indexes.
 34. Reconcile old turmas: assign `GERAL`, sequential numbers, and generated
     codes with collision fallback.
-35. Reconcile missing `turmas.matriz_id` through direct
-    `get_preferred_matriz_for_curso`.
-36. Call unrestricted `apply_schema_migrations(conn, logger=logger)`.
-37. Execute the one expected final `conn.commit()`.
+35. Call unrestricted `apply_schema_migrations(conn, logger=logger)`.
+36. Execute the one expected final `conn.commit()`.
 
 The matrix order is mandatory: matrices before links, links before activity
 versioning. Migration metadata is mandatory before the final commit.
@@ -245,6 +249,7 @@ or schema verification.
 | `init_db` export in `main` | `app.db.init_db` object | Compatibility import only; object-identical and without a local function body. |
 | `_init_db_impl` | Retired by B11 | Former delegated bootstrap body; symbol and callers removed. |
 | `ensure_reportes_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
+| `ensure_requisicao_arquivos_table` | `app/db_maintenance.py` | Sole owner of the active requisition-attachment table and its requisition index; canonical bootstrap and retained admin/student compatibility paths are callers only. |
 | `ensure_usuario_profile_schema` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
 | `ensure_requisicao_alert_receipts_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` compatibility export only. |
 | `ensure_matrizes_atividades_table` | `app/db_maintenance.py` | Accepted direct schema owner. `main` and `app.db` compatibility exports. |
@@ -264,13 +269,13 @@ or schema verification.
 | `_migration_v3_normalize_activity_versioning_core`, `_activity_versioning_source_variant` | `app/db_maintenance.py` | v3 classification and eligibility; determines `absent`, `missing_numero`, `canonical`, etc. |
 | `ensure_turmas_matriz_schema` | `app/db.py` | Direct turma/matrix schema owner; delegates the accepted matrix owner. |
 | `_needs_atividade_versao_migration`, `_needs_atividade_versao_default_fix`, `_needs_index_hardening` | Retired by B10 | Former schema-state predicates in `main.py`; retired along with the self-transactional rebuild. |
-| `get_preferred_matriz_for_curso` | `app/db.py` | Direct query/runtime owner; it invokes the matrix ensure and can therefore cause caller-owned schema work. `main` compatibility-exports the same object. |
+| `get_preferred_matriz_for_curso` | Retired | Former preferred-matrix query/schema path; the symbol and startup caller are absent. |
 | `_get_main_db_helpers` | Retired by B11 | Former lazy wiring; symbol, map, and all retrievals removed. |
 | `DATABASE`, `get_db_connection`, `close_db_connection` exports in `main.py` | `app.db` objects | Compatibility exports only, not defining ownership. |
 
-`ensure_admin_arquivos_table` and `ensure_admin_alertas_table` remain defined by
-`main.py`, but they are not reachable from the canonical `init_db` path and are
-therefore outside this init reachability matrix.
+`ensure_admin_arquivos_table` and `ensure_admin_alertas_table` are defined by
+`app/db_maintenance.py`; admin route/domain consumers call those canonical owners.
+They remain outside canonical `init_db` reachability.
 
 ## 7. Zero lazy-bridge contract
 
@@ -283,10 +288,11 @@ The exact direct `app.db_maintenance` import set is
 `apply_early_schema_migrations`, `apply_schema_migrations`,
 `ensure_atividade_versioning_schema`, `ensure_matriz_atividade_links_table`,
 `ensure_matrizes_atividades_table`, `ensure_reportes_table`,
+`ensure_requisicao_arquivos_table`,
 `ensure_requisicao_alert_receipts_table`, `ensure_usuario_access_schema`, and
 `ensure_usuario_profile_schema`. Backup settings are imported directly from
-`app.backup_settings`; app settings, cloud backup, preferred matrix, and turma
-matrix ownership are local to `app.db`.
+`app.backup_settings`; app settings, cloud backup, and turma/matrix ownership are
+local to `app.db`. No preferred-matrix query owner remains.
 
 ## 8. Migration baseline
 
@@ -336,7 +342,7 @@ caller before the helper is entered.
 | `ensure_backup_settings_schema` | none | none | none | none | none | Exact order: structural → defaults → seed → legacy normalize → read/merge → runtime apply | Caller rollback removes uncommitted DB work but not prior runtime config effects | Caller-owned orchestrator; no atomicity improvement |
 | `ensure_cloud_backup_schema` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted work | Caller-owned |
 | `ensure_turmas_matriz_schema` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes its and delegated matrix work | Caller-owned/delegating |
-| `get_preferred_matriz_for_curso` | none | none | none | none | none | Query may be called clean or active | Delegated matrix ensure remains caller-owned | Query/runtime with schema side effect |
+| `ensure_requisicao_arquivos_table` | none | none | none | none | none | Work on clean or active connection | Outer rollback removes uncommitted work | Caller-owned canonical attachment-schema owner |
 | `ensure_atividade_versioning_schema` | none directly | none directly | none | none | none | Caller-owned additive DDL only | Outer rollback removes its uncommitted DDL | Caller-owned pure DDL orchestrator when v3 is absent or canonical |
 | Three `ensure_atividade_versioning_leaf_*` helpers | none | none | none | none | none | Execute only caller-owned `CREATE TABLE`, `CREATE TRIGGER`, or `CREATE INDEX` statements | Outer rollback removes their uncommitted DDL; injected failures propagate without commit, rollback or savepoint | Caller-owned pure DDL components |
 
@@ -382,6 +388,7 @@ then closes it without an explicit rollback to prove SQLite close rollback.
 The accepted caller-owned direct schema helpers are:
 `ensure_reportes_table`, `ensure_usuario_profile_schema`,
 `ensure_requisicao_alert_receipts_table`,
+`ensure_requisicao_arquivos_table`,
 `ensure_matrizes_atividades_table`, and
 `ensure_matriz_atividade_links_table`. The savepoint-owned direct import is
 `ensure_usuario_access_schema`; `apply_schema_migrations` is listed separately
@@ -401,13 +408,11 @@ as migration metadata.
 5. Backup runtime config is applied before caller database commit and cannot be
    rolled back with SQLite; the explicit active-app binding removes target ambiguity,
    not this timing debt.
-6. `get_preferred_matriz_for_curso` remains a query that ensures matrix schema,
-   but its owner is now direct and no lazy bridge remains.
-7. Restore and development callers retain `main.init_db` spelling but execute the
+6. Restore and development callers retain `main.init_db` spelling but execute the
    object-identical `app.db.init_db`; seed calls the owner directly.
-8. Logger warnings can hide best-effort ALTER/index/reconciliation failures; a
+7. Logger warnings can hide best-effort ALTER/index/reconciliation failures; a
    warning is not schema postcondition evidence.
-9. The v1 migration marker remains historical; v2 owns the `atividades` transition;
+8. The v1 migration marker remains historical; v2 owns the `atividades` transition;
    v3 owns the activity-versioning core transition. No migration v4 exists.
 
 ## 11. Final Phase 3 architecture
@@ -416,22 +421,23 @@ as migration metadata.
 `main` compatibility-exports the canonical objects. The lazy bridge and reverse
 `app.db → main` dependency are zero. Access DDL, historical defaults, startup-wide
 normalization, and savepoint orchestration remain explicit semantic layers in
-`app.db_maintenance`; runtime login normalization remains in `main.py` and is
-consumed unchanged by `app/views/core.py`.
+`app.db_maintenance`; runtime login normalization is owned by `app/user_accounts.py`
+and consumed by `app/views/core.py`.
 Backup-settings table DDL is separately owned by `app.db_maintenance`; runtime
 defaults, seeding, exact legacy normalization, read/merge, Flask config application
 and the one-argument compatibility orchestrator are explicit layers in
 `app.backup_settings`. Canonical init binds its exact active Flask app explicitly
 before connection acquisition; no reverse import is used. Cloud/OAuth/retention/
-restore workflows remain in `main.py`.
+restore route workflows are owned by `app/views/admin/banco_dados.py`, with shared
+backup orchestration in `app/backup/orchestrator.py`.
 Activity-versioning migration/core/leaf/requisicoes compatibility ownership remains
 in `app.db_maintenance` as established by B8/B10.
 The separate `atividades` table is governed by recorded migration v2 and an isolated
 early checkpoint; request processing no longer repairs its schema.
 
-Later separately authorized units may separate query behavior from schema ensures
-or move cloud/route concerns, but they may not recreate duplicate initialization or
-reverse dependencies. Phase 4 is not authorized by this closeout.
+Later separately authorized units may further move route concerns, but they may not
+recreate duplicate initialization, schema authority, or reverse dependencies. This
+Phase-3 closeout does not itself authorize later work.
 
 No target statement changes current behavior. No current statement endorses the
 behavior as ideal.
@@ -446,15 +452,15 @@ boundaries, not authorization:
 | Access schema/default-data/startup normalization and savepoint semantics | **Resolved by PHASE 3-B6** |
 | Application-settings schema | **Resolved by PHASE 3-B11** |
 | Backup-settings schema/default-data/legacy normalization/runtime application | **Resolved by PHASE 3-B7** |
-| Cloud-account/log/drive schema and backup offloading | **Phase 5 backup-schema/offloading unit**, separately gated |
+| Cloud-account/log/drive schema and backup offloading | **Active:** schema in `app.db`, route workflow in `app/views/admin/banco_dados.py`, and shared orchestration in `app/backup/orchestrator.py` |
 | `atividades` rebuild and FK PRAGMA semantics | **Resolved by PHASE 3-B9** |
 | Activity-versioning leaf tables/transition triggers/leaf indexes | **Resolved by PHASE 3-B8** |
 | Activity-versioning core schema, requisicoes compatibility and self-transactional rebuild | **Resolved by PHASE 3-B10** |
 | Migration baseline expansion/version policy | **Resolved through v3 by PHASE 3-B9/B10; any v4 remains separately gated and unauthorized** |
-| Matrix query that ensures schema | **Direct owner established by PHASE 3-B11; query/schema coupling remains explicit debt** |
+| Matrix query that ensures schema | **Resolved:** `get_preferred_matriz_for_curso` and its startup caller are retired |
 | Logger/wiring lazy edge | **Resolved by PHASE 3-B11** |
 | Dual direct core schemas, startup/seed/restore selection, and final commit ownership | **Resolved by PHASE 3-B11** |
-| Main-defined admin-only lazy schemas not reachable from init | Their route/module extraction phases; not part of the init cutover until explicitly added |
+| Admin-only lazy schemas not reachable from init | **Resolved ownership:** `ensure_admin_arquivos_table` and `ensure_admin_alertas_table` are canonical `app.db_maintenance` owners used by route/domain consumers |
 
 B11 closes the Phase 3 initialization cutover only. It does not authorize Phase 4,
 migration v4, cloud offloading, route extraction, repository redesign, or unrelated

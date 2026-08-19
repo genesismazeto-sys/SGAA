@@ -10,6 +10,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APP_DB_PATH = PROJECT_ROOT / "app" / "db.py"
 DB_MAINTENANCE_PATH = PROJECT_ROOT / "app" / "db_maintenance.py"
+ADMIN_ATIVIDADES_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "atividades.py"
+ADMIN_REQUISICOES_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "requisicoes.py"
+ALUNO_PATH = PROJECT_ROOT / "app" / "views" / "aluno.py"
 BACKUP_SETTINGS_PATH = PROJECT_ROOT / "app" / "backup_settings.py"
 MESSAGES_PATH = PROJECT_ROOT / "utils" / "messages.py"
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -28,6 +31,7 @@ EXPECTED_DIRECT_MAINTENANCE_IMPORTS = (
     "ensure_matriz_atividade_links_table",
     "ensure_matrizes_atividades_table",
     "ensure_reportes_table",
+    "ensure_requisicao_arquivos_table",
     "ensure_requisicao_alert_receipts_table",
     "ensure_usuario_access_schema",
     "ensure_usuario_profile_schema",
@@ -153,7 +157,7 @@ EXPECTED_BOOTSTRAP_EVENTS = (
     "table:turmas",
     "table:atividades",
     "table:requisicoes",
-    "table:requisicao_arquivos",
+    "helper:ensure_requisicao_arquivos_table",
     "helper:ensure_reportes_table",
 
     "helper:ensure_requisicao_alert_receipts_table",
@@ -543,6 +547,32 @@ def _direct_calls(function: ast.FunctionDef) -> tuple[str, ...]:
     )
 
 
+def _ddl_owners(paths: tuple[Path, ...], table_name: str) -> tuple[tuple[str, str], ...]:
+    expected = f"CREATE TABLE IF NOT EXISTS {table_name.upper()}"
+    owners = []
+    for path in paths:
+        tree = _tree(path)
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            if expected not in " ".join(node.value.upper().split()):
+                continue
+            owner = "<module>"
+            current = node
+            while current in parents:
+                current = parents[current]
+                if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    owner = current.name
+                    break
+            owners.append((path.relative_to(PROJECT_ROOT).as_posix(), owner))
+    return tuple(owners)
+
+
 def _transaction_facts(path: Path, function_name: str):
     function = _top_level_function(_tree(path), function_name)
     calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
@@ -578,6 +608,7 @@ def _bootstrap_events():
         "ensure_usuario_profile_schema",
         "ensure_backup_settings_schema",
         "ensure_reportes_table",
+        "ensure_requisicao_arquivos_table",
         "apply_early_schema_migrations",
         "ensure_requisicao_alert_receipts_table",
         "ensure_matrizes_atividades_table",
@@ -750,6 +781,56 @@ def test_exact_direct_import_set_and_zero_lazy_bridge():
     assert "import main" not in _read(APP_DB_PATH)
 
 
+def test_cleaned_schema_objects_have_single_ddl_owners_and_canonical_callers():
+    requisicao_paths = (
+        APP_DB_PATH,
+        DB_MAINTENANCE_PATH,
+        ADMIN_REQUISICOES_PATH,
+        ALUNO_PATH,
+    )
+    assert _ddl_owners(requisicao_paths, "requisicao_arquivos") == (
+        ("app/db_maintenance.py", "ensure_requisicao_arquivos_table"),
+    )
+    assert "ensure_requisicao_arquivos_table" in _direct_calls(
+        _top_level_function(_tree(APP_DB_PATH), "init_db")
+    )
+    assert "ensure_requisicao_arquivos_table" in _direct_calls(
+        _top_level_function(_tree(ADMIN_REQUISICOES_PATH), "_append_requisicao_arquivos")
+    )
+    assert "ensure_requisicao_arquivos_table" in _direct_calls(
+        _top_level_function(_tree(ALUNO_PATH), "aluno_nova_requisicao")
+    )
+
+    assert _ddl_owners((ADMIN_ATIVIDADES_PATH,), "grupos_def") == (
+        ("app/views/admin/atividades.py", "_ensure_grupos_def_table"),
+    )
+    for function_name in ("admin_grupos_renomear", "admin_grupos_excluir"):
+        assert "_ensure_grupos_def_table" in _direct_calls(
+            _top_level_function(_tree(ADMIN_ATIVIDADES_PATH), function_name)
+        )
+
+
+def test_phase3_current_state_sections_have_no_resolved_schema_owner_claims():
+    current_contract = _read(CONTRACT_PATH).split(
+        "## 16. B5 validation and review record", 1
+    )[0]
+    stale_claims = (
+        "Reconcile missing `turmas.matriz_id` through direct",
+        "Direct query/runtime owner; it invokes the matrix ensure",
+        "remains a query that ensures matrix schema",
+        "runtime login normalization remains in `main.py`",
+        "restore workflows remain in `main.py`",
+        "Phase 5 backup-schema/offloading unit",
+        "query/schema coupling remains explicit debt",
+        "Main-defined admin-only lazy schemas",
+    )
+    assert [claim for claim in stale_claims if claim in current_contract] == []
+    assert "`get_preferred_matriz_for_curso` are retired" in current_contract
+    assert "`app/user_accounts.py`" in current_contract
+    assert "`app/views/admin/banco_dados.py`" in current_contract
+    assert "`ensure_requisicao_arquivos_table`" in current_contract
+
+
 def test_app_db_bootstrap_semantic_order_and_single_final_commit():
     assert _bootstrap_events() == EXPECTED_BOOTSTRAP_EVENTS
     assert EXPECTED_BOOTSTRAP_EVENTS.index("helper:ensure_turmas_matriz_schema") < EXPECTED_BOOTSTRAP_EVENTS.index(
@@ -868,6 +949,7 @@ def test_transaction_boundaries_and_known_exceptions_are_explicit():
             "ensure_schema_migrations_table",
             "apply_schema_migrations",
             "ensure_reportes_table",
+            "ensure_requisicao_arquivos_table",
             "ensure_usuario_profile_schema",
             "ensure_requisicao_alert_receipts_table",
             "ensure_backup_settings_structural_schema",

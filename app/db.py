@@ -19,6 +19,7 @@ from app.db_maintenance import (
     ensure_matriz_atividade_links_table,
     ensure_matrizes_atividades_table,
     ensure_reportes_table,
+    ensure_requisicao_arquivos_table,
     ensure_requisicao_alert_receipts_table,
     ensure_usuario_access_schema,
     ensure_usuario_profile_schema,
@@ -274,24 +275,12 @@ def init_db():
         """
     )
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS requisicao_arquivos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            requisicao_id INTEGER NOT NULL,
-            label TEXT,
-            filename TEXT,
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id)
-        )
-        """
-    )
+    ensure_requisicao_arquivos_table(conn)
 
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_aluno ON requisicoes(aluno_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_atividade ON requisicoes(atividade_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_reqs_status ON requisicoes(status)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_req_arquivos_req ON requisicao_arquivos(requisicao_id)")
     except sqlite3.OperationalError:
         pass
 

@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import inspect
 import os
 import sqlite3
@@ -580,6 +581,90 @@ def test_init_db_registers_schema_version():
     assert migration is not None
     assert migration["version"] == db_maintenance.SCHEMA_VERSION
     assert migration["name"] == "normalize_activity_versioning_core"
+
+
+def test_get_schema_status_absent_registry_is_read_only():
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute("CREATE TABLE restore_candidate_marker (id INTEGER PRIMARY KEY)")
+        conn.execute("PRAGMA user_version = 2")
+        conn.commit()
+        before = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+        ).fetchall()
+
+        status = db_maintenance.get_schema_status(conn)
+
+        after = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+        ).fetchall()
+        assert after == before
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert status == {
+            "schema_version": 2,
+            "target_schema_version": 3,
+            "latest_migration": None,
+        }
+    finally:
+        conn.close()
+
+
+def test_restore_candidate_schema_status_inspection_is_byte_nonmutating(tmp_path):
+    candidate = tmp_path / "restore-candidate.db"
+    with sqlite3.connect(candidate) as conn:
+        conn.execute("CREATE TABLE restore_candidate_marker (id INTEGER PRIMARY KEY)")
+        conn.execute("PRAGMA user_version = 2")
+
+    before_bytes = candidate.read_bytes()
+    before_hash = hashlib.sha256(before_bytes).hexdigest()
+    with sqlite3.connect(candidate) as conn:
+        status = db_maintenance.get_schema_status(conn)
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'"
+        ).fetchone() is None
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+
+    after_bytes = candidate.read_bytes()
+    assert after_bytes == before_bytes
+    assert hashlib.sha256(after_bytes).hexdigest() == before_hash
+    assert status["latest_migration"] is None
+
+
+def test_requisicao_arquivos_schema_helper_is_exact_and_idempotent():
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("CREATE TABLE requisicoes (id INTEGER PRIMARY KEY)")
+        db_maintenance.ensure_requisicao_arquivos_table(conn)
+        first_schema = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master "
+            "WHERE tbl_name = 'requisicao_arquivos' ORDER BY type, name"
+        ).fetchall()
+        db_maintenance.ensure_requisicao_arquivos_table(conn)
+        second_schema = conn.execute(
+            "SELECT type, name, sql FROM sqlite_master "
+            "WHERE tbl_name = 'requisicao_arquivos' ORDER BY type, name"
+        ).fetchall()
+
+        columns = conn.execute("PRAGMA table_info(requisicao_arquivos)").fetchall()
+        assert [(row[1], row[2], row[3], row[4], row[5]) for row in columns] == [
+            ("id", "INTEGER", 0, None, 1),
+            ("requisicao_id", "INTEGER", 1, None, 0),
+            ("label", "TEXT", 0, None, 0),
+            ("filename", "TEXT", 0, None, 0),
+            ("criado_em", "TEXT", 0, "datetime('now')", 0),
+        ]
+        foreign_keys = conn.execute(
+            "PRAGMA foreign_key_list(requisicao_arquivos)"
+        ).fetchall()
+        assert [
+            (row[2], row[3], row[4], row[5], row[6]) for row in foreign_keys
+        ] == [("requisicoes", "requisicao_id", "id", "NO ACTION", "NO ACTION")]
+        indexes = conn.execute("PRAGMA index_list(requisicao_arquivos)").fetchall()
+        assert {row[1] for row in indexes} == {"idx_req_arquivos_req"}
+        assert second_schema == first_schema
+    finally:
+        conn.close()
 
 
 BASELINE_ENSURE_MATRIZES_ATIVIDADES_TABLE_SOURCE = '''
