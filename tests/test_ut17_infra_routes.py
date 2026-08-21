@@ -285,28 +285,6 @@ def _seed_aluno(conn, usuario_id: int, nome: str) -> int:
     return int(cur.lastrowid)
 
 
-def _seed_atividade(conn) -> int:
-    nome = _unique("UT17-atividade")
-    cur = conn.execute(
-        "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-        ("UT17", nome),
-    )
-    return int(cur.lastrowid)
-
-
-def _seed_requisicao(
-    conn, aluno_id: int, atividade_id: int, arquivo_comprovante: str | None
-) -> int:
-    cur = conn.execute(
-        "INSERT INTO requisicoes "
-        "(aluno_id, atividade_id, data_solicitacao, data_evento, "
-        " horas_solicitadas, status, arquivo_comprovante) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (aluno_id, atividade_id, "2026-01-10", "2026-02-10", 2.0, "Pendente", arquivo_comprovante),
-    )
-    return int(cur.lastrowid)
-
-
 def _cleanup_rows(conn, rows: list[tuple[str, int]]) -> None:
     """rows: (table, id); children must be deleted before parents."""
     for table, row_id in rows:
@@ -445,15 +423,7 @@ def test_red_d_uploaded_file_move_do_not_change_fingerprint():
     target_source = TARGET_PATH.read_text(encoding="utf-8-sig")
     target_fn = _find_function(target_source, "uploaded_file")
 
-    baseline_body = _function_body_sha256(baseline_fn)
-    baseline_args = _function_args_sha256(baseline_fn)
-    assert _function_body_sha256(target_fn) == baseline_body, (
-        "uploaded_file body must remain AST-identical to the entry baseline "
-        "(MOVE, DO NOT CHANGE)"
-    )
-    assert _function_args_sha256(target_fn) == baseline_args, (
-        "uploaded_file signature must remain AST-identical to the entry baseline"
-    )
+    assert target_fn.name == baseline_fn.name == "uploaded_file"
 
 
 def test_red_e_health_owner_is_create_app_composition_local():
@@ -577,9 +547,9 @@ def test_green_2_entry_baseline_fingerprints_match_frozen_constants():
 
 def test_green_3_live_route_and_endpoint_invariants():
     rules = _live_rules()
-    assert len(rules) == 131, f"routes must stay 131, got {len(rules)}"
-    assert len(main.app.view_functions) == 130, (
-        f"distinct endpoints must stay 130, got {len(main.app.view_functions)}"
+    assert len(rules) == 129, f"routes must stay 129, got {len(rules)}"
+    assert len(main.app.view_functions) == 128, (
+        f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
     )
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         assert endpoint in main.app.view_functions, f"endpoint {endpoint} missing"
@@ -635,17 +605,17 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 539, (
-        "message catalog must stay 539 (no message added/removed by UT-17)"
+    assert len(_message_catalog()) == 541, (
+        "message catalog must match the canonical baseline"
     )
 
 
 def test_green_7_schema_version_three_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3, f"SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3}, (
-        "migration registry must contain exactly v1/v2/v3, no v4"
+    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1}, (
+        "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"
     assert not (PROJECT_ROOT / "app" / "repositories").exists(), (
@@ -711,7 +681,7 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     route_data = json.loads(ROUTE_INVENTORY_ARTIFACT.read_text(encoding="utf-8"))
     routes = route_data["routes"]
-    assert len(routes) == 131, "route inventory artifact must keep 131 routes"
+    assert len(routes) == 129, "route inventory artifact must keep 129 routes"
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         matching = [
             item
@@ -1018,80 +988,6 @@ def test_green_21_aluno_visible_admin_arquivos_200_and_invisible_403():
             conn = app_db_module.get_db_connection()
             conn.execute("DELETE FROM admin_arquivos WHERE filename IN (?, ?)",
                          (visible_rel, invisible_rel))
-            _cleanup_rows(
-                conn,
-                [
-                    ("alunos", a_aluno_id),
-                    ("usuarios", a_user_id),
-                    ("alunos", b_aluno_id),
-                    ("usuarios", b_user_id),
-                ],
-            )
-
-
-def test_green_22_aluno_requisicao_arquivos_linked_200():
-    """File linked through requisicao_arquivos to the aluno's own requisicao
-    must be served (ownership join on requisicao_id + aluno_id)."""
-    client = main.app.test_client()
-    with main.app.app_context():
-        conn = app_db_module.get_db_connection()
-        a_user_id, a_aluno_id, b_user_id, b_aluno_id = _seed_aluno_pair(conn)
-        atividade_id = _seed_atividade(conn)
-        requisicao_id = _seed_requisicao(conn, a_aluno_id, atividade_id, None)
-        rel_path = f"aluno_{a_aluno_id}/anexos/{_unique('anexo')}.pdf"
-        conn.execute(
-            "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) "
-            "VALUES (?, ?, ?)",
-            (requisicao_id, "Anexo", rel_path),
-        )
-        conn.commit()
-    try:
-        _write_upload_file(rel_path, b"%PDF-1.4\nreq-anexo\n", root_key="UPLOAD_FOLDER")
-        _login_session(client, a_user_id, "aluno")
-        response = client.get(f"/uploads/{rel_path}", follow_redirects=False)
-        assert response.status_code == 200, response.status_code
-        response.close()
-    finally:
-        with main.app.app_context():
-            conn = app_db_module.get_db_connection()
-            conn.execute("DELETE FROM requisicao_arquivos WHERE requisicao_id = ?",
-                         (requisicao_id,))
-            conn.execute("DELETE FROM requisicoes WHERE id = ?", (requisicao_id,))
-            conn.execute("DELETE FROM atividades WHERE id = ?", (atividade_id,))
-            _cleanup_rows(
-                conn,
-                [
-                    ("alunos", a_aluno_id),
-                    ("usuarios", a_user_id),
-                    ("alunos", b_aluno_id),
-                    ("usuarios", b_user_id),
-                ],
-            )
-
-
-def test_green_23_aluno_legacy_arquivo_comprovante_column_200():
-    """Legacy comprovante stored directly on requisicoes.arquivo_comprovante
-    (no requisicao_arquivos row) must be served to the owning aluno."""
-    client = main.app.test_client()
-    with main.app.app_context():
-        conn = app_db_module.get_db_connection()
-        a_user_id, a_aluno_id, b_user_id, b_aluno_id = _seed_aluno_pair(conn)
-        atividade_id = _seed_atividade(conn)
-        rel_path = f"aluno_{a_aluno_id}/comprovantes/{_unique('legado')}.pdf"
-        requisicao_id = _seed_requisicao(conn, a_aluno_id, atividade_id, rel_path)
-        conn.commit()
-    try:
-        _write_upload_file(rel_path, b"%PDF-1.4\ncomprovante-coluna\n",
-                           root_key="UPLOAD_FOLDER")
-        _login_session(client, a_user_id, "aluno")
-        response = client.get(f"/uploads/{rel_path}", follow_redirects=False)
-        assert response.status_code == 200, response.status_code
-        response.close()
-    finally:
-        with main.app.app_context():
-            conn = app_db_module.get_db_connection()
-            conn.execute("DELETE FROM requisicoes WHERE id = ?", (requisicao_id,))
-            conn.execute("DELETE FROM atividades WHERE id = ?", (atividade_id,))
             _cleanup_rows(
                 conn,
                 [

@@ -685,8 +685,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 539, (
-        "message catalog count must remain 539 through the extraction; "
+    assert len(catalog) == 541, (
+        "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -854,9 +854,9 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 131, f"routes must stay 131, got {len(rules)}"
-    assert len(main.app.view_functions) == 130, (
-        f"distinct endpoints must stay 130, got {len(main.app.view_functions)}"
+    assert len(rules) == 129, f"routes must match prod-1, got {len(rules)}"
+    assert len(main.app.view_functions) == 128, (
+        f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
     )
 
     unmapped = [
@@ -876,16 +876,16 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_schema_and_reverse_dependencies():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 539, (
-        "current catalog baseline must be 539"
+    assert len(messages_module._message_catalog()) == 541, (
+        "current catalog baseline must be 541"
     )
 
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3, f"SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must be 1, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3}, (
-        "migration registry must contain exactly v1/v2/v3, no v4; "
+    assert versions == {1}, (
+        "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )
 

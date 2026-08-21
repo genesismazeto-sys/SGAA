@@ -480,8 +480,8 @@ def admin_dashboard():
     if not metrics or now - ts >= 30:
         metrics = {}
         metrics['total_alunos'] = conn.execute("SELECT COUNT(*) FROM alunos").fetchone()[0]
-        metrics['total_atividades_academicas'] = conn.execute("SELECT COUNT(*) FROM atividades WHERE tipo_atividade = 'Acadêmica Complementar'").fetchone()[0]
-        metrics['total_atividades_extensao'] = conn.execute("SELECT COUNT(*) FROM atividades WHERE tipo_atividade = 'Extensão Universitária'").fetchone()[0]
+        metrics['total_atividades_academicas'] = conn.execute("SELECT COUNT(*) FROM atividade_versao WHERE eixo='AAC' AND status='ativa'").fetchone()[0]
+        metrics['total_atividades_extensao'] = conn.execute("SELECT COUNT(*) FROM atividade_versao WHERE eixo='AEU' AND status='ativa'").fetchone()[0]
         metrics['total_atividades'] = metrics['total_atividades_academicas'] + metrics['total_atividades_extensao']
         metrics['total_requisicoes'] = conn.execute("SELECT COUNT(*) FROM requisicoes").fetchone()[0]
         metrics['requisicoes_pendentes'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE status = 'Pendente'").fetchone()[0]
@@ -498,8 +498,8 @@ def admin_dashboard():
         metrics['tempo_medio_resposta_meta_excedida'] = avg_pending_response_days > response_time_settings["response_goal_days"]
         metrics['requisicoes_devolvidas_abertas'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE status = 'Devolvida'").fetchone()[0]
         metrics['requisicoes_atrasadas_meta_dias'] = overdue_pending_count
-        metrics['requisicoes_academicas'] = conn.execute("SELECT COUNT(*) FROM requisicoes r JOIN atividades a ON r.atividade_id = a.id WHERE a.tipo_atividade = 'Acadêmica Complementar'").fetchone()[0]
-        metrics['requisicoes_extensao'] = conn.execute("SELECT COUNT(*) FROM requisicoes r JOIN atividades a ON r.atividade_id = a.id WHERE a.tipo_atividade = 'Extensão Universitária'").fetchone()[0]
+        metrics['requisicoes_academicas'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE json_extract(regra_snapshot_json,'$.eixo')='AAC'").fetchone()[0]
+        metrics['requisicoes_extensao'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE json_extract(regra_snapshot_json,'$.eixo')='AEU'").fetchone()[0]
         metrics['turma_cards'], metrics['dashboard_total_geral'], turma_summary = _build_admin_dashboard_turma_cards(conn)
         metrics.update(turma_summary)
         g._adm_dash_metrics = metrics

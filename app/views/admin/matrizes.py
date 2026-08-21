@@ -47,8 +47,7 @@ from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 
 def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
     """
-    Retorna as atividade_base no escopo legado de uma matriz via
-    matrizes_atividades_itens + atividade_legacy_map.
+    Retorna as atividade_base selecionadas pela autoridade canônica da matriz.
     Estritamente read-only — sem fallback ou inferência.
     """
     return conn.execute(
@@ -57,10 +56,9 @@ def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
             ab.id,
             ab.nome_conceito,
             ab.status
-          FROM matrizes_atividades_itens mai
-          JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
-          JOIN atividade_base ab ON ab.id = alm.atividade_base_id
-         WHERE mai.matriz_id = ?
+          FROM matriz_atividade_versao_item item
+          JOIN atividade_base ab ON ab.id = item.atividade_base_id
+         WHERE item.matriz_id = ?
          ORDER BY LOWER(ab.nome_conceito) ASC
         """,
         (matriz_id,),
@@ -141,8 +139,8 @@ def _set_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int, versao_i
         (matriz_id, base_id),
     )
     conn.execute(
-        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-        (matriz_id, versao_id),
+        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+        (matriz_id, base_id, versao_id),
     )
 
 
@@ -169,10 +167,10 @@ def _remover_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int) -> i
 
 def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict:
     """
-    Para cada atividade legada vinculada à matriz, retorna a versão atual vinculada
+    Para cada versão vinculada à matriz, retorna a versão atual vinculada
     e todas as versões disponíveis da mesma base (para escolha/relink).
-    Retorna dict str(legacy_id) → {base_id, versao_id, numero_versao, eixo, versoes}.
-    Atividades sem mapa de legado ou sem vínculo de versão na matriz não são incluídas.
+    Retorna dict str(versao_id) → {base_id, versao_id, numero_versao, eixo, versoes}.
+    Itens sem vínculo explícito de versão na matriz não são incluídos.
     Estritamente read-only.
     """
     if not activity_ids:
@@ -181,19 +179,15 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
     rows = conn.execute(
         f"""
         SELECT
-            mai.atividade_id      AS legacy_id,
-            alm.atividade_base_id AS base_id,
-            av.id                 AS versao_id,
+            item.atividade_versao_id AS selected_id,
+            item.atividade_base_id AS base_id,
+            av.id AS versao_id,
             av.numero_versao,
             av.eixo
-          FROM matrizes_atividades_itens mai
-          JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
-          JOIN atividade_versao av ON av.atividade_base_id = alm.atividade_base_id
-          JOIN matriz_atividade_versao_item mavi
-            ON mavi.matriz_id = mai.matriz_id
-           AND mavi.atividade_versao_id = av.id
-         WHERE mai.matriz_id = ?
-           AND mai.atividade_id IN ({placeholders})
+          FROM matriz_atividade_versao_item item
+          JOIN atividade_versao av ON av.id=item.atividade_versao_id
+         WHERE item.matriz_id = ?
+           AND item.atividade_versao_id IN ({placeholders})
         """,
         [matriz_id] + list(activity_ids),
     ).fetchall()
@@ -222,7 +216,7 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
             }
             for v in versoes_rows
         ]
-        result[str(row["legacy_id"])] = {
+        result[str(row["selected_id"])] = {
             "base_id": row["base_id"],
             "versao_id": current_versao_id,
             "numero_versao": row["numero_versao"],
@@ -467,27 +461,7 @@ def _matriz_axis_for_tab(active_tab: str) -> str | None:
 
 
 def _get_grupos_por_tipo(conn) -> dict[str, dict[str, str]]:
-    rows = conn.execute(
-        "SELECT tipo_atividade, grupo FROM atividades WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
-    ).fetchall()
     grupos = {}
-    for row in rows:
-        tipo = row["tipo_atividade"]
-        label = (row["grupo"] or "").strip()
-        match = re.match(r"^\s*(\d+)\s*-\s*(.*)$", label)
-        if match:
-            numero = match.group(1)
-            descricao = (match.group(2) or "").strip()
-        else:
-            match = re.match(r"^\s*(\d+)\s*$", label)
-            if not match:
-                continue
-            numero = match.group(1)
-            descricao = ""
-        if tipo not in grupos:
-            grupos[tipo] = {}
-        if numero not in grupos[tipo] or (not grupos[tipo][numero] and descricao):
-            grupos[tipo][numero] = descricao
     try:
         rows = conn.execute("SELECT tipo_atividade, numero, descricao FROM grupos_def").fetchall()
         for row in rows:
@@ -623,28 +597,29 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
         return [], [], []
 
     selected_ids = {
-        row["atividade_id"]
+        row["atividade_versao_id"]
         for row in conn.execute(
-            "SELECT atividade_id FROM matrizes_atividades_itens WHERE matriz_id = ?",
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
             (matriz_id,),
         ).fetchall()
     }
     rows = conn.execute(
         """
         SELECT
-            id,
-            nome,
-            COALESCE(NULLIF(TRIM(grupo), ''), 'Sem grupo') AS grupo,
-            limite_horas,
-            tem_limitacao,
-            tipo_limitacao,
-            limite_horas_total,
-            limite_horas_semestral
-        FROM atividades
-        WHERE COALESCE(tipo_atividade, 'Acadêmica Complementar') = ?
-        ORDER BY LOWER(COALESCE(grupo, '')), LOWER(nome), id
+            v.id, b.nome_conceito AS nome,
+            COALESCE(NULLIF(TRIM(v.grupo), ''), 'Sem grupo') AS grupo,
+            COALESCE(v.limite_semestre,v.limite_total) AS limite_horas,
+            (v.limite_total IS NOT NULL OR v.limite_semestre IS NOT NULL) AS tem_limitacao,
+            CASE WHEN v.limite_semestre IS NOT NULL THEN 'semestral' ELSE 'total' END AS tipo_limitacao,
+            v.limite_total AS limite_horas_total,
+            v.limite_semestre AS limite_horas_semestral
+        FROM atividade_versao v
+        JOIN atividade_base b ON b.id=v.atividade_base_id
+        JOIN matriz_norma mn ON mn.norma_id=v.norma_id AND mn.matriz_id=?
+        WHERE v.eixo=? AND v.status='ativa'
+        ORDER BY LOWER(COALESCE(v.grupo, '')), LOWER(b.nome_conceito), v.id
         """,
-        (activity_type,),
+        (matriz_id, 'AAC' if activity_type == 'Acadêmica Complementar' else 'AEU'),
     ).fetchall()
 
     available = []
@@ -677,11 +652,10 @@ def _matriz_counts(conn, matriz_id: int) -> tuple[int, int]:
     counts = {"Acadêmica Complementar": 0, "Extensão Universitária": 0}
     rows = conn.execute(
         """
-        SELECT COALESCE(a.tipo_atividade, 'Acadêmica Complementar') AS tipo_atividade, COUNT(*) AS total
-        FROM matrizes_atividades_itens mi
-        JOIN atividades a ON a.id = mi.atividade_id
-        WHERE mi.matriz_id = ?
-        GROUP BY COALESCE(a.tipo_atividade, 'Acadêmica Complementar')
+        SELECT CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade, COUNT(*) AS total
+        FROM matriz_atividade_versao_item mi
+        JOIN atividade_versao v ON v.id = mi.atividade_versao_id
+        WHERE mi.matriz_id = ? GROUP BY v.eixo
         """,
         (matriz_id,),
     ).fetchall()
@@ -920,30 +894,13 @@ def _ensure_default_versao_link(conn, matriz_id: int, activity_id: int) -> None:
     - a link already exists (manual choice preserved)
     Does not commit — caller's responsibility.
     """
-    row = conn.execute(
-        "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = ?",
-        (activity_id,),
-    ).fetchone()
+    row = conn.execute("SELECT atividade_base_id FROM atividade_versao WHERE id=? AND status='ativa'", (activity_id,)).fetchone()
     if not row:
         return
     base_id = row["atividade_base_id"]
     if get_vinculo_versao_da_matriz(conn, matriz_id, base_id):
         return
-    latest = conn.execute(
-        """
-        SELECT av.id
-          FROM atividade_versao av
-          JOIN matriz_norma mn ON mn.norma_id = av.norma_id AND mn.matriz_id = ?
-         WHERE av.atividade_base_id = ?
-           AND av.status = 'ativa'
-         ORDER BY av.numero_versao DESC
-         LIMIT 1
-        """,
-        (matriz_id, base_id),
-    ).fetchone()
-    if not latest:
-        return
-    _set_versao_da_matriz_para_base(conn, matriz_id, base_id, latest["id"])
+    _set_versao_da_matriz_para_base(conn, matriz_id, base_id, activity_id)
 
 
 def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
@@ -959,72 +916,24 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
             selected_ids.append(int(raw_value))
     selected_ids = sorted(set(selected_ids))
 
-    type_activity_ids = {
-        row["id"]
-        for row in conn.execute(
-            "SELECT id FROM atividades WHERE COALESCE(tipo_atividade, 'Acadêmica Complementar') = ?",
-            (activity_type,),
-        ).fetchall()
-    }
+    axis = 'AAC' if activity_type == 'Acadêmica Complementar' else 'AEU'
+    type_activity_ids = {row["id"] for row in conn.execute(
+        """SELECT v.id FROM atividade_versao v JOIN matriz_norma mn ON mn.norma_id=v.norma_id
+            WHERE mn.matriz_id=? AND v.eixo=? AND v.status='ativa'""", (matriz_id, axis)
+    ).fetchall()}
     valid_ids = [activity_id for activity_id in selected_ids if activity_id in type_activity_ids]
 
     conn.execute(
         """
-        DELETE FROM matrizes_atividades_itens
-        WHERE matriz_id = ?
-          AND atividade_id IN (
-              SELECT id FROM atividades WHERE COALESCE(tipo_atividade, 'Acadêmica Complementar') = ?
-          )
+        DELETE FROM matriz_atividade_versao_item
+         WHERE matriz_id=? AND atividade_versao_id IN
+               (SELECT id FROM atividade_versao WHERE eixo=?)
         """,
-        (matriz_id, activity_type),
+        (matriz_id, axis),
     )
     if valid_ids:
-        conn.executemany(
-            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
-            [(matriz_id, activity_id) for activity_id in valid_ids],
-        )
         for activity_id in valid_ids:
             _ensure_default_versao_link(conn, matriz_id, activity_id)
-
-    selected_base_ids: list[int] = []
-    for activity_id in valid_ids:
-        base_row = conn.execute(
-            "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = ?",
-            (activity_id,),
-        ).fetchone()
-        if base_row:
-            selected_base_ids.append(base_row["atividade_base_id"])
-
-    if selected_base_ids:
-        placeholders_b = ", ".join("?" for _ in selected_base_ids)
-        conn.execute(
-            f"""
-            DELETE FROM matriz_atividade_versao_item
-             WHERE matriz_id = ?
-               AND atividade_versao_id IN (
-                   SELECT av.id FROM atividade_versao av
-                    JOIN atividade_legacy_map alm ON alm.atividade_base_id = av.atividade_base_id
-                    JOIN atividades a ON a.id = alm.atividade_id_legacy
-                   WHERE COALESCE(a.tipo_atividade, 'Acadêmica Complementar') = ?
-                     AND av.atividade_base_id NOT IN ({placeholders_b})
-               )
-            """,
-            [matriz_id, activity_type] + selected_base_ids,
-        )
-    else:
-        conn.execute(
-            """
-            DELETE FROM matriz_atividade_versao_item
-             WHERE matriz_id = ?
-               AND atividade_versao_id IN (
-                   SELECT av.id FROM atividade_versao av
-                    JOIN atividade_legacy_map alm ON alm.atividade_base_id = av.atividade_base_id
-                    JOIN atividades a ON a.id = alm.atividade_id_legacy
-                   WHERE COALESCE(a.tipo_atividade, 'Acadêmica Complementar') = ?
-               )
-            """,
-            (matriz_id, activity_type),
-        )
 
     conn.commit()
     return True
@@ -1270,34 +1179,6 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
         return _render_modal_error(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX])
 
     try:
-        atividade_cursor = conn.execute(
-            """
-            INSERT INTO atividades (
-                grupo,
-                nome,
-                descricao,
-                limite_horas,
-                tipo_atividade,
-                tem_limitacao,
-                tipo_limitacao,
-                limite_horas_total,
-                limite_horas_semestral
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                grupo,
-                nome,
-                None,
-                None,
-                activity_type,
-                0,
-                "total",
-                None,
-                None,
-            ),
-        )
-        atividade_id = atividade_cursor.lastrowid
-
         base_cursor = conn.execute(
             """
             INSERT INTO atividade_base (nome_conceito, descricao, status)
@@ -1306,20 +1187,6 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
             (nome, None),
         )
         base_id = base_cursor.lastrowid
-
-        conn.execute(
-            """
-            INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status)
-            VALUES (?, ?, 'mapeada')
-            """,
-            (atividade_id, base_id),
-        )
-
-        if add_to_matrix:
-            conn.execute(
-                "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
-                (matriz_id, atividade_id),
-            )
 
         next_num = get_next_numero_versao(conn, base_id)
         versao_cursor = conn.execute(
@@ -1347,20 +1214,16 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
 
         if add_to_matrix:
             conn.execute(
-                "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-                (matriz_id, versao_id),
+                "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+                (matriz_id, base_id, versao_id),
             )
 
         conn.commit()
     except sqlite3.IntegrityError as exc:
         conn.rollback()
         error_message = str(exc).lower()
-        if "unique constraint failed: atividades.nome" in error_message:
-            return _render_modal_error("Já existe atividade com este nome.")
         if "unique constraint failed: atividade_base.nome_conceito" in error_message:
             return _render_modal_error("Já existe atividade-base com este nome.")
-        if "unique constraint failed: atividade_legacy_map.atividade_id_legacy" in error_message:
-            return _render_modal_error("Falha ao mapear a atividade criada para a atividade-base.")
         if "unique constraint failed: atividade_versao.atividade_base_id, atividade_versao.numero_versao" in error_message:
             return _render_modal_error("Conflito ao atribuir número de versão. Tente novamente.")
         return _render_modal_error(f"Erro de integridade ao criar atividade: {exc}")
@@ -1407,22 +1270,14 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         flash("Matriz não encontrada.", "error")
         return redirect(url_for("admin_matrizes"))
 
-    legacy_map = conn.execute(
-        "SELECT atividade_base_id FROM atividade_legacy_map WHERE atividade_id_legacy = ?",
-        (atividade_id,),
-    ).fetchone()
-    if not legacy_map:
-        flash("Atividade não mapeada para uma atividade-base.", "error")
-        return _redirect_matrix()
-    base_id = legacy_map["atividade_base_id"]
-
-    in_scope = conn.execute(
-        "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
+    selected = conn.execute(
+        "SELECT atividade_base_id FROM matriz_atividade_versao_item WHERE matriz_id=? AND atividade_versao_id=?",
         (matriz_id, atividade_id),
-    ).fetchone() is not None
-    if not in_scope:
-        flash("A atividade não está vinculada a esta matriz.", "error")
+    ).fetchone()
+    if not selected:
+        flash("A versão da atividade não está vinculada a esta matriz.", "error")
         return _redirect_matrix()
+    base_id = selected["atividade_base_id"]
 
     versao_id_raw = (request.form.get("versao_id") or "").strip()
     if not versao_id_raw or not versao_id_raw.isdigit():
@@ -1530,7 +1385,7 @@ def admin_matriz_versoes(matriz_id: int):
     """
     Página admin para gerenciar vínculos explícitos matriz→atividade_versao.
 
-    Para cada atividade_base no escopo legado da matriz mostra:
+    Para cada atividade_base no escopo canônico da matriz mostra:
       - vínculo atual (se houver);
       - versões ativas disponíveis (somente ativas, cujas normas estão em matriz_norma).
 
@@ -1573,7 +1428,7 @@ def admin_matriz_versoes_definir(matriz_id: int):
       3. atividade_versao existe.
       4. atividade_versao pertence à atividade_base informada.
       5. atividade_versao.status == 'ativa'.
-      6. atividade_base no escopo legado da matriz (matrizes_atividades_itens + atividade_legacy_map).
+      6. atividade_base já selecionada pela autoridade canônica da matriz.
       7. norma_id da versão está em matriz_norma para esta matriz.
 
     Operação "set": remove vínculo anterior da mesma matriz+base e insere novo.
@@ -1617,18 +1472,11 @@ def admin_matriz_versoes_definir(matriz_id: int):
         return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
     in_scope = conn.execute(
-        """
-        SELECT 1
-          FROM matrizes_atividades_itens mai
-          JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = mai.atividade_id
-         WHERE mai.matriz_id = ?
-           AND alm.atividade_base_id = ?
-         LIMIT 1
-        """,
+        "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id=? AND atividade_base_id=?",
         (matriz_id, base_id),
     ).fetchone() is not None
     if not in_scope:
-        flash("A atividade-base não está no escopo legado desta matriz.", "error")
+        flash("A atividade-base não está no escopo canônico desta matriz.", "error")
         return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
     norma_in_matriz = conn.execute(

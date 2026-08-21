@@ -53,23 +53,10 @@ def _seed_d76d(conn) -> dict:
     norma_1_id = 1  # AAC-rev5 ativa (seed de referência)
     conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)", (matriz_id, norma_1_id))
 
-    atividade_id = conn.execute(
-        """
-        INSERT INTO atividades (nome, grupo, tipo_atividade, descricao, limite_horas)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        ("Congresso D7.6D", "1 - Congresso", "Acadêmica Complementar", "desc", 100),
-    ).lastrowid
-
     base_a_id = conn.execute(
         "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
         ("Base A D7.6D", "base para teste", "ativo"),
     ).lastrowid
-
-    conn.execute(
-        "INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status) VALUES (?, ?, ?)",
-        (atividade_id, base_a_id, "mapeada"),
-    )
 
     versao_1_id = conn.execute(
         """
@@ -102,12 +89,9 @@ def _seed_d76d(conn) -> dict:
     ).lastrowid
 
     conn.execute(
-        "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
-        (matriz_id, atividade_id),
-    )
-    conn.execute(
-        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-        (matriz_id, versao_1_id),
+        "INSERT INTO matriz_atividade_versao_item "
+        "(matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+        (matriz_id, base_a_id, versao_1_id),
     )
 
     # Base B para testar rejeição cross-base
@@ -152,7 +136,7 @@ def _seed_d76d(conn) -> dict:
 
     return {
         "matriz_id": matriz_id,
-        "atividade_id": atividade_id,
+        "atividade_id": versao_1_id,
         "base_a_id": base_a_id,
         "base_b_id": base_b_id,
         "versao_1_id": versao_1_id,
@@ -412,20 +396,12 @@ def test_card_version_menu_data_excludes_unlinked_activity(env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        # Busca atividade_id que existe mas NÃO está em matriz_atividade_versao_item
-        other_atividade = conn.execute(
-            "SELECT id FROM atividades WHERE id != ? LIMIT 1",
-            (seed["atividade_id"],),
-        ).fetchone()
-        if other_atividade is None:
-            pytest.skip("Nenhuma outra atividade disponível no seed")
-
         result = main.get_card_version_menu_data(
-            conn, seed["matriz_id"], [other_atividade["id"]]
+            conn, seed["matriz_id"], [seed["versao_b1_id"]]
         )
 
-    # Activity not linked to any versão in this matrix → not included
-    assert str(other_atividade["id"]) not in result
+    # Exact version not linked to this matrix is not included.
+    assert str(seed["versao_b1_id"]) not in result
 
 
 # ---------------------------------------------------------------------------

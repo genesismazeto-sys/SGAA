@@ -11,6 +11,12 @@ from typing import Any
 
 import yaml
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.prod1_schema import bootstrap_prod1_schema
+
 
 APPROVED_CH_RULES = {
     None,
@@ -30,153 +36,6 @@ ALLOWED_NORMA_STATUS = {"ativa", "inativa"}
 ALLOWED_VERSAO_STATUS = {"rascunho", "ativa", "inativa", "descontinuada", "substituida"}
 ALLOWED_TRANSITION_TYPES = {"mesmo_eixo", "aac_para_aeu", "nova_aeu", "descontinuada", "sem_transicao"}
 REAL_DB_BASENAME = "database.db"
-
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS atividade_base (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome_conceito TEXT NOT NULL UNIQUE,
-    descricao TEXT,
-    status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo', 'inativo')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS norma_atividade (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    codigo TEXT NOT NULL UNIQUE,
-    eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
-    revisao TEXT NOT NULL,
-    nome TEXT,
-    descricao TEXT,
-    status TEXT NOT NULL DEFAULT 'ativa' CHECK(status IN ('ativa', 'inativa')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS atividade_versao (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    atividade_base_id INTEGER NOT NULL,
-    norma_id INTEGER NOT NULL,
-    codigo_normativo TEXT NOT NULL,
-    eixo TEXT NOT NULL CHECK(eixo IN ('AAC', 'AEU')),
-    grupo TEXT,
-    ch_por_evento REAL,
-    limite_semestre REAL,
-    limite_total REAL,
-    observacao_aluno TEXT,
-    observacao_admin TEXT,
-    documentos_json TEXT,
-    vigencia_inicio TEXT,
-    vigencia_fim TEXT,
-    status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho', 'ativa', 'inativa', 'descontinuada', 'substituida')),
-    versao_anterior_id INTEGER,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
-    FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
-    FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-    UNIQUE(atividade_base_id, norma_id)
-);
-
-CREATE TABLE IF NOT EXISTS atividade_transicao (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    from_atividade_versao_id INTEGER,
-    to_atividade_versao_id INTEGER,
-    tipo_transicao TEXT NOT NULL CHECK(tipo_transicao IN ('mesmo_eixo', 'aac_para_aeu', 'nova_aeu', 'descontinuada', 'sem_transicao')),
-    justificativa TEXT,
-    observacao_admin TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY(from_atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-    FOREIGN KEY(to_atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
-    CHECK(from_atividade_versao_id IS NOT NULL OR to_atividade_versao_id IS NOT NULL),
-    CHECK(from_atividade_versao_id IS NULL OR to_atividade_versao_id IS NULL OR from_atividade_versao_id <> to_atividade_versao_id)
-);
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_eixo_norma_insert
-BEFORE INSERT ON atividade_versao
-FOR EACH ROW
-WHEN NEW.norma_id IS NOT NULL
-     AND EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id = NEW.norma_id AND n.eixo <> NEW.eixo)
-BEGIN
-    SELECT RAISE(ABORT, 'atividade_versao.eixo incompatível com norma_atividade.eixo');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_eixo_norma_update
-BEFORE UPDATE OF norma_id, eixo ON atividade_versao
-FOR EACH ROW
-WHEN NEW.norma_id IS NOT NULL
-     AND EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id = NEW.norma_id AND n.eixo <> NEW.eixo)
-BEGIN
-    SELECT RAISE(ABORT, 'atividade_versao.eixo incompatível com norma_atividade.eixo');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_prev_same_eixo_insert
-BEFORE INSERT ON atividade_versao
-FOR EACH ROW
-WHEN NEW.versao_anterior_id IS NOT NULL
-     AND EXISTS(
-         SELECT 1
-           FROM atividade_versao prev
-          WHERE prev.id = NEW.versao_anterior_id
-            AND prev.eixo <> NEW.eixo
-     )
-BEGIN
-    SELECT RAISE(ABORT, 'Mudança de eixo não pode ocorrer via versao_anterior_id; registre em atividade_transicao');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_versao_prev_same_eixo_update
-BEFORE UPDATE OF versao_anterior_id, eixo ON atividade_versao
-FOR EACH ROW
-WHEN NEW.versao_anterior_id IS NOT NULL
-     AND EXISTS(
-         SELECT 1
-           FROM atividade_versao prev
-          WHERE prev.id = NEW.versao_anterior_id
-            AND prev.eixo <> NEW.eixo
-     )
-BEGIN
-    SELECT RAISE(ABORT, 'Mudança de eixo não pode ocorrer via versao_anterior_id; registre em atividade_transicao');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_transicao_aac_para_aeu_insert
-BEFORE INSERT ON atividade_transicao
-FOR EACH ROW
-WHEN NEW.tipo_transicao = 'aac_para_aeu'
-BEGIN
-    SELECT CASE
-        WHEN NEW.justificativa IS NULL OR TRIM(NEW.justificativa) = ''
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige justificativa')
-    END;
-    SELECT CASE
-        WHEN NEW.from_atividade_versao_id IS NULL OR NEW.to_atividade_versao_id IS NULL
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige from/to atividade_versao')
-    END;
-    SELECT CASE
-        WHEN (SELECT eixo FROM atividade_versao WHERE id = NEW.from_atividade_versao_id) <> 'AAC'
-             OR (SELECT eixo FROM atividade_versao WHERE id = NEW.to_atividade_versao_id) <> 'AEU'
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige eixo AAC -> AEU')
-    END;
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_atividade_transicao_aac_para_aeu_update
-BEFORE UPDATE OF tipo_transicao, justificativa, from_atividade_versao_id, to_atividade_versao_id
-ON atividade_transicao
-FOR EACH ROW
-WHEN NEW.tipo_transicao = 'aac_para_aeu'
-BEGIN
-    SELECT CASE
-        WHEN NEW.justificativa IS NULL OR TRIM(NEW.justificativa) = ''
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige justificativa')
-    END;
-    SELECT CASE
-        WHEN NEW.from_atividade_versao_id IS NULL OR NEW.to_atividade_versao_id IS NULL
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige from/to atividade_versao')
-    END;
-    SELECT CASE
-        WHEN (SELECT eixo FROM atividade_versao WHERE id = NEW.from_atividade_versao_id) <> 'AAC'
-             OR (SELECT eixo FROM atividade_versao WHERE id = NEW.to_atividade_versao_id) <> 'AEU'
-        THEN RAISE(ABORT, 'Transição aac_para_aeu exige eixo AAC -> AEU')
-    END;
-END;
-"""
-
 
 class DryRunImporterError(Exception):
     """Base error for the dry-run importer."""
@@ -464,7 +323,7 @@ def _connect_sqlite(db_path: Path) -> sqlite3.Connection:
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA_SQL)
+    bootstrap_prod1_schema(conn)
 
 
 def _assert_existing_row_matches(
@@ -591,6 +450,7 @@ def _upsert_versao(
             observacao_aluno,
             observacao_admin,
             documentos_json,
+            numero_versao,
             status,
             versao_anterior_id
           FROM atividade_versao
@@ -599,6 +459,9 @@ def _upsert_versao(
         (atividade_base_id, norma_id),
     ).fetchone()
     documentos_json = _build_documentos_json(version)
+    numero_versao = int(
+        version.get("numero_versao") or (activity["versoes"].index(version) + 1)
+    )
     expected = {
         "codigo_normativo": norma["codigo"],
         "eixo": norma["eixo"],
@@ -609,6 +472,7 @@ def _upsert_versao(
         "observacao_aluno": version.get("observacao_aluno"),
         "observacao_admin": version.get("observacao_admin"),
         "documentos_json": documentos_json,
+        "numero_versao": numero_versao,
         "status": version["status_inicial"],
         "versao_anterior_id": None,
     }
@@ -635,9 +499,10 @@ def _upsert_versao(
             observacao_aluno,
             observacao_admin,
             documentos_json,
+            numero_versao,
             status,
             versao_anterior_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
         """,
         (
             atividade_base_id,
@@ -651,6 +516,7 @@ def _upsert_versao(
             version.get("observacao_aluno"),
             version.get("observacao_admin"),
             documentos_json,
+            numero_versao,
             version["status_inicial"],
         ),
     )

@@ -36,7 +36,6 @@ os.environ.setdefault(
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = Path(TESTS_DIR).parent
 PROJECT_ROOT_PATH = PROJECT_ROOT
-D73H_SOURCES_CONFIG_ATTR = "_sgaa_d73h_sources"
 
 
 # ---- Canonical project-root baseline (captured before any test writes) ----
@@ -47,8 +46,10 @@ _CANONICAL_SCOPES: list[tuple[str, bool]] = [
     ("documentos_alunos", False),
     ("backups", False),
     ("logs", False),
-    (".pytest_cache", False),
 ]
+# Pytest owns .pytest_cache and may hold active, unreadable temporary files
+# there while this manifest is evaluated.  It is intentionally excluded from
+# project/runtime custody; every real runtime scope above remains protected.
 
 
 def _compute_manifest(root):
@@ -158,8 +159,6 @@ def _remove_owned_runtime_root(root, marker_token):
 
 @pytest.fixture(autouse=True)
 def _isolate_real_log_writes(monkeypatch):
-    from app.versioning import shadow_reads as versioning_shadow_reads
-
     main_module = sys.modules.get("main")
     if main_module is None:
         import main as main_module
@@ -175,13 +174,6 @@ def _isolate_real_log_writes(monkeypatch):
 
     log_dir = per_test / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    dedicated_log = os.path.join(str(log_dir), "versioned_shadow_reads.log")
-    monkeypatch.setattr(
-        versioning_shadow_reads,
-        "_versioned_shadow_read_dedicated_log_path",
-        lambda: dedicated_log,
-    )
-
     temp_app_log = os.path.join(str(log_dir), "app.log")
     temp_handler = logging.FileHandler(temp_app_log, encoding="utf-8", delay=True)
     flask_app = getattr(main_module, "app", None)
@@ -314,29 +306,10 @@ def pytest_sessionfinish(session, exitstatus):
         raise ExceptionGroup("pytest_sessionfinish errors", errors)
 
 
-# ---- pytest_addoption / collection hooks (D73H and CSRF preserved) ----
+# ---- pytest options ----
 
 
 def pytest_addoption(parser):
-    group = parser.getgroup("d73h")
-    group.addoption(
-        "--run-d73h-historical",
-        action="store_true",
-        default=False,
-        help="Run D73H historical verification tests (requires --d73h-source-db and --d73h-source-backup)",
-    )
-    group.addoption(
-        "--d73h-source-db",
-        type=Path,
-        default=None,
-        help="Path to a sanitized D73H historical source database (must exist and not be the repository-root database.db)",
-    )
-    group.addoption(
-        "--d73h-source-backup",
-        type=Path,
-        default=None,
-        help="Path to a sanitized D73H historical source backup (must exist and not be inside the repository backups directory)",
-    )
     csrf_group = parser.getgroup("csrf-snapshots")
     csrf_group.addoption(
         "--update-csrf-snapshots",
@@ -354,67 +327,3 @@ def pytest_addoption(parser):
             "downloaded browser; minutes, not seconds). Skipped by default."
         ),
     )
-
-
-def pytest_collection_modifyitems(config, items):
-    run_historical = config.getoption("--run-d73h-historical", default=False)
-    if not run_historical:
-        deselect = []
-        for item in items:
-            if item.get_closest_marker("d73h_historical"):
-                deselect.append(item)
-        if deselect:
-            config.hook.pytest_deselected(items=deselect)
-            items[:] = [item for item in items if item not in deselect]
-    else:
-        source_db = config.getoption("--d73h-source-db", default=None)
-        source_backup = config.getoption("--d73h-source-backup", default=None)
-        errors = []
-        if source_db is None:
-            errors.append("--run-d73h-historical requires --d73h-source-db PATH")
-        if source_backup is None:
-            errors.append("--run-d73h-historical requires --d73h-source-backup PATH")
-        if errors:
-            raise pytest.UsageError("\n".join(errors))
-        setattr(
-            config,
-            D73H_SOURCES_CONFIG_ATTR,
-            {
-                "source_db": _validate_d73h_source_path(source_db, "--d73h-source-db"),
-                "source_backup": _validate_d73h_source_path(source_backup, "--d73h-source-backup"),
-            },
-        )
-
-
-def _validate_d73h_source_path(path: Path, option_name: str) -> Path:
-    project_root = PROJECT_ROOT_PATH.resolve()
-    root_database = project_root / "database.db"
-    backups_dir = project_root / "backups"
-
-    def reject_forbidden(candidate: Path) -> None:
-        if candidate == root_database:
-            raise pytest.UsageError(
-                f"{option_name} must not reference the repository-root database.db: {candidate}"
-            )
-        if candidate.is_relative_to(backups_dir):
-            raise pytest.UsageError(
-                f"{option_name} must not reference a path inside the repository backups directory: {candidate}"
-            )
-
-    resolved = path.resolve(strict=False)
-    reject_forbidden(resolved)
-    if not resolved.exists():
-        raise pytest.UsageError(f"{option_name} path does not exist: {resolved}")
-    if not resolved.is_file():
-        raise pytest.UsageError(f"{option_name} path is not a regular file: {resolved}")
-    resolved = resolved.resolve(strict=True)
-    reject_forbidden(resolved)
-    return resolved
-
-
-@pytest.fixture(scope="session")
-def d73h_sources(request):
-    sources = getattr(request.config, D73H_SOURCES_CONFIG_ATTR, None)
-    if sources is None:
-        raise pytest.UsageError("d73h_sources fixture requires validated --run-d73h-historical artifact paths")
-    return sources

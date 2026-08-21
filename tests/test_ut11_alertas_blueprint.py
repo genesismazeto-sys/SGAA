@@ -705,8 +705,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 539, (
-        "message catalog count must remain 539 through the extraction; "
+    assert len(catalog) == 541, (
+        "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -950,9 +950,9 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 131, f"routes must stay 131, got {len(rules)}"
-    assert len(main.app.view_functions) == 130, (
-        f"distinct endpoints must stay 130, got {len(main.app.view_functions)}"
+    assert len(rules) == 129, f"routes must match prod-1, got {len(rules)}"
+    assert len(main.app.view_functions) == 128, (
+        f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
     )
 
     business = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -973,8 +973,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 539, (
-        "current catalog baseline must be 539"
+    assert len(messages._message_catalog()) == 541, (
+        "current catalog baseline must be 541"
     )
 
     backend_paths = {
@@ -995,13 +995,13 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     )
 
 
-def test_green_6_schema_version_three_no_migration_v4():
+def test_green_6_schema_is_exactly_prod1_v1():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3, f"SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must be 1, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3}, (
-        "migration registry must contain exactly v1/v2/v3, no v4; "
+    assert versions == {1}, (
+        "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )
 
@@ -1147,7 +1147,9 @@ def test_green_10_alertas_helper_behavior_characterization():
 def test_green_11_csrf_governance_three_posts_400_get_redirects():
     app = main.app
     original_csrf = app.config.get("WTF_CSRF_ENABLED")
+    original_check_default = app.config.get("WTF_CSRF_CHECK_DEFAULT")
     app.config["WTF_CSRF_ENABLED"] = True
+    app.config["WTF_CSRF_CHECK_DEFAULT"] = True
     try:
         for url in THREE_POST_URLS:
             response = app.test_client().post(url)
@@ -1165,6 +1167,10 @@ def test_green_11_csrf_governance_three_posts_400_get_redirects():
             app.config.pop("WTF_CSRF_ENABLED", None)
         else:
             app.config["WTF_CSRF_ENABLED"] = original_csrf
+        if original_check_default is None:
+            app.config.pop("WTF_CSRF_CHECK_DEFAULT", None)
+        else:
+            app.config["WTF_CSRF_CHECK_DEFAULT"] = original_check_default
 
 
 def test_green_12_csrf_partition_tracked_disjoint_and_cumulative_expectation():

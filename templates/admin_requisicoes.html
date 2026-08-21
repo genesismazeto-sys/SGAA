@@ -672,7 +672,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         ], attrs={
           'data-req-id': r.id,
           'data-req-aluno': r.aluno_nome|e,
-          'data-atividade-id': r.atividade_id,
+          'data-atividade-id': r.atividade_versao_id,
           'data-tipo': r.tipo_atividade,
           'data-grupo': r.grupo|default('', true),
           'data-status': (r.status or '')|e,
@@ -879,7 +879,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <label class="row-label">Atividade</label>
             <div class="field-card" id="m_atividade_card">
               <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
-              <select class="control" id="m_atividade_id_select" name="atividade_id" required aria-label="Atividade">
+              <select class="control" id="m_atividade_versao_id_select" name="atividade_versao_id" required aria-label="Atividade">
                 <option value="" data-placeholder="1">Selecione uma atividade</option>
               </select>
             </div>
@@ -1060,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const numSel    = document.getElementById('m_grupo_num');
     const descInput = document.getElementById('m_grupo_desc');
     const hidGrupo  = document.getElementById('m_grupo_hidden');
-    const atvSel    = document.getElementById('m_atividade_id_select');
+    const atvSel    = document.getElementById('m_atividade_versao_id_select');
     const alunoSel  = document.getElementById('m_aluno_id_select');
     const scopeHint = document.getElementById('m_scope_hint');
     const uploadRow = document.getElementById('m_upload_row');
@@ -1583,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (typeof window.__setReqAllowedActivities === 'function'){
           window.__setReqAllowedActivities(
             data.allowed_activity_ids,
-            data.atividade_id || '',
+            data.atividade_versao_id || '',
             data.activities
           );
         }
@@ -1608,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           alunoId: data.aluno_id || '',
           tipo: data.tipo_atividade || '',
           grupo: data.grupo || '',
-          atividadeId: data.atividade_id || '',
+          atividadeId: data.atividade_versao_id || '',
           nomeEvento: (data.nome_evento || inlineNome || ''),
           horasSolicitadas: data.horas_solicitadas || '',
           dataEvento: (data.data_evento || '').split(' ')[0] || '',

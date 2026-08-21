@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-from app.db_maintenance import (
-    ensure_matriz_atividade_links_table,
-    ensure_matrizes_atividades_table,
-)
-
-
 class AcademicGraphFrozenError(RuntimeError):
     """Raised before a write would mutate a graph used by an assigned Turma."""
 
@@ -18,6 +12,8 @@ MATRIZ_STATUS_META = {
     "rascunho": {"label": "Rascunho", "badge_type": "warning"},
     "vigente": {"label": "Vigente", "badge_type": "success"},
     "encerrada": {"label": "Encerrada", "badge_type": "danger"},
+    "ativa": {"label": "Ativa", "badge_type": "success"},
+    "inativa": {"label": "Inativa", "badge_type": "danger"},
 }
 
 
@@ -71,21 +67,23 @@ def is_activity_version_referenced_by_assigned_matrix(
     )
 
 
-def is_activity_referenced_by_assigned_matrix(conn, atividade_id: int | None) -> bool:
-    """Return whether a legacy activity belongs to an assigned Matrix."""
-    if not atividade_id:
+def is_activity_base_referenced_by_assigned_matrix(
+    conn, atividade_base_id: int | None
+) -> bool:
+    """Return whether any selected version of a base is in an assigned Matrix."""
+    if not atividade_base_id:
         return False
     return (
         conn.execute(
             """
             SELECT EXISTS(
                 SELECT 1
-                  FROM matrizes_atividades_itens mai
-                  JOIN turmas t ON t.matriz_id = mai.matriz_id
-                 WHERE mai.atividade_id = ?
+                  FROM matriz_atividade_versao_item mavi
+                  JOIN turmas t ON t.matriz_id = mavi.matriz_id
+                 WHERE mavi.atividade_base_id = ?
             )
             """,
-            (atividade_id,),
+            (atividade_base_id,),
         ).fetchone()[0]
         == 1
     )
@@ -96,7 +94,6 @@ def get_effective_matriz_for_turma(
     curso_id: int | None,
     turma_matriz_id: int | None,
 ):
-    ensure_matrizes_atividades_table(conn)
     if not turma_matriz_id or not curso_id:
         return None
     return conn.execute(
@@ -105,42 +102,40 @@ def get_effective_matriz_for_turma(
     ).fetchone()
 
 
-def is_activity_allowed_for_turma_matrix(
+def is_activity_version_allowed_for_turma_matrix(
     conn,
-    atividade_id: int | None,
+    atividade_versao_id: int | None,
     curso_id: int | None,
     turma_matriz_id: int | None,
 ) -> bool:
-    if not atividade_id:
+    if not atividade_versao_id:
         return False
-    ensure_matriz_atividade_links_table(conn)
     matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
     if not matriz:
         return False
     row = conn.execute(
-        "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
-        (matriz["id"], atividade_id),
+        "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id = ? AND atividade_versao_id = ?",
+        (matriz["id"], atividade_versao_id),
     ).fetchone()
     return row is not None
 
 
-def get_allowed_activity_ids_for_turma_matrix(
+def get_allowed_activity_version_ids_for_turma_matrix(
     conn,
     curso_id: int | None,
     turma_matriz_id: int | None,
 ):
-    ensure_matriz_atividade_links_table(conn)
     matriz = get_effective_matriz_for_turma(conn, curso_id, turma_matriz_id)
     if not matriz:
         return set(), None
-    activity_ids = {
-        row["atividade_id"]
+    version_ids = {
+        row["atividade_versao_id"]
         for row in conn.execute(
-            "SELECT atividade_id FROM matrizes_atividades_itens WHERE matriz_id = ?",
+            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
             (matriz["id"],),
         ).fetchall()
     }
-    return activity_ids, matriz
+    return version_ids, matriz
 
 
 __all__ = [
@@ -150,10 +145,10 @@ __all__ = [
     "MATRIZ_STATUS_META",
     "_matriz_option_label",
     "_matriz_status_label",
-    "get_allowed_activity_ids_for_turma_matrix",
+    "get_allowed_activity_version_ids_for_turma_matrix",
     "get_effective_matriz_for_turma",
-    "is_activity_referenced_by_assigned_matrix",
+    "is_activity_base_referenced_by_assigned_matrix",
     "is_activity_version_referenced_by_assigned_matrix",
-    "is_activity_allowed_for_turma_matrix",
+    "is_activity_version_allowed_for_turma_matrix",
     "is_matrix_assigned",
 ]

@@ -444,7 +444,6 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_catalogo_versoes",          # R1  GET  /admin/catalogo-versoes
         "admin_catalogo_versao_detalhe",   # R2  GET  /admin/catalogo-versoes/<base_id>
         "admin_normas_atividade",          # R3  GET  /admin/normas-atividade
-        "admin_mapeamento_legado",         # R4  GET  /admin/mapeamento-legado
     }:
         return _permission("atividades", "view")
     if endpoint in {
@@ -475,8 +474,6 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_diagnostico_atividades_versionadas_view",  # R23
     }:
         return _permission("atividades", "view")
-    if method_norm == "GET" and endpoint == "admin_diagnostico_versioned_shadow_reads":  # R24
-        return _permission("banco_dados", "view")
 
     return None
 

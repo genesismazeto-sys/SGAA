@@ -94,15 +94,13 @@ def _create_support_turma(conn, suffix: str) -> int:
     turma_id = conn.execute(
         """
         INSERT INTO turmas (
-            nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
+            nome, turno, status, numero, curso_id, matriz_id,
             ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         """,
         (
             turma_codigo,
-            None,
-            None,
             "Manha",
             "Ativa",
             1,

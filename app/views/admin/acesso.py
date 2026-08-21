@@ -130,7 +130,7 @@ def admin_acesso():
     if q:
         like = f"%{q}%"
         where.append(
-            "(u.nome LIKE ? OR u.email LIKE ? OR COALESCE(a.matricula, '') LIKE ? OR COALESCE(t.codigo, t.nome, a.turma, '') LIKE ?)"
+            "(u.nome LIKE ? OR u.email LIKE ? OR COALESCE(a.matricula, '') LIKE ? OR COALESCE(t.codigo, t.nome, '') LIKE ?)"
         )
         params.extend([like, like, like, like])
     append_text_contains_condition(where, params, "u.nome", nome_filter)
@@ -173,7 +173,7 @@ def admin_acesso():
             a.matricula,
             a.status AS aluno_status,
             a.turma_id,
-            COALESCE(t.codigo, t.nome, a.turma, '') AS turma_label
+            COALESCE(t.codigo, t.nome, '') AS turma_label
         """
         + base_from
         + where_sql
@@ -436,18 +436,18 @@ def admin_acesso_salvar():
                 conn.execute(
                     """
                     UPDATE alunos
-                       SET nome = ?, email = ?, matricula = ?, turma = ?, turma_id = ?, status = ?
+                       SET nome = ?, email = ?, matricula = ?, turma_id = ?, status = ?
                      WHERE usuario_id = ?
                     """,
-                    (nome, email, matricula, turma_label or None, turma_id, status_aluno, usuario_id),
+                    (nome, email, matricula, turma_id, status_aluno, usuario_id),
                 )
             else:
                 conn.execute(
                     """
-                    INSERT INTO alunos (usuario_id, nome, matricula, email, turma, turma_id, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (usuario_id, nome, matricula, email, turma_label or None, turma_id, status_aluno),
+                    (usuario_id, nome, matricula, email, turma_id, status_aluno),
                 )
         elif aluno_existente:
             conn.execute(

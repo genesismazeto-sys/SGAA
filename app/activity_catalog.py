@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import json
 
+from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
 from app.text import normalize_header
+
+
+ACTIVITY_VERSION_SEMANTIC_FIELDS = frozenset({
+    "norma_id", "codigo_normativo", "eixo", "grupo", "ch_por_evento",
+    "limite_semestre", "limite_total", "observacao_aluno",
+    "observacao_admin", "documentos_json", "vigencia_inicio", "vigencia_fim",
+    "versao_anterior_id",
+})
 
 
 def parse_documentos_json(raw) -> list[str]:
@@ -157,6 +166,15 @@ def get_versoes_por_base(conn, base_id: int) -> list:
     ).fetchall()
 
 
+def get_latest_atividade_versao_for_base(conn, base_id: int):
+    """Return the highest numbered version for an exact activity base."""
+    return conn.execute(
+        "SELECT id, eixo FROM atividade_versao "
+        "WHERE atividade_base_id = ? ORDER BY numero_versao DESC LIMIT 1",
+        (base_id,),
+    ).fetchone()
+
+
 def get_norma_list(conn) -> list:
     """
     Retorna todas as norma_atividade com contagem de versões vinculadas.
@@ -263,6 +281,143 @@ def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
     }
 
 
+def can_activity_version_be_mutated_in_place(conn, versao_id: int) -> bool:
+    """Central freeze policy for semantic Activity Version writes.
+
+    Only a genuine, unreferenced draft is editable. Active/lifecycle-frozen
+    versions, assigned Matrix versions, request history and transition
+    provenance always require a successor.
+    """
+    version = get_atividade_versao_by_id(conn, versao_id)
+    if version is None or version["status"] != "rascunho":
+        return False
+    usage = get_atividade_versao_usage_counts(conn, versao_id)
+    return not (
+        usage["requisicoes"]
+        or usage["atividade_transicao_origem"]
+        or usage["atividade_transicao_destino"]
+        or is_activity_version_referenced_by_assigned_matrix(conn, versao_id)
+    )
+
+
+def apply_activity_version_semantic_changes(
+    conn,
+    versao_id: int,
+    changes: dict[str, object],
+    *,
+    create_successor_if_frozen: bool = True,
+) -> dict[str, object]:
+    """Apply semantic changes through the sole canonical mutation policy.
+
+    Frozen predecessors are never updated. A same-axis successor is copied in
+    full and receives only the intentional delta; Matrix links are untouched.
+    The caller owns the surrounding transaction.
+    """
+    unknown = set(changes) - ACTIVITY_VERSION_SEMANTIC_FIELDS
+    if unknown:
+        raise ValueError(f"Campos semânticos não autorizados: {sorted(unknown)!r}")
+    version = get_atividade_versao_by_id(conn, versao_id)
+    if version is None:
+        raise ValueError("Versão de atividade não encontrada")
+    effective_changes = {
+        field: value for field, value in changes.items() if version[field] != value
+    }
+    if not effective_changes:
+        return {"mode": "unchanged", "version_id": int(versao_id), "predecessor_id": None}
+
+    if can_activity_version_be_mutated_in_place(conn, versao_id):
+        assignments = ", ".join(f"{field} = ?" for field in effective_changes)
+        conn.execute(
+            f"UPDATE atividade_versao SET {assignments} WHERE id = ?",
+            (*effective_changes.values(), versao_id),
+        )
+        return {"mode": "updated", "version_id": int(versao_id), "predecessor_id": None}
+
+    if not create_successor_if_frozen:
+        raise ValueError("Esta versão já está em uso e não pode mais ser editada.")
+    if "eixo" in effective_changes and effective_changes["eixo"] != version["eixo"]:
+        raise ValueError("Mudança de eixo exige nova versão e transição explícita")
+
+    payload = {field: version[field] for field in ACTIVITY_VERSION_SEMANTIC_FIELDS}
+    payload.update(effective_changes)
+    next_number = get_next_numero_versao(conn, int(version["atividade_base_id"]))
+    columns = (
+        "atividade_base_id", "norma_id", "codigo_normativo", "eixo", "grupo",
+        "ch_por_evento", "limite_semestre", "limite_total", "observacao_aluno",
+        "observacao_admin", "documentos_json", "vigencia_inicio", "vigencia_fim",
+        "numero_versao", "status", "versao_anterior_id",
+    )
+    values = (
+        version["atividade_base_id"], payload["norma_id"],
+        payload["codigo_normativo"], payload["eixo"], payload["grupo"],
+        payload["ch_por_evento"], payload["limite_semestre"],
+        payload["limite_total"], payload["observacao_aluno"],
+        payload["observacao_admin"], payload["documentos_json"],
+        payload["vigencia_inicio"], payload["vigencia_fim"], next_number,
+        "rascunho", versao_id,
+    )
+    placeholders = ",".join("?" for _ in columns)
+    successor_id = conn.execute(
+        f"INSERT INTO atividade_versao ({','.join(columns)}) VALUES ({placeholders}) RETURNING id",
+        values,
+    ).fetchone()[0]
+    return {
+        "mode": "successor",
+        "version_id": int(successor_id),
+        "predecessor_id": int(versao_id),
+    }
+
+
+def apply_latest_activity_version_semantic_changes(
+    conn,
+    base_id: int,
+    changes: dict[str, object],
+    *,
+    expected_axis: str | None = None,
+) -> dict[str, object]:
+    """Resolve and mutate the current version inside the canonical owner."""
+    version = conn.execute(
+        "SELECT * FROM atividade_versao WHERE atividade_base_id = ? "
+        "ORDER BY numero_versao DESC, id DESC LIMIT 1",
+        (base_id,),
+    ).fetchone()
+    if version is None:
+        raise ValueError("Atividade-base sem versão canônica")
+    if expected_axis is not None and version["eixo"] != expected_axis:
+        raise ValueError("Import não pode mudar o eixo de uma base existente")
+    return apply_activity_version_semantic_changes(conn, int(version["id"]), changes)
+
+
+def rename_current_activity_group_versions(
+    conn,
+    *,
+    eixo: str,
+    group_number: str,
+    new_label: str,
+) -> list[dict[str, object]]:
+    """Rename only each base's current semantic version via the freeze policy."""
+    rows = conn.execute(
+        "SELECT * FROM atividade_versao WHERE eixo = ? "
+        "ORDER BY atividade_base_id, numero_versao DESC, id DESC",
+        (eixo,),
+    ).fetchall()
+    current_by_base = {}
+    for row in rows:
+        current_by_base.setdefault(int(row["atividade_base_id"]), row)
+    results = []
+    for row in current_by_base.values():
+        raw_group = str(row["grupo"] or "").strip()
+        numeric_prefix = raw_group.split("-", 1)[0].strip()
+        if numeric_prefix != str(group_number) or raw_group == new_label:
+            continue
+        results.append(
+            apply_activity_version_semantic_changes(
+                conn, int(row["id"]), {"grupo": new_label}
+            )
+        )
+    return results
+
+
 def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
     """
     Lista o histórico administrativo de atividade_transicao relacionado a uma
@@ -317,44 +472,6 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
     return transicoes
 
 
-def get_legacy_map_list(conn) -> list:
-    """
-    Retorna as atividades legadas com seus dados de mapeamento
-    (LEFT JOIN em atividade_legacy_map) e contagem de requisições existentes.
-    Estritamente read-only — não cria nenhuma entrada em atividade_legacy_map.
-    """
-    return conn.execute(
-        """
-        SELECT
-            a.id                     AS atividade_id,
-            a.nome                   AS atividade_nome,
-            a.tipo_atividade,
-            a.grupo,
-            alm.id                   AS mapa_id,
-            alm.status               AS mapa_status,
-            alm.atividade_base_id    AS base_id,
-            ab.nome_conceito         AS base_nome,
-            alm.observacao_admin,
-            alm.created_at           AS mapa_criado_em,
-            COUNT(r.id)              AS qtd_requisicoes
-          FROM atividades a
-          LEFT JOIN atividade_legacy_map alm ON alm.atividade_id_legacy = a.id
-          LEFT JOIN atividade_base ab ON ab.id = alm.atividade_base_id
-          LEFT JOIN requisicoes r ON r.atividade_id = a.id
-         GROUP BY a.id
-         ORDER BY
-            CASE COALESCE(alm.status, 'sem_mapa')
-                WHEN 'pendente'   THEN 0
-                WHEN 'revisar'    THEN 1
-                WHEN 'sem_mapa'   THEN 2
-                WHEN 'mapeada'    THEN 3
-                ELSE 4
-            END ASC,
-            LOWER(a.nome) ASC
-        """
-    ).fetchall()
-
-
 __all__ = [
     'parse_documentos_json',
     '_normalize_atividade_grupo',
@@ -369,6 +486,9 @@ __all__ = [
     'get_next_numero_versao',
     'get_atividade_versao_by_id',
     'get_atividade_versao_usage_counts',
+    'can_activity_version_be_mutated_in_place',
+    'apply_activity_version_semantic_changes',
+    'apply_latest_activity_version_semantic_changes',
+    'rename_current_activity_group_versions',
     'get_atividade_transicoes_por_base',
-    'get_legacy_map_list',
 ]

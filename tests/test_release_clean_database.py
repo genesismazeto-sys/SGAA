@@ -160,7 +160,10 @@ def test_release_clean_database_installation_and_idempotence(tmp_path):
                 "alunos",
                 "cursos",
                 "turmas",
-                "atividades",
+                "atividade_base",
+                "atividade_versao",
+                "norma_atividade",
+                "matriz_atividade_versao_item",
                 "requisicoes",
                 "requisicao_arquivos",
                 "configuracoes_acesso",
@@ -208,13 +211,14 @@ def test_release_clean_database_installation_and_idempotence(tmp_path):
             requisicoes_columns = _table_columns(conn, "requisicoes")
             assert {
                 "aluno_id",
-                "atividade_id",
+                "atividade_versao_id",
                 "data_solicitacao",
                 "data_evento",
                 "horas_solicitadas",
                 "status",
                 "nome_evento",
-                "arquivo_comprovante",
+                "regra_snapshot_json",
+                "codigo_normativo_snapshot",
                 "data_processamento",
                 "admin_id",
             }.issubset(requisicoes_columns), (

@@ -160,10 +160,13 @@ def _seed_ativa_com_vinculo() -> dict:
             " VALUES (?, ?, ?, 'AAC', '1 - B5v', 'ativa') RETURNING id",
             (base_id, norma_id, f"B5VN{t}"),
         ).fetchone()["id"]
+        base_id = conn.execute(
+            "SELECT atividade_base_id FROM atividade_versao WHERE id = ?", (versao_id,)
+        ).fetchone()["atividade_base_id"]
         conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
-            (matriz_id, versao_id),
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+            (matriz_id, base_id, versao_id),
         )
         conn.commit()
     return {
@@ -204,12 +207,6 @@ def _seed_full_resolver_setup() -> dict:
             " VALUES (?, 'Base B5r', 'ativo') RETURNING id",
             (f"Base B5r {t}",),
         ).fetchone()["id"]
-        atividade_id = conn.execute(
-            "INSERT INTO atividades"
-            " (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao)"
-            " VALUES ('1 - B5r', ?, 'B5r', 40, 'Acadêmica Complementar', 0) RETURNING id",
-            (f"Atividade B5r {t}",),
-        ).fetchone()["id"]
         versao_id = conn.execute(
             "INSERT INTO atividade_versao"
             " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
@@ -217,23 +214,13 @@ def _seed_full_resolver_setup() -> dict:
             (base_id, norma_id, f"B5RN{t}"),
         ).fetchone()["id"]
         conn.execute(
-            "INSERT INTO atividade_legacy_map"
-            " (atividade_id_legacy, atividade_base_id, status)"
-            " VALUES (?, ?, 'mapeada')",
-            (atividade_id, base_id),
-        )
-        conn.execute(
-            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id)"
-            " VALUES (?, ?)",
-            (matriz_id, atividade_id),
-        )
-        conn.execute(
             "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
             (matriz_id, norma_id),
         )
         conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) "
+            "SELECT ?, atividade_base_id, id FROM atividade_versao WHERE id = ?",
             (matriz_id, versao_id),
         )
         conn.commit()
@@ -242,7 +229,7 @@ def _seed_full_resolver_setup() -> dict:
         "norma_id": norma_id,
         "versao_id": versao_id,
         "matriz_id": matriz_id,
-        "atividade_id": atividade_id,
+        "atividade_id": versao_id,
     }
 
 
@@ -280,12 +267,6 @@ def _seed_multi_base_matrix() -> dict:
             " VALUES (?, 'Base A', 'ativo') RETURNING id",
             (f"Base B5m A {t}",),
         ).fetchone()["id"]
-        ativ_a_id = conn.execute(
-            "INSERT INTO atividades"
-            " (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao)"
-            " VALUES ('1 - B5mA', ?, 'A', 40, 'Acadêmica Complementar', 0) RETURNING id",
-            (f"Atividade B5m A {t}",),
-        ).fetchone()["id"]
         versao_a_id = conn.execute(
             "INSERT INTO atividade_versao"
             " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
@@ -293,19 +274,9 @@ def _seed_multi_base_matrix() -> dict:
             (base_a_id, norma_id, f"B5MNA{t}"),
         ).fetchone()["id"]
         conn.execute(
-            "INSERT INTO atividade_legacy_map"
-            " (atividade_id_legacy, atividade_base_id, status)"
-            " VALUES (?, ?, 'mapeada')",
-            (ativ_a_id, base_a_id),
-        )
-        conn.execute(
-            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id)"
-            " VALUES (?, ?)",
-            (matriz_id, ativ_a_id),
-        )
-        conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) "
+            "SELECT ?, atividade_base_id, id FROM atividade_versao WHERE id = ?",
             (matriz_id, versao_a_id),
         )
 
@@ -315,12 +286,6 @@ def _seed_multi_base_matrix() -> dict:
             " VALUES (?, 'Base B', 'ativo') RETURNING id",
             (f"Base B5m B {t}",),
         ).fetchone()["id"]
-        ativ_b_id = conn.execute(
-            "INSERT INTO atividades"
-            " (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao)"
-            " VALUES ('1 - B5mB', ?, 'B', 40, 'Acadêmica Complementar', 0) RETURNING id",
-            (f"Atividade B5m B {t}",),
-        ).fetchone()["id"]
         versao_b_id = conn.execute(
             "INSERT INTO atividade_versao"
             " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
@@ -328,19 +293,9 @@ def _seed_multi_base_matrix() -> dict:
             (base_b_id, norma_id, f"B5MNB{t}"),
         ).fetchone()["id"]
         conn.execute(
-            "INSERT INTO atividade_legacy_map"
-            " (atividade_id_legacy, atividade_base_id, status)"
-            " VALUES (?, ?, 'mapeada')",
-            (ativ_b_id, base_b_id),
-        )
-        conn.execute(
-            "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id)"
-            " VALUES (?, ?)",
-            (matriz_id, ativ_b_id),
-        )
-        conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) "
+            "SELECT ?, atividade_base_id, id FROM atividade_versao WHERE id = ?",
             (matriz_id, versao_b_id),
         )
         conn.commit()
@@ -349,10 +304,10 @@ def _seed_multi_base_matrix() -> dict:
         "norma_id": norma_id,
         "base_a_id": base_a_id,
         "versao_a_id": versao_a_id,
-        "ativ_a_id": ativ_a_id,
+        "ativ_a_id": versao_a_id,
         "base_b_id": base_b_id,
         "versao_b_id": versao_b_id,
-        "ativ_b_id": ativ_b_id,
+        "ativ_b_id": versao_b_id,
     }
 
 
@@ -485,8 +440,9 @@ def _criar_vinculo_matriz_para_versao(versao_id: int) -> int:
             (curso_id, f"Matriz Sub {token}"),
         ).fetchone()["id"]
         conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) "
+            "SELECT ?, atividade_base_id, id FROM atividade_versao WHERE id = ?",
             (matriz_id, versao_id),
         )
         conn.commit()
@@ -654,7 +610,7 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
         resultado_antes = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
-            atividade_id_legacy=seed["atividade_id"],
+            atividade_versao_id=seed["atividade_id"],
         )
     assert resultado_antes["status"] == "resolved"
     assert resultado_antes["atividade_versao_id"] == seed["versao_id"]
@@ -684,7 +640,7 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
         resultado_depois = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
-            atividade_id_legacy=seed["atividade_id"],
+            atividade_versao_id=seed["atividade_id"],
         )
     assert resultado_depois["status"] != "resolved"
 
@@ -885,7 +841,7 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
         resultado_b_antes = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
-            atividade_id_legacy=seed["ativ_b_id"],
+            atividade_versao_id=seed["ativ_b_id"],
         )
     assert resultado_b_antes["status"] == "resolved"
     assert resultado_b_antes["atividade_versao_id"] == seed["versao_b_id"]
@@ -915,7 +871,7 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
         resultado_b_depois = resolver_service.resolver_versao_por_matriz(
             conn,
             matriz_id=seed["matriz_id"],
-            atividade_id_legacy=seed["ativ_b_id"],
+            atividade_versao_id=seed["ativ_b_id"],
         )
     assert resultado_b_depois["status"] == "resolved"
     assert resultado_b_depois["atividade_versao_id"] == seed["versao_b_id"]

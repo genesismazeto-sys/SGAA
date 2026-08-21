@@ -51,7 +51,6 @@ HIGH_CONFIDENCE_POLICIES = {
     ("admin_catalogo_versoes", "GET"): ("atividades", "view"),
     ("admin_catalogo_versao_detalhe", "GET"): ("atividades", "view"),
     ("admin_normas_atividade", "GET"): ("atividades", "view"),
-    ("admin_mapeamento_legado", "GET"): ("atividades", "view"),
     # atividades/edit (R5-R16)
     ("admin_catalogo_nova_base", "GET"): ("atividades", "edit"),
     ("admin_catalogo_nova_base", "POST"): ("atividades", "edit"),
@@ -80,7 +79,7 @@ HIGH_CONFIDENCE_POLICIES = {
 
 
 def test_high_confidence_policy_count_is_exactly_21():
-    assert len(HIGH_CONFIDENCE_POLICIES) == 21
+    assert len(HIGH_CONFIDENCE_POLICIES) == 20
 
 
 @pytest.mark.parametrize(

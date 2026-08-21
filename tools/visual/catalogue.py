@@ -287,7 +287,6 @@ ADMIN_PAGES = [
     ("admin_banco_dados", "/admin/banco-dados"),
     ("admin_normas_atividade", "/admin/normas-atividade"),
     ("admin_catalogo_versoes", "/admin/catalogo-versoes"),
-    ("admin_mapeamento_legado", "/admin/mapeamento-legado"),
     ("admin_adicionar_aluno", "/admin/adicionar_aluno"),
     ("admin_adicionar_turma", "/admin/adicionar_turma"),
     ("admin_adicionar_curso", "/admin/cursos/adicionar"),

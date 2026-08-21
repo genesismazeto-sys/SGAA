@@ -36,35 +36,21 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         main.ensure_matriz_atividade_links_table(conn)
         curso = conn.execute("SELECT id FROM cursos ORDER BY id LIMIT 1").fetchone()
         assert curso is not None
+        norma_id = conn.execute(
+            """INSERT INTO norma_atividade(codigo,eixo,revisao,nome,status)
+                 VALUES ('AAC-matrix-test','AAC','test','Norma matrix test','ativa') RETURNING id"""
+        ).fetchone()["id"]
         conn.execute("DELETE FROM matrizes_atividades WHERE nome = ?", (matrix_name,))
-        conn.execute("DELETE FROM atividades WHERE nome = ?", (activity_name,))
-        conn.execute(
-            """
-            INSERT INTO atividades (
-                grupo,
-                nome,
-                limite_horas,
-                tipo_atividade,
-                tem_limitacao,
-                tipo_limitacao,
-                limite_horas_total,
-                limite_horas_semestral,
-                documentos_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "99 - Grupo Automatizado",
-                activity_name,
-                None,
-                "Acadêmica Complementar",
-                1,
-                "total",
-                16,
-                None,
-                None,
-            ),
-        )
-        activity_id = conn.execute("SELECT id FROM atividades WHERE nome = ?", (activity_name,)).fetchone()["id"]
+        base_id = conn.execute(
+            "INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES (?,?,'ativo') RETURNING id",
+            (activity_name, "Automated matrix test"),
+        ).fetchone()["id"]
+        activity_id = conn.execute(
+            """INSERT INTO atividade_versao
+                   (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,limite_total,numero_versao,status)
+                 VALUES (?,?,'AAC-test','AAC','99 - Grupo Automatizado',16,1,'ativa') RETURNING id""",
+            (base_id, norma_id),
+        ).fetchone()["id"]
         conn.commit()
 
     _login_admin(client)
@@ -101,6 +87,8 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         assert matriz["horas_aac_obrigatorias"] == 180
         assert matriz["horas_extensao_obrigatorias"] == 90
         matriz_id = matriz["id"]
+        conn.execute("INSERT INTO matriz_norma(matriz_id,norma_id) VALUES (?,?)", (matriz_id, norma_id))
+        conn.commit()
 
     edit_tab = client.get(f"/admin/editar_matriz/{matriz_id}?tab=aac")
     assert edit_tab.status_code == 200
@@ -125,7 +113,7 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
     with main.app.app_context():
         conn = main.get_db_connection()
         linked = conn.execute(
-            "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
+            "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id = ? AND atividade_versao_id = ?",
             (matriz_id, activity_id),
         ).fetchone()
         assert linked is not None
@@ -137,10 +125,12 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         conn = main.get_db_connection()
         removed_matriz = conn.execute("SELECT 1 FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
         removed_link = conn.execute(
-            "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
+            "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id = ? AND atividade_versao_id = ?",
             (matriz_id, activity_id),
         ).fetchone()
-        conn.execute("DELETE FROM atividades WHERE id = ?", (activity_id,))
+        conn.execute("DELETE FROM atividade_versao WHERE id = ?", (activity_id,))
+        conn.execute("DELETE FROM atividade_base WHERE id = ?", (base_id,))
+        conn.execute("DELETE FROM norma_atividade WHERE id = ?", (norma_id,))
         conn.commit()
         assert removed_matriz is None
         assert removed_link is None

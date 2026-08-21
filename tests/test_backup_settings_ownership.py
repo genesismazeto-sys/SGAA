@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import main
 from app import db as app_db
 from app import db_maintenance
+from app.prod1_schema import bootstrap_prod1_schema
 from app.views.admin import banco_dados as banco_dados_module
 
 backup_settings = importlib.import_module("app.backup_settings")
@@ -59,6 +60,7 @@ EXACT_DEFAULTS = {
 def _memory_connection():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    bootstrap_prod1_schema(conn)
     return conn
 
 
@@ -173,9 +175,10 @@ def test_zero_lazy_bridge_and_explicit_bootstrap_binding_position():
     assert init_source.index("bind_backup_settings_runtime_app(runtime_app)") < init_source.index(
         "conn = get_db_connection()"
     )
-    assert init_source.index("ensure_usuario_profile_schema(conn)") < init_source.index(
+    assert init_source.index("apply_early_schema_migrations(conn") < init_source.index(
         "ensure_backup_settings_schema(conn)"
-    ) < init_source.index("CREATE TABLE IF NOT EXISTS alunos")
+    )
+    assert "CREATE TABLE" not in init_source.upper()
 
 
 def test_complete_one_argument_caller_and_application_context_contract():
@@ -575,7 +578,7 @@ def test_success_transaction_matrix_clean_outer_repeat_and_caller_rollback():
         assert not outer.in_transaction
         assert outer.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='configuracoes_backup'"
-        ).fetchone()[0] == 0
+        ).fetchone()[0] == 1
 
 
 def test_failure_before_any_dml_propagates_without_transaction_or_runtime_effect(monkeypatch):

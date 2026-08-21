@@ -906,15 +906,8 @@ def _dynamic_lookup() -> tuple[tuple[re.Pattern[str], dict[str, Any]], ...]:
 
 
 def ensure_message_overrides_schema(conn) -> None:
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {MESSAGE_TABLE_NAME} (
-            chave TEXT PRIMARY KEY,
-            texto TEXT NOT NULL,
-            atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
-    )
+    """Validate the centrally-owned prod-1 message table without DDL."""
+    conn.execute(f"SELECT chave, texto, atualizado_em FROM {MESSAGE_TABLE_NAME} LIMIT 0")
 
 
 def _get_runtime_db_connection():

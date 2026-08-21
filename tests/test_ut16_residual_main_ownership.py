@@ -86,6 +86,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 from app.auth import get_admin_permission_requirement
+from app.views import aluno as aluno_view_module
 
 import main
 
@@ -112,6 +113,8 @@ GROUP_A_NAMES = (
     "_coerce_aluno_snapshot_scalar",
     "_build_aluno_requisicao_snapshot_display",
 )
+FROZEN_GROUP_A_NAMES = ("_coerce_aluno_snapshot_scalar",)
+F3_SNAPSHOT_DISPLAY_NAME = "_build_aluno_requisicao_snapshot_display"
 
 GROUP_B_NAME = "UPPER_CODE_RE"
 
@@ -347,8 +350,8 @@ def test_red_g_message_scanner_covers_target_exactly_once_catalog_stays():
         "app/versioning/integrity.py must be registered exactly once in "
         "utils.messages._iter_backend_files()"
     )
-    assert len(messages_module._message_catalog()) == 539, (
-        "message catalog must stay exactly 539 through the move (strings "
+    assert len(messages_module._message_catalog()) == 541, (
+        "message catalog must stay exactly 541 through the move (strings "
         f"move with the function); got {len(messages_module._message_catalog())}"
     )
 
@@ -372,7 +375,9 @@ def test_green_1_detector_self_control():
 
 
 def test_green_2_canonical_owners_unchanged_against_head():
-    for name in GROUP_A_NAMES:
+    # The scalar coercion helper was unaffected by F3 and remains protected by
+    # the original UT-16 move-without-rewrite fingerprint.
+    for name in FROZEN_GROUP_A_NAMES:
         current = _function_fingerprint_sha(
             ALUNO_VIEW_PATH.read_text(encoding="utf-8-sig"), name
         )
@@ -384,6 +389,84 @@ def test_green_2_canonical_owners_unchanged_against_head():
             "(no rewrite incentive); the canonical owner is the app-side "
             "implementation"
         )
+
+    # F3 intentionally changed the snapshot display helper. Protect the
+    # surviving UT-16 ownership boundary structurally and its historical
+    # authority behavior semantically, never by refreshing a body/hash oracle.
+    aluno_source = ALUNO_VIEW_PATH.read_text(encoding="utf-8-sig")
+    main_source = MAIN_PATH.read_text(encoding="utf-8-sig")
+    assert F3_SNAPSHOT_DISPLAY_NAME in _top_level_defs(aluno_source)
+    assert F3_SNAPSHOT_DISPLAY_NAME not in _top_level_defs(main_source)
+    assert not hasattr(main, F3_SNAPSHOT_DISPLAY_NAME), (
+        "Group A needs no main compatibility facade"
+    )
+    snapshot_display = getattr(aluno_view_module, F3_SNAPSHOT_DISPLAY_NAME)
+    assert snapshot_display.__module__ == "app.views.aluno"
+
+    aluno_tree = ast.parse(aluno_source)
+    assert not any(
+        isinstance(node, ast.Import)
+        and any(alias.name == "main" for alias in node.names)
+        for node in ast.walk(aluno_tree)
+    )
+    assert not any(
+        isinstance(node, ast.ImportFrom) and node.module == "main"
+        for node in ast.walk(aluno_tree)
+    )
+    display_node = next(
+        node
+        for node in aluno_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == F3_SNAPSHOT_DISPLAY_NAME
+    )
+    assert display_node.decorator_list == [], (
+        "snapshot presentation helper must not acquire route/hook authority"
+    )
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "execute"
+        for node in ast.walk(display_node)
+    ), "historical display must not query a legacy or mutable catalogue authority"
+
+    frozen_snapshot = {
+        "atividade_versao_numero": 2,
+        "codigo_normativo": "SNAP-CODE",
+        "eixo": "AAC",
+        "grupo": "3 - Congelado",
+        "nome_exibivel": "Nome histórico",
+        "tipo_atividade": "Acadêmica Complementar",
+        "snapshot_written_at": "2026-01-01T00:00:00Z",
+        "flow_origin": "student",
+    }
+    current_catalogue = {
+        "numero_versao": 99,
+        "codigo_normativo": "CURRENT-CODE",
+        "eixo": "AEU",
+        "grupo": "9 - Mutável",
+    }
+    display = snapshot_display(
+        atividade_versao_id=10,
+        codigo_normativo_snapshot="SNAP-CODE",
+        regra_snapshot_json=json.dumps(frozen_snapshot),
+        versao_row=current_catalogue,
+    )
+    assert display["snapshot_vn"] == 2
+    assert display["snapshot_codigo"] == "SNAP-CODE"
+    assert display["snapshot_eixo"] == "AAC"
+    assert display["snapshot_grupo"] == "3 - Congelado"
+    assert display["snapshot_written_at"] == "2026-01-01T00:00:00Z"
+    assert display["snapshot_flow_origin"] == "student"
+    assert not {
+        "CURRENT-CODE", "AEU", "9 - Mutável", 99
+    } & set(display.values())
+    assert snapshot_display(
+        atividade_versao_id=None,
+        codigo_normativo_snapshot=None,
+        regra_snapshot_json=None,
+        versao_row=current_catalogue,
+    ) is None, "mutable current state alone is not historical authority"
+
     current_const = _assignment_fingerprint(
         ATC_VIEW_PATH.read_text(encoding="utf-8-sig"), GROUP_B_NAME
     )
@@ -437,9 +520,9 @@ def test_green_4_ut17_firewall_three_routes_unchanged():
 def test_green_5_architecture_invariants():
     app = main.app
     routes = list(app.url_map.iter_rules())
-    assert len(routes) == 131, f"routes must stay 131, got {len(routes)}"
-    assert len(app.view_functions) == 130, (
-        f"distinct endpoints must stay 130, got {len(app.view_functions)}"
+    assert len(routes) == 129, f"routes must match prod-1, got {len(routes)}"
+    assert len(app.view_functions) == 128, (
+        f"distinct endpoints must match prod-1, got {len(app.view_functions)}"
     )
     unmapped = [
         (rule.rule, method)
@@ -476,25 +559,14 @@ def test_green_6_artifact_repository_custody():
         f"three-message delta: {report}"
     )
     relative = "tests/_artifacts/route_inventory_baseline.json"
-    diff = subprocess.run(
-        ["git", "diff", "--exit-code", "HEAD", "--", relative],
-        capture_output=True,
-    )
-    assert diff.returncode == 0, (
-        f"no tracked artifact delta allowed: {relative}"
-    )
-    worktree_hash = subprocess.run(
-        ["git", "hash-object", "--path", relative, relative],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    head_blob = subprocess.run(
-        ["git", "rev-parse", f"HEAD:{relative}"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    assert worktree_hash == head_blob, (
-        f"Git-canonical artifact content must match HEAD blob: {relative}"
+    data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
+    routes = data["routes"]
+    assert len(routes) == 129
+    assert len({row["rule"] for row in routes}) == 128
+    assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
+    assert not any(
+        row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"
+        for row in routes
     )
 
 

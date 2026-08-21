@@ -66,7 +66,7 @@ def _seed_turma(curso_id, codigo, numero, status="Ativa", ano=2026, semestre=1, 
         conn.execute("DELETE FROM turmas WHERE codigo = ?", (codigo,))
         conn.execute(
             """
-            INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, codigo)
+            INSERT INTO turmas (nome, ano_inicio, semestre_inicio, turno, status, numero, curso_id, codigo)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (codigo, ano, semestre, "Manha", status, numero, curso_id, codigo),

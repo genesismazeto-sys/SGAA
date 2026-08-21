@@ -65,6 +65,7 @@ import pytest
 
 import main
 import app.db as app_db
+from app.prod1_schema import Prod1SchemaError, bootstrap_prod1_schema
 from app.admin_access import _load_admin_access_context
 from app.auth import (
     DEFAULT_ACCESS_PASSWORDS,
@@ -158,29 +159,16 @@ def _normalized_sql(text: str) -> str:
 
 _ACCESS_BOOTSTRAP_SQL = (
     "SAVEPOINT ensure_usuario_access_schema",
-    "PRAGMA table_info(usuarios)",
-    (
-        "CREATE TABLE IF NOT EXISTS configuracoes_acesso "
-        "(nivel_acesso TEXT PRIMARY KEY, senha_padrao TEXT NOT NULL)"
-    ),
-    (
-        "CREATE TABLE IF NOT EXISTS usuarios_permissoes_acesso "
-        "(usuario_id INTEGER NOT NULL, recurso TEXT NOT NULL, escopo TEXT NOT NULL, "
-        "PRIMARY KEY (usuario_id, recurso), "
-        "FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE ON UPDATE CASCADE)"
-    ),
-    "CREATE INDEX IF NOT EXISTS idx_usuarios_permissoes_usuario ON usuarios_permissoes_acesso(usuario_id)",
-) + ("INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",) * 5 + (
+    "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'admin' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND LOWER(TRIM(COALESCE(nivel_acesso, ''))) = 'administrativo'",
+    "ROLLBACK TO SAVEPOINT ensure_usuario_access_schema",
     "RELEASE SAVEPOINT ensure_usuario_access_schema",
 )
 
 _MESSAGE_BOOTSTRAP_SQL = (
-    "CREATE TABLE IF NOT EXISTS {MESSAGE_TABLE_NAME} "
-    "(chave TEXT PRIMARY KEY, texto TEXT NOT NULL, "
-    "atualizado_em TEXT NOT NULL DEFAULT (datetime('now')))",
+    "SELECT chave, texto, atualizado_em FROM {MESSAGE_TABLE_NAME} LIMIT 0",
 )
 
 _WRITE_CLASS_POSITIVE_FORMS = (
@@ -876,11 +864,11 @@ def test_classifier_is_not_vacuous_against_the_live_access_bootstrap():
         assert _normalized_sql(statement) in normalized_source, (
             f"corpus statement not present in the live access bootstrap: {statement!r}"
         )
-    assert len(_ACCESS_BOOTSTRAP_SQL) == 14
-    assert sum(_is_write_class_sql(statement) for statement in _ACCESS_BOOTSTRAP_SQL) == 13
+    assert len(_ACCESS_BOOTSTRAP_SQL) == 7
+    assert sum(_is_write_class_sql(statement) for statement in _ACCESS_BOOTSTRAP_SQL) == 7
 
 
-def test_classifier_is_not_vacuous_against_the_live_message_bootstrap():
+def test_classifier_matches_the_read_only_message_schema_validator():
     source = (PROJECT_ROOT / "utils" / "messages.py").read_text(
         encoding="utf-8-sig"
     )
@@ -890,7 +878,7 @@ def test_classifier_is_not_vacuous_against_the_live_message_bootstrap():
             f"corpus statement not present in the live message bootstrap: {statement!r}"
         )
     assert len(_MESSAGE_BOOTSTRAP_SQL) == 1
-    assert sum(_is_write_class_sql(statement) for statement in _MESSAGE_BOOTSTRAP_SQL) == 1
+    assert sum(_is_write_class_sql(statement) for statement in _MESSAGE_BOOTSTRAP_SQL) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1064,10 +1052,7 @@ def test_init_db_creates_access_schema_and_defaults_on_fresh_database(_bootstrap
         main.close_db_connection(None)
 
 
-def test_init_db_repairs_legacy_database_missing_access_and_message_artifacts(tmp_path, request):
-    """RED (F2): on a legitimate legacy fixture, init_db repairs the access
-    artifacts but the missing message-bootstrap ownership remains, so the
-    mensagens_editaveis table is still absent."""
+def test_init_db_rejects_legacy_database_without_mutation(tmp_path, monkeypatch):
     db_path = tmp_path / "app.db"
     raw = sqlite3.connect(str(db_path))
     raw.execute(
@@ -1081,29 +1066,16 @@ def test_init_db_repairs_legacy_database_missing_access_and_message_artifacts(tm
     )
     raw.commit()
     raw.close()
-    env = request.getfixturevalue("_bootstrapped_env")
-    assert env.db_path == db_path
+    before = hashlib.sha256(db_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(app_db, "DATABASE", str(db_path))
+    monkeypatch.setattr(main, "DATABASE", str(db_path))
+    monkeypatch.setitem(main.app.config, "DATABASE_PATH", str(db_path))
     with main.app.app_context():
-        conn = app_db.get_db_connection()
-        access = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'configuracoes_acesso'"
-        ).fetchone()
-        assert access is not None
-        count = conn.execute("SELECT COUNT(*) FROM configuracoes_acesso").fetchone()[0]
-        assert count == 5
-        permissions = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usuarios_permissoes_acesso'"
-        ).fetchone()
-        assert permissions is not None
-        message_table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mensagens_editaveis'"
-        ).fetchone()
         main.close_db_connection(None)
-    assert message_table is not None, (
-        "init_db repaired access artifacts on the legacy database but did NOT "
-        "bootstrap mensagens_editaveis; the failure is specifically the missing "
-        "message-bootstrap ownership (F2)"
-    )
+        with pytest.raises(Prod1SchemaError, match="nonempty database"):
+            main.init_db()
+        main.close_db_connection(None)
+    assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before
 
 
 def test_request_path_does_not_repair_a_deliberately_stale_database(_bootstrapped_env):
@@ -1289,7 +1261,7 @@ def test_request_connection_does_not_convert_journal_mode_on_a_non_wal_database(
 def test_init_db_establishes_wal_on_a_non_wal_database(tmp_path, request):
     db_path = tmp_path / "app.db"
     raw = sqlite3.connect(str(db_path))
-    raw.execute("CREATE TABLE probe (id INTEGER PRIMARY KEY)")
+    bootstrap_prod1_schema(raw)
     raw.execute("PRAGMA journal_mode = DELETE")
     raw.commit()
     raw.close()
@@ -1458,7 +1430,9 @@ def test_hook_closure_does_not_instantiate_or_configure_logging_handlers():
     )
 
 
-def test_handler_identities_and_destinations_unchanged_after_representative_dispatches(_bootstrapped_env):
+def test_handler_identities_and_destinations_unchanged_after_representative_dispatches(
+    _bootstrapped_env, monkeypatch
+):
     env = _bootstrapped_env
     from werkzeug.routing import Rule
 
@@ -1495,20 +1469,20 @@ def test_handler_identities_and_destinations_unchanged_after_representative_disp
         )
         assert response.status_code == 302
         assert snapshot() == before
-        env.app.config["WTF_CSRF_ENABLED"] = True
-        try:
-            with env.client.session_transaction() as session:
-                session.clear()
-            response = env.client.post("/admin/c4-csrf-probe-30", data={"x": "1"})
-            assert response.status_code == 400
-        finally:
-            env.app.config["WTF_CSRF_ENABLED"] = False
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_ENABLED", True)
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_CHECK_DEFAULT", True)
+        with env.client.session_transaction() as session:
+            session.clear()
+        response = env.client.post("/admin/c4-csrf-probe-30", data={"x": "1"})
+        assert response.status_code == 400
         assert snapshot() == before
     finally:
         _unregister_probe_rule(csrf_rule, "admin_c4_csrf_probe_30")
 
 
-def test_hook_reachable_logging_resolves_only_to_preconfigured_local_sinks_under_app_log_dir(_bootstrapped_env):
+def test_hook_reachable_logging_resolves_only_to_preconfigured_local_sinks_under_app_log_dir(
+    _bootstrapped_env, monkeypatch
+):
     env = _bootstrapped_env
     log_dir = Path(os.environ["APP_LOG_DIR"]).resolve()
     file_destinations = []
@@ -1526,14 +1500,12 @@ def test_hook_reachable_logging_resolves_only_to_preconfigured_local_sinks_under
     csrf_rule = Rule("/admin/c4-csrf-probe-31", endpoint="admin_c4_csrf_probe_31", methods={"POST"})
     _register_probe_rule(csrf_rule, "admin_c4_csrf_probe_31", lambda: ("ok", 200))
     try:
-        env.app.config["WTF_CSRF_ENABLED"] = True
-        try:
-            with env.client.session_transaction() as session:
-                session.clear()
-            response = env.client.post("/admin/c4-csrf-probe-31", data={"x": "1"})
-            assert response.status_code == 400
-        finally:
-            env.app.config["WTF_CSRF_ENABLED"] = False
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_ENABLED", True)
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_CHECK_DEFAULT", True)
+        with env.client.session_transaction() as session:
+            session.clear()
+        response = env.client.post("/admin/c4-csrf-probe-31", data={"x": "1"})
+        assert response.status_code == 400
         _flush_file_handlers()
         canonical_log = _canonical_log_path()
         text = canonical_log.read_text(encoding="utf-8", errors="replace")
@@ -1620,14 +1592,12 @@ def test_synchronous_rbac_and_csrf_audit_logging_present_in_canonical_log(_boots
         _login(env.client, env.admin_id, "consultivo")
         response = env.client.get("/admin/c4-shadow-audit-probe")
         assert response.status_code == 200
-        env.app.config["WTF_CSRF_ENABLED"] = True
-        try:
-            with env.client.session_transaction() as session:
-                session.clear()
-            response = env.client.post("/admin/c4-csrf-probe-34", data={"x": "1"})
-            assert response.status_code == 400
-        finally:
-            env.app.config["WTF_CSRF_ENABLED"] = False
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_ENABLED", True)
+        monkeypatch.setitem(env.app.config, "WTF_CSRF_CHECK_DEFAULT", True)
+        with env.client.session_transaction() as session:
+            session.clear()
+        response = env.client.post("/admin/c4-csrf-probe-34", data={"x": "1"})
+        assert response.status_code == 400
         _flush_file_handlers()
         text = canonical_log.read_text(encoding="utf-8", errors="replace")
         assert "event=admin_rbac_missing_configuration" in text, (

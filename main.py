@@ -53,7 +53,6 @@ from app.activity_catalog import (
     get_atividade_transicoes_por_base,
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
-    get_legacy_map_list,
     get_next_numero_versao,
     get_norma_by_id,
     get_norma_list,
@@ -81,9 +80,9 @@ from app.matrix_scope import (
     MATRIZ_STATUS_META,
     _matriz_option_label,
     _matriz_status_label,
-    get_allowed_activity_ids_for_turma_matrix,
+    get_allowed_activity_version_ids_for_turma_matrix,
     get_effective_matriz_for_turma,
-    is_activity_allowed_for_turma_matrix,
+    is_activity_version_allowed_for_turma_matrix,
 )
 from app.requisition_policy import (
     _parse_optional_processing_datetime,
@@ -330,7 +329,6 @@ from app.views.admin.atividades import (
     admin_editar_atividade,
     admin_grupos_excluir,
     admin_grupos_renomear,
-    admin_mapeamento_legado,
     admin_norma_nova,
     admin_normas_atividade,
 )
@@ -362,11 +360,6 @@ from app.views.admin.requisicoes import (
 )
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
-    _build_versioned_requisicao_snapshot_payload,
-    _has_versioned_requisicao_snapshot,
-    _load_versioned_requisicao_snapshot_rule_row,
-    _normalize_snapshot_diagnostic_scalar,
-    _snapshot_diagnostic_row_value,
     is_versioned_requisicao_snapshot_display_enabled,
     prepare_versioned_requisicao_snapshot,
     PreparedRequisicaoSnapshot,
@@ -375,7 +368,6 @@ from app.versioning.snapshots import (
 from app.views.admin.versioning import (
     admin_diagnostico_atividades_versionadas,
     admin_diagnostico_atividades_versionadas_view,
-    admin_diagnostico_versioned_shadow_reads,
 )
 from app.views.admin.matrizes import (
     get_bases_escopo_matriz,
@@ -813,13 +805,13 @@ app.register_error_handler(RequestEntityTooLarge, handle_large_upload)
 
 
 def proximo_numero_turma(conn, ano=None, semestre=None):
-    """[LEGADO] Sugere próximo número de turma (global ou filtrado por ano/semestre)."""
+    """Suggest the next class number, optionally by canonical start period."""
     sql = "SELECT COALESCE(MAX(numero), 0) FROM turmas WHERE 1=1"
     params = []
     if ano is not None:
-        sql += " AND ano = ?"; params.append(int(ano))
+        sql += " AND ano_inicio = ?"; params.append(int(ano))
     if semestre is not None:
-        sql += " AND semestre = ?"; params.append(int(semestre))
+        sql += " AND semestre_inicio = ?"; params.append(int(semestre))
     maxn = conn.execute(sql, params).fetchone()[0]
     return (maxn or 0) + 1
 

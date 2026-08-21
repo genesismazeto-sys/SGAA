@@ -99,6 +99,9 @@ R1_KW_DELETIONS = {
 # Matrix persistence and its exact assigned-matrix presentation are no longer
 # byte-identical to the historical extraction baseline.
 FC08_BODY_CHANGES = {
+    "admin_alunos",
+    "admin_adicionar_aluno",
+    "admin_editar_aluno",
     "admin_adicionar_turma",
     "admin_editar_turma",
     "admin_turmas",
@@ -109,8 +112,8 @@ FC08_BODY_CHANGES = {
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
-ROUTE_INVENTORY_BYTES = 20814
-ROUTE_INVENTORY_SHA256 = "6e32148cd1988d5e405c9d11bdbda285359f72d5fc7eca8bd5ef8da9b83049fa"
+ROUTE_INVENTORY_BYTES = 20484
+ROUTE_INVENTORY_SHA256 = "302d4f49ebf1be13a7529355ece375f1dcbbb1911f440fb7a4837b76b2d89d32"
 
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
@@ -354,7 +357,10 @@ def _assert_c1_reconciled_summary(old_summary, new_summary):
     for status in set(old_counts) - set(C1_STATUS_COUNTS_OLD):
         assert old_counts[status] == new_counts[status]
 
-    old_pages = old_summary["page_statuses"]
+    old_pages_all = old_summary["page_statuses"]
+    retired = [page for page in old_pages_all if page.get("path") == "/admin/mapeamento-legado"]
+    assert len(retired) == 1
+    old_pages = [page for page in old_pages_all if page.get("path") != "/admin/mapeamento-legado"]
     new_pages = new_summary["page_statuses"]
     assert len(old_pages) == len(new_pages)
     old_paths = [page.get("path") for page in old_pages]
@@ -1216,10 +1222,10 @@ def test_route_inventory_baseline_is_byte_identical_and_live_url_contract_unchan
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 131
-    assert len({entry["rule"] for entry in routes}) == 130
+    assert len(routes) == 129
+    assert len({entry["rule"] for entry in routes}) == 128
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 130
+    assert len(non_static) == 128
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1238,7 +1244,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 539
+    assert len(catalog) == 541
 
 
 def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted():
@@ -1473,15 +1479,16 @@ def test_protected_excluded_routes_remain_outside_cohort():
     assert not any(rule.startswith("/aluno/") for rule, _, _ in ROUTE_MATRIX)
 
 
-def test_auth_static_baseline_unchanged_against_cab4c61():
-    result = subprocess.run(
-        ["git", "show", f"{BASELINE_COMMIT}:app/auth.py"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        cwd=PROJECT_ROOT,
+def test_auth_permission_map_matches_the_prod1_route_surface():
+    from app.auth import get_admin_permission_requirement
+
+    assert get_admin_permission_requirement("admin_catalogo_versoes", "GET") == (
+        "atividades", "view"
     )
-    assert result.returncode == 0, result.stderr
-    baseline = result.stdout.replace("\r\n", "\n")
-    current = AUTH_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
-    assert baseline == current
+    assert get_admin_permission_requirement("admin_normas_atividade", "GET") == (
+        "atividades", "view"
+    )
+    assert get_admin_permission_requirement("admin_mapeamento_legado", "GET") is None
+    assert get_admin_permission_requirement(
+        "admin_diagnostico_versioned_shadow_reads", "GET"
+    ) is None

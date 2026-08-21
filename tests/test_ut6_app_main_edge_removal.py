@@ -48,7 +48,7 @@ LITERAL_IMPORT_MECHANISMS = frozenset(
 
 MESSAGE_KEY = "msg_b340e19ed2686d57"
 MESSAGE_DEFAULT_TEXT = "Houve atualizações nas suas solicitações."
-MESSAGE_CATALOG_SIZE = 539
+MESSAGE_CATALOG_SIZE = 541
 
 FUTURE_URLS_MODULE = "app.web.urls"
 FUTURE_REQUISITIONS_MODULE = "app.requisitions"

@@ -64,6 +64,7 @@ from app.services.backup_service import (
     cleanup_backup_artifacts,
     create_sqlite_backup_zip,
     extract_restore_database_artifact,
+    validate_manifest_backed_restore,
 )
 from app.services.google_drive_service import (
     GoogleDriveServiceError,
@@ -1818,6 +1819,12 @@ def admin_banco_dados_restaurar():
     snapshot_path = manifest.get("database_path") or ""
     if not snapshot_path or not os.path.exists(snapshot_path):
         flash("Arquivo do backup não foi encontrado.", "error")
+        return redirect(url_for("admin_banco_dados"))
+
+    try:
+        validate_manifest_backed_restore(snapshot_path, manifest)
+    except BackupServiceError as exc:
+        flash(f"Não foi possível restaurar o backup selecionado: {exc}", "error")
         return redirect(url_for("admin_banco_dados"))
 
     _restore_database_from_source(

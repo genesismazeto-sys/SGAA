@@ -77,7 +77,7 @@ Shared canonical owners are NOT moved into the target: ``list_active_admin_alert
 ``canonicalize_access_level``/``default_access_level_for_user_type``/
 ``admin_required`` (app.auth) and ``resolve_user_message`` (utils.messages)
 stay where they are; the move is MOVE, DO NOT CHANGE — no C4/schema cleanup,
-no migration v4, SCHEMA_VERSION stays 3, request-path side effects
+the schema remains exactly prod-1/v1 and request-path side effects
 (conn.commit() in GET, g._adm_dash_metrics cache, bootstrap-on-read) are
 preserved.
 """
@@ -385,26 +385,12 @@ def _all_main_hooks() -> list[str]:
 
 
 def _make_temp_conn(tmp_path) -> sqlite3.Connection:
-    """Minimal schema mirroring the columns the Dashboard closure queries."""
+    """Minimal schema for the standalone pending-response metric helper."""
     conn = sqlite3.connect(tmp_path / "dashboard_behavior.db")
     conn.row_factory = sqlite3.Row
     conn.execute(
-        "CREATE TABLE turmas ("
-        "id INTEGER PRIMARY KEY, nome TEXT, codigo TEXT, status TEXT, "
-        "curso_id INTEGER, matriz_id INTEGER, ano_inicio INTEGER, "
-        "semestre_inicio INTEGER)"
-    )
-    conn.execute(
-        "CREATE TABLE alunos (id INTEGER PRIMARY KEY, turma_id INTEGER, status TEXT)"
-    )
-    conn.execute(
-        "CREATE TABLE atividades (id INTEGER PRIMARY KEY, tipo_atividade TEXT)"
-    )
-    conn.execute(
         "CREATE TABLE requisicoes ("
-        "id INTEGER PRIMARY KEY, aluno_id INTEGER, atividade_id INTEGER, "
-        "status TEXT, data_solicitacao TEXT, horas_solicitadas REAL, "
-        "horas_deferidas REAL)"
+        "id INTEGER PRIMARY KEY, status TEXT, data_solicitacao TEXT)"
     )
     conn.commit()
     return conn
@@ -646,8 +632,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 539, (
-        "message catalog count must remain 539 through the extraction; "
+    assert len(catalog) == 541, (
+        "message catalog count must match the canonical baseline; "
         f"got {len(catalog)}"
     )
 
@@ -861,9 +847,9 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 131, f"routes must stay 131, got {len(rules)}"
-    assert len(main.app.view_functions) == 130, (
-        f"distinct endpoints must stay 130, got {len(main.app.view_functions)}"
+    assert len(rules) == 129, f"routes must stay 129, got {len(rules)}"
+    assert len(main.app.view_functions) == 128, (
+        f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
     )
 
     unmapped = [
@@ -883,8 +869,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 539, (
-        "current catalog baseline must be 539"
+    assert len(messages._message_catalog()) == 541, (
+        "current catalog baseline must be 541"
     )
 
     backend_paths = {
@@ -908,10 +894,10 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
 def test_green_6_schema_version_three_no_migration_v4():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3, f"SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3}, (
-        "migration registry must contain exactly v1/v2/v3, no v4; "
+    assert versions == {1}, (
+        "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )
 
@@ -1096,79 +1082,6 @@ def test_green_10_dashboard_pure_helper_behavior_characterization():
     assert main._format_dashboard_days(0) == "0"
 
 
-def test_green_11_alert_kind_request_alert_and_receipts_behavior(tmp_path):
-    from app.db_maintenance import ensure_requisicao_alert_receipts_table
-
-    conn = _make_temp_conn(tmp_path)
-    ensure_requisicao_alert_receipts_table(conn)
-    conn.execute(
-        "INSERT INTO requisicoes (id, aluno_id, status, data_solicitacao) "
-        "VALUES (1, 10, 'Pendente', '2026-01-01 10:00:00')"
-    )
-    conn.execute(
-        "INSERT INTO requisicoes (id, aluno_id, status, data_solicitacao) "
-        "VALUES (2, 10, 'Pendente', '2026-01-01 10:00:00')"
-    )
-    conn.execute(
-        "INSERT INTO requisicoes (id, aluno_id, status, data_solicitacao) "
-        "VALUES (3, 10, 'Deferida', '2026-01-02 10:00:00')"
-    )
-    conn.commit()
-
-    assert main._admin_request_alert_kind("admin_total") == "admin_new_request"
-    assert main._admin_request_alert_kind("administrativo") == "coordinator_new_request"
-    assert main._admin_request_alert_kind("consultivo") is None
-    assert main._admin_request_alert_kind(None) == "admin_new_request", (
-        "fallback canonicalization of an empty level must resolve to the admin "
-        "default (admin_total) -> admin_new_request"
-    )
-
-    with main.app.test_request_context("/admin/dashboard"):
-        assert main.get_admin_new_request_alert(conn, None, "admin_total") is None, (
-            "request alert must be None without a usuario_id"
-        )
-        assert main.get_admin_new_request_alert(conn, 1, "consultivo") is None, (
-            "request alert must be None when no alert kind resolves"
-        )
-
-        alert = main.get_admin_new_request_alert(conn, 1, "admin_total")
-        assert alert is not None, "pending un-seen requisitions must surface an alert"
-        assert alert["requisicao_ids"] == [2, 1], (
-            "pending ids must come ordered by data_solicitacao DESC, id DESC"
-        )
-        assert alert["alerta"]["mensagem"] == "Há novas solicitações aguardando análise."
-        assert alert["alerta"]["bg_color"] == "#fef4c0"
-        assert alert["alerta"]["border_color"] == "#c9a227"
-        assert alert["alerta"]["href"] == "/admin/requisicoes"
-
-        main.mark_admin_new_request_alert_seen(conn, [2, 1], 1, "admin_total")
-        assert main.get_admin_new_request_alert(conn, 1, "admin_total") is None, (
-            "after receipts are written the alert must disappear"
-        )
-        main.mark_admin_new_request_alert_seen(conn, [2, 1], 1, "admin_total")
-        receipt_rows = conn.execute(
-            "SELECT * FROM requisicao_alerta_receipts"
-        ).fetchall()
-        assert len(receipt_rows) == 2, (
-            "INSERT OR IGNORE receipts must stay idempotent"
-        )
-        assert all(row["usuario_id"] == 1 for row in receipt_rows)
-        assert all(row["alert_kind"] == "admin_new_request" for row in receipt_rows)
-        assert all(row["seen_at"] for row in receipt_rows)
-
-        coordinator_alert = main.get_admin_new_request_alert(conn, 1, "administrativo")
-        assert coordinator_alert is not None, (
-            "administrativo receipts are namespaced by a distinct alert_kind"
-        )
-        assert coordinator_alert["requisicao_ids"] == [2, 1]
-
-        assert main.get_admin_new_request_alert(conn, 1, "whatever-nonexistent") is None, (
-            "an unknown level falls back to the admin default alert kind whose "
-            "receipts were already written"
-        )
-        conn.close()
-
-
 def test_green_12_pending_response_metrics_behavior(tmp_path):
     conn = _make_temp_conn(tmp_path)
 
@@ -1207,107 +1120,6 @@ def test_green_12_pending_response_metrics_behavior(tmp_path):
     assert avg_garbage == pytest.approx(avg, rel=1e-9), (
         "an unparseable reset_at must behave exactly like no reset_at"
     )
-    conn.close()
-
-
-def test_green_13_turma_cards_behavior(tmp_path):
-    conn = _make_temp_conn(tmp_path)
-
-    cards, total_geral, summary = main._build_admin_dashboard_turma_cards(conn)
-    assert cards == []
-    assert total_geral is None
-    assert set(summary) == SUMMARY_KEY_SET
-    assert summary == {
-        "total_turmas": 0,
-        "total_turmas_ativas": 0,
-        "turmas_com_aac": 0,
-        "turmas_com_aeu": 0,
-        "media_alunos_por_turma_fmt": "0,0",
-    }
-
-    conn.execute(
-        "INSERT INTO turmas (id, nome, codigo, status, ano_inicio, semestre_inicio) "
-        "VALUES (1, 'Turma A', 'TUR-A', 'Ativa', 2024, 1)"
-    )
-    conn.execute(
-        "INSERT INTO alunos (id, turma_id, status) VALUES (1, 1, 'Ativo')"
-    )
-    conn.execute(
-        "INSERT INTO atividades (id, tipo_atividade) "
-        "VALUES (1, 'Acadêmica Complementar')"
-    )
-    conn.execute(
-        "INSERT INTO requisicoes (id, aluno_id, atividade_id, status, horas_deferidas) "
-        "VALUES (1, 1, 1, 'Pendente', NULL)"
-    )
-    conn.execute(
-        "INSERT INTO requisicoes (id, aluno_id, atividade_id, status, horas_deferidas) "
-        "VALUES (2, 1, 1, 'Deferida', 40)"
-    )
-    conn.commit()
-
-    cards, total_geral, summary = main._build_admin_dashboard_turma_cards(conn)
-    assert len(cards) == 1
-    card = cards[0]
-    assert set(card) == CARD_KEY_SET, (
-        "turma card must expose exactly the frozen 18-key shape"
-    )
-    assert card["label"] == "TUR-A"
-    assert card["total_alunos"] == 1
-    assert card["total_alunos_ativos"] == 1
-    assert card["pendentes"] == 1
-    assert card["aac_hours_fmt"] == "40"
-    assert card["aeu_hours_fmt"] == "0"
-    assert card["ch_total_fmt"] == "40"
-    assert card["aac_pct"] is None
-    assert card["aeu_pct"] is None
-    assert card["total_pct"] is None
-    assert card["total_applicable"] is False
-    assert card["aac_applicable"] is False
-    assert card["aeu_applicable"] is False
-    assert card["periodo_atual_label"] == f"{main.periodo_corrente(2024, 1)}º período", (
-        "card period label must be computed from ano_inicio/semestre_inicio via "
-        "periodo_corrente"
-    )
-    assert card["attainment_avg_pct_label"] == "-"
-    assert card["attainment_donut_gradient"].startswith("conic-gradient(")
-    assert card["attainment_buckets"][4]["count"] == 0, (
-        "an unconfigured Matrix must not classify attainment against a fabricated target"
-    )
-
-    assert set(summary) == SUMMARY_KEY_SET
-    assert summary == {
-        "total_turmas": 1,
-        "total_turmas_ativas": 1,
-        "turmas_com_aac": 0,
-        "turmas_com_aeu": 0,
-        "media_alunos_por_turma_fmt": "1,0",
-    }
-    assert total_geral is not None, (
-        "an odd turma-card count must produce a Total Geral card"
-    )
-    assert set(total_geral) == TOTAL_GERAL_KEY_SET
-    assert total_geral["label"] == "Total Geral"
-    assert total_geral["total_alunos"] == 1
-    assert total_geral["aac_pct"] is None
-    assert total_geral["aeu_pct"] is None
-    assert total_geral["ch_total_fmt"] == "40"
-    assert total_geral["pendentes"] == 1
-
-    conn.execute(
-        "INSERT INTO turmas (id, nome, codigo, status) "
-        "VALUES (2, 'Turma B', 'TUR-B', 'Inativa')"
-    )
-    conn.commit()
-    cards, total_geral, summary = main._build_admin_dashboard_turma_cards(conn)
-    assert len(cards) == 2
-    assert total_geral is None, (
-        "an even turma-card count must NOT produce a Total Geral card"
-    )
-    assert summary["total_turmas"] == 2
-    assert summary["total_turmas_ativas"] == 1
-    assert summary["turmas_com_aac"] == 0
-    assert summary["turmas_com_aeu"] == 0
     conn.close()
 
 

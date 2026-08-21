@@ -461,6 +461,7 @@ def test_post_csrf_behavior_remains_enforced(monkeypatch):
         lambda force_reload=False: _access_context(configuracoes_scope="full"),
     )
     monkeypatch.setitem(main.app.config, "WTF_CSRF_ENABLED", True)
+    monkeypatch.setitem(main.app.config, "WTF_CSRF_CHECK_DEFAULT", True)
     client = main.app.test_client()
     _admin_session(client)
 
@@ -473,10 +474,13 @@ def test_post_csrf_behavior_remains_enforced(monkeypatch):
 
 
 def test_settings_helpers_preserve_persistence_and_normalization():
+    from app.prod1_schema import bootstrap_prod1_schema
+
     module = _canonical_module()
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     try:
+        bootstrap_prod1_schema(conn)
         module.save_app_settings(
             conn,
             {"response_goal_days": "7", "response_metrics_reset_at": ""},
@@ -509,10 +513,12 @@ def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
     import main
     from app.web import authz_gate
     from utils.messages import message_key_for_default, resolve_user_message
+    from app.prod1_schema import bootstrap_prod1_schema
 
     module = _canonical_module()
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    bootstrap_prod1_schema(conn)
     default = "Aluno não encontrado."
     key = message_key_for_default(default)
     override = "Aluno não localizado pelo teste da Fase 4."
@@ -633,7 +639,7 @@ def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_ow
     messages_module._message_catalog.cache_clear()
     catalog = messages_module._message_catalog()
 
-    assert len(catalog) == 539
+    assert len(catalog) == 541
     assert {
         key: catalog[key]["default_text"] for key in MOVED_MESSAGE_DEFAULTS
     } == MOVED_MESSAGE_DEFAULTS

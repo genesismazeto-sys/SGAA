@@ -122,7 +122,7 @@
       <label class="row-label">Atividade</label>
       <div class="field-card" id="atividade_card">
         <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
-        <input class="control" type="text" readonly aria-readonly="true" value="{% for a in atividades %}{% if init and init.atividade_id and a.id==init.atividade_id %}{{ a.nome }}{% endif %}{% endfor %}" />
+        <input class="control" type="text" readonly aria-readonly="true" value="{% for a in atividades %}{% if init and init.atividade_versao_id and a.id==init.atividade_versao_id %}{{ a.nome }}{% endif %}{% endfor %}" />
       </div>
     </div>
     {% else %}
@@ -130,10 +130,10 @@
       <label class="row-label">Atividade</label>
       <div class="field-card" id="atividade_card">
         <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
-        <select class="control" id="atividade_id_select" name="atividade_id" required aria-label="Atividade">
+        <select class="control" id="atividade_versao_id_select" name="atividade_versao_id" required aria-label="Atividade">
           <option value="" data-placeholder="1">Selecione o grupo...</option>
           {% for a in atividades %}
-            <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}" {% if init and init.atividade_id and a.id==init.atividade_id %}selected{% endif %}>{{ a.nome }}</option>
+            <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}" {% if init and init.atividade_versao_id and a.id==init.atividade_versao_id %}selected{% endif %}>{{ a.nome }}</option>
           {% endfor %}
         </select>
       </div>
@@ -227,7 +227,7 @@
     const numSel    = document.getElementById('grupo_num');
     const descInput = document.getElementById('grupo_desc');
     const hidGrupo  = document.getElementById('grupo_hidden');
-    const atvSel    = document.getElementById('atividade_id_select');
+    const atvSel    = document.getElementById('atividade_versao_id_select');
     if (!tipoSel || !numSel || !descInput || !hidGrupo || !atvSel) return;
 
     const allOptions = Array.from(atvSel.options);
@@ -359,8 +359,8 @@
         loadDescFromSelected();
         syncHidden();
         applyAtividadesFilter();
-        if (init.atividade_id){
-          atvSel.value = String(init.atividade_id);
+        if (init.atividade_versao_id){
+          atvSel.value = String(init.atividade_versao_id);
           // Em modo leitura, manter selects visuais mas sem interação
           if (isRO){
             atvSel.disabled = false; // visível, mas não interativo via aria-readonly/tabindex

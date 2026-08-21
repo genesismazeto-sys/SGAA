@@ -265,12 +265,6 @@
         "status_code": 200
       },
       {
-        "label": "/admin/mapeamento-legado",
-        "path": "/admin/mapeamento-legado",
-        "role": "admin",
-        "status_code": 200
-      },
-      {
         "label": "/admin/matrizes",
         "path": "/admin/matrizes",
         "role": "admin",

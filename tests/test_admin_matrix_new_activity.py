@@ -93,11 +93,8 @@ def _unique_name(prefix: str) -> str:
 
 def _table_counts(conn) -> dict[str, int]:
     return {
-        "atividades": conn.execute("SELECT COUNT(*) AS c FROM atividades").fetchone()["c"],
         "atividade_base": conn.execute("SELECT COUNT(*) AS c FROM atividade_base").fetchone()["c"],
-        "atividade_legacy_map": conn.execute("SELECT COUNT(*) AS c FROM atividade_legacy_map").fetchone()["c"],
         "atividade_versao": conn.execute("SELECT COUNT(*) AS c FROM atividade_versao").fetchone()["c"],
-        "matrizes_atividades_itens": conn.execute("SELECT COUNT(*) AS c FROM matrizes_atividades_itens").fetchone()["c"],
         "matriz_atividade_versao_item": conn.execute("SELECT COUNT(*) AS c FROM matriz_atividade_versao_item").fetchone()["c"],
     }
 
@@ -161,24 +158,8 @@ def test_post_new_aac_activity_creates_base_version_and_matrix_links(versioned_e
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        atividade = conn.execute("SELECT * FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
-        assert atividade is not None
-        assert atividade["tipo_atividade"] == "Acadêmica Complementar"
-        assert atividade["grupo"] == "7 - Grupo piloto AAC"
-
         base = conn.execute("SELECT * FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
         assert base is not None
-
-        legacy_map = conn.execute(
-            """
-            SELECT *
-              FROM atividade_legacy_map
-             WHERE atividade_id_legacy = ?
-            """,
-            (atividade["id"],),
-        ).fetchone()
-        assert legacy_map is not None
-        assert legacy_map["atividade_base_id"] == base["id"]
 
         versao = conn.execute(
             "SELECT * FROM atividade_versao WHERE atividade_base_id = ?",
@@ -191,16 +172,6 @@ def test_post_new_aac_activity_creates_base_version_and_matrix_links(versioned_e
         assert versao["eixo"] == "AAC"
         assert versao["grupo"] == "7 - Grupo piloto AAC"
         assert versao["status"] == "ativa"
-
-        legacy_scope_link = conn.execute(
-            """
-            SELECT COUNT(*) AS c
-              FROM matrizes_atividades_itens
-             WHERE matriz_id = ? AND atividade_id = ?
-            """,
-            (matrix_id, atividade["id"]),
-        ).fetchone()["c"]
-        assert legacy_scope_link == 1
 
         matrix_version_link = conn.execute(
             """
@@ -235,11 +206,6 @@ def test_post_new_aeu_activity_creates_aeu_context(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        atividade = conn.execute("SELECT * FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
-        assert atividade is not None
-        assert atividade["tipo_atividade"] == "Extensão Universitária"
-        assert atividade["grupo"] == "NA"
-
         base = conn.execute("SELECT * FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
         assert base is not None
 
@@ -277,9 +243,7 @@ def test_post_new_activity_blocks_matrix_without_compatible_norm(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        atividade = conn.execute("SELECT id FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
         base = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
-    assert atividade is None
     assert base is None
 
 
@@ -316,9 +280,7 @@ def test_post_new_activity_requires_explicit_norm_when_multiple_compatible_norms
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        atividade = conn.execute("SELECT id FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
         base = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
-    assert atividade is None
     assert base is None
 
 
@@ -353,7 +315,6 @@ def test_post_new_activity_rolls_back_on_intermediate_error(versioned_env):
     with main.app.app_context():
         conn = main.get_db_connection()
         after_counts = _table_counts(conn)
-        atividade = conn.execute("SELECT id FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
         version_rows = conn.execute(
             """
             SELECT COUNT(*) AS c
@@ -364,7 +325,6 @@ def test_post_new_activity_rolls_back_on_intermediate_error(versioned_env):
             (activity_name,),
         ).fetchone()["c"]
     assert after_counts == before_counts
-    assert atividade is None
     assert version_rows == 0
 
 
@@ -408,5 +368,7 @@ def test_modal_form_contains_csrf_and_post_requires_it(versioned_env_csrf):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        atividade = conn.execute("SELECT id FROM atividades WHERE nome = ?", (activity_name,)).fetchone()
-    assert atividade is not None
+        base = conn.execute(
+            "SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)
+        ).fetchone()
+    assert base is not None

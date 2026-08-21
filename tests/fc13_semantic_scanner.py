@@ -13,14 +13,12 @@ ALLOWED_RESOLVER_CALLERS = {
     ("app/versioning/resolver.py", "resolver_versao_por_aluno"),
     ("app/versioning/snapshots.py", "prepare_versioned_requisicao_snapshot"),
 }
-ALLOWED_SHADOW_CALLERS = {
-    ("app/views/admin/versioning.py", "admin_diagnostico_versioned_shadow_reads"),
-}
+ALLOWED_SHADOW_CALLERS = set()
 ALLOWED_LATEST_SQL = {
+    ("app/activity_catalog.py", "get_latest_atividade_versao_for_base"),
+    ("app/activity_catalog.py", "apply_latest_activity_version_semantic_changes"),
     ("app/views/admin/matrizes.py", "_ensure_default_versao_link"),
     ("app/views/admin/matrizes.py", "_save_matriz_activity_links"),
-    ("app/db_maintenance.py", "_rebuild_activity_versioning_core_v3"),
-    ("app/db_maintenance.py", "_migration_v3_normalize_activity_versioning_core"),
 }
 SHADOW_TERMS = re.compile(r"(?:shadow|probe|comparison|compare|diverg)", re.I)
 VERSION_TERMS = re.compile(r"(?:version|vers[aãa]o|resolver)", re.I)
@@ -190,6 +188,13 @@ def latest_sql(sql: str) -> bool:
 
 def has_latest_sql(source: str) -> bool:
     return any(latest_sql(sql) for sql in static_sql(source))
+
+
+def writes_activity_version(source: str) -> bool:
+    return any(
+        re.search(r"\b(?:update|delete\s+from)\s+atividade_versao\b", " ".join(sql.lower().split()))
+        for sql in static_sql(source)
+    )
 
 
 def branch_controls_authority(source: str, function_name: str, path: str = "") -> bool:
@@ -408,6 +413,35 @@ def tool_findings(sources: dict[str, str]) -> set[tuple[str, str, str]]:
 def analyze_sources(sources: dict[str, str]) -> set[tuple[str, str, str]]:
     result = {(path, function, category) for path, source in sources.items()
               for function, category in source_findings(source, path)}
+    definitions = {
+        path: {facts.name for facts in source_facts(source, path)}
+        for path, source in sources.items()
+    }
+    latest_owners = {
+        (module_name(path), facts.name)
+        for path, source in sources.items()
+        for facts in source_facts(source, path)
+        if has_latest_sql(facts.source)
+    }
+    for caller, target in qualified_calls(sources, definitions):
+        if target not in latest_owners:
+            continue
+        caller_path = next(
+            (path for path in sources if module_name(path) == caller[0]), None
+        )
+        if caller_path is None or caller_path == "app/activity_catalog.py":
+            continue
+        caller_facts = next(
+            (facts for facts in source_facts(sources[caller_path], caller_path)
+             if facts.name == caller[1]),
+            None,
+        )
+        if caller_facts is not None and writes_activity_version(caller_facts.source):
+            result.add((
+                caller_path,
+                caller[1],
+                "cross_module_latest_version_write_authority",
+            ))
     result.update(tool_findings(sources))
     result.update(export_findings(sources))
     return result

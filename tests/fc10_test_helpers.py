@@ -42,15 +42,12 @@ def add_exact_snapshot_authority(conn, *, matriz_id: int, atividade_id: int, pre
         ),
     ).fetchone()["id"]
     conn.execute(
-        "INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status) VALUES (?, ?, 'mapeada')",
-        (atividade_id, base_id),
-    )
-    conn.execute(
         "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
         (matriz_id, norma_id),
     )
     conn.execute(
-        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-        (matriz_id, version_id),
+        "INSERT INTO matriz_atividade_versao_item "
+        "(matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+        (matriz_id, base_id, version_id),
     )
     return int(version_id)

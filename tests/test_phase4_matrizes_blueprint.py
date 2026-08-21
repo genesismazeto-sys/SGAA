@@ -310,7 +310,10 @@ def _assert_c1_reconciled_summary(old_summary, new_summary):
     for status in set(old_counts) - set(C1_STATUS_COUNTS_OLD):
         assert old_counts[status] == new_counts[status]
 
-    old_pages = old_summary["page_statuses"]
+    old_pages_all = old_summary["page_statuses"]
+    retired = [page for page in old_pages_all if page.get("path") == "/admin/mapeamento-legado"]
+    assert len(retired) == 1
+    old_pages = [page for page in old_pages_all if page.get("path") != "/admin/mapeamento-legado"]
     new_pages = new_summary["page_statuses"]
     assert len(old_pages) == len(new_pages)
     old_paths = [page.get("path") for page in old_pages]
@@ -982,10 +985,10 @@ def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 131
-    assert len({entry["rule"] for entry in routes}) == 130
+    assert len(routes) == 129
+    assert len({entry["rule"] for entry in routes}) == 128
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 130
+    assert len(non_static) == 128
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1004,7 +1007,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 539
+    assert len(catalog) == 541
 
 
 def test_canonical_sqlite_never_opened_during_isolated_flow(tmp_path):

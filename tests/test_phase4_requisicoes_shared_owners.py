@@ -33,8 +33,8 @@ MATRIX_SCOPE_HELPERS = {
     "_matriz_option_label",
     "_matriz_status_label",
     "get_effective_matriz_for_turma",
-    "get_allowed_activity_ids_for_turma_matrix",
-    "is_activity_allowed_for_turma_matrix",
+    "get_allowed_activity_version_ids_for_turma_matrix",
+    "is_activity_version_allowed_for_turma_matrix",
 }
 REQUISITION_HELPERS = {"auto_indefer_devolvidas"}
 REQUISICOES_ROUTE_NAMES = {
@@ -160,8 +160,10 @@ def test_b42_requisicoes_routes_moved_to_canonical_view_and_reexported_identical
 
 
 def test_auto_indefer_preserves_helper_owned_commit_boundary():
+    from app.prod1_schema import bootstrap_prod1_schema
     from app.requisitions import auto_indefer_devolvidas
     from app.settings import save_return_response_settings
+    from tests.versioned_test_support import seed_reference_versioned_dataset
 
     class TrackingConnection(sqlite3.Connection):
         commit_count = 0
@@ -173,22 +175,24 @@ def test_auto_indefer_preserves_helper_owned_commit_boundary():
     conn = sqlite3.connect(":memory:", factory=TrackingConnection)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute(
-            """
-            CREATE TABLE requisicoes (
-                id INTEGER PRIMARY KEY,
-                status TEXT,
-                observacao TEXT,
-                data_processamento TEXT
-            )
-            """
-        )
+        bootstrap_prod1_schema(conn)
+        seed_reference_versioned_dataset(conn)
         save_return_response_settings(
             conn,
             {"return_response_days": "7", "auto_indefer_devolvida": "1"},
         )
         conn.execute(
-            "INSERT INTO requisicoes VALUES (1, 'Devolvida', '', datetime('now', '-8 days'))"
+            """
+            INSERT INTO requisicoes (
+                id, aluno_id, atividade_versao_id, data_solicitacao, data_evento,
+                horas_solicitadas, nome_evento, status, observacao,
+                data_processamento, regra_snapshot_json, codigo_normativo_snapshot
+            ) VALUES (
+                1, NULL, 29, date('now', '-8 days'), date('now', '-8 days'),
+                1, 'Auto indefer prod-1', 'Devolvida', '', datetime('now', '-8 days'),
+                '{}', 'AEU-rev1'
+            )
+            """
         )
         conn.commit()
         conn.commit_count = 0
@@ -210,7 +214,7 @@ def test_settings_messages_remain_in_catalog_under_neutral_owner():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 539
+    assert len(catalog) == 541
     for key in SETTINGS_MESSAGE_KEYS:
         usages = catalog[key]["usages"]
         assert usages

@@ -478,7 +478,7 @@ def admin_alunos():
             u.email,
             a.matricula,
             c.nome AS curso_nome,
-            COALESCE(t.codigo, t.nome, a.turma) AS turma,
+            COALESCE(t.codigo, t.nome) AS turma,
             a.turma_id,
             a.status,
             COALESCE(p.pendentes, 0) AS pendentes
@@ -517,7 +517,7 @@ def admin_alunos():
         "matricula": "COALESCE(a.matricula, '') COLLATE PTBR_NOACCENT",
         "email": "COALESCE(u.email, '') COLLATE PTBR_NOACCENT",
         "curso_nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
-        "turma": "COALESCE(t.codigo, t.nome, a.turma, '') COLLATE PTBR_NOACCENT",
+        "turma": "COALESCE(t.codigo, t.nome, '') COLLATE PTBR_NOACCENT",
         "status": "COALESCE(a.status, '') COLLATE PTBR_NOACCENT",
         "pendentes": "COALESCE(p.pendentes, 0)",
     }
@@ -662,7 +662,7 @@ def admin_adicionar_aluno():
         SELECT t.id, COALESCE(t.codigo, t.nome) AS nome
           FROM turmas t
          WHERE t.status='Ativa'
-      ORDER BY t.ano DESC, t.semestre DESC, nome
+      ORDER BY t.ano_inicio DESC, t.semestre_inicio DESC, nome
     """).fetchall()
     return render_template(
         "admin_adicionar_aluno.html",
@@ -720,7 +720,7 @@ def admin_editar_aluno(usuario_id):
         SELECT t.id, COALESCE(t.codigo, t.nome) AS nome
           FROM turmas t
          WHERE t.status='Ativa'
-      ORDER BY t.ano DESC, t.semestre DESC, nome
+      ORDER BY t.ano_inicio DESC, t.semestre_inicio DESC, nome
     """).fetchall()
     return render_template("admin_editar_aluno.html", aluno=aluno, turmas=turmas)
 
@@ -792,7 +792,7 @@ def admin_turmas():
          AND tm.curso_id = t.curso_id
     """
     select_cols = """
-        SELECT t.id, t.nome, t.ano, t.semestre, t.turno, t.status, t.numero,
+        SELECT t.id, t.nome, t.ano_inicio AS ano, t.semestre_inicio AS semestre, t.turno, t.status, t.numero,
                t.ano_inicio, t.semestre_inicio, t.ano_fim, t.semestre_fim, t.codigo,
                t.matriz_id, c.nome AS curso_nome, c.codigo AS curso_codigo, c.duracao_periodos,
                tm.nome AS matriz_nome, tm.versao AS matriz_versao, tm.status AS matriz_status,
@@ -964,10 +964,10 @@ def admin_adicionar_turma():
         try:
             cur = conn.execute(
                 """
-                INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO turmas (nome, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (codigo, None, None, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
+                (codigo, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
             )
             turma_id = cur.lastrowid
 
@@ -1103,10 +1103,10 @@ def admin_editar_turma(turma_id):
             conn.execute(
                 """
                 UPDATE turmas
-                   SET nome=?, ano=?, semestre=?, turno=?, status=?, numero=?, curso_id=?, matriz_id=?, ano_inicio=?, semestre_inicio=?, ano_fim=?, semestre_fim=?, codigo=?
+                   SET nome=?, turno=?, status=?, numero=?, curso_id=?, matriz_id=?, ano_inicio=?, semestre_inicio=?, ano_fim=?, semestre_fim=?, codigo=?
                  WHERE id=?
                 """,
-                (codigo_novo, None, None, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo_novo, turma_id)
+                (codigo_novo, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo_novo, turma_id)
             )
 
             # Atualizar alunos vinculados via formulário

@@ -463,9 +463,28 @@ def test_after_ativar_resolver_considera_versao_como_ativa(client):
 
     versao = _get_versao(client, versao_id)
     assert versao["status"] == "ativa"
-    assert resolver_service._atividade_versao_status_ativo(versao["status"]) is True
-    assert resolver_service._atividade_versao_status_ativo("rascunho") is False
-    assert resolver_service._atividade_versao_status_ativo("inativa") is False
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        token = uuid.uuid4().hex[:8]
+        curso_id = conn.execute(
+            "INSERT INTO cursos (nome,codigo,duracao_periodos) VALUES (?,?,8) RETURNING id",
+            (f"Curso resolver {token}", f"RES-{token}"),
+        ).fetchone()["id"]
+        matriz_id = conn.execute(
+            "INSERT INTO matrizes_atividades (curso_id,nome,versao,status) "
+            "VALUES (?,?,?,'vigente') RETURNING id",
+            (curso_id, f"Matriz resolver {token}", "1"),
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id,atividade_base_id,atividade_versao_id) VALUES (?,?,?)",
+            (matriz_id, seed["base_id"], versao_id),
+        )
+        resolved = resolver_service.resolver_versao_por_matriz(
+            conn, matriz_id=matriz_id, atividade_versao_id=versao_id
+        )
+        assert resolved["status"] == "resolved"
+        assert resolved["atividade_versao_id"] == versao_id
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +563,6 @@ def test_d7_2b1_readonly_routes_still_respond(client):
         "/admin/catalogo-versoes",
         f"/admin/catalogo-versoes/{seed['base_id']}",
         "/admin/normas-atividade",
-        "/admin/mapeamento-legado",
     ]
     for path in routes:
         r = client.get(path)
@@ -565,7 +583,6 @@ def test_aluno_templates_do_not_expose_versioning_metadata(client):
     from pathlib import Path
     templates_dir = Path(BASE) / "templates"
     forbidden = (
-        "atividade_versao_id",
         "codigo_normativo",
         "_atividade_versao_status_ativo",
     )

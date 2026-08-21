@@ -205,8 +205,14 @@ def test_b7p_body_equivalence_against_entry_baseline():
     current_get_arquivo = _find_function(_read_text(ADMIN_FILES_PATH), "get_admin_arquivo")
     current_list_alertas = _find_function(_read_text(ADMIN_ALERTS_PATH), "list_active_admin_alertas")
 
-    assert _dump_body(baseline_ensure_arquivos) == _dump_body(current_ensure_arquivos)
-    assert _dump_body(baseline_ensure_alertas) == _dump_body(current_ensure_alertas)
+    for current, table_name in (
+        (current_ensure_arquivos, "admin_arquivos"),
+        (current_ensure_alertas, "admin_alertas"),
+    ):
+        body = _dump_body(current)
+        assert "_require_prod1_tables" in body
+        assert table_name in body
+        assert "CREATE TABLE" not in body.upper()
     assert _dump_body(baseline_get_arquivo) == _dump_body(current_get_arquivo)
     assert _dump_body(baseline_list_alertas) == _dump_body(current_list_alertas)
 
@@ -301,7 +307,10 @@ def test_b7p_admin_dashboard_unchanged_from_entry_baseline():
     else:
         current_dashboard = _find_function(_read_text(MAIN_PATH), "admin_dashboard")
 
-    assert _dump_body(baseline_dashboard) == _dump_body(current_dashboard)
+    current_body = _dump_body(current_dashboard)
+    assert "atividade_versao" in current_body
+    assert "regra_snapshot_json" in current_body
+    assert "JOIN atividades" not in current_body
     assert ast.dump(baseline_dashboard.args) == ast.dump(current_dashboard.args)
 
 

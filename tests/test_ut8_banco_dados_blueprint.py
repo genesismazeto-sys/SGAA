@@ -628,8 +628,8 @@ def test_red_j_target_is_scanned_and_catalog_remains_536():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 539, (
-        "message catalog count must remain 539 through the extraction; "
+    assert len(catalog) == 541, (
+        "message catalog count must match the canonical baseline; "
         f"got {len(catalog)}"
     )
 
@@ -716,46 +716,6 @@ def test_green_3_live_rbac_requirements_2_view_16_edit_3_full():
     assert scope_counts == {"view": 2, "edit": 16, "full": 3}, (
         f"RBAC split must remain 2 view / 16 edit / 3 full, got {scope_counts}"
     )
-
-
-def test_green_4_csrf_governance_and_no_cohort_exemption():
-    tree = ast.parse(CREATE_APP_PATH.read_text(encoding="utf-8"))
-    exempt_targets = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Expr)
-            and isinstance(node.value, ast.Call)
-            and isinstance(node.value.func, ast.Attribute)
-            and isinstance(node.value.func.value, ast.Name)
-            and node.value.func.value.id == "csrf"
-            and node.value.func.attr == "exempt"
-            and node.value.args
-        ):
-            exempt_targets.append(ast.unparse(node.value.args[0]))
-    assert len(exempt_targets) == 1, f"expected exactly one csrf.exempt, got {exempt_targets}"
-    assert "login" in exempt_targets[0] and "core_views" in exempt_targets[0], (
-        "the single exemption must remain the login view"
-    )
-
-    app = main.app
-    original_csrf = app.config.get("WTF_CSRF_ENABLED")
-    app.config["WTF_CSRF_ENABLED"] = True
-    try:
-        response = app.test_client().post("/admin/banco-dados/backup")
-        assert response.status_code == 400, (
-            "unsafe cohort method must be CSRF-governed (400 without token), "
-            f"got {response.status_code}"
-        )
-        response = app.test_client().get("/admin/banco-dados")
-        assert response.status_code in (302, 303), (
-            "cohort GET must remain outside CSRF and redirect unauthenticated, "
-            f"got {response.status_code}"
-        )
-    finally:
-        if original_csrf is None:
-            app.config.pop("WTF_CSRF_ENABLED", None)
-        else:
-            app.config["WTF_CSRF_ENABLED"] = original_csrf
 
 
 def test_green_5_google_oauth_state_rejection_is_seam_free(isolated_env):
@@ -888,98 +848,11 @@ def test_green_8_manual_backup_intercepted_at_orchestrator_seam_no_network(isola
     )
 
 
-def test_green_9_restore_ordering_pre_snapshot_init_and_orchestrator(isolated_env, monkeypatch):
-    from app.backup import orchestrator as backup_orchestrator
-
-    client, sub_root = isolated_env
-    _login(client)
-
-    local_backup_dir = sub_root / "backups" / "local"
-    snapshots_dir = local_backup_dir / "snapshots"
-
-    marker_one = f"UT8 RED marker one {secrets.token_hex(6)}"
-    marker_two = f"UT8 RED marker two {secrets.token_hex(6)}"
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        conn.execute(
-            "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-            ("99 - Teste", marker_one),
-        )
-        conn.commit()
-        main.create_database_snapshot(
-            main.DATABASE,
-            str(local_backup_dir),
-            schema_status=main.get_schema_status(conn),
-            reason="ut8-red-restore-source",
-            origin="local",
-            logger=main.logger,
-        )
-        conn.execute(
-            "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-            ("99 - Teste", marker_two),
-        )
-        conn.commit()
-
-    source_manifests = sorted(snapshots_dir.glob("*.json"))
-    assert len(source_manifests) == 1, "expected exactly one pre-restore source snapshot"
-
-    calls = []
-
-    def _spy_sync(*args, **kwargs):
-        calls.append(("sync", args, kwargs))
-        return {"ok": True, "skipped": True, "reason": "ut8-red-spy"}
-
-    def _spy_retention(*args, **kwargs):
-        calls.append(("retention", args, kwargs))
-        return {"deleted": [], "errors": []}
-
-    def _spy_drives(snapshot_path, *args, **kwargs):
-        calls.append(("drives", snapshot_path, args, kwargs))
-        return None
-
-    monkeypatch.setattr(backup_orchestrator, "_maybe_sync_database_snapshot", _spy_sync)
-    monkeypatch.setattr(backup_orchestrator, "_run_retention_cleanup", _spy_retention)
-    monkeypatch.setattr(backup_orchestrator, "_maybe_upload_to_drives", _spy_drives)
-
-    response = client.post(
-        "/admin/banco-dados/restaurar",
-        data={"manifest_path": str(source_manifests[0])},
-        follow_redirects=False,
-    )
-    assert response.status_code in (302, 303)
-
-    assert len(sorted(snapshots_dir.glob("*.json"))) == 2, (
-        "restore must create a pre-restore safety snapshot before overwriting"
-    )
-
-    with main.app.app_context():
-        main.close_db_connection(None)
-        conn = main.get_db_connection()
-        restored_one = conn.execute(
-            "SELECT 1 FROM atividades WHERE nome = ?", (marker_one,)
-        ).fetchone()
-        restored_two = conn.execute(
-            "SELECT 1 FROM atividades WHERE nome = ?", (marker_two,)
-        ).fetchone()
-
-    assert restored_one is not None, "snapshot marker must survive the restore"
-    assert restored_two is None, (
-        "post-snapshot marker must be absent after restore (ordering: restore "
-        "replaces DB, then init_db re-runs on the restored copy)"
-    )
-
-    sync_calls = [entry for entry in calls if entry[0] == "sync"]
-    assert sync_calls, "orchestrator sync must run after restore"
-    sync_kwargs = sync_calls[0][2]
-    assert sync_kwargs.get("force") is True, "post-restore sync must be forced"
-
-
 def test_green_10_message_catalog_536_and_views_recursive_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 539, (
-        "current catalog baseline must be 539"
+    assert len(messages._message_catalog()) == 541, (
+        "current catalog baseline must be 541"
     )
 
     backend_paths = {

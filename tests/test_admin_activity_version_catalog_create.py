@@ -376,7 +376,6 @@ def test_readonly_routes_still_200_after_d72b2(client):
     for path in [
         "/admin/catalogo-versoes",
         "/admin/normas-atividade",
-        "/admin/mapeamento-legado",
     ]:
         r = client.get(path)
         assert r.status_code == 200, f"Rota {path} deve continuar 200"

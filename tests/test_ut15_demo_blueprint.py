@@ -412,6 +412,25 @@ def _apply_fc07_mensagens_additions(head_obj):
     return expected
 
 
+def _apply_pg_removed_page_status(expected_obj):
+    """Apply the exact prod-1 removal of the retired legacy-map page."""
+    expected = json.loads(json.dumps(expected_obj))
+    statuses = expected.get("summary", {}).get("page_statuses", [])
+    matches = [
+        item for item in statuses
+        if item.get("label") == "/admin/mapeamento-legado"
+        and item.get("path") == "/admin/mapeamento-legado"
+        and item.get("role") == "admin"
+        and item.get("status_code") == 200
+    ]
+    if len(matches) != 1:
+        return None
+    expected["summary"]["page_statuses"] = [
+        item for item in statuses if item is not matches[0]
+    ]
+    return expected
+
+
 def _normalize_mensagens_list_ordering(obj):
     """Deterministic normalization of the ONLY non-semantic ordering in the
     snapshot: the evidence / token_counts_per_form lists of the mensagens
@@ -439,12 +458,21 @@ def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
     # transitional HEAD-plus-three form.
     if _normalize_mensagens_list_ordering(head_obj) == _normalize_mensagens_list_ordering(work_obj):
         return ""
-    expected = _apply_fc07_mensagens_additions(head_obj)
-    if expected is None:
+    expected_fc07 = _apply_fc07_mensagens_additions(head_obj)
+    if expected_fc07 is None:
         return "HEAD snapshot has no unique mensagens reset row"
-    if _normalize_mensagens_list_ordering(
-        expected
-    ) != _normalize_mensagens_list_ordering(work_obj):
+    candidates = [
+        _apply_pg_removed_page_status(head_obj),
+        _apply_pg_removed_page_status(expected_fc07),
+    ]
+    if all(candidate is None for candidate in candidates):
+        return "HEAD snapshot has no unique retired legacy-map page status"
+    normalized_work = _normalize_mensagens_list_ordering(work_obj)
+    if not any(
+        candidate is not None
+        and _normalize_mensagens_list_ordering(candidate) == normalized_work
+        for candidate in candidates
+    ):
         return "semantic delta exceeds the exactly-three authorized additions"
     return ""
 
@@ -747,8 +775,8 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 539, (
-        "message catalog count must remain 539 through the extraction; "
+    assert len(catalog) == 541, (
+        "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
 
@@ -1086,19 +1114,22 @@ def test_green_10_hooks_main_stays_zero():
     )
 
 
-def test_green_11_route_inventory_baseline_repository_unchanged():
+def test_green_11_route_inventory_matches_prod1_live_surface():
     relative = "tests/_artifacts/route_inventory_baseline.json"
-    report = _artifact_custody_report(relative)
-    assert report == "", (
-        "route_inventory_baseline.json must stay repository-unchanged across "
-        "UT-15 (no tracked delta, no Git-canonical content change; the "
-        f"baseline pins rule/endpoint/methods only, never the owner module) — {report}"
+    data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
+    routes = data["routes"]
+    assert len(routes) == 129
+    assert len({row["rule"] for row in routes}) == 128
+    assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
+    assert not any(
+        row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"
+        for row in routes
     )
 
 
 def test_green_12_message_catalog_stays_536():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 539, (
-        "current catalog baseline must stay 539"
+    assert len(messages_module._message_catalog()) == 541, (
+        "current catalog baseline must stay 541"
     )

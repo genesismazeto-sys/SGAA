@@ -113,6 +113,26 @@ def route_choice(conn):
     assert ("route_choice", "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, "app/choice.py")
 
 
+def test_cross_module_latest_version_write_authority_is_detected():
+    sources = {
+        "app/activity_catalog.py": '''
+def get_latest(conn, base_id):
+    return conn.execute("SELECT id FROM atividade_versao WHERE atividade_base_id=? ORDER BY numero_versao DESC LIMIT 1", (base_id,)).fetchone()
+''',
+        "app/views/importer.py": '''
+from app.activity_catalog import get_latest
+def confirm(conn, base_id):
+    version = get_latest(conn, base_id)
+    conn.execute("UPDATE atividade_versao SET grupo=? WHERE id=?", ("2", version["id"]))
+''',
+    }
+    assert (
+        "app/views/importer.py",
+        "confirm",
+        "cross_module_latest_version_write_authority",
+    ) in scanner.analyze_sources(sources)
+
+
 def test_python_tool_launcher_resurrection_is_detected():
     sources = {"tools/new_probe.py": '''
 from app.versioning import shadow_reads as history_engine

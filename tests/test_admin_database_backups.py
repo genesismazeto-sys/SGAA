@@ -163,8 +163,8 @@ def test_restore_restores_basic_database_state(admin_client):
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
-            "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-            ("99 - Backup", "Atividade Backup"),
+            "INSERT INTO atividade_base (nome_conceito,status) VALUES (?, 'ativo')",
+            ("Atividade Backup",),
         )
         conn.commit()
 
@@ -179,7 +179,7 @@ def test_restore_restores_basic_database_state(admin_client):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        conn.execute("DELETE FROM atividades WHERE nome = ?", ("Atividade Backup",))
+        conn.execute("DELETE FROM atividade_base WHERE nome_conceito = ?", ("Atividade Backup",))
         conn.commit()
 
     restore_response = admin_client.post(
@@ -190,7 +190,7 @@ def test_restore_restores_basic_database_state(admin_client):
 
     with main.app.app_context():
         restored = main.get_db_connection().execute(
-            "SELECT 1 FROM atividades WHERE nome = ?",
+            "SELECT 1 FROM atividade_base WHERE nome_conceito = ?",
             ("Atividade Backup",),
         ).fetchone()
 
@@ -202,8 +202,8 @@ def test_restore_upload_restores_basic_database_state_from_official_zip(admin_cl
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
-            "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-            ("98 - Backup", "Atividade Backup ZIP"),
+            "INSERT INTO atividade_base (nome_conceito,status) VALUES (?, 'ativo')",
+            ("Atividade Backup ZIP",),
         )
         conn.commit()
 
@@ -211,7 +211,7 @@ def test_restore_upload_restores_basic_database_state_from_official_zip(admin_cl
     try:
         with main.app.app_context():
             conn = main.get_db_connection()
-            conn.execute("DELETE FROM atividades WHERE nome = ?", ("Atividade Backup ZIP",))
+            conn.execute("DELETE FROM atividade_base WHERE nome_conceito = ?", ("Atividade Backup ZIP",))
             conn.commit()
 
         with open(str(backup_artifacts["zip_path"]), "rb") as handle:
@@ -224,7 +224,7 @@ def test_restore_upload_restores_basic_database_state_from_official_zip(admin_cl
 
         with main.app.app_context():
             restored = main.get_db_connection().execute(
-                "SELECT 1 FROM atividades WHERE nome = ?",
+                "SELECT 1 FROM atividade_base WHERE nome_conceito = ?",
                 ("Atividade Backup ZIP",),
             ).fetchone()
 
@@ -241,8 +241,8 @@ def test_restore_upload_accepts_direct_sqlite_files_and_creates_safety_snapshot(
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
-            "INSERT INTO atividades (grupo, nome) VALUES (?, ?)",
-            ("97 - Backup", marker_name),
+            "INSERT INTO atividade_base (nome_conceito,status) VALUES (?, 'ativo')",
+            (marker_name,),
         )
         conn.commit()
 
@@ -251,7 +251,7 @@ def test_restore_upload_accepts_direct_sqlite_files_and_creates_safety_snapshot(
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        conn.execute("DELETE FROM atividades WHERE nome = ?", (marker_name,))
+        conn.execute("DELETE FROM atividade_base WHERE nome_conceito = ?", (marker_name,))
         conn.commit()
 
     caplog.clear()
@@ -266,7 +266,7 @@ def test_restore_upload_accepts_direct_sqlite_files_and_creates_safety_snapshot(
 
     with main.app.app_context():
         restored = main.get_db_connection().execute(
-            "SELECT 1 FROM atividades WHERE nome = ?",
+            "SELECT 1 FROM atividade_base WHERE nome_conceito = ?",
             (marker_name,),
         ).fetchone()
 

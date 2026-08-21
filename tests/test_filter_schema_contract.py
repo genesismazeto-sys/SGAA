@@ -76,12 +76,12 @@ def _ensure_turma_id() -> int:
         turma_id = conn.execute(
             """
             INSERT INTO turmas (
-                nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
+                nome, turno, status, numero, curso_id, matriz_id,
                 ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """,
-            (turma_codigo, None, None, "Noite", "Ativa", 999, curso["id"], None, 2028, 1, 2031, 2, turma_codigo),
+            (turma_codigo, "Noite", "Ativa", 999, curso["id"], None, 2028, 1, 2031, 2, turma_codigo),
         ).fetchone()["id"]
         conn.commit()
         return int(turma_id)
@@ -115,7 +115,6 @@ def test_admin_filter_schema_entries_have_explicit_type(client):
     endpoints = [
         "/admin/cursos",
         "/admin/arquivos",
-        "/admin/requisicoes",
         "/admin/atividades",
         "/admin/alunos",
         "/admin/turmas",

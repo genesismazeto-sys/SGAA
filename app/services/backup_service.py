@@ -7,7 +7,12 @@ import sqlite3
 import tempfile
 import zipfile
 
-from app.db_maintenance import SCHEMA_VERSION, get_schema_status
+from app.prod1_schema import (
+    SCHEMA_EPOCH,
+    SCHEMA_VERSION,
+    Prod1SchemaError,
+    validate_prod1_schema,
+)
 
 
 class BackupServiceError(RuntimeError):
@@ -16,7 +21,10 @@ class BackupServiceError(RuntimeError):
 
 RESTORE_SQLITE_EXTENSIONS = {".db", ".sqlite", ".sqlite3"}
 RESTORE_PACKAGE_EXTENSIONS = RESTORE_SQLITE_EXTENSIONS | {".zip"}
-ESSENTIAL_RESTORE_TABLES = {"usuarios", "alunos", "atividades", "requisicoes"}
+ESSENTIAL_RESTORE_TABLES = {
+    "usuarios", "alunos", "atividade_base", "atividade_versao",
+    "matriz_atividade_versao_item", "requisicoes",
+}
 
 
 def _calculate_file_sha256(file_path: str) -> str:
@@ -125,7 +133,38 @@ def _validate_optional_restore_manifest(payload) -> dict[str, object] | None:
         return None
     if not isinstance(payload, dict):
         raise BackupServiceError("Manifesto do pacote de backup inválido.")
-    return payload
+    if "schema_epoch" not in payload or "schema_version" not in payload:
+        raise BackupServiceError(
+            "Manifesto do pacote de backup deve declarar schema_epoch e schema_version."
+        )
+    epoch = payload.get("schema_epoch")
+    version = payload.get("schema_version")
+    if not isinstance(epoch, str) or not epoch.strip():
+        raise BackupServiceError("schema_epoch do manifesto é inválido.")
+    if isinstance(version, bool):
+        raise BackupServiceError("schema_version do manifesto é inválido.")
+    try:
+        normalized_version = int(version)
+    except (TypeError, ValueError) as exc:
+        raise BackupServiceError("schema_version do manifesto é inválido.") from exc
+    if epoch != SCHEMA_EPOCH or normalized_version != SCHEMA_VERSION:
+        raise BackupServiceError(
+            "Manifesto do backup não corresponde ao contrato PROD-1 suportado."
+        )
+    return {**payload, "schema_epoch": epoch, "schema_version": normalized_version}
+
+
+def _validate_manifest_database_consistency(
+    manifest: dict[str, object], database_validation: dict[str, object]
+) -> None:
+    status = database_validation["schema_status"]
+    if (
+        manifest["schema_epoch"] != status["schema_epoch"]
+        or manifest["schema_version"] != status["schema_version"]
+    ):
+        raise BackupServiceError(
+            "Manifesto e banco do backup declaram contratos de schema diferentes."
+        )
 
 
 def _validate_restore_database_file(database_path: str) -> dict[str, object]:
@@ -155,13 +194,9 @@ def _validate_restore_database_file(database_path: str) -> dict[str, object]:
                 + "."
             )
 
-        schema_status = get_schema_status(conn)
-        schema_version = int(schema_status.get("schema_version") or 0)
-        if schema_version > SCHEMA_VERSION:
-            raise BackupServiceError(
-                "Backup do banco usa um schema mais novo do que esta versão do sistema suporta."
-            )
-    except sqlite3.Error as exc:
+        schema_status = validate_prod1_schema(conn)
+        schema_version = int(schema_status["schema_version"])
+    except (sqlite3.Error, Prod1SchemaError) as exc:
         raise BackupServiceError(f"Não foi possível validar o schema do banco enviado: {exc}") from exc
     finally:
         conn.close()
@@ -171,6 +206,18 @@ def _validate_restore_database_file(database_path: str) -> dict[str, object]:
         "schema_status": schema_status,
         "schema_version": int(schema_status.get("schema_version") or 0),
     }
+
+
+def validate_manifest_backed_restore(
+    database_path: str, manifest_payload
+) -> dict[str, object]:
+    """Validate manifest metadata and the complete DB before target mutation."""
+    manifest = _validate_optional_restore_manifest(manifest_payload)
+    if manifest is None:
+        raise BackupServiceError("Restauração por manifesto exige um manifesto.")
+    validation = _validate_restore_database_file(database_path)
+    _validate_manifest_database_consistency(manifest, validation)
+    return {**validation, "manifest": manifest}
 
 
 def extract_restore_database_artifact(
@@ -248,6 +295,8 @@ def extract_restore_database_artifact(
             manifest_payload = _validate_optional_restore_manifest(manifest_payload)
 
     validation = _validate_restore_database_file(database_path)
+    if manifest_payload is not None:
+        _validate_manifest_database_consistency(manifest_payload, validation)
     return {
         "work_dir": safe_work_dir,
         "database_path": validation["database_path"],

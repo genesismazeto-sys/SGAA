@@ -148,7 +148,7 @@ def test_every_current_governed_business_pair_has_exactly_one_policy():
                 governed.append(result)
                 assert bool(result["requirement"]) != bool(result["exemption"])
                 assert result["kind"] in {"requirement", "exemption"}
-    assert len(governed) == 134  # 131 /admin pairs + 3 approved external callbacks.
+    assert len(governed) == 132  # 129 /admin pairs + 3 approved external callbacks.
 
 
 def test_new_governed_unmapped_pair_is_detected_without_route_registration():
@@ -169,10 +169,10 @@ def test_empty_debt_baseline_and_empty_explicit_exemption_registry_are_preserved
 
 
 def test_head_inherits_get_without_duplicate_head_mapping():
-    rule = _resolved_rule("/admin/diagnostico/versioned-shadow-reads", "HEAD")
+    rule = _resolved_rule("/admin/diagnostico/atividades-versionadas", "HEAD")
     result = auth.classify_governed_admin_request(rule.endpoint, rule, "HEAD")
     assert result["method"] == "GET"
-    assert result["requirement"] == ("banco_dados", "view")
+    assert result["requirement"] == ("atividades", "view")
     assert auth.get_admin_permission_requirement(rule.endpoint, "HEAD") == auth.get_admin_permission_requirement(rule.endpoint, "GET")
 
 

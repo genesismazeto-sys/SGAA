@@ -37,7 +37,7 @@ ARTIFACT_PATH = Path(__file__).parent / "_artifacts" / "route_inventory_baseline
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 ADMIN_ACCESS_LEVELS = ("admin_total", "administrativo", "consultivo")
 
-CANONICAL_REQUIREMENT_MATRIX_DIGEST = "855078dff8aa0e2745c6fc3bdbb1492aa308e96a5d45680780128371c2562d13"
+CANONICAL_REQUIREMENT_MATRIX_DIGEST = "48ff3a9620d711cfbcfe70d51cdfdf1334d7f5590d66f5ae7d9b3e5154bc4f09"
 CANONICAL_PROFILE_DIGESTS = {
     "admin_total": "8100f29522b3bea3cd55d37f2e35bd04a7e663e014669237b5ef7646777a77ae",
     "administrativo": "bce039124b87b716dfc6c0c78a75a0a08b563fa8d452dbd148931cd733da759c",
@@ -482,26 +482,26 @@ def test_baseline_matches_live_inventory():
     assert _build_live_inventory() == _load_baseline()
 
 
-def test_baseline_has_131_rules():
-    assert len(_load_baseline()["routes"]) == 131
+def test_baseline_has_129_rules():
+    assert len(_load_baseline()["routes"]) == 129
 
 
-def test_baseline_has_160_combinations():
+def test_baseline_has_158_combinations():
     total = sum(len(r["methods"]) for r in _load_baseline()["routes"])
-    assert total == 160
+    assert total == 158
 
 
 # ---------------------------------------------------------------------------
 # Part 2 — Governed classification invariants
 # ---------------------------------------------------------------------------
 
-def test_governed_requirement_count_is_134():
+def test_governed_requirement_count_is_132():
     req = sum(1 for cls in (
         _classify(e["rule"], e["endpoint"], m)
         for e in _load_baseline()["routes"]
         for m in e["methods"]
     ) if cls["governed"] and cls["kind"] == "requirement")
-    assert req == 134
+    assert req == 132
 
 
 def test_all_governed_requirement_kind():
@@ -588,7 +588,7 @@ def test_consultivo_security_resources_are_none():
 
 
 # ---------------------------------------------------------------------------
-# Part 4 — Permission-layer matrix (263 allowed, 139 denied)
+# Part 4 — Permission-layer matrix (259 allowed, 137 denied)
 # ---------------------------------------------------------------------------
 
 def test_permission_layer_matrix(env):
@@ -625,21 +625,21 @@ def test_permission_layer_matrix(env):
                 else:
                     total_denied += 1
                     breakdown[level]["denied"].append((rule_text, endpoint, method, resource, scope))
-    assert total_actor_combinations == 402, (
+    assert total_actor_combinations == 396, (
         f"total_actor_combinations={total_actor_combinations}"
     )
-    assert total_allowed == 263, f"total_allowed={total_allowed}"
-    assert total_denied == 139, f"total_denied={total_denied}"
+    assert total_allowed == 259, f"total_allowed={total_allowed}"
+    assert total_denied == 137, f"total_denied={total_denied}"
     assert total_allowed + total_denied == total_actor_combinations, (
         f"allowed={total_allowed} + denied={total_denied} "
         f"!= actor combinations={total_actor_combinations}"
     )
-    assert breakdown["admin_total"]["allowed"] == 134
+    assert breakdown["admin_total"]["allowed"] == 132
     assert breakdown["admin_total"]["denied"] == []
-    assert breakdown["administrativo"]["allowed"] == 98
-    assert len(breakdown["administrativo"]["denied"]) == 36
-    assert breakdown["consultivo"]["allowed"] == 31
-    assert len(breakdown["consultivo"]["denied"]) == 103
+    assert breakdown["administrativo"]["allowed"] == 97
+    assert len(breakdown["administrativo"]["denied"]) == 35
+    assert breakdown["consultivo"]["allowed"] == 30
+    assert len(breakdown["consultivo"]["denied"]) == 102
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +697,7 @@ def test_url_roundtrip(env):
         for method in entry["methods"]:
             url, _ = _build_url_for_governed(rule_text, endpoint, method)
             built.add((endpoint, method, url, rule_text))
-    assert len(built) == 160, f"roundtrip count={len(built)} expected 160 (all baseline combinations)"
+    assert len(built) == 158, f"roundtrip count={len(built)} expected 158 (all baseline combinations)"
 
 
 def test_live_governed_converters_are_int_and_string_only(env):
@@ -876,10 +876,10 @@ def _run_browser_denials(env):
             assert not conn.in_transaction, f"browser: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"browser: fingerprint mismatch for {ctx}"
-    assert executed == 139, f"browser denied cases executed={executed} expected 139"
+    assert executed == 137, f"browser denied cases executed={executed} expected 137"
 
 
-def test_browser_denial_all_139_cases(env):
+def test_browser_denial_all_137_cases(env):
     _run_browser_denials(env)
 
 
@@ -953,10 +953,10 @@ def _run_ajax_denials(env):
             assert not conn.in_transaction, f"AJAX: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"AJAX: fingerprint mismatch for {ctx}"
-    assert executed == 139, f"AJAX denied cases executed={executed} expected 139"
+    assert executed == 137, f"AJAX denied cases executed={executed} expected 137"
 
 
-def test_ajax_denial_all_139_cases(env):
+def test_ajax_denial_all_137_cases(env):
     _run_ajax_denials(env)
 
 

@@ -539,13 +539,6 @@
       "rule": "/admin/diagnostico/atividades-versionadas/view"
     },
     {
-      "endpoint": "admin_diagnostico_versioned_shadow_reads",
-      "methods": [
-        "GET"
-      ],
-      "rule": "/admin/diagnostico/versioned-shadow-reads"
-    },
-    {
       "endpoint": "admin_editar_aluno",
       "methods": [
         "GET",
@@ -598,13 +591,6 @@
         "POST"
       ],
       "rule": "/admin/importar_requisicoes"
-    },
-    {
-      "endpoint": "admin_mapeamento_legado",
-      "methods": [
-        "GET"
-      ],
-      "rule": "/admin/mapeamento-legado"
     },
     {
       "endpoint": "admin_matrizes",

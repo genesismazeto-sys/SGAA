@@ -433,11 +433,11 @@ def test_admin_acesso_filter_schema_and_typed_filters(client):
         curso_id = conn.execute("SELECT id FROM cursos WHERE codigo = ?", (course_code,)).fetchone()["id"]
         turma_id = conn.execute(
             """
-            INSERT INTO turmas (nome, ano, semestre, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO turmas (nome, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """,
-            (turma_code, None, None, "Noite", "Ativa", 1, curso_id, None, 2027, 1, 2030, 2, turma_code),
+            (turma_code, "Noite", "Ativa", 1, curso_id, None, 2027, 1, 2030, 2, turma_code),
         ).fetchone()["id"]
 
         user_a = conn.execute(
@@ -450,12 +450,12 @@ def test_admin_acesso_filter_schema_and_typed_filters(client):
         ).lastrowid
 
         conn.execute(
-            "INSERT INTO alunos (usuario_id, nome, matricula, email, turma, turma_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_a, "Acesso Filtro Aluno 1", matricula_a, email_a, turma_code, turma_id, "Ativo"),
+            "INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_a, "Acesso Filtro Aluno 1", matricula_a, email_a, turma_id, "Ativo"),
         )
         conn.execute(
-            "INSERT INTO alunos (usuario_id, nome, matricula, email, turma, turma_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_b, "Acesso Filtro Aluno 2", matricula_b, email_b, None, None, "Ativo"),
+            "INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_b, "Acesso Filtro Aluno 2", matricula_b, email_b, None, "Ativo"),
         )
         conn.commit()
 

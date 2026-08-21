@@ -19,8 +19,8 @@ from app.db_maintenance import (
 )
 from app.matrix_scope import (
     _matriz_option_label,
-    get_allowed_activity_ids_for_turma_matrix,
-    is_activity_allowed_for_turma_matrix,
+    get_allowed_activity_version_ids_for_turma_matrix,
+    is_activity_version_allowed_for_turma_matrix,
 )
 from app.requisitions import auto_indefer_devolvidas
 from app.student_documents import remove_student_document, save_student_document
@@ -33,7 +33,6 @@ from app.versioning.request_history import (
 )
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
-    _has_versioned_requisicao_snapshot,
     is_versioned_requisicao_snapshot_display_enabled,
     prepare_versioned_requisicao_snapshot,
     read_requisicao_snapshot_for_processing,
@@ -92,9 +91,6 @@ def admin_importar_requisicoes():
             erro_count = 0
             erros_detalhes = []
 
-            atividades_map = {normalize_header(row["nome"]): row["id"] for row in conn.execute("SELECT id, nome FROM atividades").fetchall()}
-            logger.info(f"Cache de atividades criado: {len(atividades_map)} atividades.")
-
             data_solicitacao_hoje = datetime.date.today().strftime("%Y-%m-%d")
 
             for row_index in range(3, sheet.max_row + 1):
@@ -111,10 +107,17 @@ def admin_importar_requisicoes():
                         logger.info(f"Linha {row_index}: linha vazia, pulando.")
                         continue
 
-                    aluno_id = None
+                    matricula = str(sheet.cell(row=row_index, column=1).value or "").strip()
+                    aluno = conn.execute("SELECT id FROM alunos WHERE matricula=?", (matricula,)).fetchone()
+                    if not aluno:
+                        raise ValueError("matrícula ausente ou não encontrada")
+                    aluno_id = int(aluno["id"])
+                    scope = _get_admin_requisicao_scope_for_aluno(conn, aluno_id)
+                    if not scope or not scope["matriz_scope"]:
+                        raise ValueError("aluno sem Matrix efetiva")
                     nome_atividade_norm = normalize_header(str(nome_atividade_raw))
-                    atividade_id = atividades_map.get(nome_atividade_norm)
-                    if not atividade_id:
+                    matches = [item for item in scope["activities"] if normalize_header(str(item["nome"])) == nome_atividade_norm]
+                    if len(matches) != 1:
                         logger.warning(f"Linha {row_index}: Atividade '{nome_atividade_raw}' não encontrada")
                         erro_count += 1
                         erros_detalhes.append(f"Linha {row_index}: Atividade '{nome_atividade_raw}' não encontrada")
@@ -157,11 +160,21 @@ def admin_importar_requisicoes():
                             status = "Indeferida"
                             horas_deferidas = 0.0
 
+                    atividade_versao_id = int(matches[0]["atividade_versao_id"])
+                    prepared = prepare_versioned_requisicao_snapshot(
+                        conn, flow_origin="admin_import", aluno_id=aluno_id,
+                        atividade_versao_id=atividade_versao_id,
+                    )
                     conn.execute("""
-                        INSERT INTO requisicoes\x20
-                        (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, status, horas_deferidas, observacao)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (aluno_id, atividade_id, data_solicitacao_hoje, data_evento, horas_solicitadas, status, horas_deferidas, f"Importado da planilha linha {row_index}"))
+                        INSERT INTO requisicoes
+                        (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
+                         horas_solicitadas, status, horas_deferidas, observacao,
+                         regra_snapshot_json, codigo_normativo_snapshot)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (aluno_id, prepared.atividade_versao_id, data_solicitacao_hoje,
+                           data_evento, horas_solicitadas, status, horas_deferidas,
+                           f"Importado da planilha linha {row_index}", prepared.snapshot_json,
+                           prepared.codigo_normativo))
                     sucesso_count += 1
 
                 except Exception as e:
@@ -227,7 +240,7 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
     ).fetchone()
     if not row:
         return None
-    allowed_activity_ids, matriz = get_allowed_activity_ids_for_turma_matrix(
+    allowed_activity_ids, matriz = get_allowed_activity_version_ids_for_turma_matrix(
         conn,
         row["curso_id"],
         row["turma_matriz_id"],
@@ -341,24 +354,16 @@ def admin_requisicoes():
         FROM requisicoes r
         LEFT JOIN alunos a ON r.aluno_id = a.id
         LEFT JOIN turmas t ON t.id = a.turma_id
-        JOIN atividades act ON r.atividade_id = act.id
     """
     select_cols = """
         SELECT r.*,\x20
                a.nome              AS aluno_nome,
                a.matricula         AS aluno_matricula,
-               a.turma             AS aluno_turma_legacy,
-               COALESCE(t.codigo, t.nome, a.turma) AS turma_codigo,
+               COALESCE(t.codigo, t.nome, 'Sem turma') AS aluno_turma_legacy,
+               COALESCE(t.codigo, t.nome, 'Sem turma') AS turma_codigo,
                t.curso_id          AS turma_curso_id,
                t.matriz_id         AS turma_matriz_id,
-               act.nome            AS atividade_nome,
-               act.grupo           AS grupo,
-               act.tipo_atividade  AS tipo_atividade,
-               act.nome            AS live_nome,
-               act.grupo           AS live_grupo,
-               act.tipo_atividade  AS live_tipo_atividade,
-               act.limite_horas_total AS live_limite_total,
-               act.limite_horas_semestral AS live_limite_semestre
+               r.atividade_versao_id AS exact_activity_version_id
     """
     query = select_cols + base_from
     params = []
@@ -369,7 +374,7 @@ def admin_requisicoes():
         params.extend(aluno_filters)
     if turma_filters:
         placeholders = ", ".join("?" for _ in turma_filters)
-        where.append(f"COALESCE(TRIM(COALESCE(t.codigo, t.nome, a.turma)), '') IN ({placeholders})")
+        where.append(f"COALESCE(TRIM(COALESCE(t.codigo, t.nome)), '') IN ({placeholders})")
         params.extend(turma_filters)
     if data_solicitacao_min:
         where.append("date(r.data_solicitacao) >= date(?)")
@@ -418,7 +423,7 @@ def admin_requisicoes():
         'data_solicitacao': 'r.data_solicitacao',
         'data_processamento': 'r.data_processamento',
         'aluno_nome': 'a.nome',
-        'turma_codigo': 'a.turma',
+        'turma_codigo': 't.codigo',
         'status': 'r.status'
     }
     historical_sort_fields = {
@@ -460,20 +465,31 @@ def admin_requisicoes():
         item["atividade_nome"] = history.nome
         item["grupo"] = history.grupo
         item["tipo_atividade"] = history.tipo_atividade
-        item["snapshot_versionado_presente"] = _has_versioned_requisicao_snapshot(item)
+        item["snapshot_versionado_presente"] = (
+            read_requisicao_snapshot_for_processing(item).authority
+            is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
+        )
         cache_key = (item.get("turma_curso_id"), item.get("turma_matriz_id"))
         if cache_key not in matrix_scope_cache:
-            matrix_scope_cache[cache_key] = get_allowed_activity_ids_for_turma_matrix(
+            matrix_scope_cache[cache_key] = get_allowed_activity_version_ids_for_turma_matrix(
                 conn,
                 item.get("turma_curso_id"),
                 item.get("turma_matriz_id"),
             )
         allowed_activity_ids, matriz = matrix_scope_cache[cache_key]
-        item["matrix_scope_issue"] = item.get("atividade_id") not in allowed_activity_ids
+        item["matrix_scope_issue"] = item.get("atividade_versao_id") not in allowed_activity_ids
         item["matrix_scope_label"] = _matriz_option_label(matriz) if matriz else None
         requisicoes.append(item)
     # Carregar atividades e documentos obrigatórios (para reuso do form do aluno no modal admin)
-    atividades = conn.execute("SELECT * FROM atividades ORDER BY tipo_atividade, grupo, nome").fetchall()
+    atividades = conn.execute(
+        """SELECT DISTINCT v.id, v.id AS atividade_versao_id, b.nome_conceito AS nome,
+                  CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
+                  v.grupo, v.documentos_json
+             FROM matriz_atividade_versao_item mi
+             JOIN atividade_versao v ON v.id=mi.atividade_versao_id
+             JOIN atividade_base b ON b.id=mi.atividade_base_id
+         ORDER BY tipo_atividade,v.grupo,b.nome_conceito"""
+    ).fetchall()
     alunos_opcoes = _list_admin_requisicao_alunos(conn)
     docs_por_atividade = {}
     try:
@@ -499,24 +515,17 @@ def admin_requisicoes():
     ).fetchall()
     turmas_filtro = conn.execute(
         """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome, a.turma)), ''), '') AS turma_codigo
+        SELECT DISTINCT COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '') AS turma_codigo
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
           LEFT JOIN turmas t ON t.id = a.turma_id
-         WHERE COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome, a.turma)), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(t.codigo, t.nome, a.turma, '')) ASC
+         WHERE COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '') <> ''
+      ORDER BY LOWER(COALESCE(t.codigo, t.nome, '')) ASC
         """
     ).fetchall()
     history_filter_rows = conn.execute(
         """
-        SELECT r.*,
-               act.nome AS live_nome,
-               act.grupo AS live_grupo,
-               act.tipo_atividade AS live_tipo_atividade,
-               act.limite_horas_total AS live_limite_total,
-               act.limite_horas_semestral AS live_limite_semestre
-          FROM requisicoes r
-          JOIN atividades act ON r.atividade_id = act.id
+        SELECT r.* FROM requisicoes r
         """
     ).fetchall()
     history_filters = [read_request_presentation(row) for row in history_filter_rows]
@@ -642,7 +651,7 @@ def admin_nova_requisicao():
         return redirect(url_for("admin_requisicoes", open_new="1", aluno_id=aluno_id or None))
 
     aluno_id = request.form.get("aluno_id", type=int)
-    atividade_id = request.form.get("atividade_id", type=int)
+    atividade_id = request.form.get("atividade_versao_id", type=int)
     nome_evento = (request.form.get("nome_evento") or "").strip()
     observacao = (request.form.get("observacao") or "").strip() or None
     data_evento = _normalize_requisicao_data_evento(request.form.get("data_evento"))
@@ -666,7 +675,7 @@ def admin_nova_requisicao():
         flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    atividade = conn.execute("SELECT id FROM atividades WHERE id = ?", (atividade_id,)).fetchone()
+    atividade = conn.execute("SELECT id FROM atividade_versao WHERE id = ? AND status='ativa'", (atividade_id,)).fetchone()
     if not atividade:
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
@@ -692,7 +701,7 @@ def admin_nova_requisicao():
             conn,
             flow_origin="admin_create",
             aluno_id=aluno_id,
-            atividade_id_legacy=atividade_id,
+            atividade_versao_id=atividade_id,
         )
     except RequisicaoSnapshotError as exc:
         conn.rollback()
@@ -711,21 +720,20 @@ def admin_nova_requisicao():
         cur.execute(
             """
             INSERT INTO requisicoes
-            (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante,
-             atividade_versao_id, regra_snapshot_json, codigo_normativo_snapshot)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
+             horas_solicitadas, nome_evento, status, observacao,
+             regra_snapshot_json, codigo_normativo_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 aluno_id,
-                atividade_id,
+                prepared_snapshot.atividade_versao_id,
                 data_solicitacao,
                 data_evento,
                 horas_solicitadas,
                 nome_evento,
                 "Pendente",
                 observacao,
-                None,
-                prepared_snapshot.atividade_versao_id,
                 prepared_snapshot.snapshot_json,
                 prepared_snapshot.codigo_normativo,
             ),
@@ -738,9 +746,6 @@ def admin_nova_requisicao():
             arquivos,
             created_document_paths=created_document_paths,
         )
-
-        if first_saved:
-            conn.execute("UPDATE requisicoes SET arquivo_comprovante = ? WHERE id = ?", (first_saved, req_id))
 
         conn.commit()
         created_document_paths.clear()
@@ -790,7 +795,7 @@ def admin_editar_requisicao(req_id):
         flash("Somente requisições pendentes podem ser editadas pelo admin.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    atividade_id = request.form.get("atividade_id", type=int)
+    atividade_id = request.form.get("atividade_versao_id", type=int)
     nome_evento = (request.form.get("nome_evento") or "").strip()
     observacao = (request.form.get("observacao") or "").strip() or None
     data_evento = _normalize_requisicao_data_evento(request.form.get("data_evento"))
@@ -813,16 +818,17 @@ def admin_editar_requisicao(req_id):
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
     if not atividade_id:
-        atividade_id = requisicao["atividade_id"]
+        atividade_id = requisicao["atividade_versao_id"]
 
-    allowed_activity_ids, _matriz = get_allowed_activity_ids_for_turma_matrix(
+    allowed_activity_ids, _matriz = get_allowed_activity_version_ids_for_turma_matrix(
         conn,
         requisicao["turma_curso_id"],
         requisicao["turma_matriz_id"],
     )
-    current_atividade_id = requisicao["atividade_id"]
+    current_atividade_id = requisicao["atividade_versao_id"]
     if (
-        _has_versioned_requisicao_snapshot(requisicao)
+        read_requisicao_snapshot_for_processing(requisicao).authority
+        is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
         and atividade_id != current_atividade_id
     ):
         flash(
@@ -839,7 +845,7 @@ def admin_editar_requisicao(req_id):
         flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    atividade = conn.execute("SELECT id FROM atividades WHERE id = ?", (atividade_id,)).fetchone()
+    atividade = conn.execute("SELECT id FROM atividade_versao WHERE id = ?", (atividade_id,)).fetchone()
     if not atividade:
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
@@ -847,18 +853,14 @@ def admin_editar_requisicao(req_id):
     arquivos = request.files.getlist("comprovantes_files") or []
     first_saved = _append_requisicao_arquivos(conn, req_id, requisicao["aluno_id"], arquivos)
 
-    params = [atividade_id, nome_evento, horas_solicitadas, data_evento, observacao]
+    params = [nome_evento, horas_solicitadas, data_evento, observacao]
     sql = """
         UPDATE requisicoes
-           SET atividade_id = ?,
-               nome_evento = ?,
+           SET nome_evento = ?,
                horas_solicitadas = ?,
                data_evento = ?,
                observacao = ?
     """
-    if requisicao["arquivo_comprovante"] is None and first_saved:
-        sql += ", arquivo_comprovante = ?"
-        params.append(first_saved)
     sql += " WHERE id = ?"
     params.append(req_id)
 
@@ -898,16 +900,10 @@ def admin_detalhes_requisicao(req_id):
     conn = get_db_connection()
     requisicao = conn.execute("""
         SELECT r.*, u.nome as AdminNome, a.nome as AlunoNome,
-               a.matricula as AlunoMatricula, act.nome as AtividadeNome,
-               act.nome AS live_nome,
-               act.grupo AS live_grupo,
-               act.tipo_atividade AS live_tipo_atividade,
-               act.limite_horas_total AS live_limite_total,
-               act.limite_horas_semestral AS live_limite_semestre
+               a.matricula as AlunoMatricula
         FROM requisicoes r
         LEFT JOIN usuarios u ON r.admin_id = u.id
         LEFT JOIN alunos a ON r.aluno_id = a.id
-        JOIN atividades act ON r.atividade_id = act.id
         WHERE r.id = ?
     """, (req_id,)).fetchone()
     if not requisicao:
@@ -929,17 +925,10 @@ def admin_api_requisicao(req_id):
         SELECT r.*, a.nome as aluno_nome, a.turma_id as turma_id,
              COALESCE(t.codigo, t.nome, 'Sem turma') as turma_label,
              t.curso_id as turma_curso_id, t.matriz_id as turma_matriz_id,
-               act.nome as atividade_nome, act.grupo as grupo,
-               act.tipo_atividade as tipo_atividade,
-               act.nome AS live_nome,
-               act.grupo AS live_grupo,
-               act.tipo_atividade AS live_tipo_atividade,
-               act.limite_horas_total AS live_limite_total,
-               act.limite_horas_semestral AS live_limite_semestre
+               r.atividade_versao_id AS exact_activity_version_id
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
           LEFT JOIN turmas t ON t.id = a.turma_id
-          JOIN atividades act ON r.atividade_id = act.id
          WHERE r.id = ?
         """,
         (req_id,)
@@ -986,7 +975,6 @@ def admin_api_requisicao(req_id):
         )
         coherent = any(
             activity.get("atividade_versao_id") == rule.atividade_versao_id
-            and activity.get("id") == rule.atividade_id_legacy
             for activity in activities
         )
         if not coherent:
@@ -998,25 +986,10 @@ def admin_api_requisicao(req_id):
                     "activities": [],
                 }
             ), 409
-        allowed_activity_ids = {activity["id"] for activity in activities}
+        allowed_activity_ids = {activity["atividade_versao_id"] for activity in activities}
         data["activities"] = activities
         data["activity_authority"] = "historical_snapshot"
         data["current_activity_allowed"] = True
-    else:
-        allowed_activity_ids, matriz = get_allowed_activity_ids_for_turma_matrix(
-            conn,
-            data.get("turma_curso_id"),
-            data.get("turma_matriz_id"),
-        )
-        data["activities"] = (
-            list_exact_matrix_activity_catalogue(conn, matriz["id"])
-            if matriz
-            else []
-        )
-        data["activity_authority"] = "current_matrix_compatibility"
-        data["current_activity_allowed"] = (
-            data.get("atividade_id") in allowed_activity_ids
-        )
     data["allowed_activity_ids"] = sorted(allowed_activity_ids)
     data["matriz_scope"] = (
         {"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None
@@ -1065,14 +1038,11 @@ def admin_processar_requisicao(req_id):
     ensure_matriz_atividade_links_table(conn)
     snapshot_display_enabled = is_versioned_requisicao_snapshot_display_enabled()
     requisicao = conn.execute("""
-        SELECT r.*, a.nome as atividade_nome, a.tipo_atividade AS atividade_tipo_legacy_atual,
-               a.tem_limitacao, a.tipo_limitacao,
-               a.limite_horas_total, a.limite_horas_semestral, al.nome as aluno_nome,
+        SELECT r.*, al.nome as aluno_nome,
                al.id AS aluno_rel_id, al.turma_id AS aluno_turma_id,
                t.id AS turma_rel_id,
                t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id
         FROM requisicoes r
-        JOIN atividades a ON r.atividade_id = a.id
         LEFT JOIN alunos al ON r.aluno_id = al.id
         LEFT JOIN turmas t ON t.id = al.turma_id
         WHERE r.id = ?
@@ -1137,32 +1107,8 @@ def admin_processar_requisicao(req_id):
                 requisicao["aluno_rel_id"] is not None
                 and requisicao["turma_rel_id"] is not None
             )
-            has_historical_null_matrix = (
-                has_existing_turma and requisicao["turma_matriz_id"] is None
-            )
-            has_explicit_matrix = (
-                has_existing_turma and requisicao["turma_matriz_id"] is not None
-            )
-
             if not has_existing_turma:
                 flash("Dados do aluno não encontrados.", "error")
-                return redirect(url_for("admin_processar_requisicao", req_id=req_id))
-
-            if (
-                snapshot_processing.authority is not SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
-                and not has_historical_null_matrix
-                and has_explicit_matrix
-                and not is_activity_allowed_for_turma_matrix(
-                    conn,
-                    requisicao["atividade_id"],
-                    requisicao["turma_curso_id"],
-                    requisicao["turma_matriz_id"],
-                )
-            ):
-                flash(
-                    "A atividade desta requisição não pertence mais a matriz efetiva da turma do aluno.",
-                    "error",
-                )
                 return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         if status in ["Deferida", "Deferida Parcialmente"]:
@@ -1172,11 +1118,11 @@ def admin_processar_requisicao(req_id):
                 if snapshot_processing.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
                 else None
             )
-            total_limit = snapshot_rule.limite_total if snapshot_rule else None
-            semester_limit = snapshot_rule.limite_semestre if snapshot_rule else None
-            if snapshot_rule is None and requisicao["tem_limitacao"]:
-                total_limit = requisicao["limite_horas_total"] if requisicao["tipo_limitacao"] == "total" else None
-                semester_limit = requisicao["limite_horas_semestral"] if requisicao["tipo_limitacao"] == "semestral" else None
+            if snapshot_rule is None:
+                flash(RequisicaoSnapshotError.user_message, "error")
+                return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+            total_limit = snapshot_rule.limite_total
+            semester_limit = snapshot_rule.limite_semestre
 
             if total_limit is not None:
                 horas_ja_deferidas = conn.execute("""
@@ -1188,8 +1134,10 @@ def admin_processar_requisicao(req_id):
                         END
                     ), 0) as total
                     FROM requisicoes\x20
-                    WHERE aluno_id = ? AND atividade_id = ? AND status IN ('Deferida', 'Deferida Parcialmente')
-                """, (requisicao["aluno_id"], requisicao["atividade_id"])).fetchone()[0]
+                    WHERE aluno_id = ?
+                      AND json_extract(regra_snapshot_json,'$.atividade_base_id') = ?
+                      AND status IN ('Deferida', 'Deferida Parcialmente')
+                """, (requisicao["aluno_id"], snapshot_rule.atividade_base_id)).fetchone()[0]
 
                 if horas_ja_deferidas + horas_a_deferir > total_limit:
                     flash(f"Erro: O aluno já possui {horas_ja_deferidas}h nesta atividade. Limite total: {total_limit}h. Máximo a deferir agora: {total_limit - horas_ja_deferidas}h.", "error")
@@ -1208,13 +1156,15 @@ def admin_processar_requisicao(req_id):
                         END
                     ), 0) as total
                     FROM requisicoes\x20
-                    WHERE aluno_id = ? AND atividade_id = ? AND status IN ('Deferida', 'Deferida Parcialmente')
+                    WHERE aluno_id = ?
+                      AND json_extract(regra_snapshot_json,'$.atividade_base_id') = ?
+                      AND status IN ('Deferida', 'Deferida Parcialmente')
                     AND strftime('%Y', data_evento) = ?\x20
                     AND (
                         (? = 1 AND strftime('%m', data_evento) BETWEEN '01' AND '06') OR
                         (? = 2 AND strftime('%m', data_evento) BETWEEN '07' AND '12')
                     )
-                """, (requisicao["aluno_id"], requisicao["atividade_id"], str(ano_atual), semestre_atual, semestre_atual)).fetchone()[0]
+                """, (requisicao["aluno_id"], snapshot_rule.atividade_base_id, str(ano_atual), semestre_atual, semestre_atual)).fetchone()[0]
 
                 if horas_ja_deferidas_semestre + horas_a_deferir > semester_limit:
                     flash(f"Erro: Já possui {horas_ja_deferidas_semestre}h neste semestre. Limite semestral: {semester_limit}h. Máximo agora: {semester_limit - horas_ja_deferidas_semestre}h.", "error")

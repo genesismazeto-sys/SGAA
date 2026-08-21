@@ -138,26 +138,6 @@ def _build_aluno_requisicao_snapshot_display(
         "snapshot_flow_origin": None,
     }
 
-    if versao_row is not None:
-        numero_versao = versao_row["numero_versao"] if "numero_versao" in versao_row.keys() else None
-        if numero_versao is not None:
-            try:
-                display["snapshot_vn"] = int(numero_versao)
-            except (TypeError, ValueError):
-                display["snapshot_vn"] = None
-        codigo_normativo_versao = (
-            versao_row["codigo_normativo"] if "codigo_normativo" in versao_row.keys() else None
-        )
-        display["snapshot_codigo"] = _coerce_aluno_snapshot_scalar(
-            codigo_normativo_versao
-        )
-        display["snapshot_eixo"] = _coerce_aluno_snapshot_scalar(
-            versao_row["eixo"] if "eixo" in versao_row.keys() else None
-        )
-        display["snapshot_grupo"] = _coerce_aluno_snapshot_scalar(
-            versao_row["grupo"] if "grupo" in versao_row.keys() else None
-        )
-
     raw_snapshot = regra_snapshot_json
     parsed: dict[str, Any] | None = None
     if raw_snapshot is not None:
@@ -176,11 +156,10 @@ def _build_aluno_requisicao_snapshot_display(
             ("snapshot_written_at", "snapshot_written_at"),
             ("snapshot_flow_origin", "flow_origin"),
         ):
-            if display[key] is None:
-                display[key] = _coerce_aluno_snapshot_scalar(parsed.get(target))
+            display[key] = _coerce_aluno_snapshot_scalar(parsed.get(target))
 
         payload_vn = parsed.get("atividade_versao_numero")
-        if display["snapshot_vn"] is None and payload_vn is not None:
+        if payload_vn is not None:
             try:
                 display["snapshot_vn"] = int(payload_vn)
             except (TypeError, ValueError):
@@ -190,6 +169,24 @@ def _build_aluno_requisicao_snapshot_display(
         display["snapshot_codigo"] = _coerce_aluno_snapshot_scalar(
             codigo_normativo_snapshot
         )
+
+    # Current catalogue data is only a corruption/legacy-display fallback. A
+    # valid persisted snapshot always wins for historical presentation.
+    if versao_row is not None:
+        if display["snapshot_vn"] is None:
+            numero_versao = versao_row["numero_versao"] if "numero_versao" in versao_row.keys() else None
+            if numero_versao is not None:
+                try:
+                    display["snapshot_vn"] = int(numero_versao)
+                except (TypeError, ValueError):
+                    pass
+        for key, source in (
+            ("snapshot_codigo", "codigo_normativo"),
+            ("snapshot_eixo", "eixo"),
+            ("snapshot_grupo", "grupo"),
+        ):
+            if display[key] is None and source in versao_row.keys():
+                display[key] = _coerce_aluno_snapshot_scalar(versao_row[source])
 
     return display
 
@@ -244,7 +241,17 @@ def _list_atividades_for_usuario(
     listed_ids = {atividade["id"] for atividade in atividades}
     if include_activity_id and include_activity_id not in listed_ids:
         current = conn.execute(
-            "SELECT * FROM atividades WHERE id = ?", (include_activity_id,)
+            """SELECT v.id, v.id AS atividade_versao_id, v.atividade_base_id,
+                      b.nome_conceito AS nome,
+                      CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
+                      v.grupo, v.limite_total AS limite_horas_total,
+                      v.limite_semestre AS limite_horas_semestral,
+                      v.documentos_json,
+                      (v.limite_total IS NOT NULL OR v.limite_semestre IS NOT NULL) AS tem_limitacao,
+                      CASE WHEN v.limite_semestre IS NOT NULL THEN 'semestral' ELSE 'total' END AS tipo_limitacao,
+                      COALESCE(v.limite_semestre,v.limite_total) AS limite_horas
+                 FROM atividade_versao v JOIN atividade_base b ON b.id=v.atividade_base_id
+                WHERE v.id=?""", (include_activity_id,)
         ).fetchone()
         if current and (
             tipo_filtro == "Todas" or current["tipo_atividade"] == tipo_filtro
@@ -273,7 +280,7 @@ def _is_activity_allowed_for_usuario(
     if current_activity_id and atividade_id == current_activity_id:
         return True
     row = conn.execute(
-        "SELECT 1 FROM matrizes_atividades_itens WHERE matriz_id = ? AND atividade_id = ?",
+        "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id = ? AND atividade_versao_id = ?",
         (matriz["id"], atividade_id),
     ).fetchone()
     return row is not None
@@ -392,7 +399,11 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
 
     aluno_id = aluno_scope["aluno_id"]
     atividades_por_id: dict[object, dict[str, Any]] = {}
-    catalogo_por_legacy_id: dict[int, object] = {}
+
+    def _version_progress_identity(version_id, fallback):
+        # Catalogue and history are projections of the same exact semantic
+        # unit. Different versions of one base intentionally remain distinct.
+        return ("version", int(version_id)) if version_id is not None else fallback
 
     atividades_catalogo = []
     tipos_matriz: set[str] = set()
@@ -401,27 +412,17 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         tipos_matriz = {str(row["tipo_atividade"] or "").strip() for row in atividades_catalogo if row["tipo_atividade"]}
 
     for row in atividades_catalogo or []:
-        key = (
-            "catalogue",
-            row["atividade_versao_id"]
-            if row["atividade_versao_id"] is not None
-            else ("legacy", row["id"]),
+        key = _version_progress_identity(
+            row["atividade_versao_id"],
+            ("unversioned-catalogue", row["id"]),
         )
         atividades_por_id[key] = _build_progress_activity(row)
-        catalogo_por_legacy_id.setdefault(row["id"], key)
 
     historical_rows = conn.execute(
         """
-        SELECT r.*,
-               student.turma_id,
-               live.nome AS live_nome,
-               live.tipo_atividade AS live_tipo_atividade,
-               live.grupo AS live_grupo,
-               live.limite_horas_total AS live_limite_total,
-               live.limite_horas_semestral AS live_limite_semestre
+        SELECT r.*, student.turma_id
           FROM requisicoes r
           LEFT JOIN alunos student ON student.id = r.aluno_id
-          LEFT JOIN atividades live ON live.id = r.atividade_id
          WHERE r.aluno_id = ?
       ORDER BY r.id
         """,
@@ -429,23 +430,15 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
     ).fetchall()
     for raw_row in historical_rows:
         row = read_request_presentation(raw_row)
-        if row.authority is SnapshotProcessingAuthority.NO_SNAPSHOT:
-            key = catalogo_por_legacy_id.get(row.atividade_id, ("legacy", row.atividade_id))
-        else:
-            key = (
-                "historical",
-                row.atividade_versao_id,
-                row.tipo_atividade,
-                row.grupo,
-                row.nome,
-                row.limite_semestre,
-                row.limite_total,
-            )
+        key = _version_progress_identity(
+            row.atividade_versao_id,
+            ("unversioned-history", row.request_id),
+        )
         if key in atividades_por_id:
             continue
         atividades_por_id[key] = _build_progress_activity(
             {
-                "id": row.atividade_id,
+                "id": row.atividade_versao_id,
                 "nome": row.nome,
                 "tipo_atividade": row.tipo_atividade,
                 "grupo": row.grupo,
@@ -470,22 +463,14 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         if _semestre_sort_key(semestre) > semestre_atual:
             continue
         horas_numericas = row.approved_hours
-        if row.authority is SnapshotProcessingAuthority.NO_SNAPSHOT:
-            key = catalogo_por_legacy_id.get(row.atividade_id, ("legacy", row.atividade_id))
-        else:
-            key = (
-                "historical",
-                row.atividade_versao_id,
-                row.tipo_atividade,
-                row.grupo,
-                row.nome,
-                row.limite_semestre,
-                row.limite_total,
-            )
+        key = _version_progress_identity(
+            row.atividade_versao_id,
+            ("unversioned-history", row.request_id),
+        )
         atividade = atividades_por_id.get(key)
         if atividade is None:
             rule_row = {
-                "id": row.atividade_id,
+                "id": row.atividade_versao_id,
                 "nome": row.nome,
                 "tipo_atividade": row.tipo_atividade,
                 "grupo": row.grupo,
@@ -604,14 +589,8 @@ def aluno_dashboard():
 
     requisicoes_rows = conn.execute(
         """
-        SELECT r.*, act.nome AS live_nome,
-               act.tipo_atividade AS live_tipo_atividade,
-               act.grupo AS live_grupo,
-               act.limite_horas_total AS live_limite_total,
-               act.limite_horas_semestral AS live_limite_semestral,
-               a.turma_id
+        SELECT r.*, a.turma_id
         FROM requisicoes r
-        LEFT JOIN atividades act ON r.atividade_id = act.id
         LEFT JOIN alunos a ON a.id = r.aluno_id
         WHERE r.aluno_id = ?
         ORDER BY r.data_solicitacao DESC
@@ -917,7 +896,7 @@ def aluno_meus_dados():
                a.matricula,
                a.turma_id,
                a.foto_perfil,
-               COALESCE(t.codigo, t.nome, a.turma, '') AS turma
+               COALESCE(t.codigo, t.nome, '') AS turma
           FROM usuarios u
           JOIN alunos a ON u.id = a.usuario_id
           LEFT JOIN turmas t ON t.id = a.turma_id
@@ -1013,7 +992,7 @@ def aluno_meus_dados():
         SELECT t.id, COALESCE(t.codigo, t.nome) AS nome
           FROM turmas t
          WHERE t.status='Ativa'
-      ORDER BY t.ano DESC, t.semestre DESC, nome
+      ORDER BY t.ano_inicio DESC, t.semestre_inicio DESC, nome
         """
     ).fetchall()
     return render_template(
@@ -1378,20 +1357,15 @@ def aluno_minhas_requisicoes():
     dir_sql = "DESC" if dir_ == "desc" else "ASC"
 
     select_cols = (
-        "SELECT r.id, r.aluno_id, r.atividade_id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
+        "SELECT r.id, r.aluno_id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
         "r.atividade_versao_id, r.codigo_normativo_snapshot, r.regra_snapshot_json, "
-        "a.nome AS atividade_nome, a.tipo_atividade, a.grupo AS grupo, "
-        "a.nome AS live_nome, a.tipo_atividade AS live_tipo_atividade, "
-        "a.grupo AS live_grupo, a.limite_horas_total AS live_limite_total, "
-        "a.limite_horas_semestral AS live_limite_semestre, "
         "av.numero_versao AS av_numero_versao, "
         "av.codigo_normativo AS av_codigo_normativo, "
         "av.eixo AS av_eixo, av.grupo AS av_grupo "
     )
     base_from = (
         "FROM requisicoes r "
-        "JOIN atividades a ON a.id = r.atividade_id "
-        "LEFT JOIN atividade_versao av ON av.id = r.atividade_versao_id "
+        "JOIN atividade_versao av ON av.id = r.atividade_versao_id "
         "WHERE r.aluno_id = ?"
     )
     params: list[Any] = [aluno_id]
@@ -1505,14 +1479,7 @@ def aluno_minhas_requisicoes():
 
     filter_rows = conn.execute(
         """
-        SELECT r.*,
-               a.nome AS live_nome,
-               a.tipo_atividade AS live_tipo_atividade,
-               a.grupo AS live_grupo,
-               a.limite_horas_total AS live_limite_total,
-               a.limite_horas_semestral AS live_limite_semestre
-          FROM requisicoes r
-          JOIN atividades a ON a.id = r.atividade_id
+        SELECT r.* FROM requisicoes r
          WHERE r.aluno_id = ?
         """,
         (aluno_id,),
@@ -1648,21 +1615,21 @@ def aluno_nova_requisicao():
     if request.method == "POST":
         aluno_id = aluno_scope["aluno_id"]
 
-        atividade_id_raw = (request.form.get("atividade_id") or "").strip()
-        atividade_id = int(atividade_id_raw) if atividade_id_raw.isdigit() else None
+        versao_id_raw = (request.form.get("atividade_versao_id") or "").strip()
+        versao_id = int(versao_id_raw) if versao_id_raw.isdigit() else None
         nome_evento = request.form.get("nome_evento")
         data_evento = request.form["data_evento"]
         horas_solicitadas = float(request.form["horas_solicitadas"])
         observacao = request.form.get("observacao")
 
-        if not atividade_id:
+        if not versao_id:
             flash("Selecione uma atividade válida.", "error")
             return render_template(
                 "aluno_nova_requisicao.html",
                 atividades=atividades,
                 tipo_atual=tipo_filtro,
             )
-        if not _is_activity_allowed_for_usuario(conn, usuario_id, atividade_id):
+        if not _is_activity_allowed_for_usuario(conn, usuario_id, versao_id):
             flash("A atividade selecionada não está disponível para a matriz da sua turma.", "error")
             return render_template(
                 "aluno_nova_requisicao.html",
@@ -1672,15 +1639,6 @@ def aluno_nova_requisicao():
 
         arquivos = request.files.getlist("comprovantes_files") or []
         labels = request.form.getlist("comprovantes_labels") or []
-        arquivo_comprovante_legacy = request.files.get("arquivo_comprovante")
-        if (
-            (not arquivos or all((not f or not getattr(f, "filename", "")) for f in arquivos))
-            and arquivo_comprovante_legacy
-            and arquivo_comprovante_legacy.filename
-        ):
-            arquivos = [arquivo_comprovante_legacy]
-            labels = ["Comprovante"]
-
         data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         created_document_paths = []
 
@@ -1689,27 +1647,26 @@ def aluno_nova_requisicao():
                 conn,
                 flow_origin="aluno_create",
                 aluno_id=aluno_id,
-                atividade_id_legacy=atividade_id,
+                atividade_versao_id=versao_id,
             )
             cur = conn.cursor()
             cur.execute(
                 """
                 INSERT INTO requisicoes
-                (aluno_id, atividade_id, data_solicitacao, data_evento, horas_solicitadas, nome_evento, status, observacao, arquivo_comprovante,
-                 atividade_versao_id, regra_snapshot_json, codigo_normativo_snapshot)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
+                 horas_solicitadas, nome_evento, status, observacao,
+                 regra_snapshot_json, codigo_normativo_snapshot)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     aluno_id,
-                    atividade_id,
+                    prepared_snapshot.atividade_versao_id,
                     data_solicitacao,
                     data_evento,
                     horas_solicitadas,
                     nome_evento,
                     "Pendente",
                     observacao,
-                    None,
-                    prepared_snapshot.atividade_versao_id,
                     prepared_snapshot.snapshot_json,
                     prepared_snapshot.codigo_normativo,
                 ),
@@ -1746,12 +1703,6 @@ def aluno_nova_requisicao():
                 conn.execute(
                     "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) VALUES (?, ?, ?)",
                     (req_id, label_val, saved),
-                )
-
-            if first_saved:
-                conn.execute(
-                    "UPDATE requisicoes SET arquivo_comprovante = ? WHERE id = ?",
-                    (first_saved, req_id),
                 )
 
             conn.commit()
@@ -1821,10 +1772,6 @@ def aluno_requisicao_detalhe(req_id: int):
             "SELECT filename FROM requisicao_arquivos WHERE requisicao_id=?",
             (req_id,),
         ).fetchall()
-        legacy_row = conn.execute(
-            "SELECT arquivo_comprovante FROM requisicoes WHERE id=?",
-            (req_id,),
-        ).fetchone()
         try:
             conn.execute(
                 "DELETE FROM requisicao_arquivos WHERE requisicao_id=?",
@@ -1845,9 +1792,6 @@ def aluno_requisicao_detalhe(req_id: int):
                 current_app.config.get("UPLOAD_FOLDER"),
             )
             filenames_to_remove = [row["filename"] for row in anexos_rows if row["filename"]]
-            if legacy_row and legacy_row["arquivo_comprovante"]:
-                filenames_to_remove.append(legacy_row["arquivo_comprovante"])
-
             removed_relpaths: set[str] = set()
             for rel_path in filenames_to_remove:
                 if not rel_path or rel_path in removed_relpaths:
@@ -1879,8 +1823,8 @@ def aluno_requisicao_detalhe(req_id: int):
 
     if request.method == "POST" and not delete_flag:
         rec = conn.execute(
-            "SELECT status, arquivo_comprovante, data_processamento, atividade_id, "
-            "atividade_versao_id, codigo_normativo_snapshot, regra_snapshot_json "
+            "SELECT status, data_processamento, atividade_versao_id, "
+            "codigo_normativo_snapshot, regra_snapshot_json "
             "FROM requisicoes WHERE id=? AND aluno_id=?",
             (req_id, aluno_id),
         ).fetchone()
@@ -1899,7 +1843,7 @@ def aluno_requisicao_detalhe(req_id: int):
         horas_solicitadas_raw = request.form.get("horas_solicitadas")
         data_evento_raw = request.form.get("data_evento")
         observacao = request.form.get("observacao")
-        atividade_id_new = request.form.get("atividade_id")
+        atividade_id_new = request.form.get("atividade_versao_id")
 
         # D8.2B — contrato de edição após snapshot versionado.
         # Quando a requisição já tem um snapshot versionado registrado no
@@ -1918,7 +1862,7 @@ def aluno_requisicao_detalhe(req_id: int):
             snapshot_versionado_presente
             and atividade_id_new
             and atividade_id_new.isdigit()
-            and int(atividade_id_new) != rec["atividade_id"]
+            and int(atividade_id_new) != rec["atividade_versao_id"]
         ):
             flash(
                 "Esta solicitação já possui versão normativa registrada. "
@@ -1950,12 +1894,8 @@ def aluno_requisicao_detalhe(req_id: int):
 
         arquivos = request.files.getlist("comprovantes_files") or []
         labels = request.form.getlist("comprovantes_labels") or []
-        novo_arquivo_unico = request.files.get("arquivo_comprovante")
         filenames_saved: list[str] = []
         first_saved: str | None = None
-        if novo_arquivo_unico and novo_arquivo_unico.filename and not arquivos:
-            arquivos = [novo_arquivo_unico]
-            labels = ["Comprovante"]
         student_name = session.get("user_name") or f"aluno-{aluno_id}"
         for idx, f in enumerate(arquivos):
             if not f or not getattr(f, "filename", ""):
@@ -1996,22 +1936,6 @@ def aluno_requisicao_detalhe(req_id: int):
         if data_evento_norm:
             set_parts.append("data_evento = ?")
             params.append(data_evento_norm)
-        if atividade_id_new and atividade_id_new.isdigit():
-            atividade_id_int = int(atividade_id_new)
-            if not _is_activity_allowed_for_usuario(
-                conn,
-                user_id,
-                atividade_id_int,
-                current_activity_id=rec["atividade_id"],
-            ):
-                flash("A atividade selecionada não está disponível para a matriz da sua turma.", "error")
-                return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, edit=1))
-            set_parts.append("atividade_id = ?")
-            params.append(atividade_id_int)
-        if rec["arquivo_comprovante"] is None and first_saved:
-            set_parts.append("arquivo_comprovante = ?")
-            params.append(first_saved)
-
         if set_parts:
             params.extend([req_id, aluno_id])
             sql = (
@@ -2030,19 +1954,12 @@ def aluno_requisicao_detalhe(req_id: int):
     row = conn.execute(
         """
         SELECT r.*,
-               a.nome AS atividade_nome, a.tipo_atividade, a.grupo,
-               a.nome AS live_nome,
-               a.tipo_atividade AS live_tipo_atividade,
-               a.grupo AS live_grupo,
-               a.limite_horas_total AS live_limite_total,
-               a.limite_horas_semestral AS live_limite_semestre,
                av.numero_versao AS av_numero_versao,
                av.codigo_normativo AS av_codigo_normativo,
                av.eixo AS av_eixo,
                av.grupo AS av_grupo
           FROM requisicoes r
-          JOIN atividades a ON a.id = r.atividade_id
-          LEFT JOIN atividade_versao av ON av.id = r.atividade_versao_id
+          JOIN atividade_versao av ON av.id = r.atividade_versao_id
          WHERE r.id = ? AND r.aluno_id = ?
         """,
         (req_id, aluno_id),
@@ -2081,7 +1998,7 @@ def aluno_requisicao_detalhe(req_id: int):
         "horas_solicitadas": row["horas_solicitadas"],
         "horas_deferidas": row["horas_deferidas"],
         "observacao": row["observacao"],
-        "arquivo_comprovante": row["arquivo_comprovante"],
+        "arquivo_comprovante": None,
         "data_processamento": row["data_processamento"],
         "nome_evento": row["nome_evento"] if "nome_evento" in row.keys() else None,
         "snapshot": snapshot_display,
@@ -2095,7 +2012,7 @@ def aluno_requisicao_detalhe(req_id: int):
             conn,
             user_id,
             tipo_filtro,
-            include_activity_id=row["atividade_id"],
+            include_activity_id=row["atividade_versao_id"],
         )
 
         data_iso10 = ""
@@ -2120,7 +2037,7 @@ def aluno_requisicao_detalhe(req_id: int):
             "tipo_atividade": detalhe["tipo_atividade"],
             "grupo": detalhe["grupo"],
             "grupo_num": grupo_num,
-            "atividade_id": row["atividade_id"],
+            "atividade_versao_id": row["atividade_versao_id"],
             "nome_evento": row["nome_evento"],
             "horas_solicitadas": detalhe["horas_solicitadas"],
             "data_evento": data_iso10,

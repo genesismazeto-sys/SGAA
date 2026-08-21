@@ -271,7 +271,6 @@
                     <th>CH/evento estruturada</th>
                     <th>Limite semestre estruturado</th>
                     <th>Limite total estruturado</th>
-                    <th>Legado</th>
                     <th>Observação aluno</th>
                     <th>Observação admin</th>
                   </tr>
@@ -285,13 +284,6 @@
                       <td>{{ format_structured_hours(item.ch_por_evento) }}</td>
                       <td>{{ format_structured_hours(item.limite_semestre) }}</td>
                       <td>{{ format_structured_hours(item.limite_total) }}</td>
-                      <td>
-                        {% if item.tem_correspondente_legado %}
-                          <span class="diag-pill">Sim{% if item.atividade_id_legacy %} (ID {{ item.atividade_id_legacy }}){% endif %}</span>
-                        {% else %}
-                          <span class="diag-pill no">Não</span>
-                        {% endif %}
-                      </td>
                       <td>{{ item.observacao_aluno or '-' }}</td>
                       <td>{{ item.observacao_admin or '-' }}</td>
                     </tr>

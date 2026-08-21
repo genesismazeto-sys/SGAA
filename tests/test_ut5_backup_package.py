@@ -44,6 +44,8 @@ from pathlib import Path
 
 import pytest
 
+from app.prod1_schema import bootstrap_prod1_schema
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DATABASE = PROJECT_ROOT / "database.db"
@@ -127,6 +129,16 @@ def _quarantine_backup_settings(
     finally:
         conn.close()
     return applied
+
+
+def _create_disposable_prod1_database(database_path: Path) -> None:
+    """Create a fresh prod-1/v1 source for normal backup-path tests."""
+    conn = sqlite3.connect(str(database_path))
+    try:
+        bootstrap_prod1_schema(conn)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _directory_snapshot(directory: Path) -> dict[str, int]:
@@ -419,7 +431,7 @@ def test_manual_backup_route_upload_receives_expected_local_snapshot_path(
 
 def test_cli_backup_sync_runs_isolated_with_app_context_only(tmp_path):
     isolated_db = tmp_path / "isolated_app_database.db"
-    shutil.copy2(CANONICAL_DATABASE, isolated_db)
+    _create_disposable_prod1_database(isolated_db)
 
     local_backup_dir = tmp_path / "backups" / "local"
     cloud_backup_dir = tmp_path / "backups" / "cloud"
@@ -429,16 +441,6 @@ def test_cli_backup_sync_runs_isolated_with_app_context_only(tmp_path):
     for directory in (local_backup_dir, cloud_backup_dir, uploads_dir, documents_dir, log_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
-    # The copy inherits the canonical database's DB-backed backup destinations,
-    # which point OUTSIDE the test root. Because DB-stored settings correctly
-    # take precedence over the APP_* runtime defaults, leaving them in place is
-    # what let the previous version of this test create real snapshots outside
-    # tmp_path and still pass. Capture those inherited destinations first so we
-    # can prove the subprocess never writes there, then quarantine the copy.
-    inherited_destinations = _read_backup_destinations(isolated_db)
-    legacy_before = {
-        raw: _directory_snapshot(Path(raw)) for raw in inherited_destinations.values()
-    }
     quarantined = _quarantine_backup_settings(
         isolated_db, local_dir=local_backup_dir, cloud_dir=cloud_backup_dir
     )
@@ -492,15 +494,6 @@ def test_cli_backup_sync_runs_isolated_with_app_context_only(tmp_path):
         f"(UT-5 RED expected at current HEAD: module absent). "
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
     )
-
-    # (F) nothing was produced in the legacy, out-of-root backup destinations.
-    #     This is the assertion the previous false-green version lacked.
-    for raw_destination, before_listing in legacy_before.items():
-        assert _directory_snapshot(Path(raw_destination)) == before_listing, (
-            "isolated CLI run wrote into the out-of-root backup destination "
-            f"{raw_destination!r} inherited from the canonical database; the "
-            "isolated fixture failed to contain it"
-        )
 
     # (A) the run really produced snapshots, and every one of them -- manifest
     #     and database alike -- is beneath tmp_path.
@@ -564,18 +557,13 @@ def test_orchestrator_resolves_database_path_at_call_time_not_import_time(tmp_pa
     from app.backup import orchestrator
 
     isolated_db = tmp_path / "call_time_isolated.db"
-    shutil.copy2(CANONICAL_DATABASE, isolated_db)
+    _create_disposable_prod1_database(isolated_db)
     monkeypatch.setattr(app_db, "DATABASE", str(isolated_db))
 
     cloud_dir = tmp_path / "cloud"
     local_dir = tmp_path / "local"
     cloud_dir.mkdir()
     local_dir.mkdir()
-    # Setting app.config alone is not containment: this call forces a real
-    # snapshot, and the orchestrator resolves its destination as
-    # `settings["cloud_backup_dir"] or current_app.config[...]` -- so the
-    # canonical copy's out-of-root destination would win and the snapshot would
-    # land outside tmp_path while this test still passed.
     _quarantine_backup_settings(isolated_db, local_dir=local_dir, cloud_dir=cloud_dir)
 
     original_cloud_dir = main.app.config.get("CLOUD_BACKUP_DIR")
@@ -614,10 +602,8 @@ def test_orchestrator_requires_app_context_but_not_request_context(tmp_path, mon
         orchestrator._maybe_sync_database_snapshot(force=False)
 
     isolated_db = tmp_path / "app_context_only.db"
-    shutil.copy2(CANONICAL_DATABASE, isolated_db)
+    _create_disposable_prod1_database(isolated_db)
     monkeypatch.setattr(app_db, "DATABASE", str(isolated_db))
-    # Same containment reason as the call-time test: the canonical copy carries
-    # out-of-root backup destinations that outrank app.config.
     _quarantine_backup_settings(
         isolated_db, local_dir=tmp_path / "local", cloud_dir=tmp_path / "cloud"
     )

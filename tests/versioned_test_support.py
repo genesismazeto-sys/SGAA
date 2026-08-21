@@ -121,7 +121,7 @@ def seed_reference_versioned_dataset(conn) -> None:
             id, curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (1, curso_id, "Matriz PPA", "T10", "ativa", 200, 100),
+        (1, curso_id, "Matriz PPA", "T10", "vigente", 200, 100),
     )
     conn.execute(
         """
@@ -129,26 +129,26 @@ def seed_reference_versioned_dataset(conn) -> None:
             id, curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (2, curso_id, "Matriz PPA", "T11", "ativa", 200, 100),
+        (2, curso_id, "Matriz PPA", "T11", "vigente", 200, 100),
     )
 
     conn.execute(
         """
         INSERT INTO turmas (
-            id, nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
+            id, nome, turno, status, numero, curso_id, matriz_id,
             ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (1, "PPA-T10", 2025, 2, "Manhã", "Ativa", 10, curso_id, 1, 2025, 2, 2028, 1, "PPA-T10"),
+        (1, "PPA-T10", "Manhã", "Ativa", 10, curso_id, 1, 2025, 2, 2028, 1, "PPA-T10"),
     )
     conn.execute(
         """
         INSERT INTO turmas (
-            id, nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
+            id, nome, turno, status, numero, curso_id, matriz_id,
             ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (2, "PPA-T11", 2026, 1, "Manhã", "Ativa", 11, curso_id, 2, 2026, 1, 2028, 2, "PPA-T11"),
+        (2, "PPA-T11", "Manhã", "Ativa", 11, curso_id, 2, 2026, 1, 2028, 2, "PPA-T11"),
     )
 
     conn.executemany(
@@ -163,37 +163,10 @@ def seed_reference_versioned_dataset(conn) -> None:
         ),
     )
 
-    activity_rows = []
-    for legacy_id in range(1, 32):
-        nome, tipo = LEGACY_ACTIVITY_DATA[legacy_id]
-        activity_rows.append(
-            (
-                legacy_id,
-                "1 - Grupo de referência" if legacy_id <= 26 else "2 - Extensão de referência",
-                nome,
-                f"Descrição sintética da atividade legado {legacy_id}.",
-                100,
-                tipo,
-                0,
-                None,
-                None,
-                None,
-            )
-        )
-    conn.executemany(
-        """
-        INSERT INTO atividades (
-            id, grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao,
-            tipo_limitacao, limite_horas_total, limite_horas_semestral
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        activity_rows,
-    )
-
     base_rows = [
         (
             base_id,
-            f"Base conceitual {base_id:02d}",
+            LEGACY_ACTIVITY_DATA.get(base_id, (f"Base conceitual {base_id:02d}", ""))[0],
             f"Base sintética para atividade versionada {base_id:02d}.",
             "ativo",
         )
@@ -205,16 +178,6 @@ def seed_reference_versioned_dataset(conn) -> None:
         VALUES (?, ?, ?, ?)
         """,
         base_rows,
-    )
-
-    legacy_map_rows = [(legacy_id, legacy_id, "mapeada") for legacy_id in range(1, 32) if legacy_id != 8]
-    legacy_map_rows.append((8, 32, "mapeada"))
-    conn.executemany(
-        """
-        INSERT INTO atividade_legacy_map (atividade_id_legacy, atividade_base_id, status)
-        VALUES (?, ?, ?)
-        """,
-        legacy_map_rows,
     )
 
     version_rows = []
@@ -315,17 +278,9 @@ def seed_reference_versioned_dataset(conn) -> None:
         [(1, 1), (2, 2), (2, 3)],
     )
     conn.executemany(
-        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-        [(1, version_id) for version_id in matrix10_version_ids]
-        + [(2, version_id) for version_id in matrix11_version_ids],
-    )
-
-    matrix10_legacy_scope = [legacy_id for legacy_id in range(1, 27) if legacy_id != 6]
-    matrix11_legacy_scope = [legacy_id for legacy_id in range(1, 32) if legacy_id != 6]
-    conn.executemany(
-        "INSERT INTO matrizes_atividades_itens (matriz_id, atividade_id) VALUES (?, ?)",
-        [(1, legacy_id) for legacy_id in matrix10_legacy_scope]
-        + [(2, legacy_id) for legacy_id in matrix11_legacy_scope],
+        "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+        [(1, version_rows[version_id - 1][1], version_id) for version_id in matrix10_version_ids]
+        + [(2, version_rows[version_id - 1][1], version_id) for version_id in matrix11_version_ids],
     )
 
     conn.execute(
@@ -341,15 +296,14 @@ def seed_reference_versioned_dataset(conn) -> None:
     ).fetchone()["id"]
     conn.execute(
         """
-        INSERT INTO alunos (usuario_id, nome, matricula, email, turma, turma_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             usuario_id,
             "Aluno Base Versionado",
             "PPA.TESTE.0001",
             "aluno.base.versionado@example.com",
-            "PPA-T11",
             2,
             "Ativo",
         ),

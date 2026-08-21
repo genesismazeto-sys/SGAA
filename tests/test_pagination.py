@@ -1,73 +1,85 @@
-import os
 import pytest
-from flask import Flask
-
-# Ensure app can import
-os.environ.setdefault("APP_DATABASE", os.path.join(os.path.dirname(__file__), "..", "database.db"))
-
-import importlib
-
-main = importlib.import_module("main")
+from flask import Flask, template_rendered
+import main
+from tests.canonical_request_test_support import create_admin_request, login_admin, login_student
+from tests.versioned_test_support import isolated_versioned_app_env
 
 
-def setup_module(module):
-    with main.app.app_context():
-        main.init_db()
+@pytest.fixture()
+def pagination_client(tmp_path):
+    with isolated_versioned_app_env(tmp_path, "pagination.db") as env:
+        yield env["client"]
 
 
-def test_admin_requisicoes_paginated():
+def test_admin_requisicoes_paginated(pagination_client):
     app: Flask = main.app
-    client = app.test_client()
-    # login as admin
-    rv = client.post(
-        "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
-        follow_redirects=True,
-    )
-    assert rv.status_code == 200
-    r = client.get("/admin/requisicoes?page=1&per_page=1")
+    login_admin(pagination_client)
+    r = pagination_client.get("/admin/requisicoes?page=1&per_page=1")
     assert r.status_code == 200
 
 
-def test_admin_alunos_turmas_paginated():
+def test_admin_alunos_turmas_paginated(pagination_client):
     app: Flask = main.app
-    client = app.test_client()
-    client.post(
-        "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
-        follow_redirects=True,
-    )
-    r1 = client.get("/admin/alunos?page=1&per_page=2")
-    r2 = client.get("/admin/turmas?page=1&per_page=2")
+    login_admin(pagination_client)
+    r1 = pagination_client.get("/admin/alunos?page=1&per_page=2")
+    r2 = pagination_client.get("/admin/turmas?page=1&per_page=2")
     assert r1.status_code == 200
     assert r2.status_code == 200
 
 
-def test_aluno_minhas_requisicoes_paginated():
-    app: Flask = main.app
-    with app.app_context():
-        conn = main.get_db_connection()
-        # create aluno user if not exists
-        u = conn.execute("SELECT id FROM usuarios WHERE email=?", ("aluno1@ej.edu.br",)).fetchone()
-        if not u:
-            pw = main.hash_password("aluno123")
-            cur = conn.execute(
-                "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?,?,?,?)",
-                ("Aluno 1", "aluno1@ej.edu.br", pw, "aluno"),
-            )
-            uid = cur.lastrowid
-            conn.execute(
-                "INSERT INTO alunos (usuario_id, nome, matricula, email, status) VALUES (?,?,?,?,?)",
-                (uid, "Aluno 1", "M0001", "aluno1@ej.edu.br", "Ativo"),
-            )
-            conn.commit()
-    client = app.test_client()
-    # login as aluno
-    rv = client.post(
-        "/login",
-        data={"email": "aluno1@ej.edu.br", "senha": "aluno123"},
-        follow_redirects=True,
-    )
-    assert rv.status_code == 200
-    r = client.get("/aluno/requisicoes?page=1&per_page=5")
+def test_aluno_minhas_requisicoes_paginated(pagination_client):
+    login_student(pagination_client)
+    r = pagination_client.get("/aluno/requisicoes?page=1&per_page=5")
     assert r.status_code == 200
+
+
+def test_historical_filter_is_applied_before_count_and_pagination_is_stable(pagination_client):
+    login_admin(pagination_client)
+    _, first = create_admin_request(pagination_client, "pagination-first", version_id=29)
+    _, second = create_admin_request(pagination_client, "pagination-second", version_id=29)
+    create_admin_request(pagination_client, "pagination-outside-filter", version_id=30)
+    with main.app.app_context():
+        activity_name = main.get_db_connection().execute(
+            """SELECT b.nome_conceito FROM atividade_versao v
+                 JOIN atividade_base b ON b.id=v.atividade_base_id WHERE v.id=29"""
+        ).fetchone()[0]
+    login_student(pagination_client)
+
+    captured = []
+
+    def receiver(_sender, template, context, **_extra):
+        if template.name == "aluno_minhas_requisicoes.html":
+            captured.append(context)
+
+    template_rendered.connect(receiver, main.app)
+    try:
+        page_one = pagination_client.get(
+            "/aluno/requisicoes",
+            query_string={
+                "atividade": activity_name,
+                "page": 1,
+                "per_page": 1,
+                "sort": "data_evento",
+                "dir": "asc",
+            },
+        )
+        context_one = captured[-1]
+        page_two = pagination_client.get(
+            "/aluno/requisicoes",
+            query_string={
+                "atividade": activity_name,
+                "page": 2,
+                "per_page": 1,
+                "sort": "data_evento",
+                "dir": "asc",
+            },
+        )
+        context_two = captured[-1]
+    finally:
+        template_rendered.disconnect(receiver, main.app)
+
+    assert page_one.status_code == page_two.status_code == 200
+    assert context_one["total"] == context_two["total"] == 2
+    assert context_one["total_pages"] == context_two["total_pages"] == 2
+    assert [row["id"] for row in context_one["requisicoes"]] == [second["id"]]
+    assert [row["id"] for row in context_two["requisicoes"]] == [first["id"]]

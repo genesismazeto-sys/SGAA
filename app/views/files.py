@@ -90,12 +90,6 @@ def uploaded_file(filename):
                         """,
                         (rel_norm, aluno_id),
                     ).fetchone()
-                    if not row:
-                        # Comprovante legado armazenado direto em requisicoes
-                        row = conn.execute(
-                            "SELECT 1 FROM requisicoes WHERE arquivo_comprovante = ? AND aluno_id = ? LIMIT 1",
-                            (rel_norm, aluno_id),
-                        ).fetchone()
                     if row:
                         allowed = True
         except Exception:

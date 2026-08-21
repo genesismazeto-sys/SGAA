@@ -648,8 +648,9 @@ def _seed_matriz_vinculada(client, versao_id: int) -> dict:
             (curso_id, f"Matriz FC07 {token}", "FC07-1", "ativa"),
         ).lastrowid
         item_id = conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id)"
-            " VALUES (?, ?)",
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) "
+            "SELECT ?, atividade_base_id, id FROM atividade_versao WHERE id = ?",
             (matriz_id, versao_id),
         ).lastrowid
         conn.commit()

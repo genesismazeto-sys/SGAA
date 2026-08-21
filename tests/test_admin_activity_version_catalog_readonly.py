@@ -5,13 +5,11 @@ Cobre:
 1. GET /admin/catalogo-versoes      — lista atividade_base
 2. GET /admin/catalogo-versoes/<id> — detalhe base + versões
 3. GET /admin/normas-atividade      — lista norma_atividade
-4. GET /admin/mapeamento-legado     — lista atividades legadas com mapeamento
 
 Provas obrigatórias:
 - GETs não escrevem no banco (total_changes / contagens antes=depois).
 - Termos proibidos ("snapshot", "diagnóstico") ausentes nas respostas.
 - Detalhe de base inexistente não quebra (flash + redirect).
-- GET mapeamento-legado não cria entradas em atividade_legacy_map.
 - Templates de aluno não expõem termos do catálogo versionado.
 """
 from __future__ import annotations
@@ -444,79 +442,12 @@ def test_normas_atividade_list_no_forbidden_terms(client):
 
 
 # ---------------------------------------------------------------------------
-# 6. GET /admin/mapeamento-legado — lista mapeamento
-# ---------------------------------------------------------------------------
-
-def test_mapeamento_legado_list_get_returns_200(client):
-    """GET /admin/mapeamento-legado retorna 200."""
-    _login_admin(client)
-    response = client.get("/admin/mapeamento-legado")
-    assert response.status_code == 200
-
-
-def test_mapeamento_legado_list_no_forbidden_terms(client):
-    """Página de mapeamento não exibe termos específicos do D6 proibidos."""
-    _login_admin(client)
-    response = client.get("/admin/mapeamento-legado")
-    html_lower = response.get_data(as_text=True).lower()
-    assert "snapshot versionado" not in html_lower
-    assert "diagnóstico do snapshot" not in html_lower
-    assert "comparação read-only" not in html_lower
-
-
-def test_mapeamento_legado_filter_by_status(client):
-    """GET com parâmetro status=mapeada retorna 200."""
-    _login_admin(client)
-    response = client.get("/admin/mapeamento-legado?status=mapeada")
-    assert response.status_code == 200
-
-
-def test_mapeamento_legado_filter_sem_mapa(client):
-    """GET com parâmetro status=sem_mapa retorna 200."""
-    _login_admin(client)
-    response = client.get("/admin/mapeamento-legado?status=sem_mapa")
-    assert response.status_code == 200
-
-
-# ---------------------------------------------------------------------------
-# 7. GET mapeamento-legado NÃO cria entradas em atividade_legacy_map
-# ---------------------------------------------------------------------------
-
-def test_mapeamento_legado_does_not_auto_map(client):
-    """
-    GET /admin/mapeamento-legado não deve criar nenhuma linha em
-    atividade_legacy_map — prova que não há auto-mapeamento.
-    """
-    _login_admin(client)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        count_before = conn.execute(
-            "SELECT COUNT(*) AS c FROM atividade_legacy_map"
-        ).fetchone()["c"]
-
-    client.get("/admin/mapeamento-legado")
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        count_after = conn.execute(
-            "SELECT COUNT(*) AS c FROM atividade_legacy_map"
-        ).fetchone()["c"]
-
-    assert count_after == count_before, (
-        f"GET /admin/mapeamento-legado não deve criar entradas em atividade_legacy_map: "
-        f"antes={count_before}, depois={count_after}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # 8. GETs não mutam o banco (total_changes)
 # ---------------------------------------------------------------------------
 
 def test_readonly_catalog_routes_do_not_mutate_database(client):
     """
-    Todos os GETs do catálogo (catalogo-versoes, normas-atividade,
-    mapeamento-legado) não devem alterar o banco de dados.
+    Todos os GETs canônicos do catálogo não devem alterar o banco de dados.
     """
     _login_admin(client)
     base_id, _, _ = _seed_base_and_norma(client)
@@ -530,11 +461,6 @@ def test_readonly_catalog_routes_do_not_mutate_database(client):
         client.get(f"/admin/catalogo-versoes/{base_id}")
         client.get("/admin/catalogo-versoes/999999")  # missing → redirect
         client.get("/admin/normas-atividade")
-        client.get("/admin/mapeamento-legado")
-        client.get("/admin/mapeamento-legado?status=pendente")
-        client.get("/admin/mapeamento-legado?status=mapeada")
-        client.get("/admin/mapeamento-legado?status=sem_mapa")
-
         changes_after = conn.total_changes
 
     assert changes_after == changes_before, (

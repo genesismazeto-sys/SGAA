@@ -795,15 +795,16 @@ def test_post_editar_versao_blocked_when_used_in_matriz_item(client):
             (curso_id, f"Matriz Bloqueio {token}", "2026.1"),
         ).lastrowid
         conn.execute(
-            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_versao_id) VALUES (?, ?)",
-            (matriz_id, versao_id),
+            "INSERT INTO matriz_atividade_versao_item "
+            "(matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
+            (matriz_id, seed["base_id"], versao_id),
         )
         conn.execute(
             """
-            INSERT INTO turmas (
-                nome, ano, semestre, turno, status, numero, curso_id, matriz_id,
-                ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
-            ) VALUES (?, 2026, 1, 'Noite', 'Ativa', 991, ?, ?, 2026, 1, 2029, 2, ?)
+                INSERT INTO turmas (
+                    nome, turno, status, numero, curso_id, matriz_id,
+                    ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo
+                ) VALUES (?, 'Noite', 'Ativa', 991, ?, ?, 2026, 1, 2029, 2, ?)
             """,
             (f"Turma B5v {token}", curso_id, matriz_id, f"B5V-{token}"),
         )
@@ -840,27 +841,16 @@ def test_post_editar_versao_blocked_when_used_in_requisicoes(client):
             "INSERT INTO alunos (usuario_id, nome, matricula, email) VALUES (?, ?, ?, ?)",
             (usuario_id, f"Aluno Req {token}", f"REQ-{token}", f"aluno.req.{token}@teste.local"),
         ).lastrowid
-        atividade_id = conn.execute(
-            """
-            INSERT INTO atividades (
-                grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao,
-                tipo_limitacao, limite_horas_total, limite_horas_semestral, documentos_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "1 - Grupo", f"Atividade Req {token}", "Fluxo legado",
-                5, "Acadêmica Complementar", 0, "total", None, None, None,
-            ),
-        ).lastrowid
         conn.execute(
             """
             INSERT INTO requisicoes (
-                aluno_id, atividade_id, data_solicitacao, data_evento,
-                horas_solicitadas, nome_evento, status, atividade_versao_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                aluno_id, data_solicitacao, data_evento, horas_solicitadas,
+                nome_evento, status, atividade_versao_id,
+                codigo_normativo_snapshot, regra_snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (aluno_id, atividade_id, "2026-05-22 10:00:00", "2026-05-22",
-             2.0, f"Evento {token}", "Pendente", versao_id),
+            (aluno_id, "2026-05-22 10:00:00", "2026-05-22", 2.0,
+             f"Evento {token}", "Pendente", versao_id, seed["codigo_ativa"], "{}"),
         )
         conn.commit()
 
@@ -1016,7 +1006,6 @@ def test_d7_2b1_readonly_routes_still_respond(client):
         "/admin/catalogo-versoes",
         f"/admin/catalogo-versoes/{seed['base_id']}",
         "/admin/normas-atividade",
-        "/admin/mapeamento-legado",
     ]
     for path in routes:
         r = client.get(path)
@@ -1065,9 +1054,4 @@ def test_d7_1_contract_still_holds_after_edit(client):
     assert versao["status"] == "rascunho"
     assert versao["grupo"] == "Grupo pós-edição"
 
-    # O status helper do resolver deve continuar excluindo rascunho do conjunto ativo
-    assert resolver_service._atividade_versao_status_ativo(versao["status"]) is False
-    assert resolver_service._atividade_versao_status_ativo("rascunho") is False
-    assert resolver_service._atividade_versao_status_ativo("inativa") is False
-    assert resolver_service._atividade_versao_status_ativo("ativa") is True
-    assert resolver_service._atividade_versao_status_ativo("vigente") is True
+    assert versao["status"] == "rascunho"

@@ -24,18 +24,21 @@ from app.activity_catalog import (
     _build_grupo_label,
     _canonicalize_tipo_limitacao,
     _normalize_atividade_grupo,
+    apply_activity_version_semantic_changes,
+    apply_latest_activity_version_semantic_changes,
+    can_activity_version_be_mutated_in_place,
     get_atividade_base,
     get_atividade_base_list,
     get_atividade_transicoes_por_base,
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
-    get_legacy_map_list,
     get_next_numero_versao,
     get_norma_by_id,
     get_norma_list,
     get_versoes_da_base_por_eixo,
     get_versoes_por_base,
     parse_documentos_json,
+    rename_current_activity_group_versions,
 )
 from app.auth import admin_required
 from app.db import get_db_connection
@@ -46,7 +49,7 @@ from app.db_maintenance import (
 from app.matrix_scope import (
     ACADEMIC_GRAPH_FROZEN_MESSAGE,
     ACADEMIC_VERSION_FROZEN_MESSAGE,
-    is_activity_referenced_by_assigned_matrix,
+    is_activity_base_referenced_by_assigned_matrix,
     is_activity_version_referenced_by_assigned_matrix,
 )
 from app.uploads import ALLOWED_CSV, save_upload
@@ -75,6 +78,19 @@ ATIVIDADES_IMPORT_REQUIRED_HEADERS = (
     "limite_horas_total",
     "limite_horas_semestral",
 )
+
+
+def _canonical_activity_rows_sql() -> str:
+    return """SELECT v.id, v.atividade_base_id AS base_id, v.grupo,
+                     b.nome_conceito AS nome, b.descricao,
+                     COALESCE(v.ch_por_evento,v.limite_semestre,v.limite_total) AS limite_horas,
+                     CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
+                     (v.limite_total IS NOT NULL OR v.limite_semestre IS NOT NULL) AS tem_limitacao,
+                     CASE WHEN v.limite_semestre IS NOT NULL THEN 'semestral' ELSE 'total' END AS tipo_limitacao,
+                     v.limite_total AS limite_horas_total,
+                     v.limite_semestre AS limite_horas_semestral,
+                     v.documentos_json
+                FROM atividade_versao v JOIN atividade_base b ON b.id=v.atividade_base_id"""
 
 
 def _normalize_import_header_name(text: str) -> str:
@@ -123,16 +139,8 @@ def _format_preview_limitacao(tem_limitacao: bool, tipo_limitacao: str | None, l
 
 
 def _ensure_grupos_def_table(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS grupos_def (
-            tipo_atividade TEXT NOT NULL,
-            numero INTEGER NOT NULL,
-            descricao TEXT,
-            PRIMARY KEY (tipo_atividade, numero)
-        )
-        """
-    )
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='grupos_def'").fetchone():
+        raise RuntimeError("prod-1 schema missing grupos_def")
 
 
 def _upsert_grupo_definition(conn, tipo_atividade: str, grupo_numero: str, grupo_descricao: str) -> None:
@@ -259,7 +267,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
 
 def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: str) -> tuple[dict, dict | None]:
     conn = get_db_connection()
-    existing_rows = conn.execute("SELECT id, nome FROM atividades").fetchall()
+    existing_rows = conn.execute("SELECT id, nome_conceito AS nome FROM atividade_base").fetchall()
     existing_by_name = {str(row["nome"]): row["id"] for row in existing_rows}
 
     preview = {
@@ -405,7 +413,7 @@ def admin_atividades():
     sort_field = (request.args.get('s') or '').strip().lower()
     sort_dir = 'DESC' if (request.args.get('dir') or 'asc').strip().lower() == 'desc' else 'ASC'
     conn = get_db_connection()
-    base_from = " FROM atividades"
+    base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
     where = []
     params = []
     append_text_contains_condition(where, params, 'nome', nome_filter)
@@ -443,8 +451,7 @@ def admin_atividades():
     if not order_sql:
         order_sql = " ORDER BY tipo_atividade, grupo, nome" if (not where) else " ORDER BY grupo, nome"
     query = (
-        "SELECT *, (SELECT atividade_base_id FROM atividade_legacy_map"
-        " WHERE atividade_id_legacy = id) AS base_id"
+        "SELECT *"
         + base_from + where_sql + order_sql
     )
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
@@ -455,15 +462,10 @@ def admin_atividades():
         query += " LIMIT ? OFFSET ?"
         exec_params += [per_page, offset]
     atividades = conn.execute(query, exec_params).fetchall()
-    # Load documentos obrigatórios per atividade (tolerant parser)
+    # Load documentos obrigatórios per canonical version (tolerant parser).
     docs_por_atividade = {}
-    try:
-        cols = [c[1] for c in conn.execute("PRAGMA table_info(atividades)").fetchall()]
-        if 'documentos_json' in cols:
-            for a in atividades:
-                docs_por_atividade[a['id']] = parse_documentos_json(a.get('documentos_json') if isinstance(a, dict) else a['documentos_json'])
-    except Exception:
-        pass
+    for activity in atividades:
+        docs_por_atividade[activity['id']] = parse_documentos_json(activity['documentos_json'])
     # Build grupos_por_tipo including explicit definitions from grupos_def table
     def build_grupos_por_tipo_from_db(c):
         grupos = {}
@@ -474,9 +476,9 @@ def admin_atividades():
                 grupos.setdefault(tipo, {})[num] = desc
         except Exception:
             pass
-        # also derive from atividades for missing entries
+        # Also derive from canonical versions for missing entries.
         rows2 = conn.execute(
-            "SELECT tipo_atividade, grupo FROM atividades WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
+            "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade, grupo FROM atividade_versao WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
         ).fetchall()
         for r in rows2:
             tipo = r[0]
@@ -500,7 +502,7 @@ def admin_atividades():
     grupos_filtro = conn.execute(
         """
         SELECT DISTINCT COALESCE(NULLIF(TRIM(grupo), ''), '') AS grupo
-          FROM atividades
+          FROM (""" + _canonical_activity_rows_sql() + """) canonical_activity
          WHERE COALESCE(NULLIF(TRIM(grupo), ''), '') <> ''
       ORDER BY LOWER(COALESCE(grupo, '')) ASC
         """
@@ -549,7 +551,7 @@ def admin_atividades_academicas():
     """Lista atividades do tipo Acadêmica Complementar com paginação opcional."""
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
-    base_from = " FROM atividades WHERE tipo_atividade = 'Acadêmica Complementar'"
+    base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Acadêmica Complementar'"
     query = "SELECT *" + base_from + " ORDER BY grupo, nome"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
@@ -568,7 +570,7 @@ def admin_atividades_extensao():
     """Lista atividades do tipo Extensão Universitária com paginação opcional."""
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
-    base_from = " FROM atividades WHERE tipo_atividade = 'Extensão Universitária'"
+    base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Extensão Universitária'"
     query = "SELECT *" + base_from + " ORDER BY grupo, nome"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
@@ -587,7 +589,7 @@ def admin_adicionar_atividade():
     # Build mapping of existing group numbers -> description per activity type
     def build_grupos_por_tipo(conn):
         rows = conn.execute(
-            "SELECT tipo_atividade, grupo FROM atividades WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
+            "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade, grupo FROM atividade_versao WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
         ).fetchall()
         grupos = {}
         for r in rows:
@@ -661,37 +663,31 @@ def admin_adicionar_atividade():
             grupos_por_tipo = build_grupos_por_tipo(conn)
             return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
         # Checagem explícita de duplicidade por nome (escopo global)
-        dup = conn.execute("SELECT id, tipo_atividade, grupo FROM atividades WHERE nome = ?", (nome,)).fetchone()
+        dup = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (nome,)).fetchone()
         if dup:
-            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}, Tipo: {dup['tipo_atividade']}, Grupo: {dup['grupo']}).", "error")
+            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}).", "error")
             grupos_por_tipo = build_grupos_por_tipo(conn)
             return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
         try:
+            axis = 'AAC' if tipo_atividade == 'Acadêmica Complementar' else 'AEU'
+            norma = conn.execute("SELECT id,codigo FROM norma_atividade WHERE eixo=? AND status='ativa' ORDER BY id LIMIT 1", (axis,)).fetchone()
+            if not norma:
+                raise sqlite3.IntegrityError("Nenhuma norma ativa para o eixo selecionado")
+            base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES(?,?,'ativo') RETURNING id", (nome,descricao)).fetchone()[0]
             conn.execute(
-                """
-                INSERT INTO atividades
-                (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao, tipo_limitacao, limite_horas_total, limite_horas_semestral, documentos_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    grupo,
-                    nome,
-                    descricao,
-                    limite_horas,
-                    tipo_atividade,
-                    tem_limitacao,
-                    tipo_limitacao,
-                    limite_horas_total,
-                    limite_horas_semestral,
-                    request.form.get("documentos_json") or None,
-                ),
+                """INSERT INTO atividade_versao
+                   (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,ch_por_evento,
+                    limite_total,limite_semestre,documentos_json,numero_versao,status)
+                   VALUES(?,?,?,?,?,?,?,?,?,1,'ativa')""",
+                (base_id,norma['id'],norma['codigo'],axis,grupo,limite_horas,
+                 limite_horas_total,limite_horas_semestral,request.form.get('documentos_json') or None),
             )
             conn.commit()
             flash("Atividade adicionada com sucesso.", "success")
             return redirect(url_for("admin_atividades"))
         except sqlite3.IntegrityError as e:
             msg = str(e).lower()
-            if 'not null constraint failed' in msg and 'atividades.grupo' in msg:
+            if 'not null constraint failed' in msg and 'atividade_versao.grupo' in msg:
                 flash("Erro: selecione um número de grupo válido.", "error")
             elif 'unique' in msg and 'nome' in msg:
                 flash("Erro: Atividade com este nome já existe.", "error")
@@ -713,7 +709,7 @@ def admin_editar_atividade(atividade_id):
     except Exception:
         pass
     conn = get_db_connection()
-    atividade = conn.execute("SELECT * FROM atividades WHERE id = ?", (atividade_id,)).fetchone()
+    atividade = conn.execute("SELECT * FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE id=?", (atividade_id,)).fetchone()
     if not atividade:
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_atividades"))
@@ -734,9 +730,9 @@ def admin_editar_atividade(atividade_id):
                 grupos.setdefault(tipo, {})[num] = desc
         except Exception:
             pass
-        # derive from atividades for gaps
+        # Derive from canonical versions for gaps.
         rows2 = c.execute(
-            "SELECT tipo_atividade, grupo FROM atividades WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
+            "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END, grupo FROM atividade_versao WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
         ).fetchall()
         for r in rows2:
             tipo = r[0]
@@ -783,9 +779,9 @@ def admin_editar_atividade(atividade_id):
             limite_horas_semestral = None
 
         # Checagem explícita de duplicidade por nome (escopo global), ignorando a própria
-        dup = conn.execute("SELECT id, tipo_atividade, grupo FROM atividades WHERE nome = ? AND id <> ?", (nome, atividade_id)).fetchone()
+        dup = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito=? AND id<>?", (nome, atividade['base_id'])).fetchone()
         if dup:
-            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}, Tipo: {dup['tipo_atividade']}, Grupo: {dup['grupo']}).", "error")
+            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}).", "error")
             grupos_por_tipo = build_grupos_por_tipo(conn)
             # Repassa lista de documentos a partir do que veio do form (ou salvos)
             atividade_docs = parse_documentos_json(request.form.get("documentos_json") or (atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None))
@@ -821,18 +817,29 @@ def admin_editar_atividade(atividade_id):
             return resp
 
         try:
-            conn.execute("""
-                UPDATE atividades
-                SET grupo = ?, nome = ?, descricao = ?, limite_horas = ?, tipo_atividade = ?,
-                    tem_limitacao = ?, tipo_limitacao = ?, limite_horas_total = ?, limite_horas_semestral = ?, documentos_json = ?
-                WHERE id = ?
-            """, (grupo, nome, descricao, limite_horas, tipo_atividade, tem_limitacao, tipo_limitacao, limite_horas_total, limite_horas_semestral, request.form.get("documentos_json") or None, atividade_id))
+            if tipo_atividade != atividade['tipo_atividade']:
+                raise sqlite3.IntegrityError("Mudança de eixo exige nova versão e transição")
+            conn.execute("UPDATE atividade_base SET nome_conceito=?,descricao=? WHERE id=?", (nome,descricao,atividade['base_id']))
+            mutation = apply_activity_version_semantic_changes(
+                conn,
+                atividade_id,
+                {
+                    "grupo": grupo,
+                    "ch_por_evento": limite_horas,
+                    "limite_total": limite_horas_total,
+                    "limite_semestre": limite_horas_semestral,
+                    "documentos_json": request.form.get('documentos_json') or None,
+                },
+            )
             conn.commit()
-            flash("Atividade atualizada com sucesso.", "success")
+            if mutation["mode"] == "successor":
+                flash("Alterações salvas em uma nova versão em rascunho; matrizes existentes foram preservadas.", "success")
+            else:
+                flash("Atividade atualizada com sucesso.", "success")
             return redirect(url_for("admin_atividades"))
         except sqlite3.IntegrityError as e:
             msg = str(e).lower()
-            if 'not null constraint failed' in msg and 'atividades.grupo' in msg:
+            if 'not null constraint failed' in msg and 'atividade_versao.grupo' in msg:
                 flash("Erro: selecione um número de grupo válido.", "error")
             elif 'unique' in msg and 'nome' in msg:
                 flash("Erro: Atividade com este nome já existe.", "error")
@@ -856,13 +863,13 @@ def admin_editar_atividade(atividade_id):
 @admin_required
 def admin_deletar_atividade(atividade_id):
     conn = get_db_connection()
-    atividade = conn.execute("SELECT id, nome FROM atividades WHERE id = ?", (atividade_id,)).fetchone()
+    atividade = conn.execute("SELECT v.id,v.atividade_base_id,b.nome_conceito AS nome FROM atividade_versao v JOIN atividade_base b ON b.id=v.atividade_base_id WHERE v.id=?", (atividade_id,)).fetchone()
     if not atividade:
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_atividades"))
 
     requisicoes_em_uso = conn.execute(
-        "SELECT COUNT(*) FROM requisicoes WHERE atividade_id = ?",
+        "SELECT COUNT(*) FROM requisicoes WHERE atividade_versao_id = ?",
         (atividade_id,),
     ).fetchone()[0]
     if requisicoes_em_uso:
@@ -873,14 +880,16 @@ def admin_deletar_atividade(atividade_id):
         )
         return redirect(url_for("admin_atividades"))
 
-    if is_activity_referenced_by_assigned_matrix(conn, atividade_id):
+    if is_activity_base_referenced_by_assigned_matrix(conn, atividade['atividade_base_id']):
         flash(ACADEMIC_GRAPH_FROZEN_MESSAGE, "error")
         return redirect(url_for("admin_atividades"))
 
     try:
         ensure_matriz_atividade_links_table(conn)
-        conn.execute("DELETE FROM matrizes_atividades_itens WHERE atividade_id = ?", (atividade_id,))
-        conn.execute("DELETE FROM atividades WHERE id = ?", (atividade_id,))
+        conn.execute("DELETE FROM matriz_atividade_versao_item WHERE atividade_versao_id = ?", (atividade_id,))
+        conn.execute("DELETE FROM atividade_versao WHERE id = ?", (atividade_id,))
+        if not conn.execute("SELECT 1 FROM atividade_versao WHERE atividade_base_id=?", (atividade['atividade_base_id'],)).fetchone():
+            conn.execute("DELETE FROM atividade_base WHERE id=?", (atividade['atividade_base_id'],))
         conn.commit()
         flash("Atividade deletada com sucesso.", "success")
     except sqlite3.IntegrityError:
@@ -935,55 +944,31 @@ def admin_atividades_importar_confirmar():
         for row in payload.get("rows", []):
             _upsert_grupo_definition(conn, row["tipo_atividade"], row["grupo_numero"], row["grupo_descricao"])
             if row.get("action") == "create":
-                conn.execute(
-                    """
-                    INSERT INTO atividades (
-                        grupo,
-                        nome,
-                        limite_horas,
-                        tipo_atividade,
-                        tem_limitacao,
-                        tipo_limitacao,
-                        limite_horas_total,
-                        limite_horas_semestral,
-                        documentos_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        row["grupo"],
-                        row["nome"],
-                        None,
-                        row["tipo_atividade"],
-                        1 if row["tem_limitacao"] else 0,
-                        row["tipo_limitacao"],
-                        row["limite_horas_total"],
-                        row["limite_horas_semestral"],
-                        None,
-                    ),
-                )
+                axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
+                norma = conn.execute("SELECT id,codigo FROM norma_atividade WHERE eixo=? AND status='ativa' ORDER BY id LIMIT 1", (axis,)).fetchone()
+                if not norma:
+                    raise sqlite3.IntegrityError(f"Nenhuma norma ativa para {axis}")
+                base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,status) VALUES(?,'ativo') RETURNING id", (row['nome'],)).fetchone()[0]
+                conn.execute("""INSERT INTO atividade_versao
+                    (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,limite_total,limite_semestre,numero_versao,status)
+                    VALUES(?,?,?,?,?,?,?,1,'ativa')""",
+                    (base_id,norma['id'],norma['codigo'],axis,row['grupo'],row['limite_horas_total'],row['limite_horas_semestral']))
                 created += 1
             elif row.get("action") == "update":
-                conn.execute(
-                    """
-                    UPDATE atividades
-                       SET grupo = ?,
-                           tipo_atividade = ?,
-                           tem_limitacao = ?,
-                           tipo_limitacao = ?,
-                           limite_horas_total = ?,
-                           limite_horas_semestral = ?
-                     WHERE id = ?
-                    """,
-                    (
-                        row["grupo"],
-                        row["tipo_atividade"],
-                        1 if row["tem_limitacao"] else 0,
-                        row["tipo_limitacao"],
-                        row["limite_horas_total"],
-                        row["limite_horas_semestral"],
+                axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
+                try:
+                    apply_latest_activity_version_semantic_changes(
+                        conn,
                         row["existing_id"],
-                    ),
-                )
+                        {
+                            "grupo": row['grupo'],
+                            "limite_total": row['limite_horas_total'],
+                            "limite_semestre": row['limite_horas_semestral'],
+                        },
+                        expected_axis=axis,
+                    )
+                except ValueError as exc:
+                    raise sqlite3.IntegrityError(str(exc)) from exc
                 updated += 1
         conn.commit()
     except sqlite3.IntegrityError as exc:
@@ -1013,18 +998,15 @@ def admin_grupos_renomear():
         novo_label = f"{numero} - {descricao}" if descricao else numero
         conn = get_db_connection()
         _ensure_grupos_def_table(conn)
-        cur = conn.execute("SELECT id, grupo FROM atividades WHERE tipo_atividade = ? AND grupo IS NOT NULL AND TRIM(grupo) <> ''", (tipo,))
-        rows = cur.fetchall()
-        def parse_num(s):
-            m = re.match(r'^\s*(\d+)', (s or '').strip())
-            return m.group(1) if m else None
-        updated = 0
-        for r in rows:
-            gid, g = r[0], r[1]
-            n = parse_num(g)
-            if n == numero and (g or '').strip() != novo_label:
-                conn.execute("UPDATE atividades SET grupo = ? WHERE id = ?", (novo_label, gid))
-                updated += 1
+        eixo = 'AAC' if tipo == 'Acadêmica Complementar' else 'AEU'
+        mutations = rename_current_activity_group_versions(
+            conn,
+            eixo=eixo,
+            group_number=numero,
+            new_label=novo_label,
+        )
+        updated = len(mutations)
+        successors = sum(item["mode"] == "successor" for item in mutations)
         # upsert definition (compatible): try update, if none affected then insert
         cur2 = conn.execute(
             "UPDATE grupos_def SET descricao = ? WHERE tipo_atividade = ? AND numero = ?",
@@ -1036,7 +1018,7 @@ def admin_grupos_renomear():
                 (tipo, int(numero), descricao)
             )
         conn.commit()
-        return jsonify({ 'ok': True, 'updated': updated, 'label': novo_label })
+        return jsonify({ 'ok': True, 'updated': updated, 'successors': successors, 'label': novo_label })
     except Exception as e:
         logging.exception('Erro ao renomear grupo')
         return jsonify({ 'ok': False, 'error': 'erro_interno' }), 500
@@ -1060,14 +1042,14 @@ def admin_grupos_excluir():
         em_uso = conn.execute(
             """
             SELECT 1
-              FROM atividades
-             WHERE tipo_atividade = ?
+              FROM atividade_versao
+             WHERE eixo = ?
                AND grupo IS NOT NULL
                AND TRIM(grupo) <> ''
                AND TRIM(grupo) LIKE ?
              LIMIT 1
             """,
-            (tipo, prefixo),
+            ('AAC' if tipo == 'Acadêmica Complementar' else 'AEU', prefixo),
         ).fetchone()
         if em_uso:
             return jsonify({'ok': False, 'error': 'grupo_em_uso'}), 409
@@ -1172,28 +1154,6 @@ def admin_normas_atividade():
     return render_template(
         "admin_normas_atividade.html",
         normas=normas,
-    )
-
-
-@admin_required
-def admin_mapeamento_legado():
-    """
-    Lista atividades legadas com status de mapeamento para atividade_base.
-    GET-only, sem inferência automática por nome, sem escrita no banco.
-    """
-    conn = get_db_connection()
-    status_filter = (request.args.get("status") or "").strip().lower()
-    mapa = get_legacy_map_list(conn)
-    # Filtro opcional por status (pendente, mapeada, revisar, sem_mapa)
-    if status_filter in ("pendente", "mapeada", "revisar", "sem_mapa"):
-        if status_filter == "sem_mapa":
-            mapa = [m for m in mapa if m["mapa_id"] is None]
-        else:
-            mapa = [m for m in mapa if (m["mapa_status"] or "") == status_filter]
-    return render_template(
-        "admin_mapeamento_legado.html",
-        mapa=mapa,
-        status_filter=status_filter,
     )
 
 
@@ -1497,18 +1457,13 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         flash("Versão não encontrada para esta atividade-base.", "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
-    if versao["status"] != "rascunho":
-        flash("Apenas versões em rascunho podem ser editadas.", "error")
-        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
-
-    uso = get_atividade_versao_usage_counts(conn, versao_id)
-    if (
-        uso["requisicoes"]
-        or uso["atividade_transicao_origem"]
-        or uso["atividade_transicao_destino"]
-        or is_activity_version_referenced_by_assigned_matrix(conn, versao_id)
-    ):
-        flash("Esta versão já está em uso e não pode mais ser editada.", "error")
+    if not can_activity_version_be_mutated_in_place(conn, versao_id):
+        message = (
+            "Apenas versões em rascunho podem ser editadas."
+            if versao["status"] != "rascunho"
+            else "Esta versão já está em uso e não pode mais ser editada."
+        )
+        flash(message, "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
     normas = get_norma_list(conn)
@@ -1623,30 +1578,24 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
                 return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
 
         try:
-            conn.execute(
-                """
-                UPDATE atividade_versao
-                   SET norma_id = ?,
-                       codigo_normativo = ?,
-                       eixo = ?,
-                       grupo = ?,
-                       ch_por_evento = ?,
-                       limite_semestre = ?,
-                       limite_total = ?,
-                       observacao_aluno = ?,
-                       observacao_admin = ?,
-                       vigencia_inicio = ?,
-                       vigencia_fim = ?,
-                       versao_anterior_id = ?
-                 WHERE id = ?
-                """,
-                (
-                    norma_id, codigo_normativo, eixo, grupo or None,
-                    ch_por_evento, limite_semestre, limite_total,
-                    observacao_aluno or None, observacao_admin or None,
-                    vigencia_inicio or None, vigencia_fim or None, versao_anterior_id,
-                    versao_id,
-                ),
+            apply_activity_version_semantic_changes(
+                conn,
+                versao_id,
+                {
+                    "norma_id": norma_id,
+                    "codigo_normativo": codigo_normativo,
+                    "eixo": eixo,
+                    "grupo": grupo or None,
+                    "ch_por_evento": ch_por_evento,
+                    "limite_semestre": limite_semestre,
+                    "limite_total": limite_total,
+                    "observacao_aluno": observacao_aluno or None,
+                    "observacao_admin": observacao_admin or None,
+                    "vigencia_inicio": vigencia_inicio or None,
+                    "vigencia_fim": vigencia_fim or None,
+                    "versao_anterior_id": versao_anterior_id,
+                },
+                create_successor_if_frozen=False,
             )
             conn.commit()
             flash("Versão atualizada com sucesso.", "success")
@@ -2065,12 +2014,6 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ('GET',),
         ),
         LegacyRouteSpec(
-            '/admin/mapeamento-legado',
-            'admin_mapeamento_legado',
-            admin_mapeamento_legado,
-            ('GET',),
-        ),
-        LegacyRouteSpec(
             '/admin/catalogo-versoes/nova-base',
             'admin_catalogo_nova_base',
             admin_catalogo_nova_base,
@@ -2153,7 +2096,6 @@ __all__ = [
     'admin_catalogo_versoes',
     'admin_catalogo_versao_detalhe',
     'admin_normas_atividade',
-    'admin_mapeamento_legado',
     'admin_catalogo_nova_base',
     'admin_norma_nova',
     'admin_catalogo_nova_versao',
