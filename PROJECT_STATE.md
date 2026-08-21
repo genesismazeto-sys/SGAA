@@ -1,25 +1,39 @@
 # PROJECT_STATE — live state
 
-Active branch: `refactor/design-system-foundation`
-HEAD: current Git HEAD — authoritative value: `git rev-parse HEAD`
-Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1`
-Structural refactor: **COMPLETE**.
-Final refactor technical residual count: **0**.
-Latest completed technical unit: **SCHEMA OWNER CLEANUP — CLOSED / ACCEPTED /
-PUBLISHED**.
-Final completion reconciliation: `REFACTOR_DOCUMENTATION_CLOSEOUT_ONLY`.
+Active branch: `refactor/design-system-foundation`.
+Current HEAD: authoritative value is `git rev-parse HEAD`.
+Protected `main`: `340fc7c91c6bc9b50e884adcb5915f9e29a0bfe1` — unchanged; no main action.
 
-**SGAA-EJ REFACTOR HAS NO REMAINING REAL TECHNICAL RESIDUALS.**
+PROD-1 technical acceptance is final. Phase A technical landing completed at
+`2026-08-21T11:13:22Z` with commit
+`c9452b5bffa2c2620305ee1b296ff81deb22b65f`; the live remote branch was
+independently verified at that SHA before the Phase B reset.
 
-Current branch disposition:
-`BRANCH_PUBLICATION_COMPLETE_NO_MAIN_ACTION_REQUIRED`. Deployment remains a
-separate concern and is not required for technical completion.
+Phase B pre-go-live database reset and active validation completed at
+`2026-08-21T11:17:57Z`. Active database contract: epoch `prod-1`, version `1`,
+marker `first_production_baseline`; 409600 bytes; SHA-256
+`cbd4197615d8929b7a19b5e52f016e06ecbc7fd1ad9297521b8a4fee25b37244`;
+28 tables, 40 explicit indexes, 7 triggers, clean foreign-key and integrity
+checks, no legacy objects, and no SQLite sidecars.
 
-Current canonical evidence: 1736 passed / 133 skipped / 17 deselected / 0
-failed / 0 errors. Current invariants: routes 131; endpoints 130; RBAC unmapped
-0; actor matrix 402; message catalogue 539; Design System 198 / ceiling 198;
-main routes/hooks/prohibited imports 0/0/0; schema version 3; migrations v1/v2/v3
-only; no v4.
+Initial content is defaults only: one `Geral` course, five access defaults, six
+application settings, and six backup settings. Users/admins, requests/history,
+Normas, activity catalogue, Matrices, Turmas, and students are empty. No admin
+was created. Focused disposable regression: 18 passed, 0 failed, 0 errors.
+
+Old database custody: 544768 bytes, SHA-256
+`338c833bc565c97cb55d5e08a3df9dbbe307a99820bb5a56f0cbed62d699633d`,
+archived at `D:\SGAA_CUSTODY\pre-go-live-prod1\20260821T111131Z\database.db`.
+Old code rollback artifact: `old-code-779dbb24.zip`, SHA-256
+`ee1e0542923964fa3584bcfffd52e9cd2d2cc617a1b30cc80ab67a8b9d81f169`.
+Full evidence is in the same external custody directory and in
+`docs/PRE_GO_LIVE_PROD1_RESET_CUTOVER_RECORD.md`.
+
+`PRODUCTION_WEB_RUNTIME_ACTIVATION = DEFERRED`. Phase C still requires the final
+HTTPS `APP_PUBLIC_BASE_URL`, externally provisioned `APP_SECRET_KEY` and
+`TOKEN_ENCRYPTION_KEY`, binding/proxy decisions, production `create_app`
+preflight, web startup/smoke, and manual admin creation. No production web
+runtime was started in Phase A/B.
 
 ## Historical UT live-summary record
 

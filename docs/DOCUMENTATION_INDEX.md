@@ -1,5 +1,13 @@
 # SGAA Documentation Index
 
+## Current Phase A/B landing record
+
+- `docs/PRE_GO_LIVE_PROD1_RESET_CUTOVER_RECORD.md` — authoritative operational
+  record for the accepted PROD-1 technical landing and pre-go-live database
+  reset completed on 2026-08-21. It records external rollback custody,
+  direct-bootstrap and atomic-replacement evidence, and explicitly defers
+  production web-runtime activation to a separately authorized Phase C.
+
 ## Authority hierarchy
 
 1. **Canonical repository state** — `git` commit/tree facts are the single source
