@@ -136,6 +136,21 @@ def _bootstrap(tmp_path: Path) -> Path:
     return path
 
 
+def _bootstrap_wal_mode(tmp_path: Path) -> Path:
+    path = tmp_path / "canonical" / "database.db"
+    path.parent.mkdir()
+    conn = sqlite3.connect(path)
+    try:
+        assert conn.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        reconstruction._load_prod1_schema_module().bootstrap_prod1_schema(conn)
+        conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        conn.close()
+    assert reconstruction._sqlite_sidecars(path) == []
+    return path
+
+
 def _signature(path: Path) -> tuple[int, str]:
     return path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -371,15 +386,17 @@ def test_simulated_active_wrong_hash_is_refused_before_sqlite_open(
     assert sqlite_open_attempted is False
 
 
+@pytest.mark.parametrize("sidecar_suffix", ("-wal", "-shm", "-journal"))
 def test_simulated_active_sidecar_is_refused_before_sqlite_open(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    sidecar_suffix: str,
 ):
     simulated_active = tmp_path / "canonical" / "database.db"
     simulated_active.parent.mkdir()
     simulated_active.write_bytes(b"simulated active custody")
     expected_hash = hashlib.sha256(simulated_active.read_bytes()).hexdigest()
-    Path(f"{simulated_active}-wal").write_bytes(b"present")
+    Path(f"{simulated_active}{sidecar_suffix}").write_bytes(b"present")
     sqlite_open_attempted = False
 
     def unexpected_sqlite_open(*args, **kwargs):
@@ -389,7 +406,7 @@ def test_simulated_active_sidecar_is_refused_before_sqlite_open(
 
     monkeypatch.setattr(reconstruction, "_connect", unexpected_sqlite_open)
 
-    with pytest.raises(reconstruction.GuardRailError, match=r"sidecar detected.*-wal"):
+    with pytest.raises(reconstruction.GuardRailError, match="sidecar detected") as exc_info:
         reconstruction.reconstruct(
             simulated_active,
             _approved_manifest(),
@@ -398,6 +415,7 @@ def test_simulated_active_sidecar_is_refused_before_sqlite_open(
             expected_active_sha256=expected_hash,
             _canonical_active_database=simulated_active,
         )
+    assert sidecar_suffix in str(exc_info.value)
     assert sqlite_open_attempted is False
 
 
@@ -446,9 +464,10 @@ def test_simulated_exact_active_authorization_succeeds_with_matching_hash(
     class AuthorizedSQLiteBoundaryReached(Exception):
         pass
 
-    def authorized_sqlite_boundary(path, *, read_only):
+    def authorized_sqlite_boundary(path, *, read_only, immutable):
         assert path == simulated_active.resolve()
         assert read_only is True
+        assert immutable is True
         raise AuthorizedSQLiteBoundaryReached
 
     monkeypatch.setattr(reconstruction, "_connect", authorized_sqlite_boundary)
@@ -465,6 +484,102 @@ def test_simulated_exact_active_authorization_succeeds_with_matching_hash(
     assert _signature(simulated_active) == before_signature
     assert simulated_active.stat().st_mtime_ns == before_mtime_ns
     assert reconstruction._sqlite_sidecars(simulated_active) == []
+
+
+def test_wal_mode_active_dry_run_uses_immutable_uri_and_creates_no_sidecars(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    simulated_active = _bootstrap_wal_mode(tmp_path)
+    expected_hash = hashlib.sha256(simulated_active.read_bytes()).hexdigest()
+    before_signature = _signature(simulated_active)
+    before_mtime_ns = simulated_active.stat().st_mtime_ns
+    actual_connect = reconstruction.sqlite3.connect
+    connection_calls: list[tuple[str, bool]] = []
+
+    def capture_connect(database, *args, **kwargs):
+        connection_calls.append((str(database), kwargs.get("uri", False)))
+        return actual_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(reconstruction.sqlite3, "connect", capture_connect)
+
+    query_only_probe = reconstruction._connect(
+        simulated_active.resolve(),
+        read_only=True,
+        immutable=True,
+    )
+    try:
+        assert query_only_probe.execute("PRAGMA query_only").fetchone()[0] == 1
+    finally:
+        query_only_probe.close()
+    assert reconstruction._sqlite_sidecars(simulated_active) == []
+    connection_calls.clear()
+
+    report = reconstruction.reconstruct(
+        simulated_active.resolve(),
+        _approved_manifest(),
+        dry_run=True,
+        allow_active_prod1=True,
+        expected_active_sha256=expected_hash,
+        _canonical_active_database=simulated_active,
+    )
+
+    target_connection_calls = [call for call in connection_calls if call[0].startswith("file:")]
+    assert target_connection_calls == [
+        (simulated_active.resolve().as_uri() + "?mode=ro&immutable=1", True)
+    ]
+    assert report["status"] == "dry_run_ready"
+    assert report["planned"] == {
+        "normas": 1,
+        "atividade_base": 27,
+        "atividade_versao": 27,
+    }
+    assert report["created"] == {
+        "normas": 0,
+        "atividade_base": 0,
+        "atividade_versao": 0,
+    }
+    assert report["active_authorization_mode"] == "authorized_active_prod1"
+    assert _signature(simulated_active) == before_signature
+    assert simulated_active.stat().st_mtime_ns == before_mtime_ns
+    assert reconstruction._sqlite_sidecars(simulated_active) == []
+
+
+def test_active_real_uses_nonimmutable_uri_and_remains_write_capable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    simulated_active = _bootstrap(tmp_path)
+    expected_hash = hashlib.sha256(simulated_active.read_bytes()).hexdigest()
+    actual_connect = reconstruction.sqlite3.connect
+    connection_calls: list[tuple[str, bool]] = []
+
+    def capture_connect(database, *args, **kwargs):
+        connection_calls.append((str(database), kwargs.get("uri", False)))
+        return actual_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(reconstruction.sqlite3, "connect", capture_connect)
+
+    report = reconstruction.reconstruct(
+        simulated_active.resolve(),
+        _approved_manifest(),
+        dry_run=False,
+        allow_active_prod1=True,
+        expected_active_sha256=expected_hash,
+        _canonical_active_database=simulated_active,
+    )
+
+    target_connection_calls = [call for call in connection_calls if call[0].startswith("file:")]
+    assert target_connection_calls == [
+        (simulated_active.resolve().as_uri() + "?mode=rw", True)
+    ]
+    assert "immutable=" not in target_connection_calls[0][0]
+    assert report["status"] == "reconstructed"
+    assert report["created"] == {
+        "normas": 1,
+        "atividade_base": 27,
+        "atividade_versao": 27,
+    }
 
 
 def test_successful_disposable_reconstruction_is_exact_and_structurally_green(tmp_path: Path):

@@ -430,9 +430,18 @@ def load_and_validate_manifest(
     return _validate_manifest_data(data), actual_sha256, resolved
 
 
-def _connect(path: Path, *, read_only: bool) -> sqlite3.Connection:
+def _connect(
+    path: Path,
+    *,
+    read_only: bool,
+    immutable: bool = False,
+) -> sqlite3.Connection:
+    if immutable and not read_only:
+        raise ValueError("immutable SQLite mode is valid only for read-only connections")
     mode = "ro" if read_only else "rw"
     uri = path.as_uri() + f"?mode={mode}"
+    if immutable:
+        uri += "&immutable=1"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
@@ -614,7 +623,11 @@ def reconstruct(
         _canonical_active_database=_canonical_active_database,
     )
     safe_db = target_authorization["path"]
-    conn = _connect(safe_db, read_only=dry_run)
+    active_dry_run = (
+        dry_run
+        and target_authorization["active_authorization_mode"] == "authorized_active_prod1"
+    )
+    conn = _connect(safe_db, read_only=dry_run, immutable=active_dry_run)
     try:
         pre_state, pre_counts, schema_status = _classify_pre_state(conn, manifest)
         base_report = {
