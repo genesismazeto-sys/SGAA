@@ -140,13 +140,13 @@ body{
    Every responsive rule written against the viewport is therefore wrong by an
    amount that changes with the operating system.
 
-   It contains the inline axis only, and .app-track's inline size was already
-   externally determined (width:100% capped at 1200), so its computed width is
-   unchanged -- measured identical at every viewport in the F-6B matrix. */
+   .app-track remains the named inline-size container, so responsive rules
+   measure the actual content column. On wide screens the track expands to the
+   available .app-main width; the sidebar, .app-main padding, and scrollbar
+   gutter still determine the actual content width. It contains the inline
+   axis only, and container queries continue to measure .app-track itself. */
 .app-track{
   width:100%;
-  max-width:1200px;
-  margin:0 auto;
   min-width:0;
   container-type:inline-size;
   container-name:track;

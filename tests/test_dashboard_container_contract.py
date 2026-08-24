@@ -28,6 +28,7 @@ download, and keeping the canonical suite count stable.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -43,6 +44,7 @@ KPI_COLUMN_MIN = 180
 KPI_GAP = 24
 KPI_COLUMNS = 4
 FOUR_COLUMN_MIN_TRACK = KPI_COLUMNS * KPI_COLUMN_MIN + (KPI_COLUMNS - 1) * KPI_GAP  # 792
+GLOBAL_CSS = PROJECT_ROOT / "static" / "css" / "modern-style.css"
 
 # Grids that must follow the track, and the page each is reachable on.
 TRACK_DRIVEN_GRIDS = [
@@ -51,11 +53,27 @@ TRACK_DRIVEN_GRIDS = [
     ("turma-row-kpis", "/admin/dashboard", ".dashboard-turma-row-kpis", "admin"),
 ]
 
-# Pin the container's inline size directly. Overriding max-width too, because
-# .app-track caps itself at 1200 and the cap would otherwise win at some sizes.
+# Pin the container's inline size directly so the assertions exercise the
+# container-query contract independently of the shell's available width.
 FORCE_TRACK_WIDTH = """
 .app-track{{ width:{width}px !important; max-width:{width}px !important; }}
 """
+
+
+def test_global_track_css_is_uncapped_named_container():
+    """The global owner keeps the width and container-query contract."""
+    css = GLOBAL_CSS.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^\.app-track\s*\{([^}]*)\}", css)
+    assert match, "global .app-track rule is missing"
+    declarations = dict(
+        re.findall(r"(?m)^\s*([\w-]+)\s*:\s*([^;]+);", match.group(1))
+    )
+    assert declarations.get("width") == "100%"
+    assert "max-width" not in declarations
+    assert "margin" not in declarations
+    assert declarations.get("min-width") == "0"
+    assert declarations.get("container-type") == "inline-size"
+    assert declarations.get("container-name") == "track"
 
 COUNT_COLUMNS = """
 (selector) => {
@@ -170,6 +188,48 @@ def test_two_columns_one_pixel_below_the_minimum_track(browser_page, name, path,
     assert result["selfOverflow"] == 0, (
         f"{name}: grid overflows its own box by {result['selfOverflow']}px at {width}px."
     )
+
+
+@pytest.mark.visual
+@pytest.mark.parametrize("viewport_width", [1920, 1440, 1366])
+def test_global_track_uses_available_app_main_width(browser_page, viewport_width):
+    """The global track must expand with .app-main instead of stopping at 1200px."""
+    page = browser_page("/admin/atividades", "admin")
+    page.set_viewport_size({"width": viewport_width, "height": 900})
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(80)
+
+    result = page.evaluate(
+        """() => {
+            const main = document.querySelector('.app-main');
+            const track = document.querySelector('.app-track');
+            if (!main || !track) return {missing: true};
+            const mainStyle = getComputedStyle(main);
+            const trackStyle = getComputedStyle(track);
+            const available = main.clientWidth
+                - parseFloat(mainStyle.paddingLeft)
+                - parseFloat(mainStyle.paddingRight);
+            return {
+                viewportWidth: window.innerWidth,
+                trackWidth: Math.round(track.getBoundingClientRect().width),
+                availableWidth: Math.round(available),
+                maxWidth: trackStyle.maxWidth,
+                containerType: trackStyle.containerType,
+                containerName: trackStyle.containerName,
+            };
+        }"""
+    )
+    assert not result.get("missing"), ".app-main/.app-track did not render"
+    assert result["trackWidth"] == result["availableWidth"], (
+        f"at {viewport_width}px, .app-track is {result['trackWidth']}px but the "
+        f"available .app-main content width is {result['availableWidth']}px"
+    )
+    assert result["maxWidth"] == "none", (
+        f"at {viewport_width}px, .app-track still has max-width={result['maxWidth']}"
+    )
+    assert result["containerType"] == "inline-size"
+    assert result["containerName"] == "track"
 
 
 @pytest.mark.visual
