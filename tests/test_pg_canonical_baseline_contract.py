@@ -40,20 +40,17 @@ def _seed_graph(conn):
     ).fetchone()[0]
     base = conn.execute("INSERT INTO atividade_base(nome_conceito) VALUES('Pesquisa') RETURNING id").fetchone()[0]
     other = conn.execute("INSERT INTO atividade_base(nome_conceito) VALUES('Extensão') RETURNING id").fetchone()[0]
-    norma = conn.execute(
-        "INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES('AAC-1','AAC','1') RETURNING id"
-    ).fetchone()[0]
     v1 = conn.execute(
-        "INSERT INTO atividade_versao(atividade_base_id,norma_id,codigo_normativo,eixo,grupo,status,numero_versao) VALUES(?,?,?,'AAC','1','ativa',1) RETURNING id",
-        (base, norma, "AAC-1"),
+        "INSERT INTO atividade_versao(atividade_base_id,eixo,grupo,status,numero_versao) VALUES(?,'AAC','1','ativa',1) RETURNING id",
+        (base,),
     ).fetchone()[0]
     v2 = conn.execute(
-        "INSERT INTO atividade_versao(atividade_base_id,norma_id,codigo_normativo,eixo,grupo,status,numero_versao) VALUES(?,?,?,'AAC','1','ativa',2) RETURNING id",
-        (base, norma, "AAC-1"),
+        "INSERT INTO atividade_versao(atividade_base_id,eixo,grupo,status,numero_versao) VALUES(?,'AAC','1','ativa',2) RETURNING id",
+        (base,),
     ).fetchone()[0]
     wrong = conn.execute(
-        "INSERT INTO atividade_versao(atividade_base_id,norma_id,codigo_normativo,eixo,grupo,status,numero_versao) VALUES(?,?,?,'AAC','2','ativa',1) RETURNING id",
-        (other, norma, "AAC-1"),
+        "INSERT INTO atividade_versao(atividade_base_id,eixo,grupo,status,numero_versao) VALUES(?,'AAC','2','ativa',1) RETURNING id",
+        (other,),
     ).fetchone()[0]
     return matrix, base, other, v1, v2, wrong
 
@@ -63,7 +60,7 @@ def test_empty_bootstrap_is_prod1_and_idempotent(tmp_path):
     first = bootstrap_prod1_schema(conn)
     second = bootstrap_prod1_schema(conn)
     assert first == second
-    assert first == {"schema_epoch": "prod-1", "schema_version": 1, "baseline_marker": "first_production_baseline", "table_count": 28}
+    assert first == {"schema_epoch": "prod-1", "schema_version": 2, "baseline_marker": "first_production_baseline", "table_count": 26}
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
     indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     assert tables == EXPECTED_TABLES
@@ -113,12 +110,12 @@ def test_request_requires_version_and_valid_immutable_snapshot(tmp_path):
     conn = _connect(tmp_path / "request.db")
     bootstrap_prod1_schema(conn)
     _, _, _, version, _, _ = _seed_graph(conn)
-    snapshot = json.dumps({"schema_version": "prod-1-request-v1"})
+    snapshot = json.dumps({"schema_version": "prod-1-request-v2"})
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO requisicoes(data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,codigo_normativo_snapshot) VALUES('2026-01-01','2026-01-01',1,'Pendente',?,'AAC-1')", (snapshot,))
+        conn.execute("INSERT INTO requisicoes(data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json) VALUES('2026-01-01','2026-01-01',1,'Pendente',?)", (snapshot,))
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,codigo_normativo_snapshot) VALUES(?,'2026-01-01','2026-01-01',1,'Pendente','not-json','AAC-1')", (version,))
-    request_id = conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,codigo_normativo_snapshot) VALUES(?,'2026-01-01','2026-01-01',1,'Pendente',?,'AAC-1') RETURNING id", (version, snapshot)).fetchone()[0]
+        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json) VALUES(?,'2026-01-01','2026-01-01',1,'Pendente','not-json')", (version,))
+    request_id = conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json) VALUES(?,'2026-01-01','2026-01-01',1,'Pendente',?) RETURNING id", (version, snapshot)).fetchone()[0]
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("UPDATE requisicoes SET regra_snapshot_json='{}' WHERE id=?", (request_id,))
 
@@ -128,12 +125,12 @@ def test_database_and_application_status_contract_are_exact(tmp_path):
     bootstrap_prod1_schema(conn)
     _, _, _, version, _, _ = _seed_graph(conn)
     for status in REQUEST_STATUSES:
-        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,codigo_normativo_snapshot) VALUES(?,'2026-01-01','2026-01-01',1,?,'{}','AAC-1')", (version, status))
+        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json) VALUES(?,'2026-01-01','2026-01-01',1,?,'{}')", (version, status))
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,codigo_normativo_snapshot) VALUES(?,'2026-01-01','2026-01-01',1,'Cancelada','{}','AAC-1')", (version,))
+        conn.execute("INSERT INTO requisicoes(atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json) VALUES(?,'2026-01-01','2026-01-01',1,'Cancelada','{}')", (version,))
 
 
-def test_backup_and_restore_accept_only_prod1_v1(tmp_path):
+def test_backup_and_restore_accept_only_current_prod1(tmp_path):
     source = tmp_path / "source.db"
     conn = _connect(source)
     bootstrap_prod1_schema(conn)

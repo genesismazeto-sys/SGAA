@@ -26,13 +26,7 @@ def _seed_parent_graph(conn):
         "INSERT INTO matrizes_atividades(curso_id,nome,versao) VALUES(?,'Matriz R4','1') RETURNING id",
         (course_id,),
     ).fetchone()[0]
-    aac_norma_id = conn.execute(
-        "INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES('R4-AAC','AAC','1') RETURNING id"
-    ).fetchone()[0]
-    aeu_norma_id = conn.execute(
-        "INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES('R4-AEU','AEU','1') RETURNING id"
-    ).fetchone()[0]
-    return matrix_id, aac_norma_id, aeu_norma_id
+    return matrix_id
 
 
 def _base(conn, name):
@@ -41,26 +35,24 @@ def _base(conn, name):
     ).fetchone()[0]
 
 
-def _version(conn, *, base_id, norma_id, code, axis, number=1):
+def _version(conn, *, base_id, axis, number=1):
     return conn.execute(
         """INSERT INTO atividade_versao
-           (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,status,numero_versao)
-           VALUES(?,?,?,?,?,'ativa',?) RETURNING id""",
-        (base_id, norma_id, code, axis, f"Grupo {axis}", number),
+           (atividade_base_id,eixo,grupo,status,numero_versao)
+           VALUES(?,?,?,'ativa',?) RETURNING id""",
+        (base_id, axis, f"Grupo {axis}", number),
     ).fetchone()[0]
 
 
 def _same_base_aac_aeu(conn):
-    _, aac_norma_id, aeu_norma_id = _seed_parent_graph(conn)
+    _seed_parent_graph(conn)
     base_id = _base(conn, "Conceito R4 compartilhado")
     aac_id = _version(
-        conn, base_id=base_id, norma_id=aac_norma_id, code="R4-AAC", axis="AAC"
+        conn, base_id=base_id, axis="AAC"
     )
     aeu_id = _version(
         conn,
         base_id=base_id,
-        norma_id=aeu_norma_id,
-        code="R4-AEU",
         axis="AEU",
         number=2,
     )
@@ -142,10 +134,6 @@ def test_g1_leaf_index_inventory_has_independent_order_and_uniqueness_contract(t
             "idx_atividade_transicao_to": ("to_atividade_versao_id",),
             "idx_atividade_transicao_tipo": ("tipo_transicao",),
         },
-        "matriz_norma": {
-            "idx_matriz_norma_matriz": ("matriz_id",),
-            "idx_matriz_norma_norma": ("norma_id",),
-        },
         "matriz_atividade_versao_item": {
             "idx_matriz_atividade_versao_item_matriz": ("matriz_id",),
             "idx_matriz_atividade_versao_item_base": ("atividade_base_id",),
@@ -159,11 +147,6 @@ def test_g1_leaf_index_inventory_has_independent_order_and_uniqueness_contract(t
             assert name in inventory
             assert inventory[name] == {"unique": False, "columns": columns}
 
-    matriz_norma = _index_inventory(conn, "matriz_norma")
-    assert any(
-        item == {"unique": True, "columns": ("matriz_id", "norma_id")}
-        for item in matriz_norma.values()
-    )
     matrix_items = _index_inventory(conn, "matriz_atividade_versao_item")
     required_unique_sequences = {
         ("matriz_id", "atividade_base_id"),
@@ -203,14 +186,14 @@ def test_g2_integrity_accepts_valid_explicit_aac_to_aeu_transition(tmp_path):
 
 def test_g2_integrity_rejects_cross_base_transition(tmp_path):
     conn = _connection(tmp_path / "g2-cross-base.db")
-    _, aac_norma_id, aeu_norma_id = _seed_parent_graph(conn)
+    _seed_parent_graph(conn)
     source_base = _base(conn, "Conceito R4 origem")
     destination_base = _base(conn, "Conceito R4 destino")
     aac_id = _version(
-        conn, base_id=source_base, norma_id=aac_norma_id, code="R4-AAC", axis="AAC"
+        conn, base_id=source_base, axis="AAC"
     )
     aeu_id = _version(
-        conn, base_id=destination_base, norma_id=aeu_norma_id, code="R4-AEU", axis="AEU"
+        conn, base_id=destination_base, axis="AEU"
     )
     conn.execute(
         """INSERT INTO atividade_transicao
@@ -237,22 +220,4 @@ def test_g2_invalid_transition_type_is_physically_rejected(tmp_path):
                (from_atividade_versao_id,to_atividade_versao_id,tipo_transicao,justificativa)
                VALUES(?,?,'conversao_implicita','Tipo fora do contrato PROD-1')""",
             (aac_id, aeu_id),
-        )
-
-
-def test_g2_duplicate_matriz_norma_is_physically_rejected(tmp_path):
-    conn = _connection(tmp_path / "g2-duplicate-matriz-norma.db")
-    matrix_id, aac_norma_id, _ = _seed_parent_graph(conn)
-    conn.execute(
-        "INSERT INTO matriz_norma(matriz_id,norma_id) VALUES(?,?)",
-        (matrix_id, aac_norma_id),
-    )
-
-    with pytest.raises(
-        sqlite3.IntegrityError,
-        match=r"UNIQUE constraint failed: matriz_norma\.matriz_id, matriz_norma\.norma_id",
-    ):
-        conn.execute(
-            "INSERT INTO matriz_norma(matriz_id,norma_id) VALUES(?,?)",
-            (matrix_id, aac_norma_id),
         )

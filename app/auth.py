@@ -443,12 +443,10 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     if endpoint in {
         "admin_catalogo_versoes",          # R1  GET  /admin/catalogo-versoes
         "admin_catalogo_versao_detalhe",   # R2  GET  /admin/catalogo-versoes/<base_id>
-        "admin_normas_atividade",          # R3  GET  /admin/normas-atividade
     }:
         return _permission("atividades", "view")
     if endpoint in {
         "admin_catalogo_nova_base",        # R5/R6   GET+POST /admin/catalogo-versoes/nova-base
-        "admin_norma_nova",                # R7/R8   GET+POST /admin/normas-atividade/nova
         "admin_catalogo_nova_versao",      # R9/R10  GET+POST /admin/catalogo-versoes/<base_id>/nova-versao
         "admin_catalogo_editar_versao",    # R11/R12 GET+POST /admin/catalogo-versoes/<base_id>/versoes/<versao_id>/editar
         "admin_catalogo_ativar_versao",    # R13 POST .../ativar

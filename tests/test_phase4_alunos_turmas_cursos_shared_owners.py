@@ -306,7 +306,7 @@ def test_academic_owner_remains_in_canonical_message_catalog():
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
 
-    assert len(catalog) == 541
+    assert len(catalog) == 537
     entry = catalog["msg_4642b1608cf6a126"]
     assert entry["default_text"] == "Turma sem código para gerar matrícula."
     assert any(

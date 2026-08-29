@@ -54,8 +54,6 @@ from app.activity_catalog import (
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
     get_next_numero_versao,
-    get_norma_by_id,
-    get_norma_list,
     get_versoes_da_base_por_eixo,
     get_versoes_por_base,
     parse_documentos_json,
@@ -329,8 +327,6 @@ from app.views.admin.atividades import (
     admin_editar_atividade,
     admin_grupos_excluir,
     admin_grupos_renomear,
-    admin_norma_nova,
-    admin_normas_atividade,
 )
 from app.views.admin.configuracoes import (
     admin_configuracoes,
@@ -381,7 +377,6 @@ from app.views.admin.matrizes import (
     _matriz_activity_type_for_tab,
     _matriz_axis_for_tab,
     _get_grupos_por_tipo,
-    _get_matriz_active_normas_for_axis,
     _build_matriz_new_activity_modal_context,
     _matriz_transfer_meta,
     _matriz_activity_rule_summary,

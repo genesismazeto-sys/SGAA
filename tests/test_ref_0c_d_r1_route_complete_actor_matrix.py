@@ -37,7 +37,7 @@ ARTIFACT_PATH = Path(__file__).parent / "_artifacts" / "route_inventory_baseline
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 ADMIN_ACCESS_LEVELS = ("admin_total", "administrativo", "consultivo")
 
-CANONICAL_REQUIREMENT_MATRIX_DIGEST = "48ff3a9620d711cfbcfe70d51cdfdf1334d7f5590d66f5ae7d9b3e5154bc4f09"
+CANONICAL_REQUIREMENT_MATRIX_DIGEST = "5ab8e419a21d7d31d1055821ce93ab2d93d328495786abaa7a41b849b8e5a7cb"
 CANONICAL_PROFILE_DIGESTS = {
     "admin_total": "8100f29522b3bea3cd55d37f2e35bd04a7e663e014669237b5ef7646777a77ae",
     "administrativo": "bce039124b87b716dfc6c0c78a75a0a08b563fa8d452dbd148931cd733da759c",
@@ -483,12 +483,12 @@ def test_baseline_matches_live_inventory():
 
 
 def test_baseline_has_129_rules():
-    assert len(_load_baseline()["routes"]) == 129
+    assert len(_load_baseline()["routes"]) == 127
 
 
 def test_baseline_has_158_combinations():
     total = sum(len(r["methods"]) for r in _load_baseline()["routes"])
-    assert total == 158
+    assert total == 155
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +501,7 @@ def test_governed_requirement_count_is_132():
         for e in _load_baseline()["routes"]
         for m in e["methods"]
     ) if cls["governed"] and cls["kind"] == "requirement")
-    assert req == 132
+    assert req == 129
 
 
 def test_all_governed_requirement_kind():
@@ -625,21 +625,21 @@ def test_permission_layer_matrix(env):
                 else:
                     total_denied += 1
                     breakdown[level]["denied"].append((rule_text, endpoint, method, resource, scope))
-    assert total_actor_combinations == 396, (
+    assert total_actor_combinations == 387, (
         f"total_actor_combinations={total_actor_combinations}"
     )
-    assert total_allowed == 259, f"total_allowed={total_allowed}"
-    assert total_denied == 137, f"total_denied={total_denied}"
+    assert total_allowed == 252, f"total_allowed={total_allowed}"
+    assert total_denied == 135, f"total_denied={total_denied}"
     assert total_allowed + total_denied == total_actor_combinations, (
         f"allowed={total_allowed} + denied={total_denied} "
         f"!= actor combinations={total_actor_combinations}"
     )
-    assert breakdown["admin_total"]["allowed"] == 132
+    assert breakdown["admin_total"]["allowed"] == 129
     assert breakdown["admin_total"]["denied"] == []
-    assert breakdown["administrativo"]["allowed"] == 97
+    assert breakdown["administrativo"]["allowed"] == 94
     assert len(breakdown["administrativo"]["denied"]) == 35
-    assert breakdown["consultivo"]["allowed"] == 30
-    assert len(breakdown["consultivo"]["denied"]) == 102
+    assert breakdown["consultivo"]["allowed"] == 29
+    assert len(breakdown["consultivo"]["denied"]) == 100
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +697,7 @@ def test_url_roundtrip(env):
         for method in entry["methods"]:
             url, _ = _build_url_for_governed(rule_text, endpoint, method)
             built.add((endpoint, method, url, rule_text))
-    assert len(built) == 158, f"roundtrip count={len(built)} expected 158 (all baseline combinations)"
+    assert len(built) == 155, f"roundtrip count={len(built)} expected 155 (all baseline combinations)"
 
 
 def test_live_governed_converters_are_int_and_string_only(env):
@@ -876,7 +876,7 @@ def _run_browser_denials(env):
             assert not conn.in_transaction, f"browser: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"browser: fingerprint mismatch for {ctx}"
-    assert executed == 137, f"browser denied cases executed={executed} expected 137"
+    assert executed == 135, f"browser denied cases executed={executed} expected 135"
 
 
 def test_browser_denial_all_137_cases(env):
@@ -953,7 +953,7 @@ def _run_ajax_denials(env):
             assert not conn.in_transaction, f"AJAX: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"AJAX: fingerprint mismatch for {ctx}"
-    assert executed == 137, f"AJAX denied cases executed={executed} expected 137"
+    assert executed == 135, f"AJAX denied cases executed={executed} expected 135"
 
 
 def test_ajax_denial_all_137_cases(env):

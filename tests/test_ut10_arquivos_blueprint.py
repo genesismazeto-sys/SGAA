@@ -709,7 +709,7 @@ def test_red_k_csrf_snapshots_show_exactly_three_arquivos_owner_only_deltas():
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
         rows = report["rows"]
-        assert len(rows) == 78, (
+        assert len(rows) == 77, (
             "known cumulative current snapshot contract: 78 mutating rows "
             f"per snapshot, got {len(rows)}"
         )
@@ -790,7 +790,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 541, (
+    assert len(catalog) == 537, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -1000,8 +1000,8 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 129, f"routes must match prod-1, got {len(rules)}"
-    assert len(main.app.view_functions) == 128, (
+    assert len(rules) == 127, f"routes must match prod-1, got {len(rules)}"
+    assert len(main.app.view_functions) == 126, (
         f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
     )
 
@@ -1023,7 +1023,7 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 541, (
+    assert len(messages._message_catalog()) == 537, (
         "current catalog baseline must be 541"
     )
 
@@ -1048,9 +1048,9 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
 def test_green_6_schema_is_exactly_prod1_v1():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must be 1, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 2, f"prod-1 SCHEMA_VERSION must be 1, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1}, (
+    assert versions == {1, 2}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )

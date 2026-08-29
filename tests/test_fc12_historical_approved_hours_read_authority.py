@@ -71,6 +71,6 @@ def test_invalid_snapshot_never_falls_back_to_live_catalogue(env):
     with pytest.raises(HistoricalRequestAuthorityError):
         read_historical_request({
             "id": 1, "aluno_id": 1, "status": "Deferida", "horas_solicitadas": 4,
-            "atividade_versao_id": 29, "codigo_normativo_snapshot": "AAC-rev6",
+            "atividade_versao_id": 29,
             "regra_snapshot_json": "{}",
         })

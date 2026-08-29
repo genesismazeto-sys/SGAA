@@ -654,47 +654,6 @@
       </div>
     </div>
 
-    {% if matriz_id %}
-      <div class="form-row">
-        <label class="row-label">Normas aplicáveis</label>
-        <div class="field-card norma-list">
-          {% if not readonly and not is_academically_frozen %}
-            <input type="hidden" name="manage_normas_present" value="1">
-          {% endif %}
-          {% for norma in available_normas %}
-            <label class="norma-checkbox-row">
-              <input
-                type="checkbox"
-                name="norma_ids"
-                value="{{ norma.id }}"
-                {% if norma.id in linked_norma_ids %}checked{% endif %}
-                {% if readonly or is_academically_frozen %}disabled{% endif %}
-              >
-              <span>
-                <strong>{{ norma.codigo }}</strong>
-                <span> · {{ norma.eixo }} · revisão {{ norma.revisao }} · {{ norma.status }}</span>
-              </span>
-            </label>
-          {% endfor %}
-          {% for norma in linked_normas if norma.status != 'ativa' %}
-            <label class="norma-checkbox-row">
-              <input type="checkbox" name="norma_ids" value="{{ norma.id }}" checked disabled>
-              <span>
-                <strong>{{ norma.codigo }}</strong>
-                <span> · {{ norma.eixo }} · revisão {{ norma.revisao }} · {{ norma.status }} (histórica)</span>
-              </span>
-            </label>
-            {% if not readonly and not is_academically_frozen %}
-              <input type="hidden" name="norma_ids" value="{{ norma.id }}">
-            {% endif %}
-          {% endfor %}
-          {% if not available_normas and not linked_normas %}
-            <span>Nenhuma norma disponível.</span>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-
     <div class="form-actions center">
       <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
       {% if not readonly %}
@@ -826,7 +785,7 @@
         <div class="matriz-modal-header">
           <div>
             <h3 class="matriz-modal-title" id="matriz-new-activity-modal-title">Nova atividade {{ new_activity_modal.axis }}</h3>
-            <p class="matriz-modal-subtitle">Crie a atividade no contexto da matriz e gere a versão inicial vinculada à norma.</p>
+            <p class="matriz-modal-subtitle">Crie a atividade no contexto da matriz e gere sua versão inicial no eixo {{ new_activity_modal.axis }}.</p>
           </div>
           <button class="matriz-modal-close" type="button" data-close-new-activity-modal aria-label="Fechar modal">
             <i class="lucide" data-lucide="x"></i>
@@ -910,35 +869,6 @@
                 </div>
               </div>
             {% endif %}
-
-            <div class="matriz-modal-field">
-              <span class="matriz-modal-label">Norma/regulamento base</span>
-              {% if not new_activity_modal.has_normas %}
-                <p class="matriz-modal-warning">Esta matriz não possui norma ativa {{ new_activity_modal.axis }} vinculada. O cadastro fica bloqueado até existir uma norma compatível.</p>
-              {% elif new_activity_modal.requires_norma_selection %}
-                <div class="field-card">
-                  <div class="field-chip"><i class="lucide" data-lucide="scroll-text"></i></div>
-                  <select class="control" name="norma_id" required>
-                    <option value="">Selecione a norma</option>
-                    {% for norma in new_activity_modal.normas %}
-                      <option value="{{ norma.id }}" {% if new_activity_modal.prefill.norma_id == (norma.id|string) %}selected{% endif %}>
-                        {{ norma.codigo }}{% if norma.nome %} • {{ norma.nome }}{% endif %}
-                      </option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <p class="matriz-modal-note">Há mais de uma norma ativa compatível neste eixo; a seleção explícita é obrigatória.</p>
-              {% else %}
-                <div class="matriz-modal-chip">
-                  <i class="lucide" data-lucide="scroll-text"></i>
-                  <span>
-                    {{ new_activity_modal.single_norma.codigo }}
-                    {% if new_activity_modal.single_norma.nome %} • {{ new_activity_modal.single_norma.nome }}{% endif %}
-                  </span>
-                </div>
-                <input type="hidden" name="norma_id" value="{{ new_activity_modal.single_norma.id }}">
-              {% endif %}
-            </div>
 
             <label class="matriz-modal-checkbox">
               <input type="checkbox" name="add_to_matrix" value="1" {% if new_activity_modal.prefill.add_to_matrix %}checked{% endif %}>
@@ -1221,7 +1151,6 @@
           const meta = document.createElement('span');
           meta.style.cssText = 'color:var(--text-secondary);font-size:13px;';
           const parts = [];
-          if (v.codigo_normativo) parts.push(v.codigo_normativo);
           if (v.status && v.status !== 'ativa') parts.push(v.status);
           if (v.is_current) parts.push('atual');
           meta.textContent = parts.join(' • ');

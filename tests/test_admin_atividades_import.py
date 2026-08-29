@@ -13,12 +13,6 @@ def client():
 
 
 def test_admin_atividades_import_preview_and_confirm(client):
-    with main.app.app_context():
-        conn=main.get_db_connection()
-        norma=conn.execute("SELECT id FROM norma_atividade WHERE eixo='AAC' LIMIT 1").fetchone()
-        if not norma:
-            conn.execute("INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES('IMPORT-AAC','AAC','1')")
-        conn.commit()
     with client.session_transaction() as session: session.update(user_id=1,user_type='admin',user_name='Administrador')
     name='Atividade CSV Teste Nova'
     csv='\n'.join([

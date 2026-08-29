@@ -41,8 +41,8 @@ def test_diagnostic_view_renders_canonical_rows(diagnostic_client):
     )
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "AAC-rev6" in html
-    assert "AEU-rev1" in html
+    assert "AAC" in html
+    assert "AEU" in html
 
 
 def test_diagnostic_requires_admin(tmp_path):

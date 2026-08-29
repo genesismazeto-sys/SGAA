@@ -547,8 +547,8 @@ def test_green_2_entry_baseline_fingerprints_match_frozen_constants():
 
 def test_green_3_live_route_and_endpoint_invariants():
     rules = _live_rules()
-    assert len(rules) == 129, f"routes must stay 129, got {len(rules)}"
-    assert len(main.app.view_functions) == 128, (
+    assert len(rules) == 127, f"routes must stay 129, got {len(rules)}"
+    assert len(main.app.view_functions) == 126, (
         f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
     )
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
@@ -605,7 +605,7 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 541, (
+    assert len(_message_catalog()) == 537, (
         "message catalog must match the canonical baseline"
     )
 
@@ -613,8 +613,8 @@ def test_green_6_message_catalog_stays_536():
 def test_green_7_schema_version_three_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 1, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1}, (
+    assert SCHEMA_VERSION == 2, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2}, (
         "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"
@@ -681,7 +681,7 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     route_data = json.loads(ROUTE_INVENTORY_ARTIFACT.read_text(encoding="utf-8"))
     routes = route_data["routes"]
-    assert len(routes) == 129, "route inventory artifact must keep 129 routes"
+    assert len(routes) == 127, "route inventory artifact must keep 129 routes"
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         matching = [
             item
@@ -695,7 +695,7 @@ def test_green_10_artifacts_git_canonical_zero_delta():
     for artifact in (CSRF_ON_ARTIFACT, CSRF_OFF_ARTIFACT):
         data = json.loads(artifact.read_text(encoding="utf-8"))
         rows = data["rows"]
-        assert len(rows) == 78, f"{artifact.name} must keep 78 rows"
+        assert len(rows) == 77, f"{artifact.name} must keep 78 rows"
         infra_routes = {
             "/uploads/<path:filename>",
             "/health",

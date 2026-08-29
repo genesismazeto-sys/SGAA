@@ -13,7 +13,6 @@ from app.activity_catalog import (
     get_atividade_base,
     get_atividade_versao_by_id,
     get_next_numero_versao,
-    get_norma_list,
 )
 from app.admin_access import _admin_can, _get_current_admin_access_context
 from app.auth import admin_required
@@ -67,26 +66,24 @@ def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
 
 def get_versoes_ativas_por_base_na_matriz(conn, matriz_id: int, base_id: int) -> list:
     """
-    Retorna versões ativas de uma atividade_base cuja norma está vinculada
-    à matriz em matriz_norma. Apenas status 'ativa'.
+    Retorna versões ativas da base no mesmo eixo do vínculo atual da matriz.
     Estritamente read-only — sem fallback, sem inferência, sem primeira ativa.
     """
     return conn.execute(
         """
         SELECT
             av.id,
-            av.codigo_normativo,
             av.eixo,
             av.status,
-            av.numero_versao,
-            n.id      AS norma_id,
-            n.codigo  AS norma_codigo
+            av.numero_versao
           FROM atividade_versao av
-          JOIN norma_atividade n ON n.id = av.norma_id
-          JOIN matriz_norma mn ON mn.norma_id = n.id AND mn.matriz_id = ?
+          JOIN matriz_atividade_versao_item current
+            ON current.matriz_id=? AND current.atividade_base_id=av.atividade_base_id
+          JOIN atividade_versao selected ON selected.id=current.atividade_versao_id
          WHERE av.atividade_base_id = ?
            AND av.status = 'ativa'
-         ORDER BY av.id
+           AND av.eixo=selected.eixo
+         ORDER BY av.numero_versao
         """,
         (matriz_id, base_id),
     ).fetchall()
@@ -104,7 +101,6 @@ def get_vinculo_versao_da_matriz(conn, matriz_id: int, base_id: int):
         SELECT
             mavi.id                AS item_id,
             mavi.atividade_versao_id,
-            av.codigo_normativo,
             av.numero_versao,
             av.eixo,
             av.status              AS versao_status,
@@ -197,21 +193,20 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
         current_versao_id = row["versao_id"]
         versoes_rows = conn.execute(
             """
-            SELECT av.id, av.numero_versao, av.status, av.codigo_normativo
+            SELECT av.id, av.numero_versao, av.status
               FROM atividade_versao av
-              JOIN matriz_norma mn ON mn.norma_id = av.norma_id AND mn.matriz_id = ?
              WHERE av.atividade_base_id = ?
                AND av.status = 'ativa'
+               AND av.eixo = ?
              ORDER BY av.numero_versao DESC
             """,
-            (matriz_id, row["base_id"]),
+            (row["base_id"], row["eixo"]),
         ).fetchall()
         versoes = [
             {
                 "id": v["id"],
                 "numero_versao": v["numero_versao"],
                 "status": v["status"],
-                "codigo_normativo": v["codigo_normativo"] or "",
                 "is_current": v["id"] == current_versao_id,
             }
             for v in versoes_rows
@@ -476,26 +471,6 @@ def _get_grupos_por_tipo(conn) -> dict[str, dict[str, str]]:
     return grupos
 
 
-def _get_matriz_active_normas_for_axis(conn, matriz_id: int, eixo: str) -> list:
-    return conn.execute(
-        """
-        SELECT
-            n.id,
-            n.codigo,
-            n.eixo,
-            n.revisao,
-            n.nome
-          FROM matriz_norma mn
-          JOIN norma_atividade n ON n.id = mn.norma_id
-         WHERE mn.matriz_id = ?
-           AND n.eixo = ?
-           AND n.status = 'ativa'
-         ORDER BY LOWER(n.codigo) ASC, n.id ASC
-        """,
-        (matriz_id, eixo),
-    ).fetchall()
-
-
 def _build_matriz_new_activity_modal_context(
     conn,
     matriz,
@@ -524,11 +499,6 @@ def _build_matriz_new_activity_modal_context(
         {"numero": numero, "descricao": group_map[numero]}
         for numero in sorted(group_map.keys(), key=_group_sort_key)
     ]
-    try:
-        normas = _get_matriz_active_normas_for_axis(conn, matriz_id, axis)
-    except sqlite3.OperationalError:
-        normas = []
-
     raw_add_to_matrix = form_data.get("add_to_matrix")
     if raw_add_to_matrix is None:
         add_to_matrix_checked = True
@@ -544,17 +514,11 @@ def _build_matriz_new_activity_modal_context(
         "axis": axis,
         "matrix_context_label": (matriz["nome"] or "").strip(),
         "group_suggestions": group_suggestions,
-        "normas": normas,
-        "norm_count": len(normas),
-        "has_normas": bool(normas),
-        "requires_norma_selection": len(normas) > 1,
-        "single_norma": normas[0] if len(normas) == 1 else None,
-        "submit_disabled": not normas,
+        "submit_disabled": False,
         "prefill": {
             "nome": str(form_data.get("nome") or "").strip(),
             "grupo_numero": str(form_data.get("grupo_numero") or "").strip(),
             "grupo_descricao": str(form_data.get("grupo_descricao") or "").strip(),
-            "norma_id": str(form_data.get("norma_id") or "").strip(),
             "add_to_matrix": add_to_matrix_checked,
         },
     }
@@ -615,11 +579,10 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
             v.limite_semestre AS limite_horas_semestral
         FROM atividade_versao v
         JOIN atividade_base b ON b.id=v.atividade_base_id
-        JOIN matriz_norma mn ON mn.norma_id=v.norma_id AND mn.matriz_id=?
         WHERE v.eixo=? AND v.status='ativa'
         ORDER BY LOWER(COALESCE(v.grupo, '')), LOWER(b.nome_conceito), v.id
         """,
-        (matriz_id, 'AAC' if activity_type == 'Acadêmica Complementar' else 'AEU'),
+        ('AAC' if activity_type == 'Acadêmica Complementar' else 'AEU',),
     ).fetchall()
 
     available = []
@@ -664,107 +627,12 @@ def _matriz_counts(conn, matriz_id: int) -> tuple[int, int]:
     return counts["Acadêmica Complementar"], counts["Extensão Universitária"]
 
 
-def _get_matriz_norma_context(conn, matriz_id: int) -> dict[str, object]:
-    normas = get_norma_list(conn)
-    linked_ids = {
-        row["norma_id"]
-        for row in conn.execute(
-            "SELECT norma_id FROM matriz_norma WHERE matriz_id = ?",
-            (matriz_id,),
-        ).fetchall()
-    }
-    return {
-        "linked_normas": [row for row in normas if row["id"] in linked_ids],
-        "linked_norma_ids": linked_ids,
-        "available_normas": [row for row in normas if row["status"] == "ativa"],
-        "is_academically_frozen": is_matrix_assigned(conn, matriz_id),
-    }
-
-
-_MATRIZ_NORMA_ERR_INVALID_PARAMS = "invalid_params"
-_MATRIZ_NORMA_ERR_INACTIVE_NORMA = "inactive_norma"
-_MATRIZ_NORMA_ERR_FROZEN_MATRIX = "frozen_matrix"
-_MATRIZ_NORMA_ERR_PROTECTED_REMOVAL = "protected_norma_removal"
-
-_MATRIZ_NORMA_ERROR_TEXT = {
-    _MATRIZ_NORMA_ERR_INVALID_PARAMS: "Parâmetros inválidos.",
-    _MATRIZ_NORMA_ERR_INACTIVE_NORMA: "Apenas versões com status 'ativa' podem ser vinculadas à matriz.",
-    _MATRIZ_NORMA_ERR_FROZEN_MATRIX: "Parâmetros inválidos.",
-    _MATRIZ_NORMA_ERR_PROTECTED_REMOVAL: "Parâmetros inválidos.",
+_MATRIZ_ERR_INVALID_PARAMS = "invalid_params"
+_MATRIZ_ERR_FROZEN = "frozen_matrix"
+_MATRIZ_ERROR_TEXT = {
+    _MATRIZ_ERR_INVALID_PARAMS: "Parâmetros inválidos.",
+    _MATRIZ_ERR_FROZEN: "Parâmetros inválidos.",
 }
-
-
-def _parse_matriz_norma_request() -> tuple[bool, set[int] | None, str | None]:
-    if request.form.get("manage_normas_present") != "1":
-        return False, None, None
-
-    requested_ids = set()
-    for raw_value in request.form.getlist("norma_ids"):
-        raw_id = str(raw_value or "").strip()
-        if not raw_id.isdigit():
-            return True, None, _MATRIZ_NORMA_ERR_INVALID_PARAMS
-        requested_ids.add(int(raw_id))
-    return True, requested_ids, None
-
-
-def _prepare_matriz_norma_delta(conn, matriz_id: int, desired_ids: set[int]):
-    current_ids = {
-        row["norma_id"]
-        for row in conn.execute(
-            "SELECT norma_id FROM matriz_norma WHERE matriz_id = ?",
-            (matriz_id,),
-        ).fetchall()
-    }
-    to_add = desired_ids - current_ids
-    to_remove = current_ids - desired_ids
-
-    if to_add:
-        placeholders = ", ".join("?" for _ in to_add)
-        rows = conn.execute(
-            f"SELECT id, status FROM norma_atividade WHERE id IN ({placeholders})",
-            sorted(to_add),
-        ).fetchall()
-        valid_active_ids = {row["id"] for row in rows if row["status"] == "ativa"}
-        if valid_active_ids != to_add:
-            return None, _MATRIZ_NORMA_ERR_INACTIVE_NORMA
-
-    if is_matrix_assigned(conn, matriz_id) and desired_ids != current_ids:
-        return None, _MATRIZ_NORMA_ERR_FROZEN_MATRIX
-
-    if to_remove:
-        placeholders = ", ".join("?" for _ in to_remove)
-        used_version = conn.execute(
-            f"""
-            SELECT 1
-              FROM matriz_atividade_versao_item mavi
-              JOIN atividade_versao av ON av.id = mavi.atividade_versao_id
-             WHERE mavi.matriz_id = ?
-               AND av.norma_id IN ({placeholders})
-             LIMIT 1
-            """,
-            [matriz_id, *sorted(to_remove)],
-        ).fetchone()
-        if used_version is not None:
-            return None, _MATRIZ_NORMA_ERR_PROTECTED_REMOVAL
-
-    return {"to_add": to_add, "to_remove": to_remove}, None
-
-
-def _apply_matriz_norma_delta(conn, matriz_id: int, delta: dict[str, set[int]]) -> None:
-    to_remove = delta["to_remove"]
-    if to_remove:
-        placeholders = ", ".join("?" for _ in to_remove)
-        conn.execute(
-            f"DELETE FROM matriz_norma WHERE matriz_id = ? AND norma_id IN ({placeholders})",
-            [matriz_id, *sorted(to_remove)],
-        )
-
-    to_add = delta["to_add"]
-    if to_add:
-        conn.executemany(
-            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
-            [(matriz_id, norma_id) for norma_id in sorted(to_add)],
-        )
 
 
 def _render_matriz_form(
@@ -833,12 +701,7 @@ def _render_matriz_form(
         transfer_groups=transfer_groups,
         new_activity_modal=new_activity_modal,
         card_version_menu_data=card_version_menu_data,
-        **(_get_matriz_norma_context(conn, matriz_id) if matriz_id else {
-            "linked_normas": [],
-            "linked_norma_ids": set(),
-            "available_normas": [],
-            "is_academically_frozen": False,
-        }),
+        is_academically_frozen=is_matrix_assigned(conn, matriz_id) if matriz_id else False,
         readonly=readonly,
     )
 
@@ -918,8 +781,7 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
 
     axis = 'AAC' if activity_type == 'Acadêmica Complementar' else 'AEU'
     type_activity_ids = {row["id"] for row in conn.execute(
-        """SELECT v.id FROM atividade_versao v JOIN matriz_norma mn ON mn.norma_id=v.norma_id
-            WHERE mn.matriz_id=? AND v.eixo=? AND v.status='ativa'""", (matriz_id, axis)
+        "SELECT id FROM atividade_versao WHERE eixo=? AND status='ativa'", (axis,)
     ).fetchall()}
     valid_ids = [activity_id for activity_id in selected_ids if activity_id in type_activity_ids]
 
@@ -1020,25 +882,9 @@ def admin_editar_matriz(matriz_id: int):
             if is_matrix_assigned(conn, matriz_id) and any(
                 payload[field] != matriz[field] for field in protected_fields
             ):
-                flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+                flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
                 return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
 
-            manages_normas, desired_norma_ids, norma_error_code = _parse_matriz_norma_request()
-            norma_delta = None
-            if norma_error_code:
-                error_message = _MATRIZ_NORMA_ERROR_TEXT[norma_error_code]
-            elif manages_normas:
-                norma_delta, norma_error_code = _prepare_matriz_norma_delta(
-                    conn, matriz_id, desired_norma_ids or set()
-                )
-                error_message = (
-                    _MATRIZ_NORMA_ERROR_TEXT[norma_error_code]
-                    if norma_error_code
-                    else None
-                )
-            if error_message:
-                flash(error_message, "error")
-                return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
             try:
                 conn.execute(
                     """
@@ -1067,12 +913,10 @@ def admin_editar_matriz(matriz_id: int):
                         matriz_id,
                     ),
                 )
-                if norma_delta is not None:
-                    _apply_matriz_norma_delta(conn, matriz_id, norma_delta)
                 conn.commit()
             except sqlite3.IntegrityError:
                 conn.rollback()
-                flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_INVALID_PARAMS], "error")
+                flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_INVALID_PARAMS], "error")
                 return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
             flash("Matriz atualizada com sucesso.", "success")
             return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
@@ -1081,7 +925,7 @@ def admin_editar_matriz(matriz_id: int):
         if save_result is True:
             flash("Lista da matriz atualizada com sucesso.", "success")
         elif save_result is None:
-            flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+            flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
         else:
             flash("Aba de gestão de atividades inválida.", "error")
         return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
@@ -1115,7 +959,6 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
         "nome": (request.form.get("nome") or "").strip(),
         "grupo_numero": (request.form.get("grupo_numero") or "").strip(),
         "grupo_descricao": (request.form.get("grupo_descricao") or "").strip(),
-        "norma_id": (request.form.get("norma_id") or "").strip(),
         "add_to_matrix": request.form.get("add_to_matrix"),
     }
 
@@ -1137,26 +980,6 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
             new_activity_modal=modal_context,
         )
 
-    normas = _get_matriz_active_normas_for_axis(conn, matriz_id, axis)
-    if not normas:
-        return _render_modal_error(
-            f"Esta matriz não possui norma ativa de {axis} vinculada para criar uma nova atividade."
-        )
-
-    norma_by_id = {int(row["id"]): row for row in normas}
-    norma_id_raw = form_data["norma_id"]
-    norma = None
-    if norma_id_raw:
-        if not norma_id_raw.isdigit():
-            return _render_modal_error("Selecione uma norma/regulamento base válida.")
-        norma = norma_by_id.get(int(norma_id_raw))
-        if not norma:
-            return _render_modal_error("Selecione uma norma compatível com esta matriz e com o eixo atual.")
-    elif len(normas) == 1:
-        norma = normas[0]
-    else:
-        return _render_modal_error("Selecione explicitamente a norma/regulamento base para esta atividade.")
-
     nome = form_data["nome"]
     if not nome:
         return _render_modal_error("Informe o nome da atividade.")
@@ -1176,7 +999,7 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
     form_data["add_to_matrix"] = add_to_matrix
 
     if add_to_matrix and is_matrix_assigned(conn, matriz_id):
-        return _render_modal_error(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX])
+        return _render_modal_error(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN])
 
     try:
         base_cursor = conn.execute(
@@ -1193,19 +1016,15 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
             """
             INSERT INTO atividade_versao (
                 atividade_base_id,
-                norma_id,
-                codigo_normativo,
                 eixo,
                 grupo,
                 numero_versao,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, 'ativa')
+            ) VALUES (?, ?, ?, ?, 'ativa')
             """,
             (
                 base_id,
-                norma["id"],
-                norma["codigo"],
-                norma["eixo"],
+                axis,
                 grupo,
                 next_num,
             ),
@@ -1261,6 +1080,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     active_tab = (request.form.get("active_tab") or "").strip().lower()
     if active_tab not in {"aac", "aea"}:
         active_tab = "aac"
+    axis = _matriz_axis_for_tab(active_tab)
 
     def _redirect_matrix():
         return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
@@ -1271,7 +1091,10 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         return redirect(url_for("admin_matrizes"))
 
     selected = conn.execute(
-        "SELECT atividade_base_id FROM matriz_atividade_versao_item WHERE matriz_id=? AND atividade_versao_id=?",
+        """SELECT item.atividade_base_id, current.eixo
+             FROM matriz_atividade_versao_item item
+             JOIN atividade_versao current ON current.id=item.atividade_versao_id
+            WHERE item.matriz_id=? AND item.atividade_versao_id=?""",
         (matriz_id, atividade_id),
     ).fetchone()
     if not selected:
@@ -1286,7 +1109,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     versao_id = int(versao_id_raw)
 
     target_versao = conn.execute(
-        "SELECT id, atividade_base_id, numero_versao, status, norma_id FROM atividade_versao WHERE id = ?",
+        "SELECT id, atividade_base_id, numero_versao, status, eixo FROM atividade_versao WHERE id = ?",
         (versao_id,),
     ).fetchone()
     if not target_versao:
@@ -1298,11 +1121,8 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     if target_versao["status"] != "ativa":
         flash("Apenas versões ativas podem ser selecionadas para esta matriz.", "error")
         return _redirect_matrix()
-    if not conn.execute(
-        "SELECT 1 FROM matriz_norma WHERE matriz_id = ? AND norma_id = ?",
-        (matriz_id, target_versao["norma_id"]),
-    ).fetchone():
-        flash("A norma desta versão não está vinculada à matriz.", "error")
+    if target_versao["eixo"] != selected["eixo"] or target_versao["eixo"] != axis:
+        flash("A versão selecionada pertence ao eixo oposto desta lista.", "error")
         return _redirect_matrix()
 
     vinculo = get_vinculo_versao_da_matriz(conn, matriz_id, base_id)
@@ -1319,7 +1139,7 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
         )
     except AcademicGraphFrozenError:
         conn.rollback()
-        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
     except sqlite3.IntegrityError as exc:
         conn.rollback()
         flash(f"Erro de integridade ao escolher versão: {exc}", "error")
@@ -1350,7 +1170,7 @@ def admin_excluir_matrizes():
         f"SELECT 1 FROM turmas WHERE matriz_id IN ({placeholders}) LIMIT 1",
         matriz_ids,
     ).fetchone() is not None:
-        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
         return redirect(url_for("admin_matrizes"))
 
     conn.execute(f"DELETE FROM matrizes_atividades WHERE id IN ({placeholders})", matriz_ids)
@@ -1366,7 +1186,7 @@ def admin_excluir_matriz(matriz_id: int):
     ensure_matriz_atividade_links_table(conn)
 
     if is_matrix_assigned(conn, matriz_id):
-        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
         return redirect(url_for("admin_matrizes"))
 
     deleted = conn.execute("DELETE FROM matrizes_atividades WHERE id = ?", (matriz_id,)).rowcount
@@ -1387,7 +1207,7 @@ def admin_matriz_versoes(matriz_id: int):
 
     Para cada atividade_base no escopo canônico da matriz mostra:
       - vínculo atual (se houver);
-      - versões ativas disponíveis (somente ativas, cujas normas estão em matriz_norma).
+      - versões ativas disponíveis no mesmo eixo operacional.
 
     GET-only — sem escrita. Escrita via POST /definir e POST /remover.
     Não usa fallback para primeira ativa. Sem inferência de versão.
@@ -1429,7 +1249,7 @@ def admin_matriz_versoes_definir(matriz_id: int):
       4. atividade_versao pertence à atividade_base informada.
       5. atividade_versao.status == 'ativa'.
       6. atividade_base já selecionada pela autoridade canônica da matriz.
-      7. norma_id da versão está em matriz_norma para esta matriz.
+      7. eixo da versão preserva o eixo do vínculo atual.
 
     Operação "set": remove vínculo anterior da mesma matriz+base e insere novo.
     Nunca cria ambiguidade nova (invariante por matriz+base).
@@ -1471,20 +1291,13 @@ def admin_matriz_versoes_definir(matriz_id: int):
         flash("Apenas versões com status 'ativa' podem ser vinculadas à matriz.", "error")
         return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
-    in_scope = conn.execute(
-        "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id=? AND atividade_base_id=?",
-        (matriz_id, base_id),
-    ).fetchone() is not None
-    if not in_scope:
+    vinculo_atual = get_vinculo_versao_da_matriz(conn, matriz_id, base_id)
+    if not vinculo_atual:
         flash("A atividade-base não está no escopo canônico desta matriz.", "error")
         return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
-    norma_in_matriz = conn.execute(
-        "SELECT 1 FROM matriz_norma WHERE matriz_id = ? AND norma_id = ?",
-        (matriz_id, versao["norma_id"]),
-    ).fetchone() is not None
-    if not norma_in_matriz:
-        flash("A norma desta versão não está vinculada a esta matriz.", "error")
+    if versao["eixo"] != vinculo_atual["eixo"]:
+        flash("A versão selecionada pertence ao eixo oposto desta lista.", "error")
         return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
 
     try:
@@ -1493,7 +1306,7 @@ def admin_matriz_versoes_definir(matriz_id: int):
         flash("Versão definida com sucesso.", "success")
     except AcademicGraphFrozenError:
         conn.rollback()
-        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
     except Exception as exc:
         conn.rollback()
         flash(f"Erro ao definir versão: {exc}", "error")
@@ -1542,7 +1355,7 @@ def admin_matriz_versoes_remover(matriz_id: int):
             flash("Não havia vínculo para remover.", "info")
     except AcademicGraphFrozenError:
         conn.rollback()
-        flash(_MATRIZ_NORMA_ERROR_TEXT[_MATRIZ_NORMA_ERR_FROZEN_MATRIX], "error")
+        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
     except Exception as exc:
         conn.rollback()
         flash(f"Erro ao remover vínculo: {exc}", "error")
@@ -1634,7 +1447,6 @@ __all__ = [
     "_build_matriz_new_activity_modal_context",
     "_ensure_default_versao_link",
     "_get_grupos_por_tipo",
-    "_get_matriz_active_normas_for_axis",
     "_matriz_activity_rule_summary",
     "_matriz_activity_type_for_tab",
     "_matriz_axis_for_tab",

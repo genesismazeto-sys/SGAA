@@ -1,24 +1,31 @@
 """
-D7.2B3-PATCH1 — Testes de criação de atividade_versao em rascunho.
+COV-1 restoration — Creation of atividade_versao in rascunho (form flow).
 
-Cobre:
-1. GET /admin/catalogo-versoes/<base_id>/nova-versao retorna 200.
-2. GET com base inexistente redireciona.
-3. POST válido cria atividade_versao com status 'rascunho' e redireciona para detalhe.
-4. POST norma_id inexistente rejeita e não insere.
-5. POST norma inativa rejeita e não insere.
-6. POST duplicidade (base_id, norma_id) rejeita e não insere.
-7. POST ch_por_evento negativo rejeita.
-8. POST versao_anterior_id de outra base rejeita.
-9. POST versao_anterior_id de eixo diferente rejeita.
-10. POST não altera matriz_atividade_versao_item.
-11. POST não altera requisicoes.
-12. Templates aluno não expõem termos versionados.
+Adapted from the pre-Norma suite (test_admin_activity_version_catalog_version_form.py)
+with all Norma-domain setup removed (norma_atividade, norma_id, codigo_normativo).
+
+Covers:
+ 1. GET /admin/catalogo-versoes/<base_id>/nova-versao retorna 200.
+ 2. GET com base inexistente redireciona.
+ 3. POST válido cria atividade_versao com status 'rascunho' e redireciona para detalhe.
+ 4. POST eixo inválido rejeita e não insere.
+ 5. POST ch_por_evento negativo rejeita.
+ 6. POST versao_anterior_id de outra base rejeita.
+ 7. POST versao_anterior_id de eixo diferente rejeita.
+ 8. POST não altera matriz_atividade_versao_item.
+ 9. POST não altera requisicoes.
+10. Templates aluno não expõem termos versionados.
+11. Formulário tem select para versao_anterior_id com placeholder vazio.
+12. POST número não numérico rejeita.
+13. POST versao_anterior_id inexistente rejeita.
+14. Segunda versão para a mesma base não é bloqueada por duplicidade
+    (o próximo numero_versao é atribuído automaticamente).
 """
 from __future__ import annotations
 
 import os
 import sys
+import uuid
 
 import pytest
 
@@ -72,17 +79,11 @@ def _count_requisicoes(client) -> int:
         ).fetchone()["c"]
 
 
-import uuid
-
-def _seed_base_and_normas(client):
-    """
-    Insere uma atividade_base e duas normas (ativa e inativa) no banco de teste.
-    Retorna dict com base_id, norma_ativa_id, norma_inativa_id.
-    """
+def _seed_base(client) -> dict:
     token = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
-        nome_base = f"Base Versão D72B3 {token}"
+        nome_base = f"Base Versão {token}"
         conn.execute(
             "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
             (nome_base, "Descrição", "ativo"),
@@ -91,40 +92,13 @@ def _seed_base_and_normas(client):
             "SELECT id FROM atividade_base WHERE nome_conceito = ?",
             (nome_base,),
         ).fetchone()["id"]
-
-        cod_ativa = f"NRM-ATIVA-D72B3-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            (cod_ativa, "AAC", "rev1", "Norma Ativa", "ativa"),
-        )
-        norma_ativa_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (cod_ativa,),
-        ).fetchone()["id"]
-
-        cod_inat = f"NRM-INAT-D72B3-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            (cod_inat, "AAC", "rev1", "Norma Inativa", "inativa"),
-        )
-        norma_inativa_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (cod_inat,),
-        ).fetchone()["id"]
-
         conn.commit()
-    return {
-        "base_id": base_id,
-        "norma_ativa_id": norma_ativa_id,
-        "norma_inativa_id": norma_inativa_id,
-        "codigo_ativa": cod_ativa,
-        "codigo_inativa": cod_inat,
-    }
+    return {"base_id": base_id}
 
 
-def _post_nova_versao(client, base_id, norma_id, **kwargs):
+def _post_nova_versao(client, base_id, **kwargs):
     data = {
-        "norma_id": str(norma_id),
+        "eixo": kwargs.get("eixo", "AAC"),
         "grupo": kwargs.get("grupo", "1 - Grupo teste"),
         "ch_por_evento": kwargs.get("ch_por_evento", "4"),
         "limite_semestre": kwargs.get("limite_semestre", "40"),
@@ -142,13 +116,29 @@ def _post_nova_versao(client, base_id, norma_id, **kwargs):
     )
 
 
+def _insert_versao_direct(client, *, base_id: int, eixo: str, numero_versao: int, status: str = "rascunho") -> int:
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        cur = conn.execute(
+            """
+            INSERT INTO atividade_versao
+                (atividade_base_id, eixo, grupo, status, numero_versao)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (base_id, eixo, "Grupo direto", status, numero_versao),
+        )
+        versao_id = cur.lastrowid
+        conn.commit()
+    return versao_id
+
+
 # ---------------------------------------------------------------------------
 # 1. GET retorna 200
 # ---------------------------------------------------------------------------
 
 def test_get_nova_versao_returns_200(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     r = client.get(f"/admin/catalogo-versoes/{seed['base_id']}/nova-versao")
     assert r.status_code == 200
 
@@ -170,10 +160,10 @@ def test_get_nova_versao_missing_base_redirects(client):
 
 def test_post_nova_versao_valid_creates_rascunho(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_atividade_versao(client)
 
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC")
     assert r.status_code == 302, f"Esperado 302, obtido {r.status_code}"
     assert f"/admin/catalogo-versoes/{seed['base_id']}" in r.headers.get("Location", "")
 
@@ -182,170 +172,112 @@ def test_post_nova_versao_valid_creates_rascunho(client):
 
     with main.app.app_context():
         row = main.get_db_connection().execute(
-            "SELECT status, codigo_normativo, eixo FROM atividade_versao WHERE atividade_base_id = ? AND norma_id = ?",
-            (seed["base_id"], seed["norma_ativa_id"]),
+            "SELECT status, eixo, numero_versao FROM atividade_versao WHERE atividade_base_id = ?",
+            (seed["base_id"],),
         ).fetchone()
     assert row is not None
     assert row["status"] == "rascunho"
-    assert row["codigo_normativo"] == seed["codigo_ativa"]
     assert row["eixo"] == "AAC"
+    assert row["numero_versao"] == 1
 
 
 # ---------------------------------------------------------------------------
-# 4. POST norma_id inexistente rejeita
+# 4. POST eixo inválido rejeita e não insere
 # ---------------------------------------------------------------------------
 
-def test_post_nova_versao_invalid_norma_rejected(client):
+def test_post_nova_versao_invalid_eixo_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], 999999)
+    r = _post_nova_versao(client, seed["base_id"], eixo="OUTRO")
     assert r.status_code == 200
+    assert _count_atividade_versao(client) == before
+
+    r_empty = _post_nova_versao(client, seed["base_id"], eixo="")
+    assert r_empty.status_code == 200
     assert _count_atividade_versao(client) == before
 
 
 # ---------------------------------------------------------------------------
-# 5. POST norma inativa rejeita
-# ---------------------------------------------------------------------------
-
-def test_post_nova_versao_inactive_norma_rejected(client):
-    _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_inativa_id"])
-    assert r.status_code == 200
-    assert _count_atividade_versao(client) == before
-
-
-# ---------------------------------------------------------------------------
-# 6. POST mesma norma para mesma base cria segunda versão (D7.6B2 removeu UNIQUE(base,norma))
-# ---------------------------------------------------------------------------
-
-def test_post_nova_versao_duplicate_rejected(client):
-    _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
-    before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
-    assert r.status_code == 302
-    assert _count_atividade_versao(client) == before + 1
-
-
-# ---------------------------------------------------------------------------
-# 7. POST ch_por_evento negativo rejeita
+# 5. POST ch_por_evento negativo rejeita
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_negative_hours_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"], ch_por_evento="-1")
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC", ch_por_evento="-1")
     assert r.status_code == 200
     assert _count_atividade_versao(client) == before
 
 
 # ---------------------------------------------------------------------------
-# 8. POST versao_anterior_id de outra base rejeita
+# 6. POST versao_anterior_id de outra base rejeita
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_prev_other_base_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        conn.execute(
-            "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
-            ("Outra Base", "Desc", "ativo"),
-        )
-        outra_base_id = conn.execute(
-            "SELECT id FROM atividade_base WHERE nome_conceito = ?", ("Outra Base",)
-        ).fetchone()["id"]
-        conn.execute(
-            """
-            INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-            ) VALUES (?, ?, ?, ?, ?, 'rascunho')
-            """,
-            (outra_base_id, seed["norma_ativa_id"], seed["codigo_ativa"], "AAC", "Grupo"),
-        )
-        outra_versao_id = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ?", (outra_base_id,)
-        ).fetchone()["id"]
-        conn.commit()
+    seed = _seed_base(client)
+    outra_base = _seed_base(client)
+    outra_versao_id = _insert_versao_direct(
+        client, base_id=outra_base["base_id"], eixo="AAC", numero_versao=1
+    )
 
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"], versao_anterior_id=str(outra_versao_id))
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC", versao_anterior_id=str(outra_versao_id))
     assert r.status_code == 200
     assert _count_atividade_versao(client) == before
 
 
 # ---------------------------------------------------------------------------
-# 9. POST versao_anterior_id de eixo diferente rejeita
+# 7. POST versao_anterior_id de eixo diferente rejeita
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_prev_different_eixo_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    token_aeu = uuid.uuid4().hex[:8]
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            (f"NRM-AEU-D72B3-{token_aeu}", "AEU", "rev1", "Norma AEU", "ativa"),
-        )
-        cod_aeu = f"NRM-AEU-D72B3-{token_aeu}"
-        norma_aeu_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?", (cod_aeu,)
-        ).fetchone()["id"]
-        conn.execute(
-            """
-            INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status
-            ) VALUES (?, ?, ?, ?, ?, 'rascunho')
-            """,
-            (seed["base_id"], norma_aeu_id, cod_aeu, "AEU", "Grupo AEU"),
-        )
-        versao_aeu_id = conn.execute(
-            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND eixo = ?",
-            (seed["base_id"], "AEU"),
-        ).fetchone()["id"]
-        conn.commit()
+    seed = _seed_base(client)
+    versao_aeu_id = _insert_versao_direct(
+        client, base_id=seed["base_id"], eixo="AEU", numero_versao=1
+    )
+    _insert_versao_direct(
+        client, base_id=seed["base_id"], eixo="AAC", numero_versao=2
+    )
 
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"], versao_anterior_id=str(versao_aeu_id))
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC", versao_anterior_id=str(versao_aeu_id))
     assert r.status_code == 200
     assert _count_atividade_versao(client) == before
 
 
 # ---------------------------------------------------------------------------
-# 10. POST não altera matriz_atividade_versao_item
+# 8. POST não altera matriz_atividade_versao_item
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_does_not_touch_matriz_item(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_matriz_versao_item(client)
-    _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
+    _post_nova_versao(client, seed["base_id"], eixo="AAC")
     after = _count_matriz_versao_item(client)
     if before != -1:
         assert after == before
 
 
 # ---------------------------------------------------------------------------
-# 11. POST não altera requisicoes
+# 9. POST não altera requisicoes
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_does_not_touch_requisicoes(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_requisicoes(client)
-    _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"])
+    _post_nova_versao(client, seed["base_id"], eixo="AAC")
     after = _count_requisicoes(client)
     assert after == before
 
 
 # ---------------------------------------------------------------------------
-# 12. Templates aluno não expõem termos versionados
+# 10. Templates aluno não expõem termos versionados
 # ---------------------------------------------------------------------------
 
 def test_student_templates_do_not_expose_versioning_terms(client):
@@ -363,29 +295,12 @@ def test_student_templates_do_not_expose_versioning_terms(client):
 
 
 # ---------------------------------------------------------------------------
-# 13. Formulário tem placeholder de norma e nenhuma pré-selecionada
-# ---------------------------------------------------------------------------
-
-def test_get_nova_versao_form_has_norma_placeholder(client):
-    _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    r = client.get(f"/admin/catalogo-versoes/{seed['base_id']}/nova-versao")
-    assert r.status_code == 200
-    html = r.get_data(as_text=True)
-    assert 'Selecione uma norma' in html
-    # Garante que nenhuma norma real tem selected por default
-    # (norma_id vazio no GET → nenhuma option deve ter selected exceto o placeholder)
-    selected_count = html.count('selected')
-    assert selected_count <= 1, "Nenhuma norma deve vir pré-selecionada no GET"
-
-
-# ---------------------------------------------------------------------------
-# 14. Formulário tem select para versao_anterior_id com placeholder vazio
+# 11. Formulário tem select para versao_anterior_id com placeholder vazio
 # ---------------------------------------------------------------------------
 
 def test_get_nova_versao_form_has_versao_anterior_select(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     r = client.get(f"/admin/catalogo-versoes/{seed['base_id']}/nova-versao")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
@@ -394,49 +309,60 @@ def test_get_nova_versao_form_has_versao_anterior_select(client):
 
 
 # ---------------------------------------------------------------------------
-# 15. POST sem norma_id rejeita e não insere
-# ---------------------------------------------------------------------------
-
-def test_post_nova_versao_empty_norma_id_rejected(client):
-    _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    before = _count_atividade_versao(client)
-    r = client.post(
-        f"/admin/catalogo-versoes/{seed['base_id']}/nova-versao",
-        data={
-            "norma_id": "",
-            "grupo": "1 - Grupo",
-            "ch_por_evento": "4",
-            "limite_semestre": "40",
-            "limite_total": "100",
-        },
-        follow_redirects=False,
-    )
-    assert r.status_code == 200
-    assert _count_atividade_versao(client) == before
-
-
-# ---------------------------------------------------------------------------
-# 16. POST número não numérico rejeita
+# 12. POST número não numérico rejeita
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_non_numeric_hours_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"], ch_por_evento="abc")
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC", ch_por_evento="abc")
     assert r.status_code == 200
     assert _count_atividade_versao(client) == before
 
 
 # ---------------------------------------------------------------------------
-# 17. POST versao_anterior_id inexistente rejeita
+# 13. POST versao_anterior_id inexistente rejeita
 # ---------------------------------------------------------------------------
 
 def test_post_nova_versao_invalid_versao_anterior_id_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     before = _count_atividade_versao(client)
-    r = _post_nova_versao(client, seed["base_id"], seed["norma_ativa_id"], versao_anterior_id="999999")
+    r = _post_nova_versao(client, seed["base_id"], eixo="AAC", versao_anterior_id="999999")
     assert r.status_code == 200
     assert _count_atividade_versao(client) == before
+
+
+# ---------------------------------------------------------------------------
+# 14. Segunda versão para a mesma base é permitida com próximo numero_versao
+# ---------------------------------------------------------------------------
+
+def test_post_nova_versao_second_version_same_base_gets_next_number(client):
+    _login_admin(client)
+    seed = _seed_base(client)
+    first = _post_nova_versao(client, seed["base_id"], eixo="AAC")
+    assert first.status_code == 302
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        v1 = conn.execute(
+            "SELECT id FROM atividade_versao WHERE atividade_base_id = ? AND numero_versao = 1",
+            (seed["base_id"],),
+        ).fetchone()["id"]
+
+    second = _post_nova_versao(
+        client, seed["base_id"], eixo="AAC", versao_anterior_id=str(v1)
+    )
+    assert second.status_code == 302
+
+    with main.app.app_context():
+        rows = main.get_db_connection().execute(
+            "SELECT numero_versao, versao_anterior_id FROM atividade_versao"
+            " WHERE atividade_base_id = ? ORDER BY numero_versao",
+            (seed["base_id"],),
+        ).fetchall()
+    assert [(row["numero_versao"], row["versao_anterior_id"]) for row in rows] == [
+        (1, None),
+        (2, v1),
+    ]

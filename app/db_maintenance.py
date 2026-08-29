@@ -18,6 +18,7 @@ from app.academics import (
 from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_type
 from app.prod1_schema import (
     BASELINE_MARKER,
+    LATEST_MIGRATION_MARKER,
     SCHEMA_EPOCH,
     SCHEMA_VERSION,
     Prod1SchemaError,
@@ -125,7 +126,10 @@ def _utc_now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-SCHEMA_MIGRATIONS = ((SCHEMA_VERSION, BASELINE_MARKER, bootstrap_prod1_schema),)
+SCHEMA_MIGRATIONS = (
+    (1, BASELINE_MARKER, bootstrap_prod1_schema),
+    (2, LATEST_MIGRATION_MARKER, bootstrap_prod1_schema),
+)
 
 
 def ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
@@ -137,10 +141,11 @@ def apply_schema_migrations(
     conn: sqlite3.Connection, logger=None, through_version: int | None = None
 ) -> dict[str, object]:
     if through_version not in (None, SCHEMA_VERSION):
-        raise ValueError("prod-1 supports only its first-production baseline")
+        raise ValueError("prod-1 supports only migration to the current schema")
+    before = get_schema_version(conn)
     status = bootstrap_prod1_schema(conn)
     return {
-        "applied": [SCHEMA_VERSION] if status else [],
+        "applied": [SCHEMA_VERSION] if before < SCHEMA_VERSION else [],
         "schema_epoch": SCHEMA_EPOCH,
         "schema_version": SCHEMA_VERSION,
         "target_schema_version": SCHEMA_VERSION,
@@ -553,7 +558,6 @@ def ensure_matriz_atividade_links_table(conn) -> None:
 def ensure_atividade_versioning_leaf_tables(conn) -> None:
     _require_prod1_tables(
         conn,
-        "matriz_norma",
         "matriz_atividade_versao_item",
         "atividade_transicao",
     )
@@ -576,8 +580,6 @@ def ensure_atividade_versioning_leaf_triggers(conn) -> None:
 
 def ensure_atividade_versioning_leaf_indexes(conn) -> None:
     expected = {
-        "idx_matriz_norma_matriz",
-        "idx_matriz_norma_norma",
         "idx_matriz_atividade_versao_item_matriz",
         "idx_matriz_atividade_versao_item_base",
         "idx_matriz_atividade_versao_item_versao",

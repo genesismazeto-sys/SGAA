@@ -151,18 +151,6 @@ def seed_reference_versioned_dataset(conn) -> None:
         (2, "PPA-T11", "Manhã", "Ativa", 11, curso_id, 2, 2026, 1, 2028, 2, "PPA-T11"),
     )
 
-    conn.executemany(
-        """
-        INSERT INTO norma_atividade (id, codigo, eixo, revisao, nome, status)
-        VALUES (?, ?, ?, ?, ?, 'ativa')
-        """,
-        (
-            (1, "AAC-rev5", "AAC", "rev5", "AAC regulamento antigo"),
-            (2, "AAC-rev6", "AAC", "rev6", "AAC regulamento novo"),
-            (3, "AEU-rev1", "AEU", "rev1", "AEU versão inicial"),
-        ),
-    )
-
     base_rows = [
         (
             base_id,
@@ -262,21 +250,18 @@ def seed_reference_versioned_dataset(conn) -> None:
         )
         matrix11_version_ids.append(version_id)
 
+    version_rows = [row[:2] + row[4:] for row in version_rows]
     conn.executemany(
         """
         INSERT INTO atividade_versao (
-            id, atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+            id, atividade_base_id, eixo, grupo,
             ch_por_evento, limite_semestre, limite_total, observacao_aluno,
             observacao_admin, documentos_json, numero_versao, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         version_rows,
     )
 
-    conn.executemany(
-        "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
-        [(1, 1), (2, 2), (2, 3)],
-    )
     conn.executemany(
         "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
         [(1, version_rows[version_id - 1][1], version_id) for version_id in matrix10_version_ids]

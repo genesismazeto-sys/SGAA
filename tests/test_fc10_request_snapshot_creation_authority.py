@@ -56,7 +56,8 @@ def test_student_creation_persists_exact_matrix_snapshot(fc10_env):
     assert saved["atividade_versao_id"] == 29
     assert payload["atividade_versao_id"] == 29
     assert payload["atividade_versao_numero"] >= 1
-    assert payload["schema_version"] == "prod-1-request-v1"
+    assert payload["schema_version"] == "prod-1-request-v2"
+    assert {"norma_id", "codigo_normativo"}.isdisjoint(payload)
 
 
 @pytest.mark.parametrize("version_id", [None, 1, 999999])
@@ -175,6 +176,7 @@ def test_admin_import_producer_persists_mandatory_exact_snapshot(fc10_env):
         saved = rows[0]
         snapshot = json.loads(saved["regra_snapshot_json"])
         assert saved["atividade_versao_id"] == 29
-        assert saved["codigo_normativo_snapshot"] == snapshot["codigo_normativo"]
+        assert "codigo_normativo_snapshot" not in saved.keys()
+        assert {"norma_id", "codigo_normativo"}.isdisjoint(snapshot)
         assert snapshot["atividade_versao_id"] == 29
         assert snapshot["flow_origin"] == "admin_import"

@@ -1,7 +1,10 @@
 """
-D7.2B3-PATCH3 — Testes de ativação de atividade_versao em rascunho.
+COV-1 restoration — Activation of atividade_versao in rascunho.
 
-Cobre:
+Adapted from the pre-Norma suite (test_admin_activity_version_catalog_version_activate.py)
+with all Norma-domain setup removed (norma_atividade, norma_id, codigo_normativo).
+
+Covers:
   1. POST ativar versão rascunho retorna redirect e muda status para ativa.
   2. POST ativar versão inexistente não gera 500.
   3. POST ativar versão de outra base rejeita e não muda status.
@@ -9,16 +12,15 @@ Cobre:
   5. POST ativar versão inativa rejeita.
   6. POST ativar versão descontinuada rejeita.
   7. POST ativar versão substituida rejeita.
-  8. POST ativar com norma vinculada inativa rejeita.
-  9. POST ativar não altera matriz_atividade_versao_item.
- 10. POST ativar não altera requisicoes.
- 11. POST ativar não altera atividade_transicao.
- 12. Após ativar, rota de edição existente bloqueia edição.
- 13. Após ativar, resolver considera a versão ativa como candidata válida.
- 14. Detalhe da base mostra botão Ativar apenas para rascunho.
- 15. Detalhe da base não mostra botão Ativar para ativa/inativa/descontinuada/substituida.
- 16. Rotas read-only D7.2B1 continuam respondendo 200.
- 17. Templates/rotas de aluno não expõem atividade_versao_id, código normativo, snapshot ou status técnico.
+  8. POST ativar não altera matriz_atividade_versao_item.
+  9. POST ativar não altera requisicoes.
+ 10. POST ativar não altera atividade_transicao.
+ 11. Após ativar, rota de edição existente bloqueia edição.
+ 12. Após ativar, resolver considera a versão ativa como candidata válida.
+ 13. Detalhe da base mostra botão Ativar apenas para rascunho.
+ 14. Detalhe da base não mostra botão Ativar para ativa/inativa/descontinuada/substituida.
+ 15. Rotas read-only continuam respondendo 200.
+ 16. Templates de aluno não expõem dados técnicos de versionamento.
 """
 from __future__ import annotations
 
@@ -87,15 +89,11 @@ def _count_atividade_transicao(client) -> int:
 # Seed helpers
 # ---------------------------------------------------------------------------
 
-def _seed_base_and_normas(client):
-    """
-    Insere uma atividade_base, uma norma ativa (AAC) e uma norma inativa (AAC).
-    Retorna dict com base_id, norma_ativa_id, norma_inativa_id e os codigos.
-    """
+def _seed_base(client) -> dict:
     token = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
-        nome_base = f"Base Ativacao D72B3 {token}"
+        nome_base = f"Base Ativacao {token}"
         conn.execute(
             "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
             (nome_base, "Descrição", "ativo"),
@@ -104,44 +102,15 @@ def _seed_base_and_normas(client):
             "SELECT id FROM atividade_base WHERE nome_conceito = ?",
             (nome_base,),
         ).fetchone()["id"]
-
-        cod_ativa = f"NRM-ATIVA-ATV-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            (cod_ativa, "AAC", "rev1", "Norma Ativa Ativação", "ativa"),
-        )
-        norma_ativa_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (cod_ativa,),
-        ).fetchone()["id"]
-
-        cod_inat = f"NRM-INAT-ATV-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-            (cod_inat, "AAC", "rev1", "Norma Inativa Ativação", "inativa"),
-        )
-        norma_inativa_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (cod_inat,),
-        ).fetchone()["id"]
-
         conn.commit()
-    return {
-        "base_id": base_id,
-        "norma_ativa_id": norma_ativa_id,
-        "norma_inativa_id": norma_inativa_id,
-        "codigo_ativa": cod_ativa,
-        "codigo_inativa": cod_inat,
-    }
+    return {"base_id": base_id}
 
 
 def _insert_versao(
     client,
     *,
     atividade_base_id,
-    norma_id,
-    codigo_normativo,
-    eixo,
+    eixo="AAC",
     status="rascunho",
     grupo="1 - Grupo teste",
 ) -> int:
@@ -154,10 +123,10 @@ def _insert_versao(
         cur = conn.execute(
             """
             INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                atividade_base_id, eixo, grupo, status, numero_versao
+            ) VALUES (?, ?, ?, ?, ?)
             """,
-            (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, next_num),
+            (atividade_base_id, eixo, grupo, status, next_num),
         )
         versao_id = cur.lastrowid
         conn.commit()
@@ -188,17 +157,15 @@ def _post_ativar_versao(client, base_id, versao_id):
 
 
 # ---------------------------------------------------------------------------
-# 1. POST ativar versão rascunho retorna redirect e muda status para ativa
+# 1. POST ativar versão rascunho muda status para ativa
 # ---------------------------------------------------------------------------
 
 def test_post_ativar_versao_rascunho_changes_status_to_ativa(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     r = _post_ativar_versao(client, seed["base_id"], versao_id)
@@ -214,7 +181,7 @@ def test_post_ativar_versao_rascunho_changes_status_to_ativa(client):
 
 def test_post_ativar_versao_inexistente_redirects_without_500(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     r = _post_ativar_versao(client, seed["base_id"], 999999)
     assert r.status_code == 302
     assert r.status_code != 500
@@ -227,12 +194,10 @@ def test_post_ativar_versao_inexistente_redirects_without_500(client):
 
 def test_post_ativar_versao_outra_base_rejected_and_status_unchanged(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     with main.app.app_context():
@@ -259,12 +224,10 @@ def test_post_ativar_versao_outra_base_rejected_and_status_unchanged(client):
 
 def test_post_ativar_versao_ja_ativa_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
         status="ativa",
     )
@@ -280,12 +243,10 @@ def test_post_ativar_versao_ja_ativa_rejected(client):
 
 def test_post_ativar_versao_inativa_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
         status="inativa",
     )
@@ -301,12 +262,10 @@ def test_post_ativar_versao_inativa_rejected(client):
 
 def test_post_ativar_versao_descontinuada_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
         status="descontinuada",
     )
@@ -322,12 +281,10 @@ def test_post_ativar_versao_descontinuada_rejected(client):
 
 def test_post_ativar_versao_substituida_rejected(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
         status="substituida",
     )
@@ -338,37 +295,15 @@ def test_post_ativar_versao_substituida_rejected(client):
 
 
 # ---------------------------------------------------------------------------
-# 8. POST ativar com norma vinculada inativa rejeita
-# ---------------------------------------------------------------------------
-
-def test_post_ativar_versao_norma_inativa_rejected(client):
-    _login_admin(client)
-    seed = _seed_base_and_normas(client)
-    versao_id = _insert_versao(
-        client,
-        atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_inativa_id"],
-        codigo_normativo=seed["codigo_inativa"],
-        eixo="AAC",
-    )
-    r = _post_ativar_versao(client, seed["base_id"], versao_id)
-    assert r.status_code == 302
-    versao = _get_versao(client, versao_id)
-    assert versao["status"] == "rascunho"
-
-
-# ---------------------------------------------------------------------------
-# 9. POST ativar não altera matriz_atividade_versao_item
+# 8. POST ativar não altera matriz_atividade_versao_item
 # ---------------------------------------------------------------------------
 
 def test_post_ativar_does_not_touch_matriz_item(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     before = _count_matriz_versao_item(client)
@@ -379,17 +314,15 @@ def test_post_ativar_does_not_touch_matriz_item(client):
 
 
 # ---------------------------------------------------------------------------
-# 10. POST ativar não altera requisicoes
+# 9. POST ativar não altera requisicoes
 # ---------------------------------------------------------------------------
 
 def test_post_ativar_does_not_touch_requisicoes(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     before = _count_requisicoes(client)
@@ -399,17 +332,15 @@ def test_post_ativar_does_not_touch_requisicoes(client):
 
 
 # ---------------------------------------------------------------------------
-# 11. POST ativar não altera atividade_transicao
+# 10. POST ativar não altera atividade_transicao
 # ---------------------------------------------------------------------------
 
 def test_post_ativar_does_not_touch_atividade_transicao(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     before = _count_atividade_transicao(client)
@@ -419,17 +350,15 @@ def test_post_ativar_does_not_touch_atividade_transicao(client):
 
 
 # ---------------------------------------------------------------------------
-# 12. Após ativar, rota de edição existente bloqueia edição
+# 11. Após ativar, rota de edição existente bloqueia edição
 # ---------------------------------------------------------------------------
 
 def test_after_ativar_rota_edicao_blocks(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     r_ativar = _post_ativar_versao(client, seed["base_id"], versao_id)
@@ -445,17 +374,15 @@ def test_after_ativar_rota_edicao_blocks(client):
 
 
 # ---------------------------------------------------------------------------
-# 13. Após ativar, resolver considera a versão ativa como candidata válida
+# 12. Após ativar, resolver considera a versão ativa como candidata válida
 # ---------------------------------------------------------------------------
 
 def test_after_ativar_resolver_considera_versao_como_ativa(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     r = _post_ativar_versao(client, seed["base_id"], versao_id)
@@ -488,17 +415,15 @@ def test_after_ativar_resolver_considera_versao_como_ativa(client):
 
 
 # ---------------------------------------------------------------------------
-# 14. Detalhe da base mostra botão Ativar apenas para rascunho
+# 13. Detalhe da base mostra botão Ativar apenas para rascunho
 # ---------------------------------------------------------------------------
 
 def test_detalhe_base_mostra_botao_ativar_apenas_para_rascunho(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     versao_id = _insert_versao(
         client,
         atividade_base_id=seed["base_id"],
-        norma_id=seed["norma_ativa_id"],
-        codigo_normativo=seed["codigo_ativa"],
         eixo="AAC",
     )
     r = _get_detalhe_base(client, seed["base_id"])
@@ -509,38 +434,21 @@ def test_detalhe_base_mostra_botao_ativar_apenas_para_rascunho(client):
 
 
 # ---------------------------------------------------------------------------
-# 15. Detalhe da base não mostra botão Ativar para ativa/inativa/descontinuada/substituida
+# 14. Detalhe da base não mostra botão Ativar para outros status
 # ---------------------------------------------------------------------------
 
 def test_detalhe_base_nao_mostra_botao_ativar_para_outros_status(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
-
-    def _insert_status_versao(target_status: str) -> int:
-        token = uuid.uuid4().hex[:6]
-        cod = f"NRM-DET-{target_status[:4].upper()}-{token}"
-        with main.app.app_context():
-            conn = main.get_db_connection()
-            conn.execute(
-                "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status) VALUES (?, ?, ?, ?, ?)",
-                (cod, "AAC", "rev1", f"Norma Det {target_status}", "ativa"),
-            )
-            norma_id = conn.execute(
-                "SELECT id FROM norma_atividade WHERE codigo = ?", (cod,)
-            ).fetchone()["id"]
-            conn.commit()
-        return _insert_versao(
-            client,
-            atividade_base_id=seed["base_id"],
-            norma_id=norma_id,
-            codigo_normativo=cod,
-            eixo="AAC",
-            status=target_status,
-        )
+    seed = _seed_base(client)
 
     versao_ids = {}
     for status in ("ativa", "inativa", "descontinuada", "substituida"):
-        versao_ids[status] = _insert_status_versao(status)
+        versao_ids[status] = _insert_versao(
+            client,
+            atividade_base_id=seed["base_id"],
+            eixo="AAC",
+            status=status,
+        )
 
     r = _get_detalhe_base(client, seed["base_id"])
     assert r.status_code == 200
@@ -553,16 +461,15 @@ def test_detalhe_base_nao_mostra_botao_ativar_para_outros_status(client):
 
 
 # ---------------------------------------------------------------------------
-# 16. Rotas read-only D7.2B1 continuam respondendo 200
+# 15. Rotas read-only continuam respondendo 200
 # ---------------------------------------------------------------------------
 
-def test_d7_2b1_readonly_routes_still_respond(client):
+def test_readonly_routes_still_respond(client):
     _login_admin(client)
-    seed = _seed_base_and_normas(client)
+    seed = _seed_base(client)
     routes = [
         "/admin/catalogo-versoes",
         f"/admin/catalogo-versoes/{seed['base_id']}",
-        "/admin/normas-atividade",
     ]
     for path in routes:
         r = client.get(path)
@@ -570,17 +477,12 @@ def test_d7_2b1_readonly_routes_still_respond(client):
 
 
 # ---------------------------------------------------------------------------
-# 17. Templates/rotas de aluno não expõem dados técnicos de versionamento
+# 16. Templates de aluno não expõem dados técnicos de versionamento
 # ---------------------------------------------------------------------------
 
 def test_aluno_templates_do_not_expose_versioning_metadata(client):
-    """
-    Os templates de aluno não devem referenciar atividade_versao_id,
-    codigo_normativo, snapshot, nem 'ativa'/'rascunho'/'descontinuada'.
-    Esta é uma checagem estática: ela evita regressão na filtragem do
-    escopo do PATCH3.
-    """
     from pathlib import Path
+
     templates_dir = Path(BASE) / "templates"
     forbidden = (
         "codigo_normativo",

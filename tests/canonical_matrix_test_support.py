@@ -15,7 +15,6 @@ def seed_matrix_graph(conn, *, name="Canonical matrix test") -> dict[str, int]:
              VALUES (?,?,'test','rascunho',100,50)""",
         (course_id, name),
     ).lastrowid
-    conn.execute("INSERT INTO matriz_norma(matriz_id,norma_id) VALUES (?,1)", (matrix_id,))
     base_id = conn.execute(
         "INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES (?,?,'ativo')",
         (f"{name} activity", "canonical test base"),
@@ -24,10 +23,10 @@ def seed_matrix_graph(conn, *, name="Canonical matrix test") -> dict[str, int]:
     for number, status in ((1, "ativa"), (2, "ativa"), (3, "inativa")):
         versions.append(conn.execute(
             """INSERT INTO atividade_versao
-                   (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,
+                   (atividade_base_id,eixo,grupo,
                     ch_por_evento,limite_semestre,limite_total,numero_versao,status)
-                 VALUES (?,1,?,'AAC','1 - Teste',2,20,60,?,?)""",
-            (base_id, f"AAC-test-v{number}", number, status),
+                 VALUES (?,'AAC','1 - Teste',2,20,60,?,?)""",
+            (base_id, number, status),
         ).lastrowid)
     conn.execute(
         """INSERT INTO matriz_atividade_versao_item

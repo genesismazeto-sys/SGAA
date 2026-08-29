@@ -32,9 +32,8 @@ from app.activity_catalog import (
     get_atividade_transicoes_por_base,
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
+    get_latest_atividade_versao_for_base,
     get_next_numero_versao,
-    get_norma_by_id,
-    get_norma_list,
     get_versoes_da_base_por_eixo,
     get_versoes_por_base,
     parse_documentos_json,
@@ -225,7 +224,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
     erro para flash pelo chamador (mesmo padrão de _render_form no POST).
     """
     blank = {
-        "norma_id": "",
+        "eixo": "",
         "grupo": "",
         "ch_por_evento": "",
         "limite_semestre": "",
@@ -250,7 +249,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
         return blank, "Versão anterior deve pertencer à mesma atividade-base."
     return (
         {
-            "norma_id": str(origem["norma_id"]),
+            "eixo": str(origem["eixo"]),
             "grupo": origem["grupo"] or "",
             "ch_por_evento": _display_number(origem["ch_por_evento"]),
             "limite_semestre": _display_number(origem["limite_semestre"]),
@@ -670,16 +669,13 @@ def admin_adicionar_atividade():
             return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
         try:
             axis = 'AAC' if tipo_atividade == 'Acadêmica Complementar' else 'AEU'
-            norma = conn.execute("SELECT id,codigo FROM norma_atividade WHERE eixo=? AND status='ativa' ORDER BY id LIMIT 1", (axis,)).fetchone()
-            if not norma:
-                raise sqlite3.IntegrityError("Nenhuma norma ativa para o eixo selecionado")
             base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES(?,?,'ativo') RETURNING id", (nome,descricao)).fetchone()[0]
             conn.execute(
                 """INSERT INTO atividade_versao
-                   (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,ch_por_evento,
+                   (atividade_base_id,eixo,grupo,ch_por_evento,
                     limite_total,limite_semestre,documentos_json,numero_versao,status)
-                   VALUES(?,?,?,?,?,?,?,?,?,1,'ativa')""",
-                (base_id,norma['id'],norma['codigo'],axis,grupo,limite_horas,
+                   VALUES(?,?,?,?,?,?,?,1,'ativa')""",
+                (base_id,axis,grupo,limite_horas,
                  limite_horas_total,limite_horas_semestral,request.form.get('documentos_json') or None),
             )
             conn.commit()
@@ -945,14 +941,11 @@ def admin_atividades_importar_confirmar():
             _upsert_grupo_definition(conn, row["tipo_atividade"], row["grupo_numero"], row["grupo_descricao"])
             if row.get("action") == "create":
                 axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
-                norma = conn.execute("SELECT id,codigo FROM norma_atividade WHERE eixo=? AND status='ativa' ORDER BY id LIMIT 1", (axis,)).fetchone()
-                if not norma:
-                    raise sqlite3.IntegrityError(f"Nenhuma norma ativa para {axis}")
                 base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,status) VALUES(?,'ativo') RETURNING id", (row['nome'],)).fetchone()[0]
                 conn.execute("""INSERT INTO atividade_versao
-                    (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,limite_total,limite_semestre,numero_versao,status)
-                    VALUES(?,?,?,?,?,?,?,1,'ativa')""",
-                    (base_id,norma['id'],norma['codigo'],axis,row['grupo'],row['limite_horas_total'],row['limite_horas_semestral']))
+                    (atividade_base_id,eixo,grupo,limite_total,limite_semestre,numero_versao,status)
+                    VALUES(?,?,?,?,?,1,'ativa')""",
+                    (base_id,axis,row['grupo'],row['limite_horas_total'],row['limite_horas_semestral']))
                 created += 1
             elif row.get("action") == "update":
                 axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
@@ -1115,7 +1108,6 @@ def admin_catalogo_versao_detalhe(base_id: int):
         substituicao_candidatas[origem_id] = [
             {
                 "id": destino["id"],
-                "codigo_normativo": destino["codigo_normativo"],
                 "eixo": destino["eixo"],
                 "numero_versao": destino["numero_versao"],
             }
@@ -1140,20 +1132,6 @@ def admin_catalogo_versao_detalhe(base_id: int):
         substituicao_candidatas=substituicao_candidatas,
         transicoes_historico=transicoes_historico,
         nova_versao_url=nova_versao_url,
-    )
-
-
-@admin_required
-def admin_normas_atividade():
-    """
-    Lista todas as norma_atividade com contagem de versões vinculadas.
-    GET-only, sem escrita no banco.
-    """
-    conn = get_db_connection()
-    normas = get_norma_list(conn)
-    return render_template(
-        "admin_normas_atividade.html",
-        normas=normas,
     )
 
 
@@ -1221,90 +1199,23 @@ def admin_catalogo_nova_base():
 
 
 @admin_required
-def admin_norma_nova():
-    """
-    Formulário para criar uma nova norma_atividade.
-    POST valida e insere; em sucesso redireciona para a listagem de normas.
-    """
-    if request.method == "POST":
-        codigo = (request.form.get("codigo") or "").strip()
-        eixo = (request.form.get("eixo") or "").strip()
-        revisao = (request.form.get("revisao") or "").strip()
-        nome = (request.form.get("nome") or "").strip()
-        descricao = (request.form.get("descricao") or "").strip()
-        status = (request.form.get("status") or "").strip()
-
-        def _render_form(msg):
-            if msg:
-                flash(msg, "error")
-            return render_template("admin_norma_form.html",
-                                   codigo=codigo, eixo=eixo,
-                                   revisao=revisao, nome=nome,
-                                   descricao=descricao, status=status)
-
-        if not codigo:
-            return _render_form("Código da norma é obrigatório.")
-        if eixo not in ("AAC", "AEU"):
-            return _render_form("Eixo deve ser 'AAC' ou 'AEU'.")
-        if not revisao:
-            return _render_form("Revisão é obrigatória.")
-        if status not in ("ativa", "inativa"):
-            return _render_form("Status deve ser 'ativa' ou 'inativa'.")
-
-        conn = get_db_connection()
-
-        existing = conn.execute(
-            "SELECT id FROM norma_atividade WHERE LOWER(codigo) = LOWER(?)",
-            (codigo,),
-        ).fetchone()
-        if existing:
-            return _render_form("Já existe uma norma com este código.")
-
-        try:
-            conn.execute(
-                """
-                INSERT INTO norma_atividade (codigo, eixo, revisao, nome, descricao, status)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (codigo, eixo, revisao, nome or None, descricao or None, status),
-            )
-            conn.commit()
-            flash("Norma de atividade criada com sucesso.", "success")
-            return redirect(url_for("admin_normas_atividade"))
-        except Exception as exc:
-            return _render_form(f"Erro ao criar norma: {exc}")
-
-    return render_template("admin_norma_form.html",
-                           codigo="", eixo="AAC", revisao="",
-                           nome="", descricao="", status="ativa")
-
-
-@admin_required
 def admin_catalogo_nova_versao(base_id: int):
-    """
-    Formulário para criar uma nova atividade_versao em rascunho
-    vinculada a uma atividade_base e uma norma_atividade.
-    POST valida e insere; em sucesso redireciona para o detalhe da base.
-    """
+    """Create the next exact Activity Version without external domain gates."""
     conn = get_db_connection()
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
         return redirect(url_for("admin_catalogo_versoes"))
 
-    normas = get_norma_list(conn)
-    versoes_anteriores = (
-        get_versoes_da_base_por_eixo(conn, base_id, "AAC")
-        + get_versoes_da_base_por_eixo(conn, base_id, "AEU")
-    )
-
+    latest = get_latest_atividade_versao_for_base(conn, base_id)
+    versoes_anteriores = [latest] if latest else []
     next_num = get_next_numero_versao(conn, base_id)
     form_action = url_for("admin_catalogo_nova_versao", base_id=base_id)
     form_title = f"Nova versão (será v{next_num})"
     submit_label = "Criar versão em rascunho"
 
     if request.method == "POST":
-        norma_id_raw = (request.form.get("norma_id") or "").strip()
+        eixo = str(latest["eixo"] if latest else request.form.get("eixo") or "").strip().upper()
         grupo = (request.form.get("grupo") or "").strip()
         ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
         limite_semestre_raw = (request.form.get("limite_semestre") or "").strip()
@@ -1321,9 +1232,9 @@ def admin_catalogo_nova_versao(base_id: int):
             return render_template(
                 "admin_catalogo_versao_form.html",
                 base=base,
-                normas=normas,
                 versoes_anteriores=versoes_anteriores,
-                norma_id=norma_id_raw,
+                eixo=eixo,
+                eixo_locked=bool(latest),
                 grupo=grupo,
                 ch_por_evento=ch_por_evento_raw,
                 limite_semestre=limite_semestre_raw,
@@ -1338,21 +1249,8 @@ def admin_catalogo_nova_versao(base_id: int):
                 submit_label=submit_label,
             )
 
-        if not norma_id_raw:
-            return _render_form("Norma é obrigatória.")
-        try:
-            norma_id = int(norma_id_raw)
-        except (TypeError, ValueError):
-            return _render_form("Norma inválida.")
-
-        norma = get_norma_by_id(conn, norma_id)
-        if not norma:
-            return _render_form("Norma não encontrada.")
-        if norma["status"] != "ativa":
-            return _render_form("Norma deve estar ativa para criar uma versão.")
-
-        eixo = norma["eixo"]
-        codigo_normativo = norma["codigo"]
+        if eixo not in {"AAC", "AEU"}:
+            return _render_form("Selecione um eixo operacional válido (AAC ou AEU).")
 
         # validação numérica
         def _parse_float(raw, nome):
@@ -1374,37 +1272,32 @@ def admin_catalogo_nova_versao(base_id: int):
                 return _render_form(f"{maybe_err} deve ser um número válido e maior ou igual a zero.")
 
         versao_anterior_id = None
-        if versao_anterior_id_raw:
+        if latest:
             try:
                 versao_anterior_id = int(versao_anterior_id_raw)
             except (TypeError, ValueError):
                 return _render_form("Versão anterior inválida.")
-            prev = conn.execute(
-                "SELECT atividade_base_id, eixo FROM atividade_versao WHERE id = ?",
-                (versao_anterior_id,),
-            ).fetchone()
-            if not prev:
-                return _render_form("Versão anterior não encontrada.")
-            if prev["atividade_base_id"] != base_id:
-                return _render_form("Versão anterior deve pertencer à mesma atividade-base.")
-            if prev["eixo"] != eixo:
-                return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
+            if versao_anterior_id != int(latest["id"]):
+                return _render_form("A nova versão deve suceder a versão canônica mais recente.")
+        elif versao_anterior_id_raw:
+            return _render_form("A primeira versão não pode declarar predecessora.")
 
         try:
             next_num = get_next_numero_versao(conn, base_id)
             conn.execute(
                 """
                 INSERT INTO atividade_versao (
-                    atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                    atividade_base_id, eixo, grupo,
                     ch_por_evento, limite_semestre, limite_total,
-                    observacao_aluno, observacao_admin,
+                    observacao_aluno, observacao_admin, documentos_json,
                     vigencia_inicio, vigencia_fim, numero_versao, status, versao_anterior_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
                 """,
                 (
-                    base_id, norma_id, codigo_normativo, eixo, grupo or None,
+                    base_id, eixo, grupo or None,
                     ch_por_evento, limite_semestre, limite_total,
                     observacao_aluno or None, observacao_admin or None,
+                    latest["documentos_json"] if latest else "[]",
                     vigencia_inicio or None, vigencia_fim or None, next_num, versao_anterior_id,
                 ),
             )
@@ -1414,15 +1307,17 @@ def admin_catalogo_nova_versao(base_id: int):
         except Exception as exc:
             return _render_form(f"Erro ao criar versão: {exc}")
 
-    prefill, prefill_error = _resolve_nova_versao_prefill(conn, base_id, request.args.get("from"))
+    prefill, prefill_error = _resolve_nova_versao_prefill(
+        conn, base_id, request.args.get("from") or (str(latest["id"]) if latest else None)
+    )
     if prefill_error:
         flash(prefill_error, "error")
     return render_template(
         "admin_catalogo_versao_form.html",
         base=base,
-        normas=normas,
         versoes_anteriores=versoes_anteriores,
-        norma_id=prefill["norma_id"],
+        eixo=prefill["eixo"] or (latest["eixo"] if latest else "AAC"),
+        eixo_locked=bool(latest),
         grupo=prefill["grupo"],
         ch_por_evento=prefill["ch_por_evento"],
         limite_semestre=prefill["limite_semestre"],
@@ -1466,7 +1361,6 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         flash(message, "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
-    normas = get_norma_list(conn)
     versoes_anteriores = [
         v
         for v in (
@@ -1478,7 +1372,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
 
     form_action = url_for("admin_catalogo_editar_versao", base_id=base_id, versao_id=versao_id)
     _num = versao["numero_versao"]
-    form_title = f"Editar versão v{_num}" if _num else f"Editar versão — {versao['codigo_normativo']}"
+    form_title = f"Editar versão v{_num}"
     submit_label = "Salvar alterações"
 
     def _display_number(value):
@@ -1489,7 +1383,6 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         return str(value)
 
     if request.method == "POST":
-        norma_id_raw = (request.form.get("norma_id") or "").strip()
         grupo = (request.form.get("grupo") or "").strip()
         ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
         limite_semestre_raw = (request.form.get("limite_semestre") or "").strip()
@@ -1506,9 +1399,9 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             return render_template(
                 "admin_catalogo_versao_form.html",
                 base=base,
-                normas=normas,
                 versoes_anteriores=versoes_anteriores,
-                norma_id=norma_id_raw,
+                eixo=versao["eixo"],
+                eixo_locked=True,
                 grupo=grupo,
                 ch_por_evento=ch_por_evento_raw,
                 limite_semestre=limite_semestre_raw,
@@ -1523,21 +1416,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
                 submit_label=submit_label,
             )
 
-        if not norma_id_raw:
-            return _render_form("Norma é obrigatória.")
-        try:
-            norma_id = int(norma_id_raw)
-        except (TypeError, ValueError):
-            return _render_form("Norma inválida.")
-
-        norma = get_norma_by_id(conn, norma_id)
-        if not norma:
-            return _render_form("Norma não encontrada.")
-        if norma["status"] != "ativa":
-            return _render_form("Norma deve estar ativa para editar a versão.")
-
-        eixo = norma["eixo"]
-        codigo_normativo = norma["codigo"]
+        eixo = versao["eixo"]
 
         # validação numérica
         def _parse_float(raw, nome):
@@ -1575,15 +1454,13 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             if prev["atividade_base_id"] != base_id:
                 return _render_form("Versão anterior deve pertencer à mesma atividade-base.")
             if prev["eixo"] != eixo:
-                return _render_form("Versão anterior deve ter o mesmo eixo da norma selecionada.")
+                return _render_form("Versão anterior deve ter o mesmo eixo da versão.")
 
         try:
             apply_activity_version_semantic_changes(
                 conn,
                 versao_id,
                 {
-                    "norma_id": norma_id,
-                    "codigo_normativo": codigo_normativo,
                     "eixo": eixo,
                     "grupo": grupo or None,
                     "ch_por_evento": ch_por_evento,
@@ -1606,9 +1483,9 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     return render_template(
         "admin_catalogo_versao_form.html",
         base=base,
-        normas=normas,
         versoes_anteriores=versoes_anteriores,
-        norma_id=str(versao["norma_id"]),
+        eixo=versao["eixo"],
+        eixo_locked=True,
         grupo=versao["grupo"] or "",
         ch_por_evento=_display_number(versao["ch_por_evento"]),
         limite_semestre=_display_number(versao["limite_semestre"]),
@@ -1636,7 +1513,6 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
       - atividade_base existe
       - atividade_versao existe e pertence ao base_id da URL
       - status atual == 'rascunho'
-      - norma_atividade vinculada existe e está ativa
 
     Operação: UPDATE atividade_versao SET status = 'ativa'
     WHERE id = ? AND status = 'rascunho'. Se rowcount != 1, rollback.
@@ -1662,17 +1538,6 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
 
     if is_activity_version_referenced_by_assigned_matrix(conn, versao_id):
         flash(ACADEMIC_VERSION_FROZEN_MESSAGE, "error")
-        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
-
-    norma = get_norma_by_id(conn, versao["norma_id"])
-    if not norma:
-        flash("Não é possível ativar: a norma vinculada não existe.", "error")
-        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
-    if norma["status"] != "ativa":
-        flash(
-            "Não é possível ativar: a norma vinculada não está ativa.",
-            "error",
-        )
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
     try:
@@ -2008,21 +1873,9 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ('GET',),
         ),
         LegacyRouteSpec(
-            '/admin/normas-atividade',
-            'admin_normas_atividade',
-            admin_normas_atividade,
-            ('GET',),
-        ),
-        LegacyRouteSpec(
             '/admin/catalogo-versoes/nova-base',
             'admin_catalogo_nova_base',
             admin_catalogo_nova_base,
-            ('GET', 'POST'),
-        ),
-        LegacyRouteSpec(
-            '/admin/normas-atividade/nova',
-            'admin_norma_nova',
-            admin_norma_nova,
             ('GET', 'POST'),
         ),
         LegacyRouteSpec(
@@ -2095,9 +1948,7 @@ __all__ = [
     'admin_grupos_excluir',
     'admin_catalogo_versoes',
     'admin_catalogo_versao_detalhe',
-    'admin_normas_atividade',
     'admin_catalogo_nova_base',
-    'admin_norma_nova',
     'admin_catalogo_nova_versao',
     'admin_catalogo_editar_versao',
     'admin_catalogo_ativar_versao',

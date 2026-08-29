@@ -1,3 +1,19 @@
+"""
+COV-1 restoration — New activity created from the Matrix AAC/AEU tabs.
+
+Adapted from the pre-Norma suite (test_admin_matrix_new_activity.py) with all
+Norma-domain setup removed (matriz_norma, norma_id, codigo_normativo, "norma"
+gates). The tab controls the eixo; the created version receives the tab eixo.
+
+Covers:
+ 1. AAC tab renders the "+ Nova atividade" entry and the modal form action.
+ 2. AEU tab renders the "+ Nova atividade" entry and the modal form action.
+ 3. POST from AAC tab creates base + exact version (eixo AAC) + matrix link.
+ 4. POST from AEU tab creates base + exact version (eixo AEU).
+ 5. Invalid creation (duplicate base name) rolls back everything.
+ 6. Assigned (frozen) matrix rejects add_to_matrix creation.
+ 7. Modal contains csrf_token and POST requires it.
+"""
 from __future__ import annotations
 
 import os
@@ -41,8 +57,6 @@ def versioned_env(tmp_path):
                 """,
                 (curso_id,),
             ).fetchone()["id"]
-            conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, 1)", (aac_matrix_id,))
-            conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, 3)", (aeu_matrix_id,))
             conn.commit()
         env.update({"aac_matrix_id": aac_matrix_id, "aeu_matrix_id": aeu_matrix_id})
         yield env
@@ -65,7 +79,6 @@ def versioned_env_csrf(tmp_path):
                 """,
                 (curso_id,),
             ).fetchone()["id"]
-            conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, 1)", (aac_matrix_id,))
             conn.commit()
         env["aac_matrix_id"] = aac_matrix_id
         original_enabled = main.app.config.get("WTF_CSRF_ENABLED")
@@ -167,10 +180,9 @@ def test_post_new_aac_activity_creates_base_version_and_matrix_links(versioned_e
         ).fetchone()
         assert versao is not None
         assert versao["atividade_base_id"] == base["id"]
-        assert versao["norma_id"] == 1
-        assert versao["codigo_normativo"] == "AAC-rev5"
         assert versao["eixo"] == "AAC"
         assert versao["grupo"] == "7 - Grupo piloto AAC"
+        assert versao["numero_versao"] == 1
         assert versao["status"] == "ativa"
 
         matrix_version_link = conn.execute(
@@ -215,73 +227,10 @@ def test_post_new_aeu_activity_creates_aeu_context(versioned_env):
         ).fetchone()
         assert versao is not None
         assert versao["atividade_base_id"] == base["id"]
-        assert versao["norma_id"] == 3
-        assert versao["codigo_normativo"] == "AEU-rev1"
         assert versao["eixo"] == "AEU"
         assert versao["grupo"] == "NA"
+        assert versao["numero_versao"] == 1
         assert versao["status"] == "ativa"
-
-
-def test_post_new_activity_blocks_matrix_without_compatible_norm(versioned_env):
-    client = versioned_env["client"]
-    _login_admin(client)
-    matrix_id = versioned_env["aac_matrix_id"]
-    activity_name = _unique_name("Blocked AEU")
-
-    response = client.post(
-        f"/admin/matrizes/{matrix_id}/atividades/nova/aea",
-        data={
-            "nome": activity_name,
-            "add_to_matrix": "1",
-        },
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-
-    html = response.get_data(as_text=True)
-    assert "norma ativa de AEU" in html
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        base = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
-    assert base is None
-
-
-def test_post_new_activity_requires_explicit_norm_when_multiple_compatible_norms(versioned_env):
-    client = versioned_env["client"]
-    _login_admin(client)
-    matrix_id = versioned_env["aac_matrix_id"]
-    activity_name = _unique_name("Multiple AAC")
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        norma_id = conn.execute(
-            """
-            INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)
-            VALUES (?, 'AAC', 'rev-extra', ?, 'ativa')
-            """,
-            (_unique_name("AAC-rev-extra"), "Norma AAC extra"),
-        ).lastrowid
-        conn.execute("INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)", (matrix_id, norma_id))
-        conn.commit()
-
-    response = client.post(
-        f"/admin/matrizes/{matrix_id}/atividades/nova/aac",
-        data={
-            "nome": activity_name,
-            "grupo_numero": "9",
-            "grupo_descricao": "Precisa escolher norma",
-            "add_to_matrix": "1",
-        },
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert "Selecione explicitamente a norma/regulamento base" in response.get_data(as_text=True)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        base = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)).fetchone()
-    assert base is None
 
 
 def test_post_new_activity_rolls_back_on_intermediate_error(versioned_env):
@@ -326,6 +275,49 @@ def test_post_new_activity_rolls_back_on_intermediate_error(versioned_env):
         ).fetchone()["c"]
     assert after_counts == before_counts
     assert version_rows == 0
+
+
+def test_post_new_activity_frozen_assigned_matrix_rejected(versioned_env):
+    client = versioned_env["client"]
+    _login_admin(client)
+    matrix_id = versioned_env["aac_matrix_id"]
+    activity_name = _unique_name("Frozen AAC")
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        curso_id = conn.execute(
+            "SELECT curso_id FROM matrizes_atividades WHERE id = ?", (matrix_id,)
+        ).fetchone()["curso_id"]
+        conn.execute(
+            """INSERT INTO turmas
+                   (nome,turno,status,numero,curso_id,ano_inicio,semestre_inicio,codigo,matriz_id)
+                 VALUES (?,'Noite','Ativa',?,?,2026,1,?,?)""",
+            (f'Turma Frozen {matrix_id}', 1000 + matrix_id, curso_id,
+             f'FROZEN-{matrix_id}', matrix_id),
+        )
+        conn.commit()
+        before_counts = _table_counts(conn)
+
+    response = client.post(
+        f"/admin/matrizes/{matrix_id}/atividades/nova/aac",
+        data={
+            "nome": activity_name,
+            "grupo_numero": "12",
+            "grupo_descricao": "Frozen test",
+            "add_to_matrix": "1",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Parâmetros inválidos." in response.get_data(as_text=True)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        assert _table_counts(conn) == before_counts
+        base = conn.execute(
+            "SELECT id FROM atividade_base WHERE nome_conceito = ?", (activity_name,)
+        ).fetchone()
+    assert base is None
 
 
 def test_modal_form_contains_csrf_and_post_requires_it(versioned_env_csrf):

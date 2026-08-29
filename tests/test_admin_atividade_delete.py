@@ -7,8 +7,8 @@ def _unselected_version(conn):
     base = conn.execute("INSERT INTO atividade_base(nome_conceito,status) VALUES ('Delete candidate','ativo') RETURNING id").fetchone()["id"]
     version = conn.execute(
         """INSERT INTO atividade_versao
-             (atividade_base_id,norma_id,codigo_normativo,eixo,numero_versao,status)
-             VALUES (?,1,'AAC-delete','AAC',1,'ativa') RETURNING id""", (base,)
+             (atividade_base_id,eixo,numero_versao,status)
+             VALUES (?,'AAC',1,'ativa') RETURNING id""", (base,)
     ).fetchone()["id"]
     conn.commit()
     return base, version

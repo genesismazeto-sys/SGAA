@@ -89,7 +89,7 @@
       margin-top:8px;
     }
     .diag-meta strong{ color:#0f172a; }
-    .diag-normas{
+    .diag-versions{
       display:flex;
       flex-wrap:wrap;
       gap:6px;
@@ -247,11 +247,6 @@
           <div><strong>AAC:</strong> {{ payload.totais.por_eixo.get('AAC', 0) }}</div>
           <div><strong>AEU:</strong> {{ payload.totais.por_eixo.get('AEU', 0) }}</div>
         </div>
-        <div class="diag-normas">
-          {% for norma in payload.normas %}
-            <span class="diag-chip">{{ norma.codigo }} ({{ norma.eixo }})</span>
-          {% endfor %}
-        </div>
       </section>
 
       {% for eixo in ['AAC', 'AEU'] %}
@@ -266,7 +261,7 @@
                 <thead>
                   <tr>
                     <th>Atividade</th>
-                    <th>Norma</th>
+                    <th>Versão</th>
                     <th>Grupo</th>
                     <th>CH/evento estruturada</th>
                     <th>Limite semestre estruturado</th>
@@ -279,7 +274,7 @@
                   {% for item in itens %}
                     <tr>
                       <td>{{ item.nome_exibivel }}</td>
-                      <td>{{ item.norma }}</td>
+                      <td>v{{ item.atividade_versao_numero }} ({{ item.eixo }})</td>
                       <td>{{ item.grupo or '-' }}</td>
                       <td>{{ format_structured_hours(item.ch_por_evento) }}</td>
                       <td>{{ format_structured_hours(item.limite_semestre) }}</td>

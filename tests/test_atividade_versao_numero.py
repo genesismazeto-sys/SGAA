@@ -4,7 +4,7 @@ Testes focados — D7.6B2: numero_versao operacional por atividade_base.
 Cobre:
   - todos os registros migrados têm numero_versao NOT NULL (> 0)
   - v1/v2 por base são atribuídos em ordem de id
-  - permite criar v3 com mesma norma_id de v1/v2
+  - permite criar v3 preservando o eixo de v1/v2
   - bloqueia duas versões da mesma base com mesmo numero_versao
   - bases diferentes podem ter numero_versao=1
   - matriz_atividade_versao_item preserva vínculos válidos após migração
@@ -78,24 +78,22 @@ def test_versao_numerada_em_ordem_de_id_por_base(env):
 
 
 # ---------------------------------------------------------------------------
-# T03 — Permite criar v3 com a mesma norma_id de versões anteriores
+# T03 — Permite criar v3 preservando o eixo das versões anteriores
 # ---------------------------------------------------------------------------
 
 
-def test_permite_nova_versao_mesma_norma(env):
+def test_permite_nova_versao_mesmo_eixo(env):
     with main.app.app_context():
         conn = main.get_db_connection()
-        # Base 1 já tem v1 (norma 1) e v2 (norma 2). Criar v3 com norma 1 (mesma do v1).
-        norma_1_id = 1
         next_num = main.get_next_numero_versao(conn, 1)
         conn.execute(
             """
             INSERT INTO atividade_versao
-                (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                (atividade_base_id, eixo, grupo,
                  numero_versao, status)
-            VALUES (1, ?, 'AAC-rev5', 'AAC', '1 - v3 dup norma', ?, 'rascunho')
+            VALUES (1, 'AAC', '1 - v3 mesmo eixo', ?, 'rascunho')
             """,
-            (norma_1_id, next_num),
+            (next_num,),
         )
         conn.commit()
         count = conn.execute(
@@ -117,9 +115,9 @@ def test_bloqueia_duplicata_base_numero_versao(env):
             conn.execute(
                 """
                 INSERT INTO atividade_versao
-                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                    (atividade_base_id, eixo, grupo,
                      numero_versao, status)
-                VALUES (2, 2, 'AAC-rev6', 'AAC', '1 - conflito', 1, 'rascunho')
+                VALUES (2, 'AAC', '1 - conflito', 1, 'rascunho')
                 """
             )
 
@@ -222,9 +220,9 @@ def test_autoincrement_preservado_apos_migracao(env):
         inserted_id = conn.execute(
             """
             INSERT INTO atividade_versao
-                (atividade_base_id, norma_id, codigo_normativo, eixo,
+                (atividade_base_id, eixo,
                  numero_versao, status)
-            VALUES (26, 1, 'AAC-rev5', 'AAC', ?, 'rascunho')
+            VALUES (26, 'AAC', ?, 'rascunho')
             RETURNING id
             """,
             (next_num,),
@@ -248,9 +246,9 @@ def test_bloqueia_numero_versao_zero(env):
             conn.execute(
                 """
                 INSERT INTO atividade_versao
-                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                    (atividade_base_id, eixo, grupo,
                      numero_versao, status)
-                VALUES (26, 1, 'AAC-zero', 'AAC', '1 - Zero', 0, 'rascunho')
+                VALUES (26, 'AAC', '1 - Zero', 0, 'rascunho')
                 """
             )
 
@@ -267,8 +265,8 @@ def test_bloqueia_numero_versao_negativo(env):
             conn.execute(
                 """
                 INSERT INTO atividade_versao
-                    (atividade_base_id, norma_id, codigo_normativo, eixo, grupo,
+                    (atividade_base_id, eixo, grupo,
                      numero_versao, status)
-                VALUES (26, 1, 'AAC-neg', 'AAC', '1 - Negativo', -5, 'rascunho')
+                VALUES (26, 'AAC', '1 - Negativo', -5, 'rascunho')
                 """
             )

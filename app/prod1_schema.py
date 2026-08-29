@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import sqlite3
 
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BASELINE_MARKER = "first_production_baseline"
+LATEST_MIGRATION_MARKER = "remove_norma_domain"
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -17,8 +19,8 @@ EXPECTED_TABLES = frozenset({
     "atividade_transicao", "atividade_versao", "backup_logs", "cloud_accounts",
     "cloud_drive_settings", "configuracoes_acesso", "configuracoes_app",
     "configuracoes_backup", "configuracoes_presets", "cursos", "grupos_def",
-    "matriz_atividade_versao_item", "matriz_norma", "matrizes_atividades",
-    "mensagens_editaveis", "norma_atividade", "reportes",
+    "matriz_atividade_versao_item", "matrizes_atividades",
+    "mensagens_editaveis", "reportes",
     "requisicao_alerta_receipts", "requisicao_arquivos", "requisicoes",
     "schema_migrations", "turmas", "usuarios", "usuarios_permissoes_acesso",
 })
@@ -125,15 +127,8 @@ CREATE TABLE atividade_base (
  status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo')),
  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE norma_atividade (
- id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT NOT NULL UNIQUE,
- eixo TEXT NOT NULL CHECK(eixo IN ('AAC','AEU')), revisao TEXT NOT NULL,
- nome TEXT, descricao TEXT, status TEXT NOT NULL DEFAULT 'ativa' CHECK(status IN ('ativa','inativa')),
- created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 CREATE TABLE atividade_versao (
  id INTEGER PRIMARY KEY AUTOINCREMENT, atividade_base_id INTEGER NOT NULL,
- norma_id INTEGER NOT NULL, codigo_normativo TEXT NOT NULL,
  eixo TEXT NOT NULL CHECK(eixo IN ('AAC','AEU')), grupo TEXT,
  ch_por_evento REAL CHECK(ch_por_evento IS NULL OR ch_por_evento>=0),
  limite_semestre REAL CHECK(limite_semestre IS NULL OR limite_semestre>=0),
@@ -145,7 +140,6 @@ CREATE TABLE atividade_versao (
  status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho','ativa','inativa','descontinuada','substituida')),
  versao_anterior_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')),
  FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
- FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
  FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
  UNIQUE(atividade_base_id,numero_versao), UNIQUE(id,atividade_base_id)
 );
@@ -158,13 +152,6 @@ CREATE TABLE atividade_transicao (
  FOREIGN KEY(to_atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
  CHECK(from_atividade_versao_id IS NOT NULL OR to_atividade_versao_id IS NOT NULL),
  CHECK(from_atividade_versao_id IS NULL OR to_atividade_versao_id IS NULL OR from_atividade_versao_id<>to_atividade_versao_id)
-);
-CREATE TABLE matriz_norma (
- id INTEGER PRIMARY KEY AUTOINCREMENT, matriz_id INTEGER NOT NULL, norma_id INTEGER NOT NULL,
- created_at TEXT NOT NULL DEFAULT (datetime('now')),
- FOREIGN KEY(matriz_id) REFERENCES matrizes_atividades(id) ON DELETE CASCADE,
- FOREIGN KEY(norma_id) REFERENCES norma_atividade(id) ON DELETE RESTRICT,
- UNIQUE(matriz_id,norma_id)
 );
 CREATE TABLE matriz_atividade_versao_item (
  id INTEGER PRIMARY KEY AUTOINCREMENT, matriz_id INTEGER NOT NULL,
@@ -184,7 +171,6 @@ CREATE TABLE requisicoes (
  data_processamento TEXT, admin_id INTEGER, aluno_update_notified_at TEXT,
  aluno_update_seen_at TEXT,
  regra_snapshot_json TEXT NOT NULL CHECK(json_valid(regra_snapshot_json) AND json_type(regra_snapshot_json)='object'),
- codigo_normativo_snapshot TEXT NOT NULL CHECK(TRIM(codigo_normativo_snapshot)<>''),
  FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE SET NULL ON UPDATE CASCADE,
  FOREIGN KEY(atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT ON UPDATE CASCADE,
  FOREIGN KEY(admin_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
@@ -229,13 +215,11 @@ CREATE INDEX idx_backup_logs_provider_created ON backup_logs(provider,created_at
 CREATE INDEX idx_turmas_status ON turmas(status); CREATE INDEX idx_turmas_curso ON turmas(curso_id);
 CREATE INDEX idx_turmas_matriz ON turmas(matriz_id); CREATE INDEX idx_alunos_usuario_id ON alunos(usuario_id);
 CREATE INDEX idx_alunos_matricula ON alunos(matricula); CREATE INDEX idx_alunos_email ON alunos(email);
-CREATE INDEX idx_alunos_turma_id ON alunos(turma_id); CREATE INDEX idx_norma_atividade_codigo ON norma_atividade(codigo);
-CREATE INDEX idx_norma_atividade_eixo ON norma_atividade(eixo); CREATE INDEX idx_atividade_versao_base ON atividade_versao(atividade_base_id);
-CREATE INDEX idx_atividade_versao_norma ON atividade_versao(norma_id); CREATE INDEX idx_atividade_versao_eixo ON atividade_versao(eixo);
+CREATE INDEX idx_alunos_turma_id ON alunos(turma_id); CREATE INDEX idx_atividade_versao_base ON atividade_versao(atividade_base_id);
+CREATE INDEX idx_atividade_versao_eixo ON atividade_versao(eixo);
 CREATE INDEX idx_atividade_versao_status ON atividade_versao(status); CREATE INDEX idx_atividade_transicao_from ON atividade_transicao(from_atividade_versao_id);
 CREATE INDEX idx_atividade_transicao_to ON atividade_transicao(to_atividade_versao_id); CREATE INDEX idx_atividade_transicao_tipo ON atividade_transicao(tipo_transicao);
 CREATE INDEX idx_matrizes_curso ON matrizes_atividades(curso_id); CREATE INDEX idx_matrizes_status ON matrizes_atividades(status);
-CREATE INDEX idx_matriz_norma_matriz ON matriz_norma(matriz_id); CREATE INDEX idx_matriz_norma_norma ON matriz_norma(norma_id);
 CREATE INDEX idx_matriz_atividade_versao_item_matriz ON matriz_atividade_versao_item(matriz_id);
 CREATE INDEX idx_matriz_atividade_versao_item_base ON matriz_atividade_versao_item(atividade_base_id);
 CREATE INDEX idx_matriz_atividade_versao_item_versao ON matriz_atividade_versao_item(atividade_versao_id);
@@ -249,12 +233,6 @@ CREATE INDEX idx_reportes_aluno_id ON reportes(aluno_id); CREATE INDEX idx_repor
 CREATE INDEX idx_reportes_criado_em ON reportes(criado_em); CREATE INDEX idx_admin_arquivos_visivel ON admin_arquivos(visivel);
 CREATE INDEX idx_admin_arquivos_criado_em ON admin_arquivos(criado_em); CREATE INDEX idx_admin_alertas_visivel ON admin_alertas(visivel);
 
-CREATE TRIGGER trg_atividade_versao_eixo_norma_insert BEFORE INSERT ON atividade_versao
-FOR EACH ROW WHEN EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id=NEW.norma_id AND n.eixo<>NEW.eixo)
-BEGIN SELECT RAISE(ABORT,'atividade_versao.eixo incompatível com norma_atividade.eixo'); END;
-CREATE TRIGGER trg_atividade_versao_eixo_norma_update BEFORE UPDATE OF norma_id,eixo ON atividade_versao
-FOR EACH ROW WHEN EXISTS(SELECT 1 FROM norma_atividade n WHERE n.id=NEW.norma_id AND n.eixo<>NEW.eixo)
-BEGIN SELECT RAISE(ABORT,'atividade_versao.eixo incompatível com norma_atividade.eixo'); END;
 CREATE TRIGGER trg_atividade_versao_prev_same_eixo_insert BEFORE INSERT ON atividade_versao
 FOR EACH ROW WHEN NEW.versao_anterior_id IS NOT NULL AND EXISTS(SELECT 1 FROM atividade_versao p WHERE p.id=NEW.versao_anterior_id AND p.eixo<>NEW.eixo)
 BEGIN SELECT RAISE(ABORT,'Mudança de eixo exige atividade_transicao'); END;
@@ -274,13 +252,15 @@ FOR EACH ROW WHEN NEW.tipo_transicao='aac_para_aeu' BEGIN
  SELECT CASE WHEN (SELECT eixo FROM atividade_versao WHERE id=NEW.from_atividade_versao_id)<>'AAC' OR (SELECT eixo FROM atividade_versao WHERE id=NEW.to_atividade_versao_id)<>'AEU' THEN RAISE(ABORT,'Transição aac_para_aeu exige eixo AAC -> AEU') END;
 END;
 CREATE TRIGGER trg_requisicoes_snapshot_immutable
-BEFORE UPDATE OF atividade_versao_id,regra_snapshot_json,codigo_normativo_snapshot ON requisicoes
-FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_snapshot_json<>OLD.regra_snapshot_json OR NEW.codigo_normativo_snapshot<>OLD.codigo_normativo_snapshot
+BEFORE UPDATE OF atividade_versao_id,regra_snapshot_json ON requisicoes
+FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_snapshot_json<>OLD.regra_snapshot_json
 BEGIN SELECT RAISE(ABORT,'request snapshot authority is immutable'); END;
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
-PRAGMA user_version=1;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(2,'remove_norma_domain','prod-1','{"schema_epoch":"prod-1","removed_domain":"norma"}');
+PRAGMA user_version=2;
 """
 
 
@@ -383,6 +363,7 @@ def _physical_schema_signature(conn: sqlite3.Connection) -> dict[str, object]:
 
 
 _EXPECTED_PHYSICAL_SIGNATURE: dict[str, object] | None = None
+_PROD1_V1_SIGNATURE_SHA256 = "58b2e8b5dadc8381e03350cb3972a9590844f88c56e1f793e4036e4e6481a877"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -398,13 +379,210 @@ def _expected_physical_schema_signature() -> dict[str, object]:
     return _EXPECTED_PHYSICAL_SIGNATURE
 
 
+def _physical_schema_digest(conn: sqlite3.Connection) -> str:
+    payload = json.dumps(
+        _physical_schema_signature(conn),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _validate_prod1_v1_schema(conn: sqlite3.Connection) -> None:
+    """Recognize the sole supported previous physical contract exactly."""
+    if _user_version(conn) != 1:
+        raise Prod1SchemaError("prod-1/v1 user_version mismatch")
+    if _marker(conn) != [(1, BASELINE_MARKER, SCHEMA_EPOCH)]:
+        raise Prod1SchemaError("prod-1/v1 baseline marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V1_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v1 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v1 foreign key violations: {violations!r}")
+
+
+_ATIVIDADE_VERSAO_V2_SQL = """
+CREATE TABLE _atividade_versao_v2 (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, atividade_base_id INTEGER NOT NULL,
+ eixo TEXT NOT NULL CHECK(eixo IN ('AAC','AEU')), grupo TEXT,
+ ch_por_evento REAL CHECK(ch_por_evento IS NULL OR ch_por_evento>=0),
+ limite_semestre REAL CHECK(limite_semestre IS NULL OR limite_semestre>=0),
+ limite_total REAL CHECK(limite_total IS NULL OR limite_total>=0),
+ observacao_aluno TEXT, observacao_admin TEXT,
+ documentos_json TEXT CHECK(documentos_json IS NULL OR json_valid(documentos_json)),
+ vigencia_inicio TEXT, vigencia_fim TEXT,
+ numero_versao INTEGER NOT NULL DEFAULT 1 CHECK(numero_versao>=1),
+ status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho','ativa','inativa','descontinuada','substituida')),
+ versao_anterior_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ FOREIGN KEY(atividade_base_id) REFERENCES atividade_base(id) ON DELETE RESTRICT,
+ FOREIGN KEY(versao_anterior_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT,
+ UNIQUE(atividade_base_id,numero_versao), UNIQUE(id,atividade_base_id)
+)
+"""
+
+_REQUISICOES_V2_SQL = """
+CREATE TABLE _requisicoes_v2 (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, aluno_id INTEGER, atividade_versao_id INTEGER NOT NULL,
+ data_solicitacao TEXT NOT NULL, data_evento TEXT NOT NULL,
+ horas_solicitadas REAL NOT NULL CHECK(horas_solicitadas>=0), nome_evento TEXT,
+ status TEXT NOT NULL CHECK(status IN ('Pendente','Deferida','Deferida Parcialmente','Indeferida','Devolvida','Encerrada')),
+ horas_deferidas REAL CHECK(horas_deferidas IS NULL OR horas_deferidas>=0), observacao TEXT,
+ data_processamento TEXT, admin_id INTEGER, aluno_update_notified_at TEXT,
+ aluno_update_seen_at TEXT,
+ regra_snapshot_json TEXT NOT NULL CHECK(json_valid(regra_snapshot_json) AND json_type(regra_snapshot_json)='object'),
+ FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE SET NULL ON UPDATE CASCADE,
+ FOREIGN KEY(atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ FOREIGN KEY(admin_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
+)
+"""
+
+
+def migrate_prod1_v1_to_v2(conn: sqlite3.Connection) -> dict[str, object]:
+    """Transactionally remove Norma while preserving every surviving row identity."""
+    if conn.in_transaction:
+        raise Prod1SchemaError("prod-1/v2 migration requires a clean connection")
+    _validate_prod1_v1_schema(conn)
+    foreign_keys_enabled = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for name in (
+            "trg_requisicoes_snapshot_immutable",
+            "trg_atividade_versao_eixo_norma_insert",
+            "trg_atividade_versao_eixo_norma_update",
+            "trg_atividade_versao_prev_same_eixo_insert",
+            "trg_atividade_versao_prev_same_eixo_update",
+            "idx_requisicoes_atividade_versao_id",
+            "idx_reqs_aluno",
+            "idx_reqs_status",
+            "idx_reqs_aluno_update_pending",
+            "idx_atividade_versao_base",
+            "idx_atividade_versao_norma",
+            "idx_atividade_versao_eixo",
+            "idx_atividade_versao_status",
+        ):
+            kind = "TRIGGER" if name.startswith("trg_") else "INDEX"
+            conn.execute(f"DROP {kind} IF EXISTS {_quote_identifier(name)}")
+
+        conn.execute(_REQUISICOES_V2_SQL)
+        conn.execute(
+            """INSERT INTO _requisicoes_v2 (
+                   id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,
+                   horas_solicitadas,nome_evento,status,horas_deferidas,observacao,
+                   data_processamento,admin_id,aluno_update_notified_at,
+                   aluno_update_seen_at,regra_snapshot_json)
+               SELECT id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,
+                      horas_solicitadas,nome_evento,status,horas_deferidas,observacao,
+                      data_processamento,admin_id,aluno_update_notified_at,
+                      aluno_update_seen_at,
+                      json_set(
+                          json_remove(
+                              regra_snapshot_json,
+                              '$.norma_id','$.codigo_normativo',
+                              '$.norma_codigo','$.norma_revisao'
+                          ),
+                          '$.schema_version','prod-1-request-v2'
+                      )
+                 FROM requisicoes"""
+        )
+        conn.execute("DROP TABLE requisicoes")
+        conn.execute(_REQUISICOES_V2_SQL.replace("_requisicoes_v2", "requisicoes", 1))
+        conn.execute(
+            """INSERT INTO requisicoes (
+                   id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,
+                   horas_solicitadas,nome_evento,status,horas_deferidas,observacao,
+                   data_processamento,admin_id,aluno_update_notified_at,
+                   aluno_update_seen_at,regra_snapshot_json)
+               SELECT id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,
+                      horas_solicitadas,nome_evento,status,horas_deferidas,observacao,
+                      data_processamento,admin_id,aluno_update_notified_at,
+                      aluno_update_seen_at,regra_snapshot_json
+                 FROM _requisicoes_v2"""
+        )
+        conn.execute("DROP TABLE _requisicoes_v2")
+
+        conn.execute(_ATIVIDADE_VERSAO_V2_SQL)
+        conn.execute(
+            """INSERT INTO _atividade_versao_v2 (
+                   id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                   limite_total,observacao_aluno,observacao_admin,documentos_json,
+                   vigencia_inicio,vigencia_fim,numero_versao,status,
+                   versao_anterior_id,created_at)
+               SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                      limite_total,observacao_aluno,observacao_admin,documentos_json,
+                      vigencia_inicio,vigencia_fim,numero_versao,status,
+                      versao_anterior_id,created_at
+                 FROM atividade_versao"""
+        )
+        conn.execute("DROP TABLE atividade_versao")
+        conn.execute(_ATIVIDADE_VERSAO_V2_SQL.replace("_atividade_versao_v2", "atividade_versao", 1))
+        conn.execute(
+            """INSERT INTO atividade_versao (
+                   id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                   limite_total,observacao_aluno,observacao_admin,documentos_json,
+                   vigencia_inicio,vigencia_fim,numero_versao,status,
+                   versao_anterior_id,created_at)
+               SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                      limite_total,observacao_aluno,observacao_admin,documentos_json,
+                      vigencia_inicio,vigencia_fim,numero_versao,status,
+                      versao_anterior_id,created_at
+                 FROM _atividade_versao_v2"""
+        )
+        conn.execute("DROP TABLE _atividade_versao_v2")
+        conn.execute("DROP TABLE matriz_norma")
+        conn.execute("DROP TABLE norma_atividade")
+
+        surviving_schema = (
+            "CREATE INDEX idx_atividade_versao_base ON atividade_versao(atividade_base_id)",
+            "CREATE INDEX idx_atividade_versao_eixo ON atividade_versao(eixo)",
+            "CREATE INDEX idx_atividade_versao_status ON atividade_versao(status)",
+            "CREATE INDEX idx_reqs_aluno ON requisicoes(aluno_id)",
+            "CREATE INDEX idx_reqs_status ON requisicoes(status)",
+            "CREATE INDEX idx_requisicoes_atividade_versao_id ON requisicoes(atividade_versao_id)",
+            "CREATE INDEX idx_reqs_aluno_update_pending ON requisicoes(aluno_id,aluno_update_seen_at,aluno_update_notified_at)",
+            """CREATE TRIGGER trg_atividade_versao_prev_same_eixo_insert BEFORE INSERT ON atividade_versao
+               FOR EACH ROW WHEN NEW.versao_anterior_id IS NOT NULL AND EXISTS(SELECT 1 FROM atividade_versao p WHERE p.id=NEW.versao_anterior_id AND p.eixo<>NEW.eixo)
+               BEGIN SELECT RAISE(ABORT,'Mudança de eixo exige atividade_transicao'); END""",
+            """CREATE TRIGGER trg_atividade_versao_prev_same_eixo_update BEFORE UPDATE OF versao_anterior_id,eixo ON atividade_versao
+               FOR EACH ROW WHEN NEW.versao_anterior_id IS NOT NULL AND EXISTS(SELECT 1 FROM atividade_versao p WHERE p.id=NEW.versao_anterior_id AND p.eixo<>NEW.eixo)
+               BEGIN SELECT RAISE(ABORT,'Mudança de eixo exige atividade_transicao'); END""",
+            """CREATE TRIGGER trg_requisicoes_snapshot_immutable
+               BEFORE UPDATE OF atividade_versao_id,regra_snapshot_json ON requisicoes
+               FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_snapshot_json<>OLD.regra_snapshot_json
+               BEGIN SELECT RAISE(ABORT,'request snapshot authority is immutable'); END""",
+        )
+        for statement in surviving_schema:
+            conn.execute(statement)
+        conn.execute(
+            "INSERT INTO schema_migrations(version,name,schema_epoch,details_json) VALUES(?,?,?,?)",
+            (2, LATEST_MIGRATION_MARKER, SCHEMA_EPOCH, '{"schema_epoch":"prod-1","removed_domain":"norma"}'),
+        )
+        conn.execute("PRAGMA user_version=2")
+        validate_prod1_schema(conn)
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise Prod1SchemaError("prod-1/v2 integrity check failed")
+        conn.execute("COMMIT")
+    except Exception:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
+    return validate_prod1_schema(conn)
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
     if _user_version(conn) != SCHEMA_VERSION:
         raise Prod1SchemaError("prod-1 user_version mismatch")
-    if _marker(conn) != [(SCHEMA_VERSION, BASELINE_MARKER, SCHEMA_EPOCH)]:
-        raise Prod1SchemaError("prod-1 baseline marker mismatch")
+    expected_markers = [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, LATEST_MIGRATION_MARKER, SCHEMA_EPOCH),
+    ]
+    if _marker(conn) != expected_markers:
+        raise Prod1SchemaError("prod-1 migration marker mismatch")
     if missing or unexpected:
         raise Prod1SchemaError(f"prod-1 table census mismatch: missing={sorted(missing)!r} unexpected={sorted(unexpected)!r}")
     if tables & LEGACY_TABLES or _names(conn, "index") & LEGACY_INDEXES:
@@ -422,10 +600,12 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
 
 def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     if _names(conn, "table") or _names(conn, "index") or _names(conn, "trigger") or _user_version(conn):
+        if _user_version(conn) == 1:
+            return migrate_prod1_v1_to_v2(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:
-            raise Prod1SchemaError("nonempty database is not a valid prod-1/v1 database") from exc
+            raise Prod1SchemaError("nonempty database is not a supported prod-1 database") from exc
     try:
         conn.executescript("BEGIN IMMEDIATE;\n" + PROD1_SCHEMA_SQL + "\nCOMMIT;")
     except Exception:
@@ -437,10 +617,13 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
 
 def get_prod1_schema_status(conn: sqlite3.Connection) -> dict[str, object]:
     status = validate_prod1_schema(conn)
-    row = conn.execute("SELECT applied_at,details_json FROM schema_migrations WHERE version=1").fetchone()
+    row = conn.execute(
+        "SELECT applied_at,details_json FROM schema_migrations WHERE version=?",
+        (SCHEMA_VERSION,),
+    ).fetchone()
     details = None
     if row and row[1]:
         try: details = json.loads(row[1])
         except (TypeError, ValueError): pass
-    return {**status, "migration": {"version": 1, "name": BASELINE_MARKER,
+    return {**status, "migration": {"version": SCHEMA_VERSION, "name": LATEST_MIGRATION_MARKER,
         "schema_epoch": SCHEMA_EPOCH, "applied_at": row[0] if row else None, "details": details}}

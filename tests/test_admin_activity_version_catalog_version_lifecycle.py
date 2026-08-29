@@ -1,7 +1,10 @@
 """
-D7.2B5-PATCH1 — Testes de inativação e descontinuação de atividade_versao ativa.
+COV-1 restoration — Lifecycle of atividade_versao status transitions.
 
-Cobre:
+Adapted from the pre-Norma suite (test_admin_activity_version_catalog_version_lifecycle.py)
+with all Norma-domain setup removed (norma_atividade, matriz_norma, norma_id,
+codigo_normativo). Covers:
+
   1.  POST inativar versão ativa sem vínculo → status muda para 'inativa', redirect.
   2.  POST inativar versão inexistente → redirect (não 500).
   3.  POST inativar versão de outra base → rejeitado, status inalterado.
@@ -23,11 +26,17 @@ Cobre:
  17.  Detalhe da base não mostra Inativar/Descontinuar para inativa/descontinuada/substituida.
  18.  CSRF token presente nos forms de inativar e descontinuar.
  19.  Após inativar versão A de uma base, versão B de outra base ainda resolve
-      para a mesma matriz (regressão D7.2B4).
+      para a mesma matriz.
+ 20.  Substituir: transição 'mesmo_eixo' + origem 'substituida' + destino intacto.
+ 21.  Substituir: todas as rejeições (sem destino, destino inválido, inexistente,
+      inativo, outra base, outro eixo, auto-substituição, origem com vínculo,
+      origem já com transição, destino já usado como origem).
+ 22.  Inativar/descontinuar não criam atividade_transicao.
 """
 from __future__ import annotations
 
 import os
+import re
 import sys
 import uuid
 
@@ -55,9 +64,6 @@ def versioned_env(tmp_path):
 
 def _login_admin(client):
     with client.session_transaction() as sess:
-        # REF-0C-B1: authenticate as the real bootstrap admin_total (id=1). The
-        # prior non-existent id 999999 passed only while these routes were unmapped;
-        # once RBAC-mapped, a non-resolvable admin is (correctly) denied at the gate.
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Admin Lifecycle Test"
@@ -69,11 +75,6 @@ def _login_admin(client):
 
 
 def _seed_ativa_sem_vinculo() -> dict:
-    """
-    Insere: 1 atividade_base, 1 norma ativa (AAC), 1 atividade_versao ativa.
-    Nenhum vínculo em matriz_atividade_versao_item.
-    Retorna dict com base_id, norma_id, versao_id.
-    """
     t = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -82,26 +83,17 @@ def _seed_ativa_sem_vinculo() -> dict:
             " VALUES (?, 'Base B5', 'ativo') RETURNING id",
             (f"Base B5 {t}",),
         ).fetchone()["id"]
-        norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, 'AAC', 'rev1', ?, 'ativa') RETURNING id",
-            (f"B5NRM{t}", f"Norma B5 {t}"),
-        ).fetchone()["id"]
         versao_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5', 'ativa') RETURNING id",
-            (base_id, norma_id, f"B5NRM{t}"),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5', 1, 'ativa') RETURNING id",
+            (base_id,),
         ).fetchone()["id"]
         conn.commit()
-    return {"base_id": base_id, "norma_id": norma_id, "versao_id": versao_id}
+    return {"base_id": base_id, "versao_id": versao_id}
 
 
 def _seed_versao_com_status(status: str) -> dict:
-    """
-    Insere uma atividade_versao no status especificado (rascunho, inativa,
-    descontinuada, substituida). Sem vínculo em matriz_atividade_versao_item.
-    """
     t = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -110,27 +102,17 @@ def _seed_versao_com_status(status: str) -> dict:
             " VALUES (?, 'Base B5s', 'ativo') RETURNING id",
             (f"Base B5s {t}",),
         ).fetchone()["id"]
-        norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, 'AAC', 'rev1', ?, 'ativa') RETURNING id",
-            (f"B5SN{t}", f"Norma B5s {t}"),
-        ).fetchone()["id"]
         versao_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5s', ?) RETURNING id",
-            (base_id, norma_id, f"B5SN{t}", status),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5s', 1, ?) RETURNING id",
+            (base_id, status),
         ).fetchone()["id"]
         conn.commit()
-    return {"base_id": base_id, "norma_id": norma_id, "versao_id": versao_id}
+    return {"base_id": base_id, "versao_id": versao_id}
 
 
 def _seed_ativa_com_vinculo() -> dict:
-    """
-    Insere: 1 curso, 1 matriz, 1 norma ativa, 1 base, 1 versão ativa,
-    e um vínculo em matriz_atividade_versao_item.
-    Retorna dict com base_id, norma_id, versao_id, matriz_id.
-    """
     t = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -149,20 +131,12 @@ def _seed_ativa_com_vinculo() -> dict:
             " VALUES (?, 'Base B5v', 'ativo') RETURNING id",
             (f"Base B5v {t}",),
         ).fetchone()["id"]
-        norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, 'AAC', 'rev1', ?, 'ativa') RETURNING id",
-            (f"B5VN{t}", f"Norma B5v {t}"),
-        ).fetchone()["id"]
         versao_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5v', 'ativa') RETURNING id",
-            (base_id, norma_id, f"B5VN{t}"),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5v', 1, 'ativa') RETURNING id",
+            (base_id,),
         ).fetchone()["id"]
-        base_id = conn.execute(
-            "SELECT atividade_base_id FROM atividade_versao WHERE id = ?", (versao_id,)
-        ).fetchone()["atividade_base_id"]
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "
             "(matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
@@ -171,19 +145,12 @@ def _seed_ativa_com_vinculo() -> dict:
         conn.commit()
     return {
         "base_id": base_id,
-        "norma_id": norma_id,
         "versao_id": versao_id,
         "matriz_id": matriz_id,
     }
 
 
 def _seed_full_resolver_setup() -> dict:
-    """
-    Insere setup completo para o resolver: curso, matriz, norma, base, atividade,
-    atividade_versao ativa, atividade_legacy_map, matrizes_atividades_itens,
-    matriz_norma e matriz_atividade_versao_item.
-    Retorna todos os ids necessários para chamar resolver_versao_por_matriz.
-    """
     t = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -197,11 +164,6 @@ def _seed_full_resolver_setup() -> dict:
             " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
             (curso_id, f"Matriz B5r {t}"),
         ).fetchone()["id"]
-        norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, 'AAC', 'rev1', ?, 'ativa') RETURNING id",
-            (f"B5RN{t}", f"Norma B5r {t}"),
-        ).fetchone()["id"]
         base_id = conn.execute(
             "INSERT INTO atividade_base (nome_conceito, descricao, status)"
             " VALUES (?, 'Base B5r', 'ativo') RETURNING id",
@@ -209,14 +171,10 @@ def _seed_full_resolver_setup() -> dict:
         ).fetchone()["id"]
         versao_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5r', 'ativa') RETURNING id",
-            (base_id, norma_id, f"B5RN{t}"),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5r', 1, 'ativa') RETURNING id",
+            (base_id,),
         ).fetchone()["id"]
-        conn.execute(
-            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
-            (matriz_id, norma_id),
-        )
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "
             "(matriz_id, atividade_base_id, atividade_versao_id) "
@@ -226,7 +184,6 @@ def _seed_full_resolver_setup() -> dict:
         conn.commit()
     return {
         "base_id": base_id,
-        "norma_id": norma_id,
         "versao_id": versao_id,
         "matriz_id": matriz_id,
         "atividade_id": versao_id,
@@ -234,10 +191,6 @@ def _seed_full_resolver_setup() -> dict:
 
 
 def _seed_multi_base_matrix() -> dict:
-    """
-    Insere: 1 matriz, 2 bases (A e B) cada com 1 versão ativa e vínculo explícito.
-    Usado para regressão: inativar versão A não deve quebrar resolver para versão B.
-    """
     t = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -251,17 +204,7 @@ def _seed_multi_base_matrix() -> dict:
             " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
             (curso_id, f"Matriz B5m {t}"),
         ).fetchone()["id"]
-        norma_id = conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, 'AAC', 'rev1', ?, 'ativa') RETURNING id",
-            (f"B5MN{t}", f"Norma B5m {t}"),
-        ).fetchone()["id"]
-        conn.execute(
-            "INSERT INTO matriz_norma (matriz_id, norma_id) VALUES (?, ?)",
-            (matriz_id, norma_id),
-        )
 
-        # Base A
         base_a_id = conn.execute(
             "INSERT INTO atividade_base (nome_conceito, descricao, status)"
             " VALUES (?, 'Base A', 'ativo') RETURNING id",
@@ -269,9 +212,9 @@ def _seed_multi_base_matrix() -> dict:
         ).fetchone()["id"]
         versao_a_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5mA', 'ativa') RETURNING id",
-            (base_a_id, norma_id, f"B5MNA{t}"),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5mA', 1, 'ativa') RETURNING id",
+            (base_a_id,),
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "
@@ -280,7 +223,6 @@ def _seed_multi_base_matrix() -> dict:
             (matriz_id, versao_a_id),
         )
 
-        # Base B
         base_b_id = conn.execute(
             "INSERT INTO atividade_base (nome_conceito, descricao, status)"
             " VALUES (?, 'Base B', 'ativo') RETURNING id",
@@ -288,9 +230,9 @@ def _seed_multi_base_matrix() -> dict:
         ).fetchone()["id"]
         versao_b_id = conn.execute(
             "INSERT INTO atividade_versao"
-            " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status)"
-            " VALUES (?, ?, ?, 'AAC', '1 - B5mB', 'ativa') RETURNING id",
-            (base_b_id, norma_id, f"B5MNB{t}"),
+            " (atividade_base_id, eixo, grupo, numero_versao, status)"
+            " VALUES (?, 'AAC', '1 - B5mB', 1, 'ativa') RETURNING id",
+            (base_b_id,),
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "
@@ -301,7 +243,6 @@ def _seed_multi_base_matrix() -> dict:
         conn.commit()
     return {
         "matriz_id": matriz_id,
-        "norma_id": norma_id,
         "base_a_id": base_a_id,
         "versao_a_id": versao_a_id,
         "ativ_a_id": versao_a_id,
@@ -351,32 +292,25 @@ def _get_transicoes() -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def _insert_norma_e_versao(
+def _insert_versao(
     conn,
     *,
     base_id: int,
     eixo: str,
     status: str,
     prefixo: str,
-) -> tuple[int, int]:
+) -> int:
     token = uuid.uuid4().hex[:8]
-    codigo = f"{prefixo}{token}"
-    norma_id = conn.execute(
-        "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-        " VALUES (?, ?, 'rev1', ?, 'ativa') RETURNING id",
-        (codigo, eixo, f"Norma {codigo}"),
-    ).fetchone()["id"]
     next_num = conn.execute(
         "SELECT COALESCE(MAX(numero_versao), 0) + 1 FROM atividade_versao WHERE atividade_base_id = ?",
         (base_id,),
     ).fetchone()[0]
-    versao_id = conn.execute(
+    return conn.execute(
         "INSERT INTO atividade_versao"
-        " (atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status, numero_versao)"
-        " VALUES (?, ?, ?, ?, '1 - SUB', ?, ?) RETURNING id",
-        (base_id, norma_id, codigo, eixo, status, next_num),
+        " (atividade_base_id, eixo, grupo, status, numero_versao)"
+        " VALUES (?, ?, ?, ?, ?) RETURNING id",
+        (base_id, eixo, f"{prefixo}{token}", status, next_num),
     ).fetchone()["id"]
-    return norma_id, versao_id
 
 
 def _seed_substituicao_par(
@@ -402,14 +336,14 @@ def _seed_substituicao_par(
                 " VALUES (?, 'Base Dest', 'ativo') RETURNING id",
                 (f"Base Dest {token}",),
             ).fetchone()["id"]
-        _, origem_id = _insert_norma_e_versao(
+        origem_id = _insert_versao(
             conn,
             base_id=base_id,
             eixo=origem_eixo,
             status=origem_status,
             prefixo="SUBORIG",
         )
-        _, destino_id = _insert_norma_e_versao(
+        destino_id = _insert_versao(
             conn,
             base_id=destino_base_id,
             eixo=destino_eixo,
@@ -502,7 +436,6 @@ def test_inativar_versao_de_outra_base_rejeitado(versioned_env):
     seed_a = _seed_ativa_sem_vinculo()
     seed_b = _seed_ativa_sem_vinculo()
 
-    # Tenta inativar seed_b.versao_id usando base_id de seed_a
     resp = client.post(
         f"/admin/catalogo-versoes/{seed_a['base_id']}/versoes/{seed_b['versao_id']}/inativar",
         data={},
@@ -604,7 +537,6 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
     _login_admin(client)
     seed = _seed_full_resolver_setup()
 
-    # Verifica que resolver inicialmente resolve (antes da remoção de vínculo)
     with main.app.app_context():
         conn = main.get_db_connection()
         resultado_antes = resolver_service.resolver_versao_por_matriz(
@@ -615,7 +547,6 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
     assert resultado_antes["status"] == "resolved"
     assert resultado_antes["atividade_versao_id"] == seed["versao_id"]
 
-    # Remove o vínculo diretamente (pré-requisito para inativar)
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
@@ -625,7 +556,6 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
         )
         conn.commit()
 
-    # Inativa a versão
     resp = client.post(
         f"/admin/catalogo-versoes/{seed['base_id']}/versoes/{seed['versao_id']}/inativar",
         data={},
@@ -634,7 +564,6 @@ def test_inativar_resolver_retorna_ausencia(versioned_env):
     assert resp.status_code == 200
     assert _get_versao_status(seed["versao_id"]) == "inativa"
 
-    # Resolver retorna ausência de versão para essa base
     with main.app.app_context():
         conn = main.get_db_connection()
         resultado_depois = resolver_service.resolver_versao_por_matriz(
@@ -744,7 +673,6 @@ def test_detalhe_mostra_inativar_descontinuar_para_ativa(versioned_env):
     )
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # Verifica presença dos botões (atributo class no elemento, não apenas a regra CSS)
     assert 'class="vc-inativar-btn"' in html
     assert 'class="vc-descontinuar-btn"' in html
 
@@ -761,7 +689,6 @@ def test_detalhe_nao_mostra_inativar_para_rascunho_mostra_ativar(versioned_env):
     )
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # Rascunho deve mostrar Ativar, não Inativar/Descontinuar
     assert 'class="vc-activate-btn"' in html
     assert 'class="vc-inativar-btn"' not in html
     assert 'class="vc-descontinuar-btn"' not in html
@@ -802,15 +729,6 @@ def test_csrf_token_presente_nos_forms_lifecycle(versioned_env):
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
 
-    # Garante que os forms renderizados têm csrf_token
-    import re
-    inativar_form_block = re.search(
-        r'<form[^>]*vc-lifecycle-form[^>]*>.*?</form>',
-        html,
-        re.DOTALL,
-    )
-    assert inativar_form_block is not None, "form vc-lifecycle-form não encontrado"
-    # Ao menos um form de lifecycle deve ter csrf_token
     lifecycle_forms = re.findall(
         r'<form[^>]*vc-lifecycle-form[^>]*>.*?</form>',
         html,
@@ -822,20 +740,19 @@ def test_csrf_token_presente_nos_forms_lifecycle(versioned_env):
 
 
 # ---------------------------------------------------------------------------
-# Test — regressão D7.2B4
+# Test — isolamento entre bases no resolver
 # ---------------------------------------------------------------------------
 
 
 def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
     """
     Após inativar versão A (base A), o resolver ainda resolve versão B (base B)
-    para a mesma matriz — regressão D7.2B4.
+    para a mesma matriz.
     """
     client = versioned_env["client"]
     _login_admin(client)
     seed = _seed_multi_base_matrix()
 
-    # Verifica que versão B resolve antes
     with main.app.app_context():
         conn = main.get_db_connection()
         resultado_b_antes = resolver_service.resolver_versao_por_matriz(
@@ -846,7 +763,6 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
     assert resultado_b_antes["status"] == "resolved"
     assert resultado_b_antes["atividade_versao_id"] == seed["versao_b_id"]
 
-    # Remove vínculo da versão A (pré-requisito para inativar)
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
@@ -856,7 +772,6 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
         )
         conn.commit()
 
-    # Inativa versão A
     resp = client.post(
         f"/admin/catalogo-versoes/{seed['base_a_id']}/versoes/{seed['versao_a_id']}/inativar",
         data={},
@@ -865,7 +780,6 @@ def test_inativar_versao_a_nao_quebra_resolver_versao_b(versioned_env):
     assert resp.status_code == 200
     assert _get_versao_status(seed["versao_a_id"]) == "inativa"
 
-    # Verifica que versão B ainda resolve
     with main.app.app_context():
         conn = main.get_db_connection()
         resultado_b_depois = resolver_service.resolver_versao_por_matriz(
@@ -1016,7 +930,7 @@ def test_substituir_origem_ja_com_transicao_rejeita(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        _, terceiro_id = _insert_norma_e_versao(
+        terceiro_id = _insert_versao(
             conn,
             base_id=seed["base_id"],
             eixo="AAC",
@@ -1049,7 +963,7 @@ def test_substituir_destino_ja_como_from_rejeita(versioned_env):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        _, terceiro_id = _insert_norma_e_versao(
+        terceiro_id = _insert_versao(
             conn,
             base_id=seed["base_id"],
             eixo="AAC",
@@ -1113,8 +1027,6 @@ def test_csrf_token_presente_no_form_substituir(versioned_env):
     )
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-
-    import re
 
     form_match = re.search(
         r'<form[^>]*class="vc-substituir-form"[^>]*>.*?</form>',

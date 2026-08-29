@@ -29,4 +29,4 @@ def test_admin_creation_writes_mandatory_snapshot(env):
     assert response.status_code == 302
     assert row["atividade_versao_id"] == 29
     assert row["regra_snapshot_json"]
-    assert row["codigo_normativo_snapshot"]
+    assert "codigo_normativo_snapshot" not in row

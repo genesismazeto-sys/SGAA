@@ -65,7 +65,7 @@
     }
     .versao-card{
       display:grid;
-      grid-template-columns: 44px 180px 60px 1fr 90px 90px 90px 110px 80px 250px;
+      grid-template-columns: 44px 60px 90px 90px 90px 110px 80px 250px;
       align-items:center;
       column-gap:12px;
       padding:10px 14px;
@@ -94,7 +94,6 @@
       letter-spacing:.04em;
       padding:6px 14px;
     }
-    .versao-card .vc-code{ font-weight:600; color:var(--text-primary); }
     .status-pill{
       display:inline-flex;
       align-items:center;
@@ -292,7 +291,7 @@
 
 <div class="info-banner" role="note">
   <i class="lucide" data-lucide="info"></i>
-  <span>Alunos veem apenas o nome desta atividade. Código normativo, eixo e versão são dados administrativos.</span>
+  <span>Alunos veem apenas o nome desta atividade. Eixo e versão são dados administrativos.</span>
 </div>
 
 <div class="base-meta">
@@ -319,9 +318,7 @@
     <!-- Cabeçalho -->
     <div class="versao-card header-row">
       <span>Versão</span>
-      <span>Código normativo</span>
       <span>Eixo</span>
-      <span>Norma</span>
       <span>CH/evento</span>
       <span>Lim. semestre</span>
       <span>Lim. total</span>
@@ -334,14 +331,7 @@
       {% set status_key = (v.status or 'rascunho')|lower %}
       <div class="versao-card">
         <span><span class="vc-version">v{{ v.numero_versao if v.numero_versao else '?' }}</span></span>
-        <span class="vc-code">{{ v.codigo_normativo or '-' }}</span>
         <span>{{ v.eixo or '-' }}</span>
-        <span title="{{ v.norma_nome or '' }}">
-          {{ v.norma_codigo or '-' }}
-          {% if v.norma_status == 'inativa' %}
-            <span style="font-size:10px; color:#f59e0b; margin-left:4px;">(inativa)</span>
-          {% endif %}
-        </span>
         <span class="horas-text">
           {% if v.ch_por_evento %}{{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h{% else %}-{% endif %}
         </span>
@@ -417,7 +407,7 @@
                   {% if substituicao_options %}
                     <option value="">Destino</option>
                     {% for candidato in substituicao_options %}
-                      <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} — {{ candidato.codigo_normativo }} ({{ candidato.eixo }})</option>
+                      <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} ({{ candidato.eixo }})</option>
                     {% endfor %}
                   {% else %}
                     <option value="">Sem candidata válida</option>

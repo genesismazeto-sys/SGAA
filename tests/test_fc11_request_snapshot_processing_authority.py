@@ -25,7 +25,7 @@ def env(tmp_path):
 
 def test_missing_snapshot_is_invalid_not_compatibility_authority():
     read = read_requisicao_snapshot_for_processing({
-        "atividade_versao_id": None, "codigo_normativo_snapshot": None,
+        "atividade_versao_id": None,
         "regra_snapshot_json": None,
     })
     assert read.authority is SnapshotProcessingAuthority.INVALID_AUTHORITATIVE_SNAPSHOT
@@ -48,17 +48,14 @@ def test_valid_snapshot_processes_and_preserves_bytes(env):
     assert saved["regra_snapshot_json"] == frozen
 
 
-def _insert_with_payload(conn, payload, *, name, hours=4, normative_code=None):
+def _insert_with_payload(conn, payload, *, name, hours=4):
     student = student_identity()
-    if normative_code is None:
-        normative_code = payload.get("codigo_normativo", "AAC-rev6")
     return conn.execute(
         """INSERT INTO requisicoes
            (aluno_id,atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,
-            nome_evento,status,codigo_normativo_snapshot,regra_snapshot_json)
-           VALUES(?,29,'2026-05-01 10:00:00','2026-05-01',?,?,'Pendente',?,?) RETURNING id""",
-        (student["aluno_id"], hours, name, normative_code,
-         json.dumps(payload, sort_keys=True)),
+            nome_evento,status,regra_snapshot_json)
+           VALUES(?,29,'2026-05-01 10:00:00','2026-05-01',?,?,'Pendente',?) RETURNING id""",
+        (student["aluno_id"], hours, name, json.dumps(payload, sort_keys=True)),
     ).fetchone()["id"]
 
 
@@ -106,7 +103,6 @@ def test_invalid_snapshot_processing_is_atomic(env):
     [
         ("unsupported_schema_version", "unsupported_schema_version"),
         ("activity_version_identity_mismatch", "activity_version_identity_mismatch"),
-        ("normative_code_identity_mismatch", "normative_code_identity_mismatch"),
     ],
 )
 def test_distinct_invalid_snapshot_branches_fail_closed_atomically(
@@ -125,26 +121,18 @@ def test_distinct_invalid_snapshot_branches_fail_closed_atomically(
             payload["schema_version"] = "prod-1-request-v999"
         elif invalid_class == "activity_version_identity_mismatch":
             payload["atividade_versao_id"] = 27
-        else:
-            payload["codigo_normativo"] = "AAC-TAMPERED"
 
         frozen_invalid_bytes = json.dumps(payload, sort_keys=True)
         direct_read = read_requisicao_snapshot_for_processing(
             {
                 "atividade_versao_id": 29,
-                "codigo_normativo_snapshot": prepared.codigo_normativo,
                 "regra_snapshot_json": frozen_invalid_bytes,
             }
         )
         assert direct_read.authority is SnapshotProcessingAuthority.INVALID_AUTHORITATIVE_SNAPSHOT
         assert direct_read.reason == expected_reason
 
-        req_id = _insert_with_payload(
-            conn,
-            payload,
-            name=f"FC11 {invalid_class}",
-            normative_code=prepared.codigo_normativo,
-        )
+        req_id = _insert_with_payload(conn, payload, name=f"FC11 {invalid_class}")
         student_id = student_identity()["aluno_id"]
         approved_before = conn.execute(
             """SELECT COALESCE(SUM(CASE
@@ -167,7 +155,7 @@ def test_distinct_invalid_snapshot_branches_fail_closed_atomically(
     with main.app.app_context():
         conn = main.get_db_connection()
         saved = conn.execute(
-            """SELECT atividade_versao_id,codigo_normativo_snapshot,regra_snapshot_json,
+            """SELECT atividade_versao_id,regra_snapshot_json,
                       status,horas_deferidas,observacao,data_processamento,admin_id
                  FROM requisicoes WHERE id=?""",
             (req_id,),
@@ -183,7 +171,6 @@ def test_distinct_invalid_snapshot_branches_fail_closed_atomically(
 
     assert tuple(saved) == (
         29,
-        prepared.codigo_normativo,
         frozen_invalid_bytes,
         "Pendente",
         None,

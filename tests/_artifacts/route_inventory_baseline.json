@@ -678,21 +678,6 @@
       "rule": "/admin/meus_dados"
     },
     {
-      "endpoint": "admin_normas_atividade",
-      "methods": [
-        "GET"
-      ],
-      "rule": "/admin/normas-atividade"
-    },
-    {
-      "endpoint": "admin_norma_nova",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "rule": "/admin/normas-atividade/nova"
-    },
-    {
       "endpoint": "admin_processar_requisicao",
       "methods": [
         "GET",

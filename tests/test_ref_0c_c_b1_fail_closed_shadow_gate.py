@@ -148,7 +148,7 @@ def test_every_current_governed_business_pair_has_exactly_one_policy():
                 governed.append(result)
                 assert bool(result["requirement"]) != bool(result["exemption"])
                 assert result["kind"] in {"requirement", "exemption"}
-    assert len(governed) == 132  # 129 /admin pairs + 3 approved external callbacks.
+    assert len(governed) == 129  # 126 /admin pairs + 3 approved external callbacks.
 
 
 def test_new_governed_unmapped_pair_is_detected_without_route_registration():

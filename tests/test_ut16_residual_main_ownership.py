@@ -350,7 +350,7 @@ def test_red_g_message_scanner_covers_target_exactly_once_catalog_stays():
         "app/versioning/integrity.py must be registered exactly once in "
         "utils.messages._iter_backend_files()"
     )
-    assert len(messages_module._message_catalog()) == 541, (
+    assert len(messages_module._message_catalog()) == 537, (
         "message catalog must stay exactly 541 through the move (strings "
         f"move with the function); got {len(messages_module._message_catalog())}"
     )
@@ -431,7 +431,6 @@ def test_green_2_canonical_owners_unchanged_against_head():
 
     frozen_snapshot = {
         "atividade_versao_numero": 2,
-        "codigo_normativo": "SNAP-CODE",
         "eixo": "AAC",
         "grupo": "3 - Congelado",
         "nome_exibivel": "Nome histórico",
@@ -441,28 +440,24 @@ def test_green_2_canonical_owners_unchanged_against_head():
     }
     current_catalogue = {
         "numero_versao": 99,
-        "codigo_normativo": "CURRENT-CODE",
         "eixo": "AEU",
         "grupo": "9 - Mutável",
     }
     display = snapshot_display(
         atividade_versao_id=10,
-        codigo_normativo_snapshot="SNAP-CODE",
         regra_snapshot_json=json.dumps(frozen_snapshot),
         versao_row=current_catalogue,
     )
     assert display["snapshot_vn"] == 2
-    assert display["snapshot_codigo"] == "SNAP-CODE"
     assert display["snapshot_eixo"] == "AAC"
     assert display["snapshot_grupo"] == "3 - Congelado"
     assert display["snapshot_written_at"] == "2026-01-01T00:00:00Z"
     assert display["snapshot_flow_origin"] == "student"
     assert not {
-        "CURRENT-CODE", "AEU", "9 - Mutável", 99
+        "AEU", "9 - Mutável", 99
     } & set(display.values())
     assert snapshot_display(
         atividade_versao_id=None,
-        codigo_normativo_snapshot=None,
         regra_snapshot_json=None,
         versao_row=current_catalogue,
     ) is None, "mutable current state alone is not historical authority"
@@ -520,8 +515,8 @@ def test_green_4_ut17_firewall_three_routes_unchanged():
 def test_green_5_architecture_invariants():
     app = main.app
     routes = list(app.url_map.iter_rules())
-    assert len(routes) == 129, f"routes must match prod-1, got {len(routes)}"
-    assert len(app.view_functions) == 128, (
+    assert len(routes) == 127, f"routes must match prod-1, got {len(routes)}"
+    assert len(app.view_functions) == 126, (
         f"distinct endpoints must match prod-1, got {len(app.view_functions)}"
     )
     unmapped = [
@@ -561,8 +556,8 @@ def test_green_6_artifact_repository_custody():
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 129
-    assert len({row["rule"] for row in routes}) == 128
+    assert len(routes) == 127
+    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"

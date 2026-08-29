@@ -162,7 +162,6 @@ def test_release_clean_database_installation_and_idempotence(tmp_path):
                 "turmas",
                 "atividade_base",
                 "atividade_versao",
-                "norma_atividade",
                 "matriz_atividade_versao_item",
                 "requisicoes",
                 "requisicao_arquivos",
@@ -218,7 +217,6 @@ def test_release_clean_database_installation_and_idempotence(tmp_path):
                 "status",
                 "nome_evento",
                 "regra_snapshot_json",
-                "codigo_normativo_snapshot",
                 "data_processamento",
                 "admin_id",
             }.issubset(requisicoes_columns), (

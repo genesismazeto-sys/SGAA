@@ -47,7 +47,7 @@ def _assert_canonical_request(name):
         read = read_requisicao_snapshot_for_processing(row)
         assert read.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
         assert read.rule.atividade_versao_id == row["atividade_versao_id"]
-        assert json.loads(row["regra_snapshot_json"])["schema_version"] == "prod-1-request-v1"
+        assert json.loads(row["regra_snapshot_json"])["schema_version"] == "prod-1-request-v2"
         return row["id"]
 
 

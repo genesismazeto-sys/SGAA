@@ -15,21 +15,16 @@
 
   <div class="form-cards-narrow">
 
-    <!-- Norma -->
+    <!-- Eixo operacional -->
     <div class="form-row">
-      <label class="row-label" for="norma_id">Norma</label>
+      <label class="row-label" for="eixo">Eixo</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="layers"></i></div>
-        <select id="norma_id" name="norma_id" class="control" required>
-          <option value="">Selecione uma norma…</option>
-          {% for n in normas %}
-            <option value="{{ n.id }}"
-                    {% if norma_id|string == n.id|string %}selected{% endif %}>
-              {{ n.codigo }} ({{ n.eixo }} — {{ n.revisao }})
-              {% if n.status != 'ativa' %}[{{ n.status }}]{% endif %}
-            </option>
-          {% endfor %}
+        <select id="eixo" name="eixo" class="control" required {% if eixo_locked %}disabled{% endif %}>
+          <option value="AAC" {% if eixo == 'AAC' %}selected{% endif %}>AAC</option>
+          <option value="AEU" {% if eixo == 'AEU' %}selected{% endif %}>AEU</option>
         </select>
+        {% if eixo_locked %}<input type="hidden" name="eixo" value="{{ eixo }}">{% endif %}
       </div>
     </div>
 
@@ -151,7 +146,7 @@
           {% for v in versoes_anteriores %}
             <option value="{{ v.id }}"
                     {% if versao_anterior_id|string == v.id|string %}selected{% endif %}>
-              v{{ v.numero_versao if v.numero_versao else '?' }} — {{ v.codigo_normativo }} ({{ v.eixo }})
+              v{{ v.numero_versao if v.numero_versao else '?' }} ({{ v.eixo }})
             </option>
           {% endfor %}
         </select>

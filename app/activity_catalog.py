@@ -7,7 +7,7 @@ from app.text import normalize_header
 
 
 ACTIVITY_VERSION_SEMANTIC_FIELDS = frozenset({
-    "norma_id", "codigo_normativo", "eixo", "grupo", "ch_por_evento",
+    "eixo", "grupo", "ch_por_evento",
     "limite_semestre", "limite_total", "observacao_aluno",
     "observacao_admin", "documentos_json", "vigencia_inicio", "vigencia_fim",
     "versao_anterior_id",
@@ -127,16 +127,13 @@ def get_atividade_base(conn, base_id: int):
 
 def get_versoes_por_base(conn, base_id: int) -> list:
     """
-    Retorna as atividade_versao vinculadas a uma base, enriquecidas com dados da norma
-    e contagem de uso em matrizes. Estritamente read-only.
+    Retorna as atividade_versao vinculadas a uma base e sua contagem de uso.
     """
     return conn.execute(
         """
         SELECT
             av.id,
             av.atividade_base_id,
-            av.norma_id,
-            av.codigo_normativo,
             av.eixo,
             av.grupo,
             av.ch_por_evento,
@@ -150,13 +147,8 @@ def get_versoes_por_base(conn, base_id: int) -> list:
             av.status,
             av.versao_anterior_id,
             av.created_at,
-            n.codigo          AS norma_codigo,
-            n.nome            AS norma_nome,
-            n.revisao         AS norma_revisao,
-            n.status          AS norma_status,
             COUNT(DISTINCT mavi.matriz_id) AS uso_em_matrizes
           FROM atividade_versao av
-          JOIN norma_atividade n ON n.id = av.norma_id
           LEFT JOIN matriz_atividade_versao_item mavi ON mavi.atividade_versao_id = av.id
          WHERE av.atividade_base_id = ?
          GROUP BY av.id
@@ -169,46 +161,9 @@ def get_versoes_por_base(conn, base_id: int) -> list:
 def get_latest_atividade_versao_for_base(conn, base_id: int):
     """Return the highest numbered version for an exact activity base."""
     return conn.execute(
-        "SELECT id, eixo FROM atividade_versao "
-        "WHERE atividade_base_id = ? ORDER BY numero_versao DESC LIMIT 1",
+        "SELECT * FROM atividade_versao "
+        "WHERE atividade_base_id = ? ORDER BY numero_versao DESC, id DESC LIMIT 1",
         (base_id,),
-    ).fetchone()
-
-
-def get_norma_list(conn) -> list:
-    """
-    Retorna todas as norma_atividade com contagem de versões vinculadas.
-    Estritamente read-only.
-    """
-    return conn.execute(
-        """
-        SELECT
-            n.id,
-            n.codigo,
-            n.eixo,
-            n.revisao,
-            n.nome,
-            n.descricao,
-            n.status,
-            n.created_at,
-            COUNT(av.id)                                              AS total_versoes,
-            SUM(CASE WHEN av.status = 'ativa' THEN 1 ELSE 0 END)     AS versoes_ativas
-          FROM norma_atividade n
-          LEFT JOIN atividade_versao av ON av.norma_id = n.id
-         GROUP BY n.id
-         ORDER BY n.eixo ASC, LOWER(n.codigo) ASC
-        """
-    ).fetchall()
-
-
-def get_norma_by_id(conn, norma_id: int):
-    """
-    Retorna uma norma_atividade pelo id, ou None.
-    Estritamente read-only.
-    """
-    return conn.execute(
-        "SELECT * FROM norma_atividade WHERE id = ?",
-        (norma_id,),
     ).fetchone()
 
 
@@ -219,7 +174,7 @@ def get_versoes_da_base_por_eixo(conn, base_id: int, eixo: str) -> list:
     """
     return conn.execute(
         """
-        SELECT id, codigo_normativo, eixo, status, numero_versao, created_at
+        SELECT id, eixo, status, numero_versao, created_at
           FROM atividade_versao
          WHERE atividade_base_id = ? AND eixo = ?
          ORDER BY created_at DESC
@@ -342,14 +297,13 @@ def apply_activity_version_semantic_changes(
     payload.update(effective_changes)
     next_number = get_next_numero_versao(conn, int(version["atividade_base_id"]))
     columns = (
-        "atividade_base_id", "norma_id", "codigo_normativo", "eixo", "grupo",
+        "atividade_base_id", "eixo", "grupo",
         "ch_por_evento", "limite_semestre", "limite_total", "observacao_aluno",
         "observacao_admin", "documentos_json", "vigencia_inicio", "vigencia_fim",
         "numero_versao", "status", "versao_anterior_id",
     )
     values = (
-        version["atividade_base_id"], payload["norma_id"],
-        payload["codigo_normativo"], payload["eixo"], payload["grupo"],
+        version["atividade_base_id"], payload["eixo"], payload["grupo"],
         payload["ch_por_evento"], payload["limite_semestre"],
         payload["limite_total"], payload["observacao_aluno"],
         payload["observacao_admin"], payload["documentos_json"],
@@ -432,11 +386,11 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
                t.created_at,
                src.id AS from_id,
                src.atividade_base_id AS from_base_id,
-               src.codigo_normativo AS from_codigo_normativo,
+               src.numero_versao AS from_numero_versao,
                src.eixo AS from_eixo,
                dst.id AS to_id,
                dst.atividade_base_id AS to_base_id,
-               dst.codigo_normativo AS to_codigo_normativo,
+               dst.numero_versao AS to_numero_versao,
                dst.eixo AS to_eixo
           FROM atividade_transicao t
           LEFT JOIN atividade_versao src ON src.id = t.from_atividade_versao_id
@@ -454,10 +408,10 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
         observacao_admin = (row["observacao_admin"] or "").strip()
         from_label = "-"
         if row["from_id"] is not None:
-            from_label = row["from_codigo_normativo"] or f"Versão #{row['from_id']}"
+            from_label = f"v{row['from_numero_versao']}"
         to_label = "-"
         if row["to_id"] is not None:
-            to_label = row["to_codigo_normativo"] or f"Versão #{row['to_id']}"
+            to_label = f"v{row['to_numero_versao']}"
         transicoes.append(
             {
                 "id": row["id"],
@@ -480,8 +434,6 @@ __all__ = [
     'get_atividade_base_list',
     'get_atividade_base',
     'get_versoes_por_base',
-    'get_norma_list',
-    'get_norma_by_id',
     'get_versoes_da_base_por_eixo',
     'get_next_numero_versao',
     'get_atividade_versao_by_id',

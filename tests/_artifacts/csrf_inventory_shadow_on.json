@@ -289,18 +289,6 @@
         "status_code": 200
       },
       {
-        "label": "/admin/normas-atividade",
-        "path": "/admin/normas-atividade",
-        "role": "admin",
-        "status_code": 200
-      },
-      {
-        "label": "/admin/normas-atividade/nova",
-        "path": "/admin/normas-atividade/nova",
-        "role": "admin",
-        "status_code": 200
-      },
-      {
         "label": "/admin/processar_requisicao/<int:req_id>",
         "path": "/admin/processar_requisicao/1",
         "role": "admin",
@@ -9487,40 +9475,6 @@
           "kind": "rendered_form",
           "page": "/admin/meus_dados",
           "action": "/admin/meus_dados",
-          "token_count": 1
-        }
-      ],
-      "status": "ok_rendered_form_token"
-    },
-    {
-      "route": "/admin/normas-atividade/nova",
-      "method": "POST",
-      "view_function": "app.views.admin.atividades.admin_norma_nova",
-      "template_related": [
-        "admin_norma_form.html"
-      ],
-      "requires_login": "admin",
-      "has_post_form": true,
-      "csrf_in_html": true,
-      "token_counts_per_form": [
-        {
-          "page": "/admin/normas-atividade/nova",
-          "action": "/admin/normas-atividade/nova",
-          "token_counts": [
-            1
-          ]
-        }
-      ],
-      "has_fetch_post": false,
-      "fetch_sends_token": null,
-      "has_dynamic_form": false,
-      "risk": [],
-      "notes": [],
-      "evidence": [
-        {
-          "kind": "rendered_form",
-          "page": "/admin/normas-atividade/nova",
-          "action": "/admin/normas-atividade/nova",
           "token_count": 1
         }
       ],

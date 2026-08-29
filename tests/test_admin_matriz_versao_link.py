@@ -14,8 +14,8 @@ def test_version_page_lists_base_and_active_choices(tmp_path):
         html = response.get_data(as_text=True)
         assert response.status_code == 200
         assert "Version page activity" in html
-        assert "AAC-test-v2" in html
-        assert "AAC-test-v3" not in html
+        assert "v2" in html
+        assert "v3" not in html
 
 
 def test_define_and_remove_mutate_only_canonical_item(tmp_path):

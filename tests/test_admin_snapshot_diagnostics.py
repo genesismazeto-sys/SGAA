@@ -9,7 +9,6 @@ from app.versioning.snapshots import _build_admin_requisicao_snapshot_diagnostic
 def test_missing_snapshot_is_data_integrity_invalid():
     diagnostic = _build_admin_requisicao_snapshot_diagnostic({
         "atividade_versao_id": None,
-        "codigo_normativo_snapshot": None,
         "regra_snapshot_json": None,
     })
     assert diagnostic == {
@@ -20,7 +19,6 @@ def test_missing_snapshot_is_data_integrity_invalid():
 def test_malformed_snapshot_is_data_integrity_invalid():
     diagnostic = _build_admin_requisicao_snapshot_diagnostic({
         "atividade_versao_id": 1,
-        "codigo_normativo_snapshot": "AAC-rev5",
         "regra_snapshot_json": "{",
     })
     assert diagnostic["status"] == "invalid"
@@ -29,16 +27,16 @@ def test_malformed_snapshot_is_data_integrity_invalid():
 
 def test_valid_snapshot_diagnostic_uses_frozen_payload():
     payload = {
-        "schema_version": "prod-1-request-v1", "atividade_versao_id": 7,
-        "atividade_versao_numero": 1, "atividade_base_id": 4, "norma_id": 2,
-        "codigo_normativo": "AAC-rev6", "eixo": "AAC", "grupo": "1 - Teste",
+        "schema_version": "prod-1-request-v2", "atividade_versao_id": 7,
+        "atividade_versao_numero": 1, "atividade_base_id": 4,
+        "eixo": "AAC", "grupo": "1 - Teste",
         "nome_exibivel": "Teste", "tipo_atividade": "Acadêmica Complementar",
         "ch_por_evento": 4, "limite_semestre": 40, "limite_total": 100,
         "documentos_json": "[]", "versao_status": "ativa", "matriz_id_efetiva": 2,
         "flow_origin": "admin_create", "snapshot_written_at": "2026-01-01T00:00:00Z",
     }
     diagnostic = _build_admin_requisicao_snapshot_diagnostic({
-        "atividade_versao_id": 7, "codigo_normativo_snapshot": "AAC-rev6",
+        "atividade_versao_id": 7,
         "regra_snapshot_json": json.dumps(payload),
     })
     assert diagnostic["status"] == "valid"

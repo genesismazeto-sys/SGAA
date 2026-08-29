@@ -102,7 +102,6 @@ HELPER_NAMES = (
     "_matriz_activity_type_for_tab",
     "_matriz_axis_for_tab",
     "_get_grupos_por_tipo",
-    "_get_matriz_active_normas_for_axis",
     "_build_matriz_new_activity_modal_context",
     "_matriz_transfer_meta",
     "_matriz_activity_rule_summary",
@@ -985,10 +984,10 @@ def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 129
-    assert len({entry["rule"] for entry in routes}) == 128
+    assert len(routes) == 127
+    assert len({entry["rule"] for entry in routes}) == 126
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 128
+    assert len(non_static) == 126
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1007,7 +1006,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 541
+    assert len(catalog) == 537
 
 
 def test_canonical_sqlite_never_opened_during_isolated_flow(tmp_path):
@@ -1081,9 +1080,14 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
+        old_snapshot["rows"] = [row for row in old_snapshot["rows"] if row["route"] != "/admin/normas-atividade/nova"]
+        old_snapshot["summary"]["page_statuses"] = [
+            item for item in old_snapshot["summary"]["page_statuses"]
+            if item["path"] not in {"/admin/normas-atividade", "/admin/normas-atividade/nova"}
+        ]
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 78
+        assert len(old_rows) == len(new_rows) == 77
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]

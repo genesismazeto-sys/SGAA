@@ -186,11 +186,11 @@ def test_auto_indefer_preserves_helper_owned_commit_boundary():
             INSERT INTO requisicoes (
                 id, aluno_id, atividade_versao_id, data_solicitacao, data_evento,
                 horas_solicitadas, nome_evento, status, observacao,
-                data_processamento, regra_snapshot_json, codigo_normativo_snapshot
+                data_processamento, regra_snapshot_json
             ) VALUES (
                 1, NULL, 29, date('now', '-8 days'), date('now', '-8 days'),
                 1, 'Auto indefer prod-1', 'Devolvida', '', datetime('now', '-8 days'),
-                '{}', 'AEU-rev1'
+                '{}'
             )
             """
         )
@@ -214,7 +214,7 @@ def test_settings_messages_remain_in_catalog_under_neutral_owner():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 541
+    assert len(catalog) == 537
     for key in SETTINGS_MESSAGE_KEYS:
         usages = catalog[key]["usages"]
         assert usages

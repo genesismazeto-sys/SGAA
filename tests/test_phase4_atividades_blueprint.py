@@ -5,8 +5,8 @@ from app.views.admin import atividades as views
 
 def test_activity_blueprint_owns_exact_canonical_surface():
     rules = [rule for rule in main.app.url_map.iter_rules() if rule.endpoint in {spec.endpoint for spec in views.LEGACY_ROUTE_SPECS}]
-    assert len(views.LEGACY_ROUTE_SPECS) == 21
-    assert len(rules) == 21
+    assert len(views.LEGACY_ROUTE_SPECS) == 19
+    assert len(rules) == 19
     assert not any("mapeamento-legado" in rule.rule for rule in rules)
 
 

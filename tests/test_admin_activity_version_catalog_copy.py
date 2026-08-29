@@ -1,25 +1,24 @@
 """
-FC-07 — Nova atividade_versao inicia como cópia do predecessor (?from=).
+COV-1 restoration — New atividade_versao starts as a copy of its predecessor.
 
-GET /admin/catalogo-versoes/<base_id>/nova-versao?from=<atividade_versao_id>
-pré-preenche os campos editáveis do formulário com os valores do predecessor
-(mesma atividade-base) e o pré-seleciona como versao_anterior_id.
+Adapted from the pre-Norma suite (test_admin_activity_version_catalog_copy.py)
+with all Norma-domain setup removed (norma_atividade, norma_id, codigo_normativo).
 
-Cobertura discriminante (T1-T12):
-  T1  — GET ?from=Av1 renderiza os valores exatos de Av1 em todos os campos
-        editáveis e seleciona Av1 como versao_anterior_id.
-  T2  — A identidade vem do id exato de `from`, não de label/eixo/ordem.
-  T3  — Fonte de outra atividade-base não pré-preenche nem cria sucessor.
-  T4  — `from` inexistente/malformado é tratado sem nenhuma escrita.
-  T5  — Base sem histórico mantém formulário em branco e válido.
-  T6  — Detalhe da base aponta "Criar versão" para a versão de maior
-        numero_versao (via ?from=) quando há histórico.
-  T7  — Edição do admin após cópia é persistida (sem recópia forçada no POST).
-  T8  — Av2 nasce com versao_anterior_id = Av1.id (linhagem).
-  T9  — Av2 recebe próximo numero_versao e status='rascunho'.
-  T10 — Av1 permanece inalterada (valor-equivalente antes/depois).
-  T11 — Nenhuma mutação em matriz_atividade_versao_item vinculada a Av1.
-  T12 — GET de cópia não altera contagens/linhas relevantes.
+Covers:
+  T1  — GET ?from=Av1 renders the exact Av1 values in all editable fields and
+        selects Av1 as versao_anterior_id.
+  T2  — The source identity comes from the exact `from` id, not label/axis/order.
+  T3  — A source from another atividade-base is refused (no prefill, no creation).
+  T4  — `from` missing/malformed is handled safely with zero writes.
+  T5  — A base without history keeps the form blank and valid.
+  T6  — Base detail points "Criar versão" at the highest numero_versao (?from=).
+  T7  — Admin edit after copy is persisted (no forced recopy on POST).
+  T8  — Av2 is born with versao_anterior_id = Av1.id (lineage).
+  T9  — Av2 gets next numero_versao and status='rascunho'; the new version must
+        succeed the canonical latest version (no silent fallback to older sources).
+  T10 — Av1 remains unchanged (value-equivalent before/after).
+  T11 — No mutation in matriz_atividade_versao_item linked to Av1.
+  T12 — GET copy does not change relevant row counts.
 """
 from __future__ import annotations
 
@@ -99,7 +98,7 @@ def _get_all_versoes(client, base_id: int) -> list[dict]:
 # Seed helpers
 # ---------------------------------------------------------------------------
 
-def _seed_base_norma(client, *, eixo: str = "AAC") -> dict:
+def _seed_base(client, *, eixo: str = "AAC") -> dict:
     token = uuid.uuid4().hex[:8]
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -113,45 +112,14 @@ def _seed_base_norma(client, *, eixo: str = "AAC") -> dict:
             "SELECT id FROM atividade_base WHERE nome_conceito = ?",
             (nome_base,),
         ).fetchone()["id"]
-        codigo = f"NRM-FC07-{eixo}-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (codigo, eixo, "rev1", f"Norma FC07 {token}", "ativa"),
-        )
-        norma_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (codigo,),
-        ).fetchone()["id"]
         conn.commit()
-    return {"base_id": base_id, "norma_id": norma_id, "codigo": codigo, "eixo": eixo}
-
-
-def _seed_segunda_norma(client, *, eixo: str = "AAC") -> dict:
-    """Segunda norma ATIVA no MESMO eixo, com codigo/norma_id distintos."""
-    token = uuid.uuid4().hex[:8]
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        codigo = f"NRM-FC07-{eixo}-2-{token}"
-        conn.execute(
-            "INSERT INTO norma_atividade (codigo, eixo, revisao, nome, status)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (codigo, eixo, "rev2", f"Norma FC07 alternada {token}", "ativa"),
-        )
-        norma_id = conn.execute(
-            "SELECT id FROM norma_atividade WHERE codigo = ?",
-            (codigo,),
-        ).fetchone()["id"]
-        conn.commit()
-    return {"norma_id": norma_id, "codigo": codigo, "eixo": eixo}
+    return {"base_id": base_id, "eixo": eixo}
 
 
 def _insert_versao(
     client,
     *,
     base_id: int,
-    norma_id: int,
-    codigo: str,
     eixo: str,
     grupo: str,
     ch_por_evento,
@@ -176,14 +144,14 @@ def _insert_versao(
         cur = conn.execute(
             """
             INSERT INTO atividade_versao (
-                atividade_base_id, norma_id, codigo_normativo, eixo, grupo, status,
+                atividade_base_id, eixo, grupo, status,
                 ch_por_evento, limite_semestre, limite_total,
                 observacao_aluno, observacao_admin,
                 vigencia_inicio, vigencia_fim, versao_anterior_id, numero_versao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                base_id, norma_id, codigo, eixo, grupo, status,
+                base_id, eixo, grupo, status,
                 ch_por_evento, limite_semestre, limite_total,
                 observacao_aluno, observacao_admin,
                 vigencia_inicio, vigencia_fim, versao_anterior_id, numero_versao,
@@ -218,14 +186,12 @@ V2_VALUES = {
 
 
 def _seed_versao(client, *, eixo: str = "AAC", valores: dict | None = None) -> dict:
-    """Base + norma ativa + uma atividade_versao com valores distintivos."""
-    seed = _seed_base_norma(client, eixo=eixo)
+    """Base + uma atividade_versao com valores distintivos."""
+    seed = _seed_base(client, eixo=eixo)
     valores = valores or V1_VALUES
     versao_id = _insert_versao(
         client,
         base_id=seed["base_id"],
-        norma_id=seed["norma_id"],
-        codigo=seed["codigo"],
         eixo=seed["eixo"],
         grupo=valores["grupo"],
         ch_por_evento=valores["ch_por_evento"],
@@ -245,7 +211,7 @@ def _nova_versao_url(client, base_id: int) -> str:
 
 def _post_nova_versao(client, base_id: int, data: dict):
     payload = {
-        "norma_id": "",
+        "eixo": "",
         "grupo": "",
         "ch_por_evento": "",
         "limite_semestre": "",
@@ -294,7 +260,6 @@ def _assert_form_blank(html: str) -> None:
     assert _textarea_value(html, "observacao_admin") == ""
     assert _input_value(html, "vigencia_inicio") == ""
     assert _input_value(html, "vigencia_fim") == ""
-    assert _selected_option_value(html, "norma_id") == []
     assert _selected_option_value(html, "versao_anterior_id") == []
 
 
@@ -319,10 +284,6 @@ def test_t1_get_copy_renders_exact_predecessor_values(client):
     assert _input_value(html, "vigencia_inicio") == V1_VALUES["vigencia_inicio"]
     assert _input_value(html, "vigencia_fim") == V1_VALUES["vigencia_fim"]
 
-    selected_norma = _selected_option_value(html, "norma_id")
-    assert selected_norma == [str(seed["norma_id"])], (
-        f"norma do predecessor deve vir selecionada, obtido {selected_norma}"
-    )
     selected_prev = _selected_option_value(html, "versao_anterior_id")
     assert selected_prev == [str(seed["versao_id"])], (
         f"predecessor deve vir selecionado como versao_anterior_id, obtido {selected_prev}"
@@ -335,14 +296,12 @@ def test_t1_get_copy_renders_exact_predecessor_values(client):
 
 def test_t2_exact_source_identity_from_id(client):
     _login_admin(client)
-    seed = _seed_base_norma(client)
+    seed = _seed_base(client)
     v1_id = _insert_versao(
-        client, base_id=seed["base_id"], norma_id=seed["norma_id"],
-        codigo=seed["codigo"], eixo=seed["eixo"], **V1_VALUES,
+        client, base_id=seed["base_id"], eixo=seed["eixo"], **V1_VALUES,
     )
     v2_id = _insert_versao(
-        client, base_id=seed["base_id"], norma_id=seed["norma_id"],
-        codigo=seed["codigo"], eixo=seed["eixo"], **V2_VALUES,
+        client, base_id=seed["base_id"], eixo=seed["eixo"], **V2_VALUES,
     )
     assert v1_id != v2_id
 
@@ -350,7 +309,6 @@ def test_t2_exact_source_identity_from_id(client):
     html1 = r1.get_data(as_text=True)
     assert _input_value(html1, "grupo") == V1_VALUES["grupo"]
     assert _input_value(html1, "ch_por_evento") == "4.5"
-    assert _selected_option_value(html1, "versao_anterior_id") == [str(v1_id)]
 
     r2 = client.get(_nova_versao_url(client, seed["base_id"]) + f"?from={v2_id}")
     html2 = r2.get_data(as_text=True)
@@ -384,7 +342,7 @@ def test_t3_foreign_base_source_refused_on_post(client):
     before = _count(client, "atividade_versao")
 
     r = _post_nova_versao(client, base_a["base_id"], {
-        "norma_id": str(base_a["norma_id"]),
+        "eixo": "AAC",
         "versao_anterior_id": str(base_b["versao_id"]),
     })
     assert r.status_code == 200
@@ -425,7 +383,7 @@ def test_t4_malformed_or_missing_from_handled_safely(client, from_value):
 
 def test_t5_zero_history_base_blank_form(client):
     _login_admin(client)
-    seed = _seed_base_norma(client)
+    seed = _seed_base(client)
 
     r = client.get(_nova_versao_url(client, seed["base_id"]))
     assert r.status_code == 200
@@ -444,23 +402,17 @@ def test_t5_zero_history_base_blank_form(client):
 
 
 # ---------------------------------------------------------------------------
-# T6 — link normal aponta para a versão de maior numero_versao,
-#      mesmo quando id/ordem de criação apontam para outra versão
+# T6 — link normal aponta para a versão de maior numero_versao
 # ---------------------------------------------------------------------------
 
 def test_t6_detail_page_points_to_highest_numero_versao(client):
     _login_admin(client)
-    seed = _seed_base_norma(client)
-    # Versão A: criada PRIMEIRO (id menor) com numero_versao ALTO (9).
+    seed = _seed_base(client)
     a_id = _insert_versao(
-        client, base_id=seed["base_id"], norma_id=seed["norma_id"],
-        codigo=seed["codigo"], eixo=seed["eixo"], numero_versao=9, **V1_VALUES,
+        client, base_id=seed["base_id"], eixo=seed["eixo"], numero_versao=9, **V1_VALUES,
     )
-    # Versão B: criada DEPOIS (id maior) com numero_versao BAIXO (3).
-    # id / ordem de criação e numero_versao agora CONFLITAM.
     b_id = _insert_versao(
-        client, base_id=seed["base_id"], norma_id=seed["norma_id"],
-        codigo=seed["codigo"], eixo=seed["eixo"], numero_versao=3, **V2_VALUES,
+        client, base_id=seed["base_id"], eixo=seed["eixo"], numero_versao=3, **V2_VALUES,
     )
     versoes = _get_all_versoes(client, seed["base_id"])
     numero_por_id = {v["id"]: v["numero_versao"] for v in versoes}
@@ -487,28 +439,24 @@ def test_t6_detail_page_points_to_highest_numero_versao(client):
 
 
 # ---------------------------------------------------------------------------
-# T7 — edição do admin após cópia é persistida (sem recópia no POST);
-#      codigo_normativo/eixo derivam da Norma selecionada no POST, não da fonte
+# T7 — edição do admin após cópia é persistida (sem recópia no POST)
 # ---------------------------------------------------------------------------
 
 def test_t7_admin_edit_after_copy_is_persisted(client):
     _login_admin(client)
     seed = _seed_versao(client)
-    norma_b = _seed_segunda_norma(client, eixo=seed["eixo"])
-    assert norma_b["norma_id"] != seed["norma_id"], "Norma B deve ser distinta da fonte"
-    assert norma_b["eixo"] == seed["eixo"], "Norma B deve estar no mesmo eixo"
 
     r = client.get(_nova_versao_url(client, seed["base_id"]) + f"?from={seed['versao_id']}")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    selected_norma = _selected_option_value(html, "norma_id")
-    assert selected_norma == [str(seed["norma_id"])], (
-        "GET ?from= deve pré-selecionar a Norma A da fonte, "
-        f"obtido {selected_norma}"
+    selected_prev = _selected_option_value(html, "versao_anterior_id")
+    assert selected_prev == [str(seed["versao_id"])], (
+        "GET ?from= deve pré-selecionar o predecessor da fonte, "
+        f"obtido {selected_prev}"
     )
 
     edited = {
-        "norma_id": str(norma_b["norma_id"]),
+        "eixo": "AAC",
         "grupo": "1 - Grupo editado pelo admin",
         "ch_por_evento": "9",
         "limite_semestre": "30",
@@ -525,17 +473,7 @@ def test_t7_admin_edit_after_copy_is_persisted(client):
     versoes = _get_all_versoes(client, seed["base_id"])
     assert len(versoes) == 2
     nova = [v for v in versoes if v["id"] != seed["versao_id"]][0]
-    assert nova["norma_id"] == norma_b["norma_id"], (
-        "norma_id persistido deve ser o da Norma B selecionada no POST"
-    )
-    assert nova["codigo_normativo"] == norma_b["codigo"], (
-        "codigo_normativo deve derivar da Norma B selecionada no POST, "
-        "não da fonte"
-    )
-    assert nova["eixo"] == norma_b["eixo"]
-    assert nova["codigo_normativo"] != seed["codigo"], (
-        "codigo_normativo NÃO deve ser copiado do predecessor"
-    )
+    assert nova["eixo"] == "AAC"
     assert nova["grupo"] == "1 - Grupo editado pelo admin"
     assert nova["ch_por_evento"] == 9.0
     assert nova["limite_semestre"] == 30.0
@@ -558,7 +496,7 @@ def test_t8_lineage_versao_anterior_id(client):
     seed = _seed_versao(client)
 
     r = _post_nova_versao(client, seed["base_id"], {
-        "norma_id": str(seed["norma_id"]),
+        "eixo": "AAC",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302
@@ -570,40 +508,47 @@ def test_t8_lineage_versao_anterior_id(client):
 
 
 # ---------------------------------------------------------------------------
-# T9 — nova identidade: numero_versao base-wide MAX+1 (não fonte+1)
-#      e status rascunho, com linhagem para a fonte escolhida
+# T9 — nova identidade: numero_versao base-wide MAX+1 e status rascunho;
+#      a nova versão deve suceder a versão canônica mais recente (sem fallback)
 # ---------------------------------------------------------------------------
 
 def test_t9_new_identity_next_number_and_rascunho(client):
     _login_admin(client)
     seed = _seed_versao(client)
     older = _get_versao_row(client, seed["versao_id"])
-    # Outra versão existente na MESMA base com numero_versao MAIOR (5).
     newer_id = _insert_versao(
-        client, base_id=seed["base_id"], norma_id=seed["norma_id"],
-        codigo=seed["codigo"], eixo=seed["eixo"], numero_versao=5, **V2_VALUES,
+        client, base_id=seed["base_id"], eixo=seed["eixo"], numero_versao=5, **V2_VALUES,
     )
     newer = _get_versao_row(client, newer_id)
     assert newer["numero_versao"] > older["numero_versao"], (
         "base deve ter uma versão com numero_versao maior que a fonte"
     )
 
-    # Nova versão criada a partir da fonte MAIS ANTIGA.
-    r = _post_nova_versao(client, seed["base_id"], {
-        "norma_id": str(seed["norma_id"]),
+    rejected = _post_nova_versao(client, seed["base_id"], {
+        "eixo": "AAC",
         "versao_anterior_id": str(seed["versao_id"]),
+    })
+    before_rejected = _count(client, "atividade_versao")
+    assert rejected.status_code == 200, (
+        "sucessor de fonte não-canônica (mais antiga) deve ser rejeitado: "
+        "a nova versão deve suceder a versão canônica mais recente"
+    )
+    assert _count(client, "atividade_versao") == before_rejected
+
+    r = _post_nova_versao(client, seed["base_id"], {
+        "eixo": "AAC",
+        "versao_anterior_id": str(newer_id),
     })
     assert r.status_code == 302
 
     versoes = _get_all_versoes(client, seed["base_id"])
     assert len(versoes) == 3
     nova = [v for v in versoes if v["id"] not in (seed["versao_id"], newer_id)][0]
-    assert nova["versao_anterior_id"] == seed["versao_id"], (
-        "linhagem deve apontar para a fonte escolhida (a mais antiga)"
+    assert nova["versao_anterior_id"] == newer_id, (
+        "linhagem deve apontar para a versão canônica mais recente"
     )
     assert nova["numero_versao"] == newer["numero_versao"] + 1, (
-        "novo numero_versao deve ser MAX(numero_versao) da base + 1, "
-        "não fonte.numero_versao + 1"
+        "novo numero_versao deve ser MAX(numero_versao) da base + 1"
     )
     assert nova["numero_versao"] != older["numero_versao"] + 1
     assert nova["status"] == "rascunho"
@@ -620,7 +565,7 @@ def test_t10_predecessor_row_unchanged(client):
     before = _get_versao_row(client, seed["versao_id"])
 
     r = _post_nova_versao(client, seed["base_id"], {
-        "norma_id": str(seed["norma_id"]),
+        "eixo": "AAC",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302
@@ -664,7 +609,7 @@ def test_t11_matrix_link_to_predecessor_untouched(client):
     before_items = _count(client, "matriz_atividade_versao_item")
 
     r = _post_nova_versao(client, seed["base_id"], {
-        "norma_id": str(seed["norma_id"]),
+        "eixo": "AAC",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302

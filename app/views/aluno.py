@@ -113,7 +113,6 @@ def _coerce_aluno_snapshot_scalar(value: Any) -> str | None:
 def _build_aluno_requisicao_snapshot_display(
     *,
     atividade_versao_id: Any,
-    codigo_normativo_snapshot: Any,
     regra_snapshot_json: Any,
     versao_row: Any | None,
 ) -> dict[str, Any] | None:
@@ -124,14 +123,12 @@ def _build_aluno_requisicao_snapshot_display(
     disponíveis no banco, sem nunca lançar exceção.
     """
     has_atividade_versao_id = atividade_versao_id not in (None, "")
-    has_codigo_normativo = bool(str(codigo_normativo_snapshot or "").strip())
-    if not has_atividade_versao_id and not has_codigo_normativo:
+    if not has_atividade_versao_id:
         return None
 
     display: dict[str, Any] = {
         "snapshot_versionado_presente": True,
         "snapshot_vn": None,
-        "snapshot_codigo": None,
         "snapshot_eixo": None,
         "snapshot_grupo": None,
         "snapshot_written_at": None,
@@ -150,7 +147,6 @@ def _build_aluno_requisicao_snapshot_display(
 
     if parsed is not None:
         for key, target in (
-            ("snapshot_codigo", "codigo_normativo"),
             ("snapshot_eixo", "eixo"),
             ("snapshot_grupo", "grupo"),
             ("snapshot_written_at", "snapshot_written_at"),
@@ -165,11 +161,6 @@ def _build_aluno_requisicao_snapshot_display(
             except (TypeError, ValueError):
                 pass
 
-    if display["snapshot_codigo"] is None and has_codigo_normativo:
-        display["snapshot_codigo"] = _coerce_aluno_snapshot_scalar(
-            codigo_normativo_snapshot
-        )
-
     # Current catalogue data is only a corruption/legacy-display fallback. A
     # valid persisted snapshot always wins for historical presentation.
     if versao_row is not None:
@@ -181,7 +172,6 @@ def _build_aluno_requisicao_snapshot_display(
                 except (TypeError, ValueError):
                     pass
         for key, source in (
-            ("snapshot_codigo", "codigo_normativo"),
             ("snapshot_eixo", "eixo"),
             ("snapshot_grupo", "grupo"),
         ):
@@ -1358,9 +1348,8 @@ def aluno_minhas_requisicoes():
 
     select_cols = (
         "SELECT r.id, r.aluno_id, r.data_evento, r.data_processamento, r.horas_solicitadas, r.horas_deferidas, r.status, "
-        "r.atividade_versao_id, r.codigo_normativo_snapshot, r.regra_snapshot_json, "
+        "r.atividade_versao_id, r.regra_snapshot_json, "
         "av.numero_versao AS av_numero_versao, "
-        "av.codigo_normativo AS av_codigo_normativo, "
         "av.eixo AS av_eixo, av.grupo AS av_grupo "
     )
     base_from = (
@@ -1447,16 +1436,14 @@ def aluno_minhas_requisicoes():
     requisicoes = []
     for r, history in selected_rows:
         versao_row = None
-        if r["av_numero_versao"] is not None or r["av_codigo_normativo"] is not None:
+        if r["av_numero_versao"] is not None:
             versao_row = {
                 "numero_versao": r["av_numero_versao"],
-                "codigo_normativo": r["av_codigo_normativo"],
                 "eixo": r["av_eixo"],
                 "grupo": r["av_grupo"],
             }
         snapshot_display = _build_aluno_requisicao_snapshot_display(
             atividade_versao_id=r["atividade_versao_id"],
-            codigo_normativo_snapshot=r["codigo_normativo_snapshot"],
             regra_snapshot_json=r["regra_snapshot_json"],
             versao_row=versao_row,
         )
@@ -1655,8 +1642,8 @@ def aluno_nova_requisicao():
                 INSERT INTO requisicoes
                 (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
                  horas_solicitadas, nome_evento, status, observacao,
-                 regra_snapshot_json, codigo_normativo_snapshot)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 regra_snapshot_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     aluno_id,
@@ -1668,7 +1655,6 @@ def aluno_nova_requisicao():
                     "Pendente",
                     observacao,
                     prepared_snapshot.snapshot_json,
-                    prepared_snapshot.codigo_normativo,
                 ),
             )
             req_id = cur.lastrowid
@@ -1823,8 +1809,7 @@ def aluno_requisicao_detalhe(req_id: int):
 
     if request.method == "POST" and not delete_flag:
         rec = conn.execute(
-            "SELECT status, data_processamento, atividade_versao_id, "
-            "codigo_normativo_snapshot, regra_snapshot_json "
+            "SELECT status, data_processamento, atividade_versao_id, regra_snapshot_json "
             "FROM requisicoes WHERE id=? AND aluno_id=?",
             (req_id, aluno_id),
         ).fetchone()
@@ -1855,7 +1840,6 @@ def aluno_requisicao_detalhe(req_id: int):
         # mantendo a validação de atividade permitida pela matriz.
         snapshot_versionado_presente = (
             (rec["atividade_versao_id"] is not None and str(rec["atividade_versao_id"]).strip() != "")
-            or (str(rec["codigo_normativo_snapshot"] or "").strip() != "")
             or (str(rec["regra_snapshot_json"] or "").strip() != "")
         )
         if (
@@ -1865,7 +1849,7 @@ def aluno_requisicao_detalhe(req_id: int):
             and int(atividade_id_new) != rec["atividade_versao_id"]
         ):
             flash(
-                "Esta solicitação já possui versão normativa registrada. "
+                "Esta solicitação já possui uma versão de atividade registrada. "
                 "Para trocar a atividade, crie uma nova solicitação.",
                 "error",
             )
@@ -1955,7 +1939,6 @@ def aluno_requisicao_detalhe(req_id: int):
         """
         SELECT r.*,
                av.numero_versao AS av_numero_versao,
-               av.codigo_normativo AS av_codigo_normativo,
                av.eixo AS av_eixo,
                av.grupo AS av_grupo
           FROM requisicoes r
@@ -1969,19 +1952,14 @@ def aluno_requisicao_detalhe(req_id: int):
         return redirect(_aluno_url("aluno_minhas_requisicoes"))
 
     versao_row = None
-    if (
-        row["av_numero_versao"] is not None
-        or row["av_codigo_normativo"] is not None
-    ):
+    if row["av_numero_versao"] is not None:
         versao_row = {
             "numero_versao": row["av_numero_versao"],
-            "codigo_normativo": row["av_codigo_normativo"],
             "eixo": row["av_eixo"],
             "grupo": row["av_grupo"],
         }
     snapshot_display = _build_aluno_requisicao_snapshot_display(
         atividade_versao_id=row["atividade_versao_id"] if "atividade_versao_id" in row.keys() else None,
-        codigo_normativo_snapshot=row["codigo_normativo_snapshot"] if "codigo_normativo_snapshot" in row.keys() else None,
         regra_snapshot_json=row["regra_snapshot_json"] if "regra_snapshot_json" in row.keys() else None,
         versao_row=versao_row,
     )

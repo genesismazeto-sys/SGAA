@@ -169,12 +169,11 @@ def admin_importar_requisicoes():
                         INSERT INTO requisicoes
                         (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
                          horas_solicitadas, status, horas_deferidas, observacao,
-                         regra_snapshot_json, codigo_normativo_snapshot)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         regra_snapshot_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (aluno_id, prepared.atividade_versao_id, data_solicitacao_hoje,
                            data_evento, horas_solicitadas, status, horas_deferidas,
-                           f"Importado da planilha linha {row_index}", prepared.snapshot_json,
-                           prepared.codigo_normativo))
+                           f"Importado da planilha linha {row_index}", prepared.snapshot_json))
                     sucesso_count += 1
 
                 except Exception as e:
@@ -722,8 +721,8 @@ def admin_nova_requisicao():
             INSERT INTO requisicoes
             (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
              horas_solicitadas, nome_evento, status, observacao,
-             regra_snapshot_json, codigo_normativo_snapshot)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             regra_snapshot_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 aluno_id,
@@ -735,7 +734,6 @@ def admin_nova_requisicao():
                 "Pendente",
                 observacao,
                 prepared_snapshot.snapshot_json,
-                prepared_snapshot.codigo_normativo,
             ),
         )
         req_id = cur.lastrowid
@@ -834,7 +832,7 @@ def admin_editar_requisicao(req_id):
         flash(
             "".join(
                 (
-                    "Esta solicitação já possui versão normativa registrada. ",
+                    "Esta solicitação já possui uma versão de atividade registrada. ",
                     "Para trocar a atividade, crie uma nova solicitação.",
                 )
             ),

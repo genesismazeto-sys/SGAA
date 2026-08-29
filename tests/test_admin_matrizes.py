@@ -1,3 +1,15 @@
+"""
+COV-1 restoration — Matrizes CRUD, transfer lists, filters and flash/toast UI.
+
+Adapted from the pre-Norma suite (test_admin_matrizes.py) with all Norma-domain
+setup removed (norma_atividade, matriz_norma).
+
+Covers:
+ 1. Listagem, criação, transferência de atividade e exclusão de matriz.
+ 2. Flash component ignores blank messages.
+ 3. Base toast helper ignores blank messages.
+ 4. Filter schema and typed filters (text_contains / number_range / date_range).
+"""
 import os
 import re
 import sys
@@ -36,10 +48,6 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         main.ensure_matriz_atividade_links_table(conn)
         curso = conn.execute("SELECT id FROM cursos ORDER BY id LIMIT 1").fetchone()
         assert curso is not None
-        norma_id = conn.execute(
-            """INSERT INTO norma_atividade(codigo,eixo,revisao,nome,status)
-                 VALUES ('AAC-matrix-test','AAC','test','Norma matrix test','ativa') RETURNING id"""
-        ).fetchone()["id"]
         conn.execute("DELETE FROM matrizes_atividades WHERE nome = ?", (matrix_name,))
         base_id = conn.execute(
             "INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES (?,?,'ativo') RETURNING id",
@@ -47,9 +55,9 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         ).fetchone()["id"]
         activity_id = conn.execute(
             """INSERT INTO atividade_versao
-                   (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,limite_total,numero_versao,status)
-                 VALUES (?,?,'AAC-test','AAC','99 - Grupo Automatizado',16,1,'ativa') RETURNING id""",
-            (base_id, norma_id),
+                   (atividade_base_id,eixo,grupo,limite_total,numero_versao,status)
+                 VALUES (?,'AAC','99 - Grupo Automatizado',16,1,'ativa') RETURNING id""",
+            (base_id,),
         ).fetchone()["id"]
         conn.commit()
 
@@ -87,7 +95,6 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         assert matriz["horas_aac_obrigatorias"] == 180
         assert matriz["horas_extensao_obrigatorias"] == 90
         matriz_id = matriz["id"]
-        conn.execute("INSERT INTO matriz_norma(matriz_id,norma_id) VALUES (?,?)", (matriz_id, norma_id))
         conn.commit()
 
     edit_tab = client.get(f"/admin/editar_matriz/{matriz_id}?tab=aac")
@@ -130,7 +137,6 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         ).fetchone()
         conn.execute("DELETE FROM atividade_versao WHERE id = ?", (activity_id,))
         conn.execute("DELETE FROM atividade_base WHERE id = ?", (base_id,))
-        conn.execute("DELETE FROM norma_atividade WHERE id = ?", (norma_id,))
         conn.commit()
         assert removed_matriz is None
         assert removed_link is None

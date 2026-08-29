@@ -19,15 +19,11 @@ def _login(client):
 
 
 def _seed(name, axis, group, total=None):
-    token = uuid.uuid4().hex[:8]
     conn = main.get_db_connection()
-    norma = conn.execute("SELECT id,codigo FROM norma_atividade WHERE eixo=? ORDER BY id LIMIT 1", (axis,)).fetchone()
-    if not norma:
-        norma = conn.execute("INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES(?,?, '1') RETURNING id,codigo", (f"FILTER-{axis}-{token}",axis)).fetchone()
     base = conn.execute("INSERT INTO atividade_base(nome_conceito) VALUES(?) RETURNING id", (name,)).fetchone()[0]
     version = conn.execute("""INSERT INTO atividade_versao
-        (atividade_base_id,norma_id,codigo_normativo,eixo,grupo,limite_total,status)
-        VALUES(?,?,?,?,?,?,'ativa') RETURNING id""", (base,norma['id'],norma['codigo'],axis,group,total)).fetchone()[0]
+        (atividade_base_id,eixo,grupo,limite_total,status)
+        VALUES(?,?,?,?,'ativa') RETURNING id""", (base,axis,group,total)).fetchone()[0]
     return base, version
 
 

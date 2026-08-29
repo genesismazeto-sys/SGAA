@@ -36,9 +36,6 @@ def _serialize(row) -> dict[str, object]:
         "nome_exibivel": row["atividade_base_nome"],
         "atividade_versao_id": int(row["atividade_versao_id"]),
         "atividade_versao_numero": int(row["atividade_versao_numero"]),
-        "norma_id": int(row["norma_id"]),
-        "codigo_normativo": row["codigo_normativo"],
-        "norma": row["codigo_normativo"],
         "eixo": row["eixo"],
         "grupo": row["grupo"],
         "ch_por_evento": row["ch_por_evento"],
@@ -60,7 +57,7 @@ def listar_atividades_versionadas_por_matriz(conn, matriz_id: int) -> dict[str, 
         SELECT selected.atividade_base_id, selected.atividade_versao_id,
                base.nome_conceito AS atividade_base_nome,
                version.numero_versao AS atividade_versao_numero,
-               version.norma_id, version.codigo_normativo, version.eixo,
+               version.eixo,
                version.grupo, version.ch_por_evento, version.limite_semestre,
                version.limite_total, version.documentos_json,
                version.observacao_aluno, version.observacao_admin,
@@ -77,17 +74,9 @@ def listar_atividades_versionadas_por_matriz(conn, matriz_id: int) -> dict[str, 
     by_axis = {"AAC": [], "AEU": []}
     for activity in activities:
         by_axis.setdefault(str(activity["eixo"]), []).append(activity)
-    norms = []
-    seen_norms = set()
-    for activity in activities:
-        key = (activity["norma_id"], activity["codigo_normativo"], activity["eixo"])
-        if key not in seen_norms:
-            seen_norms.add(key)
-            norms.append({"id": key[0], "codigo": key[1], "eixo": key[2]})
     return {
         "status": "resolved",
         "matriz": {"id": int(matriz["id"]), "label": _versioning_matriz_option_label(matriz)},
-        "normas": norms,
         "totais": {"geral": len(activities), "por_eixo": {k: len(v) for k, v in by_axis.items()}},
         "atividades": activities,
         "por_eixo": by_axis,
@@ -120,7 +109,7 @@ def resolver_versao_por_matriz(conn, *, matriz_id, atividade_versao_id):
         """
         SELECT selected.matriz_id, selected.atividade_base_id,
                version.id AS atividade_versao_id, version.numero_versao,
-               version.norma_id, version.codigo_normativo, version.eixo,
+               version.eixo,
                version.status AS versao_status
           FROM matriz_atividade_versao_item selected
           JOIN atividade_versao version ON version.id=selected.atividade_versao_id
@@ -138,8 +127,6 @@ def resolver_versao_por_matriz(conn, *, matriz_id, atividade_versao_id):
         "atividade_base_id": int(row["atividade_base_id"]),
         "atividade_versao_id": int(row["atividade_versao_id"]),
         "atividade_versao_numero": int(row["numero_versao"]),
-        "norma_id": int(row["norma_id"]),
-        "codigo_normativo": row["codigo_normativo"],
         "eixo": row["eixo"],
         "warnings": [],
     }

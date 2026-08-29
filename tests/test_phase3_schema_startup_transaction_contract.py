@@ -21,11 +21,13 @@ def test_single_init_owner_and_no_main_bridge():
     assert "_get_main_db_helpers" not in app_defs
 
 
-def test_migration_registry_is_exactly_prod1_v1():
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 1
-    version, marker, owner = db_maintenance.SCHEMA_MIGRATIONS[0]
-    assert (version, marker) == (1, "first_production_baseline")
-    assert owner.__module__ == "app.prod1_schema"
+def test_migration_registry_is_exactly_prod1_v1_to_v2():
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 2
+    assert [(version, marker) for version, marker, _ in db_maintenance.SCHEMA_MIGRATIONS] == [
+        (1, "first_production_baseline"),
+        (2, "remove_norma_domain"),
+    ]
+    assert all(owner.__module__ == "app.prod1_schema" for _, _, owner in db_maintenance.SCHEMA_MIGRATIONS)
 
 
 def test_app_db_bootstrap_calls_only_central_schema_owner():

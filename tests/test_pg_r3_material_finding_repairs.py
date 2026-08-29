@@ -127,7 +127,7 @@ def test_f1_validation_rejects_forbidden_object_and_marker_corruption(tmp_path, 
     elif corruption == "wrong_epoch":
         conn.execute("UPDATE schema_migrations SET schema_epoch='future-2'")
     else:
-        conn.execute("PRAGMA user_version=2")
+        conn.execute("PRAGMA user_version=1")
     conn.commit()
     before = _signature(path)
     with pytest.raises(Prod1SchemaError):
@@ -149,18 +149,15 @@ def _seed_frozen_version(conn):
            VALUES('R3-Turma',1,?,2026,1,'R3-T1',?)""",
         (course, matrix),
     )
-    norma = conn.execute(
-        "INSERT INTO norma_atividade(codigo,eixo,revisao) VALUES('R3-AAC','AAC','1') RETURNING id"
-    ).fetchone()[0]
     base = conn.execute(
         "INSERT INTO atividade_base(nome_conceito,descricao) VALUES('R3 Base','descrição') RETURNING id"
     ).fetchone()[0]
     version = conn.execute(
         """INSERT INTO atividade_versao(
-               atividade_base_id,norma_id,codigo_normativo,eixo,grupo,ch_por_evento,
+               atividade_base_id,eixo,grupo,ch_por_evento,
                limite_semestre,limite_total,observacao_aluno,documentos_json,status
-           ) VALUES(?,?,?,'AAC','1 - Antigo',2,10,20,'preservar','["doc"]','ativa') RETURNING id""",
-        (base, norma, "R3-AAC"),
+           ) VALUES(?,'AAC','1 - Antigo',2,10,20,'preservar','["doc"]','ativa') RETURNING id""",
+        (base,),
     ).fetchone()[0]
     conn.execute(
         "INSERT INTO matriz_atividade_versao_item(matriz_id,atividade_base_id,atividade_versao_id) VALUES(?,?,?)",
@@ -170,9 +167,9 @@ def _seed_frozen_version(conn):
     request_id = conn.execute(
         """INSERT INTO requisicoes(
                atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,status,
-               regra_snapshot_json,codigo_normativo_snapshot)
-           VALUES(?,'2026-01-01','2026-01-01',2,'Pendente',?,?) RETURNING id""",
-        (version, snapshot, "R3-AAC"),
+               regra_snapshot_json)
+           VALUES(?,'2026-01-01','2026-01-01',2,'Pendente',?) RETURNING id""",
+        (version, snapshot),
     ).fetchone()[0]
     conn.commit()
     return base, matrix, version, request_id, snapshot
@@ -209,8 +206,8 @@ def test_f2_canonical_owner_updates_draft_but_copies_frozen_version_to_successor
 
     draft_id = conn.execute(
         """INSERT INTO atividade_versao(
-               atividade_base_id,norma_id,codigo_normativo,eixo,grupo,numero_versao,status)
-           SELECT atividade_base_id,norma_id,codigo_normativo,eixo,'2',numero_versao+2,'rascunho'
+               atividade_base_id,eixo,grupo,numero_versao,status)
+           SELECT atividade_base_id,eixo,'2',numero_versao+2,'rascunho'
              FROM atividade_versao WHERE id=? RETURNING id""",
         (frozen_id,),
     ).fetchone()[0]
@@ -338,7 +335,6 @@ def test_f2_generic_admin_edit_creates_successor_without_rebinding_matrix_or_req
 def test_f3_snapshot_display_is_snapshot_first_even_when_catalogue_differs():
     snapshot = {
         "atividade_versao_numero": 2,
-        "codigo_normativo": "SNAP-CODE",
         "eixo": "AAC",
         "grupo": "3 - Congelado",
         "snapshot_written_at": "2026-01-01T00:00:00Z",
@@ -347,20 +343,18 @@ def test_f3_snapshot_display_is_snapshot_first_even_when_catalogue_differs():
     current = sqlite3.Row
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE current(numero_versao,codigo_normativo,eixo,grupo)")
+    conn.execute("CREATE TABLE current(numero_versao,eixo,grupo)")
     current = conn.execute(
-        "SELECT 9 AS numero_versao,'CURRENT-CODE' AS codigo_normativo,'AEU' AS eixo,'9 - Mutável' AS grupo"
+        "SELECT 9 AS numero_versao,'AEU' AS eixo,'9 - Mutável' AS grupo"
     ).fetchone()
     display = _build_aluno_requisicao_snapshot_display(
         atividade_versao_id=10,
-        codigo_normativo_snapshot="SNAP-CODE",
         regra_snapshot_json=json.dumps(snapshot),
         versao_row=current,
     )
     assert display == {
         "snapshot_versionado_presente": True,
         "snapshot_vn": 2,
-        "snapshot_codigo": "SNAP-CODE",
         "snapshot_eixo": "AAC",
         "snapshot_grupo": "3 - Congelado",
         "snapshot_written_at": "2026-01-01T00:00:00Z",
@@ -381,7 +375,7 @@ def test_f3_student_list_and_detail_do_not_leak_mutated_catalogue_values(version
             (frozen["atividade_base_id"],),
         )
         conn.execute(
-            "UPDATE atividade_versao SET codigo_normativo='LIVE-CODE',grupo='LIVE-GROUP',numero_versao=99 WHERE id=29"
+            "UPDATE atividade_versao SET grupo='LIVE-GROUP',numero_versao=99 WHERE id=29"
         )
         conn.commit()
     login_student(client)
@@ -393,10 +387,8 @@ def test_f3_student_list_and_detail_do_not_leak_mutated_catalogue_values(version
         html = page.get_data(as_text=True)
         assert page.status_code == 200
         assert frozen["nome_exibivel"] in html
-        assert frozen["codigo_normativo"] in html
         assert frozen["grupo"] in html
         assert "LIVE NAME LEAK" not in html
-        assert "LIVE-CODE" not in html
         assert "LIVE-GROUP" not in html
 
 
@@ -420,11 +412,9 @@ def test_f4_progress_merges_current_and_history_for_same_exact_version(versioned
             "atividade_base_id": old["atividade_base_id"],
             "atividade_versao_id": old["id"],
             "atividade_versao_numero": old["numero_versao"],
-            "norma_id": old["norma_id"],
-            "codigo_normativo": old["codigo_normativo"],
             "eixo": old["eixo"],
             "matriz_id_efetiva": 1,
-            "schema_version": "prod-1-request-v1",
+            "schema_version": "prod-1-request-v2",
             "ch_por_evento": old["ch_por_evento"],
             "limite_semestre": old["limite_semestre"],
             "limite_total": old["limite_total"],
@@ -436,10 +426,9 @@ def test_f4_progress_merges_current_and_history_for_same_exact_version(versioned
         conn.execute(
             """INSERT INTO requisicoes(
                    aluno_id,atividade_versao_id,data_solicitacao,data_evento,
-                   horas_solicitadas,status,horas_deferidas,regra_snapshot_json,
-                   codigo_normativo_snapshot,nome_evento)
-               VALUES(?,1,'2026-01-01','2026-01-01',2,'Deferida',2,?,?,?)""",
-            (identity["aluno_id"], json.dumps(old_snapshot), old["codigo_normativo"], "R3 old history"),
+                   horas_solicitadas,status,horas_deferidas,regra_snapshot_json,nome_evento)
+               VALUES(?,1,'2026-01-01','2026-01-01',2,'Deferida',2,?,?)""",
+            (identity["aluno_id"], json.dumps(old_snapshot), "R3 old history"),
         )
         conn.commit()
         payload = _build_aluno_progresso_payload(conn, identity["usuario_id"])

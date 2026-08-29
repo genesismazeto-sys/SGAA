@@ -431,6 +431,25 @@ def _apply_pg_removed_page_status(expected_obj):
     return expected
 
 
+def _apply_removed_norma_surfaces(expected_obj):
+    """Apply the intentional removal of both Norma admin pages and its POST row."""
+    expected = json.loads(json.dumps(expected_obj))
+    rows = expected.get("rows", [])
+    removed_rows = [row for row in rows if row.get("route") == "/admin/normas-atividade/nova"]
+    statuses = expected.get("summary", {}).get("page_statuses", [])
+    removed_statuses = [
+        item for item in statuses
+        if item.get("path") in {"/admin/normas-atividade", "/admin/normas-atividade/nova"}
+    ]
+    if len(removed_rows) != 1 or len(removed_statuses) != 2:
+        return None
+    expected["rows"] = [row for row in rows if row not in removed_rows]
+    expected["summary"]["page_statuses"] = [
+        item for item in statuses if item not in removed_statuses
+    ]
+    return expected
+
+
 def _normalize_mensagens_list_ordering(obj):
     """Deterministic normalization of the ONLY non-semantic ordering in the
     snapshot: the evidence / token_counts_per_form lists of the mensagens
@@ -461,12 +480,18 @@ def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
     expected_fc07 = _apply_fc07_mensagens_additions(head_obj)
     if expected_fc07 is None:
         return "HEAD snapshot has no unique mensagens reset row"
-    candidates = [
+    legacy_candidates = [
+        head_obj,
+        expected_fc07,
         _apply_pg_removed_page_status(head_obj),
         _apply_pg_removed_page_status(expected_fc07),
     ]
+    candidates = [
+        _apply_removed_norma_surfaces(candidate)
+        for candidate in legacy_candidates if candidate is not None
+    ]
     if all(candidate is None for candidate in candidates):
-        return "HEAD snapshot has no unique retired legacy-map page status"
+        return "HEAD snapshot has no unique removable Norma surface"
     normalized_work = _normalize_mensagens_list_ordering(work_obj)
     if not any(
         candidate is not None
@@ -775,7 +800,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 541, (
+    assert len(catalog) == 537, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -1049,7 +1074,7 @@ def test_green_8_csrf_zero_delta_and_snapshot_custody(tmp_path):
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
         rows = report["rows"]
-        assert len(rows) == 78, (
+        assert len(rows) == 77, (
             f"snapshot {suffix} must keep the known 78-row contract"
         )
 
@@ -1118,8 +1143,8 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 129
-    assert len({row["rule"] for row in routes}) == 128
+    assert len(routes) == 127
+    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"
@@ -1130,6 +1155,6 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
 def test_green_12_message_catalog_stays_536():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 541, (
+    assert len(messages_module._message_catalog()) == 537, (
         "current catalog baseline must stay 541"
     )
