@@ -2076,3 +2076,46 @@ mechanically possible. The accepted disposition is
 `FINAL_PROJECT_CLOSEOUT_RECORD_REQUIRED` is satisfied by this documentation
 unit only after independent acceptance and publication. This candidate does
 not claim its own publication.
+
+## REMOVE-NORMA-DOMAIN-1 — ACCEPTED / LANDED
+
+Final independent review verdict: `REMOVE_NORMA_DOMAIN_ACCEPTED`.
+
+Logical implementation commit: `3cd804d8734d0d7f94def1b7ed5eda336ae54f4b`
+(parent `2cb1db7e68fddb1f68b0b0a3b24b06bb919d6e7c`, subject `Remove Norma domain while preserving activity versioning`).
+
+Schema transition: prod-1 `user_version` 1 -> 2; migration marker `remove_norma_domain`
+recorded in `schema_migrations` (version 2, applied during controlled cutover startup).
+
+The active database was migrated through the accepted real application path
+(`bootstrap_prod1_schema` -> `migrate_prod1_v1_to_v2`) during a controlled application
+start; no ad-hoc migration SQL was used. Post-migration active DB validation:
+`integrity_check` ok, `foreign_key_check` zero rows, 27 `atividade_base` preserved,
+27 `atividade_versao` preserved (IDs, `numero_versao`, `eixo` and matrix row preserved
+byte-for-byte against the clean v1 backup), matrix row preserved. Live counts:
+`requisicoes` 0, `turmas` 0, `matriz_atividade_versao_item` 0.
+
+Removed physical structures confirmed absent from the active v2 DB: `norma_atividade`,
+`matriz_norma`, `atividade_versao.norma_id`, `atividade_versao.codigo_normativo`,
+`requisicoes.codigo_normativo_snapshot`. No fake/sentinel Norma replacement exists.
+Removed Norma routes are absent (404). `atividade_versao` remains the canonical version
+authority; `matriz_atividade_versao_item` remains the exact matrix->version authority;
+immutable `regra_snapshot_json` remains the historical authority.
+
+Final accepted suite: 1271 passed, 136 skipped, 0 failed (independent review evidence;
+no canonical rerun during landing by design).
+
+Backup custody (external): `C:\Users\klebe\AppData\Local\Temp\SGAA-PROD1-V1-BACKUP-20260829-141215\`
+- raw bundle: `database.db` SHA-256 `84E4891FD9A3BBE320880439C216E983DD8433B74433EDDD394AF123E31935E2` (421888 bytes); WAL was 0 bytes and SHM was removed by SQLite clean-close before copy, so the main DB file is the complete v1 state.
+- clean v1 backup: `database-v1-clean.db` SHA-256 `84E4891FD9A3BBE320880439C216E983DD8433B74433EDDD394AF123E31935E2`; independently validated `user_version=1`, `integrity_check` ok, `foreign_key_check` zero, counts 27/27/1/0/0.
+
+Runtime smoke (real application, live HTTP, admin login): login/admin shell, Matrizes list,
+existing matrix open, matrix form without "Normas aplicaveis", AAC list, AEU list, activity
+catalogue ("Versoes das atividades"), version detail, exact-version management page all
+PASS; removed Norma routes 404; no SQL error referencing removed tables/columns.
+Second-start idempotence: `user_version` stayed 2, no migration rerun, counts unchanged.
+
+Active v2 DB post-cutover: SHA-256 `E65BC2C924FD2DC70D5A7BF3FD1BD9F72B92753208B0298509C0B598119FD28B`, `user_version` 2.
+
+`run.bat` / `run2.bat` residue remains pre-existing and unrelated (unstaged, unmodified
+by this landing). `AGENT_HANDOFF.md` remains frozen and unchanged.
