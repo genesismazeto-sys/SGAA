@@ -2161,3 +2161,28 @@ SHA-256 `19548FB631017436CB8E1E6226875EFA2D6D18415DAE83731A278EC322F99997`,
 
 `run.bat` / `run2.bat` remain pre-existing unrelated residue. `AGENT_HANDOFF.md`
 remains frozen and unchanged.
+
+## LAUNCHER-RESIDUE-CLOSEOUT-1 — LANDED
+
+`run.bat` / `run2.bat` long-lived dirty residue resolved.
+
+- `run.bat` remains the canonical configurable Windows/dev launcher
+  (APP_HOST/APP_PORT overridable, venv preferred with PATH fallback,
+  browser auto-opens `/login`).
+- `run2.bat` retained as the strict manual deterministic launcher
+  (fixed 127.0.0.1:5000, venv required, no browser auto-open).
+- Occupied-port error visibility hardened with `pause` before `exit /b 1`
+  in both launchers.
+- Foreground PowerShell invocation now uses
+  `-NoProfile -NonInteractive -NoExit` in both launchers.
+- Bounded launcher validation passed: PowerShell flag combo (command runs,
+  `-NoExit` keeps shell alive), `pause` interactive wait and non-interactive
+  EOF return, occupied-port branch on both launchers (offender PID/CMD
+  shown, exit 1, no second instance), run.bat bounded startup + `/login`
+  HTTP 200 on alternate port with clean tree termination; real prod-1
+  instance untouched and healthy throughout.
+- Logical launcher commit: `801d619345f71575900701961c1a9bc07262d2f7`.
+- Known `run.bat` / `run2.bat` residue is now resolved; tracked worktree
+  expected clean except ignored authorized artifacts.
+
+`AGENT_HANDOFF.md` remains frozen and unchanged.
