@@ -47,10 +47,10 @@ def _seed_d76d(conn) -> dict:
     matriz_id = conn.execute(
         """
         INSERT INTO matrizes_atividades
-            (curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (curso_id, "Matriz D7.6D", "D76D-test", "ativa", 100, 50),
+        (curso_id, "Matriz D7.6D", "ativa", 100, 50),
     ).lastrowid
 
     base_a_id = conn.execute(

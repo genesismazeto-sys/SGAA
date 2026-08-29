@@ -118,18 +118,18 @@ def seed_reference_versioned_dataset(conn) -> None:
     conn.execute(
         """
         INSERT INTO matrizes_atividades (
-            id, curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
+        ) VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (1, curso_id, "Matriz PPA", "T10", "vigente", 200, 100),
+        (1, curso_id, "Matriz PPA", "vigente", 200, 100),
     )
     conn.execute(
         """
         INSERT INTO matrizes_atividades (
-            id, curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias
+        ) VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (2, curso_id, "Matriz PPA", "T11", "vigente", 200, 100),
+        (2, curso_id, "Matriz PPA", "vigente", 200, 100),
     )
 
     conn.execute(

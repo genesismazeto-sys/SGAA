@@ -542,8 +542,8 @@ def test_post_editar_versao_blocked_when_used_in_matriz_item(client):
             (f"Curso Bloqueio {token}", f"BLQ{token}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status) VALUES (?, ?, ?, 'ativa')",
-            (curso_id, f"Matriz Bloqueio {token}", "2026.1"),
+            "INSERT INTO matrizes_atividades (curso_id, nome, status) VALUES (?, ?, 'ativa')",
+            (curso_id, f"Matriz Bloqueio {token}"),
         ).lastrowid
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "

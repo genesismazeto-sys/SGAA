@@ -144,7 +144,6 @@ def test_admin_messages_override_updates_rendered_ui_for_helper_generated_flash(
         data={
             "curso_id": course_id,
             "nome": "",
-            "versao": "2026.1",
             "status": "rascunho",
             "horas_aac_obrigatorias": 0,
             "horas_extensao_obrigatorias": 0,
@@ -164,7 +163,6 @@ def test_admin_messages_override_updates_rendered_ui_for_helper_generated_flash(
         data={
             "curso_id": course_id,
             "nome": "",
-            "versao": "2026.1",
             "status": "rascunho",
             "horas_aac_obrigatorias": 0,
             "horas_extensao_obrigatorias": 0,

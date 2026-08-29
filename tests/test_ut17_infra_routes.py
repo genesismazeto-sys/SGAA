@@ -605,7 +605,7 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 537, (
+    assert len(_message_catalog()) == 536, (
         "message catalog must match the canonical baseline"
     )
 
@@ -613,8 +613,8 @@ def test_green_6_message_catalog_stays_536():
 def test_green_7_schema_version_three_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 2, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2}, (
+    assert SCHEMA_VERSION == 3, f"prod-1 SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3}, (
         "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"

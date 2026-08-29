@@ -38,7 +38,6 @@ def _diagnostico_versionado_turmas_disponiveis(conn) -> list[dict[str, object]]:
                    t.ano_fim,
                    t.semestre_fim,
                    m.nome,
-                   m.versao,
                    m.status
               FROM turmas t
               LEFT JOIN matrizes_atividades m ON m.id = t.matriz_id

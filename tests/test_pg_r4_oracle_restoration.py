@@ -23,7 +23,7 @@ def _seed_parent_graph(conn):
         "INSERT INTO cursos(nome,codigo,duracao_periodos) VALUES('Curso R4','R4',8) RETURNING id"
     ).fetchone()[0]
     matrix_id = conn.execute(
-        "INSERT INTO matrizes_atividades(curso_id,nome,versao) VALUES(?,'Matriz R4','1') RETURNING id",
+        "INSERT INTO matrizes_atividades(curso_id,nome) VALUES(?,'Matriz R4') RETURNING id",
         (course_id,),
     ).fetchone()[0]
     return matrix_id

@@ -632,7 +632,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 537, (
+    assert len(catalog) == 536, (
         "message catalog count must match the canonical baseline; "
         f"got {len(catalog)}"
     )
@@ -869,7 +869,7 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 537, (
+    assert len(messages._message_catalog()) == 536, (
         "current catalog baseline must be 541"
     )
 
@@ -894,9 +894,9 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
 def test_green_6_schema_version_three_no_migration_v4():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 2, f"prod-1 SCHEMA_VERSION must stay 1, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 3, f"prod-1 SCHEMA_VERSION must stay 3, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2}, (
+    assert versions == {1, 2, 3}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )

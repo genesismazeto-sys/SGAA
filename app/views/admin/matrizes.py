@@ -228,7 +228,6 @@ def admin_matrizes():
     sort_field = (request.args.get("s") or "nome").strip().lower()
     sort_dir = (request.args.get("dir") or "asc").strip().lower()
     nome_filter = get_text_query_value("nome")
-    versao_filter = get_text_query_value("versao")
     inicio_min, inicio_max = get_date_range_query("data_inicio_vigencia")
     fim_min, fim_max = get_date_range_query("data_fim_vigencia")
     horas_aac_min, horas_aac_max = get_number_range_query("horas_aac_obrigatorias")
@@ -249,11 +248,10 @@ def admin_matrizes():
     if q:
         like = f"%{q}%"
         where.append(
-            "(COALESCE(m.nome, '') LIKE ? OR COALESCE(c.nome, '') LIKE ? OR COALESCE(m.versao, '') LIKE ?)"
+            "(COALESCE(m.nome, '') LIKE ? OR COALESCE(c.nome, '') LIKE ?)"
         )
-        params.extend([like, like, like])
+        params.extend([like, like])
     append_text_contains_condition(where, params, "m.nome", nome_filter)
-    append_text_contains_condition(where, params, "m.versao", versao_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"LOWER(COALESCE(m.status, 'rascunho')) IN ({placeholders})")
@@ -290,7 +288,6 @@ def admin_matrizes():
     order_map = {
         "nome": "LOWER(COALESCE(m.nome, ''))",
         "curso": "LOWER(COALESCE(c.nome, ''))",
-        "versao": "LOWER(COALESCE(m.versao, ''))",
         "vigencia": "COALESCE(m.data_inicio_vigencia, ''), COALESCE(m.data_fim_vigencia, '')",
         "status": "LOWER(COALESCE(m.status, 'rascunho'))",
         "horas_aac_obrigatorias": "m.horas_aac_obrigatorias",
@@ -337,12 +334,6 @@ def admin_matrizes():
             ],
         },
         {
-            "param": "versao",
-            "label": "Versão",
-            "type": "text_contains",
-            "placeholder": "Contém na versão",
-        },
-        {
             "param": "data_inicio_vigencia",
             "label": "Vigência inicial",
             "type": "date_range",
@@ -386,7 +377,6 @@ def admin_matrizes():
             "id": row["id"],
             "nome": row["nome"],
             "curso": row["curso_nome"],
-            "versao": row["versao"],
             "vigencia": _matriz_vigencia_label(row),
             "horas_aac_obrigatorias": row["horas_aac_obrigatorias"] or 0,
             "horas_extensao_obrigatorias": row["horas_extensao_obrigatorias"] or 0,
@@ -709,7 +699,6 @@ def _render_matriz_form(
 def _matriz_payload_from_request(conn):
     curso_id = request.form.get("curso_id", type=int)
     nome = (request.form.get("nome") or "").strip()
-    versao = (request.form.get("versao") or "").strip()
     status = (request.form.get("status") or "rascunho").strip().lower()
     data_inicio_vigencia = (request.form.get("data_inicio_vigencia") or "").strip() or None
     data_fim_vigencia = (request.form.get("data_fim_vigencia") or "").strip() or None
@@ -724,8 +713,6 @@ def _matriz_payload_from_request(conn):
         return None, "Curso inválido para a matriz."
     if not nome:
         return None, "Informe o nome da matriz."
-    if not versao:
-        return None, "Informe a versão da matriz."
     if status not in MATRIZ_STATUS_META:
         return None, "Status de matriz inválido."
     if horas_aac_obrigatorias is None or horas_aac_obrigatorias < 0:
@@ -738,7 +725,6 @@ def _matriz_payload_from_request(conn):
     return {
         "curso_id": curso_id,
         "nome": nome,
-        "versao": versao,
         "status": status,
         "data_inicio_vigencia": data_inicio_vigencia,
         "data_fim_vigencia": data_fim_vigencia,
@@ -817,19 +803,17 @@ def admin_adicionar_matriz():
             INSERT INTO matrizes_atividades (
                 curso_id,
                 nome,
-                versao,
                 status,
                 data_inicio_vigencia,
                 data_fim_vigencia,
                 horas_aac_obrigatorias,
                 horas_extensao_obrigatorias,
                 descricao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["curso_id"],
                 payload["nome"],
-                payload["versao"],
                 payload["status"],
                 payload["data_inicio_vigencia"],
                 payload["data_fim_vigencia"],
@@ -891,7 +875,6 @@ def admin_editar_matriz(matriz_id: int):
                     UPDATE matrizes_atividades
                     SET curso_id = ?,
                         nome = ?,
-                        versao = ?,
                         status = ?,
                         data_inicio_vigencia = ?,
                         data_fim_vigencia = ?,
@@ -903,7 +886,6 @@ def admin_editar_matriz(matriz_id: int):
                     (
                         payload["curso_id"],
                         payload["nome"],
-                        payload["versao"],
                         payload["status"],
                         payload["data_inicio_vigencia"],
                         payload["data_fim_vigencia"],

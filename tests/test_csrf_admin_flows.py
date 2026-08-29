@@ -20,7 +20,7 @@ def test_admin_mutation_requires_and_accepts_active_csrf(tmp_path):
         try:
             page = env["client"].get("/admin/adicionar_matriz")
             token = _token(page.get_data(as_text=True))
-            payload = {"curso_id": 1, "nome": "CSRF Matrix", "versao": "1",
+            payload = {"curso_id": 1, "nome": "CSRF Matrix",
                        "status": "rascunho", "horas_aac_obrigatorias": 1,
                        "horas_extensao_obrigatorias": 1}
             assert env["client"].post("/admin/adicionar_matriz", data=payload).status_code == 400

@@ -11,8 +11,8 @@ def seed_matrix_graph(conn, *, name="Canonical matrix test") -> dict[str, int]:
     course_id = conn.execute("SELECT id FROM cursos ORDER BY id LIMIT 1").fetchone()["id"]
     matrix_id = conn.execute(
         """INSERT INTO matrizes_atividades
-               (curso_id,nome,versao,status,horas_aac_obrigatorias,horas_extensao_obrigatorias)
-             VALUES (?,?,'test','rascunho',100,50)""",
+               (curso_id,nome,status,horas_aac_obrigatorias,horas_extensao_obrigatorias)
+             VALUES (?,?,'rascunho',100,50)""",
         (course_id, name),
     ).lastrowid
     base_id = conn.execute(

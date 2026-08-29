@@ -98,6 +98,8 @@ R1_KW_DELETIONS = {
 # FC-08 is a bounded behavioral tightening in the existing owner: Turma
 # Matrix persistence and its exact assigned-matrix presentation are no longer
 # byte-identical to the historical extraction baseline.
+# REMOVE-MATRIX-VERSION-METADATA-1: _matrizes_by_curso no longer selects the
+# removed matrizes_atividades.versao column.
 FC08_BODY_CHANGES = {
     "admin_alunos",
     "admin_adicionar_aluno",
@@ -108,6 +110,7 @@ FC08_BODY_CHANGES = {
     "admin_detalhes_turma",
     "_resolve_turma_matriz_id",
     "_build_admin_dashboard_turma_cards",
+    "_matrizes_by_curso",
 }
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
@@ -1244,7 +1247,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 537
+    assert len(catalog) == 536
 
 
 def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted():

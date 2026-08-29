@@ -800,7 +800,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 537, (
+    assert len(catalog) == 536, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -1155,6 +1155,6 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
 def test_green_12_message_catalog_stays_536():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 537, (
+    assert len(messages_module._message_catalog()) == 536, (
         "current catalog baseline must stay 541"
     )

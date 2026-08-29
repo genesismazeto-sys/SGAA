@@ -42,12 +42,12 @@ def test_runtime_schema_helpers_reject_partial_databases_without_mutation():
     assert list(conn.iterdump()) == before
 
 
-def test_schema_status_is_prod1_v2():
+def test_schema_status_is_prod1_v3():
     conn = _prod1()
     status = db_maintenance.get_schema_status(conn)
     assert status["schema_epoch"] == status["target_schema_epoch"] == "prod-1"
-    assert status["schema_version"] == status["target_schema_version"] == 2
-    assert status["latest_migration"]["name"] == "remove_norma_domain"
+    assert status["schema_version"] == status["target_schema_version"] == 3
+    assert status["latest_migration"]["name"] == "remove_matrix_version_metadata"
 
 
 def test_access_defaults_are_idempotent_and_do_not_overwrite_customization():

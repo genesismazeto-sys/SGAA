@@ -122,8 +122,8 @@ def _seed_ativa_com_vinculo() -> dict:
             (f"Curso B5v {t}", f"B5V{t}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status)"
-            " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
+            "INSERT INTO matrizes_atividades (curso_id, nome, status)"
+            " VALUES (?, ?, 'ativa') RETURNING id",
             (curso_id, f"Matriz B5v {t}"),
         ).fetchone()["id"]
         base_id = conn.execute(
@@ -160,8 +160,8 @@ def _seed_full_resolver_setup() -> dict:
             (f"Curso B5r {t}", f"B5R{t}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status)"
-            " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
+            "INSERT INTO matrizes_atividades (curso_id, nome, status)"
+            " VALUES (?, ?, 'ativa') RETURNING id",
             (curso_id, f"Matriz B5r {t}"),
         ).fetchone()["id"]
         base_id = conn.execute(
@@ -200,8 +200,8 @@ def _seed_multi_base_matrix() -> dict:
             (f"Curso B5m {t}", f"B5M{t}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status)"
-            " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
+            "INSERT INTO matrizes_atividades (curso_id, nome, status)"
+            " VALUES (?, ?, 'ativa') RETURNING id",
             (curso_id, f"Matriz B5m {t}"),
         ).fetchone()["id"]
 
@@ -369,8 +369,8 @@ def _criar_vinculo_matriz_para_versao(versao_id: int) -> int:
             (f"Curso Sub {token}", f"SUB{token}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id, nome, versao, status)"
-            " VALUES (?, ?, '2026.1', 'ativa') RETURNING id",
+            "INSERT INTO matrizes_atividades (curso_id, nome, status)"
+            " VALUES (?, ?, 'ativa') RETURNING id",
             (curso_id, f"Matriz Sub {token}"),
         ).fetchone()["id"]
         conn.execute(

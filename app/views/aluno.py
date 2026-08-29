@@ -546,7 +546,7 @@ def aluno_dashboard():
         """
         SELECT a.*, t.id AS turma_rel_id, t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id,
                c.nome AS curso_nome, c.codigo AS curso_codigo,
-               m.nome AS matriz_nome, m.versao AS matriz_versao,
+               m.nome AS matriz_nome,
                m.horas_aac_obrigatorias, m.horas_extensao_obrigatorias
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id

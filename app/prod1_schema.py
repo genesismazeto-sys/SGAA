@@ -6,9 +6,11 @@ import re
 import sqlite3
 
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 BASELINE_MARKER = "first_production_baseline"
-LATEST_MIGRATION_MARKER = "remove_norma_domain"
+NORMA_REMOVAL_MARKER = "remove_norma_domain"
+MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
+LATEST_MIGRATION_MARKER = MATRIX_VERSION_REMOVAL_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -91,14 +93,13 @@ CREATE TABLE cursos (
 );
 CREATE TABLE matrizes_atividades (
  id INTEGER PRIMARY KEY AUTOINCREMENT, curso_id INTEGER NOT NULL, nome TEXT NOT NULL,
- versao TEXT NOT NULL, descricao TEXT,
+ descricao TEXT,
  status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho','vigente','encerrada','ativa','inativa')),
  data_inicio_vigencia TEXT, data_fim_vigencia TEXT,
  horas_aac_obrigatorias INTEGER NOT NULL DEFAULT 160 CHECK(horas_aac_obrigatorias>=0),
  horas_extensao_obrigatorias INTEGER NOT NULL DEFAULT 80 CHECK(horas_extensao_obrigatorias>=0),
- matriz_origem_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')),
- FOREIGN KEY(curso_id) REFERENCES cursos(id) ON DELETE RESTRICT,
- FOREIGN KEY(matriz_origem_id) REFERENCES matrizes_atividades(id) ON DELETE RESTRICT
+ created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ FOREIGN KEY(curso_id) REFERENCES cursos(id) ON DELETE RESTRICT
 );
 CREATE TABLE turmas (
  id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE, turno TEXT,
@@ -260,7 +261,9 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(2,'remove_norma_domain','prod-1','{"schema_epoch":"prod-1","removed_domain":"norma"}');
-PRAGMA user_version=2;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(3,'remove_matrix_version_metadata','prod-1','{"schema_epoch":"prod-1","removed_fields":["matrizes_atividades.versao","matrizes_atividades.matriz_origem_id"]}');
+PRAGMA user_version=3;
 """
 
 
@@ -364,6 +367,7 @@ def _physical_schema_signature(conn: sqlite3.Connection) -> dict[str, object]:
 
 _EXPECTED_PHYSICAL_SIGNATURE: dict[str, object] | None = None
 _PROD1_V1_SIGNATURE_SHA256 = "58b2e8b5dadc8381e03350cb3972a9590844f88c56e1f793e4036e4e6481a877"
+_PROD1_V2_SIGNATURE_SHA256 = "af842dbf7a4a6d93a933463ccfe18f7b4040a0a3a09e9fc799a27c9219ba3df6"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -400,6 +404,22 @@ def _validate_prod1_v1_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v1 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v2_schema(conn: sqlite3.Connection) -> None:
+    """Recognize the sole supported prod-1/v2 physical contract exactly."""
+    if _user_version(conn) != 2:
+        raise Prod1SchemaError("prod-1/v2 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v2 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V2_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v2 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v2 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -556,12 +576,82 @@ def migrate_prod1_v1_to_v2(conn: sqlite3.Connection) -> dict[str, object]:
             conn.execute(statement)
         conn.execute(
             "INSERT INTO schema_migrations(version,name,schema_epoch,details_json) VALUES(?,?,?,?)",
-            (2, LATEST_MIGRATION_MARKER, SCHEMA_EPOCH, '{"schema_epoch":"prod-1","removed_domain":"norma"}'),
+            (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH, '{"schema_epoch":"prod-1","removed_domain":"norma"}'),
         )
         conn.execute("PRAGMA user_version=2")
-        validate_prod1_schema(conn)
+        _validate_prod1_v2_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v2 integrity check failed")
+        conn.execute("COMMIT")
+    except Exception:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
+    _validate_prod1_v2_schema(conn)
+    return {"schema_epoch": SCHEMA_EPOCH, "schema_version": 2,
+            "baseline_marker": BASELINE_MARKER, "table_count": len(_names(conn, "table"))}
+
+
+_MATRIZES_ATIVIDADES_V3_SQL = """
+CREATE TABLE _matrizes_atividades_v3 (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, curso_id INTEGER NOT NULL, nome TEXT NOT NULL,
+ descricao TEXT,
+ status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho','vigente','encerrada','ativa','inativa')),
+ data_inicio_vigencia TEXT, data_fim_vigencia TEXT,
+ horas_aac_obrigatorias INTEGER NOT NULL DEFAULT 160 CHECK(horas_aac_obrigatorias>=0),
+ horas_extensao_obrigatorias INTEGER NOT NULL DEFAULT 80 CHECK(horas_extensao_obrigatorias>=0),
+ created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ FOREIGN KEY(curso_id) REFERENCES cursos(id) ON DELETE RESTRICT
+)
+"""
+
+
+def migrate_prod1_v2_to_v3(conn: sqlite3.Connection) -> dict[str, object]:
+    """Transactionally remove matrix version/lineage metadata while preserving
+    every surviving matrix row, ID, field and relationship exactly."""
+    if conn.in_transaction:
+        raise Prod1SchemaError("prod-1/v3 migration requires a clean connection")
+    _validate_prod1_v2_schema(conn)
+    foreign_keys_enabled = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(_MATRIZES_ATIVIDADES_V3_SQL)
+        conn.execute(
+            """INSERT INTO _matrizes_atividades_v3 (
+                   id,curso_id,nome,descricao,status,data_inicio_vigencia,data_fim_vigencia,
+                   horas_aac_obrigatorias,horas_extensao_obrigatorias,created_at)
+               SELECT id,curso_id,nome,descricao,status,data_inicio_vigencia,data_fim_vigencia,
+                      horas_aac_obrigatorias,horas_extensao_obrigatorias,created_at
+                 FROM matrizes_atividades"""
+        )
+        conn.execute("DROP TABLE matrizes_atividades")
+        conn.execute(_MATRIZES_ATIVIDADES_V3_SQL.replace("_matrizes_atividades_v3", "matrizes_atividades", 1))
+        conn.execute(
+            """INSERT INTO matrizes_atividades (
+                   id,curso_id,nome,descricao,status,data_inicio_vigencia,data_fim_vigencia,
+                   horas_aac_obrigatorias,horas_extensao_obrigatorias,created_at)
+               SELECT id,curso_id,nome,descricao,status,data_inicio_vigencia,data_fim_vigencia,
+                      horas_aac_obrigatorias,horas_extensao_obrigatorias,created_at
+                 FROM _matrizes_atividades_v3"""
+        )
+        conn.execute("DROP TABLE _matrizes_atividades_v3")
+        for statement in (
+            "CREATE INDEX idx_matrizes_curso ON matrizes_atividades(curso_id)",
+            "CREATE INDEX idx_matrizes_status ON matrizes_atividades(status)",
+        ):
+            conn.execute(statement)
+        conn.execute(
+            "INSERT INTO schema_migrations(version,name,schema_epoch,details_json) VALUES(?,?,?,?)",
+            (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH,
+             '{"schema_epoch":"prod-1","removed_fields":["matrizes_atividades.versao","matrizes_atividades.matriz_origem_id"]}'),
+        )
+        conn.execute("PRAGMA user_version=3")
+        validate_prod1_schema(conn)
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise Prod1SchemaError("prod-1/v3 integrity check failed")
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
@@ -579,7 +669,8 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         raise Prod1SchemaError("prod-1 user_version mismatch")
     expected_markers = [
         (1, BASELINE_MARKER, SCHEMA_EPOCH),
-        (2, LATEST_MIGRATION_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -601,7 +692,10 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
 def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     if _names(conn, "table") or _names(conn, "index") or _names(conn, "trigger") or _user_version(conn):
         if _user_version(conn) == 1:
-            return migrate_prod1_v1_to_v2(conn)
+            migrate_prod1_v1_to_v2(conn)
+            return migrate_prod1_v2_to_v3(conn)
+        if _user_version(conn) == 2:
+            return migrate_prod1_v2_to_v3(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

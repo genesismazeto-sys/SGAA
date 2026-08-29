@@ -628,7 +628,7 @@ def test_red_j_target_is_scanned_and_catalog_remains_536():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 537, (
+    assert len(catalog) == 536, (
         "message catalog count must match the canonical baseline; "
         f"got {len(catalog)}"
     )
@@ -851,7 +851,7 @@ def test_green_8_manual_backup_intercepted_at_orchestrator_seam_no_network(isola
 def test_green_10_message_catalog_536_and_views_recursive_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 537, (
+    assert len(messages._message_catalog()) == 536, (
         "current catalog baseline must be 541"
     )
 

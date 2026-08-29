@@ -36,7 +36,7 @@ def _seed_graph(conn):
         "INSERT INTO cursos(nome,codigo,duracao_periodos) VALUES('Curso','PG',8) RETURNING id"
     ).fetchone()[0]
     matrix = conn.execute(
-        "INSERT INTO matrizes_atividades(curso_id,nome,versao) VALUES(?,'Matriz','1') RETURNING id", (course,)
+        "INSERT INTO matrizes_atividades(curso_id,nome) VALUES(?,'Matriz') RETURNING id", (course,)
     ).fetchone()[0]
     base = conn.execute("INSERT INTO atividade_base(nome_conceito) VALUES('Pesquisa') RETURNING id").fetchone()[0]
     other = conn.execute("INSERT INTO atividade_base(nome_conceito) VALUES('Extensão') RETURNING id").fetchone()[0]
@@ -60,7 +60,7 @@ def test_empty_bootstrap_is_prod1_and_idempotent(tmp_path):
     first = bootstrap_prod1_schema(conn)
     second = bootstrap_prod1_schema(conn)
     assert first == second
-    assert first == {"schema_epoch": "prod-1", "schema_version": 2, "baseline_marker": "first_production_baseline", "table_count": 26}
+    assert first == {"schema_epoch": "prod-1", "schema_version": 3, "baseline_marker": "first_production_baseline", "table_count": 26}
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
     indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     assert tables == EXPECTED_TABLES

@@ -174,9 +174,6 @@
       {% for t in turmas %}
         {% set is_active = (t.status == 'Ativa') %}
         {% set matriz_label = t.matriz_nome or '—' %}
-        {% if t.matriz_versao %}
-          {% set matriz_label = matriz_label ~ ' • ' ~ t.matriz_versao %}
-        {% endif %}
         {{ cl.row([
           {'class':'left ellipsis','content': (t.codigo or 'N/A')},
           {'class':'left ellipsis','content': (t.curso_nome or '—') },

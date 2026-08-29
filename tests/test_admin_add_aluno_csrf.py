@@ -73,15 +73,14 @@ def _create_support_turma(conn, suffix: str) -> int:
     matriz_id = conn.execute(
         """
         INSERT INTO matrizes_atividades (
-            curso_id, nome, versao, status, data_inicio_vigencia,
+            curso_id, nome, status, data_inicio_vigencia,
             horas_aac_obrigatorias, horas_extensao_obrigatorias, descricao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         """,
         (
             curso_id,
             f"Matriz CSRF {suffix}",
-            "2026.2",
             "vigente",
             "2026-07-01",
             120,

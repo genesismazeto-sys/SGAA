@@ -398,9 +398,9 @@ def test_after_ativar_resolver_considera_versao_como_ativa(client):
             (f"Curso resolver {token}", f"RES-{token}"),
         ).fetchone()["id"]
         matriz_id = conn.execute(
-            "INSERT INTO matrizes_atividades (curso_id,nome,versao,status) "
-            "VALUES (?,?,?,'vigente') RETURNING id",
-            (curso_id, f"Matriz resolver {token}", "1"),
+            "INSERT INTO matrizes_atividades (curso_id,nome,status) "
+            "VALUES (?,?,'vigente') RETURNING id",
+            (curso_id, f"Matriz resolver {token}"),
         ).fetchone()["id"]
         conn.execute(
             "INSERT INTO matriz_atividade_versao_item "

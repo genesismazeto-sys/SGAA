@@ -114,8 +114,8 @@ cuidadosa, com diagnósticos em `/admin/diagnostico/*`.
 
 ### `matrizes_atividades`
 Conjunto de atividades válidas para um curso/período. `curso_id`, `nome`,
-`versao`, `status`, vigência, `horas_aac_obrigatorias` (160),
-`horas_extensao_obrigatorias` (80), `matriz_origem_id` (clonagem). É aqui que as
+`status`, vigência, `horas_aac_obrigatorias` (160),
+`horas_extensao_obrigatorias` (80). É aqui que as
 **horas obrigatórias** do aluno são definidas hoje.
 
 - `matrizes_atividades_itens` — itens via modelo legado (`atividade_id`).

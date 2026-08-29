@@ -141,7 +141,7 @@ def _seed_frozen_version(conn):
         "INSERT INTO cursos(nome,codigo,duracao_periodos) VALUES('Curso','R3',8) RETURNING id"
     ).fetchone()[0]
     matrix = conn.execute(
-        "INSERT INTO matrizes_atividades(curso_id,nome,versao) VALUES(?,'Matriz','1') RETURNING id",
+        "INSERT INTO matrizes_atividades(curso_id,nome) VALUES(?,'Matriz') RETURNING id",
         (course,),
     ).fetchone()[0]
     conn.execute(

@@ -91,7 +91,7 @@ def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
     ensure_matrizes_atividades_table(conn)
     rows = conn.execute(
         """
-        SELECT id, curso_id, nome, versao, status, data_inicio_vigencia
+        SELECT id, curso_id, nome, status, data_inicio_vigencia
           FROM matrizes_atividades
          WHERE curso_id IS NOT NULL
       ORDER BY curso_id,
@@ -795,7 +795,7 @@ def admin_turmas():
         SELECT t.id, t.nome, t.ano_inicio AS ano, t.semestre_inicio AS semestre, t.turno, t.status, t.numero,
                t.ano_inicio, t.semestre_inicio, t.ano_fim, t.semestre_fim, t.codigo,
                t.matriz_id, c.nome AS curso_nome, c.codigo AS curso_codigo, c.duracao_periodos,
-               tm.nome AS matriz_nome, tm.versao AS matriz_versao, tm.status AS matriz_status,
+               tm.nome AS matriz_nome, tm.status AS matriz_status,
                COUNT(a.id) AS qtd_alunos
     """
     where = []
@@ -1225,7 +1225,7 @@ def admin_detalhes_turma(turma_id):
     }
     turma = conn.execute("""
         SELECT t.*, c.nome AS curso_nome, c.codigo AS curso_codigo, c.duracao_periodos,
-               tm.nome AS matriz_nome, tm.versao AS matriz_versao, tm.status AS matriz_status
+               tm.nome AS matriz_nome, tm.status AS matriz_status
           FROM turmas t
           LEFT JOIN cursos c ON c.id = t.curso_id
            LEFT JOIN matrizes_atividades tm

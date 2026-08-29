@@ -42,8 +42,8 @@ def versioned_env(tmp_path):
             aac_matrix_id = conn.execute(
                 """
                 INSERT INTO matrizes_atividades
-                    (curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
-                VALUES (?, 'FC09 test AAC Matrix', 'test-aac', 'rascunho', 100, 50)
+                    (curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
+                VALUES (?, 'FC09 test AAC Matrix', 'rascunho', 100, 50)
                 RETURNING id
                 """,
                 (curso_id,),
@@ -51,8 +51,8 @@ def versioned_env(tmp_path):
             aeu_matrix_id = conn.execute(
                 """
                 INSERT INTO matrizes_atividades
-                    (curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
-                VALUES (?, 'FC09 test AEU Matrix', 'test-aeu', 'rascunho', 100, 50)
+                    (curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
+                VALUES (?, 'FC09 test AEU Matrix', 'rascunho', 100, 50)
                 RETURNING id
                 """,
                 (curso_id,),
@@ -73,8 +73,8 @@ def versioned_env_csrf(tmp_path):
             aac_matrix_id = conn.execute(
                 """
                 INSERT INTO matrizes_atividades
-                    (curso_id, nome, versao, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
-                VALUES (?, 'FC09 CSRF AAC Matrix', 'test-aac', 'rascunho', 100, 50)
+                    (curso_id, nome, status, horas_aac_obrigatorias, horas_extensao_obrigatorias)
+                VALUES (?, 'FC09 CSRF AAC Matrix', 'rascunho', 100, 50)
                 RETURNING id
                 """,
                 (curso_id,),

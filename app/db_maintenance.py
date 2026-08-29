@@ -19,6 +19,7 @@ from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_typ
 from app.prod1_schema import (
     BASELINE_MARKER,
     LATEST_MIGRATION_MARKER,
+    NORMA_REMOVAL_MARKER,
     SCHEMA_EPOCH,
     SCHEMA_VERSION,
     Prod1SchemaError,
@@ -128,7 +129,8 @@ def _utc_now_iso() -> str:
 
 SCHEMA_MIGRATIONS = (
     (1, BASELINE_MARKER, bootstrap_prod1_schema),
-    (2, LATEST_MIGRATION_MARKER, bootstrap_prod1_schema),
+    (2, NORMA_REMOVAL_MARKER, bootstrap_prod1_schema),
+    (3, LATEST_MIGRATION_MARKER, bootstrap_prod1_schema),
 )
 
 

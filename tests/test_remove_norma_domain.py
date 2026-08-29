@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import shutil
 import sqlite3
 from pathlib import Path
 
 import main
-from app.prod1_schema import bootstrap_prod1_schema
+from app.prod1_schema import migrate_prod1_v1_to_v2
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
     prepare_versioned_requisicao_snapshot,
     read_requisicao_snapshot_for_processing,
 )
 from tests.canonical_matrix_test_support import current_version_id, login_admin, seed_matrix_graph
+from tests.hermetic_prod1_fixtures import (
+    _columns,
+    _markers,
+    _table_names,
+    build_canonical_v1_database,
+    seed_v1_business_data,
+)
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -31,10 +36,6 @@ REMOVED_RUNTIME_TERMS = (
 )
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def test_prod1_v2_has_no_norma_schema_or_routes(tmp_path):
     with isolated_versioned_app_env(tmp_path, "schema-v2.db") as env:
         with main.app.app_context():
@@ -43,7 +44,7 @@ def test_prod1_v2_has_no_norma_schema_or_routes(tmp_path):
             assert not tables & REMOVED_SCHEMA_NAMES
             assert REMOVED_FIELDS.isdisjoint({row[1] for row in conn.execute("PRAGMA table_info(atividade_versao)")})
             assert "codigo_normativo_snapshot" not in {row[1] for row in conn.execute("PRAGMA table_info(requisicoes)")}
-            assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
         assert env["client"].get("/admin/normas-atividade").status_code == 404
         assert env["client"].get("/admin/normas-atividade/nova").status_code == 404
 
@@ -163,39 +164,149 @@ def test_request_snapshot_is_exact_version_snapshot_only_and_norma_free(tmp_path
             assert read.rule.atividade_versao_id == 29
 
 
-def test_real_v1_copy_migrates_transactionally_and_preserves_business_rows(tmp_path):
-    source = Path(main.__file__).resolve().parent / "database.db"
-    assert source.exists()
-    source_hash = _sha256(source)
-    target = tmp_path / "disposable-v1.db"
-    shutil.copyfile(source, target)
+def test_canonical_v1_to_v2_preserves_versioned_business_data(tmp_path):
+    """Hermetic canonical prod-1/v1 → v2 via the REAL migration entry.
 
-    before = sqlite3.connect(target)
-    before.row_factory = sqlite3.Row
-    version_rows = [dict(row) for row in before.execute(
+    The v1 database is generated entirely under tmp_path from the canonical
+    historical DDL (proven against _PROD1_V1_SIGNATURE_SHA256 inside the
+    fixture builder). No operational database is read or copied.
+    """
+    conn = sqlite3.connect(tmp_path / "hermetic-v1-to-v2.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    build_canonical_v1_database(conn)
+    ids = seed_v1_business_data(conn)
+
+    base_rows_before = [tuple(row) for row in conn.execute(
+        "SELECT id,nome_conceito,descricao,status,created_at FROM atividade_base ORDER BY id"
+    )]
+    version_rows_before = [tuple(row) for row in conn.execute(
         """SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
                   limite_total,observacao_aluno,observacao_admin,documentos_json,
                   vigencia_inicio,vigencia_fim,numero_versao,status,
                   versao_anterior_id,created_at FROM atividade_versao ORDER BY id"""
     )]
-    base_rows = [dict(row) for row in before.execute("SELECT * FROM atividade_base ORDER BY id")]
-    before.close()
+    matrix_rows_before = [dict(row) for row in conn.execute(
+        "SELECT * FROM matrizes_atividades ORDER BY id"
+    )]
+    mavi_before = [tuple(row) for row in conn.execute(
+        "SELECT matriz_id,atividade_base_id,atividade_versao_id FROM matriz_atividade_versao_item ORDER BY id"
+    )]
+    turmas_before = [tuple(row) for row in conn.execute(
+        "SELECT id,nome,matriz_id FROM turmas ORDER BY id"
+    )]
+    reqs_before = [dict(row) for row in conn.execute("SELECT * FROM requisicoes ORDER BY id")]
 
-    conn = sqlite3.connect(target)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    result = bootstrap_prod1_schema(conn)
+    result = migrate_prod1_v1_to_v2(conn)
     assert result["schema_version"] == 2
-    assert [dict(row) for row in conn.execute("SELECT * FROM atividade_base ORDER BY id")] == base_rows
-    assert [dict(row) for row in conn.execute(
+
+    # Intermediate v2 state contract.
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert _markers(conn) == [
+        (1, "first_production_baseline", "prod-1"),
+        (2, "remove_norma_domain", "prod-1"),
+    ]
+    assert not _table_names(conn) & REMOVED_SCHEMA_NAMES
+    assert REMOVED_FIELDS.isdisjoint(_columns(conn, "atividade_versao"))
+    assert "codigo_normativo_snapshot" not in _columns(conn, "requisicoes")
+    assert {"versao", "matriz_origem_id"} <= _columns(conn, "matrizes_atividades")
+
+    # Preservation proofs.
+    assert [tuple(row) for row in conn.execute(
+        "SELECT id,nome_conceito,descricao,status,created_at FROM atividade_base ORDER BY id"
+    )] == base_rows_before
+    assert [tuple(row) for row in conn.execute(
         """SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
                   limite_total,observacao_aluno,observacao_admin,documentos_json,
                   vigencia_inicio,vigencia_fim,numero_versao,status,
                   versao_anterior_id,created_at FROM atividade_versao ORDER BY id"""
-    )] == version_rows
-    assert conn.execute("SELECT COUNT(*) FROM atividade_base").fetchone()[0] == 27
-    assert conn.execute("SELECT COUNT(*) FROM atividade_versao").fetchone()[0] == 27
+    )] == version_rows_before
+    assert [dict(row) for row in conn.execute("SELECT * FROM matrizes_atividades ORDER BY id")] == matrix_rows_before
+    assert [tuple(row) for row in conn.execute(
+        "SELECT matriz_id,atividade_base_id,atividade_versao_id FROM matriz_atividade_versao_item ORDER BY id"
+    )] == mavi_before
+    assert [tuple(row) for row in conn.execute(
+        "SELECT id,nome,matriz_id FROM turmas ORDER BY id"
+    )] == turmas_before
+
+    reqs_after = [dict(row) for row in conn.execute("SELECT * FROM requisicoes ORDER BY id")]
+    assert [row["id"] for row in reqs_after] == [row["id"] for row in reqs_before]
+    assert [row["atividade_versao_id"] for row in reqs_after] == [row["atividade_versao_id"] for row in reqs_before]
+    converted = json.loads(reqs_after[0]["regra_snapshot_json"])
+    assert converted["schema_version"] == "prod-1-request-v2"
+    assert REMOVED_FIELDS.isdisjoint(converted)
+    assert converted["atividade_versao_id"] == ids["v1a"]
+    assert converted["matriz_id_efetiva"] == ids["m1"]
+
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
-    assert _sha256(source) == source_hash
+
+
+def test_canonical_v1_migrates_through_v2_to_v3(tmp_path):
+    """Hermetic canonical prod-1/v1 → v3 through the single production bootstrap entry."""
+    conn = sqlite3.connect(tmp_path / "hermetic-v1-chain.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    build_canonical_v1_database(conn)
+    ids = seed_v1_business_data(conn)
+
+    version_rows_before = [tuple(row) for row in conn.execute(
+        """SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                  limite_total,observacao_aluno,observacao_admin,documentos_json,
+                  vigencia_inicio,vigencia_fim,numero_versao,status,
+                  versao_anterior_id,created_at FROM atividade_versao ORDER BY id"""
+    )]
+    mavi_before = [tuple(row) for row in conn.execute(
+        "SELECT matriz_id,atividade_base_id,atividade_versao_id FROM matriz_atividade_versao_item ORDER BY id"
+    )]
+    turmas_before = [tuple(row) for row in conn.execute(
+        "SELECT id,nome,matriz_id FROM turmas ORDER BY id"
+    )]
+    reqs_before = [dict(row) for row in conn.execute("SELECT * FROM requisicoes ORDER BY id")]
+
+    from app.prod1_schema import bootstrap_prod1_schema
+
+    result = bootstrap_prod1_schema(conn)
+    assert result["schema_version"] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert _markers(conn) == [
+        (1, "first_production_baseline", "prod-1"),
+        (2, "remove_norma_domain", "prod-1"),
+        (3, "remove_matrix_version_metadata", "prod-1"),
+    ]
+    assert not _table_names(conn) & REMOVED_SCHEMA_NAMES
+    assert REMOVED_FIELDS.isdisjoint(_columns(conn, "atividade_versao"))
+    assert "codigo_normativo_snapshot" not in _columns(conn, "requisicoes")
+    assert {"versao", "matriz_origem_id"}.isdisjoint(_columns(conn, "matrizes_atividades"))
+
+    assert [tuple(row) for row in conn.execute(
+        """SELECT id,atividade_base_id,eixo,grupo,ch_por_evento,limite_semestre,
+                  limite_total,observacao_aluno,observacao_admin,documentos_json,
+                  vigencia_inicio,vigencia_fim,numero_versao,status,
+                  versao_anterior_id,created_at FROM atividade_versao ORDER BY id"""
+    )] == version_rows_before
+    assert [tuple(row) for row in conn.execute(
+        "SELECT matriz_id,atividade_base_id,atividade_versao_id FROM matriz_atividade_versao_item ORDER BY id"
+    )] == mavi_before
+    assert [tuple(row) for row in conn.execute(
+        "SELECT id,nome,matriz_id FROM turmas ORDER BY id"
+    )] == turmas_before
+
+    matrices_after = [dict(row) for row in conn.execute("SELECT * FROM matrizes_atividades ORDER BY id")]
+    assert {row["id"] for row in matrices_after} == {ids["m1"], ids["m2"]}
+
+    reqs_after = [dict(row) for row in conn.execute("SELECT * FROM requisicoes ORDER BY id")]
+    assert [row["id"] for row in reqs_after] == [row["id"] for row in reqs_before]
+    converted = json.loads(reqs_after[0]["regra_snapshot_json"])
+    assert converted["schema_version"] == "prod-1-request-v2"
+    assert converted["matriz_id_efetiva"] == ids["m1"]
+    read = read_requisicao_snapshot_for_processing(conn.execute(
+        "SELECT * FROM requisicoes WHERE id=?", (ids["req1"],)
+    ).fetchone())
+    assert read.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
+    assert read.rule.matriz_id_efetiva == ids["m1"]
+
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.close()

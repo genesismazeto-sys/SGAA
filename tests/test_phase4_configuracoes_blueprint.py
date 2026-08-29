@@ -639,7 +639,7 @@ def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_ow
     messages_module._message_catalog.cache_clear()
     catalog = messages_module._message_catalog()
 
-    assert len(catalog) == 537
+    assert len(catalog) == 536
     assert {
         key: catalog[key]["default_text"] for key in MOVED_MESSAGE_DEFAULTS
     } == MOVED_MESSAGE_DEFAULTS

@@ -22,7 +22,7 @@
   <div class="filters">
     <div class="input-group" id="grp-busca-matrizes">
       <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
-      <input id="busca-matrizes" type="search" placeholder="Buscar por nome, curso ou versão..." aria-label="Buscar matrizes" value="{{ request.args.get('q','') }}">
+      <input id="busca-matrizes" type="search" placeholder="Buscar por nome ou curso..." aria-label="Buscar matrizes" value="{{ request.args.get('q','') }}">
     </div>
 
     <div class="input-group" id="grp-ordenar">
@@ -83,7 +83,6 @@
   <div class="menu-list" id="sort-fields-list">
     <div class="menu-item" data-field="nome">Nome</div>
     <div class="menu-item" data-field="curso">Curso</div>
-    <div class="menu-item" data-field="versao">Versão</div>
     <div class="menu-item" data-field="vigencia">Vigência</div>
     <div class="menu-item" data-field="status">Status</div>
     <div class="menu-item" data-field="horas_aac_obrigatorias">AAC</div>
@@ -111,7 +110,6 @@
     {{ cl.header([
       {'text':'Nome','class':'left'},
       {'text':'Curso','class':'left'},
-      {'text':'Versão','class':'center'},
       {'text':'Vigência','class':'center'},
       {'text':'AAC','class':'center'},
       {'text':'Extensão','class':'center'},
@@ -124,7 +122,6 @@
         {{ cl.row([
           {'content': matriz.nome or '-', 'class':'left ellipsis'},
           {'content': matriz.curso or '-', 'class':'left ellipsis'},
-          {'content': matriz.versao or '-', 'class':'center'},
           {'content': matriz.vigencia or '-', 'class':'center'},
           {'content': ((matriz.horas_aac_obrigatorias or 0) ~ ' h'), 'class':'center'},
           {'content': ((matriz.horas_extensao_obrigatorias or 0) ~ ' h'), 'class':'center'},

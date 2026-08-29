@@ -72,7 +72,6 @@ def test_admin_matrizes_list_create_transfer_and_delete(client):
         data={
             "curso_id": curso["id"],
             "nome": matrix_name,
-            "versao": "2026.1",
             "status": "vigente",
             "data_inicio_vigencia": "2026-01-01",
             "data_fim_vigencia": "2026-12-31",
@@ -190,7 +189,6 @@ def test_admin_matrizes_filter_schema_and_typed_filters(client):
         data={
             "curso_id": curso_id,
             "nome": matrix_a,
-            "versao": "2026.1",
             "status": "vigente",
             "data_inicio_vigencia": "2026-01-10",
             "data_fim_vigencia": "2026-12-20",
@@ -207,7 +205,6 @@ def test_admin_matrizes_filter_schema_and_typed_filters(client):
         data={
             "curso_id": curso_id,
             "nome": matrix_b,
-            "versao": "2025.2",
             "status": "rascunho",
             "data_inicio_vigencia": "2025-02-01",
             "data_fim_vigencia": "2025-11-30",
@@ -224,7 +221,6 @@ def test_admin_matrizes_filter_schema_and_typed_filters(client):
             "/admin/matrizes",
             query_string={
                 "nome": "Tipado A",
-                "versao": "2026",
                 "status": "vigente",
                 "data_inicio_vigencia_min": "2026-01-01",
                 "horas_aac_obrigatorias_min": "170",
@@ -235,7 +231,7 @@ def test_admin_matrizes_filter_schema_and_typed_filters(client):
         html = response.get_data(as_text=True)
 
         assert '"param": "nome"' in html
-        assert '"param": "versao"' in html
+        assert '"param": "versao"' not in html
         assert '"param": "data_inicio_vigencia"' in html
         assert '"param": "horas_aac_obrigatorias"' in html
         assert '"type": "text_contains"' in html

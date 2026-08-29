@@ -24,8 +24,6 @@ def _matriz_status_label(status: str | None) -> str:
 
 def _matriz_option_label(row) -> str:
     parts = [str(row["nome"] or "Matriz sem nome").strip()]
-    if row["versao"]:
-        parts.append(str(row["versao"]).strip())
     if row["status"]:
         parts.append(_matriz_status_label(row["status"]))
     return " | ".join(part for part in parts if part)

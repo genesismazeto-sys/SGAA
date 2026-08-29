@@ -7,7 +7,7 @@ def test_release_matrix_crud_uses_canonical_schema(tmp_path):
     with isolated_versioned_app_env(tmp_path, "release-crud.db") as env:
         login_admin(env["client"])
         response = env["client"].post("/admin/adicionar_matriz", data={
-            "curso_id": 1, "nome": "Release CRUD", "versao": "1", "status": "rascunho",
+            "curso_id": 1, "nome": "Release CRUD", "status": "rascunho",
             "horas_aac_obrigatorias": 10, "horas_extensao_obrigatorias": 5,
         })
         assert response.status_code == 302

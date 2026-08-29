@@ -29,7 +29,7 @@ def test_factory_init_bootstraps_empty_prod1_database(tmp_path):
         app_db.init_db()
         status = validate_prod1_schema(app_db.get_db_connection())
     assert status["schema_epoch"] == "prod-1"
-    assert status["schema_version"] == 2
+    assert status["schema_version"] == 3
 
 
 def test_factory_init_is_idempotent(tmp_path):

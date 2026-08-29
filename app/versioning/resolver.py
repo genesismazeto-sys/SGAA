@@ -10,8 +10,6 @@ _MATRIZ_STATUS_LABELS = {
 
 def _versioning_matriz_option_label(row) -> str:
     parts = [str(row["nome"] or "Matriz sem nome").strip()]
-    if row["versao"]:
-        parts.append(str(row["versao"]).strip())
     if row["status"]:
         parts.append(_MATRIZ_STATUS_LABELS.get(str(row["status"]).lower(), str(row["status"])))
     return " | ".join(parts)
@@ -86,7 +84,7 @@ def listar_atividades_versionadas_por_matriz(conn, matriz_id: int) -> dict[str, 
 def listar_atividades_versionadas_por_turma(conn, turma_id: int) -> dict[str, object]:
     turma = conn.execute(
         """
-        SELECT t.*, m.nome AS matriz_nome, m.versao AS matriz_versao,
+        SELECT t.*, m.nome AS matriz_nome,
                m.status AS matriz_status
           FROM turmas t LEFT JOIN matrizes_atividades m ON m.id=t.matriz_id
          WHERE t.id=?
