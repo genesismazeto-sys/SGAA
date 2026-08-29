@@ -2119,3 +2119,45 @@ Active v2 DB post-cutover: SHA-256 `E65BC2C924FD2DC70D5A7BF3FD1BD9F72B92753208B0
 
 `run.bat` / `run2.bat` residue remains pre-existing and unrelated (unstaged, unmodified
 by this landing). `AGENT_HANDOFF.md` remains frozen and unchanged.
+
+## REMOVE-MATRIX-VERSION-METADATA-1 — ACCEPTED / LANDED
+
+Independent final verdict: `REMOVE_MATRIX_VERSION_ACCEPTED`.
+
+Logical implementation commit: `5be2829fea1fd9041685ac22cea9ad7c48f8824a`
+(parent `e74baa5955b6616567410ce332458e54773482d6`).
+
+Schema transition: prod-1 `user_version` 2 -> 3; migration marker
+`remove_matrix_version_metadata` recorded in `schema_migrations` (version 3).
+The active database was migrated through the accepted normal application startup
+path; no ad-hoc migration SQL was used.
+
+Post-migration validation: `integrity_check` ok, `foreign_key_check` zero rows,
+live counts unchanged at 1 matrix / 0 turmas / 0 requisicoes /
+0 matriz_atividade_versao_item. Matrix ID 1, `curso_id`, name, description,
+status, validity, AAC/AEU hour requirements and `created_at` were preserved.
+`matrizes_atividades.versao` and `matrizes_atividades.matriz_origem_id` were
+removed. Matrix ID remains canonical identity; `turma.matriz_id`,
+`atividade_versao` (including `numero_versao` and `versao_anterior_id`),
+`matriz_atividade_versao_item` and `regra_snapshot_json` remain protected
+authorities.
+
+Raw v2 backup custody: `C:\Users\klebe\AppData\Local\Temp\SGAA-PROD1-V2-BACKUP-20260829-173806679\`
+(`database.db` SHA-256
+`E65BC2C924FD2DC70D5A7BF3FD1BD9F72B92753208B0298509C0B598119FD28B`).
+Clean v2 rollback backup: `database-v2-clean.db`, same SHA-256, independently
+validated at `user_version=2`, `integrity_check` ok, `foreign_key_check` zero,
+and unchanged counts.
+
+Real application/admin-login smoke passed for the admin shell, Matrizes list,
+existing matrix, matrix form/list removal of Versao metadata, AAC, AEU,
+activity-version catalog/detail, exact matrix activity-version management,
+legacy `versao` query parameters, and absent Norma UI. Second-start
+idempotence passed: v3, three markers and business counts remained unchanged.
+
+Accepted suite: 1287 passed, 136 skipped, 0 failed. Active v3 database final
+SHA-256 `19548FB631017436CB8E1E6226875EFA2D6D18415DAE83731A278EC322F99997`,
+`user_version=3`.
+
+`run.bat` / `run2.bat` remain pre-existing unrelated residue. `AGENT_HANDOFF.md`
+remains frozen and unchanged.
