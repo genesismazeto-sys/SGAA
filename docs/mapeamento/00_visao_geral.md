@@ -52,6 +52,9 @@ google-auth-oauthlib==1.2.2        google-auth-httplib2==0.2.0
   [`app/__init__.py`](../../app/__init__.py).
 - **Windows/dev:** `run.bat` ativa o `.venv`, checa a porta 5000, abre o
   navegador no `/login` e roda `python main.py`.
+- **Windows/manual:** `run2.bat` é o lançador manual estrito: porta fixa
+  `127.0.0.1:5000`, exige a venv do projeto (sem fallback para PATH) e não
+  abre o navegador automaticamente.
 - **Variáveis de ambiente:** ver `.env.example`. Principais:
   - `APP_ENV` = `development` | `production` | `testing`
   - `APP_SECRET_KEY` (obrigatória e forte em produção)

@@ -25,7 +25,10 @@ powershell -NoProfile -Command ^
 	"if ($commandLine) { Write-Host ('[run.bat] Processo atual: PID=' + $listener.OwningProcess + ' CMD=' + $commandLine) } else { Write-Host ('[run.bat] Processo atual: PID=' + $listener.OwningProcess) }; " ^
 	"Write-Host '[run.bat] Feche esse processo ou defina APP_PORT com outra porta antes de iniciar este projeto.'; " ^
 	"exit 1"
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+	 pause
+	 exit /b 1
+)
 
 echo [run.bat] Iniciando app em http://%APP_HOST%:%APP_PORT%
 echo [run.bat] Abrindo login automaticamente em %APP_LOGIN_URL%
@@ -37,4 +40,4 @@ start "" powershell -NoProfile -WindowStyle Hidden -Command ^
 	"  Start-Sleep -Milliseconds 500; " ^
 	"}; " ^
 	"exit 0"
-powershell -NoExit -Command "$env:APP_HOST='%APP_HOST%'; $env:APP_PORT='%APP_PORT%'; & '%PYTHON_EXE%' 'main.py'"
+powershell -NoProfile -NonInteractive -NoExit -Command "$env:APP_HOST='%APP_HOST%'; $env:APP_PORT='%APP_PORT%'; & '%PYTHON_EXE%' 'main.py'"

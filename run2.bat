@@ -26,7 +26,10 @@ powershell -NoProfile -Command ^
 	"if ($commandLine) { Write-Host ('[run2.bat] Processo atual: PID=' + $listener.OwningProcess + ' CMD=' + $commandLine) } else { Write-Host ('[run2.bat] Processo atual: PID=' + $listener.OwningProcess) }; " ^
 	"Write-Host '[run2.bat] Feche esse processo ou ajuste APP_PORT antes de iniciar este projeto.'; " ^
 	"exit 1"
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+	 pause
+	 exit /b 1
+)
 
 echo [run2.bat] Iniciando app em http://%APP_HOST%:%APP_PORT%
-powershell -NoExit -Command "$env:APP_HOST='%APP_HOST%'; $env:APP_PORT='%APP_PORT%'; & '%PYTHON_EXE%' 'main.py'"
+powershell -NoProfile -NonInteractive -NoExit -Command "$env:APP_HOST='%APP_HOST%'; $env:APP_PORT='%APP_PORT%'; & '%PYTHON_EXE%' 'main.py'"
