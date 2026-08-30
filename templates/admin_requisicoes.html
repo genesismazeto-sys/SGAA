@@ -1492,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     bar.setAttribute('aria-label','Ações da requisição selecionada');
     bar.innerHTML = `
       ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="process" aria-label="Processar requisição" title="Processar"><i data-lucide="circle-check-big"></i></button>' : ''}
-      ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar requisição" title="Editar"><i data-lucide="pencil"></i></button>' : ''}
+      ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar requisição" title="Editar"><i data-lucide="edit"></i></button>' : ''}
       <button type="button" class="act-btn" data-action="view" aria-label="Ver requisição" title="Ver"><i data-lucide="eye"></i></button>
     `;
     window.lucide?.createIcons?.();
