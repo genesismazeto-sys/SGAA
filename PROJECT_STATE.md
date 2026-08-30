@@ -2248,3 +2248,43 @@ statement wherever the two differ.
   `git diff --check` passed.
 - Logical implementation commit:
   `a35ef35` (`Normalize floating row actions across lists`).
+
+## ADMIN-REPORT-CREATION-1 — ACCEPTED / LANDED
+
+Admin report creation workflow implemented and user-approved.
+
+- New route `POST /admin/reportes/novo` (`admin_reportes_novo`), canonical
+  owner `app/views/admin/reportes.py`, registered via the immutable
+  `LEGACY_ROUTE_SPECS` tuple (Reportes cohort grows from 5 to 6 relocated
+  symbols: 4 routes, 1 helper, 1 constant); `main` re-exports by identity
+  only.
+- RBAC `reportes:edit`; `can_reportes_edit` gates the "Novo reporte" button;
+  consultivo (view-only) admins see no creation control and POST is denied.
+- Modal creation form with aluno selector, categoria, título (max 120),
+  descrição and optional screenshot (`save_student_document` /
+  `ALLOWED_REPORTE_SCREENSHOTS`), transactional insert with screenshot
+  rollback on failure.
+- Validation: aluno required and existing, categoria from
+  `REPORTE_CATEGORY_OPTIONS`, título/descrição trimmed required; errors flash
+  and reopen the modal (`novo=1`).
+- CSRF protected; unauthenticated creation redirects to login.
+- Test coverage: `tests/test_admin_reportes.py` creation suite (initial
+  state, invalid required values, valid screenshot storage, invalid
+  extension rejection, insert-failure screenshot cleanup, view-only denial,
+  unauthenticated block, CSRF enforcement).
+- Route inventory baseline reconciled (127 -> 128 rules; 126 -> 127 distinct
+  non-static endpoints; method pairs 155 -> 156; governed requirements
+  129 -> 130; actor combinations 387 -> 390 = 254 allowed + 136 denied).
+- Message catalog 536 -> 545 (9 new report-creation flash messages).
+- Focused validation: `test_admin_reportes.py` +
+  `test_ut12_reportes_blueprint.py` +
+  `test_ref_0c_d_r1_route_complete_actor_matrix.py`: 77 passed; global
+  invariant lane (route inventory snapshot + RBAC coverage + UT3/UT6/UT8):
+  98 passed; phase-4 shared-owner + shadow-gate lane: 156 passed; remaining
+  modified UT lanes (UT10/11/13/14/15/16/17): 186 passed. Total 517 passed /
+  0 failed / 0 errors. `git diff --check` passed.
+- User visual approval granted for the creation modal flow.
+- Logical implementation commit:
+  `a8382dd` (`Implement admin report creation workflow`).
+
+`AGENT_HANDOFF.md` remains frozen and unchanged.
