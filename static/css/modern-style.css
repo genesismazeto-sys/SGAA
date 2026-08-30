@@ -258,6 +258,32 @@ body{
 .btn.danger{ color:#b91c1c; border:1px solid #ef4444; background:var(--surface); }
 .btn.danger:hover{ background:#fee2e2; }
 
+/* Disabled — canonical Design System state for any .btn. Owned here with the
+   rest of the button contract so a disabled primary keeps its primary identity
+   while clearly reading as inactive (no hover shift, not-allowed cursor). */
+.btn:disabled,
+.btn[aria-disabled="true"]{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.btn:disabled:hover,
+.btn[aria-disabled="true"]:hover{
+  background:var(--surface);
+  border-color:var(--border-strong);
+  box-shadow:none;
+}
+.btn.primary:disabled,
+.btn.primary[aria-disabled="true"]{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.btn.primary:disabled:hover,
+.btn.primary[aria-disabled="true"]:hover{
+  background:var(--brand);
+  border-color:var(--brand);
+  box-shadow:none;
+}
+
 /* CentralizaÃ§Ã£o Ã­cone/texto para botÃµes "Nova" / "Adicionar" */
 .btn.btn-nova-alinhado{ align-items:center; }
 .btn.btn-nova-alinhado .lucide,

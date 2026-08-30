@@ -369,8 +369,11 @@ def test_after_ativar_rota_edicao_blocks(client):
     r_editar = client.get(
         f"/admin/catalogo-versoes/{seed['base_id']}/versoes/{versao_id}/editar"
     )
-    assert r_editar.status_code == 302
-    assert f"/admin/catalogo-versoes/{seed['base_id']}" in r_editar.headers.get("Location", "")
+    assert r_editar.status_code == 200
+    html_editar = r_editar.get_data(as_text=True)
+    assert 'class="btn primary"' not in html_editar, (
+        "versão ativada deve abrir somente-leitura, sem botão Salvar"
+    )
 
 
 # ---------------------------------------------------------------------------

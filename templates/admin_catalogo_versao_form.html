@@ -1,175 +1,306 @@
 {% extends "base.html" %}
 {% block title %}{{ form_title }} — {{ base.nome_conceito }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
+  .form-fieldset[disabled]{ opacity:1; }
+  .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
+  .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap:var(--list-col-gap, 2px); }
+  .is-off-chunk{ opacity:.55; pointer-events:none; }
+  .versao-switcher{
+    display:flex; align-items:center; gap:10px; margin:14px 0 18px; padding:10px 12px;
+    background:var(--field-readonly-bg); border:1px solid var(--border-strong); border-radius:var(--radius);
+  }
+  .versao-switcher .vs-label{ font-size:13px; font-weight:500; color:var(--text-secondary); white-space:nowrap; }
+  .versao-switcher .control{ min-width:220px; }
+  .versao-switcher .vs-actions{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  @media (max-width:720px){
+    .versao-switcher{ flex-wrap:wrap; }
+    .versao-switcher .vs-actions{ margin-left:0; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
+{% set grp_val = grupo or '' %}
+{% set grp_num = (grp_val.split(' - ', 1)[0] if ' - ' in grp_val else (grp_val if grp_val.isdigit() else '')) %}
+{% set grp_desc = (grp_val.split(' - ', 1)[1] if ' - ' in grp_val else ('' if grp_val.isdigit() else grp_val)) %}
+
 <h1 class="main-title">{{ form_title }}</h1>
 
-<p style="margin-bottom:18px; color:var(--text-secondary);">
-  Atividade-base: <strong>{{ base.nome_conceito }}</strong>
+{% if is_clone_create and versao_anterior_label and versao_anterior_label != 'Sem versão anterior' and next_num %}
+<p style="margin-bottom:10px; color:var(--text-secondary);">
+  Criando <strong>v{{ next_num }}</strong> a partir de <strong>{{ versao_anterior_label }}</strong>
 </p>
+{% endif %}
 
-<form action="{{ form_action }}"
-      method="post"
-      autocomplete="off">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <div class="form-cards-narrow">
-
-    <!-- Eixo operacional -->
-    <div class="form-row">
-      <label class="row-label" for="eixo">Eixo</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="layers"></i></div>
-        <select id="eixo" name="eixo" class="control" required {% if eixo_locked %}disabled{% endif %}>
-          <option value="AAC" {% if eixo == 'AAC' %}selected{% endif %}>AAC</option>
-          <option value="AEU" {% if eixo == 'AEU' %}selected{% endif %}>AEU</option>
-        </select>
-        {% if eixo_locked %}<input type="hidden" name="eixo" value="{{ eixo }}">{% endif %}
-      </div>
-    </div>
-
-    <!-- Grupo -->
-    <div class="form-row">
-      <label class="row-label" for="grupo">Grupo</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="folder"></i></div>
-        <input id="grupo"
-               name="grupo"
-               type="text"
-               class="control"
-               placeholder="Ex.: 1 - AAC vigente"
-               value="{{ grupo }}">
-      </div>
-    </div>
-
-    <!-- CH por evento -->
-    <div class="form-row">
-      <label class="row-label" for="ch_por_evento">Carga horária por evento</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
-        <input id="ch_por_evento"
-               name="ch_por_evento"
-               type="text"
-               class="control"
-               placeholder="Ex.: 4"
-               value="{{ ch_por_evento }}">
-      </div>
-    </div>
-
-    <!-- Limite semestre -->
-    <div class="form-row">
-      <label class="row-label" for="limite_semestre">Limite por semestre</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="gauge"></i></div>
-        <input id="limite_semestre"
-               name="limite_semestre"
-               type="text"
-               class="control"
-               placeholder="Ex.: 40"
-               value="{{ limite_semestre }}">
-      </div>
-    </div>
-
-    <!-- Limite total -->
-    <div class="form-row">
-      <label class="row-label" for="limite_total">Limite total</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="gauge"></i></div>
-        <input id="limite_total"
-               name="limite_total"
-               type="text"
-               class="control"
-               placeholder="Ex.: 100"
-               value="{{ limite_total }}">
-      </div>
-    </div>
-
-    <!-- Observação aluno -->
-    <div class="form-row">
-      <label class="row-label" for="observacao_aluno">Observação para o aluno</label>
-      <div class="field-card field-card--textarea">
-        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
-        <textarea id="observacao_aluno"
-                  name="observacao_aluno"
-                  class="control"
-                  rows="3"
-                  placeholder="Texto que o aluno poderá ver (quando houver tela de aluno versionada)">{{ observacao_aluno }}</textarea>
-      </div>
-    </div>
-
-    <!-- Observação admin -->
-    <div class="form-row">
-      <label class="row-label" for="observacao_admin">Observação administrativa</label>
-      <div class="field-card field-card--textarea">
-        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
-        <textarea id="observacao_admin"
-                  name="observacao_admin"
-                  class="control"
-                  rows="3"
-                  placeholder="Instruções internas para análise administrativa">{{ observacao_admin }}</textarea>
-      </div>
-    </div>
-
-    <!-- Vigência início -->
-    <div class="form-row">
-      <label class="row-label" for="vigencia_inicio">Vigência início</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
-        <input id="vigencia_inicio"
-               name="vigencia_inicio"
-               type="date"
-               class="control"
-               value="{{ vigencia_inicio }}">
-      </div>
-    </div>
-
-    <!-- Vigência fim -->
-    <div class="form-row">
-      <label class="row-label" for="vigencia_fim">Vigência fim</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
-        <input id="vigencia_fim"
-               name="vigencia_fim"
-               type="date"
-               class="control"
-               value="{{ vigencia_fim }}">
-      </div>
-    </div>
-
-    <!-- Versão anterior -->
-    <div class="form-row">
-      <label class="row-label" for="versao_anterior_id">Versão anterior (opcional)</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="git-commit"></i></div>
-        <select id="versao_anterior_id" name="versao_anterior_id" class="control">
-          <option value="">Sem versão anterior</option>
-          {% for v in versoes_anteriores %}
-            <option value="{{ v.id }}"
-                    {% if versao_anterior_id|string == v.id|string %}selected{% endif %}>
-              v{{ v.numero_versao if v.numero_versao else '?' }} ({{ v.eixo }})
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <!-- Ações -->
-    <div class="form-row form-actions">
-      <span></span>
-      <div style="display:flex; gap:8px;">
-        <a href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}" class="btn btn-ghost">Cancelar</a>
-        <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
-      </div>
-    </div>
-
+{% if versao_switcher %}
+<div class="versao-switcher" role="navigation" aria-label="Alternar entre versões da atividade">
+  <label class="vs-label" for="versao-switcher">Versão</label>
+  <select id="versao-switcher" class="control" aria-label="Selecionar versão da atividade">
+    {% for v in versao_switcher %}
+      <option value="{{ v.id }}" {% if v.id == versao_atual_id %}selected{% endif %}>
+        v{{ v.numero_versao }} · {{ v.status_label }}
+      </option>
+    {% endfor %}
+  </select>
+  <div class="vs-actions">
+    <a class="btn" href="{{ nova_versao_url }}"><i class="lucide" data-lucide="plus"></i><span class="btn-label">Criar nova versão</span></a>
   </div>
+</div>
+{% endif %}
+
+<form action="{{ form_action }}" method="post" autocomplete="off">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-cards-narrow form-cards-narrow--wide">
+    <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      <div class="form-row" data-visible-field="tipo">
+        <label class="row-label">Tipo</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
+          <select class="control" name="tipo_atividade" id="tipo_atividade_sel" required {% if tipo_locked %}disabled{% endif %}>
+            {% for opt in ['Acadêmica Complementar', 'Extensão Universitária'] %}
+              <option value="{{ opt }}" {% if tipo_atividade == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          {% if tipo_locked %}<input type="hidden" name="tipo_atividade" value="{{ tipo_atividade }}">{% endif %}
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="grupo">
+        <label class="row-label">Grupo (nº/descrição)</label>
+        <div class="field-card split-2 compact-left" id="grupo_card">
+          <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
+          <select class="control" id="grupo_num" aria-label="Número do grupo" data-selected="{{ grp_num }}" required>
+            <option value=""></option>
+            {% if grp_num %}<option value="{{ grp_num }}" selected>{{ grp_num }}</option>{% endif %}
+          </select>
+          <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+          <input class="control" id="grupo_desc" type="text" placeholder="Descrição do grupo" value="{{ grp_desc }}" required>
+          <input type="hidden" name="grupo" id="grupo_hidden" value="{{ grp_val }}">
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="nome">
+        <label class="row-label">Nome</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
+          <input class="control" type="text" id="nome" name="nome" required value="{{ nome }}">
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="descricao">
+        <label class="row-label">Descrição</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
+          <textarea class="control auto-grow" id="descricao" name="descricao" rows="1" placeholder="Descrição opcional" style="height:var(--btn-h);">{{ descricao }}</textarea>
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="limitacao">
+        <label class="row-label">Limitação / Tempo limite</label>
+        <div class="field-card split-2" id="limitacao_card">
+          <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+          <select class="control" id="tipo_limit_card">
+            <option value="" {% if not tipo_limitacao %}selected{% endif %}>Nenhuma</option>
+            <option value="semestral" {% if tipo_limitacao == 'semestral' %}selected{% endif %}>Semestral</option>
+            <option value="total" {% if tipo_limitacao == 'total' %}selected{% endif %}>Total</option>
+          </select>
+          <div class="field-chip" id="chip_limite"><i class="lucide" data-lucide="timer"></i></div>
+          <input class="control" type="number" id="valor_limite_card" inputmode="decimal" min="0" step="any" placeholder="Horas" value="{{ limite_valor }}">
+          <input type="hidden" name="tipo_limitacao" id="tipo_limitacao_hidden" value="{{ tipo_limitacao }}">
+          <input type="hidden" name="limite_valor" id="limite_valor_hidden" value="{{ limite_valor }}">
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="ch_por_evento">
+        <label class="row-label" for="ch_por_evento">Carga horária por evento</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
+          <input id="ch_por_evento" name="ch_por_evento" type="number" inputmode="decimal" min="0" step="any" class="control" placeholder="Ex.: 4" value="{{ ch_por_evento }}">
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="observacoes">
+        <label class="row-label" for="observacoes">Observações</label>
+        <div class="field-card field-card--textarea">
+          <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
+          <textarea id="observacoes" name="observacoes" class="control auto-grow" rows="3" placeholder="Observações sobre esta versão">{{ observacoes }}</textarea>
+        </div>
+      </div>
+
+      <div class="form-row" data-visible-field="versao_anterior">
+        <label class="row-label" for="{{ 'versao_anterior_meta' if readonly else 'versao_anterior_id' }}">Versão anterior</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="git-commit"></i></div>
+          {% if readonly %}
+            <input type="text" id="versao_anterior_meta" class="control" value="{{ versao_anterior_label }}" readonly tabindex="-1">
+          {% else %}
+            <select id="versao_anterior_id" name="versao_anterior_id" class="control">
+              <option value="">Sem versão anterior</option>
+              {% for v in versoes_anteriores %}
+                <option value="{{ v.id }}" {% if versao_anterior_id|string == v.id|string %}selected{% endif %}>
+                  v{{ v.numero_versao if v.numero_versao else '?' }} — {{ 'Acadêmica Complementar' if v.eixo == 'AAC' else 'Extensão Universitária' }}
+                </option>
+              {% endfor %}
+            </select>
+          {% endif %}
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="form-actions center">
+      {% if readonly %}
+        <a class="btn" href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></a>
+      {% else %}
+        <a class="btn" href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}">Cancelar</a>
+        <button type="submit" class="btn primary" id="btn-salvar-versao" {% if form_snapshot_json %}disabled{% endif %}>
+          <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span>
+        </button>
+      {% endif %}
+    </div>
+  </div>
+  <script id="grupos-por-tipo-json" type="application/json">{{ (grupos_por_tipo or {}) | tojson | safe }}</script>
 </form>
+
+{% if form_snapshot_json %}
+<script id="versao-form-snapshot" type="application/json">{{ form_snapshot_json|safe }}</script>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    if (window.lucide) lucide.createIcons();
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.lucide) lucide.createIcons();
+  const switcher = document.getElementById('versao-switcher');
+  if (switcher){
+    const baseUrl = "{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=0) }}";
+    switcher.addEventListener('change', function(){
+      window.location.href = baseUrl.replace('/versoes/0/editar', '/versoes/' + switcher.value + '/editar');
+    });
+  }
+
+  const groupDataEl = document.getElementById('grupos-por-tipo-json');
+  let gruposPorTipo = {};
+  try { gruposPorTipo = groupDataEl ? JSON.parse(groupDataEl.textContent || '{}') : {}; } catch (_e) { gruposPorTipo = {}; }
+  const tipoSel = document.getElementById('tipo_atividade_sel');
+  const numSel = document.getElementById('grupo_num');
+  const groupDesc = document.getElementById('grupo_desc');
+  const groupHidden = document.getElementById('grupo_hidden');
+  const groupCard = document.getElementById('grupo_card');
+  const limitType = document.getElementById('tipo_limit_card');
+  const limitValue = document.getElementById('valor_limite_card');
+  const limitChip = document.getElementById('chip_limite');
+  const hiddenLimitType = document.getElementById('tipo_limitacao_hidden');
+  const hiddenLimitValue = document.getElementById('limite_valor_hidden');
+  const snapshotEl = document.getElementById('versao-form-snapshot');
+  const submitBtn = document.getElementById('btn-salvar-versao');
+
+  function isExtensao(){ return (tipoSel?.value || '').trim() === 'Extensão Universitária'; }
+  function syncGrupo(){
+    if (!groupHidden) return;
+    if (isExtensao()) { groupHidden.value = 'NA'; return; }
+    const numero = String((numSel?.value || '').trim());
+    const descricao = String((groupDesc?.value || '').trim());
+    groupHidden.value = numero && descricao ? `${numero} - ${descricao}` : (numero || descricao);
+  }
+  function populateNumeros(){
+    if (!numSel) return;
+    const map = gruposPorTipo[(tipoSel?.value || '').trim()] || {};
+    const selected = (numSel.getAttribute('data-selected') || '').trim();
+    numSel.innerHTML = '<option value=""></option>';
+    const numeros = Object.keys(map).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+    const list = numeros.length ? numeros : Array.from({length:50}, (_,i) => String(i + 1));
+    list.forEach(numero => {
+      const option = document.createElement('option');
+      option.value = numero; option.textContent = numero;
+      if (map[numero] !== undefined) option.setAttribute('data-desc', map[numero] || '');
+      if (selected === String(numero)) option.selected = true;
+      numSel.appendChild(option);
+    });
+    if (selected && !numSel.querySelector(`option[value="${selected}"]`)){
+      const option = document.createElement('option'); option.value = selected; option.textContent = selected;
+      numSel.insertBefore(option, numSel.options[1] || null); numSel.value = selected;
+    }
+    if (!numSel.value && numSel.options.length > 1) numSel.selectedIndex = 1;
+  }
+  function loadDescFromSelected(){
+    const option = numSel?.selectedOptions?.[0];
+    if (groupDesc) groupDesc.value = option ? (option.getAttribute('data-desc') || '') : '';
+  }
+  function syncGrupoState(){
+    if (!numSel || !groupDesc) return;
+    if (isExtensao()){
+      numSel.dataset.lastAcademicValue = (numSel.value || '').trim();
+      groupDesc.dataset.lastAcademicValue = (groupDesc.value || '').trim();
+      numSel.innerHTML = '<option value="NA" selected>NA</option>'; numSel.value = 'NA'; numSel.disabled = true;
+      groupDesc.value = 'NA'; groupDesc.disabled = true; groupDesc.placeholder = 'NA';
+      groupCard?.classList.add('is-off-chunk'); syncGrupo(); return;
+    }
+    numSel.disabled = false; groupDesc.disabled = false; groupDesc.placeholder = 'Descrição do grupo';
+    groupCard?.classList.remove('is-off-chunk');
+    const selected = (numSel.dataset.lastAcademicValue || numSel.getAttribute('data-selected') || '').trim();
+    if (selected) numSel.setAttribute('data-selected', selected);
+    populateNumeros();
+    if ((groupDesc.dataset.lastAcademicValue || '').trim()) groupDesc.value = groupDesc.dataset.lastAcademicValue.trim();
+    else loadDescFromSelected();
+    syncGrupo();
+  }
+  function syncLimitacao(){
+    if (!hiddenLimitType || !hiddenLimitValue || !limitValue) return;
+    const mode = (limitType?.value || '').toLowerCase();
+    const value = (limitValue.value || '').trim();
+    hiddenLimitType.value = mode; hiddenLimitValue.value = mode ? value : '';
+    if (!mode){
+      limitValue.value = ''; limitValue.disabled = true; limitChip?.classList.add('is-off-chunk'); limitValue.classList.add('is-off-chunk');
+    } else {
+      limitValue.disabled = false; limitChip?.classList.remove('is-off-chunk'); limitValue.classList.remove('is-off-chunk');
+      hiddenLimitValue.value = (limitValue.value || '').trim();
+    }
+  }
+  function normText(value){ const v = value == null ? '' : String(value).trim(); return v === '' ? null : v; }
+  function normNum(value){
+    const v = value == null ? '' : String(value).trim();
+    if (v === '') return null;
+    const parsed = Number(v); return Number.isNaN(parsed) ? null : parsed;
+  }
+  function currentPayload(){
+    const prev = document.getElementById('versao_anterior_id');
+    const prevValue = (prev?.value || '').trim();
+    return {
+      tipo_atividade: normText(tipoSel?.value),
+      grupo: normText(groupHidden?.value),
+      nome: normText(document.getElementById('nome')?.value),
+      descricao: normText(document.getElementById('descricao')?.value),
+      tipo_limitacao: normText(hiddenLimitType?.value),
+      limite_valor: normNum(hiddenLimitValue?.value),
+      ch_por_evento: normNum(document.getElementById('ch_por_evento')?.value),
+      observacoes: normText(document.getElementById('observacoes')?.value),
+      versao_anterior_id: prevValue === '' ? null : Number(prevValue)
+    };
+  }
+  let snapshot = null;
+  try { snapshot = snapshotEl ? JSON.parse(snapshotEl.textContent || '{}') : null; } catch (_e) { snapshot = null; }
+  function refresh(){
+    if (!snapshot || !submitBtn) return;
+    const current = currentPayload();
+    submitBtn.disabled = Object.keys(snapshot).every(key => current[key] === snapshot[key]);
+  }
+  function autoGrow(el){ el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+
+  syncGrupoState(); syncLimitacao();
+  tipoSel?.addEventListener('change', () => { syncGrupoState(); refresh(); });
+  numSel?.addEventListener('change', () => { loadDescFromSelected(); syncGrupo(); refresh(); });
+  groupDesc?.addEventListener('input', () => { syncGrupo(); refresh(); });
+  limitType?.addEventListener('change', () => { syncLimitacao(); refresh(); });
+  limitValue?.addEventListener('input', () => { syncLimitacao(); refresh(); });
+  ['nome','descricao','ch_por_evento','observacoes','versao_anterior_id'].forEach(id => {
+    const el = document.getElementById(id); if (el){ el.addEventListener('input', refresh); el.addEventListener('change', refresh); }
   });
+  document.querySelectorAll('textarea.auto-grow').forEach(el => { autoGrow(el); el.addEventListener('input', () => autoGrow(el)); });
+  document.querySelector('form[method="post"]')?.addEventListener('submit', () => { syncGrupo(); syncLimitacao(); });
+  refresh();
+});
 </script>
 {% endblock %}

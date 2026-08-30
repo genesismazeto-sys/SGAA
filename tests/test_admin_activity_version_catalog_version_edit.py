@@ -188,15 +188,26 @@ def _get_editar_versao(client, base_id, versao_id):
 
 
 def _post_editar_versao(client, base_id, versao_id, **kwargs):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        base = conn.execute("SELECT nome_conceito, descricao FROM atividade_base WHERE id = ?", (base_id,)).fetchone()
+        current = conn.execute("SELECT eixo FROM atividade_versao WHERE id = ?", (versao_id,)).fetchone()
+    eixo = kwargs.get("eixo", current["eixo"] if current else "AAC")
+    if "limite_semestre" in kwargs:
+        limite_semestre, limite_total = kwargs["limite_semestre"], ""
+    elif "limite_total" in kwargs:
+        limite_semestre, limite_total = "", kwargs["limite_total"]
+    else:
+        limite_semestre, limite_total = "50", ""
     data = {
+        "tipo_atividade": "Extensão Universitária" if eixo == "AEU" else "Acadêmica Complementar",
         "grupo": kwargs.get("grupo", "1 - Grupo editado"),
+        "nome": base["nome_conceito"],
+        "descricao": base["descricao"] or "",
         "ch_por_evento": kwargs.get("ch_por_evento", "5"),
-        "limite_semestre": kwargs.get("limite_semestre", "50"),
-        "limite_total": kwargs.get("limite_total", "120"),
-        "observacao_aluno": kwargs.get("observacao_aluno", ""),
-        "observacao_admin": kwargs.get("observacao_admin", ""),
-        "vigencia_inicio": kwargs.get("vigencia_inicio", ""),
-        "vigencia_fim": kwargs.get("vigencia_fim", ""),
+        "tipo_limitacao": "semestral" if limite_semestre != "" else ("total" if limite_total != "" else ""),
+        "limite_valor": limite_semestre if limite_semestre != "" else limite_total,
+        "observacoes": kwargs.get("observacao_admin") or kwargs.get("observacao_aluno") or "",
         "versao_anterior_id": kwargs.get("versao_anterior_id", ""),
     }
     for extra in ("status", "atividade_base_id", "eixo"):
@@ -210,16 +221,22 @@ def _post_editar_versao(client, base_id, versao_id, **kwargs):
 
 
 def _post_nova_versao(client, base_id, **kwargs):
+    with main.app.app_context():
+        base = main.get_db_connection().execute(
+            "SELECT nome_conceito, descricao FROM atividade_base WHERE id = ?", (base_id,)
+        ).fetchone()
+    eixo = kwargs.get("eixo", "AAC")
+    limite_semestre = kwargs.get("limite_semestre", "40")
+    limite_total = kwargs.get("limite_total", "100")
     data = {
-        "eixo": kwargs.get("eixo", "AAC"),
+        "tipo_atividade": "Extensão Universitária" if eixo == "AEU" else "Acadêmica Complementar",
         "grupo": kwargs.get("grupo", "1 - Grupo teste"),
+        "nome": base["nome_conceito"],
+        "descricao": base["descricao"] or "",
         "ch_por_evento": kwargs.get("ch_por_evento", "4"),
-        "limite_semestre": kwargs.get("limite_semestre", "40"),
-        "limite_total": kwargs.get("limite_total", "100"),
-        "observacao_aluno": kwargs.get("observacao_aluno", ""),
-        "observacao_admin": kwargs.get("observacao_admin", ""),
-        "vigencia_inicio": kwargs.get("vigencia_inicio", ""),
-        "vigencia_fim": kwargs.get("vigencia_fim", ""),
+        "tipo_limitacao": "semestral" if limite_semestre != "" else ("total" if limite_total != "" else ""),
+        "limite_valor": limite_semestre if limite_semestre != "" else limite_total,
+        "observacoes": kwargs.get("observacao_admin") or kwargs.get("observacao_aluno") or "",
         "versao_anterior_id": kwargs.get("versao_anterior_id", ""),
     }
     return client.post(
@@ -276,10 +293,10 @@ def test_get_editar_versao_outra_base_rejected(client):
 
 
 # ---------------------------------------------------------------------------
-# 4. GET editar versão não-rascunho bloqueia
+# 4. GET editar versão não-rascunho abre em modo somente-leitura
 # ---------------------------------------------------------------------------
 
-def test_get_editar_versao_non_rascunho_blocked(client):
+def test_get_editar_versao_non_rascunho_opens_readonly(client):
     _login_admin(client)
     seed = _seed_base(client)
     for status in ("ativa", "inativa", "descontinuada", "substituida"):
@@ -290,8 +307,14 @@ def test_get_editar_versao_non_rascunho_blocked(client):
             status=status,
         )
         r = _get_editar_versao(client, seed["base_id"], versao_id)
-        assert r.status_code == 302, f"status={status} deveria bloquear GET com redirect"
-        assert f"/admin/catalogo-versoes/{seed['base_id']}" in r.headers.get("Location", "")
+        assert r.status_code == 200, f"status={status} deveria abrir em modo somente-leitura"
+        html = r.get_data(as_text=True)
+        assert 'class="btn primary"' not in html, (
+            f"status={status}: modo somente-leitura não deve expor botão Salvar"
+        )
+        assert 'name="grupo"' in html and 'readonly' in html, (
+            f"status={status}: campos devem ser visíveis como somente-leitura"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -328,11 +351,11 @@ def test_post_editar_versao_valid_updates_allowed_fields(client):
     assert versao["grupo"] == "Grupo atualizado"
     assert versao["ch_por_evento"] == 8.0
     assert versao["limite_semestre"] == 60.0
-    assert versao["limite_total"] == 200.0
-    assert versao["observacao_aluno"] == "Obs aluno nova"
+    assert versao["limite_total"] is None
+    assert versao["observacao_aluno"] == "Obs admin nova"
     assert versao["observacao_admin"] == "Obs admin nova"
-    assert versao["vigencia_inicio"] == "2026-01-01"
-    assert versao["vigencia_fim"] == "2026-12-31"
+    assert versao["vigencia_inicio"] is None
+    assert versao["vigencia_fim"] is None
     assert versao["status"] == "rascunho"
 
 

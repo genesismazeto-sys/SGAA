@@ -212,6 +212,129 @@ def _display_number(value):
     return str(value)
 
 
+def _tipo_atividade_from_eixo(eixo) -> str:
+    return "Extensão Universitária" if str(eixo or "").strip().upper() == "AEU" else "Acadêmica Complementar"
+
+
+def _eixo_from_tipo_atividade(tipo_atividade) -> str | None:
+    canonical = _canonicalize_tipo_atividade(str(tipo_atividade or ""))
+    if canonical == "Acadêmica Complementar":
+        return "AAC"
+    if canonical == "Extensão Universitária":
+        return "AEU"
+    return None
+
+
+def _canonical_version_observacoes(values) -> str:
+    """Project the two legacy columns into the single R4 visible field.
+
+    Existing split values are not rewritten by merely rendering or saving a
+    different field.  The admin value is the read source, with the student
+    value as compatibility fallback.  An intentional Observações change is
+    dual-written by the caller so both legacy consumers receive the same new
+    canonical value.
+    """
+    values = dict(values)
+    admin = str(values.get("observacao_admin") or "").strip()
+    aluno = str(values.get("observacao_aluno") or "").strip()
+    return admin or aluno
+
+
+def _limitation_form_values(values) -> tuple[str, str]:
+    values = dict(values)
+    if values.get("limite_semestre") is not None:
+        return "semestral", _display_number(values.get("limite_semestre"))
+    if values.get("limite_total") is not None:
+        return "total", _display_number(values.get("limite_total"))
+    return "", ""
+
+
+def _normalized_version_form_payload(values) -> dict:
+    """Normalize exactly the eight visible R4 field concepts."""
+    values = dict(values)
+
+    def _num(value):
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _txt(value):
+        text = str(value or "").strip()
+        return text or None
+
+    tipo = _canonicalize_tipo_atividade(str(values.get("tipo_atividade") or ""))
+    grupo = "NA" if tipo == "Extensão Universitária" else _txt(values.get("grupo"))
+    tipo_limitacao = str(values.get("tipo_limitacao") or "").strip().lower()
+    if tipo_limitacao not in {"total", "semestral"}:
+        tipo_limitacao = None
+    limite_valor = _num(values.get("limite_valor")) if tipo_limitacao else None
+    prev_raw = str(values.get("versao_anterior_id") or "").strip()
+    try:
+        versao_anterior_id = int(prev_raw) if prev_raw else None
+    except (TypeError, ValueError):
+        versao_anterior_id = None
+    return {
+        "tipo_atividade": tipo,
+        "grupo": grupo,
+        "nome": _txt(values.get("nome")),
+        "descricao": _txt(values.get("descricao")),
+        "tipo_limitacao": tipo_limitacao,
+        "limite_valor": limite_valor,
+        "ch_por_evento": _num(values.get("ch_por_evento")),
+        "observacoes": _txt(values.get("observacoes")),
+        "versao_anterior_id": versao_anterior_id,
+    }
+
+
+def _build_version_form_initial_payload(base, version, *, predecessor_id=None) -> dict:
+    tipo_limitacao, limite_valor = _limitation_form_values(version)
+    return _normalized_version_form_payload(
+        {
+            "tipo_atividade": _tipo_atividade_from_eixo(version["eixo"]),
+            "grupo": version["grupo"],
+            "nome": base["nome_conceito"],
+            "descricao": base["descricao"],
+            "tipo_limitacao": tipo_limitacao,
+            "limite_valor": limite_valor,
+            "ch_por_evento": version["ch_por_evento"],
+            "observacoes": _canonical_version_observacoes(version),
+            "versao_anterior_id": predecessor_id,
+        }
+    )
+
+
+def _build_grupos_por_tipo_for_activity_form(conn) -> dict:
+    """Use the same group-number/description source as canonical Activity UI."""
+    grupos = {}
+    try:
+        rows = conn.execute(
+            "SELECT tipo_atividade, numero, descricao FROM grupos_def"
+        ).fetchall()
+        for row in rows:
+            grupos.setdefault(row[0], {})[str(row[1])] = (row[2] or "").strip()
+    except Exception:
+        pass
+    rows = conn.execute(
+        "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' "
+        "ELSE 'Extensão Universitária' END, grupo FROM atividade_versao "
+        "WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
+    ).fetchall()
+    for row in rows:
+        label = (row[1] or "").strip()
+        match = re.match(r"^\s*(\d+)\s*(?:-\s*(.*))?$", label)
+        if not match:
+            continue
+        tipo, numero = row[0], match.group(1)
+        descricao = (match.group(2) or "").strip()
+        tipo_grupos = grupos.setdefault(tipo, {})
+        if numero not in tipo_grupos or (not tipo_grupos[numero] and descricao):
+            tipo_grupos[numero] = descricao
+    return grupos
+
+
 def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, str | None]:
     """
     FC-07 — Resolve o estado inicial do formulário de nova versão.
@@ -223,16 +346,16 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
     outra atividade-base) retornam o formulário em branco junto da mensagem de
     erro para flash pelo chamador (mesmo padrão de _render_form no POST).
     """
+    base = get_atividade_base(conn, base_id)
     blank = {
-        "eixo": "",
+        "tipo_atividade": "Acadêmica Complementar",
         "grupo": "",
+        "nome": base["nome_conceito"] if base else "",
+        "descricao": (base["descricao"] or "") if base else "",
+        "tipo_limitacao": "",
+        "limite_valor": "",
         "ch_por_evento": "",
-        "limite_semestre": "",
-        "limite_total": "",
-        "observacao_aluno": "",
-        "observacao_admin": "",
-        "vigencia_inicio": "",
-        "vigencia_fim": "",
+        "observacoes": "",
         "versao_anterior_id": "",
     }
     raw = (from_raw or "").strip()
@@ -247,21 +370,18 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
         return blank, "Versão anterior não encontrada."
     if origem["atividade_base_id"] != base_id:
         return blank, "Versão anterior deve pertencer à mesma atividade-base."
-    return (
-        {
-            "eixo": str(origem["eixo"]),
-            "grupo": origem["grupo"] or "",
-            "ch_por_evento": _display_number(origem["ch_por_evento"]),
-            "limite_semestre": _display_number(origem["limite_semestre"]),
-            "limite_total": _display_number(origem["limite_total"]),
-            "observacao_aluno": origem["observacao_aluno"] or "",
-            "observacao_admin": origem["observacao_admin"] or "",
-            "vigencia_inicio": origem["vigencia_inicio"] or "",
-            "vigencia_fim": origem["vigencia_fim"] or "",
-            "versao_anterior_id": str(origem["id"]),
-        },
-        None,
-    )
+    tipo_limitacao, limite_valor = _limitation_form_values(origem)
+    return ({
+        "tipo_atividade": _tipo_atividade_from_eixo(origem["eixo"]),
+        "grupo": origem["grupo"] or "",
+        "nome": base["nome_conceito"] if base else "",
+        "descricao": (base["descricao"] or "") if base else "",
+        "tipo_limitacao": tipo_limitacao,
+        "limite_valor": limite_valor,
+        "ch_por_evento": _display_number(origem["ch_por_evento"]),
+        "observacoes": _canonical_version_observacoes(origem),
+        "versao_anterior_id": str(origem["id"]),
+    }, None)
 
 
 def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: str) -> tuple[dict, dict | None]:
@@ -1205,7 +1325,7 @@ def admin_catalogo_nova_base():
 
 @admin_required
 def admin_catalogo_nova_versao(base_id: int):
-    """Create the next exact Activity Version without external domain gates."""
+    """Create the next version through the authoritative eight-field R4 form."""
     conn = get_db_connection()
     base = get_atividade_base(conn, base_id)
     if not base:
@@ -1213,83 +1333,173 @@ def admin_catalogo_nova_versao(base_id: int):
         return redirect(url_for("admin_catalogo_versoes"))
 
     latest = get_latest_atividade_versao_for_base(conn, base_id)
-    versoes_anteriores = [latest] if latest else []
     next_num = get_next_numero_versao(conn, base_id)
     form_action = url_for("admin_catalogo_nova_versao", base_id=base_id)
     form_title = f"Nova versão (será v{next_num})"
-    submit_label = "Criar versão em rascunho"
+    submit_label = "Salvar nova versão"
+
+    from_raw = (request.args.get("from") or "").strip()
+    source = None
+    source_error = None
+    if not from_raw and latest is not None:
+        from_raw = str(latest["id"])
+    if from_raw:
+        try:
+            from_id = int(from_raw)
+        except (TypeError, ValueError):
+            source_error = "Versão anterior inválida."
+        else:
+            candidate_source = get_atividade_versao_by_id(conn, from_id)
+            if candidate_source is None:
+                source_error = "Versão anterior não encontrada."
+            elif candidate_source["atividade_base_id"] != base_id:
+                source_error = "Versão anterior deve pertencer à mesma atividade-base."
+            else:
+                source = candidate_source
+    versoes_anteriores = [source] if source is not None else []
+    grupos_por_tipo = _build_grupos_por_tipo_for_activity_form(conn)
+
+    initial_payload = (
+        _build_version_form_initial_payload(base, source, predecessor_id=source["id"])
+        if source is not None else None
+    )
+
+    def _render_form(msg, values):
+        if msg:
+            flash(msg, "error")
+        versao_anterior_label = "Sem versão anterior"
+        if source is not None:
+            versao_anterior_label = f"v{source['numero_versao']}"
+        return render_template(
+            "admin_catalogo_versao_form.html",
+            base=base,
+            versoes_anteriores=versoes_anteriores,
+            grupos_por_tipo=grupos_por_tipo,
+            tipo_atividade=values["tipo_atividade"],
+            tipo_locked=False,
+            grupo=values["grupo"],
+            nome=values["nome"],
+            descricao=values["descricao"],
+            tipo_limitacao=values["tipo_limitacao"],
+            limite_valor=values["limite_valor"],
+            ch_por_evento=values["ch_por_evento"],
+            observacoes=values["observacoes"],
+            versao_anterior_id=values["versao_anterior_id"],
+            is_clone_create=True,
+            versao_anterior_label=versao_anterior_label,
+            form_snapshot_json=(
+                json.dumps(initial_payload, ensure_ascii=False)
+                if initial_payload is not None else None
+            ),
+            next_num=next_num,
+            form_action=form_action,
+            form_title=form_title,
+            submit_label=submit_label,
+            readonly=False,
+        )
 
     if request.method == "POST":
-        eixo = str(latest["eixo"] if latest else request.form.get("eixo") or "").strip().upper()
-        grupo = (request.form.get("grupo") or "").strip()
-        ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
-        limite_semestre_raw = (request.form.get("limite_semestre") or "").strip()
-        limite_total_raw = (request.form.get("limite_total") or "").strip()
-        observacao_aluno = (request.form.get("observacao_aluno") or "").strip()
-        observacao_admin = (request.form.get("observacao_admin") or "").strip()
-        vigencia_inicio = (request.form.get("vigencia_inicio") or "").strip()
-        vigencia_fim = (request.form.get("vigencia_fim") or "").strip()
-        versao_anterior_id_raw = (request.form.get("versao_anterior_id") or "").strip()
+        values = {
+            "tipo_atividade": (request.form.get("tipo_atividade") or "").strip(),
+            "grupo": (request.form.get("grupo") or "").strip(),
+            "nome": (request.form.get("nome") or "").strip(),
+            "descricao": (request.form.get("descricao") or "").strip(),
+            "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
+            "limite_valor": (request.form.get("limite_valor") or "").strip(),
+            "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
+            "observacoes": (request.form.get("observacoes") or "").strip(),
+            "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
+        }
 
-        def _render_form(msg):
-            if msg:
-                flash(msg, "error")
-            return render_template(
-                "admin_catalogo_versao_form.html",
-                base=base,
-                versoes_anteriores=versoes_anteriores,
-                eixo=eixo,
-                eixo_locked=bool(latest),
-                grupo=grupo,
-                ch_por_evento=ch_por_evento_raw,
-                limite_semestre=limite_semestre_raw,
-                limite_total=limite_total_raw,
-                observacao_aluno=observacao_aluno,
-                observacao_admin=observacao_admin,
-                vigencia_inicio=vigencia_inicio,
-                vigencia_fim=vigencia_fim,
-                versao_anterior_id=versao_anterior_id_raw,
-                form_action=form_action,
-                form_title=form_title,
-                submit_label=submit_label,
-            )
+        def _render(msg):
+            return _render_form(msg, values)
 
-        if eixo not in {"AAC", "AEU"}:
-            return _render_form("Selecione um eixo operacional válido (AAC ou AEU).")
+        eixo = _eixo_from_tipo_atividade(values["tipo_atividade"])
+        if eixo is None:
+            return _render("Selecione um Tipo válido.")
+        grupo = _normalize_atividade_grupo(values["tipo_atividade"], values["grupo"])
+        values["grupo"] = grupo or ""
+        if not grupo:
+            return _render("Selecione o Grupo (nº/descrição).")
+        if not values["nome"]:
+            return _render("Informe o Nome da atividade.")
 
-        # validação numérica
-        def _parse_float(raw, nome):
+        def _parse_non_negative(raw, label, *, required=False):
             if not raw:
+                if required:
+                    raise ValueError(f"Informe {label}.")
                 return None
             try:
-                v = float(raw)
-                if v < 0:
-                    return nome
-                return v
+                parsed = float(raw)
             except (TypeError, ValueError):
-                return nome
+                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
+            if parsed < 0:
+                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
+            return parsed
 
-        ch_por_evento = _parse_float(ch_por_evento_raw, "ch_por_evento")
-        limite_semestre = _parse_float(limite_semestre_raw, "limite_semestre")
-        limite_total = _parse_float(limite_total_raw, "limite_total")
-        for maybe_err in (ch_por_evento, limite_semestre, limite_total):
-            if isinstance(maybe_err, str):
-                return _render_form(f"{maybe_err} deve ser um número válido e maior ou igual a zero.")
+        try:
+            ch_por_evento = _parse_non_negative(
+                values["ch_por_evento"], "Carga horária por evento"
+            )
+            tipo_limitacao = values["tipo_limitacao"]
+            if tipo_limitacao not in {"", "total", "semestral"}:
+                return _render("Selecione uma Limitação / Tempo limite válida.")
+            limite_valor = _parse_non_negative(
+                values["limite_valor"], "o tempo limite", required=bool(tipo_limitacao)
+            )
+        except ValueError as exc:
+            return _render(str(exc))
+        limite_semestre = limite_valor if tipo_limitacao == "semestral" else None
+        limite_total = limite_valor if tipo_limitacao == "total" else None
 
         versao_anterior_id = None
-        if latest:
+        if values["versao_anterior_id"]:
             try:
-                versao_anterior_id = int(versao_anterior_id_raw)
+                versao_anterior_id = int(values["versao_anterior_id"])
             except (TypeError, ValueError):
-                return _render_form("Versão anterior inválida.")
-            if versao_anterior_id != int(latest["id"]):
-                return _render_form("A nova versão deve suceder a versão canônica mais recente.")
-        elif versao_anterior_id_raw:
-            return _render_form("A primeira versão não pode declarar predecessora.")
+                return _render("Versão anterior inválida.")
+            predecessor = get_atividade_versao_by_id(conn, versao_anterior_id)
+            if predecessor is None:
+                return _render("Versão anterior não encontrada.")
+            if predecessor["atividade_base_id"] != base_id:
+                return _render("Versão anterior deve pertencer à mesma atividade-base.")
+        if source is not None and versao_anterior_id != int(source["id"]):
+            return _render("A versão de origem deve permanecer selecionada como Versão anterior.")
+        if source is None and versao_anterior_id is not None:
+            return _render("A primeira versão não pode declarar predecessora.")
+
+        candidate_payload = _normalized_version_form_payload(values)
+        if initial_payload is not None and candidate_payload == initial_payload:
+            return _render(
+                "Nenhuma alteração efetiva informada. Altere ao menos um campo para criar a nova versão."
+            )
+
+        duplicate = conn.execute(
+            "SELECT id FROM atividade_base WHERE nome_conceito = ? AND id <> ?",
+            (values["nome"], base_id),
+        ).fetchone()
+        if duplicate:
+            return _render("Já existe atividade com este Nome.")
+
+        cross_axis = source is not None and source["eixo"] != eixo
+        if cross_axis and not (source["eixo"] == "AAC" and eixo == "AEU"):
+            return _render("A arquitetura atual permite transição de Tipo apenas de AAC para AEU.")
+
+        observacoes = values["observacoes"] or None
+        if source is not None and initial_payload["observacoes"] == candidate_payload["observacoes"]:
+            observacao_aluno = source["observacao_aluno"]
+            observacao_admin = source["observacao_admin"]
+        else:
+            observacao_aluno = observacoes
+            observacao_admin = observacoes
 
         try:
             next_num = get_next_numero_versao(conn, base_id)
             conn.execute(
+                "UPDATE atividade_base SET nome_conceito = ?, descricao = ? WHERE id = ?",
+                (values["nome"], values["descricao"] or None, base_id),
+            )
+            new_version_id = conn.execute(
                 """
                 INSERT INTO atividade_versao (
                     atividade_base_id, eixo, grupo,
@@ -1297,55 +1507,83 @@ def admin_catalogo_nova_versao(base_id: int):
                     observacao_aluno, observacao_admin, documentos_json,
                     vigencia_inicio, vigencia_fim, numero_versao, status, versao_anterior_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
+                RETURNING id
                 """,
                 (
                     base_id, eixo, grupo or None,
                     ch_por_evento, limite_semestre, limite_total,
-                    observacao_aluno or None, observacao_admin or None,
-                    latest["documentos_json"] if latest else "[]",
-                    vigencia_inicio or None, vigencia_fim or None, next_num, versao_anterior_id,
+                    observacao_aluno, observacao_admin,
+                    source["documentos_json"] if source else "[]",
+                    source["vigencia_inicio"] if source else None,
+                    source["vigencia_fim"] if source else None,
+                    next_num,
+                    None if cross_axis else versao_anterior_id,
                 ),
-            )
+            ).fetchone()[0]
+            if cross_axis:
+                conn.execute(
+                    """
+                    INSERT INTO atividade_transicao (
+                        from_atividade_versao_id, to_atividade_versao_id,
+                        tipo_transicao, justificativa
+                    ) VALUES (?, ?, 'aac_para_aeu', ?)
+                    """,
+                    (
+                        source["id"],
+                        new_version_id,
+                        "Alteração de Tipo AAC para AEU na criação de nova versão.",
+                    ),
+                )
             conn.commit()
             flash("Versão criada com sucesso em rascunho.", "success")
             return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
         except Exception as exc:
-            return _render_form(f"Erro ao criar versão: {exc}")
+            conn.rollback()
+            return _render(f"Erro ao criar versão: {exc}")
 
     prefill, prefill_error = _resolve_nova_versao_prefill(
-        conn, base_id, request.args.get("from") or (str(latest["id"]) if latest else None)
+        conn, base_id, from_raw
     )
-    if prefill_error:
-        flash(prefill_error, "error")
-    return render_template(
-        "admin_catalogo_versao_form.html",
-        base=base,
-        versoes_anteriores=versoes_anteriores,
-        eixo=prefill["eixo"] or (latest["eixo"] if latest else "AAC"),
-        eixo_locked=bool(latest),
-        grupo=prefill["grupo"],
-        ch_por_evento=prefill["ch_por_evento"],
-        limite_semestre=prefill["limite_semestre"],
-        limite_total=prefill["limite_total"],
-        observacao_aluno=prefill["observacao_aluno"],
-        observacao_admin=prefill["observacao_admin"],
-        vigencia_inicio=prefill["vigencia_inicio"],
-        vigencia_fim=prefill["vigencia_fim"],
-        versao_anterior_id=prefill["versao_anterior_id"],
-        form_action=form_action,
-        form_title=form_title,
-        submit_label=submit_label,
-    )
+    return _render_form(source_error or prefill_error, prefill)
+
+
+def _versao_status_label(status: str | None) -> str:
+    """Rótulo amigável de status de atividade_versao para o seletor de versões."""
+    labels = {
+        "rascunho": "Rascunho",
+        "ativa": "Ativa",
+        "inativa": "Inativa",
+        "descontinuada": "Descontinuada",
+        "substituida": "Substituída",
+    }
+    return labels.get(str(status or "").strip().lower(), str(status or "rascunho"))
+
+
+def _get_versoes_para_switcher(conn, base_id: int) -> list[dict]:
+    """Todas as versões da mesma atividade_base, na ordem canônica (numero_versao)."""
+    rows = conn.execute(
+        """
+        SELECT id, numero_versao, status, eixo
+          FROM atividade_versao
+         WHERE atividade_base_id = ?
+         ORDER BY numero_versao ASC, id ASC
+        """,
+        (base_id,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "numero_versao": row["numero_versao"],
+            "status": row["status"],
+            "status_label": _versao_status_label(row["status"]),
+        }
+        for row in rows
+    ]
 
 
 @admin_required
 def admin_catalogo_editar_versao(base_id: int, versao_id: int):
-    """
-    Formulário para editar uma atividade_versao existente.
-    Permitido apenas enquanto status = 'rascunho' e sem nenhum uso registrado
-    (matriz_atividade_versao_item, requisicoes, atividade_transicao).
-    POST valida e atualiza; em sucesso redireciona para o detalhe da base.
-    """
+    """Edit/view one exact version through the same eight-field R4 form."""
     conn = get_db_connection()
     base = get_atividade_base(conn, base_id)
     if not base:
@@ -1357,14 +1595,27 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         flash("Versão não encontrada para esta atividade-base.", "error")
         return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
-    if not can_activity_version_be_mutated_in_place(conn, versao_id):
-        message = (
-            "Apenas versões em rascunho podem ser editadas."
-            if versao["status"] != "rascunho"
-            else "Esta versão já está em uso e não pode mais ser editada."
-        )
-        flash(message, "error")
-        return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
+    versao_switcher = _get_versoes_para_switcher(conn, base_id)
+    versao_atual_id = int(versao_id)
+    nova_versao_url = url_for(
+        "admin_catalogo_nova_versao",
+        base_id=base_id,
+        **{"from": str(versao_id)},
+    )
+
+    versao_anterior_label = "Sem versão anterior"
+    if versao["versao_anterior_id"] is not None:
+        _prev = get_atividade_versao_by_id(conn, versao["versao_anterior_id"])
+        if _prev is not None:
+            versao_anterior_label = f"v{_prev['numero_versao']}"
+
+    # Modo explícito somente-leitura (?view=1), consistente com as convenções
+    # SGAA existentes (admin_editar_atividade usa o mesmo parâmetro).  Força
+    # leitura mesmo para rascunhos editáveis e nunca expõe ação de salvar.
+    view_mode = (request.args.get("view") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    readonly = view_mode or not can_activity_version_be_mutated_in_place(conn, versao_id)
 
     versoes_anteriores = [
         v
@@ -1377,135 +1628,189 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
 
     form_action = url_for("admin_catalogo_editar_versao", base_id=base_id, versao_id=versao_id)
     _num = versao["numero_versao"]
-    form_title = f"Editar versão v{_num}"
+    form_title = f"Ver versão v{_num}" if readonly else f"Editar versão v{_num}"
     submit_label = "Salvar alterações"
+    grupos_por_tipo = _build_grupos_por_tipo_for_activity_form(conn)
+    tipo_limitacao, limite_valor = _limitation_form_values(versao)
+    initial_values = {
+        "tipo_atividade": _tipo_atividade_from_eixo(versao["eixo"]),
+        "grupo": versao["grupo"] or "",
+        "nome": base["nome_conceito"],
+        "descricao": base["descricao"] or "",
+        "tipo_limitacao": tipo_limitacao,
+        "limite_valor": limite_valor,
+        "ch_por_evento": _display_number(versao["ch_por_evento"]),
+        "observacoes": _canonical_version_observacoes(versao),
+        "versao_anterior_id": (
+            "" if versao["versao_anterior_id"] is None
+            else str(versao["versao_anterior_id"])
+        ),
+    }
+    initial_payload = _normalized_version_form_payload(initial_values)
 
-    def _display_number(value):
-        if value is None:
-            return ""
-        if isinstance(value, float) and value.is_integer():
-            return str(int(value))
-        return str(value)
+    def _render_form(msg, values, *, force_readonly=False):
+        if msg:
+            flash(msg, "error")
+        return render_template(
+            "admin_catalogo_versao_form.html",
+            base=base,
+            versoes_anteriores=versoes_anteriores,
+            grupos_por_tipo=grupos_por_tipo,
+            tipo_atividade=values["tipo_atividade"],
+            tipo_locked=True,
+            grupo=values["grupo"],
+            nome=values["nome"],
+            descricao=values["descricao"],
+            tipo_limitacao=values["tipo_limitacao"],
+            limite_valor=values["limite_valor"],
+            ch_por_evento=values["ch_por_evento"],
+            observacoes=values["observacoes"],
+            versao_anterior_id=values["versao_anterior_id"],
+            form_action=form_action,
+            form_title=form_title,
+            submit_label=submit_label,
+            readonly=readonly or force_readonly,
+            versao_switcher=versao_switcher,
+            versao_atual_id=versao_atual_id,
+            nova_versao_url=nova_versao_url,
+            versao_anterior_label=versao_anterior_label,
+            form_snapshot_json=(
+                None if readonly else json.dumps(initial_payload, ensure_ascii=False)
+            ),
+        )
 
     if request.method == "POST":
-        grupo = (request.form.get("grupo") or "").strip()
-        ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
-        limite_semestre_raw = (request.form.get("limite_semestre") or "").strip()
-        limite_total_raw = (request.form.get("limite_total") or "").strip()
-        observacao_aluno = (request.form.get("observacao_aluno") or "").strip()
-        observacao_admin = (request.form.get("observacao_admin") or "").strip()
-        vigencia_inicio = (request.form.get("vigencia_inicio") or "").strip()
-        vigencia_fim = (request.form.get("vigencia_fim") or "").strip()
-        versao_anterior_id_raw = (request.form.get("versao_anterior_id") or "").strip()
-
-        def _render_form(msg):
-            if msg:
-                flash(msg, "error")
-            return render_template(
-                "admin_catalogo_versao_form.html",
-                base=base,
-                versoes_anteriores=versoes_anteriores,
-                eixo=versao["eixo"],
-                eixo_locked=True,
-                grupo=grupo,
-                ch_por_evento=ch_por_evento_raw,
-                limite_semestre=limite_semestre_raw,
-                limite_total=limite_total_raw,
-                observacao_aluno=observacao_aluno,
-                observacao_admin=observacao_admin,
-                vigencia_inicio=vigencia_inicio,
-                vigencia_fim=vigencia_fim,
-                versao_anterior_id=versao_anterior_id_raw,
-                form_action=form_action,
-                form_title=form_title,
-                submit_label=submit_label,
+        if readonly:
+            message = (
+                "Apenas versões em rascunho podem ser editadas."
+                if versao["status"] != "rascunho"
+                else (
+                    "Modo de visualização: a edição desta versão não está disponível."
+                    if view_mode
+                    else "Esta versão já está em uso e não pode mais ser editada."
+                )
             )
+            flash(message, "error")
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
 
-        eixo = versao["eixo"]
+        values = {
+            "tipo_atividade": (request.form.get("tipo_atividade") or "").strip(),
+            "grupo": (request.form.get("grupo") or "").strip(),
+            "nome": (request.form.get("nome") or "").strip(),
+            "descricao": (request.form.get("descricao") or "").strip(),
+            "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
+            "limite_valor": (request.form.get("limite_valor") or "").strip(),
+            "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
+            "observacoes": (request.form.get("observacoes") or "").strip(),
+            "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
+        }
 
-        # validação numérica
-        def _parse_float(raw, nome):
+        def _render(msg):
+            return _render_form(msg, values)
+
+        eixo = _eixo_from_tipo_atividade(values["tipo_atividade"])
+        if eixo != versao["eixo"]:
+            return _render("Para alterar o Tipo, crie uma nova versão a partir desta versão.")
+        grupo = _normalize_atividade_grupo(values["tipo_atividade"], values["grupo"])
+        values["grupo"] = grupo or ""
+        if not grupo:
+            return _render("Selecione o Grupo (nº/descrição).")
+        if not values["nome"]:
+            return _render("Informe o Nome da atividade.")
+
+        def _parse_non_negative(raw, label, *, required=False):
             if not raw:
+                if required:
+                    raise ValueError(f"Informe {label}.")
                 return None
             try:
-                v = float(raw)
-                if v < 0:
-                    return nome
-                return v
+                parsed = float(raw)
             except (TypeError, ValueError):
-                return nome
+                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
+            if parsed < 0:
+                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
+            return parsed
 
-        ch_por_evento = _parse_float(ch_por_evento_raw, "ch_por_evento")
-        limite_semestre = _parse_float(limite_semestre_raw, "limite_semestre")
-        limite_total = _parse_float(limite_total_raw, "limite_total")
-        for maybe_err in (ch_por_evento, limite_semestre, limite_total):
-            if isinstance(maybe_err, str):
-                return _render_form(f"{maybe_err} deve ser um número válido e maior ou igual a zero.")
+        try:
+            ch_por_evento = _parse_non_negative(
+                values["ch_por_evento"], "Carga horária por evento"
+            )
+            tipo_limitacao = values["tipo_limitacao"]
+            if tipo_limitacao not in {"", "total", "semestral"}:
+                return _render("Selecione uma Limitação / Tempo limite válida.")
+            limite_valor = _parse_non_negative(
+                values["limite_valor"], "o tempo limite", required=bool(tipo_limitacao)
+            )
+        except ValueError as exc:
+            return _render(str(exc))
+        limite_semestre = limite_valor if tipo_limitacao == "semestral" else None
+        limite_total = limite_valor if tipo_limitacao == "total" else None
 
         versao_anterior_id = None
-        if versao_anterior_id_raw:
+        if values["versao_anterior_id"]:
             try:
-                versao_anterior_id = int(versao_anterior_id_raw)
+                versao_anterior_id = int(values["versao_anterior_id"])
             except (TypeError, ValueError):
-                return _render_form("Versão anterior inválida.")
+                return _render("Versão anterior inválida.")
             if versao_anterior_id == versao_id:
-                return _render_form("Versão anterior não pode ser a própria versão.")
+                return _render("Versão anterior não pode ser a própria versão.")
             prev = conn.execute(
                 "SELECT atividade_base_id, eixo FROM atividade_versao WHERE id = ?",
                 (versao_anterior_id,),
             ).fetchone()
             if not prev:
-                return _render_form("Versão anterior não encontrada.")
+                return _render("Versão anterior não encontrada.")
             if prev["atividade_base_id"] != base_id:
-                return _render_form("Versão anterior deve pertencer à mesma atividade-base.")
+                return _render("Versão anterior deve pertencer à mesma atividade-base.")
             if prev["eixo"] != eixo:
-                return _render_form("Versão anterior deve ter o mesmo eixo da versão.")
+                return _render("Versão anterior deve ter o mesmo Tipo da versão.")
+
+        candidate_payload = _normalized_version_form_payload(values)
+        if candidate_payload == initial_payload:
+            return _render("Nenhuma alteração efetiva informada.")
+
+        duplicate = conn.execute(
+            "SELECT id FROM atividade_base WHERE nome_conceito = ? AND id <> ?",
+            (values["nome"], base_id),
+        ).fetchone()
+        if duplicate:
+            return _render("Já existe atividade com este Nome.")
+
+        observacoes_changed = (
+            candidate_payload["observacoes"] != initial_payload["observacoes"]
+        )
+        changes = {
+            "eixo": eixo,
+            "grupo": grupo or None,
+            "ch_por_evento": ch_por_evento,
+            "limite_semestre": limite_semestre,
+            "limite_total": limite_total,
+            "versao_anterior_id": versao_anterior_id,
+        }
+        if observacoes_changed:
+            observacoes = values["observacoes"] or None
+            changes["observacao_aluno"] = observacoes
+            changes["observacao_admin"] = observacoes
 
         try:
+            conn.execute(
+                "UPDATE atividade_base SET nome_conceito = ?, descricao = ? WHERE id = ?",
+                (values["nome"], values["descricao"] or None, base_id),
+            )
             apply_activity_version_semantic_changes(
                 conn,
                 versao_id,
-                {
-                    "eixo": eixo,
-                    "grupo": grupo or None,
-                    "ch_por_evento": ch_por_evento,
-                    "limite_semestre": limite_semestre,
-                    "limite_total": limite_total,
-                    "observacao_aluno": observacao_aluno or None,
-                    "observacao_admin": observacao_admin or None,
-                    "vigencia_inicio": vigencia_inicio or None,
-                    "vigencia_fim": vigencia_fim or None,
-                    "versao_anterior_id": versao_anterior_id,
-                },
+                changes,
                 create_successor_if_frozen=False,
             )
             conn.commit()
             flash("Versão atualizada com sucesso.", "success")
             return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
         except Exception as exc:
-            return _render_form(f"Erro ao atualizar versão: {exc}")
+            conn.rollback()
+            return _render(f"Erro ao atualizar versão: {exc}")
 
-    return render_template(
-        "admin_catalogo_versao_form.html",
-        base=base,
-        versoes_anteriores=versoes_anteriores,
-        eixo=versao["eixo"],
-        eixo_locked=True,
-        grupo=versao["grupo"] or "",
-        ch_por_evento=_display_number(versao["ch_por_evento"]),
-        limite_semestre=_display_number(versao["limite_semestre"]),
-        limite_total=_display_number(versao["limite_total"]),
-        observacao_aluno=versao["observacao_aluno"] or "",
-        observacao_admin=versao["observacao_admin"] or "",
-        vigencia_inicio=versao["vigencia_inicio"] or "",
-        vigencia_fim=versao["vigencia_fim"] or "",
-        versao_anterior_id=(
-            "" if versao["versao_anterior_id"] is None else str(versao["versao_anterior_id"])
-        ),
-        form_action=form_action,
-        form_title=form_title,
-        submit_label=submit_label,
-    )
+    return _render_form(None, initial_values)
 
 
 @admin_required

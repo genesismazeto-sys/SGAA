@@ -210,19 +210,33 @@ def _nova_versao_url(client, base_id: int) -> str:
 
 
 def _post_nova_versao(client, base_id: int, data: dict):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        base = conn.execute(
+            "SELECT nome_conceito, descricao FROM atividade_base WHERE id = ?", (base_id,)
+        ).fetchone()
+        predecessor = None
+        if data.get("versao_anterior_id"):
+            predecessor = conn.execute(
+                "SELECT * FROM atividade_versao WHERE id = ?", (data["versao_anterior_id"],)
+            ).fetchone()
+    eixo = data.get("eixo", "AAC")
+    tipo = "Extensão Universitária" if eixo == "AEU" else "Acadêmica Complementar"
+    limite_semestre = data.get("limite_semestre", predecessor["limite_semestre"] if predecessor else "")
+    limite_total = data.get("limite_total", predecessor["limite_total"] if predecessor else "")
     payload = {
-        "eixo": "",
-        "grupo": "",
-        "ch_por_evento": "",
-        "limite_semestre": "",
-        "limite_total": "",
-        "observacao_aluno": "",
-        "observacao_admin": "",
-        "vigencia_inicio": "",
-        "vigencia_fim": "",
-        "versao_anterior_id": "",
+        "tipo_atividade": tipo,
+        "grupo": data.get("grupo", predecessor["grupo"] if predecessor else ""),
+        "nome": base["nome_conceito"],
+        "descricao": base["descricao"] or "",
+        "tipo_limitacao": "semestral" if limite_semestre != "" else ("total" if limite_total != "" else ""),
+        "limite_valor": limite_semestre if limite_semestre != "" else limite_total,
+        "ch_por_evento": data.get("ch_por_evento", predecessor["ch_por_evento"] if predecessor else ""),
+        "observacoes": data.get("observacao_admin") or data.get("observacao_aluno") or (
+            (predecessor["observacao_admin"] or predecessor["observacao_aluno"] or "") if predecessor else ""
+        ),
+        "versao_anterior_id": data.get("versao_anterior_id", ""),
     }
-    payload.update(data)
     return client.post(_nova_versao_url(client, base_id), data=payload, follow_redirects=False)
 
 
@@ -231,6 +245,8 @@ def _post_nova_versao(client, base_id: int, data: dict):
 # ---------------------------------------------------------------------------
 
 def _input_value(html: str, field_id: str) -> str:
+    if field_id == "grupo":
+        field_id = "grupo_hidden"
     match = re.search(rf'id="{field_id}"[^>]*value="([^"]*)"', html)
     assert match, f"campo id={field_id} não encontrado no HTML"
     return match.group(1)
@@ -251,16 +267,34 @@ def _selected_option_value(html: str, select_id: str):
     return [value for value, selected, _body in options if selected]
 
 
+def _hidden_input_value(html: str, name: str) -> str:
+    match = re.search(rf'<input type="hidden" name="{name}" value="([^"]*)"', html)
+    assert match, f"hidden input name={name} não encontrado no HTML"
+    return match.group(1)
+
+
+def _readonly_meta_value(html: str, field_id: str) -> str:
+    match = re.search(rf'id="{field_id}"[^>]*value="([^"]*)"', html)
+    assert match, f"campo read-only id={field_id} não encontrado no HTML"
+    return match.group(1)
+
+
+def _assert_no_editable_predecessor(html: str) -> None:
+    assert '<select id="versao_anterior_id" name="versao_anterior_id"' in html
+
+
 def _assert_form_blank(html: str) -> None:
     assert _input_value(html, "grupo") == ""
     assert _input_value(html, "ch_por_evento") == ""
-    assert _input_value(html, "limite_semestre") == ""
-    assert _input_value(html, "limite_total") == ""
-    assert _textarea_value(html, "observacao_aluno") == ""
-    assert _textarea_value(html, "observacao_admin") == ""
-    assert _input_value(html, "vigencia_inicio") == ""
-    assert _input_value(html, "vigencia_fim") == ""
+    assert _input_value(html, "limite_valor_hidden") == ""
+    assert _textarea_value(html, "observacoes") == ""
+    _assert_no_editable_predecessor(html)
     assert _selected_option_value(html, "versao_anterior_id") == []
+
+
+def _assert_fixed_predecessor(html: str, predecessor_id: int) -> None:
+    _assert_no_editable_predecessor(html)
+    assert _selected_option_value(html, "versao_anterior_id") == [str(predecessor_id)]
 
 
 # ---------------------------------------------------------------------------
@@ -277,17 +311,11 @@ def test_t1_get_copy_renders_exact_predecessor_values(client):
 
     assert _input_value(html, "grupo") == V1_VALUES["grupo"]
     assert _input_value(html, "ch_por_evento") == "4.5"
-    assert _input_value(html, "limite_semestre") == "40"
-    assert _input_value(html, "limite_total") == "100"
-    assert _textarea_value(html, "observacao_aluno") == V1_VALUES["observacao_aluno"]
-    assert _textarea_value(html, "observacao_admin") == V1_VALUES["observacao_admin"]
-    assert _input_value(html, "vigencia_inicio") == V1_VALUES["vigencia_inicio"]
-    assert _input_value(html, "vigencia_fim") == V1_VALUES["vigencia_fim"]
+    assert _input_value(html, "limite_valor_hidden") == "40"
+    assert _textarea_value(html, "observacoes") == V1_VALUES["observacao_admin"]
+    assert "Vigência início" not in html and "Vigência fim" not in html
 
-    selected_prev = _selected_option_value(html, "versao_anterior_id")
-    assert selected_prev == [str(seed["versao_id"])], (
-        f"predecessor deve vir selecionado como versao_anterior_id, obtido {selected_prev}"
-    )
+    _assert_fixed_predecessor(html, seed["versao_id"])
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +342,7 @@ def test_t2_exact_source_identity_from_id(client):
     html2 = r2.get_data(as_text=True)
     assert _input_value(html2, "grupo") == V2_VALUES["grupo"]
     assert _input_value(html2, "ch_por_evento") == "6"
-    assert _selected_option_value(html2, "versao_anterior_id") == [str(v2_id)]
+    _assert_fixed_predecessor(html2, v2_id)
 
     assert _input_value(html1, "grupo") != _input_value(html2, "grupo")
 
@@ -449,11 +477,7 @@ def test_t7_admin_edit_after_copy_is_persisted(client):
     r = client.get(_nova_versao_url(client, seed["base_id"]) + f"?from={seed['versao_id']}")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    selected_prev = _selected_option_value(html, "versao_anterior_id")
-    assert selected_prev == [str(seed["versao_id"])], (
-        "GET ?from= deve pré-selecionar o predecessor da fonte, "
-        f"obtido {selected_prev}"
-    )
+    _assert_fixed_predecessor(html, seed["versao_id"])
 
     edited = {
         "eixo": "AAC",
@@ -477,11 +501,11 @@ def test_t7_admin_edit_after_copy_is_persisted(client):
     assert nova["grupo"] == "1 - Grupo editado pelo admin"
     assert nova["ch_por_evento"] == 9.0
     assert nova["limite_semestre"] == 30.0
-    assert nova["limite_total"] == 120.0
-    assert nova["observacao_aluno"] == "Observação editada pelo admin"
+    assert nova["limite_total"] is None
+    assert nova["observacao_aluno"] == "Admin editou esta observação"
     assert nova["observacao_admin"] == "Admin editou esta observação"
-    assert nova["vigencia_inicio"] == "2026-03-01"
-    assert nova["vigencia_fim"] == "2026-09-30"
+    assert nova["vigencia_inicio"] == V1_VALUES["vigencia_inicio"]
+    assert nova["vigencia_fim"] == V1_VALUES["vigencia_fim"]
     assert nova["grupo"] != V1_VALUES["grupo"], (
         "POST deve persistir os valores submetidos, não recopiar o predecessor"
     )
@@ -497,6 +521,7 @@ def test_t8_lineage_versao_anterior_id(client):
 
     r = _post_nova_versao(client, seed["base_id"], {
         "eixo": "AAC",
+        "ch_por_evento": "5",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302
@@ -537,6 +562,7 @@ def test_t9_new_identity_next_number_and_rascunho(client):
 
     r = _post_nova_versao(client, seed["base_id"], {
         "eixo": "AAC",
+        "ch_por_evento": "7",
         "versao_anterior_id": str(newer_id),
     })
     assert r.status_code == 302
@@ -566,6 +592,7 @@ def test_t10_predecessor_row_unchanged(client):
 
     r = _post_nova_versao(client, seed["base_id"], {
         "eixo": "AAC",
+        "ch_por_evento": "5",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302
@@ -610,6 +637,7 @@ def test_t11_matrix_link_to_predecessor_untouched(client):
 
     r = _post_nova_versao(client, seed["base_id"], {
         "eixo": "AAC",
+        "ch_por_evento": "5",
         "versao_anterior_id": str(seed["versao_id"]),
     })
     assert r.status_code == 302

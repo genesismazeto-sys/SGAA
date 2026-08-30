@@ -93,20 +93,29 @@ def _seed_base(client) -> dict:
             (nome_base,),
         ).fetchone()["id"]
         conn.commit()
-    return {"base_id": base_id}
+    return {"base_id": base_id, "nome": nome_base, "descricao": "Descrição"}
 
 
 def _post_nova_versao(client, base_id, **kwargs):
+    with main.app.app_context():
+        base = main.get_db_connection().execute(
+            "SELECT nome_conceito, descricao FROM atividade_base WHERE id = ?", (base_id,)
+        ).fetchone()
+    eixo = kwargs.get("eixo", "AAC")
+    limite_semestre = kwargs.get("limite_semestre", "40")
+    limite_total = kwargs.get("limite_total", "100")
     data = {
-        "eixo": kwargs.get("eixo", "AAC"),
+        "tipo_atividade": (
+            "Extensão Universitária" if eixo == "AEU" else
+            ("Acadêmica Complementar" if eixo == "AAC" else eixo)
+        ),
         "grupo": kwargs.get("grupo", "1 - Grupo teste"),
+        "nome": base["nome_conceito"],
+        "descricao": base["descricao"] or "",
         "ch_por_evento": kwargs.get("ch_por_evento", "4"),
-        "limite_semestre": kwargs.get("limite_semestre", "40"),
-        "limite_total": kwargs.get("limite_total", "100"),
-        "observacao_aluno": kwargs.get("observacao_aluno", ""),
-        "observacao_admin": kwargs.get("observacao_admin", ""),
-        "vigencia_inicio": kwargs.get("vigencia_inicio", ""),
-        "vigencia_fim": kwargs.get("vigencia_fim", ""),
+        "tipo_limitacao": "semestral" if limite_semestre != "" else ("total" if limite_total != "" else ""),
+        "limite_valor": limite_semestre if limite_semestre != "" else limite_total,
+        "observacoes": kwargs.get("observacao_admin") or kwargs.get("observacao_aluno") or "",
         "versao_anterior_id": kwargs.get("versao_anterior_id", ""),
     }
     return client.post(
@@ -295,10 +304,10 @@ def test_student_templates_do_not_expose_versioning_terms(client):
 
 
 # ---------------------------------------------------------------------------
-# 11. Formulário tem select para versao_anterior_id com placeholder vazio
+# 11. Formulário preserva o controle visível e editável de Versão anterior
 # ---------------------------------------------------------------------------
 
-def test_get_nova_versao_form_has_versao_anterior_select(client):
+def test_get_nova_versao_form_has_visible_editable_predecessor_select(client):
     _login_admin(client)
     seed = _seed_base(client)
     r = client.get(f"/admin/catalogo-versoes/{seed['base_id']}/nova-versao")
@@ -352,7 +361,8 @@ def test_post_nova_versao_second_version_same_base_gets_next_number(client):
         ).fetchone()["id"]
 
     second = _post_nova_versao(
-        client, seed["base_id"], eixo="AAC", versao_anterior_id=str(v1)
+        client, seed["base_id"], eixo="AAC", versao_anterior_id=str(v1),
+        ch_por_evento="6",
     )
     assert second.status_code == 302
 

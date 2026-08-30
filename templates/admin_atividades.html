@@ -940,12 +940,22 @@
         if (!btn || btn.disabled || !currentId) return;
         const action = btn.getAttribute('data-action');
         if (action === 'view'){
-          const base = "{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId);
-          window.navigateWithReturnTo(base, { view: 1 });
+          if (currentBaseId){
+            const base = "{{ url_for('admin_catalogo_editar_versao', base_id=0, versao_id=0) }}".replace('/0/versoes/0/editar', '/' + currentBaseId + '/versoes/' + currentId + '/editar');
+            window.navigateWithReturnTo(base, { view: 1 });
+          } else {
+            const base = "{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId);
+            window.navigateWithReturnTo(base, { view: 1 });
+          }
         } else if (action === 'edit'){
-          window.navigateWithReturnTo("{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId));
+          if (currentBaseId){
+            const base = "{{ url_for('admin_catalogo_editar_versao', base_id=0, versao_id=0) }}".replace('/0/versoes/0/editar', '/' + currentBaseId + '/versoes/' + currentId + '/editar');
+            window.navigateWithReturnTo(base);
+          } else {
+            window.navigateWithReturnTo("{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId));
+          }
         } else if (action === 'nova-versao' && currentBaseId){
-          window.location.href = "{{ url_for('admin_catalogo_nova_versao', base_id=0) }}".replace('/0/', '/' + currentBaseId + '/');
+          window.location.href = "{{ url_for('admin_catalogo_nova_versao', base_id=0) }}".replace('/0/', '/' + currentBaseId + '/') + '?from=' + currentId;
         } else if (action === 'ver-versoes' && currentBaseId){
           window.location.href = "{{ url_for('admin_catalogo_versao_detalhe', base_id=0) }}".replace('/0', '/' + currentBaseId);
         } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){
