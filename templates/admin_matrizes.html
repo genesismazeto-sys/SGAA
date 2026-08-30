@@ -140,7 +140,7 @@
               'neutral'
             )
           },
-        ], {'data-matriz-id': matriz.id, 'data-view-url': matriz.view_url, 'data-edit-url': matriz.edit_url, 'data-delete-url': matriz.delete_url, 'data-aac-url': matriz.manage_academicas_url, 'data-aea-url': matriz.manage_extensao_url}) }}
+        ], {'data-matriz-id': matriz.id, 'data-view-url': matriz.view_url, 'data-edit-url': matriz.edit_url, 'data-delete-url': (matriz.delete_url if auth_can('matrizes', 'full') else ''), 'data-aac-url': matriz.manage_academicas_url, 'data-aea-url': matriz.manage_extensao_url}) }}
       {% endfor %}
     {% else %}
       <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma matriz cadastrada.</div>

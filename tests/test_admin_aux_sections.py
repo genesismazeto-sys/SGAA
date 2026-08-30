@@ -254,8 +254,8 @@ def test_admin_list_pages_render_actions_menu_for_selection(client):
         if path == "/admin/atividades":
             assert 'id="btn-grupos"' in html
             assert 'id="btn-importar-csv-atividades"' in html
-        if path in {"/admin/alunos", "/admin/turmas", "/admin/cursos"}:
-            assert 'data-action="delete"' not in html
+        if path in {"/admin/atividades", "/admin/alunos", "/admin/turmas", "/admin/cursos"}:
+            assert 'data-action="delete"' in html or 'data-action=\\"delete\\"' in html
 
 
 def test_admin_acesso_definir_senha_updates_selected_user_password(client):

@@ -268,8 +268,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) lucide.createIcons();
 
-    const canArquivosEdit = {{ 'true' if can_arquivos_edit else 'false' }};
-    const canArquivosFull = {{ 'true' if can_arquivos_full else 'false' }};
+    const canArquivosEdit = {{ 'true' if auth_can('arquivos', 'edit') else 'false' }};
+    const canArquivosFull = {{ 'true' if auth_can('arquivos', 'full') else 'false' }};
 
     const editDataElement = document.getElementById('admin-arquivo-edit-data');
     const editData = editDataElement ? JSON.parse(editDataElement.textContent || 'null') : null;
@@ -425,6 +425,8 @@
 </script>
 <script>
   document.addEventListener('DOMContentLoaded', ()=>{
+    const canArquivosEdit = {{ 'true' if auth_can('arquivos', 'edit') else 'false' }};
+    const canArquivosFull = {{ 'true' if auth_can('arquivos', 'full') else 'false' }};
     let bar = document.getElementById('pedido-actions-float');
     if (!bar){
       bar = document.createElement('div');

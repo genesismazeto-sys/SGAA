@@ -107,7 +107,7 @@
         <div class="menu-title">{{ user_message("Ações da requisição") }}</div>
         <div class="menu-list">
           <button class="menu-item" type="button" id="req-action-view" disabled><i class="lucide" data-lucide="eye"></i><span>{{ user_message("Ver") }}</span></button>
-          <button class="menu-item" type="button" id="req-action-edit" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="pencil"></i><span>{{ user_message("Editar") }}</span></button>
+          <button class="menu-item" type="button" id="req-action-edit" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="edit"></i><span>{{ user_message("Editar") }}</span></button>
           <button class="menu-item" type="button" id="req-action-process" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="circle-check-big"></i><span>{{ user_message("Processar") }}</span></button>
           <button class="menu-item danger" type="button" id="req-action-delete" disabled {% if not can_requisicoes_full %}hidden{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
         </div>
@@ -732,6 +732,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         enableBulkDelete: false,
       });
       if (!rowSelectionApi) return;
+      window.requisicoesRowSelectionApi = rowSelectionApi;
 
       const actBtn   = document.getElementById('btn-req-actions');
       const actMenu  = document.getElementById('req-actions-menu');
@@ -784,6 +785,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         if (hint)     { hint.textContent  = hasRow ? '' : reqMessageTemplates.selectRowHint; }
       }
+      window.requisicoesActionsSync = syncItems;
 
       actBtn.addEventListener('click', ()=>{ if (actMenu.hidden) openMenu(); else closeMenu(); });
       actMenu.addEventListener('click', (e)=>{ e.stopPropagation(); });
@@ -1494,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="process" aria-label="Processar requisição" title="Processar"><i data-lucide="circle-check-big"></i></button>' : ''}
       ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar requisição" title="Editar"><i data-lucide="edit"></i></button>' : ''}
       <button type="button" class="act-btn" data-action="view" aria-label="Ver requisição" title="Ver"><i data-lucide="eye"></i></button>
+      ${canRequisicoesFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir requisição" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
     `;
     window.lucide?.createIcons?.();
 
@@ -1600,7 +1603,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         if (titleEl){
           titleEl.innerHTML = mode === 'edit'
-            ? '<i class="lucide" data-lucide="pencil"></i> Editar Requisição'
+            ? '<i class="lucide" data-lucide="edit"></i> Editar Requisição'
             : '<i class="lucide" data-lucide="file-plus"></i> Requisição';
         }
         const inlineNome = currentCard ? (currentCard.getAttribute('data-nome-evento') || '') : '';
@@ -1651,7 +1654,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const titleEl = document.getElementById('req-modal-title');
         if (titleEl){
           titleEl.innerHTML = mode === 'edit'
-            ? '<i class="lucide" data-lucide="pencil"></i> Editar Requisição'
+            ? '<i class="lucide" data-lucide="edit"></i> Editar Requisição'
             : '<i class="lucide" data-lucide="file-plus"></i> Requisição';
         }
         // Only unrelated presentation fields may be shown without activity authority.
@@ -1700,6 +1703,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
       } else if (action === 'process'){
         if (!canRequisicoesEdit) return;
         loadReqAndOpen('process');
+      } else if (action === 'delete' && canRequisicoesFull && currentCard?.getAttribute('data-delete-url')){
+        const deleteAction = document.getElementById('req-action-delete');
+        if (!deleteAction) return;
+        window.requisicoesRowSelectionApi?.clearSelection();
+        currentCard.click();
+        window.requisicoesActionsSync?.();
+        deleteAction.click();
       }
     });
 

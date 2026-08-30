@@ -391,12 +391,6 @@
           element.setAttribute('aria-hidden', 'true');
         });
 
-        document.querySelectorAll('.pedido-actions-float .act-btn, .access-actions-float .act-btn').forEach((element) => {
-          const action = (element.getAttribute('data-action') || '').trim().toLowerCase();
-          if (action === 'view') return;
-          element.hidden = true;
-          element.disabled = true;
-        });
       };
 
       window.addEventListener('DOMContentLoaded', () => {

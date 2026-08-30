@@ -127,7 +127,7 @@
           {'content': a.turma or '-', 'class':'ellipsis'},
           {'content': (a.pendentes or 0)|string, 'class':'left ellipsis'},
           {'content': ( 'Ativo' if is_active else 'Inativo' ), 'class':'left', 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' )},
-        ], attrs={'data-usuario-id': a.usuario_id or a.id, 'data-aluno-nome': a.nome, 'data-delete-url': url_for('admin_deletar_aluno', usuario_id=a.usuario_id or a.id)}) }}
+        ], attrs={'data-usuario-id': a.usuario_id or a.id, 'data-aluno-nome': a.nome, 'data-delete-url': (url_for('admin_deletar_aluno', usuario_id=a.usuario_id or a.id) if auth_can('alunos', 'full') else '')}) }}
       {% endfor %}
     {% else %}
       <div style="padding: 1rem; text-align:center; color:#6b7280;">{{ user_message("Nenhum aluno encontrado.") }}</div>
@@ -164,8 +164,9 @@
       enableSelectAllButton: false,
       enableBulkDelete: false
     });
+    window.alunosRowSelectionApi = rowSelectionApi;
 
-    window.initToolbarSelectionActionsMenu?.({
+    window.alunosSelectionActionsApi = window.initToolbarSelectionActionsMenu?.({
       buttonSelector: '#btn-alunos-actions',
       menuSelector: '#alunos-actions-menu',
       selectAllSelector: '#alunos-action-select-all',
@@ -193,7 +194,8 @@
     bar.setAttribute('aria-label', alunosMessageTemplates.selectedAlunoActions);
     bar.innerHTML = `
       <button type="button" class="act-btn" data-action="view" aria-label="${alunosMessageTemplates.viewAluno}" title="{{ user_message('Ver') }}"><i data-lucide="eye"></i></button>
-      <button type="button" class="act-btn" data-action="edit" aria-label="${alunosMessageTemplates.editAluno}" title="{{ user_message('Editar') }}"><i data-lucide="edit"></i></button>
+      {% if auth_can('alunos', 'edit') %}<button type="button" class="act-btn" data-action="edit" aria-label="${alunosMessageTemplates.editAluno}" title="{{ user_message('Editar') }}"><i data-lucide="edit"></i></button>{% endif %}
+      {% if auth_can('alunos', 'full') %}<button type="button" class="act-btn" data-action="delete" aria-label="{{ user_message('Excluir aluno') }}" title="{{ user_message('Excluir') }}"><i data-lucide="trash-2"></i></button>{% endif %}
     `;
     window.lucide?.createIcons?.();
 
@@ -249,6 +251,13 @@
         window.navigateWithReturnTo(base, { view: 1 });
       } else if (action === 'edit'){
         window.navigateWithReturnTo("{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid));
+      } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){
+        const deleteAction = document.getElementById('alunos-action-delete');
+        if (!deleteAction) return;
+        window.alunosRowSelectionApi?.clearSelection();
+        currentCard.click();
+        window.alunosSelectionActionsApi?.syncMenu();
+        deleteAction.click();
       }
     });
   });

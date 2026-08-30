@@ -122,7 +122,7 @@
           {'content': (c.qtd_turmas or 0)|string, 'class':'center'},
           {'content': (c.qtd_alunos or 0)|string, 'class':'center'},
           {'content': ( 'Ativo' if is_active else 'Inativo' ), 'class':'center', 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' )},
-        ], {'data-curso-id': c.id, 'data-curso-nome': c.nome or '', 'data-delete-url': url_for('admin_deletar_curso', curso_id=c.id)}) }}
+        ], {'data-curso-id': c.id, 'data-curso-nome': c.nome or '', 'data-delete-url': (url_for('admin_deletar_curso', curso_id=c.id) if auth_can('cursos', 'full') else '')}) }}
       {% endfor %}
     {% else %}
       <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum curso cadastrado.</div>
@@ -158,8 +158,9 @@
       enableSelectAllButton: false,
       enableBulkDelete: false
     });
+    window.cursosRowSelectionApi = rowSelectionApi;
 
-    window.initToolbarSelectionActionsMenu?.({
+    window.cursosSelectionActionsApi = window.initToolbarSelectionActionsMenu?.({
       buttonSelector: '#btn-cursos-actions',
       menuSelector: '#cursos-actions-menu',
       selectAllSelector: '#cursos-action-select-all',
@@ -185,7 +186,8 @@
     bar.setAttribute('aria-label','Ações do curso selecionado');
     bar.innerHTML = `
       <button type="button" class="act-btn" data-action="view" aria-label="Ver curso" title="Ver"><i data-lucide="eye"></i></button>
-      <button type="button" class="act-btn" data-action="edit" aria-label="Editar curso" title="Editar"><i data-lucide="edit"></i></button>
+      {% if auth_can('cursos', 'edit') %}<button type="button" class="act-btn" data-action="edit" aria-label="Editar curso" title="Editar"><i data-lucide="edit"></i></button>{% endif %}
+      {% if auth_can('cursos', 'full') %}<button type="button" class="act-btn" data-action="delete" aria-label="Excluir curso" title="Excluir"><i data-lucide="trash-2"></i></button>{% endif %}
     `;
     window.lucide?.createIcons?.();
 
@@ -236,6 +238,13 @@
         window.navigateWithReturnTo("{{ url_for('admin_visualizar_curso', curso_id=0) }}".replace('/0', '/' + currentCursoId));
       } else if (action === 'edit'){
         window.navigateWithReturnTo("{{ url_for('admin_editar_curso', curso_id=0) }}".replace('/0', '/' + currentCursoId));
+      } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){
+        const deleteAction = document.getElementById('cursos-action-delete');
+        if (!deleteAction) return;
+        window.cursosRowSelectionApi?.clearSelection();
+        currentCard.click();
+        window.cursosSelectionActionsApi?.syncMenu();
+        deleteAction.click();
       }
     });
   });

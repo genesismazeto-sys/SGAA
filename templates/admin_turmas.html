@@ -183,7 +183,7 @@
           {'class':'center','content': ((t.semestre_fim ~ 'S-' ~ t.ano_fim) if (t.semestre_fim and t.ano_fim) else '—') },
           {'class':'center','content': (t.qtd_alunos or 0) },
           {'class':'center','content': ( 'Ativa' if is_active else 'Inativa' ), 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' ) }
-        ], attrs={'data-turma-id': t.id, 'data-delete-url': url_for('admin_deletar_turma', turma_id=t.id)}) }}
+        ], attrs={'data-turma-id': t.id, 'data-delete-url': (url_for('admin_deletar_turma', turma_id=t.id) if auth_can('turmas', 'full') else '')}) }}
       {% endfor %}
     {% else %}
       <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma turma cadastrada.</div>
@@ -274,8 +274,9 @@
         enableSelectAllButton: false,
         enableBulkDelete: false
       });
+      window.turmasRowSelectionApi = rowSelectionApi;
 
-      window.initToolbarSelectionActionsMenu?.({
+      window.turmasSelectionActionsApi = window.initToolbarSelectionActionsMenu?.({
         buttonSelector: '#btn-turmas-actions',
         menuSelector: '#turmas-actions-menu',
         selectAllSelector: '#turmas-action-select-all',
@@ -308,7 +309,8 @@
         bar.setAttribute('aria-label','Ações da turma selecionada');
         bar.innerHTML = `
           <button type=\"button\" class=\"act-btn\" data-action=\"alunos\" aria-label=\"Alunos da turma\" title=\"Alunos\">{{ school_icon() }}</button>
-          <button type=\"button\" class=\"act-btn\" data-action=\"edit\" aria-label=\"Editar turma\" title=\"Editar\"><i data-lucide=\"edit\"></i></button>
+           {% if auth_can('turmas', 'edit') %}<button type=\"button\" class=\"act-btn\" data-action=\"edit\" aria-label=\"Editar turma\" title=\"Editar\"><i data-lucide=\"edit\"></i></button>{% endif %}
+          {% if auth_can('turmas', 'full') %}<button type=\"button\" class=\"act-btn\" data-action=\"delete\" aria-label=\"Excluir turma\" title=\"Excluir\"><i data-lucide=\"trash-2\"></i></button>{% endif %}
         `;
         document.body.appendChild(bar);
         window.lucide?.createIcons?.();
@@ -372,6 +374,13 @@
           window.navigateWithReturnTo("{{ url_for('admin_detalhes_turma', turma_id=0) }}".replace('/0', '/'+currentTid));
         } else if (action === 'edit'){
           window.navigateWithReturnTo("{{ url_for('admin_editar_turma', turma_id=0) }}".replace('/0', '/'+currentTid));
+        } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){
+          const deleteAction = document.getElementById('turmas-action-delete');
+          if (!deleteAction) return;
+          window.turmasRowSelectionApi?.clearSelection();
+          currentCard.click();
+          window.turmasSelectionActionsApi?.syncMenu();
+          deleteAction.click();
         }
       });
     });

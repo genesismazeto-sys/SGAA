@@ -15,22 +15,25 @@
 #pedido-actions-float .act-btn{
   width: var(--pedido-float-btn); height: var(--pedido-float-btn);
   display: flex; align-items: center; justify-content: center;
+  padding:0;
   border: 1px solid var(--border-strong); background: var(--surface);
   border-radius: 6px; cursor: pointer;
   transition: background .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 #pedido-actions-float .act-btn:hover{ background: var(--surface-alt, #f8fafc); }
 #pedido-actions-float .act-btn:focus{ outline: 0; }
-#pedido-actions-float .act-btn i{ width:16px; height:16px; }
+#pedido-actions-float .act-btn i,
+#pedido-actions-float .act-btn > svg{
+  width:16px; height:16px; flex:0 0 16px;
+}
 #pedido-actions-float.atividades-actions-float .act-btn:focus-visible{
   outline:2px solid var(--focus-ring-color); outline-offset:2px;
 }
 #pedido-actions-float.atividades-actions-float .act-btn:disabled{
   opacity:.45; cursor:not-allowed;
 }
-#pedido-actions-float.atividades-actions-float .act-btn[data-action="edit"] svg{
-  transform:scale(.875); transform-origin:center;
-}
 /* Optional color cues for common actions */
-#pedido-actions-float .act-btn[data-action="delete"] i{ color:#dc2626; }
-#pedido-actions-float .act-btn[data-action="suspend"] i{ color:#f59e0b; }
+#pedido-actions-float .act-btn[data-action="delete"] i,
+#pedido-actions-float .act-btn[data-action="delete"] > svg{ color:#dc2626; }
+#pedido-actions-float .act-btn[data-action="suspend"] i,
+#pedido-actions-float .act-btn[data-action="suspend"] > svg{ color:#f59e0b; }

@@ -517,6 +517,7 @@
         const formEl = document.createElement('form');
         formEl.method = 'POST';
         formEl.action = currentDeleteUrl;
+        window.ensureFormCsrfToken?.(formEl);
         document.body.appendChild(formEl);
         formEl.submit();
       }

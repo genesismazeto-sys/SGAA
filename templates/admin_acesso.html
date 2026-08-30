@@ -298,7 +298,7 @@
           <div class="menu-title">{{ user_message("Ações da seleção") }}</div>
           <div class="menu-list">
             <button class="menu-item" type="button" id="access-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
-            <button class="menu-item danger" type="button" id="access-action-delete"><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
+            <button class="menu-item danger" type="button" id="access-action-delete" {% if not auth_can('acesso', 'full') %}hidden disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
             <button class="menu-item warn" type="button" id="access-action-reset"><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Redefinir") }}</span></button>
             <button class="menu-item" type="button" id="access-action-new-password"><i class="lucide" data-lucide="lock-keyhole"></i><span>{{ user_message("Nova") }}</span></button>
           </div>
@@ -391,7 +391,7 @@
           'data-user-has-aluno': 1 if user.has_aluno else 0,
           'data-user-is-self': 1 if user.is_current_user else 0,
           'data-reset-url': url_for('admin_acesso_resetar_senha', usuario_id=user.id),
-          'data-delete-url': '' if user.is_current_user else url_for('admin_acesso_deletar', usuario_id=user.id),
+          'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user else ''),
           'data-level-label': user.nivel_label,
         }) }}
       {% endfor %}
@@ -998,9 +998,11 @@
     bar.setAttribute('role', 'toolbar');
     bar.setAttribute('aria-label', 'Ações do acesso selecionado');
     bar.innerHTML = `
+      {% if auth_can('acesso', 'full') %}
       <button type="button" class="act-btn" data-action="edit" aria-label="Editar acesso" title="Editar"><i data-lucide="edit"></i></button>
       <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Redefinir senha') }}" title="{{ user_message('Redefinir senha padrão') }}"><i data-lucide="key-round"></i></button>
       <button type="button" class="act-btn danger" data-action="delete" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2"></i></button>
+      {% endif %}
     `;
     window.lucide?.createIcons?.();
 

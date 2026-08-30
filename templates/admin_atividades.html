@@ -309,7 +309,7 @@
 
     {% if atividades and atividades|length %}
       {% for a in atividades %}
-  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) }}" data-base-id="{{ a.base_id or '' }}">
+  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}">
           <div class="cell left ellipsis">{{ a.tipo_atividade }}</div>
           <div class="cell left ellipsis">{{ a.nome }}</div>
           <div class="cell center ellipsis" title="{{ a.grupo }}">
@@ -354,7 +354,7 @@
       });
       window.activityRowSelectionApi = rowSelectionApi;
 
-      window.initToolbarSelectionActionsMenu?.({
+      window.activitySelectionActionsApi = window.initToolbarSelectionActionsMenu?.({
         buttonSelector: '#btn-atividades-actions',
         menuSelector: '#atividades-actions-menu',
         selectAllSelector: '#atividades-action-select-all',
@@ -953,6 +953,7 @@
           if (!deleteAction) return;
           window.activityRowSelectionApi?.clearSelection();
           currentCard.click();
+          window.activitySelectionActionsApi?.syncMenu();
           deleteAction.click();
         }
       });
