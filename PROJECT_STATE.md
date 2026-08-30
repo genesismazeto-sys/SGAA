@@ -2217,3 +2217,34 @@ remains frozen and unchanged.
   `git diff --check` passed.
 - Logical implementation commit:
   `f9e303ff8bf7c71671c721b4a4b51b43f49c93e9`.
+
+## FLOATING-ACTIONS-NORMALIZATION-CLOSEOUT-1 — LANDED / FINAL USER ACCEPTED
+
+This section supersedes the earlier `ACTIVITY-ROW-ACTION-TOOLBAR` floating-action
+statement wherever the two differ.
+
+- Exhaustive floating-action census completed across all canonical
+  `pedido-actions-float` consumers; 13 list surfaces were identified, including
+  the two student list surfaces and class-student details.
+- Final user decision: the current rendered floating-action pattern is accepted
+  as the SGAA Design System baseline. Geometry is 26×26px buttons, 16×16px SVG,
+  stroke width 1.75, and `transform: none`.
+- Semantic icon contract is View = Lucide `eye`, Edit = Lucide `edit`, and
+  Delete = Lucide `trash-2`.
+- Every deletion-capable canonical list exposes row-level Delete while retaining
+  its existing backend route, confirmation, CSRF, FK/in-use protections, and
+  full/delete permission boundary.
+- Explicit resource-specific permission ownership is retained. The mixed
+  `turmas`/`alunos` class-student permission case is covered: `alunos/full`
+  controls student Delete even when the current `turmas` route lacks edit.
+- Activities version actions remain Create new version (`plus-circle`) and View
+  versions (`layers`). The previous Activities-only Edit scaling override is
+  removed.
+- The application-level semantic Edit normalization remains in force,
+  including `templates/admin_catalogo_versao_detalhe.html`.
+- The current rendered visual pattern was explicitly accepted by the user on
+  `2026-08-30`.
+- Focused floating-action and permission validation: `35 passed`;
+  `git diff --check` passed.
+- Logical implementation commit:
+  `a35ef35` (`Normalize floating row actions across lists`).
