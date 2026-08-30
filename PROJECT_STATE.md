@@ -2287,4 +2287,59 @@ Admin report creation workflow implemented and user-approved.
 - Logical implementation commit:
   `a8382dd` (`Implement admin report creation workflow`).
 
+## ACTIVITY-VERSION-CLONE-EDIT-UX — FULL-FORM FRONT — CLOSED / ACCEPTED / LANDED
+
+ACTIVITY_VERSION_CLONE_EDIT_UX / Activity-version full-form UX — CLOSED /
+ACCEPTED / LANDED. Implementation and independent reviews R1–R4 accepted;
+real-browser validation and final user visual acceptance completed on
+`2026-08-30`. The R4 UI is the accepted final product; no further UI change is
+authorized in this front.
+
+- **New Version uses canonical Activity-form UX.** "Nova versão" (create) and
+  version edit render the same full Activity form family used by the primary
+  Activities screen, with the visible contract: **Tipo**, **Grupo**
+  (number + description), **Nome**, **Descrição**, **Limitação / Tempo
+  limite**, **Carga horária por evento**, **Observações**, and **Versão
+  anterior**.
+- **Tipo is user-facing terminology**, not raw Eixo. The user selects
+  "Acadêmica Complementar" / "Extensão Universitária"; the raw `eixo`
+  column remains an internal projection and is never shown as `AAC`/`AEU`
+  in the form.
+- **AAC/AEU is version-level semantics.** Classification lives on the exact
+  Activity Version and may change between versions of the same conceptual
+  activity; the form does not imply base-level or activity-wide fixed
+  classification.
+- **No Activity-version vigência UX.** The version form exposes no
+  validity/vigência editing surface.
+- **Single Observações field.** The two legacy observation columns are
+  projected into one visible field; an intentional edit dual-writes the new
+  canonical value to both legacy consumers, and merely rendering another
+  field never rewrites stored split values.
+- **Clone/preload behavior.** `?from=<atividade_versao_id>` selects one exact
+  same-base predecessor; GET is read-only and prefills the editable rule
+  fields from that exact version (including Grupo, Limitação, Carga horária,
+  Observações and the Versão anterior lineage).
+- **Dirty-state / no-op protection.** The form detects unsaved changes and
+  protects against accidental loss; submitting without any effective change
+  is treated as a no-op instead of creating a redundant version.
+- **Exact-version selector.** Version edit/create surfaces select the exact
+  predecessor version; no newest/latest fallback.
+- **Primary Activities list enters exact-version-aware View/Edit/Create.**
+  Row actions on `/admin/atividades` route View and Edit through the
+  exact-version edit surface and Create-new-version preloads the selected
+  version (`?from=<versao_id>`) when the row resolves a `base_id`; legacy
+  fallback routing is preserved only where no `base_id` exists.
+- **User visual acceptance completed.** The R4 UI was visually validated in
+  a real browser and explicitly ACCEPTED by the user on `2026-08-30`.
+
+Focused final validation at landing: R4 activity/version lane 108 passed;
+invariant/RBAC lane 35 passed; CSRF lanes 6 passed (admin flows, E2E critical
+flows, inventory audit — no CSRF snapshot delta); `git diff --check` passed.
+Previously reported real-browser validation remains the accepted evidence;
+visual design was not reopened.
+
+Implementation commit: `a9a6e838ffba138e3dd7fc832027e2b9ae34e9a1`
+(`Complete activity version full-form workflow`); governance recorded by this
+closeout commit.
+
 `AGENT_HANDOFF.md` remains frozen and unchanged.
