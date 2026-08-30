@@ -2186,3 +2186,18 @@ remains frozen and unchanged.
   expected clean except ignored authorized artifacts.
 
 `AGENT_HANDOFF.md` remains frozen and unchanged.
+
+## UI-LIST-GEOMETRY-REGRESSION-1 — LANDED
+
+- `/admin/matrizes`: removed the stale seventh CSS track left after matrix-own
+  Version metadata removal; the six semantic tracks now restore Vigência and
+  final-track Status geometry.
+- `/admin/atividades`: added `Versões` as the total `atividade_versao` row count
+  per `atividade_base`, with the approved five-column proportions.
+- `/admin/cursos`: rebalanced the six scoped grid proportions so Nome remains
+  largest without isolating Duração, Turmas, Alunos, and Status.
+- Alignment and ellipsis behavior were verified in a real browser at normal,
+  narrow, and wide desktop widths and visually approved by the user.
+- Focused regression validation: 8 passed; `git diff --check` passed.
+- Logical implementation commit:
+  `b054a158149d3dd21ffe6366051b09f26b7f320a`.
