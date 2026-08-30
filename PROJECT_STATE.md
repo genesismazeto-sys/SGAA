@@ -2201,3 +2201,19 @@ remains frozen and unchanged.
 - Focused regression validation: 8 passed; `git diff --check` passed.
 - Logical implementation commit:
   `b054a158149d3dd21ffe6366051b09f26b7f320a`.
+
+## ACTIVITY-ROW-ACTION-TOOLBAR — LANDED
+
+- Activities row toolbar simplified to direct icon actions; the three-dot
+  popover and its menu were removed.
+- Final action set: View (`eye`) / Edit (`edit`) / Create new version
+  (`plus-circle`) / View versions (`layers`) / Delete (`trash-2`).
+- Canonical SGAA icon contract: View = Lucide `eye`, Edit = Lucide `edit`,
+  Delete = Lucide `trash-2`; Edit icon scale `0.875` approved while preserving
+  the 26×26 button geometry and stroke width 2.
+- `base_id` gating preserved for version actions; permissions (`auth_can`
+  guards) and routes preserved.
+- Browser validation approved by the user; focused regression tests passed;
+  `git diff --check` passed.
+- Logical implementation commit:
+  `f9e303ff8bf7c71671c721b4a4b51b43f49c93e9`.
