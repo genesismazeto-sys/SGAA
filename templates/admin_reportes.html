@@ -44,6 +44,15 @@
     .modal-body{ padding:16px 20px; display:grid; row-gap:14px; }
     .modal-footer{ justify-content:space-between; align-items:center; padding:10px 14px; border-top:1px solid var(--border-strong); }
     .modal-footer-actions{ display:flex; gap:8px; align-items:center; }
+    .novo-reporte-form{ display:grid; gap:14px; }
+    .novo-reporte-form .form-row{ display:grid; grid-template-columns:150px 1fr; gap:12px; align-items:center; }
+    .novo-reporte-form .form-row.align-top{ align-items:start; }
+    .novo-reporte-form .form-row.align-top > label{ padding-top:9px; }
+    .novo-reporte-form label{ font-size:13px; font-weight:500; text-align:right; color:var(--text-primary); }
+    .novo-reporte-form textarea.control{ min-height:110px; resize:vertical; padding:10px 12px; line-height:1.45; }
+    .novo-reporte-form select.control{ appearance:none; }
+    .novo-reporte-form .file-name.control{ min-height:var(--btn-h); }
+    .novo-reporte-form .form-hint{ color:var(--text-secondary); font-size:12px; line-height:1.45; margin-top:7px; }
     /* Meta: 4 colunas (label/valor x2) para aproveitar a largura horizontal */
     .reporte-modal-meta{
       display:grid;
@@ -78,6 +87,9 @@
       .reporte-modal-meta{ grid-template-columns:max-content 1fr; }
       .reporte-modal-status-block{ flex-direction:column; align-items:stretch; }
       .reporte-modal-status-form select{ min-width:0; width:100%; }
+      .novo-reporte-form .form-row{ grid-template-columns:1fr; gap:7px; }
+      .novo-reporte-form label,
+      .novo-reporte-form .form-row.align-top > label{ text-align:left; padding-top:0; }
     }
   </style>
 {% endblock %}
@@ -134,6 +146,12 @@
       </div>
     </div>
   </div>
+  {% if can_reportes_edit %}
+    <button class="btn primary btn--raised" type="button" id="btn-novo-reporte">
+      <i class="lucide" data-lucide="plus"></i>
+      <span class="btn-label">Novo reporte</span>
+    </button>
+  {% endif %}
 </div>
 
 {{ paginate('admin_reportes') }}
@@ -278,10 +296,127 @@
     </div>
   </div>
 </div>
+
+<div id="novo-reporte-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="novo-reporte-modal-title">
+    <div class="modal-header">
+      <h3 id="novo-reporte-modal-title"><i class="lucide" data-lucide="bug"></i> Novo reporte</h3>
+      <button class="btn" id="novo-reporte-modal-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <form class="novo-reporte-form" id="novo-reporte-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_reportes_novo') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-row">
+          <label for="novo-reporte-aluno">Aluno</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="user-round"></i></div>
+            <select class="control" id="novo-reporte-aluno" name="aluno_id" required>
+              <option value="" selected disabled>Selecione um aluno</option>
+              {% for aluno in alunos %}
+                <option value="{{ aluno.id }}">{{ aluno.nome or 'Sem nome' }} — {{ aluno.matricula or 'Sem matrícula' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="novo-reporte-categoria">Categoria</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
+            <select class="control" id="novo-reporte-categoria" name="categoria" required>
+              <option value="" selected disabled>Selecione uma categoria</option>
+              {% for categoria in categoria_options %}
+                <option value="{{ categoria }}">{{ categoria }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="novo-reporte-titulo">Título</label>
+          <div class="field-card">
+            <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+            <input class="control" id="novo-reporte-titulo" name="titulo" type="text" maxlength="120" placeholder="Resumo curto do problema" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="novo-reporte-captura">Captura de tela</label>
+          <div>
+            <div class="field-card file-card" data-upload-card>
+              <div class="field-chip"><i class="lucide" data-lucide="image"></i></div>
+              <input class="file-input" id="novo-reporte-captura" type="file" name="captura_tela" accept=".png,.jpg,.jpeg,.webp,image/*">
+              <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+              <div class="field-chip chip-right" title="Anexar captura"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+            </div>
+            <div class="form-hint">Opcional. Formatos aceitos: PNG, JPG, JPEG ou WEBP.</div>
+          </div>
+        </div>
+
+        <div class="form-row align-top">
+          <label for="novo-reporte-descricao">Descrição</label>
+          <div class="field-card" style="align-items:stretch;">
+            <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
+            <textarea class="control" id="novo-reporte-descricao" name="descricao" placeholder="Explique o que aconteceu e como reproduzir." required></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="novo-reporte-cancelar" type="button">Cancelar</button>
+      <button class="btn primary btn--raised" type="submit" form="novo-reporte-form"><i class="lucide" data-lucide="send"></i> Criar reporte</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script>
+(function(){
+  const novoModal = document.getElementById('novo-reporte-modal');
+  const novoOpen = document.getElementById('btn-novo-reporte');
+  const novoClose = document.getElementById('novo-reporte-modal-close');
+  const novoCancel = document.getElementById('novo-reporte-cancelar');
+  const novoAluno = document.getElementById('novo-reporte-aluno');
+  function openNovoReporte(){
+    if (!novoModal) return;
+    novoModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    window.lucide?.createIcons?.();
+    novoAluno?.focus();
+  }
+  function closeNovoReporte(){
+    if (!novoModal) return;
+    novoModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+  novoOpen?.addEventListener('click', openNovoReporte);
+  novoClose?.addEventListener('click', closeNovoReporte);
+  novoCancel?.addEventListener('click', closeNovoReporte);
+  novoModal?.addEventListener('click', e => { if (e.target === novoModal) closeNovoReporte(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && novoModal && !novoModal.hidden) closeNovoReporte(); });
+  if (new URLSearchParams(window.location.search).get('novo') === '1') openNovoReporte();
+
+  document.querySelectorAll('#novo-reporte-modal [data-upload-card]').forEach(card => {
+    const input = card.querySelector('input[type="file"]');
+    const nameEl = card.querySelector('[data-file-name]');
+    const chip = card.querySelector('.chip-right');
+    const openPicker = () => input?.click();
+    const syncName = () => {
+      const file = input?.files?.[0];
+      nameEl.textContent = file ? file.name : 'Nenhum arquivo selecionado';
+      if (file) nameEl.title = file.name; else nameEl.removeAttribute('title');
+      card.classList.toggle('has-file', Boolean(file));
+    };
+    card.addEventListener('click', e => { if (e.target !== input) openPicker(); });
+    chip?.addEventListener('click', e => { e.stopPropagation(); openPicker(); });
+    input?.addEventListener('change', syncName);
+    syncName();
+  });
+})();
+</script>
 <script>
 (function(){
   const toolbarQuery = window.createToolbarQueryHelpers?.();

@@ -800,7 +800,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 536, (
+    assert len(catalog) == 545, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -1143,8 +1143,8 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({row["rule"] for row in routes}) == 126
+    assert len(routes) == 128
+    assert len({row["rule"] for row in routes}) == 127
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"
@@ -1155,6 +1155,6 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
 def test_green_12_message_catalog_stays_536():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 536, (
+    assert len(messages_module._message_catalog()) == 545, (
         "current catalog baseline must stay 541"
     )

@@ -2,6 +2,7 @@ import io
 import os
 import sys
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +43,243 @@ def _login_aluno(client, usuario_id, nome):
         sess["user_type"] = "aluno"
         sess["user_name"] = nome
         sess["perfil"] = "Aluno"
+
+
+@pytest.fixture
+def report_creation_student():
+    token = uuid.uuid4().hex[:8]
+    email = f"admin.report.creation.{token}@ej.edu.br"
+    matricula = f"ARC-{token}"
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        usuario_id = conn.execute(
+            "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
+            (f"Aluno Criação {token}", email, main.hash_password("aluno123"), "aluno", "usuario"),
+        ).lastrowid
+        aluno_id = conn.execute(
+            "INSERT INTO alunos (usuario_id, nome, matricula, email, status) VALUES (?, ?, ?, ?, ?)",
+            (usuario_id, f"Aluno Criação {token}", matricula, email, "Ativo"),
+        ).lastrowid
+        conn.commit()
+    try:
+        yield {
+            "aluno_id": aluno_id,
+            "usuario_id": usuario_id,
+            "email": email,
+            "matricula": matricula,
+            "student_dirname": f"aluno_{aluno_id} - aluno-criacao-{token}",
+        }
+    finally:
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            conn.execute("DELETE FROM reportes WHERE aluno_id = ?", (aluno_id,))
+            conn.execute("DELETE FROM alunos WHERE id = ?", (aluno_id,))
+            conn.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
+            conn.commit()
+
+
+def _post_admin_report(client, student, **overrides):
+    data = {
+        "aluno_id": str(student["aluno_id"]),
+        "categoria": "Bug na plataforma",
+        "titulo": "Reporte administrativo",
+        "descricao": "Descrição do reporte administrativo.",
+    }
+    data.update(overrides)
+    return client.post("/admin/reportes/novo", data=data, follow_redirects=False)
+
+
+def test_admin_can_create_report_for_selected_student_with_initial_state(client, report_creation_student):
+    _login_admin(client)
+    response = _post_admin_report(
+        client,
+        report_creation_student,
+        titulo="  Reporte administrativo selecionado  ",
+        descricao="  Descrição administrativa trimada.  ",
+    )
+
+    assert response.status_code in (302, 303)
+    assert response.headers["Location"].endswith("/admin/reportes")
+    with main.app.app_context():
+        row = main.get_db_connection().execute(
+            "SELECT aluno_id, titulo, descricao, categoria, status, admin_id FROM reportes WHERE aluno_id = ? ORDER BY id DESC LIMIT 1",
+            (report_creation_student["aluno_id"],),
+        ).fetchone()
+    assert dict(row) == {
+        "aluno_id": report_creation_student["aluno_id"],
+        "titulo": "Reporte administrativo selecionado",
+        "descricao": "Descrição administrativa trimada.",
+        "categoria": "Bug na plataforma",
+        "status": "Novo",
+        "admin_id": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("aluno_id", ""),
+        ("aluno_id", "999999999"),
+        ("categoria", "Categoria inventada"),
+        ("titulo", "   "),
+        ("titulo", "x" * 121),
+        ("descricao", "   "),
+    ],
+)
+def test_admin_report_creation_rejects_invalid_required_values(client, report_creation_student, field, value):
+    _login_admin(client)
+    response = _post_admin_report(client, report_creation_student, **{field: value})
+
+    assert response.status_code in (302, 303)
+    assert "novo=1" in response.headers["Location"]
+    with main.app.app_context():
+        count = main.get_db_connection().execute(
+            "SELECT COUNT(*) FROM reportes WHERE aluno_id = ?", (report_creation_student["aluno_id"],)
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_admin_report_creation_stores_valid_screenshot(client, report_creation_student):
+    _login_admin(client)
+    title = f"Reporte screenshot {uuid.uuid4().hex[:8]}"
+    response = client.post(
+        "/admin/reportes/novo",
+        data={
+            "aluno_id": str(report_creation_student["aluno_id"]),
+            "categoria": "Outro",
+            "titulo": title,
+            "descricao": "Reporte com screenshot.",
+            "captura_tela": (io.BytesIO(b"\x89PNG\r\n\x1a\nadmin"), "admin-shot.PNG"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    with main.app.app_context():
+        row = main.get_db_connection().execute(
+            "SELECT screenshot_filename FROM reportes WHERE titulo = ?", (title,)
+        ).fetchone()
+    assert row and row["screenshot_filename"]
+    saved = Path(main.app.config["DOCUMENTOS_ALUNOS_FOLDER"]) / Path(row["screenshot_filename"])
+    assert saved.is_file()
+    assert saved.suffix == ".png"
+
+
+def test_admin_report_creation_rejects_invalid_screenshot_extension(client, report_creation_student):
+    _login_admin(client)
+    response = client.post(
+        "/admin/reportes/novo",
+        data={
+            "aluno_id": str(report_creation_student["aluno_id"]),
+            "categoria": "Outro",
+            "titulo": "Reporte screenshot inválido",
+            "descricao": "Descrição.",
+            "captura_tela": (io.BytesIO(b"not an image"), "admin-shot.gif"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    assert "novo=1" in response.headers["Location"]
+    with main.app.app_context():
+        count = main.get_db_connection().execute(
+            "SELECT COUNT(*) FROM reportes WHERE aluno_id = ?", (report_creation_student["aluno_id"],)
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_admin_report_creation_removes_only_new_screenshot_after_insert_failure(client, report_creation_student):
+    _login_admin(client)
+    document_root = Path(main.app.config["DOCUMENTOS_ALUNOS_FOLDER"])
+    existing = document_root / report_creation_student["student_dirname"] / "reportes" / "keep.txt"
+    existing.parent.mkdir(parents=True, exist_ok=True)
+    existing.write_text("unrelated", encoding="utf-8")
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            """
+            CREATE TRIGGER reportes_admin_test_insert_failure
+            BEFORE INSERT ON reportes
+            WHEN NEW.titulo LIKE 'FAIL-CLEANUP-%'
+            BEGIN
+                SELECT RAISE(ABORT, 'forced report insert failure');
+            END
+            """
+        )
+        conn.commit()
+    try:
+        response = client.post(
+            "/admin/reportes/novo",
+            data={
+                "aluno_id": str(report_creation_student["aluno_id"]),
+                "categoria": "Outro",
+                "titulo": "FAIL-CLEANUP-report",
+                "descricao": "Descrição.",
+                "captura_tela": (io.BytesIO(b"\x89PNG\r\n\x1a\nfailed"), "failed.png"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+        assert response.status_code in (302, 303)
+        assert "novo=1" in response.headers["Location"]
+        assert existing.is_file()
+        report_files = [path for path in existing.parent.iterdir() if path.is_file()]
+        assert report_files == [existing]
+    finally:
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            conn.execute("DROP TRIGGER IF EXISTS reportes_admin_test_insert_failure")
+            conn.commit()
+
+
+def test_view_only_admin_cannot_create_report(client, report_creation_student):
+    consultivo_email = f"admin.report.consultivo.{uuid.uuid4().hex[:8]}@ej.edu.br"
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        main.ensure_usuario_access_schema(conn)
+        consultivo_id = conn.execute(
+            "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
+            ("Consultivo Reporte Criação", consultivo_email, main.hash_password("admin123"), "admin", "consultivo"),
+        ).lastrowid
+        conn.commit()
+    try:
+        _login_admin_by_id(client, consultivo_id, "Consultivo Reporte Criação")
+        page = client.get("/admin/reportes")
+        assert page.status_code == 200
+        assert 'id="btn-novo-reporte"' not in page.get_data(as_text=True)
+        denied = _post_admin_report(client, report_creation_student)
+        assert denied.status_code in (301, 302, 303, 307, 308, 403)
+    finally:
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            conn.execute("DELETE FROM usuarios WHERE id = ?", (consultivo_id,))
+            conn.commit()
+
+
+def test_unauthenticated_admin_report_creation_is_blocked(client, report_creation_student):
+    with client.session_transaction() as sess:
+        sess.clear()
+    response = _post_admin_report(client, report_creation_student)
+    assert response.status_code in (301, 302, 303, 307, 308)
+    assert "/login" in (response.headers.get("Location") or "")
+
+
+def test_admin_report_creation_requires_csrf_when_enabled(client, report_creation_student):
+    _login_admin(client)
+    original_enabled = main.app.config.get("WTF_CSRF_ENABLED")
+    original_check_default = main.app.config.get("WTF_CSRF_CHECK_DEFAULT")
+    main.app.config.update(WTF_CSRF_ENABLED=True, WTF_CSRF_CHECK_DEFAULT=True)
+    try:
+        response = _post_admin_report(client, report_creation_student)
+        assert response.status_code == 400
+    finally:
+        main.app.config.update(
+            WTF_CSRF_ENABLED=original_enabled,
+            WTF_CSRF_CHECK_DEFAULT=original_check_default,
+        )
 
 
 def test_admin_reportes_displays_dates_in_brazilian_format(client):

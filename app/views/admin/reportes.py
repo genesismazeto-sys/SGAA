@@ -1,7 +1,7 @@
 # coding: utf-8
 """UT-12: dono canonico do cohort "Reportes".
 
-5 simbolos relocados de main.py por MOVE-VERBATIM (3 rotas, 1 helper e 1
+6 simbolos relocados de main.py por MOVE-VERBATIM (4 rotas, 1 helper e 1
 constante). Nenhuma importacao de main; registra apenas rotas legadas via
 LegacyRouteSpec.
 """
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from flask import (
     Blueprint,
+    current_app,
     redirect,
     render_template,
     request,
@@ -22,6 +23,8 @@ from app.db import get_db_connection
 from app.db_maintenance import ensure_reportes_table
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
+from app.student_documents import remove_student_document, save_student_document
+from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
     append_conditions_sql,
@@ -65,6 +68,13 @@ def admin_reportes():
 
     conn = get_db_connection()
     ensure_reportes_table(conn)
+    alunos = conn.execute(
+        """
+        SELECT id, nome, matricula
+          FROM alunos
+      ORDER BY LOWER(COALESCE(nome, '')), LOWER(COALESCE(matricula, '')), id
+        """
+    ).fetchall()
 
     base_from = (
         " FROM reportes rep"
@@ -193,7 +203,88 @@ def admin_reportes():
         filter_schema=filter_schema,
         status_options=REPORTE_STATUS_OPTIONS,
         categoria_options=REPORTE_CATEGORY_OPTIONS,
+        alunos=alunos,
     )
+
+
+@admin_required
+def admin_reportes_novo():
+    conn = get_db_connection()
+    ensure_reportes_table(conn)
+
+    aluno_raw = (request.form.get("aluno_id") or "").strip()
+    categoria = (request.form.get("categoria") or "").strip()
+    titulo = (request.form.get("titulo") or "").strip()
+    descricao = (request.form.get("descricao") or "").strip()
+    captura_tela = request.files.get("captura_tela")
+
+    if not aluno_raw:
+        flash("Selecione um aluno para o reporte.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+    try:
+        aluno_id = int(aluno_raw)
+    except (TypeError, ValueError):
+        aluno_id = 0
+    aluno = conn.execute(
+        "SELECT id, nome FROM alunos WHERE id = ?", (aluno_id,)
+    ).fetchone()
+    if not aluno:
+        flash("O aluno selecionado não foi encontrado.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+
+    if categoria not in REPORTE_CATEGORY_OPTIONS:
+        flash("Selecione uma categoria válida para o reporte.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+    if not titulo:
+        flash("Informe o título do reporte.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+    if len(titulo) > 120:
+        flash("O título do reporte deve ter no máximo 120 caracteres.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+    if not descricao:
+        flash("Descreva o problema encontrado.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+
+    screenshot_filename = None
+    try:
+        if captura_tela and getattr(captura_tela, "filename", ""):
+            screenshot_filename = save_student_document(
+                captura_tela,
+                ALLOWED_REPORTE_SCREENSHOTS,
+                root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
+                student_id=aluno["id"],
+                student_name=aluno["nome"],
+                category="reportes",
+                prefix=f"reporte{aluno['id']}",
+            )
+    except ValueError:
+        flash("A captura deve estar em PNG, JPG, JPEG ou WEBP.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO reportes
+                (aluno_id, titulo, descricao, categoria, screenshot_filename, status)
+            VALUES (?, ?, ?, ?, ?, 'Novo')
+            """,
+            (aluno["id"], titulo, descricao, categoria, screenshot_filename),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        if screenshot_filename:
+            try:
+                remove_student_document(
+                    current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], screenshot_filename
+                )
+            except (OSError, ValueError):
+                pass
+        flash("Não foi possível criar o reporte.", "error")
+        return redirect(url_for("admin_reportes", novo="1"))
+
+    flash("Reporte registrado para acompanhamento.", "success")
+    return redirect(url_for("admin_reportes"))
 
 
 @admin_required
@@ -254,6 +345,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("GET",),
         ),
         LegacyRouteSpec(
+            "/admin/reportes/novo",
+            "admin_reportes_novo",
+            admin_reportes_novo,
+            ("POST",),
+        ),
+        LegacyRouteSpec(
             "/admin/reportes/<int:reporte_id>/status",
             "admin_reportes_atualizar_status",
             admin_reportes_atualizar_status,
@@ -274,6 +371,7 @@ __all__ = [
     "REPORTE_STATUS_OPTIONS",
     "_reporte_status_badge_type",
     "admin_reportes",
+    "admin_reportes_novo",
     "admin_reportes_atualizar_status",
     "admin_reportes_deletar",
     "bp_admin_reportes",

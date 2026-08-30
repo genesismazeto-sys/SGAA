@@ -173,6 +173,7 @@ o endpoint exato no auth.py; várias herdam `atividades:view`/`edit`/`full`).
 | `/admin/alertas/<int:alerta_id>/alternar` | POST | `admin_alternar_alerta` | `alertas:edit` |
 | `/admin/alertas/<int:alerta_id>/deletar` | POST | `admin_deletar_alerta` | `alertas:full` |
 | `/admin/reportes` | GET | `admin_reportes` | `reportes:view` |
+| `/admin/reportes/novo` | POST | `admin_reportes_novo` | `reportes:edit` |
 | `/admin/reportes/<int:reporte_id>/status` | POST | `admin_reportes_status` | `reportes:edit` |
 | `/admin/reportes/<int:reporte_id>/deletar` | POST | `admin_reportes_deletar` | `reportes:full` |
 

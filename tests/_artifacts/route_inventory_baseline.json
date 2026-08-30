@@ -707,6 +707,13 @@
       "rule": "/admin/reportes/<int:reporte_id>/status"
     },
     {
+      "endpoint": "admin_reportes_novo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/reportes/novo"
+    },
+    {
       "endpoint": "admin_detalhes_requisicao",
       "methods": [
         "GET"

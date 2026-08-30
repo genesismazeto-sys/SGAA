@@ -2,8 +2,8 @@
 
 Future canonical owner: ``app/views/admin/reportes.py``.
 
-Authoritative relocated-symbol manifest (5 symbols):
-- 3 routes (LegacyRouteSpec-preserving);
+Authoritative relocated-symbol manifest (6 symbols):
+- 4 routes (LegacyRouteSpec-preserving);
 - 1 cohort-exclusive helper (``_reporte_status_badge_type``);
 - 1 cohort-exclusive constant (``REPORTE_STATUS_OPTIONS``).
 
@@ -77,6 +77,7 @@ BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 ROUTE_NAMES = (
     "admin_reportes",
+    "admin_reportes_novo",
     "admin_reportes_atualizar_status",
     "admin_reportes_deletar",
 )
@@ -89,6 +90,11 @@ MOVED_SYMBOLS = ROUTE_NAMES + HELPER_NAMES + CONSTANT_NAMES
 
 ROUTE_MATRIX = (
     ("/admin/reportes", "admin_reportes", ("GET",)),
+    (
+        "/admin/reportes/novo",
+        "admin_reportes_novo",
+        ("POST",),
+    ),
     (
         "/admin/reportes/<int:reporte_id>/status",
         "admin_reportes_atualizar_status",
@@ -107,11 +113,12 @@ EXPECTED_PAIRS = frozenset(
 
 RBAC_MATRIX = {
     "admin_reportes": ("reportes", "view"),
+    "admin_reportes_novo": ("reportes", "edit"),
     "admin_reportes_atualizar_status": ("reportes", "edit"),
     "admin_reportes_deletar": ("reportes", "full"),
 }
 
-SCOPE_COUNTS = {"view": 1, "edit": 1, "full": 1}
+SCOPE_COUNTS = {"view": 1, "edit": 2, "full": 1}
 
 COHORT_RULE_PREFIXES = ("/admin/reportes",)
 
@@ -122,6 +129,7 @@ DASHBOARD_ROUTE_NAMES = (
 )
 
 TWO_POST_URLS = (
+    "/admin/reportes/novo",
     "/admin/reportes/1/status",
     "/admin/reportes/1/deletar",
 )
@@ -410,15 +418,15 @@ def test_red_d_exactly_three_specs_three_pairs_frozen_matrix():
 
     specs = getattr(target, "LEGACY_ROUTE_SPECS", None)
     assert isinstance(specs, tuple), "target must expose an immutable LEGACY_ROUTE_SPECS tuple"
-    assert len(specs) == 3, f"expected 3 LegacyRouteSpecs, got {len(specs)}"
+    assert len(specs) == 4, f"expected 4 LegacyRouteSpecs, got {len(specs)}"
 
     encoded = {(spec.rule, spec.endpoint, spec.methods) for spec in specs}
     assert encoded == EXPECTED_PAIRS, (
         f"spec set mismatch: missing={sorted(EXPECTED_PAIRS - encoded)} "
         f"extra={sorted(encoded - EXPECTED_PAIRS)}"
     )
-    assert sum(len(spec.methods) for spec in specs) == 3, (
-        "specs must represent exactly 3 endpoint/method pairs"
+    assert sum(len(spec.methods) for spec in specs) == 4, (
+        "specs must represent exactly 4 endpoint/method pairs"
     )
     assert {spec.view_func for spec in specs} == {
         getattr(target, name) for name in ROUTE_NAMES
@@ -433,8 +441,8 @@ def test_red_e_spec_endpoints_resolve_one_view_one_edit_one_full():
     assert target is not None, "reportes module absent; RBAC-from-specs contract unsatisfiable"
 
     specs = getattr(target, "LEGACY_ROUTE_SPECS", None)
-    assert isinstance(specs, tuple) and len(specs) == 3, (
-        "RBAC derivation requires the frozen three LegacyRouteSpecs"
+    assert isinstance(specs, tuple) and len(specs) == 4, (
+        "RBAC derivation requires the four Reportes LegacyRouteSpecs"
     )
 
     scope_counts = {"view": 0, "edit": 0, "full": 0}
@@ -629,7 +637,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 536, (
+    assert len(catalog) == 545, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -718,7 +726,7 @@ def test_red_n_blueprint_identity_and_dotless_live_endpoints():
         for rule in main.app.url_map.iter_rules()
         if rule.endpoint in ROUTE_NAMES
     }
-    assert len(live) == 3, "exactly three live Reportes endpoints required"
+    assert len(live) == 4, "exactly four live Reportes endpoints required"
     for name in ROUTE_NAMES:
         assert live[name] is getattr(target, name), (
             f"live endpoint {name} must identity-match the target callable"
@@ -812,7 +820,7 @@ def test_green_2_live_route_matrix_three_routes_three_pairs():
         for rule in main.app.url_map.iter_rules()
         if rule.endpoint in ROUTE_NAMES
     ]
-    assert len(rules) == 3, f"expected 3 live cohort rules, got {len(rules)}"
+    assert len(rules) == 4, f"expected 4 live cohort rules, got {len(rules)}"
     assert _cohort_rules(main.app) == EXPECTED_PAIRS, (
         "live url_map must match the frozen 3-pair matrix"
     )
@@ -838,8 +846,8 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 127, f"routes must match prod-1, got {len(rules)}"
-    assert len(main.app.view_functions) == 126, (
+    assert len(rules) == 128, f"routes must match prod-1 plus admin report creation, got {len(rules)}"
+    assert len(main.app.view_functions) == 127, (
         f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
     )
 
@@ -861,7 +869,7 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 536, (
+    assert len(messages._message_catalog()) == 545, (
         "current catalog baseline must be 541"
     )
 

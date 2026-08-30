@@ -547,8 +547,8 @@ def test_green_2_entry_baseline_fingerprints_match_frozen_constants():
 
 def test_green_3_live_route_and_endpoint_invariants():
     rules = _live_rules()
-    assert len(rules) == 127, f"routes must stay 129, got {len(rules)}"
-    assert len(main.app.view_functions) == 126, (
+    assert len(rules) == 128, f"routes must stay baseline plus admin report creation, got {len(rules)}"
+    assert len(main.app.view_functions) == 127, (
         f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
     )
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
@@ -605,7 +605,7 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 536, (
+    assert len(_message_catalog()) == 545, (
         "message catalog must match the canonical baseline"
     )
 
@@ -681,7 +681,7 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     route_data = json.loads(ROUTE_INVENTORY_ARTIFACT.read_text(encoding="utf-8"))
     routes = route_data["routes"]
-    assert len(routes) == 127, "route inventory artifact must keep 129 routes"
+    assert len(routes) == 128, "route inventory artifact must include admin report creation"
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         matching = [
             item

@@ -115,8 +115,8 @@ FC08_BODY_CHANGES = {
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
-ROUTE_INVENTORY_BYTES = 20176
-ROUTE_INVENTORY_SHA256 = "94452cb4939c13781b84441184ae0894fe425f03bce97ad948d8bd70fb0d78fb"
+ROUTE_INVENTORY_BYTES = 20317
+ROUTE_INVENTORY_SHA256 = "4cc49b6e644547cb17bda21c8b57e8c43e347264139306bf1bce043a7e1658ef"
 
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
@@ -1225,10 +1225,10 @@ def test_route_inventory_baseline_is_byte_identical_and_live_url_contract_unchan
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({entry["rule"] for entry in routes}) == 126
+    assert len(routes) == 128
+    assert len({entry["rule"] for entry in routes}) == 127
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 126
+    assert len(non_static) == 127
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1247,7 +1247,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 536
+    assert len(catalog) == 545
 
 
 def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted():

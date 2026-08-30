@@ -1168,10 +1168,10 @@ def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({entry["rule"] for entry in routes}) == 126
+    assert len(routes) == 128
+    assert len({entry["rule"] for entry in routes}) == 127
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 126
+    assert len(non_static) == 127
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1190,7 +1190,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 536
+    assert len(catalog) == 545
 
 
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():

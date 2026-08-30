@@ -34,6 +34,7 @@ ARQUIVOS_ALERTAS_REPORTES_ROUTE_NAMES = {
     "admin_visualizar_arquivo",
     "admin_deletar_arquivo",
     "admin_reportes",
+    "admin_reportes_novo",
     "admin_reportes_atualizar_status",
     "admin_reportes_deletar",
     "admin_alertas",
@@ -59,6 +60,7 @@ ALERTAS_ROUTE_NAMES = {
 
 REPORTES_ROUTE_NAMES = {
     "admin_reportes",
+    "admin_reportes_novo",
     "admin_reportes_atualizar_status",
     "admin_reportes_deletar",
 }
@@ -241,7 +243,7 @@ def test_b7p_aluno_lazy_map_reduced_to_exactly_two_requisicoes_keys():
 # tests/test_ut11_alertas_blueprint.py).  UT-12: the Reportes half is now
 # retired here and protected by tests/test_ut12_reportes_blueprint.py.
 # Post-UT12, Reportes handlers must be target-owned by
-# app.views.admin.reportes with an exact main identity facade (5/5, no
+# app.views.admin.reportes with an exact main identity facade (6/6, no
 # wrappers).  This is a state-invariant contract: if the target is absent
 # (pre-extraction) the handlers remain main-owned as a valid fallback.
 def test_b7p_reportes_target_owned_with_main_identity_compatibility():

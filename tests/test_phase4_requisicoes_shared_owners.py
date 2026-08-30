@@ -214,7 +214,7 @@ def test_settings_messages_remain_in_catalog_under_neutral_owner():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 536
+    assert len(catalog) == 545
     for key in SETTINGS_MESSAGE_KEYS:
         usages = catalog[key]["usages"]
         assert usages

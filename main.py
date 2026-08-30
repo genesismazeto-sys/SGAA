@@ -529,13 +529,14 @@ from app.views.admin.alertas import (
 )
 
 
-# UT-12: o cohort "Reportes" (5 simbolos: 3 rotas, 1 helper e 1 constante)
+# UT-12: o cohort "Reportes" (6 simbolos: 4 rotas, 1 helper e 1 constante)
 # passou a ser propriedade canonica de app/views/admin/reportes.py.  main
 # apenas re-exporta os nomes por IDENTIDADE -- nunca wrappers.
 from app.views.admin.reportes import (
     REPORTE_STATUS_OPTIONS,
     _reporte_status_badge_type,
     admin_reportes,
+    admin_reportes_novo,
     admin_reportes_atualizar_status,
     admin_reportes_deletar,
 )
