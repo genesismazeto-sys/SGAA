@@ -355,12 +355,12 @@
    (Moved from inline <style> in admin_cursos.html)
    ============================================================= */
 .imp-cursos { --imp-cols:
-  minmax(90px, 120px)   /* Código */
-  minmax(300px, 1.5fr)  /* Nome */
-  minmax(110px, 130px)  /* Duração */
-  minmax(88px, 104px)   /* Turmas */
-  minmax(88px, 104px)   /* Alunos */
-  minmax(96px, 120px)   /* Status */
+  minmax(64px, 0.7fr)   /* Código */
+  minmax(220px, 2.4fr)  /* Nome */
+  minmax(80px, 0.9fr)   /* Duração */
+  minmax(56px, 0.7fr)   /* Turmas */
+  minmax(56px, 0.7fr)   /* Alunos */
+  minmax(72px, 0.85fr)  /* Status */
 };
 .imp-cursos .badge.status-badge{ display:inline-flex; align-items:center; justify-content:center; border-radius:999px; height:18px; min-width:18px; padding:0 6px; font-size:11px; font-weight:500; line-height:1; }
 .imp-cursos .badge.status-pill.status-positive{ color:#1f5a3c !important; background-color:#e9f5e7 !important; border-color:#b9d7b5 !important; }
@@ -379,7 +379,6 @@
 .imp-matrizes { --imp-cols:
   minmax(280px, 1.65fr)  /* Nome */
   minmax(240px, 1.35fr)  /* Curso */
-  minmax(90px, 110px)    /* Versão */
   minmax(170px, 1.05fr)  /* Vigência */
   minmax(88px, 100px)    /* AAC */
   minmax(104px, 118px)   /* Extensão */
@@ -430,10 +429,11 @@
    (Moved from inline <style> in admin_atividades.html)
    ============================================================= */
 .imp-atividades { --imp-cols:
-  minmax(180px, 220px)  /* Tipo */
-  minmax(320px, 560px)  /* Nome */
-  minmax(80px, 110px)   /* Grupo */
-  minmax(180px, 260px)  /* Limitações */
+  minmax(180px, 1.1fr)  /* Tipo */
+  minmax(320px, 3fr)    /* Nome */
+  minmax(72px, 0.45fr)  /* Grupo */
+  minmax(72px, 0.45fr)  /* Versões */
+  minmax(210px, 1.5fr)  /* Limitações */
 };
 .imp-atividades /* note: removed broad no-left card padding rules to preserve row padding */
 .imp-atividades .cell.left{ justify-content:flex-start; }

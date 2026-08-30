@@ -303,7 +303,8 @@
       <div class="cell left">Tipo</div>
       <div class="cell left">Nome</div>
       <div class="cell center">Grupo</div>
-  <div class="cell center">Limitações</div>
+      <div class="cell center">Versões</div>
+      <div class="cell center">Limitações</div>
     </div>
 
     {% if atividades and atividades|length %}
@@ -316,6 +317,7 @@
             {% set _num = _g.split(' - ')[0]|trim %}
             {% if _num and _num != '(Sem grupo)' %}{{ _num }}{% else %}-{% endif %}
           </div>
+          <div class="cell center">{{ a.total_versoes }}</div>
           <div class="cell center">
             {% if a.tem_limitacao %}
               {% if a.tipo_limitacao == 'semestral' %}

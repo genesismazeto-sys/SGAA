@@ -412,7 +412,12 @@ def admin_atividades():
     sort_field = (request.args.get('s') or '').strip().lower()
     sort_dir = 'DESC' if (request.args.get('dir') or 'asc').strip().lower() == 'desc' else 'ASC'
     conn = get_db_connection()
-    base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
+    base_from = (
+        " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
+        " JOIN (SELECT atividade_base_id, COUNT(*) AS total_versoes"
+        "         FROM atividade_versao GROUP BY atividade_base_id) version_counts"
+        "   ON version_counts.atividade_base_id = canonical_activity.base_id"
+    )
     where = []
     params = []
     append_text_contains_condition(where, params, 'nome', nome_filter)
@@ -450,7 +455,7 @@ def admin_atividades():
     if not order_sql:
         order_sql = " ORDER BY tipo_atividade, grupo, nome" if (not where) else " ORDER BY grupo, nome"
     query = (
-        "SELECT *"
+        "SELECT canonical_activity.*, version_counts.total_versoes"
         + base_from + where_sql + order_sql
     )
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
