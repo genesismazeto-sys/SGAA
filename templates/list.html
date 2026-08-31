@@ -1,21 +1,10 @@
 {% macro atividade_card(a) %}
 {# Ordem das colunas:
-   nº | Tipo | Nome | Grupo | Horas solicitadas | Limitações | [Ações]
+   nº | Tipo | Nome | Grupo | Horas sugeridas | Limitações | [Ações]
    O card ocupa as 6 primeiras; as ações ficam fora (coluna 7). #}
 
-{# Horas solicitadas (só número) #}
-{% set horas = 0 %}
-{% if a.tem_limitacao %}
-  {% if a.tipo_limitacao == 'semestral' %}
-    {% set horas = a.limite_horas_semestral or 0 %}
-  {% elif a.tipo_limitacao in ['total','anual'] %}
-    {% set horas = a.limite_horas_total or 0 %}
-  {% else %}
-    {% set horas = a.limite_horas or 0 %}
-  {% endif %}
-{% else %}
-  {% set horas = a.limite_horas or 0 %}
-{% endif %}
+{# Sugestão por evento; independente dos limites. #}
+{% set horas = a.horas_sugeridas if a.horas_sugeridas is not none else '-' %}
 
 {# Texto da coluna Limitações #}
 {% if a.tem_limitacao %}

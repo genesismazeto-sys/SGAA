@@ -179,7 +179,8 @@ def test_dirty_snapshot_covers_all_fields_and_save_starts_disabled(client):
     assert re.search(r'id="btn-salvar-versao"[^>]*disabled', html)
     assert set(_snapshot(html)) == {
         "tipo_atividade", "grupo", "nome", "descricao", "tipo_limitacao",
-        "limite_valor", "ch_por_evento", "observacoes", "versao_anterior_id",
+        "limite_valor", "ch_por_evento", "ch_por_evento_mode",
+        "observacoes", "versao_anterior_id",
     }
     assert "Object.keys(snapshot).every" in html
     assert "Number.isNaN" in html

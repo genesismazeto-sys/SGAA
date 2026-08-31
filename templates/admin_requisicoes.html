@@ -1063,6 +1063,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const descInput = document.getElementById('m_grupo_desc');
     const hidGrupo  = document.getElementById('m_grupo_hidden');
     const atvSel    = document.getElementById('m_atividade_versao_id_select');
+    const horasInput = form.querySelector('input[name="horas_solicitadas"]');
     const alunoSel  = document.getElementById('m_aluno_id_select');
     const scopeHint = document.getElementById('m_scope_hint');
     const uploadRow = document.getElementById('m_upload_row');
@@ -1147,6 +1148,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       else if (!atvSel.value && firstVisible){ atvSel.value = firstVisible.value; }
       atvSel.disabled = !firstVisible;
     }
+    function applySuggestedHours(){
+      if (!horasInput || modal?.dataset.mode !== 'create') return;
+      const selected = atvSel.selectedOptions?.[0];
+      horasInput.value = selected?.getAttribute('data-default-hours') || '';
+    }
     function replaceActivityOptions(activities){
       if (!Array.isArray(activities)) return;
       atvSel.innerHTML = '';
@@ -1162,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         option.setAttribute('data-tipo', String(activity.tipo_atividade || ''));
         option.setAttribute('data-grupo', String(activity.grupo || ''));
         option.setAttribute('data-atividade-versao-id', String(activity.atividade_versao_id || ''));
+        option.setAttribute('data-default-hours', activity.ch_por_evento == null ? '' : String(activity.ch_por_evento));
         atvSel.appendChild(option);
       });
       allOptions = Array.from(atvSel.options);
@@ -1176,6 +1183,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       loadDescFromSelected();
       syncHidden();
       applyAtividadesFilter();
+      if (!currentId) applySuggestedHours();
     }
     function failClosedActivityAuthority(){
       setAllowedActivities([], '', []);
@@ -1297,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     window.__renderAnexos = renderAnexos;
     window.__setReqAllowedActivities = setAllowedActivities;
     window.__failClosedReqActivityAuthority = failClosedActivityAuthority;
+    atvSel.addEventListener('change', applySuggestedHours);
     window.__prefillReqForm = function(payload){
       if (!payload) return;
       try{
@@ -1452,8 +1461,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       await loadAlunoScope(alunoSel.value);
     };
 
-    tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
-    numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+    tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); applySuggestedHours(); });
+    numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); applySuggestedHours(); });
     alunoSel.addEventListener('change', ()=>{ loadAlunoScope(alunoSel.value); });
 
     const justSelect = document.getElementById('m_just_select');

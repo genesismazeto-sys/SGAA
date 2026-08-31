@@ -295,18 +295,18 @@ def test_f2_generic_admin_edit_creates_successor_without_rebinding_matrix_or_req
         ).fetchone()[0]
 
     response = client.post(
-        "/admin/editar_atividade/29",
+        f"/admin/catalogo-versoes/{original['atividade_base_id']}/nova-versao",
         data={
             "nome": base["nome_conceito"],
             "descricao": base["descricao"] or "",
             "tipo_atividade": "Acadêmica Complementar",
             "grupo": "1 - Edição futura",
-            "limite_horas": "6",
-            "tem_limitacao": "1",
             "tipo_limitacao": "total",
-            "limite_horas_total": "88",
-            "limite_horas_semestral": "",
-            "documentos_json": '["novo-doc"]',
+            "limite_valor": "88",
+            "ch_por_evento_mode": "enabled",
+            "ch_por_evento": "6",
+            "observacoes": "Edição futura",
+            "versao_anterior_id": "29",
         },
     )
     assert response.status_code in (302, 303)
@@ -320,6 +320,7 @@ def test_f2_generic_admin_edit_creates_successor_without_rebinding_matrix_or_req
         assert successor["id"] != 29 and successor["versao_anterior_id"] == 29
         assert successor["status"] == "rascunho"
         assert successor["grupo"] == "1 - Edição futura"
+        assert successor["ch_por_evento"] == 6
         assert successor["limite_total"] == 88
         assert conn.execute(
             "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE atividade_base_id=? AND matriz_id=2",

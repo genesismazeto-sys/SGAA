@@ -9,7 +9,7 @@ Proves:
   5. row v1 creates from v1 even when v2/v3 exist;
   6. row v2 creates from v2;
   7. switching versions after entering through Edit works;
-  8. legacy route remains available (admin_editar_atividade);
+  8. legacy route delegates to the canonical exact-version editor;
   9. no lifecycle/permission regression (POST guard on immutable + auth gating);
  10. R1/R2 clone/no-op/switcher suites remain green (executed externally).
 """
@@ -295,17 +295,18 @@ def test_switching_versions_after_edit_entry(client):
 
 
 # ---------------------------------------------------------------------------
-# 8. Legacy route remains available
+# 8. Legacy route delegates to canonical editor
 # ---------------------------------------------------------------------------
 
-def test_legacy_editar_atividade_route_remains_available(client):
+def test_legacy_editar_atividade_route_redirects_to_canonical_editor(client):
     _login_admin(client)
     seed = _seed_base(client)
     v1 = _insert_versao(client, base_id=seed["base_id"], numero_versao=1, status="rascunho",
                         grupo="Grupo legado", ch_por_evento=4)
 
     r = client.get(f"/admin/editar_atividade/{v1}")
-    assert r.status_code == 200, "rota legada admin_editar_atividade deve permanecer"
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith(_editar_url(seed["base_id"], v1))
 
 
 # ---------------------------------------------------------------------------

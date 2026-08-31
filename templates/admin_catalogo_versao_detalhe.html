@@ -319,7 +319,7 @@
     <div class="versao-card header-row">
       <span>Versão</span>
       <span>Eixo</span>
-      <span>CH/evento</span>
+      <span>Sugestão (h)</span>
       <span>Lim. semestre</span>
       <span>Lim. total</span>
       <span>Status</span>
@@ -333,7 +333,7 @@
         <span><span class="vc-version">v{{ v.numero_versao if v.numero_versao else '?' }}</span></span>
         <span>{{ v.eixo or '-' }}</span>
         <span class="horas-text">
-          {% if v.ch_por_evento %}{{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h{% else %}-{% endif %}
+          {% if v.ch_por_evento is not none %}{{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h{% else %}-{% endif %}
         </span>
         <span class="horas-text">
           {% if v.limite_semestre %}{{ v.limite_semestre|int if v.limite_semestre == (v.limite_semestre|int) else v.limite_semestre }} h{% else %}-{% endif %}

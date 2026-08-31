@@ -114,7 +114,8 @@ def list_exact_matrix_activity_catalogue(conn, matriz_id: int):
         """SELECT version.id, version.id AS atividade_versao_id,
                   selected.atividade_base_id, base.nome_conceito AS nome,
                   CASE version.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
-                  version.grupo, version.limite_total AS limite_horas_total,
+                  version.grupo, version.ch_por_evento,
+                  version.limite_total AS limite_horas_total,
                   version.limite_semestre AS limite_horas_semestral,
                   version.documentos_json
              FROM matriz_atividade_versao_item selected

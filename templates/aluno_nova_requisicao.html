@@ -133,7 +133,7 @@
         <select class="control" id="atividade_versao_id_select" name="atividade_versao_id" required aria-label="Atividade">
           <option value="" data-placeholder="1">Selecione o grupo...</option>
           {% for a in atividades %}
-            <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}" {% if init and init.atividade_versao_id and a.id==init.atividade_versao_id %}selected{% endif %}>{{ a.nome }}</option>
+            <option value="{{ a.id }}" data-tipo="{{ a.tipo_atividade }}" data-grupo="{{ a.grupo|default('', true) }}" data-default-hours="{{ a.ch_por_evento if a.ch_por_evento is not none else '' }}" {% if init and init.atividade_versao_id and a.id==init.atividade_versao_id %}selected{% endif %}>{{ a.nome }}</option>
           {% endfor %}
         </select>
       </div>
@@ -228,6 +228,7 @@
     const descInput = document.getElementById('grupo_desc');
     const hidGrupo  = document.getElementById('grupo_hidden');
     const atvSel    = document.getElementById('atividade_versao_id_select');
+    const horasInput = document.querySelector('input[name="horas_solicitadas"]');
     if (!tipoSel || !numSel || !descInput || !hidGrupo || !atvSel) return;
 
     const allOptions = Array.from(atvSel.options);
@@ -307,6 +308,12 @@
       atvSel.disabled = !firstVisible;
     }
 
+    function applySuggestedHours(){
+      if (!horasInput) return;
+      const selected = atvSel.selectedOptions?.[0];
+      horasInput.value = selected?.getAttribute('data-default-hours') || '';
+    }
+
     function bindUploadCards(){
       document.querySelectorAll('[data-upload-card]').forEach(card=>{
         if (card.dataset.boundUploadCard === '1') return;
@@ -382,8 +389,9 @@
 
     // Bind (somente se não for modo leitura)
     if (!isRO){
-      tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
-      numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); });
+      tipoSel.addEventListener('change', ()=>{ populateNumeros(); loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); applySuggestedHours(); });
+      numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); applySuggestedHours(); });
+      atvSel.addEventListener('change', applySuggestedHours);
     }
   })();
 

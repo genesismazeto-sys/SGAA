@@ -19,13 +19,13 @@
 {% set grp_val = request.form.get('grupo', '') %}
 {% set grp_num = (grp_val.split(' - ', 1)[0] if ' - ' in grp_val else (grp_val if grp_val.isdigit() else '')) %}
 {% set grp_desc = (grp_val.split(' - ', 1)[1] if ' - ' in grp_val else ('' if grp_val.isdigit() else grp_val)) %}
-{% set tem_lim = request.form.get('tem_limitacao', '0') %}
-{% set limit_mode = request.form.get('tipo_limitacao', '') if tem_lim in ['1', 'true', 'on', 'yes'] else '' %}
-{% set limit_value = request.form.get('limite_horas_total', '') if limit_mode == 'total' else (request.form.get('limite_horas_semestral', '') if limit_mode == 'semestral' else '') %}
+{% set limit_mode = request.form.get('tipo_limitacao', '') %}
+{% set limit_value = request.form.get('limite_valor', '') %}
+{% set suggested_mode = request.form.get('ch_por_evento_mode', '') %}
 
 <form method="post">
   <div class="form-cards-narrow form-cards-narrow--wide">
-    <div class="form-row">
+    <div class="form-row" data-visible-field="tipo">
       <label class="row-label">Tipo</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" data-visible-field="grupo">
       <label class="row-label">Grupo (nº/descrição)</label>
       <div class="field-card split-2 compact-left" id="grupo_card">
         <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" data-visible-field="nome">
       <label class="row-label">Nome</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
@@ -62,7 +62,7 @@
       </div>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" data-visible-field="descricao">
       <label class="row-label">Descrição</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
@@ -70,7 +70,7 @@
       </div>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" data-visible-field="limitacao">
       <label class="row-label">Limitação / Tempo limite</label>
       <div class="field-card split-2" id="limitacao_card">
         <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
@@ -85,10 +85,29 @@
       </div>
     </div>
 
-    <input type="hidden" name="tem_limitacao" id="tem_limitacao_hidden" value="{{ tem_lim }}">
     <input type="hidden" name="tipo_limitacao" id="tipo_limitacao_hidden" value="{{ limit_mode }}">
-    <input type="hidden" name="limite_horas_total" id="limite_total_hidden" value="{{ request.form.get('limite_horas_total', '') }}">
-    <input type="hidden" name="limite_horas_semestral" id="limite_semestral_hidden" value="{{ request.form.get('limite_horas_semestral', '') }}">
+    <input type="hidden" name="limite_valor" id="limite_valor_hidden" value="{{ limit_value }}">
+
+    <div class="form-row" data-visible-field="ch_por_evento">
+      <label class="row-label" for="ch_por_evento_mode">Carga horária por evento</label>
+      <div class="field-card split-2" id="ch_por_evento_card">
+        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+        <select class="control" id="ch_por_evento_mode" name="ch_por_evento_mode">
+          <option value="" {% if suggested_mode != 'enabled' %}selected{% endif %}>Sem sugestão</option>
+          <option value="enabled" {% if suggested_mode == 'enabled' %}selected{% endif %}>Usar sugestão</option>
+        </select>
+        <div class="field-chip" id="chip_ch_por_evento"><i class="lucide" data-lucide="clock"></i></div>
+        <input id="ch_por_evento" name="ch_por_evento" type="number" inputmode="decimal" min="0" step="any" class="control" placeholder="Horas sugeridas" value="{{ request.form.get('ch_por_evento', '') }}">
+      </div>
+    </div>
+
+    <div class="form-row" data-visible-field="observacoes">
+      <label class="row-label" for="observacoes">Observações</label>
+      <div class="field-card field-card--textarea">
+        <div class="field-chip"><i class="lucide" data-lucide="align-left"></i></div>
+        <textarea id="observacoes" name="observacoes" class="control auto-grow" rows="3" placeholder="Observações sobre esta versão">{{ request.form.get('observacoes', '') }}</textarea>
+      </div>
+    </div>
 
     <div class="form-actions center">
       <a class="btn" href="{{ url_for('admin_atividades') }}">Cancelar</a>
@@ -116,10 +135,11 @@
     const limitType = document.getElementById('tipo_limit_card');
     const limitValue = document.getElementById('valor_limite_card');
     const limitChip = document.getElementById('chip_limite');
-    const hiddenTem = document.getElementById('tem_limitacao_hidden');
     const hiddenTipo = document.getElementById('tipo_limitacao_hidden');
-    const hiddenTotal = document.getElementById('limite_total_hidden');
-    const hiddenSem = document.getElementById('limite_semestral_hidden');
+    const hiddenLimitValue = document.getElementById('limite_valor_hidden');
+    const suggestedMode = document.getElementById('ch_por_evento_mode');
+    const suggestedValue = document.getElementById('ch_por_evento');
+    const suggestedChip = document.getElementById('chip_ch_por_evento');
 
     function isExtensao(){
       return (tipoSel?.value || '').trim() === 'Extensão Universitária';
@@ -201,10 +221,8 @@
     function syncLimitacao(){
       const mode = (limitType?.value || '').toLowerCase();
       const value = (limitValue?.value || '').trim();
-      hiddenTem.value = mode ? '1' : '0';
       hiddenTipo.value = mode;
-      hiddenTotal.value = '';
-      hiddenSem.value = '';
+      hiddenLimitValue.value = mode ? value : '';
       if (!mode){
         limitValue.value = '';
         limitValue.disabled = true;
@@ -214,8 +232,22 @@
         limitValue.disabled = false;
         limitChip?.classList.remove('is-off-chunk');
         limitValue.classList.remove('is-off-chunk');
-        if (mode === 'total') hiddenTotal.value = value;
-        if (mode === 'semestral') hiddenSem.value = value;
+        hiddenLimitValue.value = (limitValue.value || '').trim();
+      }
+    }
+
+    function syncSuggestedHours(){
+      if (!suggestedValue) return;
+      const enabled = suggestedMode?.value === 'enabled';
+      if (!enabled){
+        suggestedValue.value = '';
+        suggestedValue.disabled = true;
+        suggestedChip?.classList.add('is-off-chunk');
+        suggestedValue.classList.add('is-off-chunk');
+      } else {
+        suggestedValue.disabled = false;
+        suggestedChip?.classList.remove('is-off-chunk');
+        suggestedValue.classList.remove('is-off-chunk');
       }
     }
 
@@ -226,6 +258,7 @@
 
     syncGrupoState();
     syncLimitacao();
+    syncSuggestedHours();
 
     tipoSel?.addEventListener('change', ()=>{
       syncGrupoState();
@@ -237,6 +270,7 @@
     desc?.addEventListener('input', syncGrupo);
     limitType?.addEventListener('change', syncLimitacao);
     limitValue?.addEventListener('input', syncLimitacao);
+    suggestedMode?.addEventListener('change', syncSuggestedHours);
 
     document.querySelectorAll('textarea.auto-grow').forEach(el => {
       el.style.height = 'var(--btn-h)';
@@ -247,6 +281,7 @@
     document.querySelector('form[method="post"]')?.addEventListener('submit', ()=>{
       syncGrupo();
       syncLimitacao();
+      syncSuggestedHours();
     });
   });
 </script>

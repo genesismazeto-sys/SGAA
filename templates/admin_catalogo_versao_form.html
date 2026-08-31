@@ -115,10 +115,15 @@
       </div>
 
       <div class="form-row" data-visible-field="ch_por_evento">
-        <label class="row-label" for="ch_por_evento">Carga horária por evento</label>
-        <div class="field-card">
-          <div class="field-chip"><i class="lucide" data-lucide="clock"></i></div>
-          <input id="ch_por_evento" name="ch_por_evento" type="number" inputmode="decimal" min="0" step="any" class="control" placeholder="Ex.: 4" value="{{ ch_por_evento }}">
+        <label class="row-label" for="ch_por_evento_mode">Carga horária por evento</label>
+        <div class="field-card split-2" id="ch_por_evento_card">
+          <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+          <select class="control" id="ch_por_evento_mode" name="ch_por_evento_mode">
+            <option value="" {% if not ch_por_evento_enabled %}selected{% endif %}>Sem sugestão</option>
+            <option value="enabled" {% if ch_por_evento_enabled %}selected{% endif %}>Usar sugestão</option>
+          </select>
+          <div class="field-chip" id="chip_ch_por_evento"><i class="lucide" data-lucide="clock"></i></div>
+          <input id="ch_por_evento" name="ch_por_evento" type="number" inputmode="decimal" min="0" step="any" class="control" placeholder="Horas sugeridas" value="{{ ch_por_evento }}">
         </div>
       </div>
 
@@ -194,6 +199,9 @@ document.addEventListener('DOMContentLoaded', function(){
   const limitChip = document.getElementById('chip_limite');
   const hiddenLimitType = document.getElementById('tipo_limitacao_hidden');
   const hiddenLimitValue = document.getElementById('limite_valor_hidden');
+  const suggestedMode = document.getElementById('ch_por_evento_mode');
+  const suggestedValue = document.getElementById('ch_por_evento');
+  const suggestedChip = document.getElementById('chip_ch_por_evento');
   const snapshotEl = document.getElementById('versao-form-snapshot');
   const submitBtn = document.getElementById('btn-salvar-versao');
 
@@ -259,6 +267,20 @@ document.addEventListener('DOMContentLoaded', function(){
       hiddenLimitValue.value = (limitValue.value || '').trim();
     }
   }
+  function syncSuggestedHours(){
+    if (!suggestedValue) return;
+    const enabled = suggestedMode?.value === 'enabled';
+    if (!enabled){
+      suggestedValue.value = '';
+      suggestedValue.disabled = true;
+      suggestedChip?.classList.add('is-off-chunk');
+      suggestedValue.classList.add('is-off-chunk');
+    } else {
+      suggestedValue.disabled = false;
+      suggestedChip?.classList.remove('is-off-chunk');
+      suggestedValue.classList.remove('is-off-chunk');
+    }
+  }
   function normText(value){ const v = value == null ? '' : String(value).trim(); return v === '' ? null : v; }
   function normNum(value){
     const v = value == null ? '' : String(value).trim();
@@ -275,6 +297,7 @@ document.addEventListener('DOMContentLoaded', function(){
       descricao: normText(document.getElementById('descricao')?.value),
       tipo_limitacao: normText(hiddenLimitType?.value),
       limite_valor: normNum(hiddenLimitValue?.value),
+      ch_por_evento_mode: suggestedMode?.value === 'enabled' ? 'enabled' : 'disabled',
       ch_por_evento: normNum(document.getElementById('ch_por_evento')?.value),
       observacoes: normText(document.getElementById('observacoes')?.value),
       versao_anterior_id: prevValue === '' ? null : Number(prevValue)
@@ -289,17 +312,18 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   function autoGrow(el){ el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
 
-  syncGrupoState(); syncLimitacao();
+  syncGrupoState(); syncLimitacao(); syncSuggestedHours();
   tipoSel?.addEventListener('change', () => { syncGrupoState(); refresh(); });
   numSel?.addEventListener('change', () => { loadDescFromSelected(); syncGrupo(); refresh(); });
   groupDesc?.addEventListener('input', () => { syncGrupo(); refresh(); });
   limitType?.addEventListener('change', () => { syncLimitacao(); refresh(); });
   limitValue?.addEventListener('input', () => { syncLimitacao(); refresh(); });
+  suggestedMode?.addEventListener('change', () => { syncSuggestedHours(); refresh(); });
   ['nome','descricao','ch_por_evento','observacoes','versao_anterior_id'].forEach(id => {
     const el = document.getElementById(id); if (el){ el.addEventListener('input', refresh); el.addEventListener('change', refresh); }
   });
   document.querySelectorAll('textarea.auto-grow').forEach(el => { autoGrow(el); el.addEventListener('input', () => autoGrow(el)); });
-  document.querySelector('form[method="post"]')?.addEventListener('submit', () => { syncGrupo(); syncLimitacao(); });
+  document.querySelector('form[method="post"]')?.addEventListener('submit', () => { syncGrupo(); syncLimitacao(); syncSuggestedHours(); });
   refresh();
 });
 </script>

@@ -12,7 +12,6 @@ from flask import (
     Blueprint,
     current_app,
     jsonify,
-    make_response,
     redirect,
     render_template,
     request,
@@ -23,10 +22,12 @@ from werkzeug.utils import secure_filename
 from app.activity_catalog import (
     _build_grupo_label,
     _canonicalize_tipo_limitacao,
+    _parse_non_negative_form_number,
     _normalize_atividade_grupo,
     apply_activity_version_semantic_changes,
     apply_latest_activity_version_semantic_changes,
     can_activity_version_be_mutated_in_place,
+    create_activity_with_initial_version,
     get_atividade_base,
     get_atividade_base_list,
     get_atividade_transicoes_por_base,
@@ -64,9 +65,6 @@ from app.web.pagination import get_pagination, wants_pagination
 from utils.messages import flash
 
 
-logger = logging.getLogger("main")
-
-
 ATIVIDADES_IMPORT_REQUIRED_HEADERS = (
     "nome",
     "tipo_atividade",
@@ -82,7 +80,7 @@ ATIVIDADES_IMPORT_REQUIRED_HEADERS = (
 def _canonical_activity_rows_sql() -> str:
     return """SELECT v.id, v.atividade_base_id AS base_id, v.grupo,
                      b.nome_conceito AS nome, b.descricao,
-                     COALESCE(v.ch_por_evento,v.limite_semestre,v.limite_total) AS limite_horas,
+                     v.ch_por_evento AS horas_sugeridas,
                      CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
                      (v.limite_total IS NOT NULL OR v.limite_semestre IS NOT NULL) AS tem_limitacao,
                      CASE WHEN v.limite_semestre IS NOT NULL THEN 'semestral' ELSE 'total' END AS tipo_limitacao,
@@ -271,6 +269,12 @@ def _normalized_version_form_payload(values) -> dict:
     if tipo_limitacao not in {"total", "semestral"}:
         tipo_limitacao = None
     limite_valor = _num(values.get("limite_valor")) if tipo_limitacao else None
+    ch_mode_raw = values.get("ch_por_evento_mode")
+    ch_enabled = (
+        ch_mode_raw == "enabled"
+        if ch_mode_raw is not None
+        else _num(values.get("ch_por_evento")) is not None
+    )
     prev_raw = str(values.get("versao_anterior_id") or "").strip()
     try:
         versao_anterior_id = int(prev_raw) if prev_raw else None
@@ -283,7 +287,8 @@ def _normalized_version_form_payload(values) -> dict:
         "descricao": _txt(values.get("descricao")),
         "tipo_limitacao": tipo_limitacao,
         "limite_valor": limite_valor,
-        "ch_por_evento": _num(values.get("ch_por_evento")),
+        "ch_por_evento_mode": "enabled" if ch_enabled else "disabled",
+        "ch_por_evento": _num(values.get("ch_por_evento")) if ch_enabled else None,
         "observacoes": _txt(values.get("observacoes")),
         "versao_anterior_id": versao_anterior_id,
     }
@@ -710,103 +715,86 @@ def admin_atividades_extensao():
 
 @admin_required
 def admin_adicionar_atividade():
-    # Build mapping of existing group numbers -> description per activity type
-    def build_grupos_por_tipo(conn):
-        rows = conn.execute(
-            "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade, grupo FROM atividade_versao WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
-        ).fetchall()
-        grupos = {}
-        for r in rows:
-            tipo = r[0]
-            label = (r[1] or '').strip()
-            m = re.match(r'^\s*(\d+)\s*-\s*(.*)$', label)
-            if m:
-                num = m.group(1)
-                desc = (m.group(2) or '').strip()
-            else:
-                m2 = re.match(r'^\s*(\d+)\s*$', label)
-                if not m2:
-                    # ignore labels without numeric prefix for this mapping
-                    continue
-                num = m2.group(1)
-                desc = ''
-            if tipo not in grupos:
-                grupos[tipo] = {}
-            # prefer first non-empty description seen
-            if num not in grupos[tipo] or (not grupos[tipo][num] and desc):
-                grupos[tipo][num] = desc
-        # merge explicit definitions from grupos_def if present
-        try:
-            rows2 = conn.execute("SELECT tipo_atividade, numero, descricao FROM grupos_def").fetchall()
-            for r2 in rows2:
-                tipo2, num2, desc2 = r2[0], str(r2[1]), (r2[2] or '').strip()
-                if tipo2 not in grupos:
-                    grupos[tipo2] = {}
-                # explicit def has priority
-                grupos[tipo2][num2] = desc2
-        except Exception:
-            pass
-        return grupos
+    """Create one coherent atividade_base + active atividade_versao v1."""
+
+    conn = get_db_connection()
+
+    def _render(message=None):
+        if message:
+            flash(message, "error")
+        return render_template(
+            "admin_adicionar_atividade.html",
+            grupos_por_tipo=_build_grupos_por_tipo_for_activity_form(conn),
+        )
 
     if request.method == "POST":
-        grupo = _normalize_atividade_grupo(request.form.get("tipo_atividade"), request.form.get("grupo"))
+        tipo_atividade = (request.form.get("tipo_atividade") or "").strip()
+        axis = _eixo_from_tipo_atividade(tipo_atividade)
+        grupo = _normalize_atividade_grupo(tipo_atividade, request.form.get("grupo"))
         nome = (request.form.get("nome") or "").strip()
         descricao = (request.form.get("descricao") or "").strip() or None
-        # Campo opcional: pode não vir do formulário
-        limite_horas_raw = request.form.get("limite_horas")
-        try:
-            limite_horas = int(limite_horas_raw) if (limite_horas_raw is not None and str(limite_horas_raw).strip() != "") else None
-        except (TypeError, ValueError):
-            limite_horas = None
-        tipo_atividade = request.form["tipo_atividade"]
-        # Hidden chega como '0'/'1'; evite tratar '0' como truthy
-        tem_limitacao = 1 if (request.form.get("tem_limitacao") or "0") in ("1", "true", "on", "yes") else 0
-        tipo_limitacao = request.form.get("tipo_limitacao") if tem_limitacao else None
-        limite_horas_total = request.form.get("limite_horas_total") if tem_limitacao and tipo_limitacao == "total" else None
-        limite_horas_semestral = request.form.get("limite_horas_semestral") if tem_limitacao and tipo_limitacao == "semestral" else None
-        # Se há limitação, exigir tipo_limitacao válido
-        if tem_limitacao and tipo_limitacao not in ("total", "semestral"):
-            flash("Erro: selecione o tipo de limitação (Total ou Semestral).", "error")
-            conn = get_db_connection()
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
-        # Satisfaz o CHECK da coluna: quando não há limitação, persistimos um valor válido
-        if not tem_limitacao:
-            tipo_limitacao = "total"
-            limite_horas_total = None
-            limite_horas_semestral = None
+        tipo_limitacao = (request.form.get("tipo_limitacao") or "").strip()
+        limite_valor_raw = (request.form.get("limite_valor") or "").strip()
+        ch_por_evento_raw = (request.form.get("ch_por_evento") or "").strip()
+        ch_mode_raw = request.form.get("ch_por_evento_mode")
+        ch_enabled = (
+            ch_mode_raw == "enabled"
+            if ch_mode_raw is not None
+            else bool(ch_por_evento_raw)
+        )
+        observacoes = (request.form.get("observacoes") or "").strip() or None
 
-        conn = get_db_connection()
-        # Validações básicas
+        if axis is None:
+            return _render("Erro: selecione um Tipo válido.")
         if not grupo:
-            flash("Erro: selecione o Grupo (nº/descrição).", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
+            return _render("Erro: selecione o Grupo (nº/descrição).")
         if not nome:
-            flash("Erro: informe o Nome da atividade.", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
-        # Checagem explícita de duplicidade por nome (escopo global)
+            return _render("Erro: informe o Nome da atividade.")
+        if tipo_limitacao not in {"", "total", "semestral"}:
+            return _render("Erro: selecione uma Limitação / Tempo limite válida.")
+
+        try:
+            ch_por_evento = (
+                _parse_non_negative_form_number(
+                    ch_por_evento_raw,
+                    "a Carga horária por evento",
+                    required=True,
+                )
+                if ch_enabled
+                else None
+            )
+            limite_valor = _parse_non_negative_form_number(
+                limite_valor_raw,
+                "o tempo limite",
+                required=bool(tipo_limitacao),
+            )
+        except ValueError as exc:
+            return _render(f"Erro: {exc}")
+
+        limite_total = limite_valor if tipo_limitacao == "total" else None
+        limite_semestre = limite_valor if tipo_limitacao == "semestral" else None
+
         dup = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito = ?", (nome,)).fetchone()
         if dup:
-            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}).", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
+            return _render(f"Erro: Já existe atividade com este nome (ID {dup['id']}).")
+
         try:
-            axis = 'AAC' if tipo_atividade == 'Acadêmica Complementar' else 'AEU'
-            base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,descricao,status) VALUES(?,?,'ativo') RETURNING id", (nome,descricao)).fetchone()[0]
-            conn.execute(
-                """INSERT INTO atividade_versao
-                   (atividade_base_id,eixo,grupo,ch_por_evento,
-                    limite_total,limite_semestre,documentos_json,numero_versao,status)
-                   VALUES(?,?,?,?,?,?,?,1,'ativa')""",
-                (base_id,axis,grupo,limite_horas,
-                 limite_horas_total,limite_horas_semestral,request.form.get('documentos_json') or None),
+            base_id, _versao_id = create_activity_with_initial_version(
+                conn,
+                nome=nome,
+                descricao=descricao,
+                eixo=axis,
+                grupo=grupo,
+                ch_por_evento=ch_por_evento,
+                limite_semestre=limite_semestre,
+                limite_total=limite_total,
+                observacoes=observacoes,
             )
             conn.commit()
             flash("Atividade adicionada com sucesso.", "success")
-            return redirect(url_for("admin_atividades"))
+            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
         except sqlite3.IntegrityError as e:
+            conn.rollback()
             msg = str(e).lower()
             if 'not null constraint failed' in msg and 'atividade_versao.grupo' in msg:
                 flash("Erro: selecione um número de grupo válido.", "error")
@@ -814,171 +802,29 @@ def admin_adicionar_atividade():
                 flash("Erro: Atividade com este nome já existe.", "error")
             else:
                 flash(f"Erro de integridade: {e}", "error")
-        grupos_por_tipo = build_grupos_por_tipo(conn)
-        return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
-    # GET
-    conn = get_db_connection()
-    grupos_por_tipo = build_grupos_por_tipo(conn)
-    return render_template("admin_adicionar_atividade.html", grupos_por_tipo=grupos_por_tipo)
+        except Exception as exc:
+            conn.rollback()
+            flash(f"Erro ao adicionar atividade: {exc}", "error")
+        return _render()
+
+    return _render()
 
 
 @admin_required
 def admin_editar_atividade(atividade_id):
-    # Força recarregar o template a cada requisição (evita servir versão antiga em dev)
-    try:
-        current_app.jinja_env.cache.clear()
-    except Exception:
-        pass
+    """Compatibility entrypoint for the canonical exact-version editor."""
     conn = get_db_connection()
-    atividade = conn.execute("SELECT * FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE id=?", (atividade_id,)).fetchone()
-    if not atividade:
+    version = get_atividade_versao_by_id(conn, atividade_id)
+    if version is None:
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_atividades"))
-    # Docs salvos (normalizados) para inicializar chips no template
-    try:
-        atividade_docs_saved = parse_documentos_json(atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None)
-    except Exception:
-        atividade_docs_saved = []
-
-    # Build mapping of existing group numbers -> description per activity type (for UI parity with 'Adicionar')
-    def build_grupos_por_tipo(c):
-        grupos = {}
-        # explicit definitions first
-        try:
-            rows = c.execute("SELECT tipo_atividade, numero, descricao FROM grupos_def").fetchall()
-            for r in rows:
-                tipo, num, desc = r[0], str(r[1]), (r[2] or '').strip()
-                grupos.setdefault(tipo, {})[num] = desc
-        except Exception:
-            pass
-        # Derive from canonical versions for gaps.
-        rows2 = c.execute(
-            "SELECT CASE eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END, grupo FROM atividade_versao WHERE grupo IS NOT NULL AND TRIM(grupo) <> ''"
-        ).fetchall()
-        for r in rows2:
-            tipo = r[0]
-            label = (r[1] or '').strip()
-            m = re.match(r'^\s*(\d+)\s*-\s*(.*)$', label)
-            if m:
-                num = m.group(1)
-                desc = (m.group(2) or '').strip()
-            else:
-                m2 = re.match(r'^\s*(\d+)\s*$', label)
-                if not m2:
-                    continue
-                num = m2.group(1)
-                desc = ''
-            if tipo not in grupos:
-                grupos[tipo] = {}
-            if num not in grupos[tipo] or (not grupos[tipo][num] and desc):
-                grupos[tipo][num] = desc
-        return grupos
-
-    if request.method == "POST":
-        # Use .get to avoid BadRequestKeyError if inputs are missing
-        grupo = _normalize_atividade_grupo(request.form.get("tipo_atividade"), request.form.get("grupo"))
-        nome = request.form.get("nome", "")
-        descricao = (request.form.get("descricao") or "").strip() or None
-        limite_horas_raw = request.form.get("limite_horas")
-        try:
-            limite_horas = int(limite_horas_raw) if (limite_horas_raw is not None and str(limite_horas_raw).strip() != "") else None
-        except (TypeError, ValueError):
-            limite_horas = None
-        tipo_atividade = request.form.get("tipo_atividade", "")
-        tem_limitacao = 1 if (request.form.get("tem_limitacao") or "0") in ("1", "true", "on", "yes") else 0
-        tipo_limitacao = request.form.get("tipo_limitacao") if tem_limitacao else None
-        limite_horas_total = request.form.get("limite_horas_total") if tem_limitacao and tipo_limitacao == "total" else None
-        limite_horas_semestral = request.form.get("limite_horas_semestral") if tem_limitacao and tipo_limitacao == "semestral" else None
-        # Se há limitação, exigir tipo_limitacao válido
-        if tem_limitacao and tipo_limitacao not in ("total", "semestral"):
-            flash("Erro: selecione o tipo de limitação (Total ou Semestral).", "error")
-            return render_template("admin_editar_atividade.html", atividade=atividade)
-        # Satisfaz o CHECK da coluna: quando não há limitação, persistimos um valor válido
-        if not tem_limitacao:
-            tipo_limitacao = "total"
-            limite_horas_total = None
-            limite_horas_semestral = None
-
-        # Checagem explícita de duplicidade por nome (escopo global), ignorando a própria
-        dup = conn.execute("SELECT id FROM atividade_base WHERE nome_conceito=? AND id<>?", (nome, atividade['base_id'])).fetchone()
-        if dup:
-            flash(f"Erro: Já existe atividade com este nome (ID {dup['id']}).", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            # Repassa lista de documentos a partir do que veio do form (ou salvos)
-            atividade_docs = parse_documentos_json(request.form.get("documentos_json") or (atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None))
-            try:
-                logger.info("[admin_editar_atividade POST dup] id=%s raw=%r parsed=%s", atividade_id, request.form.get("documentos_json"), atividade_docs)
-            except Exception:
-                pass
-            resp = make_response(render_template("admin_editar_atividade.html", atividade=atividade, grupos_por_tipo=grupos_por_tipo, atividade_docs=atividade_docs))
-            resp.headers['X-Template-Editar-Version'] = 'editar-atividade-20251012-02'
-            return resp
-        # Validações básicas
-        if not grupo:
-            flash("Erro: selecione o Grupo (nº/descrição).", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            atividade_docs = parse_documentos_json(request.form.get("documentos_json") or (atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None))
-            try:
-                logger.info("[admin_editar_atividade POST grupo_vazio] id=%s raw=%r parsed=%s", atividade_id, request.form.get("documentos_json"), atividade_docs)
-            except Exception:
-                pass
-            resp = make_response(render_template("admin_editar_atividade.html", atividade=atividade, grupos_por_tipo=grupos_por_tipo, atividade_docs=atividade_docs))
-            resp.headers['X-Template-Editar-Version'] = 'editar-atividade-20251012-02'
-            return resp
-        if not nome:
-            flash("Erro: informe o Nome da atividade.", "error")
-            grupos_por_tipo = build_grupos_por_tipo(conn)
-            atividade_docs = parse_documentos_json(request.form.get("documentos_json") or (atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None))
-            try:
-                logger.info("[admin_editar_atividade POST nome_vazio] id=%s raw=%r parsed=%s", atividade_id, request.form.get("documentos_json"), atividade_docs)
-            except Exception:
-                pass
-            resp = make_response(render_template("admin_editar_atividade.html", atividade=atividade, grupos_por_tipo=grupos_por_tipo, atividade_docs=atividade_docs))
-            resp.headers['X-Template-Editar-Version'] = 'editar-atividade-20251012-02'
-            return resp
-
-        try:
-            if tipo_atividade != atividade['tipo_atividade']:
-                raise sqlite3.IntegrityError("Mudança de eixo exige nova versão e transição")
-            conn.execute("UPDATE atividade_base SET nome_conceito=?,descricao=? WHERE id=?", (nome,descricao,atividade['base_id']))
-            mutation = apply_activity_version_semantic_changes(
-                conn,
-                atividade_id,
-                {
-                    "grupo": grupo,
-                    "ch_por_evento": limite_horas,
-                    "limite_total": limite_horas_total,
-                    "limite_semestre": limite_horas_semestral,
-                    "documentos_json": request.form.get('documentos_json') or None,
-                },
-            )
-            conn.commit()
-            if mutation["mode"] == "successor":
-                flash("Alterações salvas em uma nova versão em rascunho; matrizes existentes foram preservadas.", "success")
-            else:
-                flash("Atividade atualizada com sucesso.", "success")
-            return redirect(url_for("admin_atividades"))
-        except sqlite3.IntegrityError as e:
-            msg = str(e).lower()
-            if 'not null constraint failed' in msg and 'atividade_versao.grupo' in msg:
-                flash("Erro: selecione um número de grupo válido.", "error")
-            elif 'unique' in msg and 'nome' in msg:
-                flash("Erro: Atividade com este nome já existe.", "error")
-            else:
-                flash(f"Erro de integridade: {e}", "error")
-    grupos_por_tipo = build_grupos_por_tipo(conn)
-    try:
-        logger.info("[admin_editar_atividade GET] id=%s raw=%r parsed=%s", atividade_id, (atividade['documentos_json'] if 'documentos_json' in atividade.keys() else None), atividade_docs_saved)
-        try:
-            src, fname, uptodate = current_app.jinja_loader.get_source(current_app.jinja_env, 'admin_editar_atividade.html')
-            logger.info("[tmpl] editar path=%s uptodate=%s has_marker=%s", fname, uptodate, ('editar-atividade-20251012-02' in src))
-        except Exception as e2:
-            logger.warning("[tmpl] get_source error: %s", e2)
-    except Exception:
-        pass
-    resp = make_response(render_template("admin_editar_atividade.html", atividade=atividade, grupos_por_tipo=grupos_por_tipo, atividade_docs=atividade_docs_saved))
-    resp.headers['X-Template-Editar-Version'] = 'editar-atividade-20251012-02'
-    return resp
+    return redirect(
+        url_for(
+            "admin_catalogo_editar_versao",
+            base_id=version["atividade_base_id"],
+            versao_id=version["id"],
+        )
+    )
 
 
 @admin_required
@@ -1262,65 +1108,8 @@ def admin_catalogo_versao_detalhe(base_id: int):
 
 @admin_required
 def admin_catalogo_nova_base():
-    """
-    Formulário para criar uma nova atividade_base.
-    POST valida e insere; em sucesso redireciona para o detalhe da base criada.
-    """
-    if request.method == "POST":
-        nome_conceito = (request.form.get("nome_conceito") or "").strip()
-        descricao = (request.form.get("descricao") or "").strip()
-        status = (request.form.get("status") or "").strip()
-
-        if not nome_conceito:
-            flash("Nome da atividade-base é obrigatório.", "error")
-            return render_template("admin_catalogo_base_form.html",
-                                   nome_conceito=nome_conceito,
-                                   descricao=descricao,
-                                   status=status)
-
-        if status not in ("ativo", "inativo"):
-            flash("Status deve ser 'ativo' ou 'inativo'.", "error")
-            return render_template("admin_catalogo_base_form.html",
-                                   nome_conceito=nome_conceito,
-                                   descricao=descricao,
-                                   status=status)
-
-        conn = get_db_connection()
-
-        existing = conn.execute(
-            "SELECT id FROM atividade_base WHERE LOWER(nome_conceito) = LOWER(?)",
-            (nome_conceito,),
-        ).fetchone()
-        if existing:
-            flash("Já existe uma atividade-base com este nome.", "error")
-            return render_template("admin_catalogo_base_form.html",
-                                   nome_conceito=nome_conceito,
-                                   descricao=descricao,
-                                   status=status)
-
-        try:
-            conn.execute(
-                "INSERT INTO atividade_base (nome_conceito, descricao, status) VALUES (?, ?, ?)",
-                (nome_conceito, descricao or None, status),
-            )
-            conn.commit()
-            base_id = conn.execute(
-                "SELECT id FROM atividade_base WHERE nome_conceito = ?",
-                (nome_conceito,),
-            ).fetchone()["id"]
-            flash("Atividade-base criada com sucesso.", "success")
-            return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
-        except Exception as exc:
-            flash(f"Erro ao criar atividade-base: {exc}", "error")
-            return render_template("admin_catalogo_base_form.html",
-                                   nome_conceito=nome_conceito,
-                                   descricao=descricao,
-                                   status=status)
-
-    return render_template("admin_catalogo_base_form.html",
-                           nome_conceito="",
-                           descricao="",
-                           status="ativo")
+    """Retire the incomplete base-only creator in favor of canonical Add Activity."""
+    return redirect(url_for("admin_adicionar_atividade"))
 
 
 @admin_required
@@ -1367,6 +1156,12 @@ def admin_catalogo_nova_versao(base_id: int):
     def _render_form(msg, values):
         if msg:
             flash(msg, "error")
+        ch_mode = values.get("ch_por_evento_mode")
+        ch_por_evento_enabled = (
+            ch_mode == "enabled"
+            if ch_mode is not None
+            else str(values.get("ch_por_evento") or "").strip() != ""
+        )
         versao_anterior_label = "Sem versão anterior"
         if source is not None:
             versao_anterior_label = f"v{source['numero_versao']}"
@@ -1383,6 +1178,7 @@ def admin_catalogo_nova_versao(base_id: int):
             tipo_limitacao=values["tipo_limitacao"],
             limite_valor=values["limite_valor"],
             ch_por_evento=values["ch_por_evento"],
+            ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
             versao_anterior_id=values["versao_anterior_id"],
             is_clone_create=True,
@@ -1407,6 +1203,7 @@ def admin_catalogo_nova_versao(base_id: int):
             "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
             "limite_valor": (request.form.get("limite_valor") or "").strip(),
             "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
+            "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
             "observacoes": (request.form.get("observacoes") or "").strip(),
             "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
         }
@@ -1424,27 +1221,27 @@ def admin_catalogo_nova_versao(base_id: int):
         if not values["nome"]:
             return _render("Informe o Nome da atividade.")
 
-        def _parse_non_negative(raw, label, *, required=False):
-            if not raw:
-                if required:
-                    raise ValueError(f"Informe {label}.")
-                return None
-            try:
-                parsed = float(raw)
-            except (TypeError, ValueError):
-                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
-            if parsed < 0:
-                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
-            return parsed
-
         try:
-            ch_por_evento = _parse_non_negative(
-                values["ch_por_evento"], "Carga horária por evento"
+            ch_enabled = (
+                values["ch_por_evento_mode"] == "enabled"
+                if values["ch_por_evento_mode"] is not None
+                else bool(values["ch_por_evento"])
             )
+            ch_por_evento = (
+                _parse_non_negative_form_number(
+                    values["ch_por_evento"],
+                    "a Carga horária por evento",
+                    required=True,
+                )
+                if ch_enabled
+                else None
+            )
+            if not ch_enabled:
+                values["ch_por_evento"] = ""
             tipo_limitacao = values["tipo_limitacao"]
             if tipo_limitacao not in {"", "total", "semestral"}:
                 return _render("Selecione uma Limitação / Tempo limite válida.")
-            limite_valor = _parse_non_negative(
+            limite_valor = _parse_non_negative_form_number(
                 values["limite_valor"], "o tempo limite", required=bool(tipo_limitacao)
             )
         except ValueError as exc:
@@ -1651,6 +1448,12 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     def _render_form(msg, values, *, force_readonly=False):
         if msg:
             flash(msg, "error")
+        ch_mode = values.get("ch_por_evento_mode")
+        ch_por_evento_enabled = (
+            ch_mode == "enabled"
+            if ch_mode is not None
+            else str(values.get("ch_por_evento") or "").strip() != ""
+        )
         return render_template(
             "admin_catalogo_versao_form.html",
             base=base,
@@ -1664,6 +1467,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             tipo_limitacao=values["tipo_limitacao"],
             limite_valor=values["limite_valor"],
             ch_por_evento=values["ch_por_evento"],
+            ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
             versao_anterior_id=values["versao_anterior_id"],
             form_action=form_action,
@@ -1701,6 +1505,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
             "limite_valor": (request.form.get("limite_valor") or "").strip(),
             "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
+            "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
             "observacoes": (request.form.get("observacoes") or "").strip(),
             "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
         }
@@ -1718,27 +1523,27 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
         if not values["nome"]:
             return _render("Informe o Nome da atividade.")
 
-        def _parse_non_negative(raw, label, *, required=False):
-            if not raw:
-                if required:
-                    raise ValueError(f"Informe {label}.")
-                return None
-            try:
-                parsed = float(raw)
-            except (TypeError, ValueError):
-                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
-            if parsed < 0:
-                raise ValueError(f"{label} deve ser um número válido e maior ou igual a zero.")
-            return parsed
-
         try:
-            ch_por_evento = _parse_non_negative(
-                values["ch_por_evento"], "Carga horária por evento"
+            ch_enabled = (
+                values["ch_por_evento_mode"] == "enabled"
+                if values["ch_por_evento_mode"] is not None
+                else bool(values["ch_por_evento"])
             )
+            ch_por_evento = (
+                _parse_non_negative_form_number(
+                    values["ch_por_evento"],
+                    "a Carga horária por evento",
+                    required=True,
+                )
+                if ch_enabled
+                else None
+            )
+            if not ch_enabled:
+                values["ch_por_evento"] = ""
             tipo_limitacao = values["tipo_limitacao"]
             if tipo_limitacao not in {"", "total", "semestral"}:
                 return _render("Selecione uma Limitação / Tempo limite válida.")
-            limite_valor = _parse_non_negative(
+            limite_valor = _parse_non_negative_form_number(
                 values["limite_valor"], "o tempo limite", required=bool(tipo_limitacao)
             )
         except ValueError as exc:

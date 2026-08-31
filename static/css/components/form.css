@@ -180,17 +180,18 @@
   color:var(--field-invalid-text);
 }
 
-/* Disabled — "not applicable" */
-.field-card:has(.control:disabled){
+/* Disabled — "not applicable". A composed card is fully disabled only when
+   none of its controls remains interactive. */
+.field-card:has(.control:disabled):not(:has(.control:not(:disabled))){
   background:var(--field-disabled-bg);
   border-color:var(--field-disabled-border);
   box-shadow:none;
 }
-.field-card:has(.control:disabled) .control{
+.field-card .control:disabled{
   color:var(--text-tertiary);
   cursor:not-allowed;
 }
-.field-card:has(.control:disabled) .field-chip{
+.field-card:has(.control:disabled):not(:has(.control:not(:disabled))) .field-chip{
   color:var(--border-strong);
   border-right-color:var(--field-disabled-border);
 }

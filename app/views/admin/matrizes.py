@@ -9,7 +9,9 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from app.activity_catalog import (
     _build_grupo_label,
     _canonicalize_tipo_limitacao,
+    _parse_non_negative_form_number,
     _normalize_atividade_grupo,
+    create_activity_with_initial_version,
     get_atividade_base,
     get_atividade_versao_by_id,
     get_next_numero_versao,
@@ -509,6 +511,16 @@ def _build_matriz_new_activity_modal_context(
             "nome": str(form_data.get("nome") or "").strip(),
             "grupo_numero": str(form_data.get("grupo_numero") or "").strip(),
             "grupo_descricao": str(form_data.get("grupo_descricao") or "").strip(),
+            "descricao": str(form_data.get("descricao") or "").strip(),
+            "tipo_limitacao": str(form_data.get("tipo_limitacao") or "").strip(),
+            "limite_valor": str(form_data.get("limite_valor") or "").strip(),
+            "ch_por_evento": str(form_data.get("ch_por_evento") or "").strip(),
+            "ch_por_evento_enabled": (
+                str(form_data.get("ch_por_evento_mode") or "").strip() == "enabled"
+                if form_data.get("ch_por_evento_mode") is not None
+                else bool(str(form_data.get("ch_por_evento") or "").strip())
+            ),
+            "observacoes": str(form_data.get("observacoes") or "").strip(),
             "add_to_matrix": add_to_matrix_checked,
         },
     }
@@ -941,6 +953,12 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
         "nome": (request.form.get("nome") or "").strip(),
         "grupo_numero": (request.form.get("grupo_numero") or "").strip(),
         "grupo_descricao": (request.form.get("grupo_descricao") or "").strip(),
+        "descricao": (request.form.get("descricao") or "").strip(),
+        "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
+        "limite_valor": (request.form.get("limite_valor") or "").strip(),
+        "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
+        "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
+        "observacoes": (request.form.get("observacoes") or "").strip(),
         "add_to_matrix": request.form.get("add_to_matrix"),
     }
 
@@ -977,6 +995,36 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
     if activity_type != "Extensão Universitária" and not grupo:
         return _render_modal_error("Informe o grupo da atividade.")
 
+    tipo_limitacao = form_data["tipo_limitacao"]
+    if tipo_limitacao not in {"", "total", "semestral"}:
+        return _render_modal_error("Selecione uma Limitação / Tempo limite válida.")
+    ch_enabled = (
+        form_data["ch_por_evento_mode"] == "enabled"
+        if form_data["ch_por_evento_mode"] is not None
+        else bool(form_data["ch_por_evento"])
+    )
+    try:
+        ch_por_evento = (
+            _parse_non_negative_form_number(
+                form_data["ch_por_evento"],
+                "a Carga horária por evento",
+                required=True,
+            )
+            if ch_enabled
+            else None
+        )
+        limite_valor = _parse_non_negative_form_number(
+            form_data["limite_valor"],
+            "o tempo limite",
+            required=bool(tipo_limitacao),
+        )
+    except ValueError as exc:
+        return _render_modal_error(str(exc))
+    limite_total = limite_valor if tipo_limitacao == "total" else None
+    limite_semestre = limite_valor if tipo_limitacao == "semestral" else None
+    descricao = form_data["descricao"] or None
+    observacoes = form_data["observacoes"] or None
+
     add_to_matrix = str(request.form.get("add_to_matrix") or "").strip().lower() in {"1", "true", "on", "yes"}
     form_data["add_to_matrix"] = add_to_matrix
 
@@ -984,34 +1032,17 @@ def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
         return _render_modal_error(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN])
 
     try:
-        base_cursor = conn.execute(
-            """
-            INSERT INTO atividade_base (nome_conceito, descricao, status)
-            VALUES (?, ?, 'ativo')
-            """,
-            (nome, None),
+        base_id, versao_id = create_activity_with_initial_version(
+            conn,
+            nome=nome,
+            descricao=descricao,
+            eixo=axis,
+            grupo=grupo,
+            ch_por_evento=ch_por_evento,
+            limite_semestre=limite_semestre,
+            limite_total=limite_total,
+            observacoes=observacoes,
         )
-        base_id = base_cursor.lastrowid
-
-        next_num = get_next_numero_versao(conn, base_id)
-        versao_cursor = conn.execute(
-            """
-            INSERT INTO atividade_versao (
-                atividade_base_id,
-                eixo,
-                grupo,
-                numero_versao,
-                status
-            ) VALUES (?, ?, ?, ?, 'ativa')
-            """,
-            (
-                base_id,
-                axis,
-                grupo,
-                next_num,
-            ),
-        )
-        versao_id = versao_cursor.lastrowid
 
         if add_to_matrix:
             conn.execute(

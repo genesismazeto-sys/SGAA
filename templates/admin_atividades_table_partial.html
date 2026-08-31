@@ -1,7 +1,7 @@
 <table class="table">
   <thead>
     <tr>
-      <th>#</th><th>Grupo</th><th>Nome</th><th>Tipo</th><th>Limite Horas (grupo)</th><th>Limitações</th><th>Ações</th>
+      <th>#</th><th>Grupo</th><th>Nome</th><th>Tipo</th><th>Sugestão (h)</th><th>Limitações</th><th>Ações</th>
     </tr>
   </thead>
   <tbody>
@@ -15,7 +15,7 @@
       </td>
       <td>{{ a.nome }}</td>
       <td>{{ a.tipo_atividade }}</td>
-      <td>{{ a.limite_horas or '-' }}</td>
+      <td>{{ a.horas_sugeridas if a.horas_sugeridas is not none else '-' }}</td>
       <td>
         {% if a.tem_limitacao %}
           {{ a.tipo_limitacao }}

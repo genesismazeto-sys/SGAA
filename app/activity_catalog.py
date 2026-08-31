@@ -85,10 +85,67 @@ def _canonicalize_tipo_limitacao(value: str) -> str | None:
     return None
 
 
+def _parse_non_negative_form_number(raw, label, *, required=False):
+    if raw is None or str(raw).strip() == "":
+        if required:
+            raise ValueError(f"Informe {label}.")
+        return None
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{label} deve ser um número válido e maior ou igual a zero."
+        )
+    if parsed < 0:
+        raise ValueError(
+            f"{label} deve ser um número válido e maior ou igual a zero."
+        )
+    return parsed
+
+
 def _build_grupo_label(numero: str, descricao: str) -> str:
     numero = str(numero or "").strip()
     descricao = str(descricao or "").strip()
     return f"{numero} - {descricao}" if descricao else numero
+
+
+def create_activity_with_initial_version(
+    conn,
+    *,
+    nome: str,
+    descricao: str | None,
+    eixo: str,
+    grupo: str,
+    ch_por_evento: float | None,
+    limite_semestre: float | None,
+    limite_total: float | None,
+    observacoes: str | None,
+) -> tuple[int, int]:
+    """Write the canonical atividade_base + active v1 unit without committing."""
+    base_id = conn.execute(
+        "INSERT INTO atividade_base(nome_conceito,descricao,status) "
+        "VALUES(?,?,'ativo') RETURNING id",
+        (nome, descricao),
+    ).fetchone()[0]
+    versao_id = conn.execute(
+        """INSERT INTO atividade_versao
+           (atividade_base_id,eixo,grupo,ch_por_evento,
+            limite_total,limite_semestre,observacao_aluno,
+            observacao_admin,numero_versao,status)
+           VALUES(?,?,?,?,?,?,?,?,1,'ativa')
+           RETURNING id""",
+        (
+            base_id,
+            eixo,
+            grupo,
+            ch_por_evento,
+            limite_total,
+            limite_semestre,
+            observacoes,
+            observacoes,
+        ),
+    ).fetchone()[0]
+    return base_id, versao_id
 
 
 def get_atividade_base_list(conn) -> list:
@@ -430,7 +487,9 @@ __all__ = [
     'parse_documentos_json',
     '_normalize_atividade_grupo',
     '_canonicalize_tipo_limitacao',
+    '_parse_non_negative_form_number',
     '_build_grupo_label',
+    'create_activity_with_initial_version',
     'get_atividade_base_list',
     'get_atividade_base',
     'get_versoes_por_base',

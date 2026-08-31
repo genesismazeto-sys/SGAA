@@ -862,6 +862,70 @@
               </div>
             {% endif %}
 
+            <div class="matriz-modal-field">
+              <label class="matriz-modal-label" for="matriz-new-activity-description">Descrição</label>
+              <textarea
+                class="control"
+                id="matriz-new-activity-description"
+                name="descricao"
+                rows="2"
+                placeholder="Descrição opcional"
+              >{{ new_activity_modal.prefill.descricao }}</textarea>
+            </div>
+
+            <div class="matriz-modal-field">
+              <label class="matriz-modal-label" for="matriz-new-activity-limit-type">Limitação / Tempo limite</label>
+              <div class="field-card matriz-modal-group-card">
+                <select class="control" id="matriz-new-activity-limit-type" name="tipo_limitacao" data-matriz-limit-type>
+                  <option value="" {% if not new_activity_modal.prefill.tipo_limitacao %}selected{% endif %}>Sem limitação</option>
+                  <option value="total" {% if new_activity_modal.prefill.tipo_limitacao == 'total' %}selected{% endif %}>Total</option>
+                  <option value="semestral" {% if new_activity_modal.prefill.tipo_limitacao == 'semestral' %}selected{% endif %}>Semestral</option>
+                </select>
+                <input
+                  class="control"
+                  type="number"
+                  name="limite_valor"
+                  value="{{ new_activity_modal.prefill.limite_valor }}"
+                  min="0"
+                  step="0.01"
+                  placeholder="Horas"
+                  data-matriz-limit-value
+                >
+              </div>
+            </div>
+
+            <div class="matriz-modal-field">
+              <label class="matriz-modal-label" for="matriz-new-activity-hours-mode">Carga horária por evento</label>
+              <div class="field-card matriz-modal-group-card">
+                <select class="control" id="matriz-new-activity-hours-mode" name="ch_por_evento_mode" data-matriz-hours-mode>
+                  <option value="disabled" {% if not new_activity_modal.prefill.ch_por_evento_enabled %}selected{% endif %}>Sem sugestão</option>
+                  <option value="enabled" {% if new_activity_modal.prefill.ch_por_evento_enabled %}selected{% endif %}>Usar sugestão</option>
+                </select>
+                <input
+                  class="control"
+                  type="number"
+                  name="ch_por_evento"
+                  value="{{ new_activity_modal.prefill.ch_por_evento }}"
+                  min="0"
+                  step="0.01"
+                  placeholder="Horas sugeridas"
+                  data-matriz-hours-value
+                >
+              </div>
+              <p class="matriz-modal-note">A sugestão preenche a solicitação, mas continua editável.</p>
+            </div>
+
+            <div class="matriz-modal-field">
+              <label class="matriz-modal-label" for="matriz-new-activity-notes">Observações</label>
+              <textarea
+                class="control"
+                id="matriz-new-activity-notes"
+                name="observacoes"
+                rows="2"
+                placeholder="Observações opcionais"
+              >{{ new_activity_modal.prefill.observacoes }}</textarea>
+            </div>
+
             <label class="matriz-modal-checkbox">
               <input type="checkbox" name="add_to_matrix" value="1" {% if new_activity_modal.prefill.add_to_matrix %}checked{% endif %}>
               <span>Adicionar à matriz atual</span>
@@ -1071,6 +1135,23 @@
     const openButton = document.querySelector('[data-open-new-activity-modal]');
     const closeButtons = modal.querySelectorAll('[data-close-new-activity-modal]');
     const firstInput = modal.querySelector('input[name="nome"]');
+    const limitType = modal.querySelector('[data-matriz-limit-type]');
+    const limitValue = modal.querySelector('[data-matriz-limit-value]');
+    const hoursMode = modal.querySelector('[data-matriz-hours-mode]');
+    const hoursValue = modal.querySelector('[data-matriz-hours-value]');
+
+    function syncOptionalFields(){
+      if (limitValue) {
+        const enabled = Boolean(limitType?.value);
+        limitValue.disabled = !enabled;
+        limitValue.required = enabled;
+      }
+      if (hoursValue) {
+        const enabled = hoursMode?.value === 'enabled';
+        hoursValue.disabled = !enabled;
+        hoursValue.required = enabled;
+      }
+    }
 
     function openModal(){
       modal.hidden = false;
@@ -1093,6 +1174,9 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !modal.hidden) closeModal();
     });
+    limitType?.addEventListener('change', syncOptionalFields);
+    hoursMode?.addEventListener('change', syncOptionalFields);
+    syncOptionalFields();
 
     if (modal.dataset.open === '1') openModal();
   })();

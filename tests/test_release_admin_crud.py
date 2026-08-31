@@ -21,4 +21,8 @@ def test_release_activity_catalog_crud_surface_is_available(tmp_path):
     with isolated_versioned_app_env(tmp_path, "release-activity.db") as env:
         login_admin(env["client"])
         assert env["client"].get("/admin/atividades").status_code == 200
-        assert env["client"].get("/admin/editar_atividade/29").status_code == 200
+        response = env["client"].get("/admin/editar_atividade/29")
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith(
+            "/admin/catalogo-versoes/1/versoes/29/editar"
+        )
