@@ -2343,3 +2343,73 @@ Implementation commit: `a9a6e838ffba138e3dd7fc832027e2b9ae34e9a1`
 closeout commit.
 
 `AGENT_HANDOFF.md` remains frozen and unchanged.
+
+## ACTIVITY-CREATION-VERSIONING-CONSISTENCY — CLOSED / ACCEPTED / LANDED
+
+ACTIVITY_CREATION_VERSIONING_CONSISTENCY — Activity creation / versioning
+consistency — CLOSED / ACCEPTED / LANDED. User visual/functional approval given
+on `2026-08-30` for the complete candidate, including the UI-state repair for
+Limitação and Carga horária por evento. No further UI/product change was made
+in this front.
+
+- **Add Activity creates a coherent unit.** `admin_adicionar_atividade`
+  creates `atividade_base` + active `atividade_versao` v1 in one operation
+  (`create_activity_with_initial_version` in `app/activity_catalog.py`), then
+  lands on the exact-version detail; complete initial version configuration
+  is available during creation. The former base-only creator
+  (`admin_catalogo_nova_base`) is retired and delegates to Add Activity;
+  the legacy `admin_editar_atividade` route redirects to the canonical
+  exact-version editor.
+- **Coherent fields across workflows.** Tipo/Grupo/Nome/Descrição/
+  Limitação/Carga horária por evento/Observações are coherent across Add
+  Activity, new-version and version-edit surfaces; the Matrix
+  create-activity modal offers the same complete initial configuration.
+- **`ch_por_evento` is an optional suggestion/default, never a limit.** The
+  mode selector ("Sem sugestão" / "Usar sugestão") controls a dependent
+  numeric input; NULL means no suggested hours; the value only ever
+  prefills request hours and remains editable.
+- **Request flows prefill from the exact version but permit override.**
+  Student and admin create forms read `ch_por_evento` from the exact
+  version row and prefill `horas_solicitadas`; actual submitted hours are
+  preserved and historical request snapshots remain authoritative.
+- **Limit none/semestral/total behavior is coherent.** Only the dependent
+  numeric control disables when its semantic feature is off; mode selectors
+  remain interactive on editable forms; immutable versions remain
+  read-only (fieldset-level `readonly`), and the composed field-card
+  disabled styling no longer greys out an entire card when one of its
+  controls stays interactive.
+- **Exact Matrix → Activity Version ownership preserved.** Creation from a
+  Matrix still links the exact created v1 via
+  `matriz_atividade_versao_item`; predecessor and AAC→AEU transition
+  architecture preserved; multiple simultaneously active exact versions
+  remain valid under the current lifecycle model.
+- **No Activity vigência UX; one user-facing Observações field** (projected
+  from the two legacy observation columns).
+- **User visual/functional acceptance completed** on `2026-08-30`.
+
+Final bounded validation at landing: focused creation/versioning consistency
++ state-control lane (7 files) 66 passed; Matrix/request/snapshot/versioning
+regression lane (17 files) 159 passed; `python -m compileall -q app` clean;
+`git diff --check` clean. One test-only reconciliation was required and
+applied inside this front: `tests/test_activity_version_clone_edit_ux.py`
+updated the dirty-snapshot key set to include the intentional
+`ch_por_evento_mode` entry — no production/UI bytes changed by it.
+
+Database custody: `database.db` byte-identical at entry and exit (SHA-256
+`d9d7a1fb2ec185ace161edf2446342a59b8a288f0d73ecf7b8ba9e7314589630`); no
+`database.db-wal`/`database.db-shm`/`database.db-journal` sidecars. The
+repository-root pre-D6 WAL/SHM files remain the previously governed
+PRE-EXISTING / IGNORED / NONCANONICAL historical artifacts and were not
+touched.
+
+Implementation commit: `f58e7fb17717a2a093374c1281dde1bd2db0a789`
+(`Repair activity creation and versioning consistency`); governance recorded
+by this closeout commit.
+
+`AGENT_HANDOFF.md` remains frozen and unchanged.
+
+### Next observed UI front — NOT closed here
+
+The **Activity Version Detail page** has a separate Design System problem.
+It was explicitly NOT touched in this landing and is NOT fixed. It is
+recorded here only as the next observed UI front.
