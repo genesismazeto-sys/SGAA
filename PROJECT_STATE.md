@@ -2413,3 +2413,33 @@ by this closeout commit.
 The **Activity Version Detail page** has a separate Design System problem.
 It was explicitly NOT touched in this landing and is NOT fixed. It is
 recorded here only as the next observed UI front.
+
+## POST-REFACTOR DESIGN SYSTEM — NORMALIZATION BATCH — CLOSED / ACCEPTED / PUBLISHED
+
+The preceding Activity Version Detail note is retained as historical chronology.
+The already user-validated Design System normalization candidate was subsequently
+landed in implementation commit `34b4b15`.
+
+Landed contracts:
+
+- Activity Version Detail uses the established SGAA components and canonical
+  buttons, statuses, spacing, floating actions, Brazilian dates, full usable
+  width, and compact empty history.
+- `.version-identifier` is the shared version marker used by the Version Catalog,
+  transition history, aluno requests, and Matrix version cards, with the accepted
+  indigo compact geometry.
+- Aluno request-list Activity/Status geometry, ellipsis, version-marker sizing,
+  and `Deferida Parcialmente` presentation are normalized.
+- Shared responsive list cards use one full-grid width contract; horizontal
+  scrolling belongs to the outer wrapper and print resets screen minimum widths.
+- Dashboard progress surfaces use the canonical `.progress` / `.progress-bar`
+  contract and unified `data-pct` initialization.
+
+Closeout validation reused the accepted bounded visual/regression evidence and
+performed the required read-only checks: candidate scope reconciliation,
+PowerShell/source validation, `git diff --check`, canonical contract sentinels,
+and database custody verification. No full suite or browser validation was
+rerun for this closeout.
+
+The form-chip/addon background inconsistency was not part of this landing and
+remains the next independent visual defect. It is not fixed here.
