@@ -5,15 +5,28 @@ cd /d "%~dp0"
 if "%APP_HOST%"=="" set "APP_HOST=127.0.0.1"
 if "%APP_PORT%"=="" set "APP_PORT=5000"
 set "APP_LOGIN_URL=http://%APP_HOST%:%APP_PORT%/login"
+for %%I in ("%~dp0.") do set "REPO_ROOT=%%~fI"
 
-set "PYTHON_EXE="
-if exist ".venv\Scripts\python.exe" (
-	set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
-) else if exist "venv\Scripts\python.exe" (
-	set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
-) else (
-	set "PYTHON_EXE=python"
-	echo [run.bat] Virtualenv not found. Using Python from PATH.
+if "%LOCALAPPDATA%"=="" (
+	echo [run.bat] LOCALAPPDATA is not available.
+	echo [run.bat] Install Windows with a local user profile, then run this file again.
+	pause
+	exit /b 1
+)
+
+set "SGAA_VENV=%LOCALAPPDATA%\SGAA\venv"
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\tools\bootstrap_sgaa_runtime.ps1" -RepositoryRoot "%REPO_ROOT%" -VenvPath "%SGAA_VENV%" -RequirementsPath "%REPO_ROOT%\requirements.txt"
+if errorlevel 1 (
+	pause
+	exit /b 1
+)
+
+set "PYTHON_EXE=%SGAA_VENV%\Scripts\python.exe"
+if not exist "%PYTHON_EXE%" (
+	echo [run.bat] The machine-local SGAA Python was not created correctly.
+	pause
+	exit /b 1
 )
 
 powershell -NoProfile -Command ^

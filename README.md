@@ -9,12 +9,17 @@ Pequena aplicação Flask com SQLite para gestão de cursos, turmas, alunos, ati
 
 ## Setup
 
-```powershell
-# (opcional) criar venv
-python -m venv .venv; .\.venv\Scripts\Activate.ps1
+For Windows, double-click `run2.bat`. It keeps the Python environment outside
+the OneDrive-synchronized repository at `%LOCALAPPDATA%\SGAA\venv`, creates it
+on first use, and installs the pinned runtime dependencies from
+`requirements.txt`. The synced `.venv` and `venv` folders are intentionally not
+used because Python virtual environments are machine-specific.
 
-# instalar dependências
-pip install -r requirements.txt
+```powershell
+# alternativa manual fora do launcher, sempre fora do repositorio sincronizado
+$runtimeVenv = Join-Path $env:LOCALAPPDATA 'SGAA\venv'
+python -m venv $runtimeVenv
+& (Join-Path $runtimeVenv 'Scripts\python.exe') -m pip install -r .\requirements.txt
 
 # (opcional) configurar variáveis de ambiente
 $env:APP_SECRET_KEY = "troque-isto"
@@ -25,7 +30,7 @@ $env:APP_SECRET_KEY = "troque-isto"
 # $env:SESSION_COOKIE_SECURE = "1"   # se rodar em HTTPS
 
 # executar
-python .\main.py
+& (Join-Path $runtimeVenv 'Scripts\python.exe') .\main.py
 ```
 
 A aplicação inicializa o banco automaticamente (init_db) ao subir.
