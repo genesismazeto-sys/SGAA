@@ -33,6 +33,39 @@ def test_aluno_minhas_requisicoes_paginated(pagination_client):
     assert r.status_code == 200
 
 
+def test_aluno_request_uses_canonical_version_identifier_and_fits_long_status(pagination_client):
+    login_admin(pagination_client)
+    _, request_row = create_admin_request(
+        pagination_client,
+        "request-grid-design-system",
+        version_id=29,
+    )
+    assert request_row is not None
+
+    with main.app.app_context():
+        connection = main.get_db_connection()
+        connection.execute(
+            """
+            UPDATE requisicoes
+               SET status = ?, horas_deferidas = ?, data_processamento = ?
+             WHERE id = ?
+            """,
+            ("Deferida Parcialmente", 4, "2026-08-30", request_row["id"]),
+        )
+        connection.commit()
+
+    login_student(pagination_client)
+    response = pagination_client.get("/aluno/requisicoes")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'class="version-identifier aluno-snapshot-chip"' in html
+    assert 'class="aluno-activity-name"' in html
+    assert "Deferida Parcialmente" in html
+    assert "minmax(164px, var(--col-status))" in html
+    assert "border-radius:999px; background:var(--surface)" not in html
+
+
 def test_historical_filter_is_applied_before_count_and_pagination_is_stable(pagination_client):
     login_admin(pagination_client)
     _, first = create_admin_request(pagination_client, "pagination-first", version_id=29)

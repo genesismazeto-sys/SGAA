@@ -193,11 +193,12 @@
 /* .impressoes-list-page existe apenas como escopo semântico; seletores abaixo são suficientes. */
 
 .impressoes-cards-scroll{
-  position:relative; overflow-x:auto; overflow-y:hidden;
+  position:relative; width:100%; overflow-x:auto; overflow-y:hidden;
 }
 
 .impressoes-cards{
-  display:flex; flex-direction:column; gap:0; padding:4px 0 10px; width:fit-content;
+  display:flex; flex-direction:column; gap:0; padding:4px 0 10px;
+  width:100%; min-width:var(--imp-list-min-width, 100%); box-sizing:border-box;
 }
 
 .impresso-card{
@@ -209,7 +210,7 @@
   border:1px solid var(--border-strong);
   border-radius:var(--radius);
   height:var(--btn-h); min-height:var(--btn-h); line-height:var(--btn-h);
-  padding:0 8px; width:fit-content; max-width:100%;
+  padding:0 8px; width:100%; max-width:none; box-sizing:border-box;
   transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
 }
 .impresso-card[role="listitem"]{ cursor:pointer; }
@@ -281,6 +282,7 @@
    Scoped Layout Adjustments: Requisições (.imp-req)
    (Moved from inline <style> in admin_requisicoes.html)
    ============================================================= */
+.imp-req{ --imp-list-min-width:1184px; }
 .imp-req { --imp-cols:
   minmax(40px, 48px)   /* ID */
   minmax(88px, 96px)   /* Solicitado em */
@@ -308,6 +310,7 @@
    Scoped Layout Adjustments: Turmas (.imp-turmas)
    (Moved from inline <style> in admin_turmas.html)
    ============================================================= */
+.imp-turmas{ --imp-list-min-width:1184px; }
 .imp-turmas { --imp-cols:
   minmax(112px, 144px) /* Código */
   minmax(248px, 1.35fr) /* Curso */
@@ -333,6 +336,7 @@
    Scoped Layout Adjustments: Alunos (.imp-alunos)
    (Moved from inline <style> in admin_alunos.html)
    ============================================================= */
+.imp-alunos{ --imp-list-min-width:1160px; }
 .imp-alunos { --imp-cols:
   minmax(300px, 1.6fr) /* Nome */
   minmax(260px, 1.3fr) /* E-mail */
@@ -354,6 +358,7 @@
    Scoped Layout Adjustments: Cursos (.imp-cursos)
    (Moved from inline <style> in admin_cursos.html)
    ============================================================= */
+.imp-cursos{ --imp-list-min-width:626px; }
 .imp-cursos { --imp-cols:
   minmax(64px, 0.7fr)   /* Código */
   minmax(220px, 2.4fr)  /* Nome */
@@ -376,6 +381,7 @@
 /* =============================================================
    Scoped Layout Adjustments: Matrizes (.imp-matrizes)
    ============================================================= */
+.imp-matrizes{ --imp-list-min-width:1064px; }
 .imp-matrizes { --imp-cols:
   minmax(280px, 1.65fr)  /* Nome */
   minmax(240px, 1.35fr)  /* Curso */
@@ -394,6 +400,7 @@
 /* =============================================================
    Scoped Layout Adjustments: Curso — turmas do curso (.imp-curso-turmas)
    ============================================================= */
+.imp-curso-turmas{ --imp-list-min-width:368px; }
 .imp-curso-turmas { --imp-cols:
   minmax(56px, 72px)    /* Nº */
   minmax(88px, 104px)   /* Status */
@@ -409,6 +416,7 @@
 /* =============================================================
   Scoped Layout Adjustments: Arquivos (.imp-arquivos)
   ============================================================= */
+.imp-arquivos{ --imp-list-min-width:776px; }
 .imp-arquivos { --imp-cols:
   minmax(206px, 0.72fr) /* Título */
   minmax(136px, 154px)  /* Tipo de arquivo */
@@ -428,6 +436,7 @@
    Scoped Layout Adjustments: Atividades (.imp-atividades)
    (Moved from inline <style> in admin_atividades.html)
    ============================================================= */
+.imp-atividades{ --imp-list-min-width:920px; }
 .imp-atividades { --imp-cols:
   minmax(180px, 1.1fr)  /* Tipo */
   minmax(320px, 3fr)    /* Nome */
@@ -455,6 +464,7 @@
 /* =============================================================
    Scoped Layout Adjustments: Catálogo de versões (.imp-catalogo)
    ============================================================= */
+.imp-catalogo{ --imp-list-min-width:694px; }
 .imp-catalogo { --imp-cols:
   minmax(300px, 1.8fr)  /* Atividade-base */
   minmax(96px, 120px)   /* Status */
@@ -475,6 +485,7 @@
 /* =============================================================
    Scoped Layout Adjustments: Mapeamento legado (.imp-mapeamento)
    ============================================================= */
+.imp-mapeamento{ --imp-list-min-width:1034px; }
 .imp-mapeamento { --imp-cols:
   minmax(260px, 1.5fr)  /* Atividade legada */
   minmax(160px, 200px)  /* Tipo */
@@ -491,6 +502,23 @@
 .imp-mapeamento .impresso-card .cell:nth-child(4),
 .imp-mapeamento .impresso-card .cell:nth-child(6){ justify-content:center; text-align:center; }
 .imp-mapeamento .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+
+/*
+  Responsive overflow invariant: the complete grid owns the card box.
+  Page-specific legacy declarations used max-width:100%, which kept the
+  border viewport-sized while fixed/minimum tracks overflowed outside it.
+  Only the outer scroll wrapper may clip or scroll the list horizontally.
+*/
+.impressoes-cards-scroll .impressoes-cards{
+  width:100% !important;
+  min-width:var(--imp-list-min-width, 100%);
+  box-sizing:border-box;
+}
+.impressoes-cards-scroll .impresso-card{
+  width:100% !important;
+  max-width:none !important;
+  box-sizing:border-box;
+}
 
 /* ====== PRINT ====== */
 /* ====== TOOLBAR: PER-CONTROL OVERRIDES (relocated in DS-5) ======
@@ -571,7 +599,7 @@
   body { margin:0 !important; padding:10px !important; }
 
   .impressoes-cards-scroll { overflow:visible !important; position:static !important; }
-  .impressoes-cards { display:table !important; width:100% !important; table-layout:fixed !important; }
+  .impressoes-cards { display:table !important; width:100% !important; min-width:0 !important; table-layout:fixed !important; }
   .impresso-card { display:table-row !important; width:100% !important; height:auto !important; line-height:normal !important; padding:4px 0 !important; margin:0 !important; border:none !important; border-bottom:1px solid #ccc !important; background:transparent !important; }
   .impresso-card.header { display:table-row !important; background:#f5f5f5 !important; font-weight:bold !important; border-bottom:2px solid #333 !important; }
   .impresso-card .cell { display:table-cell !important; padding:4px 8px !important; text-align:center !important; vertical-align:middle !important; border-right:1px solid #ddd !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }

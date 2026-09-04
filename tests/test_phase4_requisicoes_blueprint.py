@@ -1190,7 +1190,7 @@ def test_message_catalog_count_remains_536():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 545
+    assert len(catalog) == 537
 
 
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():

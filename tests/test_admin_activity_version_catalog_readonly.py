@@ -207,7 +207,8 @@ def test_catalogo_versao_detalhe_lists_versions(client):
     html = response.get_data(as_text=True)
 
     assert "v1" in html
-    assert "AAC" in html
+    assert "Acadêmica Complementar" in html
+    assert ">Eixo<" not in html
     html_lower = html.lower()
     assert "snapshot versionado" not in html_lower
     assert "diagnóstico do snapshot" not in html_lower
@@ -237,7 +238,7 @@ def test_catalogo_versao_detalhe_shows_empty_transition_history(client):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Histórico de transições" in html
-    assert "Nenhuma transição registrada para esta atividade-base." in html
+    assert "Nenhuma transição registrada" in html
 
 
 def test_catalogo_versao_detalhe_lists_transition_history_for_current_base(client):
@@ -264,8 +265,60 @@ def test_catalogo_versao_detalhe_lists_transition_history_for_current_base(clien
     html = response.get_data(as_text=True)
     assert "v1" in html
     assert "v2" in html
-    assert "mesmo_eixo" in html
-    assert "2026-06-11 09:45:00" in html
+    assert "Mesmo Tipo" in html
+    assert "11/06/2026" in html
+    assert "2026-06-11 09:45:00" not in html
+
+
+@pytest.mark.parametrize(
+    ("tipo_transicao", "expected_label"),
+    [
+        ("mesmo_eixo", "Mesmo Tipo"),
+        ("aac_para_aeu", "Mudança de Tipo"),
+        ("nova_aeu", "Nova versão de Extensão"),
+        ("descontinuada", "Descontinuação"),
+        ("sem_transicao", "Sem transição"),
+    ],
+)
+def test_catalogo_versao_detalhe_humanizes_known_transition_types(
+    client, tipo_transicao, expected_label
+):
+    _login_admin(client)
+    base_id, origem_id = _seed_base_e_versao(
+        client,
+        base_nome=f"Atividade Transição {tipo_transicao}",
+        versao_grupo="1 - Origem",
+    )
+    _, destino_id = _seed_base_e_versao(
+        client,
+        base_nome=f"Atividade Transição {tipo_transicao}",
+        versao_grupo="1 - Destino",
+    )
+    if tipo_transicao == "aac_para_aeu":
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            conn.execute(
+                "UPDATE atividade_versao SET eixo = 'AEU' WHERE id = ?",
+                (destino_id,),
+            )
+            conn.commit()
+    _insert_transicao(
+        origem_id,
+        destino_id,
+        tipo_transicao=tipo_transicao,
+        justificativa=(
+            "Mudança normativa documentada"
+            if tipo_transicao == "aac_para_aeu"
+            else None
+        ),
+    )
+
+    response = client.get(f"/admin/catalogo-versoes/{base_id}")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert expected_label in html
+    assert f">{tipo_transicao}<" not in html
 
 
 def test_catalogo_versao_detalhe_filters_transition_history_by_base(client):
@@ -292,14 +345,14 @@ def test_catalogo_versao_detalhe_filters_transition_history_by_base(client):
         base_nome="Atividade Historico Filtro B",
         versao_grupo="1 - Grupo Filtro B Destino",
     )
-    _insert_transicao(origem_b_id, destino_b_id, created_at="2026-06-11 10:20:20")
+    _insert_transicao(origem_b_id, destino_b_id, created_at="2026-06-12 10:20:20")
 
     response = client.get(f"/admin/catalogo-versoes/{base_a_id}")
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "2026-06-11 10:10:10" in html
-    assert "2026-06-11 10:20:20" not in html
+    assert "11/06/2026" in html
+    assert "12/06/2026" not in html
 
 
 def test_catalogo_versao_detalhe_shows_dash_for_empty_transition_note(client):
@@ -326,7 +379,7 @@ def test_catalogo_versao_detalhe_shows_dash_for_empty_transition_note(client):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert re.search(r'<td class="history-note-cell">\s*-\s*</td>', html)
+    assert re.search(r'<td class="transition-note">\s*-\s*</td>', html)
 
 
 # ---------------------------------------------------------------------------

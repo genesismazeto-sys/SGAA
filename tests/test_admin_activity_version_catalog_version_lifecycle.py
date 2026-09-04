@@ -673,8 +673,8 @@ def test_detalhe_mostra_inativar_descontinuar_para_ativa(versioned_env):
     )
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    assert 'class="vc-inativar-btn"' in html
-    assert 'class="vc-descontinuar-btn"' in html
+    assert 'class="vc-lifecycle-form vc-inativar-form"' in html
+    assert 'class="vc-lifecycle-form vc-descontinuar-form"' in html
 
 
 def test_detalhe_nao_mostra_inativar_para_rascunho_mostra_ativar(versioned_env):
@@ -689,9 +689,9 @@ def test_detalhe_nao_mostra_inativar_para_rascunho_mostra_ativar(versioned_env):
     )
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    assert 'class="vc-activate-btn"' in html
-    assert 'class="vc-inativar-btn"' not in html
-    assert 'class="vc-descontinuar-btn"' not in html
+    assert 'class="vc-activate-form"' in html
+    assert 'class="vc-lifecycle-form vc-inativar-form"' not in html
+    assert 'class="vc-lifecycle-form vc-descontinuar-form"' not in html
 
 
 def test_detalhe_nao_mostra_inativar_para_outros_status(versioned_env):
@@ -707,8 +707,8 @@ def test_detalhe_nao_mostra_inativar_para_outros_status(versioned_env):
         )
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
-        assert 'class="vc-inativar-btn"' not in html, f"status={status}: vc-inativar-btn não deve aparecer"
-        assert 'class="vc-descontinuar-btn"' not in html, f"status={status}: vc-descontinuar-btn não deve aparecer"
+        assert 'class="vc-lifecycle-form vc-inativar-form"' not in html, f"status={status}: form de inativação não deve aparecer"
+        assert 'class="vc-lifecycle-form vc-descontinuar-form"' not in html, f"status={status}: form de descontinuação não deve aparecer"
 
 
 # ---------------------------------------------------------------------------
@@ -1001,7 +1001,7 @@ def test_detalhe_mostra_substituir_apenas_para_ativa(versioned_env):
     assert resp_ativa.status_code == 200
     html_ativa = resp_ativa.data.decode("utf-8")
     assert 'class="vc-substituir-form"' in html_ativa
-    assert 'class="vc-substituir-btn"' in html_ativa
+    assert '<select hidden data-substitution-options=' in html_ativa
     assert 'name="to_versao_id"' in html_ativa
 
     for status in ("rascunho", "inativa", "descontinuada", "substituida"):
@@ -1013,7 +1013,7 @@ def test_detalhe_mostra_substituir_apenas_para_ativa(versioned_env):
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
         assert 'class="vc-substituir-form"' not in html
-        assert 'class="vc-substituir-btn"' not in html
+        assert '<select hidden data-substitution-options=' not in html
 
 
 def test_csrf_token_presente_no_form_substituir(versioned_env):

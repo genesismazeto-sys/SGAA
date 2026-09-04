@@ -8,40 +8,49 @@
     /* Colunas da lista do Aluno, iguais no header e nas linhas */
     .imp-areq {
       /* Rebalanceia o grid para acomodar os labels longos das colunas de horas. */
+      --imp-list-min-width: 1212px;
       --col-id:       0.10fr;
       --col-sol:      0.85fr;
       --col-proc:     0.85fr;
       --col-tipo:     2fr;
       --col-grupo:    0.54fr;
-      --col-atv:      4.05fr;
+      --col-atv:      3.05fr;
       --col-horas:    0.62fr;
       --col-defer:    0.56fr;
-      --col-status:   0.70fr; /* +0.1fr */
+      --col-status:   1.55fr;
       --imp-cols:
         minmax(30px, 30px)
         minmax(112px, var(--col-sol))
         minmax(112px, var(--col-proc))
         minmax(170px, var(--col-tipo))
         minmax(92px,  var(--col-grupo))
-        minmax(272px, var(--col-atv))
+        minmax(220px, var(--col-atv))
         minmax(104px, var(--col-horas))
         minmax(94px,  var(--col-defer))
-        minmax(76px,  var(--col-status)); /* min +4px */
+        minmax(164px, var(--col-status));
     }
     /* Evita "inflar" visualmente a primeira coluna com padding */
     .imp-areq .impresso-card .cell:first-child,
     .imp-areq .impresso-card.header .cell:first-child{ padding: 0 2px; }
     /* Paridade explícita (segurança) */
   .imp-areq .impresso-card.header,
-  .imp-areq .impresso-card{ grid-template-columns: var(--imp-cols) !important; width:100%; }
-  /* Wrapper também full-width para permitir expansão, mantendo gap padrão da lista */
-  .imp-areq .impressoes-cards{ width:100% !important; }
+  .imp-areq .impresso-card{ grid-template-columns: var(--imp-cols) !important; }
     /* Evitar shift ao selecionar (mantém 1px) */
     .imp-areq .impresso-card.selected{ border-width:1px; box-shadow: inset 0 0 0 1px var(--btn-primary); }
     /* Helpers */
     .cell.left{ justify-content:flex-start; }
     .cell.center{ justify-content:center; }
     .cell.right{ justify-content:flex-end; }
+    .aluno-activity-name{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .aluno-snapshot-chip{
+      flex:0 0 auto;
+      margin-left:6px;
+    }
 
       /* Ajuste fino específico do chip de Status para alinhar ícone e texto como nos botões */
       #grp-filtro .input-chip.input-chip-status{
@@ -277,13 +286,12 @@
           <div class="cell center ellipsis">{{ gnum or '—' }}</div>
           <!-- Atividade (sem link) -->
           <div class="cell left ellipsis">
-            <span>{{ r.atividade_nome }}</span>
+            <span class="aluno-activity-name">{{ r.atividade_nome }}</span>
             {% if r.snapshot and r.snapshot.snapshot_versionado_presente %}
               {% set snap = r.snapshot %}
               {% set vn_text = ('v' ~ snap.snapshot_vn) if snap.snapshot_vn else 'Versão' %}
               {% set tooltip_text = 'Versão da atividade registrada: ' ~ vn_text %}
-              <span class="aluno-snapshot-chip" title="{{ tooltip_text }}" aria-label="{{ tooltip_text }}"
-                    style="display:inline-flex; align-items:center; margin-left:6px; padding:0 6px; height:16px; min-height:16px; font-size:11px; line-height:1; white-space:nowrap; border:1px solid var(--border-strong); border-radius:999px; background:var(--surface); color:var(--text-secondary);">{{ vn_text }}</span>
+              <span class="version-identifier aluno-snapshot-chip" title="{{ tooltip_text }}" aria-label="{{ tooltip_text }}">{{ vn_text }}</span>
             {% endif %}
           </div>
           <!-- Horas solicitadas -->

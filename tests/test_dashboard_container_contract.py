@@ -45,6 +45,7 @@ KPI_GAP = 24
 KPI_COLUMNS = 4
 FOUR_COLUMN_MIN_TRACK = KPI_COLUMNS * KPI_COLUMN_MIN + (KPI_COLUMNS - 1) * KPI_GAP  # 792
 GLOBAL_CSS = PROJECT_ROOT / "static" / "css" / "modern-style.css"
+ALUNO_DASHBOARD = PROJECT_ROOT / "templates" / "aluno_dashboard.html"
 
 # Grids that must follow the track, and the page each is reachable on.
 TRACK_DRIVEN_GRIDS = [
@@ -74,6 +75,33 @@ def test_global_track_css_is_uncapped_named_container():
     assert declarations.get("min-width") == "0"
     assert declarations.get("container-type") == "inline-size"
     assert declarations.get("container-name") == "track"
+
+
+def test_student_dashboard_progress_uses_the_shared_design_system_component():
+    template = ALUNO_DASHBOARD.read_text(encoding="utf-8")
+    css = GLOBAL_CSS.read_text(encoding="utf-8")
+
+    assert 'class="dashboard-total-progress"' in template
+    assert template.count('class="progress-meta-value') >= 5
+    assert template.count('class="progress-bar"') >= 5
+    assert "document.querySelectorAll('.progress[data-pct]')" in template
+
+    for legacy_fragment in (
+        "resume-total-bar",
+        "limit-bar",
+        'class="limit-pct"',
+        "linear-gradient(90deg,#8359ff",
+        "linear-gradient(90deg,#4da4ff",
+    ):
+        assert legacy_fragment not in template
+
+    assert re.search(r"\.progress-bar\s*\{[^}]*background:var\(--brand\)", css)
+    assert re.search(
+        r"\.progress-meta-value\s*\{[^}]*font-size:var\(--font-size-small\)"
+        r"[^}]*font-weight:600[^}]*font-variant-numeric:tabular-nums",
+        css,
+        re.DOTALL,
+    )
 
 COUNT_COLUMNS = """
 (selector) => {

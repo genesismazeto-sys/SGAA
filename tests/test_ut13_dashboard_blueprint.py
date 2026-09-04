@@ -632,7 +632,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 545, (
+    assert len(catalog) == 537, (
         "message catalog count must match the canonical baseline; "
         f"got {len(catalog)}"
     )
@@ -869,8 +869,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 545, (
-        "current catalog baseline must be 541"
+    assert len(messages._message_catalog()) == 537, (
+        "current catalog baseline must be 537"
     )
 
     backend_paths = {

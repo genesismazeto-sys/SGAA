@@ -605,7 +605,7 @@ def test_green_5_rbac_unmapped_stays_zero():
 def test_green_6_message_catalog_stays_536():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 545, (
+    assert len(_message_catalog()) == 537, (
         "message catalog must match the canonical baseline"
     )
 

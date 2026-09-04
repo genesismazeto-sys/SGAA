@@ -42,7 +42,6 @@
     gap: 5px;
     background: #e8f4ef;
     border: 1px solid #a3d4b8;
-    border-radius: 4px;
     padding: 2px 8px;
     font-size: 12px;
     font-weight: 600;
@@ -125,7 +124,7 @@
         </td>
         <td>
           {% if item.vinculo %}
-            <span class="mv-versao-atual">
+            <span class="mv-versao-atual compact-identifier">
               <i class="lucide" data-lucide="check-circle-2"></i>
               {% if item.vinculo.numero_versao %}v{{ item.vinculo.numero_versao }} {% endif %}({{ item.vinculo.eixo }})
             </span>

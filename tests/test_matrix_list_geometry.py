@@ -12,6 +12,49 @@ from tests.versioned_test_support import isolated_versioned_app_env
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_every_scrollable_card_grid_owns_its_complete_responsive_width():
+    css = (ROOT / "static" / "css" / "components" / "list-cards.css").read_text(
+        encoding="utf-8"
+    )
+    templates = list((ROOT / "templates").glob("*.html"))
+    combined_sources = css + "\n" + "\n".join(
+        template.read_text(encoding="utf-8") for template in templates
+    )
+
+    assert re.search(
+        r"\.impressoes-cards-scroll\s+\.impressoes-cards\s*\{[^}]*"
+        r"min-width:var\(--imp-list-min-width,\s*100%\)",
+        css,
+        re.DOTALL,
+    )
+    assert re.search(
+        r"\.impressoes-cards-scroll\s+\.impresso-card\s*\{[^}]*"
+        r"width:100%\s*!important[^}]*max-width:none\s*!important",
+        css,
+        re.DOTALL,
+    )
+    assert "min-width:0 !important" in css, "print must opt out of screen overflow widths"
+
+    audited_scopes = set()
+    for template in templates:
+        source = template.read_text(encoding="utf-8")
+        for class_names in re.findall(
+            r'class="[^"]*\bimpressoes-cards-scroll\b\s+([^"]+)"', source
+        ):
+            scopes = [name for name in class_names.split() if name.startswith("imp-")]
+            assert scopes, f"{template.name} must give its scrollable grid an imp-* scope"
+            for scope in scopes:
+                audited_scopes.add(scope)
+                assert re.search(
+                    rf"\.{re.escape(scope)}\s*\{{[^}}]*"
+                    rf"--imp-list-min-width:\s*\d+px",
+                    combined_sources,
+                    re.DOTALL,
+                ), f"{scope} must declare the minimum width of its complete grid"
+
+    assert len(audited_scopes) == 16
+
+
 def test_matrix_list_template_and_grid_have_the_same_six_columns():
     template = (ROOT / "templates" / "admin_matrizes.html").read_text(encoding="utf-8")
     css = (ROOT / "static" / "css" / "components" / "list-cards.css").read_text(

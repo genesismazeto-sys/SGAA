@@ -4,483 +4,443 @@
 
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <style>
-    .detalhe-topbar{
+    .version-detail-page{ width:100%; min-width:0; }
+    .version-detail-back{ margin-bottom:14px; }
+    .version-detail-header{ margin-bottom:24px; }
+    .version-detail-title-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .version-detail-title{ margin:0; overflow-wrap:anywhere; }
+    .version-detail-subtitle{ margin:6px 0 0; color:var(--text-secondary); font-size:13px; }
+    .version-detail-description{ max-width:90ch; margin:10px 0 0; color:var(--text-primary); line-height:1.45; }
+    .version-section{ margin-top:28px; }
+    .version-section-header{
       display:flex;
       align-items:center;
+      justify-content:space-between;
       gap:12px;
       flex-wrap:wrap;
-      margin-bottom:18px;
+      margin-bottom:10px;
     }
-    .detalhe-topbar .main-title{ margin:0; }
-    .detalhe-topbar-back{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      font-size:13px;
-      color:var(--text-secondary);
-      text-decoration:none;
-    }
-    .detalhe-topbar-back:hover{ color:var(--text-primary); }
-    .detalhe-topbar-spacer{ flex:1 1 auto; min-width:0; }
-    .info-banner{
-      display:flex;
-      align-items:flex-start;
-      gap:10px;
-      padding:10px 14px;
-      margin-bottom:14px;
-      border:1px solid #bfdbfe;
-      border-radius:var(--radius);
-      background:#eff6ff;
-      color:#1e40af;
-      font-size:13px;
-      line-height:1.5;
-    }
-    .info-banner .lucide{ flex-shrink:0; width:16px; height:16px; margin-top:1px; }
-    .base-meta{
-      display:flex;
-      gap:20px;
-      flex-wrap:wrap;
-      margin-bottom:20px;
-      padding:12px 16px;
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      background:var(--surface);
-      font-size:13px;
-    }
-    .base-meta-item{ display:flex; flex-direction:column; gap:2px; }
-    .base-meta-label{ font-size:11px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.04em; }
-    .base-meta-value{ color:var(--text-primary); font-weight:500; }
-    .section-title{
-      font-size:14px;
-      font-weight:600;
-      color:var(--text-secondary);
-      margin:0 0 10px;
-      padding-bottom:6px;
-      border-bottom:1px solid var(--border);
-    }
-    .versoes-grid{
-      display:grid;
-      gap:8px;
-    }
-    .versao-card{
-      display:grid;
-      grid-template-columns: 44px 60px 90px 90px 90px 110px 80px 250px;
-      align-items:center;
-      column-gap:12px;
-      padding:10px 14px;
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      background:var(--surface);
-      font-size:13px;
-    }
-    .vc-version{
-      display:inline-block;
-      padding:2px 6px;
-      border-radius:999px;
-      font-size:11px;
-      font-weight:700;
-      background:var(--accent-subtle,#e8f0fe);
-      color:var(--accent,#1a56db);
-      letter-spacing:.02em;
-      white-space:nowrap;
-    }
-    .versao-card.header-row{
-      background:var(--surface-2, #f8fafc);
-      font-size:11px;
-      font-weight:600;
-      color:var(--text-tertiary);
-      text-transform:uppercase;
-      letter-spacing:.04em;
-      padding:6px 14px;
-    }
-    .status-pill{
-      display:inline-flex;
-      align-items:center;
-      padding:2px 8px;
-      border-radius:999px;
-      font-size:11px;
-      font-weight:600;
-    }
-    .status-pill.rascunho   { background:#f1f5f9; color:#64748b; }
-    .status-pill.ativa      { background:#dcfce7; color:#166534; }
-    .status-pill.inativa    { background:#fef9c3; color:#854d0e; }
-    .status-pill.substituida,
-    .status-pill.descontinuada { background:#fee2e2; color:#991b1b; }
-    .use-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:2px 7px;
-      border-radius:999px;
-      font-size:11px;
-      background:#f1f5f9;
-      color:#64748b;
-    }
-    .use-badge.used{ background:#eff6ff; color:#1e40af; }
-    .vc-edit-link{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      font-size:12px;
-      font-weight:600;
-      color:#1e40af;
-      text-decoration:none;
-    }
-    .vc-edit-link:hover{ text-decoration:underline; }
-    .vc-edit-link .lucide{ width:13px; height:13px; }
-    .vc-activate-form{ display:inline-block; margin:0; }
-    .vc-activate-btn{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:3px 9px;
-      font-size:12px;
-      font-weight:600;
-      color:#166534;
-      background:#dcfce7;
-      border:1px solid #86efac;
-      border-radius:6px;
-      cursor:pointer;
-      text-decoration:none;
-    }
-    .vc-activate-btn:hover{ background:#bbf7d0; }
-    .vc-activate-btn .lucide{ width:13px; height:13px; }
-    .vc-lifecycle-form{ display:inline-block; margin:0; }
-    .vc-inativar-btn{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:3px 9px;
-      font-size:12px;
-      font-weight:600;
-      color:#854d0e;
-      background:#fef9c3;
-      border:1px solid #fde68a;
-      border-radius:6px;
-      cursor:pointer;
-    }
-    .vc-inativar-btn:hover{ background:#fef08a; }
-    .vc-inativar-btn .lucide{ width:13px; height:13px; }
-    .vc-descontinuar-btn{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:3px 9px;
-      font-size:12px;
-      font-weight:600;
-      color:#991b1b;
-      background:#fee2e2;
-      border:1px solid #fca5a5;
-      border-radius:6px;
-      cursor:pointer;
-    }
-    .vc-descontinuar-btn:hover{ background:#fecaca; }
-    .vc-descontinuar-btn .lucide{ width:13px; height:13px; }
-    .vc-substituir-form{
-      display:flex;
-      align-items:center;
-      gap:6px;
-      flex-wrap:wrap;
-    }
-    .vc-substituir-select{
-      min-width:130px;
-      padding:4px 6px;
-      font-size:12px;
-      border:1px solid var(--border-strong);
-      border-radius:6px;
-      background:#fff;
-    }
-    .vc-substituir-btn{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:3px 9px;
-      font-size:12px;
-      font-weight:600;
-      color:#1d4ed8;
-      background:#dbeafe;
-      border:1px solid #93c5fd;
-      border-radius:6px;
-      cursor:pointer;
-    }
-    .vc-substituir-btn:hover{ background:#bfdbfe; }
-    .vc-substituir-btn:disabled,
-    .vc-substituir-select:disabled{
-      cursor:not-allowed;
-      opacity:.65;
-    }
-    .vc-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .vc-no-action{ color:var(--text-tertiary); font-size:12px; }
-    .horas-text{ color:var(--text-secondary); font-size:12px; }
-    .vigencia-text{ color:var(--text-secondary); font-size:12px; }
-    .empty-versoes{
-      padding:1.5rem;
-      text-align:center;
-      color:#6b7280;
-      border:1px dashed var(--border-strong);
-      border-radius:var(--radius);
-    }
-    .history-table-wrap{
-      margin-top:24px;
-      overflow:auto;
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      background:var(--surface);
-    }
-    .history-table{
+    .version-section-title{ margin:0; color:var(--text-primary); font-size:16px; font-weight:600; }
+    .version-section-description{ margin:3px 0 0; color:var(--text-secondary); font-size:12px; }
+    .imp-version-detail{
+      --imp-list-min-width:850px;
+      --imp-cols:
+        minmax(64px, 76px)
+        minmax(174px, 1.25fr)
+        minmax(142px, 1fr)
+        minmax(142px, 1fr)
+        minmax(112px, 126px)
+        minmax(88px, 102px);
       width:100%;
-      border-collapse:collapse;
-      font-size:13px;
     }
-    .history-table thead th{
-      padding:8px 12px;
-      background:var(--surface-2, #f8fafc);
-      border-bottom:1px solid var(--border);
-      font-size:11px;
-      font-weight:600;
-      color:var(--text-tertiary);
-      text-align:left;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-      white-space:nowrap;
+    .imp-version-detail .impressoes-cards{ width:100%; }
+    .imp-version-detail .impresso-card{ width:100%; max-width:100%; }
+    .imp-version-detail .impresso-card[role="listitem"]{ cursor:default; }
+    .imp-version-detail .impresso-card .cell{ justify-content:flex-start; text-align:left; }
+    .imp-version-detail .impresso-card .cell:first-child,
+    .imp-version-detail .impresso-card .cell:nth-child(5),
+    .imp-version-detail .impresso-card .cell:nth-child(6){ justify-content:center; text-align:center; }
+    .version-value-muted{ color:var(--text-secondary); }
+    .version-usage{ display:inline-flex; align-items:center; gap:5px; color:var(--text-secondary); font-size:12px; }
+    .version-usage .lucide{ width:13px; height:13px; }
+    .version-substitute-card{ width:min(480px, calc(100vw - 32px)); max-height:calc(100vh - 32px); }
+    .version-substitute-card .modal-header{ padding:16px 18px 8px; }
+    .version-substitute-card .modal-body{ padding:12px 18px 18px; }
+    .version-substitute-card .modal-footer{ justify-content:flex-end; padding:12px 18px; border-top:1px solid var(--border); }
+    .version-substitute-card label{ display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; font-weight:600; }
+    .version-substitute-card select{ width:100%; height:var(--btn-h); }
+    .transition-table-wrap{ overflow-x:auto; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); }
+    .transition-table{ min-width:760px; table-layout:fixed; }
+    .transition-table th{ white-space:nowrap; }
+    .transition-table td{ vertical-align:middle; overflow-wrap:anywhere; }
+    .transition-table th:nth-child(1){ width:64px; }
+    .transition-table th:nth-child(2){ width:64px; }
+    .transition-table th:nth-child(3){ width:132px; }
+    .transition-table th:nth-child(4){ width:260px; }
+    .transition-table th:nth-child(6){ width:150px; }
+    .transition-table td:last-child{ white-space:nowrap; }
+    .transition-table tbody tr:last-child td{ border-bottom:0; }
+    .transition-note{ color:var(--text-secondary); }
+    @media (min-width:1200px){
+      .transition-table-wrap{ overflow-x:hidden; }
     }
-    .history-table td{
-      padding:10px 12px;
-      border-bottom:1px solid var(--border);
-      vertical-align:top;
-      color:var(--text-primary);
-    }
-    .history-table tbody tr:last-child td{ border-bottom:none; }
-    .history-type-pill{
-      display:inline-flex;
-      align-items:center;
-      padding:2px 8px;
-      border-radius:999px;
-      background:#e0f2fe;
-      color:#075985;
-      font-size:11px;
-      font-weight:600;
-    }
-    .history-note-cell{
-      min-width:180px;
-      color:var(--text-secondary);
-    }
-    .history-empty{
-      margin-top:24px;
-      padding:1.25rem;
-      text-align:center;
-      color:#6b7280;
-      border:1px dashed var(--border-strong);
-      border-radius:var(--radius);
-      background:var(--surface);
+    @container track (max-width:720px){
+      .version-section-header{ align-items:flex-start; }
     }
   </style>
 {% endblock %}
 
 {% block content %}
-<div class="detalhe-topbar">
-  <a class="detalhe-topbar-back" href="{{ url_for('admin_catalogo_versoes') }}">
-    <i class="lucide" data-lucide="arrow-left"></i>
-    Catálogo de versões
-  </a>
-  <div class="detalhe-topbar-spacer"></div>
-</div>
-
-<h1 class="main-title" style="margin-bottom:14px;">{{ base.nome_conceito }}</h1>
-
-<div class="info-banner" role="note">
-  <i class="lucide" data-lucide="info"></i>
-  <span>Alunos veem apenas o nome desta atividade. Eixo e versão são dados administrativos.</span>
-</div>
-
-<div class="base-meta">
-  <div class="base-meta-item">
-    <span class="base-meta-label">Status da base</span>
-    <span class="base-meta-value">{{ base.status or 'ativo' }}</span>
+<div class="version-detail-page">
+  <div class="version-detail-back">
+    <a class="btn" href="{{ url_for('admin_catalogo_versoes') }}">
+      <i class="lucide" data-lucide="arrow-left"></i>
+      <span class="btn-label">Catálogo de versões</span>
+    </a>
   </div>
-  {% if base.descricao %}
-  <div class="base-meta-item">
-    <span class="base-meta-label">Descrição</span>
-    <span class="base-meta-value">{{ base.descricao }}</span>
-  </div>
-  {% endif %}
-  <div class="base-meta-item">
-    <span class="base-meta-label">Versões cadastradas</span>
-    <span class="base-meta-value">{{ versoes|length }}</span>
-  </div>
-</div>
 
-<p class="section-title">Versões da atividade</p>
+  {% set base_status = (base.status or 'ativo')|lower %}
+  {% set base_status_label = 'Ativo' if base_status == 'ativo' else 'Inativo' %}
+  <header class="version-detail-header">
+    <div class="version-detail-title-row">
+      <h1 class="main-title version-detail-title">{{ base.nome_conceito }}</h1>
+      <span class="badge status-badge status-pill status-{{ 'positive' if base_status == 'ativo' else 'neutral' }}">{{ base_status_label }}</span>
+    </div>
+    <p class="version-detail-subtitle">{{ versoes|length }} {{ 'versão cadastrada' if versoes|length == 1 else 'versões cadastradas' }}</p>
+    {% if base.descricao %}<p class="version-detail-description">{{ base.descricao }}</p>{% endif %}
+  </header>
 
-{% if versoes and versoes|length %}
-  <div class="versoes-grid">
-    <!-- Cabeçalho -->
-    <div class="versao-card header-row">
-      <span>Versão</span>
-      <span>Eixo</span>
-      <span>Sugestão (h)</span>
-      <span>Lim. semestre</span>
-      <span>Lim. total</span>
-      <span>Status</span>
-      <span>Matrizes</span>
-      <span>Ações</span>
+  <section class="version-section" aria-labelledby="versions-title">
+    <div class="version-section-header">
+      <div>
+        <h2 class="version-section-title" id="versions-title">Versões</h2>
+        <p class="version-section-description">Informações, uso em Matrizes e ações disponíveis.</p>
+      </div>
+      <a href="{{ nova_versao_url }}" class="btn primary btn-nova-alinhado">
+        <i class="lucide" data-lucide="plus" aria-hidden="true"></i>
+        <span class="btn-label">Criar versão</span>
+      </a>
     </div>
 
-    {% for v in versoes %}
-      {% set status_key = (v.status or 'rascunho')|lower %}
-      <div class="versao-card">
-        <span><span class="vc-version">v{{ v.numero_versao if v.numero_versao else '?' }}</span></span>
-        <span>{{ v.eixo or '-' }}</span>
-        <span class="horas-text">
-          {% if v.ch_por_evento is not none %}{{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h{% else %}-{% endif %}
-        </span>
-        <span class="horas-text">
-          {% if v.limite_semestre %}{{ v.limite_semestre|int if v.limite_semestre == (v.limite_semestre|int) else v.limite_semestre }} h{% else %}-{% endif %}
-        </span>
-        <span class="horas-text">
-          {% if v.limite_total %}{{ v.limite_total|int if v.limite_total == (v.limite_total|int) else v.limite_total }} h{% else %}-{% endif %}
-        </span>
-        <span class="status-pill {{ status_key }}">{{ v.status or 'rascunho' }}</span>
-        <span class="use-badge {% if v.uso_em_matrizes and v.uso_em_matrizes > 0 %}used{% endif %}">
-          <i class="lucide" data-lucide="table-2" style="width:12px;height:12px;"></i>
-          {{ v.uso_em_matrizes or 0 }}
-        </span>
-        <span>
-          {% if status_key == 'rascunho' %}
-            <span class="vc-actions">
-              <a class="vc-edit-link"
-                 href="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
-                 title="Editar esta versão em rascunho">
-                <i class="lucide" data-lucide="edit"></i>
-                Editar
-              </a>
-              <form class="vc-activate-form"
-                    method="post"
+    {% if versoes and versoes|length %}
+      <div class="impressoes-cards-scroll imp-version-detail" aria-label="Versões da atividade">
+        <div class="impressoes-cards" role="list">
+          {{ cl.header([
+            {'text':'Versão','class':'center'},
+            {'text':'Tipo','class':'left'},
+            {'text':'Carga horária por evento','class':'left'},
+            {'text':'Limitação','class':'left'},
+            {'text':'Status','class':'center'},
+            {'text':'Matrizes','class':'center'},
+          ]) }}
+
+          {% for v in versoes %}
+            {% set status_key = (v.status or 'rascunho')|lower %}
+            {% set eixo_key = (v.eixo or '')|upper %}
+            {% set tipo_label = (
+              'Extensão Universitária' if eixo_key == 'AEU' else
+              'Acadêmica Complementar' if eixo_key == 'AAC' else
+              'Tipo não informado'
+            ) %}
+            {% set status_label = {
+              'ativa': 'Ativa',
+              'rascunho': 'Rascunho',
+              'inativa': 'Inativa',
+              'descontinuada': 'Descontinuada',
+              'substituida': 'Substituída'
+            }.get(status_key, v.status or 'Rascunho') %}
+            {% set status_tone = (
+              'positive' if status_key == 'ativa' else
+              'caution' if status_key == 'inativa' else
+              'negative' if status_key in ['descontinuada', 'substituida'] else
+              'neutral'
+            ) %}
+            {% set substituicao_options = substituicao_candidatas.get(v.id, []) if status_key == 'ativa' else [] %}
+            <div class="impresso-card"
+                 role="listitem"
+                 tabindex="0"
+                 data-version-id="{{ v.id }}"
+                 data-version-status="{{ status_key }}"
+                 data-version-label="v{{ v.numero_versao if v.numero_versao else '?' }}"
+                 data-version-url="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
+                 data-has-substitution="{{ '1' if substituicao_options else '0' }}">
+              <div class="cell"><span class="version-identifier">v{{ v.numero_versao if v.numero_versao else '?' }}</span></div>
+              <div class="cell" title="{{ tipo_label }}">{{ tipo_label }}</div>
+              <div class="cell version-value-muted">
+                {% if v.ch_por_evento is not none %}
+                  {{ v.ch_por_evento|int if v.ch_por_evento == (v.ch_por_evento|int) else v.ch_por_evento }} h
+                {% else %}
+                  Sem sugestão
+                {% endif %}
+              </div>
+              <div class="cell version-value-muted">
+                {% if v.limite_semestre is not none %}
+                  Semestral · {{ v.limite_semestre|int if v.limite_semestre == (v.limite_semestre|int) else v.limite_semestre }} h
+                {% elif v.limite_total is not none %}
+                  Total · {{ v.limite_total|int if v.limite_total == (v.limite_total|int) else v.limite_total }} h
+                {% else %}
+                  Sem limitação
+                {% endif %}
+              </div>
+              <div class="cell">
+                <span class="badge status-badge status-pill status-{{ status_tone }}">{{ status_label }}</span>
+              </div>
+              <div class="cell">
+                <span class="version-usage"
+                      title="{{ v.uso_em_matrizes or 0 }} {{ 'Matriz' if (v.uso_em_matrizes or 0) == 1 else 'Matrizes' }}"
+                      aria-label="Uso em Matrizes: {{ v.uso_em_matrizes or 0 }}">
+                  <i class="lucide" data-lucide="table-2" aria-hidden="true"></i>
+                  {{ v.uso_em_matrizes or 0 }}
+                </span>
+              </div>
+            </div>
+            {% if status_key == 'rascunho' %}
+              <form hidden class="vc-activate-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_ativar_versao', base_id=base.id, versao_id=v.id) }}"
                     onsubmit="return window.confirm('Ativar esta versão? Após ativada, ela não poderá ser editada por esta tela.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit"
-                        class="vc-activate-btn"
-                        title="Ativar esta versão">
-                  <i class="lucide" data-lucide="check"></i>
-                  Ativar
-                </button>
               </form>
-            </span>
-          {% elif status_key == 'ativa' %}
-            {% set substituicao_options = substituicao_candidatas.get(v.id, []) %}
-            <span class="vc-actions">
-              <form class="vc-lifecycle-form"
-                    method="post"
+            {% endif %}
+            {% if status_key == 'ativa' %}
+              <form hidden class="vc-lifecycle-form vc-inativar-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_inativar_versao', base_id=base.id, versao_id=v.id) }}"
                     onsubmit="return window.confirm('Inativar esta versão? A versão deixará de ser considerada ativa pelo resolvedor.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit"
-                        class="vc-inativar-btn"
-                        title="Inativar esta versão">
-                  <i class="lucide" data-lucide="pause-circle"></i>
-                  Inativar
-                </button>
               </form>
-              <form class="vc-lifecycle-form"
-                    method="post"
+              <form hidden class="vc-lifecycle-form vc-descontinuar-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_descontinuar_versao', base_id=base.id, versao_id=v.id) }}"
                     onsubmit="return window.confirm('Descontinuar esta versão? Esta ação é permanente e não pode ser revertida por esta tela.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit"
-                        class="vc-descontinuar-btn"
-                        title="Descontinuar esta versão">
-                  <i class="lucide" data-lucide="x-circle"></i>
-                  Descontinuar
-                </button>
               </form>
-              <form class="vc-substituir-form"
-                    method="post"
+              <form hidden class="vc-substituir-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_substituir_versao', base_id=base.id, versao_id=v.id) }}"
                     onsubmit="return window.confirm('Substituir esta versão ativa pela candidata selecionada?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <select name="to_versao_id"
-                        class="vc-substituir-select"
-                        aria-label="Selecionar versão substituta"
-                        {% if not substituicao_options %}disabled{% endif %}>
-                  {% if substituicao_options %}
-                    <option value="">Destino</option>
-                    {% for candidato in substituicao_options %}
-                      <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} ({{ candidato.eixo }})</option>
-                    {% endfor %}
-                  {% else %}
-                    <option value="">Sem candidata válida</option>
-                  {% endif %}
-                </select>
-                <button type="submit"
-                        class="vc-substituir-btn"
-                        title="Substituir esta versão"
-                        {% if not substituicao_options %}disabled{% endif %}>
-                  <i class="lucide" data-lucide="shuffle"></i>
-                  Substituir
-                </button>
+                <input type="hidden" name="to_versao_id" value="">
               </form>
-            </span>
-          {% else %}
-            <span class="vc-no-action">—</span>
-          {% endif %}
-        </span>
+              <select hidden data-substitution-options="{{ v.id }}" aria-hidden="true">
+                {% if substituicao_options %}<option value="">Selecione a versão</option>{% endif %}
+                {% for candidato in substituicao_options %}
+                  {% set candidato_eixo = (candidato.eixo or '')|upper %}
+                  {% set candidato_tipo = 'Extensão Universitária' if candidato_eixo == 'AEU' else 'Acadêmica Complementar' if candidato_eixo == 'AAC' else 'Tipo não informado' %}
+                  <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} · {{ candidato_tipo }}</option>
+                {% endfor %}
+              </select>
+            {% endif %}
+          {% endfor %}
+        </div>
       </div>
-    {% endfor %}
-  </div>
-{% else %}
-  <div class="empty-versoes">
-    Nenhuma versão cadastrada para esta atividade-base.
-    <br><small style="color:#9ca3af;">Use o botão abaixo para criar uma versão em rascunho.</small>
-  </div>
-{% endif %}
+    {% else %}
+      <div class="table-empty">Nenhuma versão cadastrada.</div>
+    {% endif %}
+  </section>
 
-<p class="section-title" style="margin-top:24px;">Histórico de transições</p>
+  <section class="version-section" aria-labelledby="history-title">
+    <div class="version-section-header">
+      <div>
+        <h2 class="version-section-title" id="history-title">Histórico de transições</h2>
+        <p class="version-section-description">Proveniência das mudanças entre versões.</p>
+      </div>
+    </div>
 
-{% if transicoes_historico and transicoes_historico|length %}
-  <div class="history-table-wrap">
-    <table class="history-table">
-      <thead>
-        <tr>
-          <th>Versão origem</th>
-          <th>Versão destino</th>
-          <th>Tipo</th>
-          <th>Eixo</th>
-          <th>Motivo</th>
-          <th>Criada em</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for transicao in transicoes_historico %}
-          <tr>
-            <td>{{ transicao.versao_origem }}</td>
-            <td>{{ transicao.versao_destino }}</td>
-            <td><span class="history-type-pill">{{ transicao.tipo_transicao }}</span></td>
-            <td>{{ transicao.eixo }}</td>
-            <td class="history-note-cell">{{ transicao.motivo }}</td>
-            <td>{{ transicao.created_at }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% else %}
-  <div class="history-empty">
-    Nenhuma transição registrada para esta atividade-base.
-  </div>
-{% endif %}
+    {% if transicoes_historico and transicoes_historico|length %}
+      <div class="transition-table-wrap">
+        <table class="table transition-table">
+          <thead>
+            <tr>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Transição</th>
+              <th>Tipos</th>
+              <th>Motivo</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for transicao in transicoes_historico %}
+              {% set origem_eixo = (transicao.eixo_origem or '')|upper %}
+              {% set destino_eixo = (transicao.eixo_destino or '')|upper %}
+              {% set origem_tipo = (
+                'Extensão Universitária' if origem_eixo == 'AEU' else
+                'Acadêmica Complementar' if origem_eixo == 'AAC' else
+                none
+              ) %}
+              {% set destino_tipo = (
+                'Extensão Universitária' if destino_eixo == 'AEU' else
+                'Acadêmica Complementar' if destino_eixo == 'AAC' else
+                none
+              ) %}
+              {% set transicao_label = {
+                'mesmo_eixo': 'Mesmo Tipo',
+                'aac_para_aeu': 'Mudança de Tipo',
+                'nova_aeu': 'Nova versão de Extensão',
+                'descontinuada': 'Descontinuação',
+                'sem_transicao': 'Sem transição'
+              }.get(transicao.tipo_transicao, 'Transição registrada') %}
+              <tr>
+                <td>
+                  {% if transicao.versao_origem != '-' %}<span class="version-identifier">{{ transicao.versao_origem }}</span>{% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if transicao.versao_destino != '-' %}<span class="version-identifier">{{ transicao.versao_destino }}</span>{% else %}—{% endif %}
+                </td>
+                <td>
+                  <span class="badge status-badge status-pill status-info">
+                    {{ transicao_label }}
+                  </span>
+                </td>
+                <td class="transition-types">
+                  {% if origem_tipo and destino_tipo %}
+                    {{ origem_tipo }}{% if origem_tipo != destino_tipo %} → {{ destino_tipo }}{% endif %}
+                  {% elif origem_tipo %}
+                    {{ origem_tipo }}
+                  {% elif destino_tipo %}
+                    {{ destino_tipo }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="transition-note">{{ transicao.motivo }}</td>
+                <td>{{ transicao.created_at_fmt }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="table-empty">Nenhuma transição registrada.</div>
+    {% endif %}
+  </section>
 
-<div style="margin-top:24px;">
-  <a href="{{ nova_versao_url }}" class="btn btn-primary">
-    <i class="lucide" data-lucide="plus"></i>
-    Criar versão
-  </a>
+  <div id="version-substitute-modal" class="modal-overlay" hidden>
+    <div class="modal-card version-substitute-card" role="dialog" aria-modal="true" aria-labelledby="version-substitute-title">
+      <div class="modal-header">
+        <h3 id="version-substitute-title"><i class="lucide" data-lucide="replace" aria-hidden="true"></i>Substituir versão</h3>
+        <button class="btn icon-btn" id="version-substitute-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+      </div>
+      <form id="version-substitute-dialog-form">
+        <div class="modal-body">
+          <label for="version-substitute-select">Versão substituta</label>
+          <select id="version-substitute-select" class="control" required></select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="version-substitute-cancel" type="button">Cancelar</button>
+          <button class="btn primary" type="submit"><i class="lucide" data-lucide="replace"></i>Substituir</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-  document.addEventListener('DOMContentLoaded', ()=>{ if (window.lucide) lucide.createIcons(); });
+  document.addEventListener('DOMContentLoaded', () => {
+    const scrollWrap = document.querySelector('.imp-version-detail');
+    const rows = Array.from(document.querySelectorAll('.imp-version-detail .impresso-card[role="listitem"]'));
+    if (!scrollWrap || !rows.length) return;
+
+    let bar = document.getElementById('pedido-actions-float');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'pedido-actions-float';
+      bar.className = 'pedido-actions-float';
+      document.body.appendChild(bar);
+    }
+    bar.classList.add('atividades-actions-float');
+    bar.setAttribute('role', 'toolbar');
+    bar.innerHTML = `
+      <button type="button" class="act-btn vc-view-btn" data-action="view" aria-label="Ver versão" title="Ver versão"><i data-lucide="eye"></i></button>
+      <button type="button" class="act-btn vc-edit-btn" data-action="edit" aria-label="Editar versão" title="Editar versão"><i data-lucide="edit"></i></button>
+      <button type="button" class="act-btn vc-activate-btn" data-action="activate" aria-label="Ativar versão" title="Ativar versão"><i data-lucide="check"></i></button>
+      <button type="button" class="act-btn vc-inativar-btn" data-action="suspend" aria-label="Inativar versão" title="Inativar versão"><i data-lucide="pause-circle"></i></button>
+      <button type="button" class="act-btn vc-substituir-btn" data-action="substitute" aria-label="Substituir versão" title="Substituir versão"><i data-lucide="replace"></i></button>
+      <button type="button" class="act-btn vc-descontinuar-btn" data-action="delete" aria-label="Descontinuar versão" title="Descontinuar versão"><i data-lucide="x-circle"></i></button>
+    `;
+
+    const modal = document.getElementById('version-substitute-modal');
+    const modalForm = document.getElementById('version-substitute-dialog-form');
+    const modalSelect = document.getElementById('version-substitute-select');
+    let currentCard = null;
+    let hideTimer = null;
+
+    const button = (action) => bar.querySelector(`[data-action="${action}"]`);
+    const setVisible = (action, visible) => { button(action).hidden = !visible; };
+    const currentVersionId = () => currentCard?.dataset.versionId || '';
+
+    const positionFor = (card) => {
+      const rect = card.getBoundingClientRect();
+      bar.style.top = Math.round(rect.top + (rect.height - bar.offsetHeight) / 2) + 'px';
+      const track = document.querySelector('.app-track') || document.querySelector('.app-main') || document.body;
+      const trackRect = track.getBoundingClientRect();
+      const paddingRight = parseFloat(getComputedStyle(track).paddingRight || '0') || 0;
+      bar.style.left = Math.round(trackRect.right - paddingRight - bar.offsetWidth) + 'px';
+      bar.style.right = 'auto';
+    };
+
+    const syncActions = () => {
+      const status = currentCard?.dataset.versionStatus || '';
+      const isDraft = status === 'rascunho';
+      const isActive = status === 'ativa';
+      setVisible('view', !isDraft);
+      setVisible('edit', isDraft);
+      setVisible('activate', isDraft);
+      setVisible('suspend', isActive);
+      setVisible('substitute', isActive);
+      setVisible('delete', isActive);
+      button('substitute').disabled = currentCard?.dataset.hasSubstitution !== '1';
+      bar.setAttribute('aria-label', `Ações da ${currentCard?.dataset.versionLabel || 'versão'}`);
+    };
+
+    const showFor = (card) => {
+      currentCard = card;
+      syncActions();
+      positionFor(card);
+      bar.classList.add('is-visible');
+    };
+    const hide = () => { bar.classList.remove('is-visible'); currentCard = null; };
+    const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 180); };
+    const cancelHide = () => clearTimeout(hideTimer);
+    const actionForm = (className) => document.querySelector(`.${className}[data-version-id="${currentVersionId()}"]`);
+
+    const closeModal = () => {
+      modal.hidden = true;
+      modal.dataset.versionId = '';
+      currentCard?.focus();
+    };
+    const openSubstitution = () => {
+      const source = document.querySelector(`[data-substitution-options="${currentVersionId()}"]`);
+      if (!source || !source.options.length) return;
+      modalSelect.innerHTML = source.innerHTML;
+      modal.dataset.versionId = currentVersionId();
+      modal.hidden = false;
+      modalSelect.focus();
+    };
+
+    rows.forEach((row) => {
+      row.addEventListener('mouseenter', () => showFor(row));
+      row.addEventListener('focus', () => showFor(row));
+      row.addEventListener('keydown', (event) => {
+        if (event.key !== 'F10') return;
+        event.preventDefault();
+        showFor(row);
+        Array.from(bar.querySelectorAll('.act-btn:not([hidden]):not([disabled])'))[0]?.focus();
+      });
+    });
+    scrollWrap.addEventListener('mouseleave', scheduleHide);
+    bar.addEventListener('mouseenter', cancelHide);
+    bar.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('scroll', () => { if (currentCard) positionFor(currentCard); });
+    window.addEventListener('resize', () => { if (currentCard) positionFor(currentCard); });
+
+    bar.addEventListener('click', (event) => {
+      const target = event.target.closest('.act-btn');
+      if (!target || target.disabled || !currentCard) return;
+      const action = target.dataset.action;
+      if (action === 'view' || action === 'edit') window.location.href = currentCard.dataset.versionUrl;
+      if (action === 'activate') actionForm('vc-activate-form')?.requestSubmit();
+      if (action === 'suspend') actionForm('vc-inativar-form')?.requestSubmit();
+      if (action === 'delete') actionForm('vc-descontinuar-form')?.requestSubmit();
+      if (action === 'substitute') openSubstitution();
+    });
+
+    modalForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!modalSelect.value) return;
+      const sourceForm = document.querySelector(`.vc-substituir-form[data-version-id="${modal.dataset.versionId}"]`);
+      if (!sourceForm) return;
+      sourceForm.querySelector('[name="to_versao_id"]').value = modalSelect.value;
+      modal.hidden = true;
+      sourceForm.requestSubmit();
+    });
+    document.getElementById('version-substitute-close').addEventListener('click', closeModal);
+    document.getElementById('version-substitute-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeModal(); });
+    window.lucide?.createIcons?.();
+  });
 </script>
 {% endblock %}

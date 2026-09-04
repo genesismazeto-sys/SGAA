@@ -20,6 +20,7 @@
   border-radius: 6px; cursor: pointer;
   transition: background .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
+#pedido-actions-float .act-btn[hidden]{ display:none; }
 #pedido-actions-float .act-btn:hover{ background: var(--surface-alt, #f8fafc); }
 #pedido-actions-float .act-btn:focus{ outline: 0; }
 #pedido-actions-float .act-btn i,

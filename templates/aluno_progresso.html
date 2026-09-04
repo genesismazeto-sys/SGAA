@@ -148,7 +148,7 @@
               {% if grupo_display and grupo_display[:1]|upper == 'G' and grupo_display[1:].isdigit() %}
               {% set grupo_display = grupo_display[1:] %}
               {% endif %}
-              <span class="badge-grupo">{{ grupo_display }}</span>
+              <span class="badge-grupo compact-identifier">{{ grupo_display }}</span>
               {% else %}
               <span class="progresso-zero">-</span>
               {% endif %}

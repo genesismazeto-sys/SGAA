@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
+from app.presentation import format_date_ptbr
 from app.text import normalize_header
 
 
@@ -477,7 +478,10 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
                 "tipo_transicao": row["tipo_transicao"],
                 "motivo": justificativa or observacao_admin or "-",
                 "created_at": row["created_at"] or "-",
+                "created_at_fmt": format_date_ptbr(row["created_at"]) or "-",
                 "eixo": row["from_eixo"] or row["to_eixo"] or "-",
+                "eixo_origem": row["from_eixo"] or "-",
+                "eixo_destino": row["to_eixo"] or "-",
             }
         )
     return transicoes

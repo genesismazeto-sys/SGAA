@@ -350,8 +350,8 @@ def test_red_g_message_scanner_covers_target_exactly_once_catalog_stays():
         "app/versioning/integrity.py must be registered exactly once in "
         "utils.messages._iter_backend_files()"
     )
-    assert len(messages_module._message_catalog()) == 545, (
-        "message catalog must stay exactly 541 through the move (strings "
+    assert len(messages_module._message_catalog()) == 537, (
+        "message catalog must stay exactly 537 through the move (strings "
         f"move with the function); got {len(messages_module._message_catalog())}"
     )
 

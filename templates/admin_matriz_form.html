@@ -427,13 +427,6 @@
       flex-shrink:0;
       margin-left:auto;
       align-self:center;
-      font-size:11px;
-      font-weight:600;
-      line-height:1;
-      padding:2px 6px;
-      border-radius:var(--radius);
-      background:var(--accent-subtle,#e8f0fe);
-      color:var(--accent,#1a56db);
       letter-spacing:.02em;
       pointer-events:none;
     }
@@ -741,7 +734,7 @@
                   <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
                 </span>
                 {% if not readonly and card_version_menu_data is defined and item.id|string in card_version_menu_data %}
-                  <span class="version-badge" aria-label="Versão {{ card_version_menu_data[item.id|string].numero_versao }}">v{{ card_version_menu_data[item.id|string].numero_versao }}</span>
+                  <span class="version-identifier version-badge" aria-label="Versão {{ card_version_menu_data[item.id|string].numero_versao }}">v{{ card_version_menu_data[item.id|string].numero_versao }}</span>
                   <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Escolher versão" title="Escolher versão">&#x22EE;</button>
                 {% endif %}
               </label>

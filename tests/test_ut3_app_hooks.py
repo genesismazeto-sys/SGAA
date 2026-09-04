@@ -211,7 +211,7 @@ def test_message_catalog_count_stays_536_green_control():
     from utils import messages
 
     messages._message_catalog.cache_clear()
-    assert len(messages._message_catalog()) == 545
+    assert len(messages._message_catalog()) == 537
 
 
 # ═══════════════════════════════════════════════════════════════════

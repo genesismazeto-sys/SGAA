@@ -152,7 +152,7 @@ def test_card_shows_vN_badge(env):
     assert resp.status_code == 200
 
     html = resp.get_data(as_text=True)
-    assert 'class="version-badge"' in html
+    assert 'class="version-identifier version-badge"' in html
     assert '>v1<' in html
 
 

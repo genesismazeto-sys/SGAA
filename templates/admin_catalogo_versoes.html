@@ -10,20 +10,6 @@
     #grp-busca-catalogo{ gap:10px; padding:0 8px 0 16px; }
     #grp-busca-catalogo .input-chip{ padding:0; flex-shrink:0; color:var(--text-tertiary); }
     #busca-catalogo{ padding:0; }
-    .info-banner{
-      display:flex;
-      align-items:flex-start;
-      gap:10px;
-      padding:10px 14px;
-      margin-bottom:14px;
-      border:1px solid #bfdbfe;
-      border-radius:var(--radius);
-      background:#eff6ff;
-      color:#1e40af;
-      font-size:13px;
-      line-height:1.5;
-    }
-    .info-banner .lucide{ flex-shrink:0; width:16px; height:16px; margin-top:1px; }
     .badge-versoes{
       display:inline-flex;
       align-items:center;
@@ -51,11 +37,6 @@
 
 {% block content %}
 <h1 class="main-title">Catálogo de versões</h1>
-
-<div class="info-banner" role="note">
-  <i class="lucide" data-lucide="info"></i>
-  <span>Alunos veem apenas o nome da atividade. Versões são dados administrativos.</span>
-</div>
 
 <div class="toolbar" id="catalogo-toolbar">
   <div class="filters">

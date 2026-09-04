@@ -155,6 +155,54 @@
       grid-row: 4;
       align-self: start;
     }
+    .dashboard-total-progress{
+      width:100%;
+      margin-top:10px;
+    }
+    .dashboard-total-progress .progress-meta{ margin-bottom:6px; }
+    .dashboard-total-progress .progress{ margin-top:0; }
+    .dashboard-limit-list{
+      display:grid;
+      gap:10px;
+      width:100%;
+    }
+    .dashboard-limit-row{
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) 120px;
+      align-items:center;
+      gap:16px;
+    }
+    .dashboard-limit-copy{
+      min-width:0;
+      display:flex;
+      align-items:baseline;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .dashboard-limit-name{
+      min-width:0;
+      color:var(--text-primary);
+      font-size:var(--font-size-base);
+      font-weight:500;
+      line-height:1.35;
+    }
+    .dashboard-limit-meter{
+      min-width:0;
+      display:grid;
+      gap:5px;
+    }
+    .dashboard-limit-meter .progress{ margin-top:0; }
+    .dashboard-limit-pct{ text-align:right; }
+    .dashboard-limit-empty{
+      padding:8px 0;
+      color:var(--text-secondary);
+      font-size:var(--font-size-small);
+      font-weight:500;
+      line-height:1.4;
+    }
+    @media (max-width:520px){
+      .dashboard-limit-row{ grid-template-columns:minmax(0, 1fr) 96px; gap:12px; }
+    }
   </style>
 {% endblock %}
 {% block content %}
@@ -225,14 +273,14 @@
   {% set pct_total   = (total_horas * 100 // meta_total) if meta_total is not none and meta_total > 0 else none %}
   {% set total_horas_fmt = total_horas_academicas_fmt if not total_horas_extensao else (total_horas_academicas_fmt ~ ' + ' ~ total_horas_extensao_fmt) %}
 
-  <div class="resume-total-wrapper" style="margin-top:10px;width:100%;">
-    <div class="resume-total-line" style="display:flex;justify-content:space-between;align-items:center;font:500 12px/1.3 system-ui;color:#555;margin-bottom:6px;">
-      <span class="rt-label">Progresso total de horas</span>
-      <span class="rt-val">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total_horas_fmt }} h ({% if pct_total is none %}{{ meta_total_horas_fmt }}{% else %}{{ pct_total }}%{% endif %})</span>
+  <div class="dashboard-total-progress">
+    <div class="progress-meta">
+      <span class="progress-meta-label">Progresso total de horas</span>
+      <span class="progress-meta-value">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total_horas_fmt }} h ({% if pct_total is none %}{{ meta_total_horas_fmt }}{% else %}{{ pct_total }}%{% endif %})</span>
     </div>
     {% if pct_total is not none %}
-      <div class="resume-total-bar" data-pct="{{ pct_total }}" style="height:12px;border-radius:4px;background:#ececec;overflow:hidden;">
-        <span style="display:block;height:100%;width:0;background:linear-gradient(90deg,#8359ff,#5c30e0);transition:width .5s cubic-bezier(.4,0,.2,1);"></span>
+      <div class="progress" data-pct="{{ pct_total }}" aria-label="{{ pct_total }}% do total de horas cumprido">
+        <div class="progress-bar"></div>
       </div>
     {% endif %}
   </div>
@@ -407,36 +455,26 @@
   <!-- Limitações - Acadêmicas Complementares -->
   <section class="content-block">
     <div class="content-block-header">Limitações - Acadêmicas Complementares</div>
-    <!-- Observação: a grade 7.5fr / 2.5fr exige APENAS dois filhos diretos abaixo -->
-    <style>
-      .limit-name { font:600 14px/1.2 system-ui; color:#111; }
-      .limit-bar { height:10px; border-radius:6px; background:#eee; overflow:hidden; }
-      .limit-bar > span { display:block; height:100%; background: linear-gradient(90deg,#4da4ff,#2e71ff); }
-      .limit-bar.is-high > span { background: linear-gradient(90deg,#ffb300,#ff6a00); }
-      .limit-bar.is-critical > span { background: linear-gradient(90deg,#ff5b5b,#d60000); }
-      .limit-empty { font:500 13px/1.4 system-ui; color:#666; padding:8px 0; }
-    </style>
-    <div class="content-block-body content-block-body-corrigir" style="width:100%;">
+    <div class="content-block-body" style="width:100%;">
       {% if limitacoes_acad %}
-        <!-- Filho 1: nomes + consumo -->
-        <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="dashboard-limit-list">
           {% for item in limitacoes_acad %}
-                <div class="limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %} {{ item.consumido_fmt }}/{{ item.limite_fmt }}</div>
-          {% endfor %}
-        </div>
-        <!-- Filho 2: percentual + barra -->
-  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:120px;">
-          {% for item in limitacoes_acad %}
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                    <span class="limit-pct" style="text-align:center; width:100%; font:600 12px/1 system-ui;color:#333;">{{ item.pct }}%</span>
-                    <div class="limit-bar {% if item.pct>=80 and item.pct<100 %}is-high{% elif item.pct>=100 %}is-critical{% endif %}" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}" style="width:100%;">
-                    <span></span>
-                  </div>
+            <div class="dashboard-limit-row">
+              <div class="dashboard-limit-copy">
+                <span class="dashboard-limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
+              </div>
+              <div class="dashboard-limit-meter">
+                <span class="progress-meta-value dashboard-limit-pct">{{ item.pct }}%</span>
+                <div class="progress" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}">
+                  <div class="progress-bar"></div>
                 </div>
+              </div>
+            </div>
           {% endfor %}
         </div>
       {% else %}
-        <div class="limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+        <div class="dashboard-limit-empty">Nenhuma solicitação de atividades com limitação.</div>
       {% endif %}
     </div>
   </section>
@@ -444,25 +482,26 @@
   <!-- Limitações - Extensão Universitária -->
   <section class="content-block">
     <div class="content-block-header">Limitações - Extensão Universitária</div>
-    <div class="content-block-body content-block-body-corrigir" style="width:100%;">
+    <div class="content-block-body" style="width:100%;">
       {% if limitacoes_ext %}
-        <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="dashboard-limit-list">
           {% for item in limitacoes_ext %}
-                <div class="limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %} {{ item.consumido_fmt }}/{{ item.limite_fmt }}</div>
-          {% endfor %}
-        </div>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:120px;">
-          {% for item in limitacoes_ext %}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
-                  <span class="limit-pct" style="font:600 12px/1 system-ui;color:#333;text-align:center;width:100%;">{{ item.pct }}%</span>
-                  <div class="limit-bar {% if item.pct>=80 and item.pct<100 %}is-high{% elif item.pct>=100 %}is-critical{% endif %}" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}" style="width:100%;">
-                    <span></span>
-                  </div>
+            <div class="dashboard-limit-row">
+              <div class="dashboard-limit-copy">
+                <span class="dashboard-limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
+              </div>
+              <div class="dashboard-limit-meter">
+                <span class="progress-meta-value dashboard-limit-pct">{{ item.pct }}%</span>
+                <div class="progress" aria-label="{{ item.pct }}% do limite consumido" data-pct="{{ item.pct }}">
+                  <div class="progress-bar"></div>
                 </div>
+              </div>
+            </div>
           {% endfor %}
         </div>
       {% else %}
-        <div class="limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+        <div class="dashboard-limit-empty">Nenhuma solicitação de atividades com limitação.</div>
       {% endif %}
     </div>
   </section>
@@ -510,24 +549,10 @@
 {% block extra_scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', ()=>{
-    document.querySelectorAll('.kpi-card .progress').forEach(p=>{
+    document.querySelectorAll('.progress[data-pct]').forEach(p=>{
       const pct = parseInt(p.getAttribute('data-pct')||'0',10);
       const bar = p.querySelector('.progress-bar');
       if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-    });
-
-    // Progress bars for limited activity consumption
-    document.querySelectorAll('.limit-bar').forEach(el => {
-      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
-      const span = el.querySelector('span');
-      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
-    });
-
-    // Total hours progress bar in Resumo
-    document.querySelectorAll('.resume-total-bar').forEach(el => {
-      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
-      const span = el.querySelector('span');
-      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
     });
 
     document.querySelectorAll('.aluno-alerta-card').forEach(el => {
