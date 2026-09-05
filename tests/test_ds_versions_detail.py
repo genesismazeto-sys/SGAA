@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import html as html_module
 import re
+from pathlib import Path
 
 import pytest
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture()
@@ -87,6 +91,39 @@ def _seed_detail_scenarios():
         return base_id, version_ids
 
 
+def test_canonical_detail_header_has_shared_markup_and_stylesheet_owners():
+    component = (PROJECT_ROOT / "templates/components/detail_header.html").read_text(
+        encoding="utf-8"
+    )
+    stylesheet = (PROJECT_ROOT / "static/css/components/detail-header.css").read_text(
+        encoding="utf-8"
+    )
+    loader = (PROJECT_ROOT / "templates/components/design_system_css.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "macro detail_header(" in component
+    assert 'class="detail-header"' in component
+    assert 'class="main-title detail-header__title"' in component
+    assert 'class="btn detail-header__back"' in component
+    assert 'data-lucide="arrow-left"' in component
+    assert "grid-template-columns:minmax(0, 1fr) auto" in stylesheet
+    assert "@container track (max-width:480px)" in stylesheet
+    assert "'css/components/detail-header.css'" in loader
+
+
+def test_activity_version_detail_uses_shared_header_owner_without_local_header_css():
+    template = (PROJECT_ROOT / "templates/admin_catalogo_versao_detalhe.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "from 'components/detail_header.html' import detail_header" in template
+    assert "{{ detail_header(" in template
+    assert "version-detail-back" not in template
+    assert "version-detail-header" not in template
+    assert "version-detail-title-row" not in template
+
+
 def test_detail_normalizes_language_values_status_usage_actions_and_exact_source(versioned_env):
     client = versioned_env["client"]
     _login_admin(client)
@@ -96,6 +133,17 @@ def test_detail_normalizes_language_values_status_usage_actions_and_exact_source
 
     assert response.status_code == 200
     rendered = html_module.unescape(response.get_data(as_text=True))
+    detail_header_match = re.search(
+        r'<header class="detail-header">(?P<header>.*?)</header>', rendered, re.S
+    )
+    assert detail_header_match
+    detail_header_html = detail_header_match.group("header")
+    assert '<h1 class="main-title detail-header__title">' in detail_header_html
+    assert 'class="detail-header__subtitle">5 versões cadastradas</p>' in detail_header_html
+    assert 'class="btn detail-header__back" href="/admin/atividades"' in detail_header_html
+    assert detail_header_html.index("detail-header__title") < detail_header_html.index(
+        "detail-header__back"
+    )
     assert 'href="/admin/atividades"' in rendered
     assert '<span class="btn-label">Atividades</span>' in rendered
     assert "Catálogo de versões" not in rendered
@@ -118,6 +166,11 @@ def test_detail_normalizes_language_values_status_usage_actions_and_exact_source
     )
     assert "css/components/actions-float.css" in rendered
     assert ">Ações<" not in rendered
+    assert '<section class="version-section" aria-labelledby="versions-title">' in rendered
+    assert '<h2 class="version-section-title" id="versions-title">Versões</h2>' in rendered
+    assert "Informações, uso em Matrizes e ações disponíveis." in rendered
+    assert '<span class="btn-label">Criar versão</span>' in rendered
+    assert rendered.index('</header>') < rendered.index('<section class="version-section"')
     assert rendered.count('class="vc-activate-form"') == 1
     assert rendered.count('class="vc-lifecycle-form vc-inativar-form"') == 1
     assert rendered.count('class="vc-lifecycle-form vc-descontinuar-form"') == 1

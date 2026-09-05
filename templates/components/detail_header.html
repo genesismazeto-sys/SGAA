@@ -1,0 +1,20 @@
+{#
+Canonical detail-page header.
+
+The title and supporting text form one hierarchy on the left. The Back link is
+the page-level navigation action on the right; section actions remain outside
+this component.
+#}
+{% macro detail_header(title, back_href, back_label, subtitle=None, description=None) -%}
+  <header class="detail-header">
+    <div class="detail-header__heading">
+      <h1 class="main-title detail-header__title">{{ title }}</h1>
+      {% if subtitle %}<p class="detail-header__subtitle">{{ subtitle }}</p>{% endif %}
+      {% if description %}<p class="detail-header__description">{{ description }}</p>{% endif %}
+    </div>
+    <a class="btn detail-header__back" href="{{ back_href }}">
+      <i class="lucide" data-lucide="arrow-left" aria-hidden="true"></i>
+      <span class="btn-label">{{ back_label }}</span>
+    </a>
+  </header>
+{%- endmacro %}

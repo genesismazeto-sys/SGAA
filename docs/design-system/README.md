@@ -26,10 +26,12 @@ static/css/
     modal.css           ← the shared modal contract (overlay/card/header/
                           body/footer). Size and placement stay per page.
     form.css            ← shared form compositions. See form-contract.md.
+    detail-header.css   ← canonical detail title/supporting text/Back layout.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
+  detail_header.html      ← shared semantic markup for detail-page headers.
 
 tools/ds_css.py           ← static cascade analyser + equivalence gate.
 tests/test_ds_design_system_contract.py  ← the structural gates.
@@ -126,7 +128,16 @@ between templates falls every time a family gets an owner.
 
 Enforced by `test_static_inline_style_attributes_do_not_grow`.
 
-### 2.5 Accessibility contract
+### 2.5 Detail-page header contract
+
+Detail pages use `components/detail_header.html` when their page-level
+navigation consists of a title, optional supporting text, and a secondary Back
+link. The title and Back link share the header row at normal widths; the Back
+link wraps below intentionally when the content track is narrow. Primary
+actions for a page section remain with that section and are not passed into the
+detail header.
+
+### 2.6 Accessibility contract
 
 These must not regress:
 
@@ -170,7 +181,7 @@ same literal — so raising it is a colour decision for a later phase, recorded 
 F5 in §8. Modal focus containment is also still open: several dialogs declare
 `aria-modal="true"` without trapping focus.
 
-### 2.6 Responsive contract
+### 2.7 Responsive contract
 
 Delivered by DS-7 and the F-5/F-6 phases. The governing idea is that a rule
 should measure **the box it actually lives in**, not the window: the shell eats
@@ -544,7 +555,7 @@ case would close the gap; recorded as F2 in §8.
 popover-contract.** Static Design System gates: 11
 (`tests/test_ds_design_system_contract.py`, not opt-in).
 
-**Cross-engine status: verified.** The responsive contracts in §2.6 were
+**Cross-engine status: verified.** The responsive contracts in §2.7 were
 verified before publication of the responsive milestone on **Chromium
 151.0.7922.34, Firefox 153.0 and WebKit 26.5** — the 792/791 container
 boundary, the F-5D absolute label geometry, the F-6A2 popover clamp, and the
@@ -640,7 +651,7 @@ reviewed technical tree is exactly the tree that was accepted.
   reachability failure was reproduced — the vertical clamp does not bind on
   either page at any supported height, and the demo seed cannot reach the
   divergent state. Fix would be to move the sync above the open call, as
-  `admin_acesso` and the shared helper already do. See §2.6.
+  `admin_acesso` and the shared helper already do. See §2.7.
 * **F2 — `PRE_EXISTING_TEST_DEBT`. Consumer-wiring coverage.** Five zero-row
   actions-menu consumers are exercised through the shared opener rather than a
   seeded real click path, so their *wiring* is unproven even though the geometry
@@ -728,12 +739,12 @@ review. These were recorded and deliberately left in the tree.
   where the binding box is the track.
 * ~~**Vertical popover overflow.**~~ Fixed by F-7. The deferral's premise — that
   an overrun bottom edge stays reachable because it scrolls with `.app-main` —
-  was measured and found false; see §2.6.
+  was measured and found false; see §2.7.
 * ~~**`openMenu()` hidden-width measurement.**~~ Fixed by F-7, which had to
   measure the same opener for the vertical axis anyway.
 * **Mobile shell / C5.** The 240px sidebar never collapses, so below roughly
   480px the content track falls under a field card's intrinsic minimum. 768px
-  is the supported floor (§2.6); a 360–480px phone shell is a separate product
+  is the supported floor (§2.7); a 360–480px phone shell is a separate product
   decision and is **not** supported.
 * **Residual narrow-form geometry below the supported floor.** Between the 720
   stacking breakpoint and 768, the `--gutter-wide` surfaces are squeezed far

@@ -98,7 +98,11 @@ def test_analyser_sees_every_full_document_template():
     full_documents = {
         ds.rel_path(p)
         for p in ds.TEMPLATES_DIR.rglob("*.html")
-        if "<head" in p.read_text(encoding="utf-8", errors="replace").lower()
+        if re.search(
+            r"<head(?:\s|>)",
+            p.read_text(encoding="utf-8", errors="replace"),
+            re.I,
+        )
         or ds.parent_template_name(p.read_text(encoding="utf-8", errors="replace"))
     }
     seen = {ds.rel_path(p) for p in pages_cached()}

@@ -19,6 +19,7 @@
       'css/foundation/tokens.css',
       'css/modern-style.css',
       'css/components/form.css',
+      'css/components/detail-header.css',
 ] -%}
 {%- for sheet in stylesheets %}
     <link rel="stylesheet" href="{{ url_for('static', filename=sheet, v=version) if version else url_for('static', filename=sheet) }}">

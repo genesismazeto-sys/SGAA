@@ -1,4 +1,5 @@
 {% import 'components/card_list.html' as cl %}
+{% from 'components/detail_header.html' import detail_header %}
 {% extends "base.html" %}
 {% block title %}{{ base.nome_conceito }} — Versões{% endblock %}
 
@@ -8,12 +9,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <style>
     .version-detail-page{ width:100%; min-width:0; }
-    .version-detail-back{ margin-bottom:14px; }
-    .version-detail-header{ margin-bottom:24px; }
-    .version-detail-title-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .version-detail-title{ margin:0; overflow-wrap:anywhere; }
-    .version-detail-subtitle{ margin:6px 0 0; color:var(--text-secondary); font-size:13px; }
-    .version-detail-description{ max-width:90ch; margin:10px 0 0; color:var(--text-primary); line-height:1.45; }
     .version-section{ margin-top:28px; }
     .version-section-header{
       display:flex;
@@ -75,20 +70,13 @@
 
 {% block content %}
 <div class="version-detail-page">
-  <div class="version-detail-back">
-    <a class="btn" href="{{ url_for('admin_atividades') }}">
-      <i class="lucide" data-lucide="arrow-left"></i>
-      <span class="btn-label">Atividades</span>
-    </a>
-  </div>
-
-  <header class="version-detail-header">
-    <div class="version-detail-title-row">
-      <h1 class="main-title version-detail-title">{{ base.nome_conceito }}</h1>
-    </div>
-    <p class="version-detail-subtitle">{{ versoes|length }} {{ 'versão cadastrada' if versoes|length == 1 else 'versões cadastradas' }}</p>
-    {% if base.descricao %}<p class="version-detail-description">{{ base.descricao }}</p>{% endif %}
-  </header>
+  {{ detail_header(
+    base.nome_conceito,
+    url_for('admin_atividades'),
+    'Atividades',
+    versoes|length ~ ' ' ~ ('versão cadastrada' if versoes|length == 1 else 'versões cadastradas'),
+    base.descricao
+  ) }}
 
   <section class="version-section" aria-labelledby="versions-title">
     <div class="version-section-header">
