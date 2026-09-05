@@ -82,12 +82,9 @@
     </a>
   </div>
 
-  {% set base_status = (base.status or 'ativo')|lower %}
-  {% set base_status_label = 'Ativo' if base_status == 'ativo' else 'Inativo' %}
   <header class="version-detail-header">
     <div class="version-detail-title-row">
       <h1 class="main-title version-detail-title">{{ base.nome_conceito }}</h1>
-      <span class="badge status-badge status-pill status-{{ 'positive' if base_status == 'ativo' else 'neutral' }}">{{ base_status_label }}</span>
     </div>
     <p class="version-detail-subtitle">{{ versoes|length }} {{ 'versão cadastrada' if versoes|length == 1 else 'versões cadastradas' }}</p>
     {% if base.descricao %}<p class="version-detail-description">{{ base.descricao }}</p>{% endif %}

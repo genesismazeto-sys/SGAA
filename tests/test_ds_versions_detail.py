@@ -97,6 +97,7 @@ def test_detail_normalizes_language_values_status_usage_actions_and_exact_source
     assert response.status_code == 200
     rendered = html_module.unescape(response.get_data(as_text=True))
     assert "Atividade com nome deliberadamente longo" in rendered
+    assert ">Ativo<" not in rendered
     assert ">Eixo<" not in rendered
     assert "Acadêmica Complementar" in rendered
     assert "Extensão Universitária" in rendered
@@ -119,6 +120,28 @@ def test_detail_normalizes_language_values_status_usage_actions_and_exact_source
     assert rendered.count('class="vc-lifecycle-form vc-descontinuar-form"') == 1
     assert rendered.count('class="vc-substituir-form"') == 1
     assert f"/nova-versao?from={version_ids[-1]}" in rendered
+
+
+def test_detail_omits_inactive_base_status_without_hiding_version_statuses(versioned_env):
+    client = versioned_env["client"]
+    _login_admin(client)
+    base_id, _ = _seed_detail_scenarios()
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            "UPDATE atividade_base SET status = 'inativo' WHERE id = ?",
+            (base_id,),
+        )
+        conn.commit()
+
+    rendered = html_module.unescape(
+        client.get(f"/admin/catalogo-versoes/{base_id}").get_data(as_text=True)
+    )
+
+    assert ">Inativo<" not in rendered
+    for status in ("Ativa", "Rascunho", "Inativa", "Descontinuada", "Substituída"):
+        assert f">{status}<" in rendered
 
 
 def test_detail_preserves_human_transition_provenance_and_empty_state(versioned_env):
