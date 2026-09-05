@@ -452,12 +452,7 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_catalogo_substituir_versao",    # R16 POST .../substituir
     }:
         return _permission("atividades", "edit")
-    if endpoint == "admin_matriz_versoes":  # R17 GET /admin/matrizes/<matriz_id>/versoes
-        return _permission("matrizes", "view")
     if endpoint in {
-        "admin_matriz_versoes_definir",    # R18 POST /admin/matrizes/<matriz_id>/versoes/definir
-        "admin_matriz_versoes_remover",    # R19 POST /admin/matrizes/<matriz_id>/versoes/remover
-        "admin_matriz_nova_atividade",     # R20 POST /admin/matrizes/<matriz_id>/atividades/nova/<active_tab>
         "admin_matriz_nova_versao_card",   # R21 POST /admin/matrizes/<matriz_id>/atividades/<atividade_id>/nova-versao
     }:
         return _permission("matrizes", "edit")

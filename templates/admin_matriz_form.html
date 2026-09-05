@@ -69,6 +69,9 @@
       font-size: 13px;
       color: var(--text-secondary);
     }
+    .matriz-tab-notice{
+      margin-bottom: var(--form-gap);
+    }
     .matriz-transfer-form{ display:grid; gap:16px; }
     .matriz-transfer-layout{
       --matriz-transfer-panel-height: clamp(540px, 66vh, 620px);
@@ -101,9 +104,6 @@
       justify-content:space-between;
       gap:12px;
       flex-wrap:wrap;
-    }
-    .matriz-new-activity-trigger{
-      white-space:nowrap;
     }
     .matriz-transfer-filters{
       display:grid;
@@ -199,7 +199,7 @@
       margin-top: 2px;
       accent-color: var(--brand);
     }
-    .matriz-transfer-item-main{ min-width:0; }
+    .matriz-transfer-item-main{ min-width:0; flex:1; }
     .matriz-transfer-item-title{
       display:block;
       font-size:13px;
@@ -217,6 +217,34 @@
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
+    }
+    .matriz-transfer-version-field{
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-left:auto;
+      font-size:12px;
+      color:var(--text-secondary);
+    }
+    .matriz-transfer-version-field[hidden]{ display:none; }
+    .matriz-transfer-version-control{
+      width:92px;
+      flex:0 0 92px;
+      grid-template-columns:minmax(0, 1fr);
+    }
+    .matriz-transfer-version-control .control{
+      min-width:0;
+      min-height:32px;
+      height:32px;
+      padding-block:4px;
+    }
+    .matriz-transfer-version-list{
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      gap:4px;
+      margin-left:auto;
     }
     .matriz-transfer-empty{
       display:flex;
@@ -361,14 +389,6 @@
       font-weight:600;
       color:var(--text-secondary);
     }
-    .matriz-modal-group-card{
-      display:grid;
-      grid-template-columns:40px 120px 40px minmax(0, 1fr);
-      column-gap:2px;
-    }
-    .matriz-modal-group-card .control + .field-chip{
-      border-left:1px solid var(--border-strong);
-    }
     .matriz-modal-chip{
       min-height:var(--btn-h);
       display:flex;
@@ -385,21 +405,6 @@
       width:16px;
       height:16px;
       color:var(--text-secondary);
-    }
-    .matriz-modal-note{
-      margin:0;
-      font-size:12px;
-      color:var(--text-secondary);
-    }
-    .matriz-modal-warning{
-      margin:0;
-      padding:10px 12px;
-      border:1px solid #fbbf24;
-      border-radius:var(--radius);
-      background:#fffbeb;
-      color:#92400e;
-      font-size:12px;
-      line-height:1.45;
     }
     .matriz-modal-checkbox{
       display:flex;
@@ -452,6 +457,8 @@
       background:var(--border-strong);
       color:var(--text-primary);
     }
+    .card-version-menu-btn[hidden]{ display:none !important; }
+    #version-modal-availability[hidden]{ display:none !important; }
     @media (max-width: 1040px){
       .matriz-transfer-layout{
         --matriz-transfer-panel-height: auto;
@@ -468,10 +475,6 @@
       }
     }
     @media (max-width: 640px){
-      .matriz-modal-group-card{
-        grid-template-columns:40px 1fr;
-        row-gap:2px;
-      }
       .matriz-modal-footer{
         flex-direction:column-reverse;
       }
@@ -516,14 +519,6 @@
       <span>Lista de AEU</span>
       <span class="matriz-tab-count">({{ extensao_count }})</span>
     </a>
-    <a
-      class="matriz-tab"
-      href="{{ url_for('admin_matriz_versoes', matriz_id=matriz_id) }}"
-      role="tab"
-      aria-selected="false"
-    >
-      <span>Versões</span>
-    </a>
   {% else %}
     <span
       class="matriz-tab disabled"
@@ -545,18 +540,10 @@
       <span>Lista de AEU</span>
       <span class="matriz-tab-count">({{ extensao_count }})</span>
     </span>
-    <span
-      class="matriz-tab disabled"
-      role="tab"
-      aria-selected="false"
-      aria-disabled="true"
-      title="Salve a matriz para gerenciar as versões"
-    >
-      <span>Versões</span>
-    </span>
   {% endif %}
 </div>
 
+{% set composition_locked = readonly or is_academically_frozen %}
 {% if active_tab == 'dados' %}
 <form method="POST">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -651,23 +638,27 @@
 <section class="matriz-tab-panel" aria-labelledby="matriz-transfer-heading">
   <p class="matriz-tab-help">{{ transfer_meta.help_text }}</p>
 
-  <form method="POST" class="matriz-transfer-form{% if readonly or is_academically_frozen %} is-readonly{% endif %}" data-transfer-root data-readonly="{{ '1' if readonly or is_academically_frozen else '0' }}">
+  {% if is_academically_frozen %}
+    <div class="flash flash-info matriz-tab-notice" role="status">
+      Esta Matriz está vinculada a uma Turma e sua composição está disponível somente para consulta.
+    </div>
+  {% elif readonly %}
+    <div class="flash flash-info matriz-tab-notice" role="status">
+      Seu acesso a esta Matriz é somente para consulta.
+    </div>
+  {% endif %}
+
+  {% if composition_locked %}
+  <div class="matriz-transfer-form is-readonly" data-transfer-root data-readonly="1">
+  {% else %}
+  <form method="POST" class="matriz-transfer-form" data-transfer-root data-readonly="0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="active_tab" value="{{ active_tab }}">
+  {% endif %}
     <div class="matriz-transfer-layout">
       <section class="matriz-transfer-card" aria-labelledby="transfer-available-heading">
         <div class="matriz-transfer-head">
           <h2 class="matriz-transfer-title" id="transfer-available-heading">{{ transfer_meta.available_title }} (<span data-count-available>{{ transfer_available|length }}</span>)</h2>
-          {% if not readonly and new_activity_modal %}
-            <button
-              class="btn matriz-new-activity-trigger"
-              type="button"
-              id="matriz-new-activity-trigger"
-              data-open-new-activity-modal
-              aria-haspopup="dialog"
-              aria-controls="matriz-new-activity-modal"
-            >+ Nova atividade</button>
-          {% endif %}
         </div>
         <div class="matriz-transfer-filters">
           <div class="input-group">
@@ -687,13 +678,44 @@
         <div class="matriz-transfer-content">
           <div class="matriz-transfer-list" data-role="available-list" {% if not transfer_available %}hidden{% endif %}>
             {% for item in transfer_available %}
-              <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
-                <input type="checkbox" data-side="available" {% if readonly or is_academically_frozen %}disabled{% endif %}>
+              {% set default_version = item.eligible_versions|last %}
+              <div class="matriz-transfer-item" data-activity-id="{{ item.id or default_version.id }}" data-base-id="{{ item.base_id }}" data-version-number="{{ item.numero_versao or default_version.numero_versao }}" data-group="{{ item.grupo or default_version.grupo }}" data-groups="{{ item.group_values|join('||') }}" data-search="{{ item.search_blob }}">
+                {% if not composition_locked %}
+                  <input
+                    type="checkbox"
+                    data-side="available"
+                    aria-label="Selecionar {{ item.nome }} v{{ item.numero_versao or default_version.numero_versao }}"
+                  >
+                {% endif %}
                 <span class="matriz-transfer-item-main">
                   <span class="matriz-transfer-item-title">{{ item.nome }}</span>
-                  <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
+                  <span class="matriz-transfer-item-meta" data-role="version-meta">{% if composition_locked and item.eligible_versions|length > 1 %}Versões elegíveis{% else %}{{ item.grupo or default_version.grupo }} • {{ item.rule_summary or default_version.rule_summary }}{% endif %}</span>
                 </span>
-              </label>
+                {% if not composition_locked %}
+                  <label class="matriz-transfer-version-field">
+                    <span>Versão:</span>
+                    <span class="field-card is-compact matriz-transfer-version-control">
+                      <select class="control" data-role="available-version-select" aria-label="Versão para {{ item.nome }}">
+                        {% for version in item.eligible_versions %}
+                          <option
+                            value="{{ version.id }}"
+                            data-version-number="{{ version.numero_versao }}"
+                            data-group="{{ version.grupo }}"
+                            data-rule-summary="{{ version.rule_summary }}"
+                            {% if version.id == (item.id or default_version.id) %}selected{% endif %}
+                          >v{{ version.numero_versao }}</option>
+                        {% endfor %}
+                      </select>
+                    </span>
+                  </label>
+                {% else %}
+                  <span class="matriz-transfer-version-list" aria-label="Versões elegíveis">
+                    {% for version in item.eligible_versions %}
+                      <span class="version-identifier" aria-label="Versão {{ version.numero_versao }}">v{{ version.numero_versao }}</span>
+                    {% endfor %}
+                  </span>
+                {% endif %}
+              </div>
             {% endfor %}
           </div>
           <div class="matriz-transfer-empty" data-empty="available" {% if transfer_available %}hidden{% endif %}>{{ transfer_meta.empty_available }}</div>
@@ -701,10 +723,12 @@
       </section>
 
       <div class="matriz-transfer-controls" aria-label="Mover atividades entre as listas">
-        <button class="matriz-transfer-btn" type="button" data-move=">" aria-label="Adicionar selecionadas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 6l6 6l-6 6" /></svg></button>
-        <button class="matriz-transfer-btn" type="button" data-move=">>" aria-label="Adicionar todas visíveis" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M7 7l5 5l-5 5" /><path d="M13 7l5 5l-5 5" /></svg></button>
-        <button class="matriz-transfer-btn" type="button" data-move="<" aria-label="Remover selecionadas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M15 6l-6 6l6 6" /></svg></button>
-        <button class="matriz-transfer-btn" type="button" data-move="<<" aria-label="Remover todas" {% if readonly %}disabled{% endif %}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M11 7l-5 5l5 5" /><path d="M17 7l-5 5l5 5" /></svg></button>
+        {% if not composition_locked %}
+          <button class="matriz-transfer-btn" type="button" data-move=">" aria-label="Adicionar selecionadas"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 6l6 6l-6 6" /></svg></button>
+          <button class="matriz-transfer-btn" type="button" data-move=">>" aria-label="Adicionar todas visíveis"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M7 7l5 5l-5 5" /><path d="M13 7l5 5l-5 5" /></svg></button>
+          <button class="matriz-transfer-btn" type="button" data-move="<" aria-label="Remover selecionadas"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M15 6l-6 6l6 6" /></svg></button>
+          <button class="matriz-transfer-btn" type="button" data-move="<<" aria-label="Remover todas"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-left"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M11 7l-5 5l5 5" /><path d="M17 7l-5 5l5 5" /></svg></button>
+        {% endif %}
       </div>
 
       <section class="matriz-transfer-card" aria-labelledby="transfer-selected-heading">
@@ -727,17 +751,44 @@
         <div class="matriz-transfer-content">
           <div class="matriz-transfer-list" data-role="selected-list" {% if not transfer_selected %}hidden{% endif %}>
             {% for item in transfer_selected %}
-              <label class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-group="{{ item.grupo }}" data-search="{{ item.search_blob }}">
-                <input type="checkbox" data-side="selected" {% if readonly or is_academically_frozen %}disabled{% endif %}>
+              {% if item.numero_versao is defined and item.numero_versao %}
+                {% set version_number = item.numero_versao %}
+              {% elif card_version_menu_data is defined and item.id|string in card_version_menu_data %}
+                {% set version_number = card_version_menu_data[item.id|string].numero_versao %}
+              {% else %}
+                {% set version_number = '?' %}
+              {% endif %}
+              <div class="matriz-transfer-item" data-activity-id="{{ item.id }}" data-base-id="{{ item.base_id }}" data-version-number="{{ item.numero_versao }}" data-group="{{ item.grupo }}" data-groups="{{ item.group_values|join('||') }}" data-search="{{ item.search_blob }}">
+                {% if not composition_locked %}<input type="checkbox" data-side="selected" aria-label="Selecionar {{ item.nome }} v{{ version_number }} para remoção">{% endif %}
                 <span class="matriz-transfer-item-main">
                   <span class="matriz-transfer-item-title">{{ item.nome }}</span>
-                  <span class="matriz-transfer-item-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
+                  <span class="matriz-transfer-item-meta" data-role="version-meta">{{ item.grupo }} • {{ item.rule_summary }}</span>
                 </span>
-                {% if not readonly and card_version_menu_data is defined and item.id|string in card_version_menu_data %}
-                  <span class="version-identifier version-badge" aria-label="Versão {{ card_version_menu_data[item.id|string].numero_versao }}">v{{ card_version_menu_data[item.id|string].numero_versao }}</span>
-                  <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Escolher versão" title="Escolher versão">&#x22EE;</button>
+                <span data-role="selected-version-display">
+                  <span class="version-identifier version-badge" aria-label="Versão {{ version_number }}">v{{ version_number }}</span>
+                  {% if not composition_locked and card_version_menu_data is defined and item.id|string in card_version_menu_data %}
+                    <button type="button" class="card-version-menu-btn" data-open-version-modal="{{ item.id }}" aria-label="Escolher versão" title="Escolher versão">&#x22EE;</button>
+                  {% endif %}
+                </span>
+                {% if not composition_locked %}
+                  <label class="matriz-transfer-version-field" data-role="available-version-field" hidden>
+                    <span>Versão:</span>
+                    <span class="field-card is-compact matriz-transfer-version-control">
+                      <select class="control" data-role="available-version-select" aria-label="Versão para {{ item.nome }}">
+                        {% for version in item.eligible_versions %}
+                          <option
+                            value="{{ version.id }}"
+                            data-version-number="{{ version.numero_versao }}"
+                            data-group="{{ version.grupo }}"
+                            data-rule-summary="{{ version.rule_summary }}"
+                            {% if version.id == item.id %}selected{% endif %}
+                          >v{{ version.numero_versao }}</option>
+                        {% endfor %}
+                      </select>
+                    </span>
+                  </label>
                 {% endif %}
-              </label>
+              </div>
             {% endfor %}
           </div>
           <div class="matriz-transfer-empty" data-empty="selected" {% if transfer_selected %}hidden{% endif %}>{{ transfer_meta.empty_selected }}</div>
@@ -745,198 +796,23 @@
       </section>
     </div>
 
-    <div data-role="selected-hidden-inputs">
-      {% for item in transfer_selected %}
-        <input type="hidden" name="selected_activity_ids" value="{{ item.id }}">
-      {% endfor %}
-    </div>
+    {% if not composition_locked %}
+      <div data-role="selected-hidden-inputs">
+        {% for item in transfer_selected %}
+          <input type="hidden" name="selected_activity_ids" value="{{ item.id }}">
+        {% endfor %}
+      </div>
+    {% endif %}
 
   <div class="form-actions center">
-      <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if readonly else 'Cancelar' }}</a>
-      {% if not readonly %}
+      <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if composition_locked else 'Cancelar' }}</a>
+      {% if not composition_locked %}
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       {% endif %}
     </div>
-  </form>
+  {% if composition_locked %}</div>{% else %}</form>{% endif %}
 
-  {% if not readonly and new_activity_modal %}
-    <div
-      id="matriz-new-activity-modal"
-      class="matriz-modal-overlay"
-      data-open="{{ '1' if new_activity_modal.is_open else '0' }}"
-      hidden
-    >
-      <div class="matriz-modal-card" role="dialog" aria-modal="true" aria-labelledby="matriz-new-activity-modal-title">
-        <div class="matriz-modal-header">
-          <div>
-            <h3 class="matriz-modal-title" id="matriz-new-activity-modal-title">Nova atividade {{ new_activity_modal.axis }}</h3>
-            <p class="matriz-modal-subtitle">Crie a atividade no contexto da matriz e gere sua versão inicial no eixo {{ new_activity_modal.axis }}.</p>
-          </div>
-          <button class="matriz-modal-close" type="button" data-close-new-activity-modal aria-label="Fechar modal">
-            <i class="lucide" data-lucide="x"></i>
-          </button>
-        </div>
-
-        <form
-          method="post"
-          id="matriz-new-activity-form"
-          class="matriz-modal-form"
-          action="{{ new_activity_modal.form_action }}"
-          autocomplete="off"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-          <div class="matriz-modal-body">
-            {% if new_activity_modal.matrix_context_label %}
-              <div class="matriz-modal-field">
-                <span class="matriz-modal-label">Contexto da versão</span>
-                <div class="matriz-modal-chip">
-                  <i class="lucide" data-lucide="git-branch-plus"></i>
-                  <span>Versão nesta matriz: {{ new_activity_modal.matrix_context_label }}</span>
-                </div>
-              </div>
-            {% endif %}
-
-            <div class="matriz-modal-field">
-              <label class="matriz-modal-label" for="matriz-new-activity-name">Nome da atividade</label>
-              <div class="field-card">
-                <div class="field-chip"><i class="lucide" data-lucide="clipboard-list"></i></div>
-                <input
-                  class="control"
-                  id="matriz-new-activity-name"
-                  type="text"
-                  name="nome"
-                  value="{{ new_activity_modal.prefill.nome }}"
-                  placeholder="Ex.: Participação em oficina, projeto ou ação"
-                  required
-                >
-              </div>
-            </div>
-
-            {% if new_activity_modal.activity_type_label == 'Acadêmica Complementar' %}
-              <div class="matriz-modal-field">
-                <label class="matriz-modal-label" for="matriz-new-activity-group-number">Grupo (nº/descrição)</label>
-                <div class="field-card matriz-modal-group-card">
-                  <div class="field-chip"><i class="lucide" data-lucide="hash"></i></div>
-                  <input
-                    class="control"
-                    id="matriz-new-activity-group-number"
-                    type="text"
-                    name="grupo_numero"
-                    value="{{ new_activity_modal.prefill.grupo_numero }}"
-                    list="matriz-new-activity-group-numbers"
-                    inputmode="numeric"
-                    placeholder="Nº"
-                    required
-                  >
-                  <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
-                  <input
-                    class="control"
-                    type="text"
-                    name="grupo_descricao"
-                    value="{{ new_activity_modal.prefill.grupo_descricao }}"
-                    placeholder="Descrição do grupo"
-                  >
-                </div>
-                <p class="matriz-modal-note">O grupo é aplicado tanto na atividade legada quanto na versão inicial AAC.</p>
-                <datalist id="matriz-new-activity-group-numbers">
-                  {% for suggestion in new_activity_modal.group_suggestions %}
-                    <option value="{{ suggestion.numero }}">{{ suggestion.descricao }}</option>
-                  {% endfor %}
-                </datalist>
-              </div>
-            {% else %}
-              <div class="matriz-modal-field">
-                <span class="matriz-modal-label">Grupo</span>
-                <div class="matriz-modal-chip">
-                  <i class="lucide" data-lucide="tag"></i>
-                  <span>NA</span>
-                </div>
-              </div>
-            {% endif %}
-
-            <div class="matriz-modal-field">
-              <label class="matriz-modal-label" for="matriz-new-activity-description">Descrição</label>
-              <textarea
-                class="control"
-                id="matriz-new-activity-description"
-                name="descricao"
-                rows="2"
-                placeholder="Descrição opcional"
-              >{{ new_activity_modal.prefill.descricao }}</textarea>
-            </div>
-
-            <div class="matriz-modal-field">
-              <label class="matriz-modal-label" for="matriz-new-activity-limit-type">Limitação / Tempo limite</label>
-              <div class="field-card matriz-modal-group-card">
-                <select class="control" id="matriz-new-activity-limit-type" name="tipo_limitacao" data-matriz-limit-type>
-                  <option value="" {% if not new_activity_modal.prefill.tipo_limitacao %}selected{% endif %}>Sem limitação</option>
-                  <option value="total" {% if new_activity_modal.prefill.tipo_limitacao == 'total' %}selected{% endif %}>Total</option>
-                  <option value="semestral" {% if new_activity_modal.prefill.tipo_limitacao == 'semestral' %}selected{% endif %}>Semestral</option>
-                </select>
-                <input
-                  class="control"
-                  type="number"
-                  name="limite_valor"
-                  value="{{ new_activity_modal.prefill.limite_valor }}"
-                  min="0"
-                  step="0.01"
-                  placeholder="Horas"
-                  data-matriz-limit-value
-                >
-              </div>
-            </div>
-
-            <div class="matriz-modal-field">
-              <label class="matriz-modal-label" for="matriz-new-activity-hours-mode">Carga horária por evento</label>
-              <div class="field-card matriz-modal-group-card">
-                <select class="control" id="matriz-new-activity-hours-mode" name="ch_por_evento_mode" data-matriz-hours-mode>
-                  <option value="disabled" {% if not new_activity_modal.prefill.ch_por_evento_enabled %}selected{% endif %}>Sem sugestão</option>
-                  <option value="enabled" {% if new_activity_modal.prefill.ch_por_evento_enabled %}selected{% endif %}>Usar sugestão</option>
-                </select>
-                <input
-                  class="control"
-                  type="number"
-                  name="ch_por_evento"
-                  value="{{ new_activity_modal.prefill.ch_por_evento }}"
-                  min="0"
-                  step="0.01"
-                  placeholder="Horas sugeridas"
-                  data-matriz-hours-value
-                >
-              </div>
-              <p class="matriz-modal-note">A sugestão preenche a solicitação, mas continua editável.</p>
-            </div>
-
-            <div class="matriz-modal-field">
-              <label class="matriz-modal-label" for="matriz-new-activity-notes">Observações</label>
-              <textarea
-                class="control"
-                id="matriz-new-activity-notes"
-                name="observacoes"
-                rows="2"
-                placeholder="Observações opcionais"
-              >{{ new_activity_modal.prefill.observacoes }}</textarea>
-            </div>
-
-            <label class="matriz-modal-checkbox">
-              <input type="checkbox" name="add_to_matrix" value="1" {% if new_activity_modal.prefill.add_to_matrix %}checked{% endif %}>
-              <span>Adicionar à matriz atual</span>
-            </label>
-          </div>
-
-          <div class="matriz-modal-footer">
-            <button class="btn" type="button" data-close-new-activity-modal>Cancelar</button>
-            <button class="btn primary" type="submit" {% if new_activity_modal.submit_disabled %}disabled{% endif %}>
-              <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Criar atividade</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  {% endif %}
-
-  {% if not readonly and card_version_menu_data is defined and card_version_menu_data %}
+  {% if not composition_locked and card_version_menu_data is defined and card_version_menu_data %}
     <div
       id="matriz-version-modal"
       class="matriz-modal-overlay"
@@ -973,9 +849,7 @@
               <span class="matriz-modal-label">Versão disponível</span>
               <div id="version-modal-versoes-list" role="radiogroup" aria-label="Versões disponíveis"></div>
             </div>
-            <div id="version-modal-no-versoes" class="flash flash-warning" role="alert" hidden>
-              Esta atividade não possui versões cadastradas.
-            </div>
+            <div id="version-modal-availability" class="flash flash-info" role="status" hidden></div>
           </div>
           <div class="matriz-modal-footer">
             <button class="btn" type="button" data-close-version-modal>Cancelar</button>
@@ -992,6 +866,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% set composition_locked = readonly or is_academically_frozen %}
 <script>
   (function(){
     const textareas = document.querySelectorAll('textarea[data-auto-grow]');
@@ -1013,7 +888,6 @@
   (function(){
     const root = document.querySelector('[data-transfer-root]');
     if (!root) return;
-    const isReadonly = root.dataset.readonly === '1';
 
     const availableList = root.querySelector('[data-role="available-list"]');
     const selectedList = root.querySelector('[data-role="selected-list"]');
@@ -1023,7 +897,9 @@
     const selectedGroupFilter = root.querySelector('[data-role="selected-group-filter"]');
     const countAvailable = root.querySelector('[data-count-available]');
     const countSelected = root.querySelector('[data-count-selected]');
+    {% if not composition_locked %}
     const hiddenInputs = root.querySelector('[data-role="selected-hidden-inputs"]');
+    {% endif %}
 
     function listItems(list){
       return Array.from(list.querySelectorAll('.matriz-transfer-item'));
@@ -1045,7 +921,9 @@
       updateEmptyState('selected');
     }
 
+    {% if not composition_locked %}
     function syncHiddenInputs(){
+      if (!hiddenInputs) return;
       hiddenInputs.innerHTML = '';
       listItems(selectedList).forEach((item) => {
         const input = document.createElement('input');
@@ -1055,13 +933,15 @@
         hiddenInputs.appendChild(input);
       });
     }
+    {% endif %}
 
     function applyAvailableFilters(){
       const text = (searchInput?.value || '').trim().toLowerCase();
       const group = (groupFilter?.value || '').trim();
       listItems(availableList).forEach((item) => {
         const matchesText = !text || (item.dataset.search || '').includes(text);
-        const matchesGroup = !group || (item.dataset.group || '') === group;
+        const groups = (item.dataset.groups || item.dataset.group || '').split('||');
+        const matchesGroup = !group || groups.includes(group);
         item.style.display = (matchesText && matchesGroup) ? '' : 'none';
       });
       refreshCounts();
@@ -1078,17 +958,48 @@
       refreshCounts();
     }
 
+    {% if not composition_locked %}
     function moveItems(sourceList, targetList, mode){
-      const sourceItems = listItems(sourceList);
-      const candidates = sourceItems.filter((item) => {
+      let candidates = listItems(sourceList).filter((item) => {
         const checkbox = item.querySelector('input[type="checkbox"]');
         if (mode === 'all') return item.style.display !== 'none';
         return checkbox?.checked;
       });
+
+      if (sourceList === availableList && targetList === selectedList) {
+        let skippedUnchosenVersion = false;
+        candidates = candidates.filter((item) => {
+          if (item.dataset.activityId) return true;
+          skippedUnchosenVersion = true;
+          return false;
+        });
+        if (skippedUnchosenVersion) {
+          window.showToast?.('Selecione uma versão exata para atividades com mais de uma opção.', 'warning');
+        }
+      }
+
       if (!candidates.length) return;
       candidates.forEach((item) => {
         const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox) checkbox.checked = false;
+        if (checkbox) {
+          checkbox.checked = false;
+          const activityName = item.querySelector('.matriz-transfer-item-title')?.textContent.trim() || 'atividade';
+          const versionNumber = item.dataset.versionNumber || '?';
+          const movingToSelected = targetList === selectedList;
+          checkbox.dataset.side = movingToSelected ? 'selected' : 'available';
+          checkbox.setAttribute(
+            'aria-label',
+            movingToSelected
+              ? `Selecionar ${activityName} v${versionNumber} para remoção`
+              : `Selecionar ${activityName} v${versionNumber}`,
+          );
+        }
+        const versionField = item.querySelector('[data-role="available-version-field"]');
+        const selectedVersionDisplay = item.querySelector('[data-role="selected-version-display"]');
+        if (targetList === availableList && versionField) {
+          versionField.hidden = false;
+          if (selectedVersionDisplay) selectedVersionDisplay.hidden = true;
+        }
         targetList.appendChild(item);
       });
       syncHiddenInputs();
@@ -1102,79 +1013,56 @@
     groupFilter?.addEventListener('change', applyAvailableFilters);
     selectedGroupFilter?.addEventListener('change', applySelectedFilters);
 
-    if (!isReadonly){
-      root.querySelectorAll('[data-move]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const action = button.getAttribute('data-move');
-          if (action === '>') moveItems(availableList, selectedList, 'checked');
-          if (action === '>>') moveItems(availableList, selectedList, 'all');
-          if (action === '<') moveItems(selectedList, availableList, 'checked');
-          if (action === '<<') moveItems(selectedList, availableList, 'all');
-        });
+    root.addEventListener('change', (event) => {
+      const select = event.target.closest('[data-role="available-version-select"]');
+      if (!select) return;
+      const item = select.closest('.matriz-transfer-item');
+      const option = select.options[select.selectedIndex];
+      const checkbox = item?.querySelector('input[type="checkbox"]');
+      const meta = item?.querySelector('[data-role="version-meta"]');
+      const activityName = item?.querySelector('.matriz-transfer-item-title')?.textContent.trim() || 'atividade';
+      const activityId = select.value || '';
+      const versionNumber = option?.dataset.versionNumber || '';
+      const group = option?.dataset.group || '';
+      const ruleSummary = option?.dataset.ruleSummary || 'Selecione uma versão para ver os detalhes';
+
+      item.dataset.activityId = activityId;
+      item.dataset.versionNumber = versionNumber;
+      item.dataset.group = group;
+      if (meta) meta.textContent = [group, ruleSummary].filter(Boolean).join(' • ');
+      if (checkbox) {
+        checkbox.disabled = !activityId;
+        if (!activityId) checkbox.checked = false;
+        checkbox.setAttribute(
+          'aria-label',
+          activityId
+            ? `Selecionar ${activityName} v${versionNumber}${item.closest('[data-role="selected-list"]') ? ' para remoção' : ''}`
+            : `Escolha uma versão para selecionar ${activityName}`,
+        );
+      }
+      syncHiddenInputs();
+      applyAvailableFilters();
+      applySelectedFilters();
+    });
+
+    root.querySelectorAll('[data-move]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.getAttribute('data-move');
+        if (action === '>') moveItems(availableList, selectedList, 'checked');
+        if (action === '>>') moveItems(availableList, selectedList, 'all');
+        if (action === '<') moveItems(selectedList, availableList, 'checked');
+        if (action === '<<') moveItems(selectedList, availableList, 'all');
       });
-    }
+    });
 
     syncHiddenInputs();
+    {% endif %}
     applyAvailableFilters();
     applySelectedFilters();
     refreshCounts();
   })();
 </script>
-<script>
-  (function(){
-    const modal = document.getElementById('matriz-new-activity-modal');
-    if (!modal) return;
-
-    const openButton = document.querySelector('[data-open-new-activity-modal]');
-    const closeButtons = modal.querySelectorAll('[data-close-new-activity-modal]');
-    const firstInput = modal.querySelector('input[name="nome"]');
-    const limitType = modal.querySelector('[data-matriz-limit-type]');
-    const limitValue = modal.querySelector('[data-matriz-limit-value]');
-    const hoursMode = modal.querySelector('[data-matriz-hours-mode]');
-    const hoursValue = modal.querySelector('[data-matriz-hours-value]');
-
-    function syncOptionalFields(){
-      if (limitValue) {
-        const enabled = Boolean(limitType?.value);
-        limitValue.disabled = !enabled;
-        limitValue.required = enabled;
-      }
-      if (hoursValue) {
-        const enabled = hoursMode?.value === 'enabled';
-        hoursValue.disabled = !enabled;
-        hoursValue.required = enabled;
-      }
-    }
-
-    function openModal(){
-      modal.hidden = false;
-      window.requestAnimationFrame(() => {
-        firstInput?.focus();
-      });
-    }
-
-    function closeModal(){
-      modal.hidden = true;
-    }
-
-    openButton?.addEventListener('click', openModal);
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', closeModal);
-    });
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) closeModal();
-    });
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !modal.hidden) closeModal();
-    });
-    limitType?.addEventListener('change', syncOptionalFields);
-    hoursMode?.addEventListener('change', syncOptionalFields);
-    syncOptionalFields();
-
-    if (modal.dataset.open === '1') openModal();
-  })();
-</script>
-{% if not readonly and card_version_menu_data %}
+{% if not composition_locked and card_version_menu_data %}
 <script>
   (function(){
     const versionModal = document.getElementById('matriz-version-modal');
@@ -1185,7 +1073,7 @@
     const activityNameEl = document.getElementById('version-modal-activity-name');
     const versoesList = document.getElementById('version-modal-versoes-list');
     const versoesField = document.getElementById('version-modal-versoes-field');
-    const noVersoesEl = document.getElementById('version-modal-no-versoes');
+    const availabilityEl = document.getElementById('version-modal-availability');
     const submitBtn = document.getElementById('version-modal-submit');
 
     function openVersionModal(activityId) {
@@ -1230,11 +1118,13 @@
           versoesList.appendChild(label);
         });
         versoesField.hidden = false;
-        noVersoesEl.hidden = true;
-        submitBtn.disabled = false;
+        availabilityEl.textContent = data.availability_message || '';
+        availabilityEl.hidden = !data.availability_message;
+        submitBtn.disabled = !(data.alternative_count > 0);
       } else {
         versoesField.hidden = true;
-        noVersoesEl.hidden = false;
+        availabilityEl.textContent = data.availability_message || 'Nenhuma versão ativa elegível está disponível para esta atividade.';
+        availabilityEl.hidden = false;
         submitBtn.disabled = true;
       }
 

@@ -259,7 +259,7 @@ def test_suggested_hours_disabled_is_null_and_enabled_requires_value(env):
         assert _created(main.get_db_connection(), missing_name) == []
 
 
-def test_matrix_inline_creator_uses_same_complete_initial_version_contract(env):
+def test_matrix_composition_has_no_inline_activity_creator(env):
     client = env["client"]
     _login_admin(client)
     with main.app.app_context():
@@ -270,48 +270,16 @@ def test_matrix_inline_creator_uses_same_complete_initial_version_contract(env):
     form_html = client.get(
         f"/admin/editar_matriz/{matrix_id}?tab=aac"
     ).get_data(as_text=True)
-    modal = re.search(
-        r'<form[^>]+id="matriz-new-activity-form"[^>]*>.*?</form>',
-        form_html,
-        re.S,
-    ).group(0)
-    for field in (
-        "nome",
-        "grupo_numero",
-        "grupo_descricao",
-        "descricao",
-        "tipo_limitacao",
-        "limite_valor",
-        "ch_por_evento_mode",
-        "ch_por_evento",
-        "observacoes",
-    ):
-        assert f'name="{field}"' in modal
+    assert "+ Nova atividade" not in form_html
+    assert 'id="matriz-new-activity-modal"' not in form_html
+    assert 'id="matriz-new-activity-form"' not in form_html
+    assert "data-open-new-activity-modal" not in form_html
 
-    name = f"Matrix consistency {uuid.uuid4().hex}"
     response = client.post(
         f"/admin/matrizes/{matrix_id}/atividades/nova/aac",
-        data={
-            "nome": name,
-            "grupo_numero": "1",
-            "grupo_descricao": "Grupo consistente",
-            "descricao": "Descrição via matriz",
-            "tipo_limitacao": "total",
-            "limite_valor": "40",
-            "ch_por_evento_mode": "enabled",
-            "ch_por_evento": "5.5",
-            "observacoes": "Observações via matriz",
-        },
         follow_redirects=False,
     )
-    assert response.status_code == 302
-    with main.app.app_context():
-        row = _created(main.get_db_connection(), name)[0]
-    assert (row["numero_versao"], row["status"]) == (1, "ativa")
-    assert row["descricao"] == "Descrição via matriz"
-    assert row["ch_por_evento"] == 5.5
-    assert (row["limite_semestre"], row["limite_total"]) == (None, 40.0)
-    assert row["observacao_aluno"] == row["observacao_admin"] == "Observações via matriz"
+    assert response.status_code == 404
 
 
 def test_legacy_edit_entrypoint_redirects_without_limite_horas_alias_write(env):

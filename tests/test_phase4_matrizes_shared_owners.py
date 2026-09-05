@@ -58,7 +58,7 @@ RELATED_LOCAL_HELPERS = {
 # Every main.py top-level function that directly references one of the five
 # helpers as a global.  No wrapper is allowed: each consumer must resolve the
 # canonical app.admin_access identity through its __globals__.
-# The two Matrizes consumers (admin_editar_matriz, admin_matriz_nova_atividade)
+# The surviving Matrizes consumer (admin_editar_matriz)
 # moved to app.views.admin.matrizes (PHASE 4-B5-R1); the Acesso consumer
 # (admin_acesso) moved to app.views.admin.acesso (UT-9).
 #
@@ -101,7 +101,6 @@ ACESSO_MODULE_OWNER = "app.views.admin.acesso"
 # app.admin_access identities through their module globals.
 MATRIZES_MODULE_CONSUMERS = {
     "admin_editar_matriz": {"_get_current_admin_access_context", "_admin_can"},
-    "admin_matriz_nova_atividade": {"_get_current_admin_access_context", "_admin_can"},
 }
 
 # All Matrizes route handlers moved to app.views.admin.matrizes (PHASE 4-B5-R1).
@@ -110,13 +109,9 @@ MATRIZES_ROUTE_NAMES = {
     "admin_matrizes",
     "admin_adicionar_matriz",
     "admin_editar_matriz",
-    "admin_matriz_nova_atividade",
     "admin_matriz_nova_versao_card",
     "admin_excluir_matrizes",
     "admin_excluir_matriz",
-    "admin_matriz_versoes",
-    "admin_matriz_versoes_definir",
-    "admin_matriz_versoes_remover",
 }
 
 NON_ADMIN_CONTEXT = {

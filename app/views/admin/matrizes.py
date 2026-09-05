@@ -7,13 +7,7 @@ import sqlite3
 from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.activity_catalog import (
-    _build_grupo_label,
     _canonicalize_tipo_limitacao,
-    _parse_non_negative_form_number,
-    _normalize_atividade_grupo,
-    create_activity_with_initial_version,
-    get_atividade_base,
-    get_atividade_versao_by_id,
     get_next_numero_versao,
 )
 from app.admin_access import _admin_can, _get_current_admin_access_context
@@ -42,53 +36,6 @@ from app.web.pagination import get_pagination, wants_pagination
 from utils.messages import flash
 
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
-
-
-# ===================== Helpers: D7.2B4 - Vínculo Matriz → atividade_versao =====================
-
-def get_bases_escopo_matriz(conn, matriz_id: int) -> list:
-    """
-    Retorna as atividade_base selecionadas pela autoridade canônica da matriz.
-    Estritamente read-only — sem fallback ou inferência.
-    """
-    return conn.execute(
-        """
-        SELECT DISTINCT
-            ab.id,
-            ab.nome_conceito,
-            ab.status
-          FROM matriz_atividade_versao_item item
-          JOIN atividade_base ab ON ab.id = item.atividade_base_id
-         WHERE item.matriz_id = ?
-         ORDER BY LOWER(ab.nome_conceito) ASC
-        """,
-        (matriz_id,),
-    ).fetchall()
-
-
-def get_versoes_ativas_por_base_na_matriz(conn, matriz_id: int, base_id: int) -> list:
-    """
-    Retorna versões ativas da base no mesmo eixo do vínculo atual da matriz.
-    Estritamente read-only — sem fallback, sem inferência, sem primeira ativa.
-    """
-    return conn.execute(
-        """
-        SELECT
-            av.id,
-            av.eixo,
-            av.status,
-            av.numero_versao
-          FROM atividade_versao av
-          JOIN matriz_atividade_versao_item current
-            ON current.matriz_id=? AND current.atividade_base_id=av.atividade_base_id
-          JOIN atividade_versao selected ON selected.id=current.atividade_versao_id
-         WHERE av.atividade_base_id = ?
-           AND av.status = 'ativa'
-           AND av.eixo=selected.eixo
-         ORDER BY av.numero_versao
-        """,
-        (matriz_id, base_id),
-    ).fetchall()
 
 
 def get_vinculo_versao_da_matriz(conn, matriz_id: int, base_id: int):
@@ -142,27 +89,6 @@ def _set_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int, versao_i
     )
 
 
-def _remover_versao_da_matriz_para_base(conn, matriz_id: int, base_id: int) -> int:
-    """
-    Remove o vínculo matriz→atividade_versao para uma atividade_base.
-    Retorna o número de linhas apagadas (0 ou 1).
-    Não commita — responsabilidade do chamador.
-    """
-    if is_matrix_assigned(conn, matriz_id):
-        raise AcademicGraphFrozenError("assigned_matrix_version_link")
-    cur = conn.execute(
-        """
-        DELETE FROM matriz_atividade_versao_item
-         WHERE matriz_id = ?
-           AND atividade_versao_id IN (
-               SELECT id FROM atividade_versao WHERE atividade_base_id = ?
-           )
-        """,
-        (matriz_id, base_id),
-    )
-    return cur.rowcount
-
-
 def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict:
     """
     Para cada versão vinculada à matriz, retorna a versão atual vinculada
@@ -213,12 +139,21 @@ def get_card_version_menu_data(conn, matriz_id: int, activity_ids: list) -> dict
             }
             for v in versoes_rows
         ]
+        alternative_count = sum(1 for version in versoes if not version["is_current"])
         result[str(row["selected_id"])] = {
             "base_id": row["base_id"],
             "versao_id": current_versao_id,
             "numero_versao": row["numero_versao"],
             "eixo": row["eixo"],
             "versoes": versoes,
+            "alternative_count": alternative_count,
+            "availability_message": (
+                "A versão atual é a única versão ativa elegível."
+                if versoes and alternative_count == 0
+                else "Nenhuma versão ativa elegível está disponível para esta atividade."
+                if not versoes
+                else ""
+            ),
         }
     return result
 
@@ -447,96 +382,17 @@ def _matriz_axis_for_tab(active_tab: str) -> str | None:
     return None
 
 
-def _get_grupos_por_tipo(conn) -> dict[str, dict[str, str]]:
-    grupos = {}
-    try:
-        rows = conn.execute("SELECT tipo_atividade, numero, descricao FROM grupos_def").fetchall()
-        for row in rows:
-            tipo = row["tipo_atividade"]
-            numero = str(row["numero"])
-            descricao = (row["descricao"] or "").strip()
-            if tipo not in grupos:
-                grupos[tipo] = {}
-            grupos[tipo][numero] = descricao
-    except Exception:
-        pass
-    return grupos
-
-
-def _build_matriz_new_activity_modal_context(
-    conn,
-    matriz,
-    active_tab: str,
-    *,
-    form_data: dict | None = None,
-    is_open: bool = False,
-):
-    matriz_id = matriz["id"] if matriz else None
-    activity_type = _matriz_activity_type_for_tab(active_tab)
-    axis = _matriz_axis_for_tab(active_tab)
-    if not matriz_id or not activity_type or not axis:
-        return None
-
-    form_data = form_data or {}
-    grupos_por_tipo = _get_grupos_por_tipo(conn)
-    group_map = grupos_por_tipo.get(activity_type, {})
-
-    def _group_sort_key(value: str):
-        normalized = str(value or "").strip()
-        if normalized.isdigit():
-            return (0, int(normalized))
-        return (1, normalized.lower())
-
-    group_suggestions = [
-        {"numero": numero, "descricao": group_map[numero]}
-        for numero in sorted(group_map.keys(), key=_group_sort_key)
-    ]
-    raw_add_to_matrix = form_data.get("add_to_matrix")
-    if raw_add_to_matrix is None:
-        add_to_matrix_checked = True
-    elif isinstance(raw_add_to_matrix, bool):
-        add_to_matrix_checked = raw_add_to_matrix
-    else:
-        add_to_matrix_checked = str(raw_add_to_matrix).strip().lower() in {"1", "true", "on", "yes"}
-
-    return {
-        "is_open": bool(is_open),
-        "form_action": url_for("admin_matriz_nova_atividade", matriz_id=matriz_id, active_tab=active_tab),
-        "activity_type_label": activity_type,
-        "axis": axis,
-        "matrix_context_label": (matriz["nome"] or "").strip(),
-        "group_suggestions": group_suggestions,
-        "submit_disabled": False,
-        "prefill": {
-            "nome": str(form_data.get("nome") or "").strip(),
-            "grupo_numero": str(form_data.get("grupo_numero") or "").strip(),
-            "grupo_descricao": str(form_data.get("grupo_descricao") or "").strip(),
-            "descricao": str(form_data.get("descricao") or "").strip(),
-            "tipo_limitacao": str(form_data.get("tipo_limitacao") or "").strip(),
-            "limite_valor": str(form_data.get("limite_valor") or "").strip(),
-            "ch_por_evento": str(form_data.get("ch_por_evento") or "").strip(),
-            "ch_por_evento_enabled": (
-                str(form_data.get("ch_por_evento_mode") or "").strip() == "enabled"
-                if form_data.get("ch_por_evento_mode") is not None
-                else bool(str(form_data.get("ch_por_evento") or "").strip())
-            ),
-            "observacoes": str(form_data.get("observacoes") or "").strip(),
-            "add_to_matrix": add_to_matrix_checked,
-        },
-    }
-
-
 def _matriz_transfer_meta(active_tab: str) -> dict[str, str]:
     if active_tab == "aea":
         return {
-            "help_text": "Selecione quais atividades de extensão pertencem a esta matriz.",
+            "help_text": "Selecione cada atividade de extensão e sua versão exata para esta matriz.",
             "available_title": "Atividades de extensão disponíveis",
             "selected_title": "Atividades de extensão vinculadas",
             "empty_available": "Nenhuma atividade de extensão disponível.",
             "empty_selected": "Nenhuma atividade de extensão vinculada.",
         }
     return {
-        "help_text": "Selecione quais atividades acadêmicas complementares pertencem a esta matriz.",
+        "help_text": "Selecione cada atividade acadêmica complementar e sua versão exata para esta matriz.",
         "available_title": "Atividades AAC disponíveis",
         "selected_title": "Atividades AAC vinculadas",
         "empty_available": "Nenhuma atividade AAC disponível.",
@@ -562,17 +418,19 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
     if not activity_type:
         return [], [], []
 
-    selected_ids = {
-        row["atividade_versao_id"]
+    selected_by_base = {
+        row["atividade_base_id"]: row["atividade_versao_id"]
         for row in conn.execute(
-            "SELECT atividade_versao_id FROM matriz_atividade_versao_item WHERE matriz_id = ?",
+            """SELECT atividade_base_id, atividade_versao_id
+                 FROM matriz_atividade_versao_item
+                WHERE matriz_id = ?""",
             (matriz_id,),
         ).fetchall()
     }
     rows = conn.execute(
         """
         SELECT
-            v.id, b.nome_conceito AS nome,
+            v.id, v.atividade_base_id, v.numero_versao, b.nome_conceito AS nome,
             COALESCE(NULLIF(TRIM(v.grupo), ''), 'Sem grupo') AS grupo,
             COALESCE(v.limite_semestre,v.limite_total) AS limite_horas,
             (v.limite_total IS NOT NULL OR v.limite_semestre IS NOT NULL) AS tem_limitacao,
@@ -582,33 +440,94 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
         FROM atividade_versao v
         JOIN atividade_base b ON b.id=v.atividade_base_id
         WHERE v.eixo=? AND v.status='ativa'
-        ORDER BY LOWER(COALESCE(v.grupo, '')), LOWER(b.nome_conceito), v.id
+        ORDER BY LOWER(b.nome_conceito), v.numero_versao, v.id
         """,
         ('AAC' if activity_type == 'Acadêmica Complementar' else 'AEU',),
     ).fetchall()
 
-    available = []
+    available_by_base = {}
+    eligible_versions_by_base = {}
     selected = []
     groups = set()
     for row in rows:
         groups.add(row["grupo"])
-        item = {
+        version = {
             "id": row["id"],
-            "nome": row["nome"],
+            "numero_versao": row["numero_versao"],
             "grupo": row["grupo"],
             "rule_summary": _matriz_activity_rule_summary(row),
         }
+        base_id = row["atividade_base_id"]
+        eligible_versions_by_base.setdefault(base_id, []).append(version)
+        if selected_by_base.get(base_id) == row["id"]:
+            selected_item = {
+                **version,
+                "base_id": base_id,
+                "nome": row["nome"],
+            }
+            selected_item["search_blob"] = " ".join(
+                [
+                    str(selected_item["nome"] or "").strip().lower(),
+                    f"v{selected_item['numero_versao']}",
+                    str(selected_item["grupo"] or "").strip().lower(),
+                    str(selected_item["rule_summary"] or "").strip().lower(),
+                ]
+            ).strip()
+            selected.append(selected_item)
+            continue
+        if base_id in selected_by_base:
+            continue
+
+        item = available_by_base.setdefault(
+            base_id,
+            {
+                "base_id": base_id,
+                "nome": row["nome"],
+                "eligible_versions": [],
+            },
+        )
+        item["eligible_versions"].append(version)
+
+    for item in selected:
+        versions = eligible_versions_by_base[item["base_id"]]
+        item["eligible_versions"] = versions
+        item["group_values"] = sorted(
+            {version["grupo"] for version in versions},
+            key=lambda value: value.lower(),
+        )
+
+    available = []
+    for item in available_by_base.values():
+        versions = item["eligible_versions"]
+        default_version = versions[-1]
+        item.update(
+            {
+                "id": default_version["id"],
+                "numero_versao": default_version["numero_versao"],
+                "grupo": default_version["grupo"],
+                "rule_summary": default_version["rule_summary"],
+                "group_values": sorted(
+                    {version["grupo"] for version in versions},
+                    key=lambda value: value.lower(),
+                ),
+            }
+        )
         item["search_blob"] = " ".join(
             [
                 str(item["nome"] or "").strip().lower(),
-                str(item["grupo"] or "").strip().lower(),
-                str(item["rule_summary"] or "").strip().lower(),
+                *(
+                    " ".join(
+                        [
+                            f"v{version['numero_versao']}",
+                            str(version["grupo"] or "").strip().lower(),
+                            str(version["rule_summary"] or "").strip().lower(),
+                        ]
+                    )
+                    for version in versions
+                ),
             ]
         ).strip()
-        if row["id"] in selected_ids:
-            selected.append(item)
-        else:
-            available.append(item)
+        available.append(item)
 
     return available, selected, sorted(groups, key=lambda value: value.lower())
 
@@ -642,7 +561,6 @@ def _render_matriz_form(
     matriz=None,
     active_tab: str = "dados",
     readonly: bool = False,
-    new_activity_modal=None,
 ):
     cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
     matriz_id = matriz["id"] if matriz else None
@@ -657,17 +575,15 @@ def _render_matriz_form(
     transfer_available = []
     transfer_selected = []
     transfer_groups = []
+    is_academically_frozen = is_matrix_assigned(conn, matriz_id) if matriz_id else False
+    interaction_locked = readonly or is_academically_frozen
     if matriz_id:
         academicas_count, extensao_count = _matriz_counts(conn, matriz_id)
         if active_tab in {"aac", "aea"}:
             transfer_available, transfer_selected, transfer_groups = _matriz_transfer_lists(conn, matriz_id, active_tab)
-            if new_activity_modal is None:
-                new_activity_modal = _build_matriz_new_activity_modal_context(conn, matriz, active_tab)
-    else:
-        new_activity_modal = None
 
     card_version_menu_data = {}
-    if matriz_id and active_tab in {"aac", "aea"} and not readonly:
+    if matriz_id and active_tab in {"aac", "aea"} and not interaction_locked:
         selected_ids = [item["id"] for item in transfer_selected]
         if selected_ids:
             try:
@@ -701,9 +617,9 @@ def _render_matriz_form(
         transfer_available=transfer_available,
         transfer_selected=transfer_selected,
         transfer_groups=transfer_groups,
-        new_activity_modal=new_activity_modal,
         card_version_menu_data=card_version_menu_data,
-        is_academically_frozen=is_matrix_assigned(conn, matriz_id) if matriz_id else False,
+        is_academically_frozen=is_academically_frozen,
+        interaction_locked=interaction_locked,
         readonly=readonly,
     )
 
@@ -748,11 +664,8 @@ def _matriz_payload_from_request(conn):
 
 def _ensure_default_versao_link(conn, matriz_id: int, activity_id: int) -> None:
     """
-    Create a default matrix→versao link for activity_id if none exists yet.
-    Uses the latest active versao of the activity's base. No-op when:
-    - activity has no legacy map entry
-    - the base has no active versao
-    - a link already exists (manual choice preserved)
+    Link the exact active activity_id selected by the caller when its base is unlinked.
+    No-op when the exact version is ineligible or the base already has a link.
     Does not commit — caller's responsibility.
     """
     row = conn.execute("SELECT atividade_base_id FROM atividade_versao WHERE id=? AND status='ativa'", (activity_id,)).fetchone()
@@ -764,6 +677,41 @@ def _ensure_default_versao_link(conn, matriz_id: int, activity_id: int) -> None:
     _set_versao_da_matriz_para_base(conn, matriz_id, base_id, activity_id)
 
 
+def _validated_matrix_activity_selection(conn, raw_values: list[str], axis: str) -> list[int] | None:
+    selected_ids = []
+    seen_ids = set()
+    for raw_value in raw_values:
+        value = str(raw_value).strip()
+        if not value.isdigit():
+            return None
+        activity_id = int(value)
+        if activity_id in seen_ids:
+            return None
+        seen_ids.add(activity_id)
+        selected_ids.append(activity_id)
+
+    if not selected_ids:
+        return []
+
+    placeholders = ", ".join("?" for _ in selected_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id, atividade_base_id
+          FROM atividade_versao
+         WHERE id IN ({placeholders})
+           AND eixo=?
+           AND status='ativa'
+        """,
+        selected_ids + [axis],
+    ).fetchall()
+    if len(rows) != len(selected_ids):
+        return None
+    base_ids = [row["atividade_base_id"] for row in rows]
+    if len(set(base_ids)) != len(base_ids):
+        return None
+    return sorted(selected_ids)
+
+
 def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
     activity_type = _matriz_activity_type_for_tab(active_tab)
     if not activity_type:
@@ -771,17 +719,14 @@ def _save_matriz_activity_links(conn, matriz_id: int, active_tab: str):
     if is_matrix_assigned(conn, matriz_id):
         return None
 
-    selected_ids = []
-    for raw_value in request.form.getlist("selected_activity_ids"):
-        if str(raw_value).strip().isdigit():
-            selected_ids.append(int(raw_value))
-    selected_ids = sorted(set(selected_ids))
-
     axis = 'AAC' if activity_type == 'Acadêmica Complementar' else 'AEU'
-    type_activity_ids = {row["id"] for row in conn.execute(
-        "SELECT id FROM atividade_versao WHERE eixo=? AND status='ativa'", (axis,)
-    ).fetchall()}
-    valid_ids = [activity_id for activity_id in selected_ids if activity_id in type_activity_ids]
+    valid_ids = _validated_matrix_activity_selection(
+        conn,
+        request.form.getlist("selected_activity_ids"),
+        axis,
+    )
+    if valid_ids is None:
+        return _MATRIZ_ERR_INVALID_PARAMS
 
     conn.execute(
         """
@@ -920,154 +865,14 @@ def admin_editar_matriz(matriz_id: int):
             flash("Lista da matriz atualizada com sucesso.", "success")
         elif save_result is None:
             flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
+        elif save_result == _MATRIZ_ERR_INVALID_PARAMS:
+            flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_INVALID_PARAMS], "error")
         else:
             flash("Aba de gestão de atividades inválida.", "error")
         return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
 
     matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
     return _render_matriz_form(conn, matriz=matriz, active_tab=active_tab, readonly=readonly)
-
-
-@admin_required
-def admin_matriz_nova_atividade(matriz_id: int, active_tab: str):
-    conn = get_db_connection()
-    ensure_matriz_atividade_links_table(conn)
-    ensure_atividade_versioning_schema(conn)
-
-    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
-    if not matriz:
-        flash("Matriz não encontrada.", "error")
-        return redirect(url_for("admin_matrizes"))
-
-    auth_context = _get_current_admin_access_context()
-    readonly = not _admin_can("matrizes", "edit", auth_context)
-
-    active_tab = (active_tab or "").strip().lower()
-    activity_type = _matriz_activity_type_for_tab(active_tab)
-    axis = _matriz_axis_for_tab(active_tab)
-    if not activity_type or not axis:
-        flash("Aba de gestão de atividades inválida.", "error")
-        return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
-
-    form_data = {
-        "nome": (request.form.get("nome") or "").strip(),
-        "grupo_numero": (request.form.get("grupo_numero") or "").strip(),
-        "grupo_descricao": (request.form.get("grupo_descricao") or "").strip(),
-        "descricao": (request.form.get("descricao") or "").strip(),
-        "tipo_limitacao": (request.form.get("tipo_limitacao") or "").strip(),
-        "limite_valor": (request.form.get("limite_valor") or "").strip(),
-        "ch_por_evento": (request.form.get("ch_por_evento") or "").strip(),
-        "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
-        "observacoes": (request.form.get("observacoes") or "").strip(),
-        "add_to_matrix": request.form.get("add_to_matrix"),
-    }
-
-    def _render_modal_error(message: str):
-        if message:
-            flash(message, "error")
-        modal_context = _build_matriz_new_activity_modal_context(
-            conn,
-            matriz,
-            active_tab,
-            form_data=form_data,
-            is_open=True,
-        )
-        return _render_matriz_form(
-            conn,
-            matriz=matriz,
-            active_tab=active_tab,
-            readonly=readonly,
-            new_activity_modal=modal_context,
-        )
-
-    nome = form_data["nome"]
-    if not nome:
-        return _render_modal_error("Informe o nome da atividade.")
-
-    if activity_type == "Acadêmica Complementar":
-        grupo_numero = form_data["grupo_numero"]
-        if not grupo_numero.isdigit():
-            return _render_modal_error("Informe um número de grupo válido para a atividade AAC.")
-        grupo_raw = _build_grupo_label(grupo_numero, form_data["grupo_descricao"])
-    else:
-        grupo_raw = "NA"
-    grupo = _normalize_atividade_grupo(activity_type, grupo_raw)
-    if activity_type != "Extensão Universitária" and not grupo:
-        return _render_modal_error("Informe o grupo da atividade.")
-
-    tipo_limitacao = form_data["tipo_limitacao"]
-    if tipo_limitacao not in {"", "total", "semestral"}:
-        return _render_modal_error("Selecione uma Limitação / Tempo limite válida.")
-    ch_enabled = (
-        form_data["ch_por_evento_mode"] == "enabled"
-        if form_data["ch_por_evento_mode"] is not None
-        else bool(form_data["ch_por_evento"])
-    )
-    try:
-        ch_por_evento = (
-            _parse_non_negative_form_number(
-                form_data["ch_por_evento"],
-                "a Carga horária por evento",
-                required=True,
-            )
-            if ch_enabled
-            else None
-        )
-        limite_valor = _parse_non_negative_form_number(
-            form_data["limite_valor"],
-            "o tempo limite",
-            required=bool(tipo_limitacao),
-        )
-    except ValueError as exc:
-        return _render_modal_error(str(exc))
-    limite_total = limite_valor if tipo_limitacao == "total" else None
-    limite_semestre = limite_valor if tipo_limitacao == "semestral" else None
-    descricao = form_data["descricao"] or None
-    observacoes = form_data["observacoes"] or None
-
-    add_to_matrix = str(request.form.get("add_to_matrix") or "").strip().lower() in {"1", "true", "on", "yes"}
-    form_data["add_to_matrix"] = add_to_matrix
-
-    if add_to_matrix and is_matrix_assigned(conn, matriz_id):
-        return _render_modal_error(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN])
-
-    try:
-        base_id, versao_id = create_activity_with_initial_version(
-            conn,
-            nome=nome,
-            descricao=descricao,
-            eixo=axis,
-            grupo=grupo,
-            ch_por_evento=ch_por_evento,
-            limite_semestre=limite_semestre,
-            limite_total=limite_total,
-            observacoes=observacoes,
-        )
-
-        if add_to_matrix:
-            conn.execute(
-                "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (?, ?, ?)",
-                (matriz_id, base_id, versao_id),
-            )
-
-        conn.commit()
-    except sqlite3.IntegrityError as exc:
-        conn.rollback()
-        error_message = str(exc).lower()
-        if "unique constraint failed: atividade_base.nome_conceito" in error_message:
-            return _render_modal_error("Já existe atividade-base com este nome.")
-        if "unique constraint failed: atividade_versao.atividade_base_id, atividade_versao.numero_versao" in error_message:
-            return _render_modal_error("Conflito ao atribuir número de versão. Tente novamente.")
-        return _render_modal_error(f"Erro de integridade ao criar atividade: {exc}")
-    except Exception as exc:
-        conn.rollback()
-        return _render_modal_error(f"Erro ao criar atividade: {exc}")
-
-    if add_to_matrix:
-        flash("Atividade criada e adicionada à matriz com sucesso.", "success")
-    else:
-        flash("Atividade criada com sucesso.", "success")
-    return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
 
 
 # ===================== Rota Admin: Criar nova versão de atividade via card da matriz (D7.5D) =====================
@@ -1211,171 +1016,6 @@ def admin_excluir_matriz(matriz_id: int):
     return redirect(url_for("admin_matrizes"))
 
 
-# ===================== Rotas Admin: Vínculo Matriz → atividade_versao (D7.2B4) =====================
-
-@admin_required
-def admin_matriz_versoes(matriz_id: int):
-    """
-    Página admin para gerenciar vínculos explícitos matriz→atividade_versao.
-
-    Para cada atividade_base no escopo canônico da matriz mostra:
-      - vínculo atual (se houver);
-      - versões ativas disponíveis no mesmo eixo operacional.
-
-    GET-only — sem escrita. Escrita via POST /definir e POST /remover.
-    Não usa fallback para primeira ativa. Sem inferência de versão.
-    """
-    conn = get_db_connection()
-    ensure_atividade_versioning_schema(conn)
-    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
-    if not matriz:
-        flash("Matriz não encontrada.", "error")
-        return redirect(url_for("admin_matrizes"))
-
-    bases = get_bases_escopo_matriz(conn, matriz_id)
-    bases_info = []
-    for base in bases:
-        vinculo = get_vinculo_versao_da_matriz(conn, matriz_id, base["id"])
-        versoes_disponiveis = get_versoes_ativas_por_base_na_matriz(conn, matriz_id, base["id"])
-        bases_info.append({
-            "base": base,
-            "vinculo": vinculo,
-            "versoes_disponiveis": versoes_disponiveis,
-        })
-
-    return render_template(
-        "admin_matriz_versoes.html",
-        matriz=matriz,
-        bases_info=bases_info,
-    )
-
-
-@admin_required
-def admin_matriz_versoes_definir(matriz_id: int):
-    """
-    Define (substitui) o vínculo matriz→atividade_versao para uma atividade_base.
-
-    Validações server-side:
-      1. Matriz existe.
-      2. atividade_base existe.
-      3. atividade_versao existe.
-      4. atividade_versao pertence à atividade_base informada.
-      5. atividade_versao.status == 'ativa'.
-      6. atividade_base já selecionada pela autoridade canônica da matriz.
-      7. eixo da versão preserva o eixo do vínculo atual.
-
-    Operação "set": remove vínculo anterior da mesma matriz+base e insere novo.
-    Nunca cria ambiguidade nova (invariante por matriz+base).
-    Rollback + flash em falha.
-    """
-    conn = get_db_connection()
-    ensure_atividade_versioning_schema(conn)
-
-    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
-    if not matriz:
-        flash("Matriz não encontrada.", "error")
-        return redirect(url_for("admin_matrizes"))
-
-    base_id_raw = (request.form.get("base_id") or "").strip()
-    versao_id_raw = (request.form.get("versao_id") or "").strip()
-
-    if not base_id_raw.isdigit() or not versao_id_raw.isdigit():
-        flash("Parâmetros inválidos.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    base_id = int(base_id_raw)
-    versao_id = int(versao_id_raw)
-
-    base = get_atividade_base(conn, base_id)
-    if not base:
-        flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    versao = get_atividade_versao_by_id(conn, versao_id)
-    if not versao:
-        flash("Versão não encontrada.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    if versao["atividade_base_id"] != base_id:
-        flash("A versão selecionada não pertence à atividade-base informada.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    if versao["status"] != "ativa":
-        flash("Apenas versões com status 'ativa' podem ser vinculadas à matriz.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    vinculo_atual = get_vinculo_versao_da_matriz(conn, matriz_id, base_id)
-    if not vinculo_atual:
-        flash("A atividade-base não está no escopo canônico desta matriz.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    if versao["eixo"] != vinculo_atual["eixo"]:
-        flash("A versão selecionada pertence ao eixo oposto desta lista.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    try:
-        _set_versao_da_matriz_para_base(conn, matriz_id, base_id, versao_id)
-        conn.commit()
-        flash("Versão definida com sucesso.", "success")
-    except AcademicGraphFrozenError:
-        conn.rollback()
-        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
-    except Exception as exc:
-        conn.rollback()
-        flash(f"Erro ao definir versão: {exc}", "error")
-
-    return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-
-@admin_required
-def admin_matriz_versoes_remover(matriz_id: int):
-    """
-    Remove o vínculo matriz→atividade_versao para uma atividade_base.
-
-    Validações server-side:
-      1. Matriz existe.
-      2. atividade_base existe.
-
-    Idempotente: se não houver vínculo, retorna info sem erro.
-    Rollback + flash em falha.
-    """
-    conn = get_db_connection()
-    ensure_atividade_versioning_schema(conn)
-
-    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
-    if not matriz:
-        flash("Matriz não encontrada.", "error")
-        return redirect(url_for("admin_matrizes"))
-
-    base_id_raw = (request.form.get("base_id") or "").strip()
-    if not base_id_raw.isdigit():
-        flash("Parâmetros inválidos.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    base_id = int(base_id_raw)
-
-    base = get_atividade_base(conn, base_id)
-    if not base:
-        flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-    try:
-        rows_deleted = _remover_versao_da_matriz_para_base(conn, matriz_id, base_id)
-        conn.commit()
-        if rows_deleted:
-            flash("Vínculo removido com sucesso.", "success")
-        else:
-            flash("Não havia vínculo para remover.", "info")
-    except AcademicGraphFrozenError:
-        conn.rollback()
-        flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
-    except Exception as exc:
-        conn.rollback()
-        flash(f"Erro ao remover vínculo: {exc}", "error")
-
-    return redirect(url_for("admin_matriz_versoes", matriz_id=matriz_id))
-
-
 bp_admin_matrizes = Blueprint("admin_matrizes_blueprint", __name__)
 
 LEGACY_ROUTE_SPECS = configure_legacy_routes(
@@ -1407,33 +1047,9 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("POST",),
         ),
         LegacyRouteSpec(
-            "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
-            "admin_matriz_nova_atividade",
-            admin_matriz_nova_atividade,
-            ("POST",),
-        ),
-        LegacyRouteSpec(
             "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao",
             "admin_matriz_nova_versao_card",
             admin_matriz_nova_versao_card,
-            ("POST",),
-        ),
-        LegacyRouteSpec(
-            "/admin/matrizes/<int:matriz_id>/versoes",
-            "admin_matriz_versoes",
-            admin_matriz_versoes,
-            ("GET",),
-        ),
-        LegacyRouteSpec(
-            "/admin/matrizes/<int:matriz_id>/versoes/definir",
-            "admin_matriz_versoes_definir",
-            admin_matriz_versoes_definir,
-            ("POST",),
-        ),
-        LegacyRouteSpec(
-            "/admin/matrizes/<int:matriz_id>/versoes/remover",
-            "admin_matriz_versoes_remover",
-            admin_matriz_versoes_remover,
             ("POST",),
         ),
     ),
@@ -1446,20 +1062,12 @@ __all__ = [
     "admin_editar_matriz",
     "admin_excluir_matriz",
     "admin_excluir_matrizes",
-    "admin_matriz_nova_atividade",
     "admin_matriz_nova_versao_card",
-    "admin_matriz_versoes",
-    "admin_matriz_versoes_definir",
-    "admin_matriz_versoes_remover",
     "admin_matrizes",
     "bp_admin_matrizes",
-    "get_bases_escopo_matriz",
     "get_card_version_menu_data",
-    "get_versoes_ativas_por_base_na_matriz",
     "get_vinculo_versao_da_matriz",
-    "_build_matriz_new_activity_modal_context",
     "_ensure_default_versao_link",
-    "_get_grupos_por_tipo",
     "_matriz_activity_rule_summary",
     "_matriz_activity_type_for_tab",
     "_matriz_axis_for_tab",
@@ -1469,7 +1077,6 @@ __all__ = [
     "_matriz_transfer_lists",
     "_matriz_transfer_meta",
     "_matriz_vigencia_label",
-    "_remover_versao_da_matriz_para_base",
     "_render_matriz_form",
     "_save_matriz_activity_links",
     "_set_versao_da_matriz_para_base",

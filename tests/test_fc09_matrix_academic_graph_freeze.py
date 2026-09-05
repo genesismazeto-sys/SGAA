@@ -10,10 +10,7 @@ from app.matrix_scope import (
     is_activity_version_referenced_by_assigned_matrix,
     is_matrix_assigned,
 )
-from app.views.admin.matrizes import (
-    _remover_versao_da_matriz_para_base,
-    _set_versao_da_matriz_para_base,
-)
+from app.views.admin.matrizes import _set_versao_da_matriz_para_base
 from tests.canonical_matrix_test_support import current_version_id, login_admin, seed_matrix_graph
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -42,7 +39,7 @@ def test_assigned_matrix_and_exact_graph_are_detected(tmp_path):
             assert not is_activity_version_referenced_by_assigned_matrix(conn, seed["v2"])
 
 
-def test_assigned_matrix_relink_and_removal_fail_before_write(tmp_path):
+def test_assigned_matrix_relink_fails_before_write(tmp_path):
     with isolated_versioned_app_env(tmp_path, "fc09-link.db"):
         with main.app.app_context():
             conn = main.get_db_connection()
@@ -50,20 +47,25 @@ def test_assigned_matrix_relink_and_removal_fail_before_write(tmp_path):
             _assign(conn, seed)
             with pytest.raises(AcademicGraphFrozenError):
                 _set_versao_da_matriz_para_base(conn, seed["matrix_id"], seed["base_id"], seed["v2"])
-            with pytest.raises(AcademicGraphFrozenError):
-                _remover_versao_da_matriz_para_base(conn, seed["matrix_id"], seed["base_id"])
             assert current_version_id(conn, seed) == seed["v1"]
 
 
 def test_unassigned_matrix_can_relink_and_remove(tmp_path):
-    with isolated_versioned_app_env(tmp_path, "fc09-unassigned.db"):
+    with isolated_versioned_app_env(tmp_path, "fc09-unassigned.db") as env:
         with main.app.app_context():
             conn = main.get_db_connection()
             seed = seed_matrix_graph(conn, name="FC09 unassigned")
             _set_versao_da_matriz_para_base(conn, seed["matrix_id"], seed["base_id"], seed["v2"])
             conn.commit()
             assert current_version_id(conn, seed) == seed["v2"]
-            assert _remover_versao_da_matriz_para_base(conn, seed["matrix_id"], seed["base_id"]) == 1
+        login_admin(env["client"])
+        response = env["client"].post(
+            f'/admin/editar_matriz/{seed["matrix_id"]}?tab=aac',
+            data={"active_tab": "aac"},
+        )
+        assert response.status_code == 302
+        with main.app.app_context():
+            assert current_version_id(main.get_db_connection(), seed) is None
 
 
 def test_assigned_matrix_delete_is_refused_and_pointer_survives(tmp_path):

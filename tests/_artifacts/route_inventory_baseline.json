@@ -600,39 +600,11 @@
       "rule": "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao"
     },
     {
-      "endpoint": "admin_matriz_nova_atividade",
-      "methods": [
-        "POST"
-      ],
-      "rule": "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>"
-    },
-    {
       "endpoint": "admin_excluir_matriz",
       "methods": [
         "POST"
       ],
       "rule": "/admin/matrizes/<int:matriz_id>/excluir"
-    },
-    {
-      "endpoint": "admin_matriz_versoes",
-      "methods": [
-        "GET"
-      ],
-      "rule": "/admin/matrizes/<int:matriz_id>/versoes"
-    },
-    {
-      "endpoint": "admin_matriz_versoes_definir",
-      "methods": [
-        "POST"
-      ],
-      "rule": "/admin/matrizes/<int:matriz_id>/versoes/definir"
-    },
-    {
-      "endpoint": "admin_matriz_versoes_remover",
-      "methods": [
-        "POST"
-      ],
-      "rule": "/admin/matrizes/<int:matriz_id>/versoes/remover"
     },
     {
       "endpoint": "admin_excluir_matrizes",

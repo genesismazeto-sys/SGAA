@@ -6,8 +6,7 @@ diagnosis HEAD ``f977fd6``):
 
   - ``atividades``/``view`` : retained routes after R1 retirement
   - ``atividades``/``edit`` : R5-R16
-  - ``matrizes``/``view``   : R17
-  - ``matrizes``/``edit``   : R18-R21 (R20 = central mapping only)
+  - ``matrizes``/``edit``   : R20-R21 after R17-R19 retirement
 
 R22-R24 are deliberately outside this B1 regression file; their approved mappings
 and actor tests are owned by ``test_ref_0c_b2_diagnostic_rbac.py``.
@@ -60,12 +59,7 @@ HIGH_CONFIDENCE_POLICIES = {
     ("admin_catalogo_inativar_versao", "POST"): ("atividades", "edit"),
     ("admin_catalogo_descontinuar_versao", "POST"): ("atividades", "edit"),
     ("admin_catalogo_substituir_versao", "POST"): ("atividades", "edit"),
-    # matrizes/view (R17)
-    ("admin_matriz_versoes", "GET"): ("matrizes", "view"),
-    # matrizes/edit (R18, R19, R20, R21)
-    ("admin_matriz_versoes_definir", "POST"): ("matrizes", "edit"),
-    ("admin_matriz_versoes_remover", "POST"): ("matrizes", "edit"),
-    ("admin_matriz_nova_atividade", "POST"): ("matrizes", "edit"),
+    # matrizes/edit (R21; R17-R20 retired)
     ("admin_matriz_nova_versao_card", "POST"): ("matrizes", "edit"),
 }
 
@@ -75,7 +69,7 @@ HIGH_CONFIDENCE_POLICIES = {
 
 
 def test_high_confidence_policy_count_matches_current_surface():
-    assert len(HIGH_CONFIDENCE_POLICIES) == 16
+    assert len(HIGH_CONFIDENCE_POLICIES) == 12
 
 
 @pytest.mark.parametrize(
@@ -143,7 +137,7 @@ def _count(sql: str, params: tuple = ()) -> int:
 
 
 # Representative routes per (resource, scope) group.
-VIEW_ROUTES = ("/admin/atividades", "/admin/matrizes/1/versoes")
+VIEW_ROUTES = ("/admin/atividades", "/admin/matrizes")
 EDIT_GET_ROUTE = "/admin/catalogo-versoes/nova-base"  # R5, atividades/edit
 
 
@@ -244,7 +238,7 @@ def test_denied_post_matrizes_edit_is_immutable(env):
     before = _count(
         "SELECT COUNT(*) FROM matriz_atividade_versao_item WHERE matriz_id = 1"
     )
-    r = client.post("/admin/matrizes/1/versoes/definir", data={})
+    r = client.post("/admin/editar_matriz/1?tab=aac", data={"active_tab": "aac"})
     assert _is_dashboard_denial(r), (r.status_code, r.headers.get("Location"))
     after = _count(
         "SELECT COUNT(*) FROM matriz_atividade_versao_item WHERE matriz_id = 1"
@@ -256,7 +250,7 @@ def test_privileged_role_passes_matrizes_edit_gate(env):
     """administrativo (matrizes=full) is not stopped by the RBAC denial gate."""
     client = env["client"]
     _login(client, _make_admin("administrativo"))
-    r = client.post("/admin/matrizes/1/versoes/remover", data={})
+    r = client.post("/admin/editar_matriz/1?tab=aac", data={"active_tab": "aac"})
     # The handler may still reject invalid input, but never with the RBAC
     # denial signature (302 -> /admin/dashboard from the before-request gate).
     assert not _is_dashboard_denial(r)

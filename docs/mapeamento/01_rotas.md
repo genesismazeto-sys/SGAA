@@ -128,13 +128,9 @@ o endpoint exato no auth.py; várias herdam `atividades:view`/`edit`/`full`).
 | `/admin/matrizes` | GET | `admin_matrizes` | `matrizes:view` |
 | `/admin/adicionar_matriz` | GET, POST | `admin_adicionar_matriz` | `matrizes:edit` |
 | `/admin/editar_matriz/<int:matriz_id>` | GET, POST | `admin_editar_matriz` | `matrizes:view` (GET) / `edit` (POST) |
-| `/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>` | POST | (nova atividade na matriz) | `matrizes:*` |
 | `/admin/matrizes/<matriz_id>/atividades/<atividade_id>/nova-versao` | POST | (nova versão na matriz) | `matrizes:*` |
 | `/admin/matrizes/excluir` | POST | `admin_excluir_matrizes` | `matrizes:full` |
 | `/admin/matrizes/<int:matriz_id>/excluir` | POST | `admin_excluir_matriz` | `matrizes:full` |
-| `/admin/matrizes/<int:matriz_id>/versoes` | GET | (lista versões da matriz) | `matrizes` |
-| `/admin/matrizes/<int:matriz_id>/versoes/definir` | POST | (define versão por base) | `matrizes` |
-| `/admin/matrizes/<int:matriz_id>/versoes/remover` | POST | (remove versão da matriz) | `matrizes` |
 
 ## Admin — Alunos, Turmas, Cursos
 

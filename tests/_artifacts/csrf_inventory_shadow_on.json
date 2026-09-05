@@ -1,13 +1,13 @@
 {
   "summary": {
-    "total_mutating_routes": 78,
+    "total_mutating_routes": 75,
     "status_counts": {
       "ok_dynamic_form_token": 13,
-      "ok_rendered_form_token": 55,
+      "ok_rendered_form_token": 53,
       "not_applicable_documented": 2,
       "ok_api_csrf_contract": 1,
       "ok_fetch_token": 3,
-      "ok_specific_regression_test": 3,
+      "ok_specific_regression_test": 2,
       "ok_logout_or_safe_exception": 1
     },
     "high_risk_routes": 0,
@@ -261,12 +261,6 @@
       {
         "label": "/admin/matrizes",
         "path": "/admin/matrizes",
-        "role": "admin",
-        "status_code": 200
-      },
-      {
-        "label": "/admin/matrizes/<int:matriz_id>/versoes",
-        "path": "/admin/matrizes/1/versoes",
         "role": "admin",
         "status_code": 200
       },
@@ -2250,25 +2244,6 @@
       "status": "ok_specific_regression_test"
     },
     {
-      "route": "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
-      "method": "POST",
-      "view_function": "app.views.admin.matrizes.admin_matriz_nova_atividade",
-      "template_related": [],
-      "requires_login": "admin",
-      "has_post_form": false,
-      "csrf_in_html": null,
-      "token_counts_per_form": [],
-      "has_fetch_post": false,
-      "fetch_sends_token": null,
-      "has_dynamic_form": false,
-      "risk": [],
-      "notes": [
-        "tests/test_admin_matrix_new_activity.py::test_modal_form_contains_csrf_and_post_requires_it"
-      ],
-      "evidence": [],
-      "status": "ok_specific_regression_test"
-    },
-    {
       "route": "/admin/matrizes/<int:matriz_id>/excluir",
       "method": "POST",
       "view_function": "app.views.admin.matrizes.admin_excluir_matriz",
@@ -2292,70 +2267,6 @@
         }
       ],
       "status": "ok_dynamic_form_token"
-    },
-    {
-      "route": "/admin/matrizes/<int:matriz_id>/versoes/definir",
-      "method": "POST",
-      "view_function": "app.views.admin.matrizes.admin_matriz_versoes_definir",
-      "template_related": [],
-      "requires_login": "admin",
-      "has_post_form": true,
-      "csrf_in_html": true,
-      "token_counts_per_form": [
-        {
-          "page": "/admin/matrizes/<int:matriz_id>/versoes",
-          "action": "/admin/matrizes/1/versoes/definir",
-          "token_counts": [
-            1
-          ]
-        }
-      ],
-      "has_fetch_post": false,
-      "fetch_sends_token": null,
-      "has_dynamic_form": false,
-      "risk": [],
-      "notes": [],
-      "evidence": [
-        {
-          "kind": "rendered_form",
-          "page": "/admin/matrizes/<int:matriz_id>/versoes",
-          "action": "/admin/matrizes/1/versoes/definir",
-          "token_count": 1
-        }
-      ],
-      "status": "ok_rendered_form_token"
-    },
-    {
-      "route": "/admin/matrizes/<int:matriz_id>/versoes/remover",
-      "method": "POST",
-      "view_function": "app.views.admin.matrizes.admin_matriz_versoes_remover",
-      "template_related": [],
-      "requires_login": "admin",
-      "has_post_form": true,
-      "csrf_in_html": true,
-      "token_counts_per_form": [
-        {
-          "page": "/admin/matrizes/<int:matriz_id>/versoes",
-          "action": "/admin/matrizes/1/versoes/remover",
-          "token_counts": [
-            1
-          ]
-        }
-      ],
-      "has_fetch_post": false,
-      "fetch_sends_token": null,
-      "has_dynamic_form": false,
-      "risk": [],
-      "notes": [],
-      "evidence": [
-        {
-          "kind": "rendered_form",
-          "page": "/admin/matrizes/<int:matriz_id>/versoes",
-          "action": "/admin/matrizes/1/versoes/remover",
-          "token_count": 1
-        }
-      ],
-      "status": "ok_rendered_form_token"
     },
     {
       "route": "/admin/matrizes/excluir",

@@ -75,17 +75,14 @@ CSRF_MUTATING_PAIRS = {
     "/admin/processar_requisicao/<int:req_id>": "admin_processar_requisicao",
 }
 
-# PHASE 4-B5-R1: the 8 Matrizes POST handlers extracted to app.views.admin.matrizes.
+# PHASE 4-B5-R1: the 5 surviving Matrizes POST handlers owned by app.views.admin.matrizes.
 # They appear as additional owner-only deltas in the regenerated CSRF snapshots.
 MATRIZES_MUTATING_PAIRS = {
     "/admin/adicionar_matriz": "admin_adicionar_matriz",
     "/admin/editar_matriz/<int:matriz_id>": "admin_editar_matriz",
     "/admin/matrizes/excluir": "admin_excluir_matrizes",
     "/admin/matrizes/<int:matriz_id>/excluir": "admin_excluir_matriz",
-    "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>": "admin_matriz_nova_atividade",
     "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao": "admin_matriz_nova_versao_card",
-    "/admin/matrizes/<int:matriz_id>/versoes/definir": "admin_matriz_versoes_definir",
-    "/admin/matrizes/<int:matriz_id>/versoes/remover": "admin_matriz_versoes_remover",
 }
 
 # PHASE 4-B6: the 11 Alunos/Turmas/Cursos POST handlers extracted to
@@ -182,11 +179,11 @@ C1_COURSE_DETAIL_PAGE_PATH = "/admin/cursos/2"
 C1_ARQUIVOS_PAGE_PATH = "/admin/arquivos?edit_arquivo=1"
 C1_STATUS_COUNTS_OLD = {
     "ok_dynamic_form_token": 14,
-    "ok_rendered_form_token": 54,
+    "ok_rendered_form_token": 52,
 }
 C1_STATUS_COUNTS_NEW = {
     "ok_dynamic_form_token": 13,
-    "ok_rendered_form_token": 55,
+    "ok_rendered_form_token": 53,
 }
 C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
 C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"
@@ -831,14 +828,31 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
-        old_snapshot["rows"] = [row for row in old_snapshot["rows"] if row["route"] != "/admin/normas-atividade/nova"]
+        retired_routes = {
+            "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
+            "/admin/matrizes/<int:matriz_id>/versoes/definir",
+            "/admin/matrizes/<int:matriz_id>/versoes/remover",
+        }
+        old_snapshot["rows"] = [
+            row for row in old_snapshot["rows"]
+            if row["route"] != "/admin/normas-atividade/nova"
+            and row["route"] not in retired_routes
+        ]
         old_snapshot["summary"]["page_statuses"] = [
             item for item in old_snapshot["summary"]["page_statuses"]
-            if item["path"] not in {"/admin/normas-atividade", "/admin/normas-atividade/nova"}
+            if item["path"] not in {
+                "/admin/normas-atividade",
+                "/admin/normas-atividade/nova",
+                "/admin/matrizes/1/versoes",
+                "/admin/catalogo-versoes",
+            }
         ]
+        old_snapshot["summary"]["total_mutating_routes"] -= 3
+        old_snapshot["summary"]["status_counts"]["ok_rendered_form_token"] -= 2
+        old_snapshot["summary"]["status_counts"]["ok_specific_regression_test"] -= 1
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 77
+        assert len(old_rows) == len(new_rows) == 74
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]
@@ -866,7 +880,7 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         # exactly 1 more owner-only delta (main ->
         # app.views.admin.meus_dados).
         # The historical 5 requisicoes deltas remain owner-only and unchanged.
-        # 49 = 5 requisicoes + 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10
+        # 46 = 5 requisicoes + 5 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10
         # + 3 UT-11 + 2 UT-12 + 1 UT-14, exhaustively partitioned with no
         # uncategorized delta.
         deltas_by_route = {
@@ -882,7 +896,7 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         reportes_routes = set(REPORTES_MUTATING_PAIRS)
         meus_dados_routes = set(MEUS_DADOS_MUTATING_PAIRS)
         assert len(requisicoes_routes) == 5
-        assert len(matrizes_routes) == 8
+        assert len(matrizes_routes) == 5
         assert len(b6_routes) == 11
         assert len(banco_dados_routes) == 11
         assert len(acesso_routes) == 5
@@ -931,14 +945,14 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
             | acesso_routes | arquivos_routes | alertas_routes | reportes_routes
             | meus_dados_routes
         )
-        _assert_historical_partition_arithmetic(deltas_by_route, 49, historical_routes)
+        _assert_historical_partition_arithmetic(deltas_by_route, 46, historical_routes)
         _assert_c1_adversarial_controls(
             old_rows,
             new_rows,
             old_summary,
             new_summary,
             deltas_by_route,
-            49,
+            46,
             historical_routes,
         )
 
@@ -980,7 +994,7 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
             if route in meus_dados_routes
         ]
         assert len(requisicoes_deltas) == 5
-        assert len(matrizes_deltas) == 8
+        assert len(matrizes_deltas) == 5
         assert len(b6_deltas) == 11
         assert len(banco_dados_deltas) == 11
         assert len(acesso_deltas) == 5
@@ -1160,7 +1174,7 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
 # =====================================================================
 
 
-def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
+def test_route_inventory_baseline_matches_live_retired_surface_counts():
     import main
 
     raw = ROUTE_INVENTORY_PATH.read_bytes()
@@ -1168,10 +1182,10 @@ def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({entry["rule"] for entry in routes}) == 126
+    assert len(routes) == 123
+    assert len({entry["rule"] for entry in routes}) == 122
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 126
+    assert len(non_static) == 122
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1185,12 +1199,12 @@ def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
     assert ROUTE_INVENTORY_PATH.read_bytes() == raw
 
 
-def test_message_catalog_count_remains_536():
+def test_message_catalog_count_matches_retired_surface_state():
     from utils import messages
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 537
+    assert len(catalog) == 526
 
 
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():
@@ -1264,7 +1278,7 @@ def test_no_matriz_aluno_route_was_moved_and_dashboard_ownership_state_aware():
 
     # PHASE 4-B5-R1: the Matrizes handlers moved to app.views.admin.matrizes;
     # the remaining legacy endpoints stay in main.
-    for endpoint in ("admin_matrizes", "admin_matriz_versoes"):
+    for endpoint in ("admin_matrizes",):
         assert endpoint in main.app.view_functions
         assert main.app.view_functions[endpoint].__module__ == "app.views.admin.matrizes"
 

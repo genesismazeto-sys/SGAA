@@ -9,18 +9,17 @@ in this test module.
 The contract covered here (GREEN targets):
 
   1. isolated import of ``app.views.admin.matrizes`` (no main / DB / FS / net);
-  2. exact ``LEGACY_ROUTE_SPECS``: 10 endpoints, 12 rule/method pairs, no 11th;
+  2. exact ``LEGACY_ROUTE_SPECS``: 6 endpoints, 8 rule/method pairs, no 7th;
   3. exact RBAC for every route/method combination;
   4. no ``@bp.route``, no namespaced alias, no duplicates, no main/dynamic import;
   5. global legacy ``request.endpoint`` and ``url_for`` preserved;
   6. factory default / opt-out, independent apps, atomic endpoint and
      rule/method collisions;
-  7. ``main`` identities for the 10 handlers and 21 helpers;
-  8. ``admin_editar_matriz`` / ``admin_matriz_nova_atividade`` keep the B5-P
-     ``app.admin_access`` owner;
-  9. route-inventory baseline byte-identical, message catalog == 536, CSRF
-      snapshots show exactly 8 Matrizes + 11 B6 + 11 UT-8 Banco de Dados
-      owner-only deltas each (30 total), canonical SQLite never opened;
+  7. ``main`` identities for the 6 handlers and 15 helpers;
+  8. ``admin_editar_matriz`` keeps the B5-P ``app.admin_access`` owner;
+  9. route-inventory baseline byte-identical, message catalog == 526, CSRF
+     snapshots show exactly 5 surviving Matrizes owner-only deltas plus the
+     later blueprint deltas, canonical SQLite never opened;
   10. ``_get_grupos_atividade`` and ``_get_matriz_active_norma_ids`` remain
       absent from ``main`` and from the new module.
 
@@ -67,42 +66,21 @@ ROUTE_MATRIX = (
     ("/admin/matrizes/excluir", "admin_excluir_matrizes", ("POST",)),
     ("/admin/matrizes/<int:matriz_id>/excluir", "admin_excluir_matriz", ("POST",)),
     (
-        "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
-        "admin_matriz_nova_atividade",
-        ("POST",),
-    ),
-    (
         "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao",
         "admin_matriz_nova_versao_card",
-        ("POST",),
-    ),
-    ("/admin/matrizes/<int:matriz_id>/versoes", "admin_matriz_versoes", ("GET",)),
-    (
-        "/admin/matrizes/<int:matriz_id>/versoes/definir",
-        "admin_matriz_versoes_definir",
-        ("POST",),
-    ),
-    (
-        "/admin/matrizes/<int:matriz_id>/versoes/remover",
-        "admin_matriz_versoes_remover",
         ("POST",),
     ),
 )
 ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
 
 HELPER_NAMES = (
-    "get_bases_escopo_matriz",
-    "get_versoes_ativas_por_base_na_matriz",
     "get_vinculo_versao_da_matriz",
     "_set_versao_da_matriz_para_base",
-    "_remover_versao_da_matriz_para_base",
     "get_card_version_menu_data",
     "_matriz_status_badge_type",
     "_matriz_vigencia_label",
     "_matriz_activity_type_for_tab",
     "_matriz_axis_for_tab",
-    "_get_grupos_por_tipo",
-    "_build_matriz_new_activity_modal_context",
     "_matriz_transfer_meta",
     "_matriz_activity_rule_summary",
     "_matriz_transfer_lists",
@@ -119,26 +97,19 @@ RBAC_MATRIX = {
     "admin_editar_matriz": ("matrizes", "view"),  # GET; POST is edit — see below
     "admin_excluir_matrizes": ("matrizes", "full"),
     "admin_excluir_matriz": ("matrizes", "full"),
-    "admin_matriz_versoes": ("matrizes", "view"),
-    "admin_matriz_nova_atividade": ("matrizes", "edit"),
     "admin_matriz_nova_versao_card": ("matrizes", "edit"),
-    "admin_matriz_versoes_definir": ("matrizes", "edit"),
-    "admin_matriz_versoes_remover": ("matrizes", "edit"),
 }
 # admin_editar_matriz is GET=view / POST=edit.
 RBAC_EDITAR_MATRIZ_PAIR = (("GET", ("matrizes", "view")), ("POST", ("matrizes", "edit")))
-RBAC_SCOPE_COUNTS = {"view": 3, "edit": 7, "full": 2}
+RBAC_SCOPE_COUNTS = {"view": 2, "edit": 4, "full": 2}
 
-# 8 POST-handlers that are the only mutating Matrizes routes (owner-only CSRF).
+# 5 POST-handlers that are the only mutating Matrizes routes (owner-only CSRF).
 CSRF_MUTATING_PAIRS = {
     "/admin/adicionar_matriz": "admin_adicionar_matriz",
     "/admin/editar_matriz/<int:matriz_id>": "admin_editar_matriz",
     "/admin/matrizes/excluir": "admin_excluir_matrizes",
     "/admin/matrizes/<int:matriz_id>/excluir": "admin_excluir_matriz",
-    "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>": "admin_matriz_nova_atividade",
     "/admin/matrizes/<int:matriz_id>/atividades/<int:atividade_id>/nova-versao": "admin_matriz_nova_versao_card",
-    "/admin/matrizes/<int:matriz_id>/versoes/definir": "admin_matriz_versoes_definir",
-    "/admin/matrizes/<int:matriz_id>/versoes/remover": "admin_matriz_versoes_remover",
 }
 
 # PHASE 4-B6: the 11 Alunos/Turmas/Cursos POST handlers extracted to
@@ -231,11 +202,11 @@ C1_COURSE_DETAIL_PAGE_PATH = "/admin/cursos/2"
 C1_ARQUIVOS_PAGE_PATH = "/admin/arquivos?edit_arquivo=1"
 C1_STATUS_COUNTS_OLD = {
     "ok_dynamic_form_token": 14,
-    "ok_rendered_form_token": 54,
+    "ok_rendered_form_token": 52,
 }
 C1_STATUS_COUNTS_NEW = {
     "ok_dynamic_form_token": 13,
-    "ok_rendered_form_token": 55,
+    "ok_rendered_form_token": 53,
 }
 C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
 C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"
@@ -545,7 +516,15 @@ BLUEPRINT_FLAG = "register_admin_matrizes_blueprint"
 BLUEPRINT_VAR = "bp_admin_matrizes"
 
 # Two void helper names that must never be defined in main nor in the module.
-VOID_HELPER_NAMES = {"_get_grupos_atividade", "_get_matriz_active_norma_ids"}
+VOID_HELPER_NAMES = {
+    "_get_grupos_atividade",
+    "_get_matriz_active_norma_ids",
+    "get_bases_escopo_matriz",
+    "get_versoes_ativas_por_base_na_matriz",
+    "_remover_versao_da_matriz_para_base",
+    "_get_grupos_por_tipo",
+    "_build_matriz_new_activity_modal_context",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +676,7 @@ def test_canonical_owner_path_exists():
 
 
 # ---------------------------------------------------------------------------
-# 1. Exact LEGACY_ROUTE_SPECS: 10 endpoints, 12 pairs, no 11th endpoint
+# 1. Exact LEGACY_ROUTE_SPECS: 6 endpoints, 8 pairs, no 7th endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -706,12 +685,12 @@ def test_exactly_ten_route_specs_and_twelve_rule_method_pairs_match_legacy_matri
     specs = module.LEGACY_ROUTE_SPECS
 
     assert isinstance(specs, tuple)
-    assert len(specs) == 10
+    assert len(specs) == 6
     assert tuple((spec.rule, spec.endpoint, spec.methods) for spec in specs) == ROUTE_MATRIX
     assert {spec.endpoint for spec in specs} == set(ROUTE_NAMES) == set(ROUTE_NAMES)
-    assert len(ROUTE_NAMES) == 10
+    assert len(ROUTE_NAMES) == 6
     pairs = {(spec.rule, method) for spec in specs for method in spec.methods}
-    assert len(pairs) == 12
+    assert len(pairs) == 8
     assert {spec.view_func for spec in specs} == {
         getattr(module, name) for name in ROUTE_NAMES
     }
@@ -726,8 +705,8 @@ def test_route_specs_are_immutable():
 
 def test_no_eleventh_endpoint_in_catalog():
     module = _canonical_module()
-    assert len(module.LEGACY_ROUTE_SPECS) == 10
-    assert len({spec.endpoint for spec in module.LEGACY_ROUTE_SPECS}) == 10
+    assert len(module.LEGACY_ROUTE_SPECS) == 6
+    assert len({spec.endpoint for spec in module.LEGACY_ROUTE_SPECS}) == 6
 
 
 # ---------------------------------------------------------------------------
@@ -781,7 +760,7 @@ def test_two_independent_factory_apps_each_register_each_route_once():
 
     assert _route_tuples(first) == set(ROUTE_MATRIX)
     assert _route_tuples(second) == set(ROUTE_MATRIX)
-    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 10
+    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 6
     assert first is not second
 
 
@@ -791,7 +770,7 @@ def test_duplicate_blueprint_registration_fails_explicitly():
 
     with pytest.raises(LegacyRouteRegistrationError, match="already registered"):
         register_legacy_blueprint(app, module.bp_admin_matrizes)
-    assert len(_live_moved_rules(app)) == 10
+    assert len(_live_moved_rules(app)) == 6
 
 
 @pytest.mark.parametrize("collision_kind", ["endpoint", "rule_method"])
@@ -822,12 +801,12 @@ def test_no_namespaced_endpoint_alias_or_duplicate_rule_exists():
     app = _factory()
     moved = _live_moved_rules(app)
 
-    assert len(moved) == 10
+    assert len(moved) == 6
     assert not any(
         rule.endpoint.startswith(f"{BLUEPRINT_VAR}.") for rule in app.url_map.iter_rules()
     )
     assert not any("." in rule.endpoint for rule in moved)
-    assert len({rule.rule for rule in moved}) == 10
+    assert len({rule.rule for rule in moved}) == 6
     for expected_rule, expected_endpoint, expected_methods in ROUTE_MATRIX:
         matches = [
             rule
@@ -964,7 +943,7 @@ def test_admin_access_owner_preserved_in_matrizes_access_consumers():
     from app import admin_access
 
     module = _canonical_module()
-    for consumer in ("admin_editar_matriz", "admin_matriz_nova_atividade"):
+    for consumer in ("admin_editar_matriz",):
         func = inspect.unwrap(getattr(module, consumer))
         assert func.__module__ == module.__name__
         for helper in ("_get_current_admin_access_context", "_admin_can"):
@@ -976,7 +955,7 @@ def test_admin_access_owner_preserved_in_matrizes_access_consumers():
 # ---------------------------------------------------------------------------
 
 
-def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
+def test_route_inventory_baseline_matches_live_retired_surface_counts():
     import main
 
     raw = ROUTE_INVENTORY_PATH.read_bytes()
@@ -984,10 +963,10 @@ def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({entry["rule"] for entry in routes}) == 126
+    assert len(routes) == 123
+    assert len({entry["rule"] for entry in routes}) == 122
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 126
+    assert len(non_static) == 122
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1001,12 +980,12 @@ def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
     assert ROUTE_INVENTORY_PATH.read_bytes() == raw
 
 
-def test_message_catalog_count_remains_536():
+def test_message_catalog_count_matches_retired_surface_state():
     from utils import messages
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 537
+    assert len(catalog) == 526
 
 
 def test_canonical_sqlite_never_opened_during_isolated_flow(tmp_path):
@@ -1065,7 +1044,7 @@ print(json.dumps({"ok": True, "module": module.__name__}))
     assert json.loads(result.stdout)["ok"] is True
 
 
-def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
+def test_csrf_snapshots_prove_exactly_five_surviving_owner_only_deltas():
     for snapshot_path in (CSRF_OFF_PATH, CSRF_ON_PATH):
         assert snapshot_path.is_file(), f"missing CSRF snapshot: {snapshot_path}"
         relative = snapshot_path.relative_to(PROJECT_ROOT).as_posix()
@@ -1080,14 +1059,31 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
-        old_snapshot["rows"] = [row for row in old_snapshot["rows"] if row["route"] != "/admin/normas-atividade/nova"]
+        retired_routes = {
+            "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
+            "/admin/matrizes/<int:matriz_id>/versoes/definir",
+            "/admin/matrizes/<int:matriz_id>/versoes/remover",
+        }
+        old_snapshot["rows"] = [
+            row for row in old_snapshot["rows"]
+            if row["route"] != "/admin/normas-atividade/nova"
+            and row["route"] not in retired_routes
+        ]
         old_snapshot["summary"]["page_statuses"] = [
             item for item in old_snapshot["summary"]["page_statuses"]
-            if item["path"] not in {"/admin/normas-atividade", "/admin/normas-atividade/nova"}
+            if item["path"] not in {
+                "/admin/normas-atividade",
+                "/admin/normas-atividade/nova",
+                "/admin/matrizes/1/versoes",
+                "/admin/catalogo-versoes",
+            }
         ]
+        old_snapshot["summary"]["total_mutating_routes"] -= 3
+        old_snapshot["summary"]["status_counts"]["ok_rendered_form_token"] -= 2
+        old_snapshot["summary"]["status_counts"]["ok_specific_regression_test"] -= 1
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 77
+        assert len(old_rows) == len(new_rows) == 74
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]
@@ -1112,8 +1108,8 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         # app.views.admin.reportes).  UT-14: the Meus Dados extraction adds
         # exactly 1 more owner-only delta (main ->
         # app.views.admin.meus_dados).
-        # The historical 8 Matrizes deltas remain owner-only and unchanged.
-        # 44 = 8 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10 + 3 UT-11
+        # The 5 surviving Matrizes deltas remain owner-only and unchanged.
+        # 41 = 5 Matrizes + 11 B6 + 11 UT-8 + 5 UT-9 + 3 UT-10 + 3 UT-11
         # + 2 UT-12 + 1 UT-14, exhaustively partitioned with no uncategorized
         # delta.
         deltas_by_route = {new_row["route"]: (old_row, new_row) for old_row, new_row in deltas}
@@ -1125,7 +1121,7 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
         alertas_routes = set(ALERTAS_MUTATING_PAIRS)
         reportes_routes = set(REPORTES_MUTATING_PAIRS)
         meus_dados_routes = set(MEUS_DADOS_MUTATING_PAIRS)
-        assert len(matrizes_routes) == 8
+        assert len(matrizes_routes) == 5
         assert len(b6_routes) == 11
         assert len(banco_dados_routes) == 11
         assert len(acesso_routes) == 5
@@ -1166,14 +1162,14 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
             | arquivos_routes | alertas_routes | reportes_routes
             | meus_dados_routes
         )
-        _assert_historical_partition_arithmetic(deltas_by_route, 44, historical_routes)
+        _assert_historical_partition_arithmetic(deltas_by_route, 41, historical_routes)
         _assert_c1_adversarial_controls(
             old_rows,
             new_rows,
             old_summary,
             new_summary,
             deltas_by_route,
-            44,
+            41,
             historical_routes,
         )
 
@@ -1209,7 +1205,7 @@ def test_csrf_snapshots_prove_exactly_eight_owner_only_deltas_when_extracted():
             for route, pair in deltas_by_route.items()
             if route in meus_dados_routes
         ]
-        assert len(matrizes_deltas) == 8
+        assert len(matrizes_deltas) == 5
         assert len(b6_deltas) == 11
         assert len(banco_dados_deltas) == 11
         assert len(acesso_deltas) == 5

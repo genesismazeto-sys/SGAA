@@ -81,7 +81,17 @@ def test_activity_version_creation_preserves_axis_number_and_lineage(tmp_path):
             conn.commit()
         first = client.post(
             f"/admin/catalogo-versoes/{base_id}/nova-versao",
-            data={"eixo": "AEU", "grupo": "NA", "ch_por_evento": "4"},
+            data={
+                "tipo_atividade": "Extensão Universitária",
+                "grupo": "NA",
+                "nome": "Sem dominio regulatorio",
+                "descricao": "",
+                "tipo_limitacao": "",
+                "limite_valor": "",
+                "ch_por_evento": "4",
+                "observacoes": "",
+                "versao_anterior_id": "",
+            },
         )
         assert first.status_code == 302
         with main.app.app_context():
@@ -91,9 +101,14 @@ def test_activity_version_creation_preserves_axis_number_and_lineage(tmp_path):
         second = client.post(
             f"/admin/catalogo-versoes/{base_id}/nova-versao",
             data={
-                "eixo": "AAC",
+                "tipo_atividade": "Extensão Universitária",
                 "grupo": "NA",
+                "nome": "Sem dominio regulatorio",
+                "descricao": "",
+                "tipo_limitacao": "",
+                "limite_valor": "",
                 "ch_por_evento": "6",
+                "observacoes": "",
                 "versao_anterior_id": str(v1["id"]),
             },
         )
@@ -121,12 +136,21 @@ def test_matrix_exact_version_relink_axis_status_and_freeze(tmp_path):
             ).fetchone()[0]
             conn.commit()
 
-        endpoint = f"/admin/matrizes/{seed['matrix_id']}/versoes/definir"
-        assert client.post(endpoint, data={"base_id": seed["base_id"], "versao_id": seed["v2"]}).status_code == 302
+        endpoint = f"/admin/editar_matriz/{seed['matrix_id']}?tab=aac"
+        assert client.post(
+            endpoint,
+            data={"active_tab": "aac", "selected_activity_ids": [str(seed["v2"])]},
+        ).status_code == 302
         with main.app.app_context():
             assert current_version_id(main.get_db_connection(), seed) == seed["v2"]
-        client.post(endpoint, data={"base_id": seed["base_id"], "versao_id": seed["v3_inactive"]})
-        client.post(endpoint, data={"base_id": seed["base_id"], "versao_id": wrong_axis})
+        client.post(
+            endpoint,
+            data={"active_tab": "aac", "selected_activity_ids": [str(seed["v3_inactive"])]},
+        )
+        client.post(
+            endpoint,
+            data={"active_tab": "aac", "selected_activity_ids": [str(wrong_axis)]},
+        )
         with main.app.app_context():
             conn = main.get_db_connection()
             assert current_version_id(conn, seed) == seed["v2"]
@@ -137,7 +161,10 @@ def test_matrix_exact_version_relink_axis_status_and_freeze(tmp_path):
                 (seed["course_id"], seed["matrix_id"]),
             )
             conn.commit()
-        client.post(endpoint, data={"base_id": seed["base_id"], "versao_id": seed["v1"]})
+        client.post(
+            endpoint,
+            data={"active_tab": "aac", "selected_activity_ids": [str(seed["v1"])]},
+        )
         with main.app.app_context():
             assert current_version_id(main.get_db_connection(), seed) == seed["v2"]
 

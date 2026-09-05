@@ -364,18 +364,13 @@ from app.views.admin.versioning import (
     admin_diagnostico_atividades_versionadas_view,
 )
 from app.views.admin.matrizes import (
-    get_bases_escopo_matriz,
-    get_versoes_ativas_por_base_na_matriz,
     get_vinculo_versao_da_matriz,
     _set_versao_da_matriz_para_base,
-    _remover_versao_da_matriz_para_base,
     get_card_version_menu_data,
     _matriz_status_badge_type,
     _matriz_vigencia_label,
     _matriz_activity_type_for_tab,
     _matriz_axis_for_tab,
-    _get_grupos_por_tipo,
-    _build_matriz_new_activity_modal_context,
     _matriz_transfer_meta,
     _matriz_activity_rule_summary,
     _matriz_transfer_lists,
@@ -387,13 +382,9 @@ from app.views.admin.matrizes import (
     admin_matrizes,
     admin_adicionar_matriz,
     admin_editar_matriz,
-    admin_matriz_nova_atividade,
     admin_matriz_nova_versao_card,
     admin_excluir_matrizes,
     admin_excluir_matriz,
-    admin_matriz_versoes,
-    admin_matriz_versoes_definir,
-    admin_matriz_versoes_remover,
 )
 from app.views.admin.alunos_turmas_cursos import (
     admin_adicionar_aluno,
