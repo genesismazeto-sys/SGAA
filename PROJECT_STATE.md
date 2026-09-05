@@ -2456,3 +2456,16 @@ remains the next independent visual defect. It is not fixed here.
 - Version/domain architecture remains unchanged, including exact Matrix →
   Activity Version ownership.
 - Focused accepted tests and Chromium evidence passed; source database unchanged.
+
+## DETAIL PAGE HEADER DESIGN SYSTEM — LANDED
+
+- Canonical Detail Page Header component established: title left and Back right
+  on desktop, with optional subtitle below the title.
+- Narrow-width stacking is supported; Back is secondary navigation and section
+  actions remain section-scoped.
+- Activity Version Detail migrated as the first consumer.
+- Course Detail and Matrix Versions remain future candidates only.
+- Accepted evidence: 57 focused tests passed; desktop Chromium and 768px
+  responsive validation passed; user visually accepted the result.
+- Source database unchanged.
+- Implementation commit: `593394f163c6edfdee0a0cfde73126b135568a04`.
