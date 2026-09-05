@@ -2443,3 +2443,16 @@ rerun for this closeout.
 
 The form-chip/addon background inconsistency was not part of this landing and
 remains the next independent visual defect. It is not fixed here.
+
+## VERSION CATALOG RETIREMENT — CLOSED / LANDED
+
+- Standalone `/admin/catalogo-versoes` retired; no compatibility redirect retained.
+- `templates/admin_catalogo_versoes.html` physically removed.
+- Canonical entry is `/admin/atividades`, whose Activity list exposes View, Edit,
+  Create Version, and View Versions.
+- Exact Version Detail/lifecycle routes remain; detail back-navigation and
+  missing-base fallbacks return to Activities.
+- Known-base version recovery remains exact-detail scoped.
+- Version/domain architecture remains unchanged, including exact Matrix →
+  Activity Version ownership.
+- Focused accepted tests and Chromium evidence passed; source database unchanged.
