@@ -149,28 +149,6 @@ def create_activity_with_initial_version(
     return base_id, versao_id
 
 
-def get_atividade_base_list(conn) -> list:
-    """
-    Retorna todas as atividade_base com contagem de versões.
-    Estritamente read-only — nenhum INSERT/UPDATE/DELETE.
-    """
-    return conn.execute(
-        """
-        SELECT
-            ab.id,
-            ab.nome_conceito,
-            ab.descricao,
-            ab.created_at,
-            COUNT(av.id)                                              AS total_versoes,
-            SUM(CASE WHEN av.status = 'ativa' THEN 1 ELSE 0 END)     AS versoes_ativas
-          FROM atividade_base ab
-          LEFT JOIN atividade_versao av ON av.atividade_base_id = ab.id
-         GROUP BY ab.id
-         ORDER BY LOWER(ab.nome_conceito) ASC
-        """
-    ).fetchall()
-
-
 def get_atividade_base(conn, base_id: int):
     """
     Retorna uma atividade_base pelo id, ou None.
@@ -493,7 +471,6 @@ __all__ = [
     '_parse_non_negative_form_number',
     '_build_grupo_label',
     'create_activity_with_initial_version',
-    'get_atividade_base_list',
     'get_atividade_base',
     'get_versoes_por_base',
     'get_versoes_da_base_por_eixo',

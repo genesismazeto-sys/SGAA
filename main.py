@@ -49,7 +49,6 @@ from app.web.request import _is_ajax_request
 from app.activity_catalog import (
     _normalize_atividade_grupo,
     get_atividade_base,
-    get_atividade_base_list,
     get_atividade_transicoes_por_base,
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
@@ -322,7 +321,6 @@ from app.views.admin.atividades import (
     admin_catalogo_nova_versao,
     admin_catalogo_substituir_versao,
     admin_catalogo_versao_detalhe,
-    admin_catalogo_versoes,
     admin_deletar_atividade,
     admin_editar_atividade,
     admin_grupos_excluir,

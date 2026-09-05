@@ -984,10 +984,10 @@ def test_route_inventory_baseline_is_byte_identical_and_counts_131_130():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 128
-    assert len({entry["rule"] for entry in routes}) == 127
+    assert len(routes) == 127
+    assert len({entry["rule"] for entry in routes}) == 126
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 127
+    assert len(non_static) == 126
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes

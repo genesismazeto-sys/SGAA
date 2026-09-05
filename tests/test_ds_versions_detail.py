@@ -96,6 +96,9 @@ def test_detail_normalizes_language_values_status_usage_actions_and_exact_source
 
     assert response.status_code == 200
     rendered = html_module.unescape(response.get_data(as_text=True))
+    assert 'href="/admin/atividades"' in rendered
+    assert '<span class="btn-label">Atividades</span>' in rendered
+    assert "Catálogo de versões" not in rendered
     assert "Atividade com nome deliberadamente longo" in rendered
     assert ">Ativo<" not in rendered
     assert ">Eixo<" not in rendered

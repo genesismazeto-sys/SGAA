@@ -1168,10 +1168,10 @@ def test_route_inventory_baseline_is_byte_identical_and_keeps_131_130_counts():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 128
-    assert len({entry["rule"] for entry in routes}) == 127
+    assert len(routes) == 127
+    assert len({entry["rule"] for entry in routes}) == 126
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 127
+    assert len(non_static) == 126
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
@@ -1237,7 +1237,6 @@ def test_b1_b2_b3_b41_shared_owners_remain_intact():
     )
     catalog_helpers = (
         "get_atividade_base",
-        "get_atividade_base_list",
         "get_atividade_versao_by_id",
         "get_next_numero_versao",
         "parse_documentos_json",
@@ -1255,7 +1254,7 @@ def test_b1_b2_b3_b41_shared_owners_remain_intact():
         assert getattr(atividades, name) is getattr(activity_catalog, name)
     for name in upload_helpers:
         assert getattr(main, name) is getattr(uploads, name)
-    for name in ("admin_atividades", "admin_editar_atividade", "admin_catalogo_versoes"):
+    for name in ("admin_atividades", "admin_editar_atividade"):
         assert getattr(main, name) is getattr(atividades, name)
 
 

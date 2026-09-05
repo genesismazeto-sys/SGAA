@@ -325,19 +325,19 @@ def test_existing_mapped_browser_ajax_and_actor_contracts_are_preserved(env):
     assert ajax.get_json()["error"] == "forbidden"
 
     _login(client, "admin_total")
-    assert client.get("/admin/catalogo-versoes").status_code == 200
+    assert client.get("/admin/atividades").status_code == 200
     _login(client, "administrativo")
-    assert client.get("/admin/catalogo-versoes").status_code == 200
+    assert client.get("/admin/atividades").status_code == 200
 
 
 def test_anonymous_and_aluno_admin_authentication_contracts_are_preserved(env):
     client = env["client"]
-    assert client.get("/admin/catalogo-versoes").status_code == 302
+    assert client.get("/admin/atividades").status_code == 302
     with client.session_transaction() as value:
         value.clear()
         value["user_id"] = 1
         value["user_type"] = "aluno"
-    response = client.get("/admin/catalogo-versoes")
+    response = client.get("/admin/atividades")
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
 

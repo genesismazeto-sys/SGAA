@@ -436,14 +436,11 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     if endpoint in {"admin_excluir_matrizes", "admin_excluir_matriz"}:
         return _permission("matrizes", "full")
 
-    # REF-0C-B1 — Strongly Supported RBAC Mappings (21 HIGH-confidence routes, R1-R21).
+    # REF-0C-B1 — Strongly Supported RBAC Mappings retained after R1 retirement.
     # Accepted diagnosis: docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md (HEAD f977fd6).
     # R22-R24 (admin_diagnostico_*) are intentionally EXCLUDED pending decision D4 and must
     # remain unmapped (return None) until their diagnostic access policy is approved.
-    if endpoint in {
-        "admin_catalogo_versoes",          # R1  GET  /admin/catalogo-versoes
-        "admin_catalogo_versao_detalhe",   # R2  GET  /admin/catalogo-versoes/<base_id>
-    }:
+    if endpoint == "admin_catalogo_versao_detalhe":  # R2  GET  /admin/catalogo-versoes/<base_id>
         return _permission("atividades", "view")
     if endpoint in {
         "admin_catalogo_nova_base",        # R5/R6   GET+POST /admin/catalogo-versoes/nova-base

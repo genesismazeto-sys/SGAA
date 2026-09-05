@@ -1,10 +1,10 @@
 """REF-0C-B1 — Strongly Supported RBAC Mappings and Denial Tests.
 
-Validates the 21 HIGH-confidence route-method RBAC policies accepted in
+Validates the retained HIGH-confidence route-method RBAC policies accepted in
 ``docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md`` (Section 9, accepted
 diagnosis HEAD ``f977fd6``):
 
-  - ``atividades``/``view`` : R1-R4
+  - ``atividades``/``view`` : retained routes after R1 retirement
   - ``atividades``/``edit`` : R5-R16
   - ``matrizes``/``view``   : R17
   - ``matrizes``/``edit``   : R18-R21 (R20 = central mapping only)
@@ -13,7 +13,7 @@ R22-R24 are deliberately outside this B1 regression file; their approved mapping
 and actor tests are owned by ``test_ref_0c_b2_diagnostic_rbac.py``.
 
 Coverage:
-  1. Central requirement mapping — every one of the 21 route-method pairs returns
+  1. Central requirement mapping — every retained route-method pair returns
      its accepted ``(resource, scope)`` tuple.
   2. Actor matrix — ``admin_total`` / ``administrativo`` / ``consultivo`` resolve
      the intended allow/deny at the permission layer for both resources × scopes.
@@ -44,11 +44,10 @@ from tests.versioned_test_support import isolated_versioned_app_env
 # Canonical accepted policy matrix (REF-0C-A diagnosis Section 9, HEAD f977fd6)
 # ---------------------------------------------------------------------------
 
-# (endpoint, method) -> (resource, scope). Exactly the 21 HIGH-confidence
-# route-method combinations from the accepted debt baseline, minus R22-R24.
+# (endpoint, method) -> (resource, scope). Retained HIGH-confidence
+# route-method combinations from the accepted debt baseline, minus retired R1 and R22-R24.
 HIGH_CONFIDENCE_POLICIES = {
-    # atividades/view (R1-R4)
-    ("admin_catalogo_versoes", "GET"): ("atividades", "view"),
+    # atividades/view (R1 retired)
     ("admin_catalogo_versao_detalhe", "GET"): ("atividades", "view"),
     # atividades/edit (R5-R16)
     ("admin_catalogo_nova_base", "GET"): ("atividades", "edit"),
@@ -76,7 +75,7 @@ HIGH_CONFIDENCE_POLICIES = {
 
 
 def test_high_confidence_policy_count_matches_current_surface():
-    assert len(HIGH_CONFIDENCE_POLICIES) == 17
+    assert len(HIGH_CONFIDENCE_POLICIES) == 16
 
 
 @pytest.mark.parametrize(
@@ -144,7 +143,7 @@ def _count(sql: str, params: tuple = ()) -> int:
 
 
 # Representative routes per (resource, scope) group.
-VIEW_ROUTES = ("/admin/catalogo-versoes", "/admin/matrizes/1/versoes")
+VIEW_ROUTES = ("/admin/atividades", "/admin/matrizes/1/versoes")
 EDIT_GET_ROUTE = "/admin/catalogo-versoes/nova-base"  # R5, atividades/edit
 
 
@@ -190,11 +189,12 @@ def test_view_routes_allow_all_admin_roles(env, level):
 
 
 @pytest.mark.parametrize("level", ["admin_total", "administrativo"])
-def test_edit_get_route_allows_privileged_roles(env, level):
+def test_edit_get_route_allows_privileged_roles_into_canonical_creator(env, level):
     client = env["client"]
     _login(client, _make_admin(level))
     r = client.get(EDIT_GET_ROUTE)
-    assert r.status_code == 200, f"{level} should be allowed on atividades/edit form"
+    assert r.status_code == 302, f"{level} should be allowed through the legacy edit route"
+    assert r.headers.get("Location", "").endswith("/admin/adicionar_atividade")
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ def test_consultivo_denied_on_edit_get_route(env):
 def test_anonymous_denied_on_mapped_route(env):
     client = env["client"]
     _logout(client)
-    r = client.get("/admin/catalogo-versoes")
+    r = client.get("/admin/atividades")
     assert r.status_code == 302
     assert "/login" in r.headers.get("Location", "")
 

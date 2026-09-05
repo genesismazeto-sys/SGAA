@@ -160,7 +160,7 @@ def test_get_nova_versao_missing_base_redirects(client):
     _login_admin(client)
     r = client.get("/admin/catalogo-versoes/999999/nova-versao")
     assert r.status_code == 302
-    assert "/admin/catalogo-versoes" in r.headers.get("Location", "")
+    assert r.headers.get("Location", "").endswith("/admin/atividades")
 
 
 # ---------------------------------------------------------------------------

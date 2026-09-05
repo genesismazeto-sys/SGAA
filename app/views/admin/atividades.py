@@ -29,7 +29,6 @@ from app.activity_catalog import (
     can_activity_version_be_mutated_in_place,
     create_activity_with_initial_version,
     get_atividade_base,
-    get_atividade_base_list,
     get_atividade_transicoes_por_base,
     get_atividade_versao_by_id,
     get_atividade_versao_usage_counts,
@@ -1030,20 +1029,6 @@ def admin_grupos_excluir():
 
 
 @admin_required
-def admin_catalogo_versoes():
-    """
-    Lista todas as atividade_base com contagem de versões.
-    GET-only, sem escrita no banco.
-    """
-    conn = get_db_connection()
-    bases = get_atividade_base_list(conn)
-    return render_template(
-        "admin_catalogo_versoes.html",
-        bases=bases,
-    )
-
-
-@admin_required
 def admin_catalogo_versao_detalhe(base_id: int):
     """
     Detalhe de uma atividade_base com todas as versões vinculadas.
@@ -1053,7 +1038,7 @@ def admin_catalogo_versao_detalhe(base_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
     versoes = get_versoes_por_base(conn, base_id)
     transicoes_origem = {
         row["from_atividade_versao_id"]
@@ -1119,7 +1104,7 @@ def admin_catalogo_nova_versao(base_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     latest = get_latest_atividade_versao_for_base(conn, base_id)
     next_num = get_next_numero_versao(conn, base_id)
@@ -1385,7 +1370,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     versao = get_atividade_versao_by_id(conn, versao_id)
     if not versao or versao["atividade_base_id"] != base_id:
@@ -1640,7 +1625,7 @@ def admin_catalogo_ativar_versao(base_id: int, versao_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     versao = get_atividade_versao_by_id(conn, versao_id)
     if not versao or versao["atividade_base_id"] != base_id:
@@ -1701,7 +1686,7 @@ def admin_catalogo_inativar_versao(base_id: int, versao_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     versao = get_atividade_versao_by_id(conn, versao_id)
     if not versao or versao["atividade_base_id"] != base_id:
@@ -1762,7 +1747,7 @@ def admin_catalogo_descontinuar_versao(base_id: int, versao_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base não encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     versao = get_atividade_versao_by_id(conn, versao_id)
     if not versao or versao["atividade_base_id"] != base_id:
@@ -1816,7 +1801,7 @@ def admin_catalogo_substituir_versao(base_id: int, versao_id: int):
     base = get_atividade_base(conn, base_id)
     if not base:
         flash("Atividade-base nÃ£o encontrada.", "error")
-        return redirect(url_for("admin_catalogo_versoes"))
+        return redirect(url_for("admin_atividades"))
 
     origem = get_atividade_versao_by_id(conn, versao_id)
     if not origem or origem["atividade_base_id"] != base_id:
@@ -1976,12 +1961,6 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ('POST',),
         ),
         LegacyRouteSpec(
-            '/admin/catalogo-versoes',
-            'admin_catalogo_versoes',
-            admin_catalogo_versoes,
-            ('GET',),
-        ),
-        LegacyRouteSpec(
             '/admin/catalogo-versoes/<int:base_id>',
             'admin_catalogo_versao_detalhe',
             admin_catalogo_versao_detalhe,
@@ -2061,7 +2040,6 @@ __all__ = [
     'admin_atividades_importar_confirmar',
     'admin_grupos_renomear',
     'admin_grupos_excluir',
-    'admin_catalogo_versoes',
     'admin_catalogo_versao_detalhe',
     'admin_catalogo_nova_base',
     'admin_catalogo_nova_versao',

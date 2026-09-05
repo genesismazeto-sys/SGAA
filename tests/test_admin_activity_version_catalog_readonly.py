@@ -5,8 +5,8 @@ Adapted from the pre-Norma suite (test_admin_activity_version_catalog_readonly.p
 with all Norma-domain routes removed (normas-atividade).
 
 Covers:
- 1. GET /admin/catalogo-versoes      — lista atividade_base.
- 2. GET /admin/catalogo-versoes/<id> — detalhe base + versões + histórico.
+ 1. GET /admin/catalogo-versoes is retired.
+ 2. GET /admin/catalogo-versoes/<id> keeps version detail and history.
  3. Provas obrigatórias:
     - GETs não escrevem no banco (total_changes antes=depois).
     - Termos proibidos ("snapshot versionado", "diagnóstico do snapshot")
@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -143,92 +144,15 @@ def _insert_transicao(
 
 
 # ---------------------------------------------------------------------------
-# 1. GET /admin/catalogo-versoes — lista vazia ou com seed
+# 1. Standalone catalog index is retired
 # ---------------------------------------------------------------------------
 
-def test_catalogo_versoes_list_get_returns_200(client):
-    """GET /admin/catalogo-versoes retorna 200 com admin logado."""
+def test_standalone_catalog_route_endpoint_and_template_are_absent(client):
     _login_admin(client)
     response = client.get("/admin/catalogo-versoes")
-    assert response.status_code == 200
-
-
-def test_catalogo_versoes_list_get_contains_title(client):
-    """A página contém o título 'Catálogo de versões'."""
-    _login_admin(client)
-    response = client.get("/admin/catalogo-versoes")
-    html = response.get_data(as_text=True)
-    assert "Catálogo de versões" in html or "Catálogo de vers" in html
-
-
-def test_catalogo_versoes_list_requires_admin(client):
-    """Sem login, deve redirecionar (não 200)."""
-    response = client.get("/admin/catalogo-versoes")
-    assert response.status_code in (302, 401, 403)
-
-
-# ---------------------------------------------------------------------------
-# 2. Termos proibidos ausentes na listagem
-# ---------------------------------------------------------------------------
-
-def test_catalogo_versoes_list_shows_base_without_forbidden_terms(client):
-    """
-    Com base seedada, nome_conceito aparece; termos específicos do D6 proibidos
-    ('snapshot versionado', 'diagnóstico do snapshot', 'comparação read-only')
-    estão ausentes na área de conteúdo.
-    """
-    _login_admin(client)
-    _seed_base_e_versao(client)
-
-    response = client.get("/admin/catalogo-versoes")
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-
-    assert "Atividade Teste" in html
-
-    html_lower = html.lower()
-    assert "snapshot versionado" not in html_lower, \
-        "Termo 'snapshot versionado' não deve aparecer no catálogo"
-    assert "diagnóstico do snapshot" not in html_lower
-    assert "comparação read-only" not in html_lower
-
-
-def test_catalogo_versoes_omits_base_status_and_preserves_version_counts(client):
-    _login_admin(client)
-    base_nome = "Atividade Base Status Oculto"
-    base_id, _ = _seed_base_e_versao(client, base_nome=base_nome)
-
-    with main.app.app_context():
-        conn = main.get_db_connection()
-        conn.execute(
-            "UPDATE atividade_base SET status = 'inativo' WHERE id = ?",
-            (base_id,),
-        )
-        conn.execute(
-            """
-            INSERT INTO atividade_versao
-                (atividade_base_id, eixo, grupo, status, numero_versao)
-            VALUES (?, 'AAC', '2 - Grupo Rascunho', 'rascunho', 2)
-            """,
-            (base_id,),
-        )
-        conn.commit()
-
-    response = client.get("/admin/catalogo-versoes")
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-
-    assert ">Status<" not in html
-    assert ">inativo<" not in html
-    assert re.search(
-        rf'data-base-id="{base_id}"[^>]*>.*?'
-        rf'{re.escape(base_nome)}.*?'
-        r'class="cell center">\s*2\s*</div>.*?'
-        r'class="cell center">\s*1\s*</div>.*?'
-        rf'href="/admin/catalogo-versoes/{base_id}"[^>]*>Ver</a>',
-        html,
-        re.DOTALL,
-    )
+    assert response.status_code == 404
+    assert "admin_catalogo_versoes" not in main.app.view_functions
+    assert not (Path(BASE) / "templates" / "admin_catalogo_versoes.html").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +356,7 @@ def test_catalogo_versao_detalhe_404_for_missing_base(client):
     _login_admin(client)
     response = client.get("/admin/catalogo-versoes/999999")
     assert response.status_code == 302
-    assert "/admin/catalogo-versoes" in response.headers.get("Location", "")
+    assert response.headers.get("Location", "").endswith("/admin/atividades")
 
 
 # ---------------------------------------------------------------------------
@@ -450,7 +374,6 @@ def test_readonly_catalog_routes_do_not_mutate_database(client):
         conn = main.get_db_connection()
         changes_before = conn.total_changes
 
-        client.get("/admin/catalogo-versoes")
         client.get(f"/admin/catalogo-versoes/{base_id}")
         client.get("/admin/catalogo-versoes/999999")  # missing → redirect
         changes_after = conn.total_changes

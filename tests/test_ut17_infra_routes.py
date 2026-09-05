@@ -681,7 +681,7 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     route_data = json.loads(ROUTE_INVENTORY_ARTIFACT.read_text(encoding="utf-8"))
     routes = route_data["routes"]
-    assert len(routes) == 128, "route inventory artifact must include admin report creation"
+    assert len(routes) == 127, "route inventory artifact must exclude the retired catalog index"
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         matching = [
             item

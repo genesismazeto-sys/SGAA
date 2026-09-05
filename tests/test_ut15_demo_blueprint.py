@@ -1143,8 +1143,8 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 128
-    assert len({row["rule"] for row in routes}) == 127
+    assert len(routes) == 127
+    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"

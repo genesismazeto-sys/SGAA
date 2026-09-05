@@ -139,12 +139,6 @@
         "status_code": 302
       },
       {
-        "label": "/admin/catalogo-versoes",
-        "path": "/admin/catalogo-versoes",
-        "role": "admin",
-        "status_code": 200
-      },
-      {
         "label": "/admin/catalogo-versoes/<int:base_id>",
         "path": "/admin/catalogo-versoes/1",
         "role": "admin",

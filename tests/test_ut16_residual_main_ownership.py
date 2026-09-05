@@ -515,8 +515,8 @@ def test_green_4_ut17_firewall_three_routes_unchanged():
 def test_green_5_architecture_invariants():
     app = main.app
     routes = list(app.url_map.iter_rules())
-    assert len(routes) == 128, f"routes must match prod-1 plus admin report creation, got {len(routes)}"
-    assert len(app.view_functions) == 127, (
+    assert len(routes) == 127, f"routes must match the retired catalog surface, got {len(routes)}"
+    assert len(app.view_functions) == 126, (
         f"distinct endpoints must match prod-1, got {len(app.view_functions)}"
     )
     unmapped = [
@@ -556,8 +556,8 @@ def test_green_6_artifact_repository_custody():
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 128
-    assert len({row["rule"] for row in routes}) == 127
+    assert len(routes) == 127
+    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"

@@ -345,13 +345,6 @@
       "rule": "/admin/banco-dados/retencao"
     },
     {
-      "endpoint": "admin_catalogo_versoes",
-      "methods": [
-        "GET"
-      ],
-      "rule": "/admin/catalogo-versoes"
-    },
-    {
       "endpoint": "admin_catalogo_versao_detalhe",
       "methods": [
         "GET"

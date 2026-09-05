@@ -105,7 +105,6 @@ Modelo novo: bases, versões, normas, mapeamento legado.
 
 | URL | Métodos | Endpoint | Permissão* |
 |-----|---------|----------|-----------|
-| `/admin/catalogo-versoes` | GET | `admin_catalogo_versoes` | `atividades:view` |
 | `/admin/catalogo-versoes/<int:base_id>` | GET | `admin_catalogo_versao_detalhe` | `atividades:view` |
 | `/admin/catalogo-versoes/nova-base` | GET, POST | `admin_catalogo_nova_base` | `atividades` |
 | `/admin/catalogo-versoes/<int:base_id>/nova-versao` | GET, POST | `admin_catalogo_nova_versao` | `atividades` |

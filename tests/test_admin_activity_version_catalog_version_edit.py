@@ -745,7 +745,7 @@ def test_readonly_routes_still_respond(client):
     _login_admin(client)
     seed = _seed_base(client)
     routes = [
-        "/admin/catalogo-versoes",
+        "/admin/atividades",
         f"/admin/catalogo-versoes/{seed['base_id']}",
     ]
     for path in routes:
