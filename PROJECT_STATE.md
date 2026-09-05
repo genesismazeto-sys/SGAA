@@ -2469,3 +2469,23 @@ remains the next independent visual defect. It is not fixed here.
   responsive validation passed; user visually accepted the result.
 - Source database unchanged.
 - Implementation commit: `593394f163c6edfdee0a0cfde73126b135568a04`.
+
+## MATRIX COMPOSITION EXACT VERSION CONSOLIDATION + STANDALONE VERSION SURFACE RETIREMENT — CLOSED / ACCEPTED / LANDED
+
+- Matrix composition is the canonical owner of Activity membership and exact
+  Activity Version selection. Each conceptual Activity base has one card, whose
+  local dropdown selects the exact version; multiple eligible versions require
+  explicit selection, and ambiguous same-base payloads are rejected atomically.
+- Matrix-local New Activity affordance, modal, route, and plumbing are removed.
+  Frozen Matrix composition remains consultation-only. Exact
+  `matriz_atividade_versao_item.atividade_versao_id` ownership and AAC → AEU
+  behavior are preserved.
+- Standalone `/admin/matrizes/<id>/versoes` is retired: its GET, define, and
+  remove routes are absent, `templates/admin_matriz_versoes.html` is physically
+  deleted, and no compatibility redirect exists.
+- Accepted evidence: direct consolidation/retirement lane 26 passed; bounded
+  Matrix/version regression lane 168 passed; authenticated Chromium validation
+  passed; user visual approval granted. The source database remained unchanged
+  during landing.
+- Implementation commit: `f52f9d89eb3a66bacc20a0e748a76875e568b23a`
+  (`Consolidate Matrix exact-version composition`).
