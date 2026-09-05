@@ -193,6 +193,44 @@ def test_catalogo_versoes_list_shows_base_without_forbidden_terms(client):
     assert "comparação read-only" not in html_lower
 
 
+def test_catalogo_versoes_omits_base_status_and_preserves_version_counts(client):
+    _login_admin(client)
+    base_nome = "Atividade Base Status Oculto"
+    base_id, _ = _seed_base_e_versao(client, base_nome=base_nome)
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            "UPDATE atividade_base SET status = 'inativo' WHERE id = ?",
+            (base_id,),
+        )
+        conn.execute(
+            """
+            INSERT INTO atividade_versao
+                (atividade_base_id, eixo, grupo, status, numero_versao)
+            VALUES (?, 'AAC', '2 - Grupo Rascunho', 'rascunho', 2)
+            """,
+            (base_id,),
+        )
+        conn.commit()
+
+    response = client.get("/admin/catalogo-versoes")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+
+    assert ">Status<" not in html
+    assert ">inativo<" not in html
+    assert re.search(
+        rf'data-base-id="{base_id}"[^>]*>.*?'
+        rf'{re.escape(base_nome)}.*?'
+        r'class="cell center">\s*2\s*</div>.*?'
+        r'class="cell center">\s*1\s*</div>.*?'
+        rf'href="/admin/catalogo-versoes/{base_id}"[^>]*>Ver</a>',
+        html,
+        re.DOTALL,
+    )
+
+
 # ---------------------------------------------------------------------------
 # 3. GET /admin/catalogo-versoes/<base_id> — detalhe com versões
 # ---------------------------------------------------------------------------

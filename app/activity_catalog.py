@@ -160,7 +160,6 @@ def get_atividade_base_list(conn) -> list:
             ab.id,
             ab.nome_conceito,
             ab.descricao,
-            ab.status,
             ab.created_at,
             COUNT(av.id)                                              AS total_versoes,
             SUM(CASE WHEN av.status = 'ativa' THEN 1 ELSE 0 END)     AS versoes_ativas

@@ -57,7 +57,6 @@
   <div id="catalogo-list" class="impressoes-cards" role="list">
     {{ cl.header([
       {'text': 'Atividade-base',   'class': 'left'},
-      {'text': 'Status',           'class': 'center'},
       {'text': 'Versões',          'class': 'center'},
       {'text': 'Ativas',           'class': 'center'},
       {'text': 'Ver',              'class': 'center'},
@@ -65,21 +64,9 @@
 
     {% if bases and bases|length %}
       {% for b in bases %}
-        {% set status_lc = (b.status or '')|lower %}
         {% set detalhe_url = url_for('admin_catalogo_versao_detalhe', base_id=b.id) %}
         {{ cl.row([
           {'content': b.nome_conceito or '-', 'class': 'left ellipsis'},
-          {
-            'content': b.status or 'ativo',
-            'class': 'center',
-            'badge': true,
-            'badge_type': 'success',
-            'status_badge': true,
-            'status_tone': (
-              'positive' if status_lc == 'ativo' else
-              'neutral'
-            )
-          },
           {'content': (b.total_versoes or 0)|string, 'class': 'center'},
           {'content': (b.versoes_ativas or 0)|string, 'class': 'center'},
           {

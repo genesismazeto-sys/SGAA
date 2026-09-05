@@ -464,10 +464,9 @@
 /* =============================================================
    Scoped Layout Adjustments: Catálogo de versões (.imp-catalogo)
    ============================================================= */
-.imp-catalogo{ --imp-list-min-width:694px; }
+.imp-catalogo{ --imp-list-min-width:586px; }
 .imp-catalogo { --imp-cols:
   minmax(300px, 1.8fr)  /* Atividade-base */
-  minmax(96px, 120px)   /* Status */
   minmax(80px, 96px)    /* Versões */
   minmax(80px, 96px)    /* Ativas */
   minmax(72px, 88px)    /* Ver */
@@ -478,9 +477,7 @@
 .imp-catalogo .impresso-card .cell{ justify-content:flex-start; text-align:left; }
 .imp-catalogo .impresso-card .cell:nth-child(2),
 .imp-catalogo .impresso-card .cell:nth-child(3),
-.imp-catalogo .impresso-card .cell:nth-child(4),
-.imp-catalogo .impresso-card .cell:nth-child(5){ justify-content:center; text-align:center; }
-.imp-catalogo .badge.status-badge{ line-height:1; height:18px; min-width:18px; padding:0 6px; font-size:11px; }
+.imp-catalogo .impresso-card .cell:nth-child(4){ justify-content:center; text-align:center; }
 
 /* =============================================================
    Scoped Layout Adjustments: Mapeamento legado (.imp-mapeamento)
