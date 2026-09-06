@@ -17,12 +17,10 @@
         <span class="help">Comprovantes</span>
         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;">
           {% for anexo in anexos %}
-            <a class="btn" href="{{ url_for('uploaded_file', filename=anexo.filename) }}" target="_blank" rel="noopener">{{ anexo.label or 'Arquivo' }}{% if anexo.filename %}: {{ anexo.filename.split('/')[-1] }}{% endif %}</a>
+            <a class="btn" href="{{ url_for('comprovantes.open_comprovante', attachment_id=anexo.id) }}" target="_blank" rel="noopener">{{ anexo.label or 'Arquivo' }}{% if anexo.filename %}: {{ anexo.filename.split('/')[-1] }}{% endif %}</a>
           {% endfor %}
         </div>
       </div>
-    {% elif requisicao.arquivo_comprovante %}
-      <div><span class="help">Comprovante</span><div><a class="btn" href="{{ url_for('uploaded_file', filename=requisicao.arquivo_comprovante) }}" target="_blank" rel="noopener">Abrir</a></div></div>
     {% endif %}
     {% if requisicao.AdminNome %}
       <div><span class="help">Processado por</span><div>{{ requisicao.AdminNome }}</div></div>

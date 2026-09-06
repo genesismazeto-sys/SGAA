@@ -15,7 +15,8 @@ import pytest
 import main
 from app.matrix_scope import _matriz_option_label
 from app.prod1_schema import (
-    LATEST_MIGRATION_MARKER,
+    COMPROVANTES_GOOGLE_DRIVE_MARKER,
+    MATRIX_VERSION_REMOVAL_MARKER,
     _PROD1_V2_SIGNATURE_SHA256,
     _physical_schema_digest,
     Prod1SchemaError,
@@ -226,38 +227,39 @@ def test_exact_activity_version_links_remain_unchanged(env):
 # Schema v3 + v2→v3 migration contracts
 # ---------------------------------------------------------------------------
 
-def test_fresh_bootstrap_is_v3_without_matrix_version_fields(tmp_path):
+def test_fresh_bootstrap_is_v4_without_matrix_version_fields(tmp_path):
     conn = sqlite3.connect(tmp_path / "fresh-v3.db")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 3
+    assert result["schema_version"] == 4
     assert REMOVED_MATRIX_FIELDS.isdisjoint(_matrix_columns(conn))
     markers = conn.execute("SELECT version,name FROM schema_migrations ORDER BY version").fetchall()
     assert [tuple(row) for row in markers] == [
         (1, "first_production_baseline"),
         (2, "remove_norma_domain"),
-        (3, LATEST_MIGRATION_MARKER),
+        (3, MATRIX_VERSION_REMOVAL_MARKER),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER),
     ]
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
 
 
-def test_second_bootstrap_on_v3_is_idempotent(tmp_path):
+def test_second_bootstrap_on_v4_is_idempotent(tmp_path):
     conn = sqlite3.connect(tmp_path / "idempotent-v3.db")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     first = bootstrap_prod1_schema(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 3
-    assert validate_prod1_schema(conn)["schema_version"] == 3
-    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 3
+    assert first["schema_version"] == second["schema_version"] == 4
+    assert validate_prod1_schema(conn)["schema_version"] == 4
+    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 4
     conn.close()
 
 
-def test_canonical_populated_v2_migrates_to_v3(tmp_path):
-    """Hermetic canonical prod-1/v2 → v3 through the real production bootstrap.
+def test_canonical_populated_v2_migrates_to_v4(tmp_path):
+    """Hermetic canonical prod-1/v2 → v4 through the real production bootstrap.
 
     The v2 database is generated under tmp_path by running the REAL v1→v2
     migration over the hermetic canonical v1 builder (proven against both
@@ -287,13 +289,14 @@ def test_canonical_populated_v2_migrates_to_v3(tmp_path):
     ]
 
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 3
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert result["schema_version"] == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert REMOVED_MATRIX_FIELDS.isdisjoint(_matrix_columns(conn))
     assert _markers(conn) == [
         (1, "first_production_baseline", "prod-1"),
         (2, "remove_norma_domain", "prod-1"),
-        (3, LATEST_MIGRATION_MARKER, "prod-1"),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, "prod-1"),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, "prod-1"),
     ]
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -330,7 +333,7 @@ def test_canonical_populated_v2_migrates_to_v3(tmp_path):
     assert read.rule.matriz_id_efetiva == ids["m1"]
 
     second = bootstrap_prod1_schema(conn)
-    assert second["schema_version"] == 3
+    assert second["schema_version"] == 4
     conn.close()
 
 

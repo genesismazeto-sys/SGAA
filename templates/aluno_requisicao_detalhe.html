@@ -51,14 +51,9 @@
         <div class="help">Comprovantes enviados</div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
           {% for anexo in anexos %}
-            <a href="{{ url_for('uploaded_file', filename=anexo.filename) }}" target="_blank" rel="noopener">{{ anexo.label or 'Arquivo' }}{% if anexo.filename %}: {{ anexo.filename.split('/')[-1] }}{% endif %}</a>
+            <a href="{{ url_for('comprovantes.open_comprovante', attachment_id=anexo.id) }}" target="_blank" rel="noopener">{{ anexo.label or 'Arquivo' }}{% if anexo.filename %}: {{ anexo.filename.split('/')[-1] }}{% endif %}</a>
           {% endfor %}
         </div>
-      </div>
-    {% elif r.arquivo_comprovante %}
-      <div>
-        <span class="help">Comprovante atual:</span>
-        <a href="{{ url_for('uploaded_file', filename=r.arquivo_comprovante) }}" target="_blank" rel="noopener">{{ r.arquivo_comprovante }}</a>
       </div>
     {% else %}
       <div class="help">Nenhum comprovante anexado.</div>
@@ -66,6 +61,7 @@
 
     {% if r.status == 'Pendente' %}
       <form method="post" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:8px; max-width:520px;">
+        <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
         <label>
           <div class="help">Adicionar comprovantes</div>
           <input class="input" type="file" name="comprovantes_files" multiple />

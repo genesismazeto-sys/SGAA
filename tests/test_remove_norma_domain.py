@@ -44,7 +44,7 @@ def test_prod1_v2_has_no_norma_schema_or_routes(tmp_path):
             assert not tables & REMOVED_SCHEMA_NAMES
             assert REMOVED_FIELDS.isdisjoint({row[1] for row in conn.execute("PRAGMA table_info(atividade_versao)")})
             assert "codigo_normativo_snapshot" not in {row[1] for row in conn.execute("PRAGMA table_info(requisicoes)")}
-            assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
         assert env["client"].get("/admin/normas-atividade").status_code == 404
         assert env["client"].get("/admin/normas-atividade/nova").status_code == 404
 
@@ -295,12 +295,13 @@ def test_canonical_v1_migrates_through_v2_to_v3(tmp_path):
     from app.prod1_schema import bootstrap_prod1_schema
 
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 3
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert result["schema_version"] == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert _markers(conn) == [
         (1, "first_production_baseline", "prod-1"),
         (2, "remove_norma_domain", "prod-1"),
         (3, "remove_matrix_version_metadata", "prod-1"),
+        (4, "comprovantes_google_drive_cutover", "prod-1"),
     ]
     assert not _table_names(conn) & REMOVED_SCHEMA_NAMES
     assert REMOVED_FIELDS.isdisjoint(_columns(conn, "atividade_versao"))

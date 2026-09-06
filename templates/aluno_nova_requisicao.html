@@ -76,6 +76,7 @@
 <h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição') }}</h1>
 
 <form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
   <div class="form-cards-narrow form-cards-narrow--gutter-wide">
     {% set t = (tipo_atual or 'Acadêmica Complementar') %}
     <!-- Tipo da Atividade (topo) -->
@@ -186,7 +187,7 @@
       <div class="field-card file-card has-file" data-file-card style="grid-template-columns:40px 1fr auto;">
         <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
         <div class="control file-name" title="{{ ax.filename }}" style="display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          <a href="{{ url_for('uploaded_file', filename=ax.filename) }}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--text);">{{ ax.filename }}</a>
+          <a href="{{ url_for('comprovantes.open_comprovante', attachment_id=ax.id) }}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--text);">{{ ax.filename }}</a>
         </div>
         <div class="field-chip chip-right" aria-disabled="true" style="pointer-events:none;opacity:.5;">
           <i class="lucide" data-lucide="paperclip"></i><span>Arquivo</span>

@@ -826,6 +826,13 @@
       "rule": "/auth/callback"
     },
     {
+      "endpoint": "comprovantes.open_comprovante",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/comprovantes/<int:attachment_id>/open"
+    },
+    {
       "endpoint": "csrf_token_refresh",
       "methods": [
         "GET"

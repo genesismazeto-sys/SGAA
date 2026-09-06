@@ -1182,10 +1182,10 @@ def test_route_inventory_baseline_matches_live_retired_surface_counts():
     assert data["schema_version"] == 1
     assert data["generated_from"] == "main.app.url_map"
     routes = data["routes"]
-    assert len(routes) == 123
-    assert len({entry["rule"] for entry in routes}) == 122
+    assert len(routes) == 124
+    assert len({entry["rule"] for entry in routes}) == 123
     non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 122
+    assert len(non_static) == 123
 
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes

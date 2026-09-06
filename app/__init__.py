@@ -42,6 +42,7 @@ from app.views.admin.meus_dados import bp_admin_meus_dados
 from app.views.admin.demo import bp_admin_demo
 from app.views import core as core_views
 from app.views.files import uploaded_file
+from app.views.comprovantes import bp_comprovantes
 
 
 # Singleton CSRF instance for templates / view exemptions
@@ -283,6 +284,7 @@ def create_app(
         app.register_blueprint(bp_presets)
     if register_aluno_blueprint:
         app.register_blueprint(bp_aluno)
+    app.register_blueprint(bp_comprovantes)
     core_specs = [
         ("/", "index", core_views.index, ["GET"]),
         ("/login", "login", core_views.login, ["GET", "POST"]),

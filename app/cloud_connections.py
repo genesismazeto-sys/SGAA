@@ -19,6 +19,7 @@ from app.db import ensure_cloud_backup_schema
 from app.services.google_drive_service import (
     GoogleDriveServiceError,
     acquire_access_token as acquire_google_access_token,
+    refresh_access_token as refresh_google_access_token,
     list_google_folders_with_access_token,
     upload_zip_backup_with_access_token as upload_google_with_access_token,
 )
@@ -254,6 +255,54 @@ def get_authenticated_access_token(conn, provider: str) -> tuple[str, str]:
         )
         conn.commit()
     return access_token, (account_email or str(account.get("account_email") or "")).strip()
+
+
+def recover_authenticated_access_token_after_401(
+    conn, provider: str
+) -> tuple[str, str]:
+    """Refresh canonically; a provider 401 alone never revokes durable authorization."""
+    normalized = normalize_provider(provider)
+    credential_status = get_application_credential_status(normalized)
+    if not credential_status["configured"]:
+        raise CloudConnectionError(
+            "Credenciais do aplicativo nao configuradas nesta maquina.",
+            debug_code="APPLICATION_CREDENTIALS_MISSING",
+        )
+    account = get_active_cloud_account(conn, normalized)
+    if not account or not account.get("token_json_available", True):
+        raise CloudConnectionError(
+            _reconnect_error(normalized), debug_code="AUTH_RECONNECT_REQUIRED"
+        )
+    original_token_json = str(account.get("token_json") or "")
+    try:
+        if normalized == "google":
+            access_token, updated_token_json, account_email = refresh_google_access_token(
+                token_json=original_token_json
+            )
+        else:
+            access_token, updated_token_json, account_email = _acquire_provider_token(
+                normalized, account, original_token_json
+            )
+    except (GoogleDriveServiceError, OneDriveServiceError) as exc:
+        debug_code = getattr(exc, "debug_code", "")
+        if debug_code == "AUTH_RECONNECT_REQUIRED":
+            _mark_reconnect_and_raise(conn, normalized, int(account["id"]), exc)
+        raise CloudConnectionError(str(exc), debug_code=debug_code) from exc
+    if not access_token:
+        raise CloudConnectionError(
+            "Nao foi possivel renovar o token de acesso.",
+            debug_code="AUTH_TEMPORARY_FAILURE",
+        )
+    update_cloud_account_token(
+        conn,
+        account_id=int(account["id"]),
+        token_json=updated_token_json,
+        account_email=account_email or None,
+    )
+    conn.commit()
+    return access_token, (
+        account_email or str(account.get("account_email") or "")
+    ).strip()
 
 
 def upload_backup_zip(

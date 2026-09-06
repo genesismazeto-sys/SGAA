@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import traceback
 import datetime
 
@@ -12,6 +11,16 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 
 from app.activity_catalog import parse_documentos_json
 from app.auth import admin_required
+from app.comprovantes import (
+    ComprovanteError,
+    capture_student_turma_snapshot,
+    delete_request_with_comprovantes,
+    find_completed_request_retry,
+    new_comprovante_operation_id,
+    prepare_comprovante_batch,
+    resolve_google_storage,
+    upload_comprovantes,
+)
 from app.db import ensure_turmas_matriz_schema, get_db_connection
 from app.db_maintenance import (
     ensure_matriz_atividade_links_table,
@@ -23,9 +32,9 @@ from app.matrix_scope import (
     is_activity_version_allowed_for_turma_matrix,
 )
 from app.requisitions import auto_indefer_devolvidas
-from app.student_documents import remove_student_document, save_student_document
+from app.storage.contracts import StorageError
 from app.text import normalize_header
-from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
+from app.uploads import _allowed, save_upload
 from app.versioning.request_history import (
     filter_historical_request_rows,
     list_exact_matrix_activity_catalogue,
@@ -165,15 +174,17 @@ def admin_importar_requisicoes():
                         conn, flow_origin="admin_import", aluno_id=aluno_id,
                         atividade_versao_id=atividade_versao_id,
                     )
+                    turma_snapshot = capture_student_turma_snapshot(conn, aluno_id)
                     conn.execute("""
                         INSERT INTO requisicoes
                         (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
                          horas_solicitadas, status, horas_deferidas, observacao,
-                         regra_snapshot_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         regra_snapshot_json,turma_id_snapshot,turma_codigo_snapshot)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (aluno_id, prepared.atividade_versao_id, data_solicitacao_hoje,
                            data_evento, horas_solicitadas, status, horas_deferidas,
-                           f"Importado da planilha linha {row_index}", prepared.snapshot_json))
+                           f"Importado da planilha linha {row_index}", prepared.snapshot_json,
+                           turma_snapshot.turma_id,turma_snapshot.turma_codigo))
                     sucesso_count += 1
 
                 except Exception as e:
@@ -278,51 +289,30 @@ def _append_requisicao_arquivos(
     arquivos,
     labels=None,
     created_document_paths=None,
+    finalize_db=None,
 ):
     ensure_requisicao_arquivos_table(conn)
-    first_saved = None
-    labels = labels or []
-    aluno_row = conn.execute("SELECT nome FROM alunos WHERE id = ?", (aluno_id,)).fetchone()
-    student_name = str((aluno_row["nome"] if aluno_row else "") or f"aluno-{aluno_id}")
-    for idx, arquivo in enumerate(arquivos or []):
-        if not arquivo or not getattr(arquivo, "filename", ""):
-            continue
-        if not _allowed(arquivo.filename, ALLOWED_ATTACHMENTS):
-            flash(f"Arquivo ignorado por extensão não permitida: {arquivo.filename}", "warning")
-            continue
-        saved = None
-        try:
-            saved = save_student_document(
-                arquivo,
-                ALLOWED_ATTACHMENTS,
-                root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
-                student_id=aluno_id,
-                student_name=student_name,
-                category="requisicoes",
-                prefix=f"req{req_id}",
-            )
-            if saved:
-                if created_document_paths is not None:
-                    created_document_paths.append(saved)
-                label_value = labels[idx] if labels and idx < len(labels) else None
-                conn.execute(
-                    "INSERT INTO requisicao_arquivos (requisicao_id, label, filename) VALUES (?, ?, ?)",
-                    (req_id, label_value, saved),
-                )
-                if first_saved is None:
-                    first_saved = saved
-        except Exception as exc:
-            if created_document_paths is None and saved:
-                try:
-                    remove_student_document(
-                        current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], saved
-                    )
-                except Exception:
-                    logger.exception("Falha ao compensar arquivo de comprovante")
-            if created_document_paths is not None:
-                raise
-            logger.error(f"Falha ao salvar arquivo de comprovante na requisição {req_id}: {exc}")
-    return first_saved
+    batch = prepare_comprovante_batch(
+        arquivos,
+        labels=labels,
+        batch_key=(
+            request.form.get("comprovantes_operation_id")
+            or request.headers.get("Idempotency-Key")
+        ),
+        max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
+    )
+    if not batch:
+        return None
+    storage = resolve_google_storage(conn)
+    rows = upload_comprovantes(
+        conn,
+        request_id=int(req_id),
+        uploader_user_id=int(session["user_id"]),
+        batch=batch,
+        storage=storage,
+        finalize_db=finalize_db,
+    )
+    return rows[0]["filename"] if rows else None
 
 
 @admin_required
@@ -636,6 +626,7 @@ def admin_requisicoes():
         alunos_opcoes=alunos_opcoes,
         docs_por_atividade=docs_por_atividade,
         filter_schema=filter_schema,
+        comprovantes_operation_id=new_comprovante_operation_id(),
     )
 
 
@@ -695,16 +686,37 @@ def admin_nova_requisicao():
         flash("Informe uma data válida para o evento.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
+    arquivos = request.files.getlist("comprovantes_files") or []
     try:
+        batch = prepare_comprovante_batch(
+            arquivos,
+            batch_key=(
+                request.form.get("comprovantes_operation_id")
+                or request.headers.get("Idempotency-Key")
+            ),
+            max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
+        )
+        replayed_request_id = find_completed_request_retry(
+            conn, aluno_id=aluno_id, batch=batch
+        )
+        if replayed_request_id is not None:
+            flash("Requisição criada com sucesso.", "success")
+            return redirect(url_for("admin_requisicoes"))
+        storage = resolve_google_storage(conn) if batch else None
         prepared_snapshot = prepare_versioned_requisicao_snapshot(
             conn,
             flow_origin="admin_create",
             aluno_id=aluno_id,
             atividade_versao_id=atividade_id,
         )
-    except RequisicaoSnapshotError as exc:
+        turma_snapshot = capture_student_turma_snapshot(conn, aluno_id)
+    except (RequisicaoSnapshotError, ComprovanteError) as exc:
         conn.rollback()
-        flash(exc.user_message, "error")
+        flash(getattr(exc, "user_message", str(exc)), "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    except StorageError:
+        conn.rollback()
+        flash("Não foi possível acessar o Google Drive com segurança.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     except Exception:
         conn.rollback()
@@ -712,8 +724,6 @@ def admin_nova_requisicao():
         raise
 
     data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    arquivos = request.files.getlist("comprovantes_files") or []
-    created_document_paths = []
     try:
         cur = conn.cursor()
         cur.execute(
@@ -721,8 +731,8 @@ def admin_nova_requisicao():
             INSERT INTO requisicoes
             (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
              horas_solicitadas, nome_evento, status, observacao,
-             regra_snapshot_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             regra_snapshot_json, turma_id_snapshot, turma_codigo_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 aluno_id,
@@ -734,31 +744,33 @@ def admin_nova_requisicao():
                 "Pendente",
                 observacao,
                 prepared_snapshot.snapshot_json,
+                turma_snapshot.turma_id,
+                turma_snapshot.turma_codigo,
             ),
         )
         req_id = cur.lastrowid
-        first_saved = _append_requisicao_arquivos(
-            conn,
-            req_id,
-            aluno_id,
-            arquivos,
-            created_document_paths=created_document_paths,
-        )
-
-        conn.commit()
-        created_document_paths.clear()
-    except Exception:
+        if batch:
+            upload_comprovantes(
+                conn,
+                request_id=req_id,
+                uploader_user_id=int(session["user_id"]),
+                batch=batch,
+                storage=storage,
+            )
+        else:
+            conn.commit()
+    except ComprovanteError as exc:
         try:
             conn.rollback()
+            if "req_id" in locals() and not exc.reconciliation_required:
+                conn.execute("DELETE FROM requisicoes WHERE id=?", (req_id,))
+                conn.commit()
         except Exception:
             logger.exception("Falha ao reverter requisição do admin")
-        for rel_path in created_document_paths:
-            try:
-                remove_student_document(
-                    current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], rel_path
-                )
-            except Exception:
-                    logger.exception("Falha ao compensar arquivo de comprovante")
+        flash(exc.user_message, "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    except Exception:
+        conn.rollback()
         logger.exception("Falha ao criar requisição do admin")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     flash("Requisição criada com sucesso.", "success")
@@ -848,9 +860,6 @@ def admin_editar_requisicao(req_id):
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    arquivos = request.files.getlist("comprovantes_files") or []
-    first_saved = _append_requisicao_arquivos(conn, req_id, requisicao["aluno_id"], arquivos)
-
     params = [nome_evento, horas_solicitadas, data_evento, observacao]
     sql = """
         UPDATE requisicoes
@@ -861,9 +870,31 @@ def admin_editar_requisicao(req_id):
     """
     sql += " WHERE id = ?"
     params.append(req_id)
-
-    conn.execute(sql, tuple(params))
-    conn.commit()
+    arquivos = request.files.getlist("comprovantes_files") or []
+    try:
+        uploaded = _append_requisicao_arquivos(
+            conn,
+            req_id,
+            requisicao["aluno_id"],
+            arquivos,
+            finalize_db=lambda: conn.execute(sql, tuple(params)),
+        )
+        if uploaded is None:
+            conn.execute(sql, tuple(params))
+            conn.commit()
+    except ComprovanteError as exc:
+        conn.rollback()
+        flash(exc.user_message, "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    except StorageError:
+        conn.rollback()
+        flash("Não foi possível acessar o Google Drive com segurança.", "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    except Exception:
+        conn.rollback()
+        logger.exception("Falha ao atualizar requisição do admin")
+        flash("Falha ao atualizar requisição.", "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     flash("Requisição atualizada com sucesso.", "success")
     return redirect(url_for("admin_requisicoes"))
 
@@ -875,21 +906,12 @@ def admin_excluir_requisicao(req_id):
     if not row:
         return ("Requisição não encontrada.", 404)
     try:
-        conn.execute("DELETE FROM requisicao_arquivos WHERE requisicao_id = ?", (req_id,))
-        conn.execute("DELETE FROM requisicoes WHERE id = ?", (req_id,))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Erro ao excluir requisição {req_id}: {e}")
+        delete_request_with_comprovantes(
+            conn, request_id=req_id, actor_user_id=int(session["user_id"])
+        )
+    except ComprovanteError as exc:
+        logger.error("Erro controlado ao excluir requisição %s: %s", req_id, exc.code)
         return ("Erro ao excluir.", 500)
-    # Remove arquivos físicos (best-effort)
-    try:
-        upload_root = current_app.config.get("UPLOAD_FOLDER")
-        if upload_root:
-            req_dir = os.path.join(upload_root, f"req_{req_id}")
-            if os.path.isdir(req_dir):
-                shutil.rmtree(req_dir, ignore_errors=True)
-    except Exception:
-        pass
     return ("", 204)
 
 
@@ -909,7 +931,16 @@ def admin_detalhes_requisicao(req_id):
         return redirect(url_for("admin_requisicoes"))
     item = {key: requisicao[key] for key in requisicao.keys()}
     item["AtividadeNome"] = read_request_presentation(requisicao).nome
-    return render_template("admin_detalhes_requisicao.html", requisicao=item)
+    anexos = conn.execute(
+        """SELECT id,label,filename,original_filename,provider,criado_em
+             FROM requisicao_arquivos
+            WHERE requisicao_id=? AND storage_status IN ('active','legacy_active')
+         ORDER BY id""",
+        (req_id,),
+    ).fetchall()
+    return render_template(
+        "admin_detalhes_requisicao.html", requisicao=item, anexos=anexos
+    )
 
 
 @admin_required
@@ -934,7 +965,10 @@ def admin_api_requisicao(req_id):
     if not r:
         return jsonify({"error":"not-found"}), 404
     anexos = conn.execute(
-        "SELECT id, label, filename, criado_em FROM requisicao_arquivos WHERE requisicao_id = ? ORDER BY id",
+        """SELECT id,label,filename,original_filename,provider,criado_em
+             FROM requisicao_arquivos
+            WHERE requisicao_id=? AND storage_status IN ('active','legacy_active')
+         ORDER BY id""",
         (req_id,)
     ).fetchall()
     def row_to_dict(row):
@@ -994,15 +1028,12 @@ def admin_api_requisicao(req_id):
     )
     data["anexos"] = [row_to_dict(x) for x in anexos]
     # URL pública para cada anexo (se possível)
-    base_upload = current_app.config.get("UPLOAD_FOLDER")
     items = []
     for x in data["anexos"]:
         fn = x.get("filename")
         if not fn:
             items.append(x); continue
-        # normalizar caminho para rota /uploads
-        safe = os.path.normpath(fn).replace("\\", "/").lstrip("/")
-        x["url"] = url_for("uploaded_file", filename=safe)
+        x["url"] = url_for("comprovantes.open_comprovante", attachment_id=x["id"])
         items.append(x)
     data["anexos"] = items
     return jsonify(data)
@@ -1052,6 +1083,13 @@ def admin_processar_requisicao(req_id):
 
     snapshot_processing = read_requisicao_snapshot_for_processing(requisicao)
     snapshot_diag = _build_admin_requisicao_snapshot_diagnostic(requisicao)
+    anexos = conn.execute(
+        """SELECT id,label,filename,original_filename,provider,criado_em
+             FROM requisicao_arquivos
+            WHERE requisicao_id=? AND storage_status IN ('active','legacy_active')
+         ORDER BY id""",
+        (req_id,),
+    ).fetchall()
 
     if (
         request.method == "POST"
@@ -1064,6 +1102,7 @@ def admin_processar_requisicao(req_id):
         return render_template(
             "admin_processar_requisicao.html",
             requisicao=requisicao,
+            anexos=anexos,
             snapshot_diag=snapshot_diag,
             snapshot_display_enabled=snapshot_display_enabled,
         )
@@ -1209,6 +1248,7 @@ def admin_processar_requisicao(req_id):
     return render_template(
         "admin_processar_requisicao.html",
         requisicao=requisicao,
+        anexos=anexos,
         snapshot_diag=snapshot_diag,
         snapshot_display_enabled=snapshot_display_enabled,
     )

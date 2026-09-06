@@ -437,6 +437,32 @@ def test_invalid_refresh_authorization_marks_account_for_reconnect(monkeypatch):
     assert conn.execute("SELECT token_json FROM cloud_accounts").fetchone()[0] == stored_before
 
 
+def test_invalid_client_refresh_failure_preserves_durable_authorization(monkeypatch):
+    app, conn = _cloud_connection_fixture(monkeypatch)
+    with app.app_context():
+        cloud_connections.set_active_cloud_account(
+            conn,
+            "google",
+            "admin@example.com",
+            json.dumps({"token": "expired", "refresh_token": "still-valid"}),
+        )
+        conn.commit()
+        _install_google_refresh_stub(
+            monkeypatch,
+            failure=RefreshError(
+                "invalid client",
+                {"error": "invalid_client", "error_description": "bad app credentials"},
+            ),
+        )
+        with pytest.raises(cloud_connections.CloudConnectionError) as captured:
+            cloud_connections.get_authenticated_access_token(conn, "google")
+
+    assert captured.value.debug_code == "APPLICATION_CREDENTIALS_INVALID"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM cloud_accounts WHERE active = 1"
+    ).fetchone()[0] == 1
+
+
 @pytest.mark.parametrize(
     "failure",
     [

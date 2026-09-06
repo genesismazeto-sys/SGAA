@@ -882,9 +882,9 @@ def test_green_5_message_catalog_schema_and_reverse_dependencies():
 
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 3, f"prod-1 SCHEMA_VERSION must be 3, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 4, f"prod-1 SCHEMA_VERSION must be 4, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3}, (
+    assert versions == {1, 2, 3, 4}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )

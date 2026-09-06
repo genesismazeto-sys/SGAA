@@ -102,23 +102,15 @@ def test_matrix_db_constraint_prevents_ambiguous_version_for_same_base(fc10_env)
             )
 
 
-def test_attachment_failure_rolls_back_request_and_compensates_saved_file(fc10_env, monkeypatch):
+def test_invalid_attachment_batch_is_rejected_before_any_storage_call(fc10_env, monkeypatch):
     with main.app.app_context():
         student = _student(main.get_db_connection())
     _login_student(fc10_env["client"], student)
-    saved_paths = []
-
-    def failing_second_save(_upload, _allowed, *, root_folder, **_kwargs):
-        if saved_paths:
-            raise OSError("second attachment failed")
-        relative = "r3/first-proof.pdf"
-        absolute = Path(root_folder) / relative
-        absolute.parent.mkdir(parents=True, exist_ok=True)
-        absolute.write_bytes(b"proof")
-        saved_paths.append((relative, absolute))
-        return relative
-
-    monkeypatch.setattr(aluno_views, "save_student_document", failing_second_save)
+    monkeypatch.setattr(
+        aluno_views,
+        "resolve_google_storage",
+        lambda _conn: pytest.fail("storage must not be resolved for an invalid batch"),
+    )
     name = f"FC10-compensation-{uuid.uuid4().hex}"
     response = fc10_env["client"].post(
         "/aluno/nova-requisicao",
@@ -127,9 +119,9 @@ def test_attachment_failure_rolls_back_request_and_compensates_saved_file(fc10_e
             "nome_evento": name,
             "data_evento": "2026-05-10",
             "horas_solicitadas": "4",
-            "comprovantes_files": [
-                (BytesIO(b"one"), "one.pdf"),
-                (BytesIO(b"two"), "two.pdf"),
+                "comprovantes_files": [
+                (BytesIO(b"%PDF-1.4\n%%EOF"), "one.pdf"),
+                (BytesIO(b"not-a-pdf"), "two.pdf"),
             ],
             "comprovantes_labels": ["one", "two"],
         },
@@ -138,7 +130,6 @@ def test_attachment_failure_rolls_back_request_and_compensates_saved_file(fc10_e
     assert response.status_code == 200
     with main.app.app_context():
         assert _request(main.get_db_connection(), name) is None
-    assert saved_paths and not saved_paths[0][1].exists()
 
 
 def test_admin_import_producer_persists_mandatory_exact_snapshot(fc10_env):

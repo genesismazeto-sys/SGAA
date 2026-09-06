@@ -11,6 +11,17 @@
     Status atual: <strong>{{ requisicao.status }}</strong>
   </div>
 
+  {% if anexos and anexos|length %}
+  <div class="process-comprovantes">
+    <div class="help">Comprovantes</div>
+    <div class="actions">
+      {% for anexo in anexos %}
+      <a class="btn" href="{{ url_for('comprovantes.open_comprovante', attachment_id=anexo.id) }}" target="_blank" rel="noopener">{{ anexo.label or anexo.filename }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if requisicao.tem_limitacao %}
   <div class="flash" style="border-left-color:#ef4444; margin-bottom:12px;">
     <strong>Atenção:</strong> Esta atividade tem limitação

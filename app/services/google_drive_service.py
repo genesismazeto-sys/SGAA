@@ -196,7 +196,7 @@ def exchange_code_for_token(*, code: str, code_verifier: str, is_debug: bool) ->
     return token_json, email
 
 
-def _build_credentials_from_token_json(token_json: str):
+def _build_credentials_from_token_json(token_json: str, *, force_refresh: bool = False):
     Credentials, Request, Flow, build, MediaFileUpload = _import_google_dependencies()
     try:
         payload = json.loads(token_json)
@@ -228,12 +228,13 @@ def _build_credentials_from_token_json(token_json: str):
         expiry=expiry,
     )
     refreshed = False
-    if credentials.expired and not credentials.refresh_token:
+    refresh_required = bool(credentials.expired or force_refresh)
+    if refresh_required and not credentials.refresh_token:
         raise GoogleDriveServiceError(
             "Autorizacao Google expirada e sem renovacao valida. Reconecte o Google Drive.",
             debug_code="AUTH_RECONNECT_REQUIRED",
         )
-    if credentials.expired and credentials.refresh_token:
+    if refresh_required and credentials.refresh_token:
         try:
             credentials.refresh(Request())
             refreshed = True
@@ -269,6 +270,19 @@ def acquire_access_token(*, token_json: str) -> tuple[str, str, str]:
     except Exception as exc:
         raise GoogleDriveServiceError("Nao foi possivel validar a identidade Google.") from exc
     return str(credentials.token), updated_token_json, account_email
+
+
+def refresh_access_token(*, token_json: str) -> tuple[str, str, str]:
+    """Force canonical token refresh after an access-token rejection."""
+    credentials, _refreshed, updated_token_json = _build_credentials_from_token_json(
+        token_json, force_refresh=True
+    )
+    if not credentials.token:
+        raise GoogleDriveServiceError(
+            "Autorizacao Google invalida. Reconecte o Google Drive.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
+        )
+    return str(credentials.token), updated_token_json, ""
 
 
 def get_connected_account(*, token_json: str) -> dict[str, str]:

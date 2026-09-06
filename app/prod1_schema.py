@@ -5,12 +5,14 @@ import hashlib
 import re
 import sqlite3
 
+from app.prod1_comprovantes_ddl import COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
-LATEST_MIGRATION_MARKER = MATRIX_VERSION_REMOVAL_MARKER
+COMPROVANTES_GOOGLE_DRIVE_MARKER = "comprovantes_google_drive_cutover"
+LATEST_MIGRATION_MARKER = COMPROVANTES_GOOGLE_DRIVE_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -172,6 +174,7 @@ CREATE TABLE requisicoes (
  data_processamento TEXT, admin_id INTEGER, aluno_update_notified_at TEXT,
  aluno_update_seen_at TEXT,
  regra_snapshot_json TEXT NOT NULL CHECK(json_valid(regra_snapshot_json) AND json_type(regra_snapshot_json)='object'),
+ turma_id_snapshot INTEGER, turma_codigo_snapshot TEXT,
  FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE SET NULL ON UPDATE CASCADE,
  FOREIGN KEY(atividade_versao_id) REFERENCES atividade_versao(id) ON DELETE RESTRICT ON UPDATE CASCADE,
  FOREIGN KEY(admin_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
@@ -179,7 +182,13 @@ CREATE TABLE requisicoes (
 CREATE TABLE requisicao_arquivos (
  id INTEGER PRIMARY KEY AUTOINCREMENT, requisicao_id INTEGER NOT NULL, label TEXT,
  filename TEXT NOT NULL, criado_em TEXT DEFAULT (datetime('now')),
- FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id) ON DELETE CASCADE
+ provider TEXT NOT NULL DEFAULT 'local_legacy', remote_file_id TEXT,
+ remote_parent_id TEXT, original_filename TEXT, mime_type TEXT, size_bytes INTEGER,
+ sha256 TEXT, uploaded_at TEXT, uploader_user_id INTEGER, operation_key TEXT,
+ storage_status TEXT NOT NULL DEFAULT 'legacy_active', failure_code TEXT,
+ delete_previous_status TEXT, delete_started_at TEXT,
+ FOREIGN KEY(requisicao_id) REFERENCES requisicoes(id) ON DELETE CASCADE,
+ FOREIGN KEY(uploader_user_id) REFERENCES usuarios(id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE TABLE requisicao_alerta_receipts (
  id INTEGER PRIMARY KEY AUTOINCREMENT, requisicao_id INTEGER NOT NULL,
@@ -256,6 +265,7 @@ CREATE TRIGGER trg_requisicoes_snapshot_immutable
 BEFORE UPDATE OF atividade_versao_id,regra_snapshot_json ON requisicoes
 FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_snapshot_json<>OLD.regra_snapshot_json
 BEGIN SELECT RAISE(ABORT,'request snapshot authority is immutable'); END;
+__COMPROVANTES_V4_SCHEMA_OBJECTS__
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
@@ -263,8 +273,27 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(2,'remove_norma_domain','prod-1','{"schema_epoch":"prod-1","removed_domain":"norma"}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(3,'remove_matrix_version_metadata','prod-1','{"schema_epoch":"prod-1","removed_fields":["matrizes_atividades.versao","matrizes_atividades.matriz_origem_id"]}');
-PRAGMA user_version=3;
-"""
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(4,'comprovantes_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
+PRAGMA user_version=4;
+""".replace(
+    "__COMPROVANTES_V4_SCHEMA_OBJECTS__", COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
+)
+
+
+def canonical_prod1_object_sql(kind: str, name: str) -> str:
+    """Return DDL from the single canonical v4 schema authority."""
+    probe = sqlite3.connect(":memory:")
+    try:
+        probe.executescript(PROD1_SCHEMA_SQL)
+        row = probe.execute(
+            "SELECT sql FROM sqlite_master WHERE type=? AND name=?", (kind, name)
+        ).fetchone()
+        if not row or not row[0]:
+            raise Prod1SchemaError(f"canonical schema object missing: {kind} {name}")
+        return str(row[0])
+    finally:
+        probe.close()
 
 
 def _names(conn: sqlite3.Connection, kind: str) -> set[str]:
@@ -368,6 +397,7 @@ def _physical_schema_signature(conn: sqlite3.Connection) -> dict[str, object]:
 _EXPECTED_PHYSICAL_SIGNATURE: dict[str, object] | None = None
 _PROD1_V1_SIGNATURE_SHA256 = "58b2e8b5dadc8381e03350cb3972a9590844f88c56e1f793e4036e4e6481a877"
 _PROD1_V2_SIGNATURE_SHA256 = "af842dbf7a4a6d93a933463ccfe18f7b4040a0a3a09e9fc799a27c9219ba3df6"
+_PROD1_V3_SIGNATURE_SHA256 = "51b2d17cf814e64e34ccd47360a57bea4e676c30c1023e167a3295c7cea77a41"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -420,6 +450,23 @@ def _validate_prod1_v2_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v2 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v3_schema(conn: sqlite3.Connection) -> None:
+    """Recognize the sole supported prod-1/v3 physical contract exactly."""
+    if _user_version(conn) != 3:
+        raise Prod1SchemaError("prod-1/v3 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v3 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V3_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v3 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v3 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -649,7 +696,7 @@ def migrate_prod1_v2_to_v3(conn: sqlite3.Connection) -> dict[str, object]:
              '{"schema_epoch":"prod-1","removed_fields":["matrizes_atividades.versao","matrizes_atividades.matriz_origem_id"]}'),
         )
         conn.execute("PRAGMA user_version=3")
-        validate_prod1_schema(conn)
+        _validate_prod1_v3_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v3 integrity check failed")
         conn.execute("COMMIT")
@@ -659,7 +706,14 @@ def migrate_prod1_v2_to_v3(conn: sqlite3.Connection) -> dict[str, object]:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
-    return validate_prod1_schema(conn)
+    _validate_prod1_v3_schema(conn)
+    return {"schema_epoch": SCHEMA_EPOCH, "schema_version": 3,
+            "baseline_marker": BASELINE_MARKER, "table_count": len(_names(conn, "table"))}
+
+
+def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.prod1_comprovantes_v4 import migrate_prod1_v3_to_v4 as migrate
+    return migrate(conn)
 
 
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
@@ -671,6 +725,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (1, BASELINE_MARKER, SCHEMA_EPOCH),
         (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
         (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -693,9 +748,13 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     if _names(conn, "table") or _names(conn, "index") or _names(conn, "trigger") or _user_version(conn):
         if _user_version(conn) == 1:
             migrate_prod1_v1_to_v2(conn)
-            return migrate_prod1_v2_to_v3(conn)
+            migrate_prod1_v2_to_v3(conn)
+            return migrate_prod1_v3_to_v4(conn)
         if _user_version(conn) == 2:
-            return migrate_prod1_v2_to_v3(conn)
+            migrate_prod1_v2_to_v3(conn)
+            return migrate_prod1_v3_to_v4(conn)
+        if _user_version(conn) == 3:
+            return migrate_prod1_v3_to_v4(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:
