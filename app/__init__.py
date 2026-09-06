@@ -22,6 +22,7 @@ from werkzeug.routing import BuildError
 from presets_api import bp_presets
 from app.backup_settings import bind_backup_settings_runtime_app
 from app.db import DATABASE, close_db_connection, get_db_connection
+from app.oauth_log_filter import install_oauth_query_redaction_filter
 from app.versioning.request_history import HistoricalRequestAuthorityError
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
@@ -388,6 +389,7 @@ def create_app(
         )
 
     # ----- Logging -----
+    install_oauth_query_redaction_filter()
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     log_fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

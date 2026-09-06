@@ -31,6 +31,7 @@ import sqlite3
 from flask import current_app, g
 
 import app.cloud_drives as _cd
+import app.cloud_connections as _cloud_connections
 from app import db as _app_db
 from app.backup_settings import (
     _apply_backup_settings_to_app,
@@ -232,20 +233,14 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
         for provider in ("google", "onedrive"):
             prefix = "gdrive" if provider == "google" else "onedrive"
             enabled = str(drive_settings.get(f"{prefix}_enabled") or "0") in {"1", "true"}
-            if not enabled or not drive_settings.get(f"{prefix}_access_token"):
+            if not enabled:
                 continue
 
             dest_folder = drive_settings.get(f"{prefix}_dest_folder") or "Backups/sistema"
             try:
-                if provider == "google":
-                    token, updates = _cd.refresh_google_if_needed(drive_settings)
-                else:
-                    token, updates = _cd.refresh_onedrive_if_needed(drive_settings)
-
-                if updates:
-                    _save_drive_config(conn, updates)
-                    drive_settings.update(updates)
-                    conn.commit()
+                token, _account_email = _cloud_connections.get_authenticated_access_token(
+                    conn, provider
+                )
 
                 if provider == "google":
                     _cd.google_upload(token, snapshot_path, dest_folder)

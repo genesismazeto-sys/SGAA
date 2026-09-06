@@ -2,6 +2,8 @@ import logging
 import os
 from urllib.parse import urlsplit
 
+from app.cloud_config import get_public_base_url_setting
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +87,7 @@ def _legacy_redirect_base(env_key: str, expected_path: str) -> str:
 
 def get_public_base_url() -> str:
     env = get_app_env()
-    configured = (os.getenv("APP_PUBLIC_BASE_URL") or "").strip()
+    configured = get_public_base_url_setting()
     legacy_google_redirect = (os.getenv("GOOGLE_REDIRECT_URI") or "").strip()
     legacy_onedrive_redirect = (os.getenv("MS_REDIRECT_URI") or "").strip()
     if configured:

@@ -2,11 +2,11 @@ import datetime
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
+from app.cloud_config import get_onedrive_oauth_config
 from services.oauth_config import OAuthConfigError, get_onedrive_redirect_uri
 
 
@@ -55,14 +55,12 @@ def _utc_now_iso() -> str:
 
 
 def _load_config() -> _OneDriveConfig:
+    resolved = get_onedrive_oauth_config()
     env = {
-        "MS_CLIENT_ID": (os.environ.get("MS_CLIENT_ID") or "").strip(),
-        "MS_CLIENT_SECRET": (os.environ.get("MS_CLIENT_SECRET") or "").strip(),
-        "MS_TENANT_ID": (os.environ.get("MS_TENANT_ID") or "").strip(),
-        "MS_GRAPH_BASE_URL": (
-            (os.environ.get("MS_GRAPH_BASE_URL") or "").strip()
-            or DEFAULT_GRAPH_BASE_URL
-        ),
+        "MS_CLIENT_ID": resolved["client_id"],
+        "MS_CLIENT_SECRET": resolved["client_secret"],
+        "MS_TENANT_ID": resolved["tenant_id"],
+        "MS_GRAPH_BASE_URL": resolved["graph_base_url"] or DEFAULT_GRAPH_BASE_URL,
     }
     missing = [
         key
@@ -147,17 +145,6 @@ def _token_error_message(result: dict[str, Any]) -> str:
     return "Falha na autenticação com Microsoft/OneDrive."
 
 
-def _sanitize_oauth_error_description(text: str) -> str:
-    if not text:
-        return ""
-    cleaned = re.sub(
-        r"(?i)(access_token|refresh_token|client_secret|code)\s*=\s*[^&\s]+",
-        r"\1=[redacted]",
-        text,
-    )
-    cleaned = " ".join(cleaned.split())
-    return cleaned[:400]
-
 def _graph_error_message(status_code: int, payload: dict[str, Any], *, operation: str) -> str:
     error_obj = payload.get("error") if isinstance(payload, dict) else {}
     code = str((error_obj or {}).get("code") or "").strip().lower()
@@ -186,19 +173,23 @@ def _graph_error_message(status_code: int, payload: dict[str, Any], *, operation
     return f"Falha no {op_label} OneDrive (HTTP {status_code})."
 
 
-def create_authorization_url(*, state: str) -> str:
+def create_authorization_url(*, state: str) -> tuple[str, dict[str, Any]]:
     if not state:
         raise OneDriveServiceError("State OAuth ausente para conexão OneDrive.")
 
     config = _load_config()
     try:
         app = _build_app(config, _new_cache())
-        return app.get_authorization_request_url(
+        flow = app.initiate_auth_code_flow(
             scopes=SCOPES,
             state=state,
             redirect_uri=get_ms_redirect_uri(),
             prompt="select_account",
         )
+        auth_uri = str(flow.get("auth_uri") or "")
+        if not auth_uri:
+            raise OneDriveServiceError("Falha ao gerar PKCE para a conexao OneDrive.")
+        return auth_uri, flow
     except ValueError as exc:
         raise OneDriveServiceError(
             "Configuração OAuth do OneDrive inválida. Revise os escopos e o App Registration."
@@ -242,26 +233,38 @@ def _parse_token_json(token_json: str) -> dict[str, Any]:
     try:
         payload = json.loads(token_json or "{}")
     except json.JSONDecodeError as exc:
-        raise OneDriveServiceError("Token OAuth do OneDrive inválido. Reconecte a conta.") from exc
+        raise OneDriveServiceError(
+            "Token OAuth do OneDrive inválido. Reconecte a conta.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
+        ) from exc
 
     if not isinstance(payload, dict) or not payload.get("msal_cache"):
-        raise OneDriveServiceError("Token OAuth do OneDrive inválido. Reconecte a conta.")
+        raise OneDriveServiceError(
+            "Token OAuth do OneDrive inválido. Reconecte a conta.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
+        )
     return payload
 
 
-def exchange_code_for_token(*, code: str) -> tuple[str, str]:
-    if not code:
+def exchange_code_for_token(
+    *, auth_response: dict[str, str], auth_flow: dict[str, Any]
+) -> tuple[str, str]:
+    if not str(auth_response.get("code") or "").strip():
         raise OneDriveServiceError("Codigo OAuth ausente no callback do OneDrive.")
+    if not auth_flow:
+        raise OneDriveServiceError("Sessao PKCE expirada. Inicie a conexao OneDrive novamente.")
 
     config = _load_config()
     cache = _new_cache()
     app = _build_app(config, cache)
 
-    result = app.acquire_token_by_authorization_code(
-        code=code,
-        scopes=SCOPES,
-        redirect_uri=get_ms_redirect_uri(),
-    )
+    try:
+        result = app.acquire_token_by_auth_code_flow(auth_flow, auth_response)
+    except ValueError as exc:
+        raise OneDriveServiceError(
+            "Sessao OAuth invalida ou expirada. Reconecte o OneDrive.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
+        ) from exc
 
     if not isinstance(result, dict):
         logger.warning("OneDrive OAuth falhou: resposta invalida da MSAL.")
@@ -270,12 +273,7 @@ def exchange_code_for_token(*, code: str) -> tuple[str, str]:
     access_token = result.get("access_token")
     if not access_token:
         error_code = str(result.get("error") or "").strip().lower() or "unknown_error"
-        error_description = _sanitize_oauth_error_description(
-            str(result.get("error_description") or "")
-        )
         logger.warning("OneDrive OAuth falhou: %s", error_code)
-        if error_description:
-            logger.info("OneDrive OAuth detalhe (sanitizado): %s", error_description)
         raise OneDriveServiceError(_token_error_message(result or {}))
 
     account_email = fetch_account_email(str(access_token))
@@ -291,7 +289,8 @@ def _acquire_access_token(token_json: str) -> tuple[str, str, str]:
     accounts = app.get_accounts()
     if not accounts:
         raise OneDriveServiceError(
-            "Token expirado e sem refresh válido. Reconecte o OneDrive."
+            "Token expirado e sem refresh válido. Reconecte o OneDrive.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
         )
 
     account = accounts[0]
@@ -303,12 +302,17 @@ def _acquire_access_token(token_json: str) -> tuple[str, str, str]:
     access_token = result.get("access_token") if isinstance(result, dict) else None
     if not access_token:
         raise OneDriveServiceError(
-            "Token expirado e sem refresh válido. Reconecte o OneDrive."
+            "Token expirado e sem refresh válido. Reconecte o OneDrive.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
         )
 
     account_email = str(payload.get("account_email") or account.get("username") or "").strip()
     updated_token_json = _serialize_cache_payload(cache, account_email)
     return str(access_token), updated_token_json, account_email
+
+
+def acquire_access_token(*, token_json: str) -> tuple[str, str, str]:
+    return _acquire_access_token(token_json)
 
 
 def _build_folder_upload_url(
@@ -482,6 +486,21 @@ def list_onedrive_folders(
     list_result["token_json"] = updated_token_json
     list_result["account_email"] = account_email
     return list_result
+
+
+def list_onedrive_folders_with_access_token(
+    *,
+    access_token: str,
+    parent_id: str | None = None,
+    drive_id: str | None = None,
+) -> dict[str, object]:
+    config = _load_config()
+    return _list_folders_with_access_token(
+        access_token=access_token,
+        graph_base_url=config.graph_base_url,
+        parent_id=parent_id,
+        drive_id=drive_id,
+    )
 
 
 def upload_zip_backup_with_access_token(

@@ -194,6 +194,7 @@
     /* Drive sub-sections */
     .db-drive-sep { margin:14px -16px; border-top:1px solid var(--border-strong); }
     .db-drive-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+    .db-drive-grid.is-google-only { grid-template-columns:minmax(0, 1fr); }
     .db-provider-card{
       display:grid;
       gap:14px;
@@ -328,6 +329,7 @@
     .db-provider-actions{
       display:grid;
       gap:10px;
+      align-content:start;
     }
     .db-provider-primary,
     .db-provider-secondary{
@@ -335,7 +337,7 @@
       gap:8px;
     }
     .db-provider-secondary{
-      grid-template-columns:repeat(3, minmax(0, 1fr));
+      grid-template-columns:repeat(2, minmax(0, 1fr));
     }
     .db-provider-primary form,
     .db-provider-secondary form{
@@ -552,9 +554,6 @@
         border-radius:var(--radius) var(--radius) 0 0;
       }
     }
-    @media (max-width: 980px){
-      .db-provider-secondary{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
-    }
     @media (max-width: 520px){
       .db-provider-secondary{ grid-template-columns:1fr; }
     }
@@ -613,16 +612,22 @@
         {% if gdrive_last_upload_label %}
           <div><strong>Último upload Google Drive:</strong> {{ gdrive_last_upload_label }}</div>
         {% endif %}
-        <div>
-          <strong>OneDrive:</strong>
-          {% if onedrive_connected %}
-            <span class="badge status-pill status-positive">Conectado</span>
-          {% else %}
-            <span class="badge status-pill status-neutral">Desconectado</span>
+        {% if onedrive_ui_enabled %}
+          <div>
+            <strong>OneDrive:</strong>
+            {% if onedrive_connection_status == 'connected' %}
+              <span class="badge status-pill status-positive">Conectado</span>
+            {% elif onedrive_connection_status == 'not_configured' %}
+              <span class="badge status-pill status-neutral">Não configurado</span>
+            {% elif onedrive_connection_status == 'needs_reconnection' %}
+              <span class="badge status-pill status-warning">Reconectar</span>
+            {% else %}
+              <span class="badge status-pill status-neutral">Desconectado</span>
+            {% endif %}
+          </div>
+          {% if onedrive_last_upload_label %}
+            <div><strong>Último upload OneDrive:</strong> {{ onedrive_last_upload_label }}</div>
           {% endif %}
-        </div>
-        {% if onedrive_last_upload_label %}
-          <div><strong>Último upload OneDrive:</strong> {{ onedrive_last_upload_label }}</div>
         {% endif %}
       </div>
     </article>
@@ -635,10 +640,12 @@
       <div class="db-chips">
         <span class="db-chip {% if cloud_backup_dir %}is-active{% endif %}">Pasta sincronizada</span>
         <span class="db-chip {% if gdrive_connected %}is-active{% endif %}">Google Drive</span>
-        <span class="db-chip {% if onedrive_connected %}is-active{% endif %}">OneDrive</span>
+        {% if onedrive_ui_enabled %}
+          <span class="db-chip {% if onedrive_connected %}is-active{% endif %}">OneDrive</span>
+        {% endif %}
       </div>
     </div>
-    <p>Configure onde os snapshots serão salvos e enviados. Google Drive e OneDrive via API ficam nos cards abaixo.</p>
+    <p>Configure onde os snapshots serão salvos e enviados. O Google Drive é o provedor em nuvem ativo desta entrega.</p>
     {% if auth_can('banco_dados', 'edit') %}
       <form method="post" action="{{ url_for('admin_banco_dados_configuracoes') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -698,7 +705,7 @@
     {% endif %}
 
     <div class="db-drive-sep"></div>
-    <div class="db-drive-grid">
+    <div class="db-drive-grid{% if not onedrive_ui_enabled %} is-google-only{% endif %}">
       {# Google Drive #}
       <section class="db-provider-card">
         <div class="db-provider-head">
@@ -706,10 +713,12 @@
             <img src="{{ url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
             <h3>Google Drive</h3>
           </div>
-          {% if gdrive_connected %}
+          {% if gdrive_connection_status == 'connected' %}
             <span class="db-badge local">Conectado</span>
-          {% elif gdrive_legacy_connection_detected %}
+          {% elif gdrive_connection_status == 'needs_reconnection' or gdrive_legacy_connection_detected %}
             <span class="db-badge warning">Reconectar</span>
+          {% elif gdrive_connection_status == 'not_configured' %}
+            <span class="db-badge">Não configurado</span>
           {% else %}
             <span class="db-badge">Desconectado</span>
           {% endif %}
@@ -719,6 +728,10 @@
           {% if gdrive_connected %}
             <div class="db-provider-line">
               <span>{{ google_drive_account_email or drive_settings.gdrive_account_email or '—' }}</span>
+            </div>
+          {% elif gdrive_connection_status == 'needs_reconnection' %}
+            <div class="db-provider-line is-warning">
+              <span>Reconecte {{ google_drive_account_email or 'a conta Google anterior' }}</span>
             </div>
           {% elif gdrive_legacy_connection_detected %}
             <div class="db-provider-line is-warning">
@@ -737,6 +750,9 @@
           <div class="db-provider-line">
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ google_folder_label or 'Backups/sistema' }}">{{ google_folder_label or 'Backups/sistema' }}</span>
+          </div>
+          <div class="db-provider-line is-muted">
+            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
         </div>
 
@@ -764,6 +780,16 @@
             </div>
 
             <div class="db-provider-secondary">
+              {% if gdrive_connected %}
+                <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="provider" value="google">
+                  <input type="hidden" name="action" value="test_connection">
+                  <button type="submit" class="btn" title="Testar conexão com Google Drive">
+                    <i class="lucide" data-lucide="circle-check"></i>Testar conexão
+                  </button>
+                </form>
+              {% endif %}
               <button
                 type="button"
                 class="btn"
@@ -781,8 +807,8 @@
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
 
-              <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
-                <i class="lucide" data-lucide="refresh-cw"></i>{% if gdrive_connected or gdrive_legacy_connection_detected %}Reconectar{% else %}Conectar{% endif %}
+              <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
+                <i class="lucide" data-lucide="refresh-cw"></i>{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar{% else %}Conectar{% endif %}
               </a>
 
               {% if gdrive_connected or gdrive_legacy_connection_detected %}
@@ -858,6 +884,7 @@
         {% endif %}
       </section>
 
+      {% if onedrive_ui_enabled %}
       {# OneDrive #}
       <section class="db-provider-card">
         <div class="db-provider-head">
@@ -865,17 +892,29 @@
             <img src="{{ url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
             <h3>OneDrive</h3>
           </div>
-          {% if onedrive_connected %}
+          {% if onedrive_connection_status == 'connected' %}
             <span class="db-badge local">Conectado</span>
+          {% elif onedrive_connection_status == 'needs_reconnection' %}
+            <span class="db-badge">Reconectar</span>
+          {% elif onedrive_connection_status == 'not_configured' %}
+            <span class="db-badge">Não configurado</span>
           {% else %}
             <span class="db-badge">Desconectado</span>
           {% endif %}
         </div>
 
         <div class="db-provider-meta">
-          {% if onedrive_connected %}
+          {% if onedrive_connection_status == 'connected' %}
             <div class="db-provider-line">
               <span>{{ onedrive_account_email or drive_settings.onedrive_account_email or '—' }}</span>
+            </div>
+          {% elif onedrive_connection_status == 'not_configured' %}
+            <div class="db-provider-line is-muted">
+              <span>Configuração Microsoft adiada</span>
+            </div>
+          {% elif onedrive_connection_status == 'needs_reconnection' %}
+            <div class="db-provider-line is-muted">
+              <span>Reconexão pendente</span>
             </div>
           {% else %}
             <div class="db-provider-line is-muted">
@@ -912,6 +951,10 @@
             </div>
 
             <div class="db-provider-secondary">
+              <button type="button" class="btn" disabled aria-disabled="true" title="OneDrive não está configurado">
+                <i class="lucide" data-lucide="circle-check"></i>Testar conexão
+              </button>
+
               <button
                 type="button"
                 class="btn"
@@ -929,9 +972,15 @@
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
 
-              <a href="{{ url_for('admin_backup_onedrive_connect') }}" class="btn" title="{% if onedrive_connected %}Reconectar OneDrive{% else %}Conectar OneDrive{% endif %}">
-                <i class="lucide" data-lucide="refresh-cw"></i>{% if onedrive_connected %}Reconectar{% else %}Conectar{% endif %}
-              </a>
+              {% if onedrive_connection_status == 'not_configured' %}
+                <button type="button" class="btn" disabled aria-disabled="true" title="Disponível após configurar as credenciais Microsoft desta máquina">
+                  <i class="lucide" data-lucide="plug"></i>Conectar
+                </button>
+              {% else %}
+                <a href="{{ url_for('admin_backup_onedrive_connect') }}" class="btn" title="{% if onedrive_connected %}Reconectar OneDrive{% else %}Conectar OneDrive{% endif %}">
+                  <i class="lucide" data-lucide="refresh-cw"></i>{% if onedrive_connected %}Reconectar{% else %}Conectar{% endif %}
+                </a>
+              {% endif %}
 
               {% if onedrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_oauth_disconnect') }}" onsubmit="return confirm('Desconectar OneDrive e revogar acesso');">
@@ -1005,6 +1054,7 @@
           </div>
         {% endif %}
       </section>
+      {% endif %}
     </div>
     {% if oauth_config_error %}
       <p class="db-note" style="color:#dc2626; margin-top:12px;">
@@ -1013,10 +1063,13 @@
     {% else %}
       <div class="db-oauth-meta">
         <p class="db-oauth-meta-head">Configuração técnica OAuth</p>
-        <p class="db-oauth-meta-note">Cadastre estes callbacks no Google Cloud e em Registros de aplicativo da Microsoft.</p>
+        <p class="db-oauth-meta-note">Cadastre este callback no Google Cloud.</p>
+        <p class="db-oauth-meta-note">Para renovar as credenciais do aplicativo nesta máquina, execute <code>python tools/configure_cloud_oauth.py --provider google</code>. Os segredos não são exibidos nem gravados no repositório.</p>
         <div><strong>APP_PUBLIC_BASE_URL:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ oauth_public_base_url or '—' }}">{{ oauth_public_base_url or '—' }}</span></div>
         <div><strong>Google callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ google_oauth_callback_uri or '—' }}">{{ google_oauth_callback_uri or '—' }}</span></div>
-        <div><strong>OneDrive callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_oauth_callback_uri or '—' }}">{{ onedrive_oauth_callback_uri or '—' }}</span></div>
+        {% if onedrive_ui_enabled %}
+          <div><strong>OneDrive callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_oauth_callback_uri or '—' }}">{{ onedrive_oauth_callback_uri or '—' }}</span></div>
+        {% endif %}
       </div>
     {% endif %}
   </article>

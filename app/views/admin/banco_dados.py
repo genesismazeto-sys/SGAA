@@ -32,8 +32,13 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-import app.cloud_drives as _cd
+import app.cloud_connections as _cloud_connections
 import app.db as app_db
+from app.cloud_config import (
+    get_application_credential_status,
+    get_google_oauth_config,
+    get_onedrive_oauth_config,
+)
 from app.auth import admin_required
 from app.backup import orchestrator as _backup_orchestrator
 from app.backup import (
@@ -71,14 +76,10 @@ from app.services.google_drive_service import (
     create_authorization_url as google_create_authorization_url,
     exchange_code_for_token as google_exchange_code_for_token,
     get_redirect_uri as google_get_redirect_uri,
-    list_google_folders as google_list_folders,
-    upload_zip_backup as google_upload_zip_backup,
 )
 from app.services.token_encryption import (
     TokenEncryptionConfigError,
     TokenEncryptionError,
-    decrypt_token_json_from_storage,
-    encrypt_token_json_for_storage,
     validate_token_encryption_configuration,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -94,9 +95,6 @@ from services.onedrive_service import (
     exchange_code_for_token as onedrive_exchange_code_for_token,
     get_connected_account as onedrive_get_connected_account,
     get_ms_redirect_uri as onedrive_get_ms_redirect_uri,
-    list_onedrive_folders as onedrive_list_folders,
-    upload_zip_backup as onedrive_upload_zip_backup,
-    upload_zip_backup_with_access_token as onedrive_upload_with_access_token,
     validate_configuration as onedrive_validate_configuration,
 )
 from utils.messages import flash
@@ -298,52 +296,10 @@ def _extract_oauth_scopes(token_json: str) -> list[str]:
     return []
 
 def _set_active_cloud_account(conn, provider: str, account_email: str, token_json: str) -> None:
-    ensure_cloud_backup_schema(conn)
-    encrypted_token_json = encrypt_token_json_for_storage(
-        token_json,
-        env=str(current_app.config.get("APP_ENV") or os.getenv("APP_ENV") or "development"),
-    )
-    conn.execute(
-        "UPDATE cloud_accounts SET active = 0, updated_at = datetime('now') WHERE provider = ? AND active = 1",
-        (provider,),
-    )
-    conn.execute(
-        """
-        INSERT INTO cloud_accounts (provider, account_email, token_json, connected_at, updated_at, active)
-        VALUES (?, ?, ?, datetime('now'), datetime('now'), 1)
-        """,
-        (provider, (account_email or "").strip() or None, encrypted_token_json),
-    )
+    _cloud_connections.set_active_cloud_account(conn, provider, account_email, token_json)
 
 def _get_active_cloud_account(conn, provider: str):
-    ensure_cloud_backup_schema(conn)
-    row = conn.execute(
-        """
-        SELECT id, provider, account_email, token_json, connected_at, updated_at, active
-          FROM cloud_accounts
-         WHERE provider = ? AND active = 1
-      ORDER BY id DESC
-        LIMIT 1
-        """,
-        (provider,),
-    ).fetchone()
-    if not row:
-        return None
-
-    payload = dict(row)
-    try:
-        payload["token_json"] = decrypt_token_json_from_storage(
-            str(payload.get("token_json") or ""),
-            env=str(current_app.config.get("APP_ENV") or os.getenv("APP_ENV") or "development"),
-        )
-        payload["token_json_available"] = True
-        payload["token_json_error"] = ""
-    except TokenEncryptionError as exc:
-        logger.warning("Token OAuth indisponivel para %s: %s", provider, exc)
-        payload["token_json"] = ""
-        payload["token_json_available"] = False
-        payload["token_json_error"] = str(exc)
-    return payload
+    return _cloud_connections.get_active_cloud_account(conn, provider)
 
 def _require_cloud_token_encryption_ready() -> None:
     validate_token_encryption_configuration(
@@ -357,20 +313,11 @@ def _update_cloud_account_token(
     token_json: str,
     account_email: str | None = None,
 ) -> None:
-    encrypted_token_json = encrypt_token_json_for_storage(
-        token_json,
-        env=str(current_app.config.get("APP_ENV") or os.getenv("APP_ENV") or "development"),
-    )
-    if account_email is None:
-        conn.execute(
-            "UPDATE cloud_accounts SET token_json = ?, updated_at = datetime('now') WHERE id = ?",
-            (encrypted_token_json, int(account_id)),
-        )
-        return
-
-    conn.execute(
-        "UPDATE cloud_accounts SET token_json = ?, account_email = ?, updated_at = datetime('now') WHERE id = ?",
-        (encrypted_token_json, account_email or None, int(account_id)),
+    _cloud_connections.update_cloud_account_token(
+        conn,
+        account_id=account_id,
+        token_json=token_json,
+        account_email=account_email,
     )
 
 def _record_backup_log(
@@ -436,6 +383,12 @@ def _build_database_admin_context(conn):
     onedrive_folder_setting = _get_cloud_drive_folder_setting(conn, "onedrive")
     google_account = _get_active_cloud_account(conn, "google")
     onedrive_account = _get_active_cloud_account(conn, "onedrive")
+    google_last_account = google_account or _cloud_connections.get_latest_cloud_account(
+        conn, "google"
+    )
+    onedrive_last_account = onedrive_account or _cloud_connections.get_latest_cloud_account(
+        conn, "onedrive"
+    )
     google_backup_logs = []
     onedrive_backup_logs = []
     for row in _list_backup_logs(conn, provider="google", limit=20):
@@ -447,21 +400,31 @@ def _build_database_admin_context(conn):
         payload["size_label"] = _format_bytes_label(payload.get("file_size"))
         onedrive_backup_logs.append(payload)
 
-    google_connected = bool(google_account)
+    google_application_status = get_application_credential_status("google")
+    onedrive_application_status = get_application_credential_status("onedrive")
+    google_connected = bool(
+        google_application_status["configured"]
+        and google_account
+        and google_account.get("token_json_available", True)
+    )
     google_legacy_connection_detected = bool(
         (drive_settings.get("gdrive_access_token") or "").strip()
     ) and not google_connected
     google_legacy_account_email = str(drive_settings.get("gdrive_account_email") or "")
     google_account_email = ""
-    if google_account:
-        google_account_email = str(google_account["account_email"] or "")
+    if google_last_account:
+        google_account_email = str(google_last_account["account_email"] or "")
     if not google_account_email:
         google_account_email = google_legacy_account_email
 
-    onedrive_connected = bool(onedrive_account)
+    onedrive_connected = bool(
+        onedrive_application_status["configured"]
+        and onedrive_account
+        and onedrive_account.get("token_json_available", True)
+    )
     onedrive_account_email = ""
-    if onedrive_account:
-        onedrive_account_email = str(onedrive_account["account_email"] or "")
+    if onedrive_last_account:
+        onedrive_account_email = str(onedrive_last_account["account_email"] or "")
     if not onedrive_account_email:
         onedrive_account_email = str(drive_settings.get("onedrive_account_email") or "")
 
@@ -479,7 +442,11 @@ def _build_database_admin_context(conn):
         drive_settings["gdrive_dest_folder"] = google_folder_label
     if onedrive_folder_label:
         drive_settings["onedrive_dest_folder"] = onedrive_folder_label
-    google_client_id = str(os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
+    google_client_id = (
+        get_google_oauth_config()["client_id"]
+        if google_application_status["source"] != "ERROR"
+        else ""
+    )
     google_picker_api_key = str(os.environ.get("GOOGLE_PICKER_API_KEY") or "").strip()
     google_app_id = str(os.environ.get("GOOGLE_APP_ID") or "").strip()
 
@@ -497,11 +464,17 @@ def _build_database_admin_context(conn):
         "retention_windows_meta": _RETENTION_WINDOWS_META,
         "retention_interval_options": _RETENTION_INTERVAL_OPTIONS,
         "drive_settings": drive_settings,
-        "gdrive_configured": bool(os.environ.get("GOOGLE_CLIENT_ID")),
-        "onedrive_configured": bool(
-            (os.environ.get("MS_CLIENT_ID") or "").strip()
-            or (os.environ.get("ONEDRIVE_CLIENT_ID") or "").strip()
+        "gdrive_configured": bool(google_application_status["configured"]),
+        "onedrive_configured": bool(onedrive_application_status["configured"]),
+        "gdrive_config_source": google_application_status["source"],
+        "onedrive_config_source": onedrive_application_status["source"],
+        "gdrive_connection_status": (
+            "not_configured" if not google_application_status["configured"] else "connected" if google_connected else "needs_reconnection" if google_last_account else "disconnected"
         ),
+        "onedrive_connection_status": (
+            "not_configured" if not onedrive_application_status["configured"] else "connected" if onedrive_connected else "needs_reconnection" if onedrive_last_account else "disconnected"
+        ),
+        "onedrive_ui_enabled": True,
         "gdrive_connected": google_connected,
         "gdrive_legacy_connection_detected": google_legacy_connection_detected,
         "gdrive_legacy_account_email": google_legacy_account_email,
@@ -571,13 +544,14 @@ def _onedrive_connect_diagnostics(redirect_uri: str = "") -> dict[str, str]:
     except Exception:
         msal_imported = "não"
 
+    config = get_onedrive_oauth_config()
     return {
         "APP_ENV": str(current_app.config.get("APP_ENV") or os.getenv("APP_ENV") or ""),
-        "APP_PUBLIC_BASE_URL": (os.getenv("APP_PUBLIC_BASE_URL") or "").strip(),
-        "MS_TENANT_ID_presente": "sim" if (os.getenv("MS_TENANT_ID") or "").strip() else "não",
-        "MS_CLIENT_ID_presente": "sim" if (os.getenv("MS_CLIENT_ID") or "").strip() else "não",
-        "MS_CLIENT_SECRET_presente": "sim" if (os.getenv("MS_CLIENT_SECRET") or "").strip() else "não",
-        "MS_GRAPH_BASE_URL_presente": "sim" if (os.getenv("MS_GRAPH_BASE_URL") or "").strip() else "não",
+        "APP_PUBLIC_BASE_URL": oauth_get_public_base_url(),
+        "MS_TENANT_ID_presente": "sim" if config["tenant_id"] else "não",
+        "MS_CLIENT_ID_presente": "sim" if config["client_id"] else "não",
+        "MS_CLIENT_SECRET_presente": "sim" if config["client_secret"] else "não",
+        "MS_GRAPH_BASE_URL_presente": "sim" if config["graph_base_url"] else "não",
         "redirect_uri_calculado": redirect_uri,
         "msal_importado": msal_imported,
     }
@@ -623,18 +597,19 @@ def admin_backup_google_connect():
     session.modified = True
 
     try:
-        auth_url, generated_state = google_create_authorization_url(
+        auth_url, generated_state, code_verifier = google_create_authorization_url(
             state=state,
             is_debug=not current_app.config.get("IS_PRODUCTION", False),
         )
         session["google_oauth_state"] = generated_state or state
+        session["google_oauth_verifier"] = code_verifier
         session.modified = True
     except GoogleDriveServiceError as exc:
         flash(str(exc), "error")
         return redirect(url_for("admin_banco_dados"))
     except Exception as exc:
-        logger.warning("Falha ao iniciar OAuth Google Drive: %s", exc)
-        flash(f"Falha ao iniciar conexão com Google Drive: {exc}", "error")
+        logger.warning("Falha ao iniciar OAuth Google Drive: %s", type(exc).__name__)
+        flash("Falha ao conectar Google Drive.", "error")
         return redirect(url_for("admin_banco_dados"))
 
     return redirect(auth_url)
@@ -662,6 +637,7 @@ def google_callback():
     state = request.args.get("state") or ""
     code = request.args.get("code") or ""
     expected_state = session.pop("google_oauth_state", "")
+    code_verifier = session.pop("google_oauth_verifier", "")
     session.modified = True
 
     if not state or not expected_state or not secrets.compare_digest(state, expected_state):
@@ -681,6 +657,7 @@ def google_callback():
     try:
         token_json, account_email = google_exchange_code_for_token(
             code=code,
+            code_verifier=code_verifier,
             is_debug=not current_app.config.get("IS_PRODUCTION", False),
         )
         _set_active_cloud_account(conn, "google", account_email, token_json)
@@ -702,8 +679,8 @@ def google_callback():
         flash(f"Falha ao conectar Google Drive: {exc}", "error")
     except Exception as exc:
         conn.rollback()
-        logger.warning("Erro inesperado no callback OAuth Google Drive: %s", exc)
-        flash(f"Falha ao conectar Google Drive: {exc}", "error")
+        logger.warning("Erro inesperado no callback OAuth Google Drive: %s", type(exc).__name__)
+        flash("Falha ao conectar Google Drive.", "error")
 
     return redirect(url_for("admin_banco_dados"))
 
@@ -745,20 +722,14 @@ def admin_backup_google_upload():
         google_folder_setting = _get_cloud_drive_folder_setting(conn, "google")
         selected_google_folder_id = str(google_folder_setting.get("folder_id") or "").strip()
 
-        upload_result = google_upload_zip_backup(
-            token_json=str(google_account["token_json"] or ""),
+        _cloud_connections.upload_backup_zip(
+            conn,
+            "google",
             zip_path=str(backup_artifacts["zip_path"]),
             file_name=file_name,
             folder_name="SGAA - Backups",
             folder_id=selected_google_folder_id or None,
         )
-        updated_token_json = str(upload_result.get("token_json") or "")
-        if updated_token_json:
-            _update_cloud_account_token(
-                conn,
-                account_id=int(google_account["id"]),
-                token_json=updated_token_json,
-            )
 
         now_iso = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         _save_drive_config(
@@ -778,7 +749,12 @@ def admin_backup_google_upload():
         )
         conn.commit()
         flash("Backup enviado para o Google Drive com sucesso.", "success")
-    except (BackupServiceError, GoogleDriveServiceError, TokenEncryptionConfigError) as exc:
+    except (
+        BackupServiceError,
+        GoogleDriveServiceError,
+        TokenEncryptionConfigError,
+        _cloud_connections.CloudConnectionError,
+    ) as exc:
         conn.rollback()
         error_message = str(exc)
         safe_lower_error = error_message.lower()
@@ -818,7 +794,7 @@ def admin_backup_google_upload():
             flash(f"Falha ao enviar backup para o Google Drive: {exc}", "error")
     except Exception as exc:
         conn.rollback()
-        error_message = str(exc)
+        error_message = "Falha inesperada ao enviar backup para o Google Drive."
         try:
             _record_backup_log(
                 conn,
@@ -832,8 +808,8 @@ def admin_backup_google_upload():
             conn.commit()
         except Exception:
             conn.rollback()
-        logger.warning("Erro inesperado no backup manual Google Drive: %s", exc)
-        flash(f"Falha ao enviar backup para o Google Drive: {exc}", "error")
+        logger.warning("Erro inesperado no backup manual Google Drive: %s", type(exc).__name__)
+        flash(error_message, "error")
     finally:
         cleanup_backup_artifacts(backup_artifacts)
 
@@ -903,13 +879,12 @@ def admin_backup_onedrive_connect():
     _clear_legacy_oauth_session()
     state = secrets.token_urlsafe(24)
     session["onedrive_oauth_state"] = state
-    session.pop("onedrive_oauth_verifier", None)
-    session.pop("onedrive_oauth_flow_mode", None)
+    session.pop("onedrive_oauth_flow", None)
     session.modified = True
 
     try:
-        auth_url = onedrive_create_authorization_url(state=state)
-        session["onedrive_oauth_flow_mode"] = "msal"
+        auth_url, auth_flow = onedrive_create_authorization_url(state=state)
+        session["onedrive_oauth_flow"] = auth_flow
         session.modified = True
     except OneDriveServiceError as exc:
         current_app.logger.exception("Falha ao iniciar conexão OneDrive")
@@ -951,8 +926,7 @@ def onedrive_callback():
     state = request.args.get("state") or ""
     code = request.args.get("code") or ""
     expected_state = session.pop("onedrive_oauth_state", "")
-    verifier = session.pop("onedrive_oauth_verifier", "")
-    flow_mode = session.pop("onedrive_oauth_flow_mode", "msal")
+    auth_flow = session.pop("onedrive_oauth_flow", {})
     session.modified = True
 
     state_match = bool(state and expected_state and secrets.compare_digest(state, expected_state))
@@ -985,64 +959,17 @@ def onedrive_callback():
 
     conn = get_db_connection()
     try:
-        if flow_mode == "legacy_pkce":
-            client_id = (
-                (os.environ.get("ONEDRIVE_CLIENT_ID") or "").strip()
-                or (os.environ.get("MS_CLIENT_ID") or "").strip()
-            )
-            if not verifier:
-                raise OneDriveServiceError("Sessao OAuth expirada. Inicie a conexao OneDrive novamente.")
-            if not client_id:
-                raise OneDriveServiceError("ONEDRIVE_CLIENT_ID/MS_CLIENT_ID ausente para OAuth OneDrive.")
-
-            current_app.logger.info("OneDrive token exchange iniciado: flow_mode=legacy_pkce")
-            tokens = _cd.onedrive_exchange(client_id, code, redirect_uri, verifier)
-            access_token = str(tokens.get("access_token") or "").strip()
-            current_app.logger.info("OneDrive token obtido com sucesso: %s", bool(access_token))
-            if not access_token:
-                error_code = str(tokens.get("error") or "").strip().lower() or "unknown_error"
-                current_app.logger.warning("OneDrive OAuth falhou: %s", error_code)
-                raise OneDriveServiceError("Falha na autenticacao com Microsoft/OneDrive.")
-
-            current_app.logger.info("OneDrive consulta /me iniciada")
-            info = _cd.onedrive_userinfo(access_token)
-            account_email = str(info.get("mail") or info.get("userPrincipalName") or "").strip()
-            current_app.logger.info("OneDrive e-mail obtido: %s", bool(account_email))
-
-            expires_in = int(tokens.get("expires_in") or 3600)
-            refresh_token = str(tokens.get("refresh_token") or "").strip()
-            expires_at = _cd.token_expires_at(expires_in)
-
-            legacy_payload = {
-                "version": 1,
-                "provider": "onedrive",
-                "mode": "legacy_pkce",
-                "account_email": account_email,
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "expires_at": expires_at,
-                "updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            }
-            token_json = json.dumps(legacy_payload, ensure_ascii=False)
-            _save_drive_config(
-                conn,
-                {
-                    "onedrive_access_token": access_token,
-                    "onedrive_refresh_token": refresh_token,
-                    "onedrive_expires_at": expires_at,
-                    "onedrive_account_email": account_email,
-                    "onedrive_last_upload_error": "",
-                },
-            )
-        else:
-            current_app.logger.info("OneDrive token exchange iniciado: flow_mode=msal")
-            token_json, account_email = onedrive_exchange_code_for_token(code=code)
-            current_app.logger.info("OneDrive token obtido com sucesso: %s", bool(token_json))
-            current_app.logger.info("OneDrive consulta /me iniciada")
-            account_info = onedrive_get_connected_account(token_json=token_json)
-            token_json = str(account_info.get("token_json") or token_json)
-            account_email = str(account_info.get("account_email") or account_email)
-            current_app.logger.info("OneDrive e-mail obtido: %s", bool(account_email))
+        current_app.logger.info("OneDrive token exchange iniciado: flow_mode=msal_pkce")
+        token_json, account_email = onedrive_exchange_code_for_token(
+            auth_response={key: str(value) for key, value in request.args.items()},
+            auth_flow=auth_flow if isinstance(auth_flow, dict) else {},
+        )
+        current_app.logger.info("OneDrive token obtido com sucesso: %s", bool(token_json))
+        current_app.logger.info("OneDrive consulta /me iniciada")
+        account_info = onedrive_get_connected_account(token_json=token_json)
+        token_json = str(account_info.get("token_json") or token_json)
+        account_email = str(account_info.get("account_email") or account_email)
+        current_app.logger.info("OneDrive e-mail obtido: %s", bool(account_email))
 
         current_app.logger.info("OneDrive salvamento cloud_accounts iniciado")
         _set_active_cloud_account(conn, "onedrive", account_email, token_json)
@@ -1059,7 +986,11 @@ def onedrive_callback():
             flash(f"OneDrive conectado como {account_email}.", "success")
         else:
             flash("OneDrive conectado com sucesso.", "success")
-    except (OneDriveServiceError, TokenEncryptionConfigError) as exc:
+    except (
+        OneDriveServiceError,
+        TokenEncryptionConfigError,
+        _cloud_connections.CloudConnectionError,
+    ) as exc:
         conn.rollback()
         current_app.logger.warning("Falha no callback OAuth OneDrive: %s", exc)
         flash(str(exc), "error")
@@ -1106,98 +1037,18 @@ def admin_backup_onedrive_upload():
         selected_onedrive_folder_id = str(onedrive_folder_setting.get("folder_id") or "").strip()
         selected_onedrive_drive_id = str(onedrive_folder_setting.get("drive_id") or "").strip()
 
-        token_json_raw = str(onedrive_account["token_json"] or "")
-        token_payload: dict[str, object] = {}
-        try:
-            loaded = json.loads(token_json_raw or "{}")
-            if isinstance(loaded, dict):
-                token_payload = loaded
-        except json.JSONDecodeError:
-            token_payload = {}
-
-        legacy_mode = bool(
-            token_payload.get("mode") == "legacy_pkce"
-            or (
-                token_payload.get("provider") == "onedrive"
-                and token_payload.get("access_token")
-                and not token_payload.get("msal_cache")
-            )
+        upload_result = _cloud_connections.upload_backup_zip(
+            conn,
+            "onedrive",
+            zip_path=str(backup_artifacts["zip_path"]),
+            file_name=file_name,
+            folder_name="SGAA - Backups",
+            folder_id=selected_onedrive_folder_id or None,
+            drive_id=selected_onedrive_drive_id or None,
         )
-
-        if legacy_mode:
-            client_id = (
-                (os.environ.get("ONEDRIVE_CLIENT_ID") or "").strip()
-                or (os.environ.get("MS_CLIENT_ID") or "").strip()
-            )
-            if not client_id:
-                raise OneDriveServiceError("ONEDRIVE_CLIENT_ID/MS_CLIENT_ID ausente para refresh do OneDrive.")
-
-            access_token = str(token_payload.get("access_token") or "").strip()
-            refresh_token = str(token_payload.get("refresh_token") or "").strip()
-            expires_at = str(token_payload.get("expires_at") or "").strip()
-
-            if not access_token:
-                raise OneDriveServiceError("Token OAuth do OneDrive inválido. Reconecte a conta.")
-
-            if _cd.is_token_expired(expires_at):
-                if not refresh_token:
-                    raise OneDriveServiceError("Token expirado e sem refresh válido. Reconecte o OneDrive.")
-                refreshed_tokens = _cd.onedrive_refresh(client_id, refresh_token)
-                access_token = str(refreshed_tokens.get("access_token") or "").strip()
-                if not access_token:
-                    raise OneDriveServiceError("Falha ao renovar token OAuth do OneDrive.")
-                refresh_token = str(refreshed_tokens.get("refresh_token") or refresh_token).strip()
-                expires_at = _cd.token_expires_at(int(refreshed_tokens.get("expires_in") or 3600))
-
-            onedrive_upload_with_access_token(
-                access_token=access_token,
-                zip_path=str(backup_artifacts["zip_path"]),
-                file_name=file_name,
-                folder_name="SGAA - Backups",
-                folder_id=selected_onedrive_folder_id or None,
-                drive_id=selected_onedrive_drive_id or None,
-            )
-            profile = _cd.onedrive_userinfo(access_token)
-            connected_email = str(
-                profile.get("mail")
-                or profile.get("userPrincipalName")
-                or token_payload.get("account_email")
-                or onedrive_account["account_email"]
-                or ""
-            ).strip()
-
-            token_payload.update(
-                {
-                    "version": int(token_payload.get("version") or 1),
-                    "provider": "onedrive",
-                    "mode": "legacy_pkce",
-                    "account_email": connected_email,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "expires_at": expires_at,
-                    "updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-                }
-            )
-            refreshed_token_json = json.dumps(token_payload, ensure_ascii=False)
-        else:
-            upload_result = onedrive_upload_zip_backup(
-                token_json=token_json_raw,
-                zip_path=str(backup_artifacts["zip_path"]),
-                file_name=file_name,
-                folder_name="SGAA - Backups",
-                folder_id=selected_onedrive_folder_id or None,
-                drive_id=selected_onedrive_drive_id or None,
-            )
-            refreshed_token_json = str(upload_result.get("token_json") or "")
-            connected_email = str(upload_result.get("account_email") or onedrive_account["account_email"] or "")
-
-        if refreshed_token_json:
-            _update_cloud_account_token(
-                conn,
-                account_id=int(onedrive_account["id"]),
-                token_json=refreshed_token_json,
-                account_email=connected_email or None,
-            )
+        connected_email = str(
+            upload_result.get("account_email") or onedrive_account["account_email"] or ""
+        )
 
         now_iso = (
             datetime.datetime.now(datetime.timezone.utc)
@@ -1210,14 +1061,6 @@ def admin_backup_onedrive_upload():
             "onedrive_last_upload_error": "",
             "onedrive_account_email": connected_email,
         }
-        if legacy_mode:
-            drive_updates.update(
-                {
-                    "onedrive_access_token": str(token_payload.get("access_token") or ""),
-                    "onedrive_refresh_token": str(token_payload.get("refresh_token") or ""),
-                    "onedrive_expires_at": str(token_payload.get("expires_at") or ""),
-                }
-            )
         _save_drive_config(conn, drive_updates)
         _record_backup_log(
             conn,
@@ -1246,7 +1089,11 @@ def admin_backup_onedrive_upload():
             conn.rollback()
         logger.warning("Falha no backup local para OneDrive: %s", exc)
         flash("Falha no backup local antes do envio para OneDrive.", "error")
-    except (OneDriveServiceError, TokenEncryptionConfigError) as exc:
+    except (
+        OneDriveServiceError,
+        TokenEncryptionConfigError,
+        _cloud_connections.CloudConnectionError,
+    ) as exc:
         conn.rollback()
         error_message = str(exc)
         try:
@@ -1330,27 +1177,12 @@ def admin_backup_cloud_folders(provider):
     )
 
     try:
-        if safe_provider == "google":
-            list_result = google_list_folders(
-                token_json=str(account["token_json"] or ""),
-                parent_id=parent_id,
-            )
-        else:
-            list_result = onedrive_list_folders(
-                token_json=str(account["token_json"] or ""),
-                parent_id=parent_id,
-                drive_id=drive_id or None,
-            )
-
-        updated_token_json = str(list_result.get("token_json") or "")
-        if updated_token_json and updated_token_json != str(account.get("token_json") or ""):
-            _update_cloud_account_token(
-                conn,
-                account_id=int(account["id"]),
-                token_json=updated_token_json,
-                account_email=str(list_result.get("account_email") or account.get("account_email") or "") or None,
-            )
-            conn.commit()
+        list_result = _cloud_connections.list_folders(
+            conn,
+            safe_provider,
+            parent_id=parent_id,
+            drive_id=drive_id or None,
+        )
 
         folders = []
         for item in list_result.get("folders", []) if isinstance(list_result, dict) else []:
@@ -1620,19 +1452,9 @@ def admin_banco_dados_oauth_disconnect():
         return redirect(url_for("admin_banco_dados"))
 
     conn = get_db_connection()
-    drive_settings = get_drive_settings(conn)
     prefix = "gdrive" if provider == "google" else "onedrive"
-    token = drive_settings.get(f"{prefix}_access_token") or ""
 
-    if provider in ("google", "onedrive"):
-        ensure_cloud_backup_schema(conn)
-        conn.execute(
-            "UPDATE cloud_accounts SET active = 0, updated_at = datetime('now') WHERE provider = ? AND active = 1",
-            (provider,),
-        )
-
-    if token and provider == "google":
-        _cd.google_revoke(token)  # best-effort; failures are silently ignored
+    _cloud_connections.disconnect_cloud_account(conn, provider)
 
     _save_drive_config(conn, {
         f"{prefix}_access_token": "",
@@ -1650,6 +1472,21 @@ def admin_banco_dados_drive_settings():
     provider = request.form.get("provider") or ""
     if provider not in ("google", "onedrive"):
         flash("Provedor inválido.", "error")
+        return redirect(url_for("admin_banco_dados"))
+
+    if (request.form.get("action") or "").strip() == "test_connection":
+        conn = get_db_connection()
+        try:
+            result = _cloud_connections.test_connection(conn, provider)
+            identity = str(result.get("account_email") or "").strip()
+            label = "Google Drive" if provider == "google" else "OneDrive"
+            flash(
+                f"Conexão com {label} validada" + (f" para {identity}." if identity else "."),
+                "success",
+            )
+        except (_cloud_connections.CloudConnectionError, TokenEncryptionError) as exc:
+            conn.rollback()
+            flash(str(exc), "error")
         return redirect(url_for("admin_banco_dados"))
 
     prefix = "gdrive" if provider == "google" else "onedrive"

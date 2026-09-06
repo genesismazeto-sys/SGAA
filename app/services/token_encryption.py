@@ -2,6 +2,8 @@ import logging
 import os
 from typing import Final
 
+from app.machine_secrets import MachineSecretsError, get_machine_token_encryption_key
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,13 @@ def _import_fernet():
 
 
 def get_token_encryption_key() -> str:
-    return (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip()
+    legacy_environment_key = (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip()
+    if legacy_environment_key:
+        return legacy_environment_key
+    try:
+        return get_machine_token_encryption_key(create=False)
+    except MachineSecretsError as exc:
+        raise TokenEncryptionConfigError(str(exc)) from exc
 
 
 def is_token_encryption_configured() -> bool:
@@ -61,8 +69,9 @@ def validate_token_encryption_configuration(*, env: str | None = None) -> None:
     key = get_token_encryption_key()
     if not key:
         raise TokenEncryptionConfigError(
-            "TOKEN_ENCRYPTION_KEY ausente. Gere uma chave com "
-            f"{_KEY_HINT} e defina-a no .env antes de conectar ou enviar backups em nuvem."
+            "Chave de criptografia OAuth ausente. Execute tools/configure_cloud_oauth.py "
+            "para criar a configuracao segura desta maquina. "
+            f"Compatibilidade legada: gere uma chave com {_KEY_HINT} e defina TOKEN_ENCRYPTION_KEY fora do Git."
         )
 
     Fernet, InvalidToken = _import_fernet()
@@ -70,8 +79,8 @@ def validate_token_encryption_configuration(*, env: str | None = None) -> None:
         Fernet(key.encode("utf-8"))
     except Exception as exc:
         raise TokenEncryptionConfigError(
-            "TOKEN_ENCRYPTION_KEY invalida. Gere uma nova chave Fernet com "
-            f"{_KEY_HINT} e atualize o .env."
+            "Chave de criptografia OAuth invalida. Reconfigure o armazenamento seguro desta maquina. "
+            f"Compatibilidade legada: gere uma chave Fernet com {_KEY_HINT}."
         ) from exc
 
     if normalized_env == "production" and not key:

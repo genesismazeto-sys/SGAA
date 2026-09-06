@@ -13,6 +13,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from app.cloud_config import get_google_oauth_config, get_onedrive_oauth_config
+
 UTC = datetime.timezone.utc
 
 
@@ -58,8 +60,7 @@ def _post_form(url: str, fields: dict) -> dict:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode()) or {}
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")
-        raise RuntimeError(f"HTTP {exc.code}: {detail[:300]}") from exc
+        raise RuntimeError(f"HTTP {exc.code}") from exc
 
 
 def _api(
@@ -84,8 +85,7 @@ def _api(
     except urllib.error.HTTPError as exc:
         if exc.code == 204:
             return None  # No Content is success for DELETE
-        detail = exc.read().decode(errors="replace")
-        raise RuntimeError(f"HTTP {exc.code}: {detail[:300]}") from exc
+        raise RuntimeError(f"HTTP {exc.code}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ _GOOGLE_SCOPE_DEFAULT = "https://www.googleapis.com/auth/drive.file https://www.
 
 
 def _google_scope_value() -> str:
-    return (os.environ.get("GOOGLE_SCOPES") or "").strip() or _GOOGLE_SCOPE_DEFAULT
+    return get_google_oauth_config()["scopes"] or _GOOGLE_SCOPE_DEFAULT
 
 
 def google_auth_url(client_id: str, redirect_uri: str, state: str, code_challenge: str) -> str:
@@ -237,11 +237,7 @@ _ONEDRIVE_SCOPE = "Files.ReadWrite offline_access User.Read"
 
 
 def _onedrive_tenant() -> str:
-    tenant = (
-        (os.environ.get("MS_TENANT_ID") or "").strip()
-        or (os.environ.get("ONEDRIVE_TENANT_ID") or "").strip()
-        or "common"
-    )
+    tenant = get_onedrive_oauth_config()["tenant_id"] or "common"
     return tenant
 
 
@@ -331,8 +327,9 @@ def refresh_google_if_needed(settings: dict) -> tuple[str, dict | None]:
     token = settings.get("gdrive_access_token") or ""
     if not is_token_expired(settings.get("gdrive_expires_at") or ""):
         return token, None
-    client_id = os.environ.get("GOOGLE_CLIENT_ID") or ""
-    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or ""
+    config = get_google_oauth_config()
+    client_id = config["client_id"]
+    client_secret = config["client_secret"]
     refresh_tok = settings.get("gdrive_refresh_token") or ""
     if not refresh_tok or not client_id:
         raise RuntimeError("Google Drive: GOOGLE_CLIENT_ID ou refresh_token ausente.")
@@ -351,7 +348,7 @@ def refresh_onedrive_if_needed(settings: dict) -> tuple[str, dict | None]:
     token = settings.get("onedrive_access_token") or ""
     if not is_token_expired(settings.get("onedrive_expires_at") or ""):
         return token, None
-    client_id = os.environ.get("ONEDRIVE_CLIENT_ID") or ""
+    client_id = get_onedrive_oauth_config()["client_id"]
     refresh_tok = settings.get("onedrive_refresh_token") or ""
     if not refresh_tok or not client_id:
         raise RuntimeError("OneDrive: ONEDRIVE_CLIENT_ID ou refresh_token ausente.")
