@@ -2187,6 +2187,34 @@ remains frozen and unchanged.
 
 `AGENT_HANDOFF.md` remains frozen and unchanged.
 
+## COMPROVANTES GOOGLE DRIVE — CLOSED / ACCEPTED / LANDED
+
+- Requisition comprovantes now use canonical `requisicao_arquivos` custody with
+  provider-neutral storage boundaries. New files use Google Drive; historical
+  local files remain classified as `local_legacy`.
+- Request snapshot authority, exact Activity Version ownership, AAC → AEU
+  behavior, and Turma snapshot semantics are preserved. Attachment identities
+  remain local database identities independent of provider remote identifiers.
+- Google authorization continues through the canonical cloud connection layer
+  with least-privilege `drive.file` scope. Upload idempotency, bounded 401 retry,
+  checksum verification, and deletion compensation are implemented.
+- PNG, JPEG, and PDF validation uses pinned Pillow/pypdf dependencies and bounded
+  decoding, including per-dimension image limits for amplification resistance.
+- Operational schema migration `prod-1` v3 → v4 completed and canonical schema
+  validation passed. The pre-v4 recovery copy is held outside the repository in
+  the machine-local SGAA recovery category. The operational baseline contained
+  zero historical attachment rows, so no legacy remote identifiers or request
+  relationships required transformation.
+- Focused landing gate: 157 passed. Authenticated read-only application smoke
+  passed for admin/student requisition lists and details plus Google backup
+  status. No upload, deletion, request mutation, or live Drive write was run.
+- The previously accepted disposable Google lifecycle validation passed. Its
+  synthetic empty managed-folder/trash residue is non-blocking.
+- Unrelated stale message-catalog and governed-route-pair test debts remain
+  outside this front. OneDrive remains deferred and unconfigured.
+- Implementation commit: `500a6592de79d63f95cd47943f5a98eac1e67842`
+  (`Store requisition proofs in Google Drive`).
+
 ## UI-LIST-GEOMETRY-REGRESSION-1 — LANDED
 
 - `/admin/matrizes`: removed the stale seventh CSS track left after matrix-own
