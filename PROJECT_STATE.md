@@ -2489,3 +2489,29 @@ remains the next independent visual defect. It is not fixed here.
   during landing.
 - Implementation commit: `f52f9d89eb3a66bacc20a0e748a76875e568b23a`
   (`Consolidate Matrix exact-version composition`).
+
+## CLOUD OAUTH RECOVERY — GOOGLE ACTIVE / ONEDRIVE DEFERRED — CLOSED / ACCEPTED / LANDED
+
+- Google Drive is active and production-validated. OAuth application credentials
+  are machine-local and DPAPI-protected; connected authorization is encrypted.
+- The Google OAuth callback uses Authorization Code with PKCE and state
+  validation. Offline authorization and connected account identity are preserved.
+- Refresh-token preservation and rotation are implemented. Transient refresh
+  failures preserve the active authorization; invalid or revoked authorization
+  requires reconnect. Invalid application credentials do not deactivate the
+  user's authorization.
+- Google health (`Testar conexão`), reconnect, and disconnect administrative flows
+  are validated. The backup consumer uses the canonical cloud connection layer.
+- OneDrive remains visible but deferred and unconfigured. It is not retired, is
+  not required for Google operation, and may be reactivated later with the proper
+  institutional Microsoft tenant.
+- Provider-card action grids are visually normalized. Independent review accepted
+  the candidate with no blocking findings, and user visual approval was granted.
+- Landing validation: compact OAuth/backup/RBAC/CSRF gate 37 passed;
+  `git diff --check` passed. Pre-existing message-catalog debt (expected 537,
+  actual 526) and governed-route-pair debt (expected 130, actual 125) remain
+  outside this front.
+- Implementation commit: `7aa327f49b91ced2055ab45e288dbbfdc2627e11`
+  (`Harden cloud OAuth and Google Drive connection`).
+
+`AGENT_HANDOFF.md` remains frozen and unchanged.
