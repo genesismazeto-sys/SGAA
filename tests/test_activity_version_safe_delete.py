@@ -348,13 +348,9 @@ def test_ui_offers_permanent_delete_for_every_status_when_another_version_surviv
                 f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar"
             )
         )
-        assert 'class="version-delete-form"' in version_html
-        assert (
-            f'/admin/catalogo-versoes/{base_id}/versoes/{version_id}/excluir'
-            in version_html
-        )
-        assert "Esta ação é permanente." in version_html
-        assert ">Excluir versão</span>" in version_html
+        assert 'class="version-delete-form"' not in version_html
+        assert ">Excluir versão</span>" not in version_html
+        assert ">Excluir</span>" not in version_html
 
 
 def test_ui_does_not_offer_delete_for_the_sole_version(env):

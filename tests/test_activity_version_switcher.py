@@ -247,9 +247,40 @@ def test_switcher_ordered_by_numero_versao(client):
         f"ordem do seletor deve seguir numero_versao, obtido {values}"
     )
     labels = _switcher_labels(html)
-    assert labels[0].startswith("v1")
-    assert labels[1].startswith("v2")
-    assert labels[2].startswith("v10")
+    assert labels == ["v1", "v2", "v10"]
+
+
+def test_version_form_header_is_lightweight_and_has_no_delete_action(client):
+    _login_admin(client)
+    seed = _seed_base(client)
+    _insert_versao(
+        client,
+        base_id=seed["base_id"],
+        numero_versao=1,
+        status="ativa",
+    )
+    v2 = _insert_versao(
+        client,
+        base_id=seed["base_id"],
+        numero_versao=2,
+        status="descontinuada",
+    )
+
+    html = client.get(_editar_url(seed["base_id"], v2)).get_data(as_text=True)
+
+    assert '<div class="version-form-heading">' in html
+    assert '<h1 class="main-title">Ver versão v2</h1>' in html
+    assert (
+        'class="badge status-badge status-pill status-negative">Descontinuada</span>'
+        in html
+    )
+    assert _switcher_labels(html) == ["v1", "v2"]
+    assert ">Nova versão</span>" in html
+    assert "version-delete-form" not in html
+    assert ">Excluir versão</span>" not in html
+    assert ">Excluir</span>" not in html
+    assert "background:var(--field-readonly-bg)" not in html
+    assert "border:1px solid var(--border-strong)" not in html
 
 
 # ---------------------------------------------------------------------------

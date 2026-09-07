@@ -8,17 +8,18 @@
   .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
   .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap:var(--list-col-gap, 2px); }
   .is-off-chunk{ opacity:.55; pointer-events:none; }
+  .version-form-heading{ display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:24px; }
+  .version-form-heading .main-title{ margin:0; }
   .versao-switcher{
-    display:flex; align-items:center; gap:10px; margin:14px 0 18px; padding:10px 12px;
-    background:var(--field-readonly-bg); border:1px solid var(--border-strong); border-radius:var(--radius);
+    display:flex; align-items:center; gap:10px; margin:0 0 24px; padding:0 0 14px;
+    border-bottom:1px solid var(--border);
   }
   .versao-switcher .vs-label{ font-size:13px; font-weight:500; color:var(--text-secondary); white-space:nowrap; }
-  .versao-switcher .control{ min-width:220px; }
+  .versao-switcher .control{ flex:0 1 140px; width:140px; max-width:100%; }
   .versao-switcher .vs-actions{ margin-left:auto; display:flex; gap:8px; align-items:center; }
-  .versao-switcher .vs-actions form{ margin:0; }
   @media (max-width:720px){
     .versao-switcher{ flex-wrap:wrap; }
-    .versao-switcher .vs-actions{ margin-left:0; }
+    .versao-switcher .vs-actions{ margin-left:auto; }
   }
 </style>
 {% endblock %}
@@ -28,7 +29,20 @@
 {% set grp_num = (grp_val.split(' - ', 1)[0] if ' - ' in grp_val else (grp_val if grp_val.isdigit() else '')) %}
 {% set grp_desc = (grp_val.split(' - ', 1)[1] if ' - ' in grp_val else ('' if grp_val.isdigit() else grp_val)) %}
 
-<h1 class="main-title">{{ form_title }}</h1>
+{% set current_version = versao_switcher|selectattr('id', 'equalto', versao_atual_id)|first if versao_switcher else none %}
+{% set current_status = (current_version.status or 'rascunho')|lower if current_version else none %}
+{% set current_status_tone = (
+  'positive' if current_status == 'ativa' else
+  'caution' if current_status == 'inativa' else
+  'negative' if current_status in ['descontinuada', 'substituida'] else
+  'neutral'
+) %}
+<div class="version-form-heading">
+  <h1 class="main-title">{{ form_title }}</h1>
+  {% if current_version %}
+    <span class="badge status-badge status-pill status-{{ current_status_tone }}">{{ current_version.status_label }}</span>
+  {% endif %}
+</div>
 
 {% if is_clone_create and versao_anterior_label and versao_anterior_label != 'Sem versão anterior' and next_num %}
 <p style="margin-bottom:10px; color:var(--text-secondary);">
@@ -42,22 +56,12 @@
   <select id="versao-switcher" class="control" aria-label="Selecionar versão da atividade">
     {% for v in versao_switcher %}
       <option value="{{ v.id }}" {% if v.id == versao_atual_id %}selected{% endif %}>
-        v{{ v.numero_versao }} · {{ v.status_label }}
+        v{{ v.numero_versao }}
       </option>
     {% endfor %}
   </select>
   <div class="vs-actions">
-    <a class="btn" href="{{ nova_versao_url }}"><i class="lucide" data-lucide="plus"></i><span class="btn-label">Criar nova versão</span></a>
-    {% if not is_clone_create and versao_atual_id and versao_switcher|length > 1 %}
-      <form class="version-delete-form" method="post"
-            action="{{ url_for('admin_catalogo_excluir_versao', base_id=base.id, versao_id=versao_atual_id) }}"
-            onsubmit="return window.confirm('Excluir definitivamente a versão v{{ versao_switcher|selectattr('id', 'equalto', versao_atual_id)|map(attribute='numero_versao')|first }}? Esta ação é permanente.');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn danger">
-          <i class="lucide" data-lucide="trash-2"></i><span class="btn-label">Excluir versão</span>
-        </button>
-      </form>
-    {% endif %}
+    <a class="btn" href="{{ nova_versao_url }}"><i class="lucide" data-lucide="plus"></i><span class="btn-label">Nova versão</span></a>
   </div>
 </div>
 {% endif %}
