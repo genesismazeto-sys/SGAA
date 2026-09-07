@@ -1,6 +1,8 @@
 import json
 import logging
+import re
 import sqlite3
+from html import unescape
 
 import pytest
 from cryptography.fernet import Fernet
@@ -701,6 +703,122 @@ def test_health_action_reuses_existing_csrf_and_rbac_protected_post_route():
     assert 'f"Conexao com {label} validada"' not in source
 
 
+def _provider_card_markup(page: str, provider_title: str) -> str:
+    cards = re.findall(
+        r'<section class="db-provider-card">(.*?)</section>', page, flags=re.DOTALL
+    )
+    return next(card for card in cards if f"<h3>{provider_title}</h3>" in card)
+
+
+def _secondary_action_controls(card: str) -> list[tuple[str, str]]:
+    action_grid = card.split('<div class="db-provider-secondary">', 1)[1].split(
+        "</div>", 1
+    )[0]
+    controls = re.findall(
+        r'(<(?:button|a)\b[^>]*>.*?</(?:button|a)>)', action_grid, flags=re.DOTALL
+    )
+    return [
+        (
+            unescape(re.sub(r"<[^>]+>", "", control)).strip(),
+            control,
+        )
+        for control in controls
+    ]
+
+
+@pytest.mark.parametrize(
+    ("credentials_configured", "connected", "expected_badge"),
+    [(True, True, "Conectado"), (False, False, "Não configurado")],
+    ids=["configured-connected", "unconfigured"],
+)
+def test_provider_cards_render_four_action_contract_for_google_and_onedrive(
+    monkeypatch, credentials_configured, connected, expected_badge
+):
+    import main
+    from app.views.admin import banco_dados
+
+    google_account = {
+        "id": 1,
+        "provider": "google",
+        "account_email": "admin@example.com",
+        "token_json_available": True,
+        "active": 1,
+    }
+    monkeypatch.setattr(
+        banco_dados,
+        "get_application_credential_status",
+        lambda provider: {
+            "provider": provider,
+            "configured": credentials_configured if provider == "google" else False,
+            "source": (
+                "MACHINE_LOCAL_DPAPI"
+                if provider == "google" and credentials_configured
+                else "ABSENT"
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        banco_dados,
+        "_get_active_cloud_account",
+        lambda conn, provider: google_account if provider == "google" and connected else None,
+    )
+    monkeypatch.setattr(
+        banco_dados._cloud_connections,
+        "get_latest_cloud_account",
+        lambda conn, provider: google_account if provider == "google" else None,
+    )
+    monkeypatch.setattr(
+        banco_dados,
+        "get_google_oauth_config",
+        lambda: {
+            "client_id": "configured-client" if credentials_configured else "",
+            "client_secret": "configured-secret" if credentials_configured else "",
+            "scopes": "scope-a",
+        },
+    )
+
+    client = main.app.test_client()
+    login_response = client.post(
+        "/login",
+        data={"email": "admin@ej.edu.br", "senha": "admin123"},
+        follow_redirects=False,
+    )
+    assert login_response.status_code in (302, 303)
+    response = client.get("/admin/banco-dados")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+
+    google_card = _provider_card_markup(page, "Google Drive")
+    google_actions = _secondary_action_controls(google_card)
+    assert [label for label, _ in google_actions] == [
+        "Testar conexão",
+        "Selecionar pasta",
+        "Conectar",
+        "Desconectar",
+    ]
+    assert len(google_actions) == 4
+    assert (" disabled" in google_actions[0][1]) is (not connected)
+    assert expected_badge in google_card
+    expected_credential_label = (
+        "Credenciais do aplicativo: configuração segura desta máquina"
+        if credentials_configured
+        else "Credenciais do aplicativo: ausentes"
+    )
+    assert expected_credential_label in google_card
+
+    onedrive_card = _provider_card_markup(page, "OneDrive")
+    onedrive_actions = _secondary_action_controls(onedrive_card)
+    assert [label for label, _ in onedrive_actions] == [
+        "Testar conexão",
+        "Selecionar pasta",
+        "Conectar",
+        "Desconectar",
+    ]
+    assert len(onedrive_actions) == 4
+    assert all(" disabled" in markup for _, markup in onedrive_actions)
+    assert "Configuração Microsoft adiada" in onedrive_card
+
+
 def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
     template = open("templates/admin_banco_dados.html", encoding="utf-8-sig").read()
     view_source = open("app/views/admin/banco_dados.py", encoding="utf-8-sig").read()
@@ -719,6 +837,10 @@ def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
     assert "align-content:start;" in template
     assert template.count(".db-provider-secondary{ grid-template-columns:1fr; }") == 2
     assert 'title="OneDrive não está configurado"' in template
+    assert "url_for('static', filename='img/google-drive.svg')" in template
+    assert "url_for('static', filename='img/onedrive.svg')" in template
+    assert "url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg')" not in template
+    assert "url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg')" not in template
     assert "<strong>OneDrive callback:</strong>" in template
     assert "tools/configure_cloud_oauth.py --provider google" in template
     assert "tools/configure_cloud_oauth.py --provider both" not in template

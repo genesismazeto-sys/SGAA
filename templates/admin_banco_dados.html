@@ -710,7 +710,7 @@
       <section class="db-provider-card">
         <div class="db-provider-head">
           <div class="db-provider-title">
-            <img src="{{ url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
+            <img src="{{ url_for('static', filename='img/google-drive.svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
             <h3>Google Drive</h3>
           </div>
           {% if gdrive_connection_status == 'connected' %}
@@ -789,6 +789,10 @@
                     <i class="lucide" data-lucide="circle-check"></i>Testar conexão
                   </button>
                 </form>
+              {% else %}
+                <button type="button" class="btn" disabled aria-disabled="true" title="Google Drive não está conectado">
+                  <i class="lucide" data-lucide="circle-check"></i>Testar conexão
+                </button>
               {% endif %}
               <button
                 type="button"
@@ -808,7 +812,7 @@
               </button>
 
               <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
-                <i class="lucide" data-lucide="refresh-cw"></i>{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar{% else %}Conectar{% endif %}
+                <i class="lucide" data-lucide="refresh-cw"></i>Conectar
               </a>
 
               {% if gdrive_connected or gdrive_legacy_connection_detected %}
@@ -889,7 +893,7 @@
       <section class="db-provider-card">
         <div class="db-provider-head">
           <div class="db-provider-title">
-            <img src="{{ url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
+            <img src="{{ url_for('static', filename='img/onedrive.svg') }}" class="db-provider-brand-icon" width="18" height="18" alt="" aria-hidden="true">
             <h3>OneDrive</h3>
           </div>
           {% if onedrive_connection_status == 'connected' %}
