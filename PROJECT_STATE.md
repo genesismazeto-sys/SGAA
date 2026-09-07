@@ -2542,4 +2542,28 @@ remains the next independent visual defect. It is not fixed here.
 - Implementation commit: `7aa327f49b91ced2055ab45e288dbbfdc2627e11`
   (`Harden cloud OAuth and Google Drive connection`).
 
+## ARQUIVOS GOOGLE DRIVE — CLOSED / ACCEPTED / LANDED
+
+- Implementation commit: `2e004e2` (`Store published files in Google Drive`).
+- `admin_arquivos` remains the canonical entity and local `admin_arquivos.id`
+  remains browser/application identity.
+- New ARQUIVOS uploads use Google Drive under the direct `SGAA/ARQUIVOS/`
+  hierarchy with the `drive.file` scope. The provider-neutral Google adapter is
+  shared with COMPROVANTES.
+- Historical ARQUIVOS rows remain `local_legacy` / `legacy_active`; the real
+  historical row migrated from prod-1 v4 to v5 with its ID, metadata, relative
+  path, visibility, and timestamp preserved. Its 4,158-byte local file was
+  preserved and passed authenticated read-only admin/student smoke.
+- New-upload validation accepts PDF/PNG/JPEG and rejects encrypted PDFs.
+  Replacement uses a new remote object with durable prior cleanup; deletion
+  uses durable pending state followed by Google trash. `local_legacy` → Google
+  replacement is supported.
+- Controlled real lifecycle validation passed: create, visibility transition,
+  replacement/replay, local legacy read/replacement, and durable trash.
+- Operational prod-1 migration v4 → v5 passed integrity and foreign-key checks;
+  counts and `sqlite_sequence` custody were preserved. Recovery copy:
+  `C:\Users\klebe\AppData\Local\SGAA\recovery\database-v4-20260907-landing-recovery.db`.
+- Synthetic validation objects retained in Google Trash are non-blocking residue.
+- Historical message-catalog debt remains 11 and is outside this front.
+
 `AGENT_HANDOFF.md` remains frozen and unchanged.
