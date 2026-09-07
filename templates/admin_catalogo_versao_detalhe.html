@@ -169,6 +169,13 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               </form>
             {% endif %}
+            {% if status_key in ['rascunho', 'inativa'] %}
+              <form hidden class="vc-delete-form" data-version-id="{{ v.id }}" method="post"
+                    action="{{ url_for('admin_catalogo_excluir_versao', base_id=base.id, versao_id=v.id) }}"
+                    onsubmit="return window.confirm('Excluir definitivamente a versão v{{ v.numero_versao }}? Esta exclusão é permanente.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              </form>
+            {% endif %}
             {% if status_key == 'ativa' %}
               <form hidden class="vc-lifecycle-form vc-inativar-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_inativar_versao', base_id=base.id, versao_id=v.id) }}"
@@ -323,7 +330,8 @@
       <button type="button" class="act-btn vc-activate-btn" data-action="activate" aria-label="Ativar versão" title="Ativar versão"><i data-lucide="check"></i></button>
       <button type="button" class="act-btn vc-inativar-btn" data-action="suspend" aria-label="Inativar versão" title="Inativar versão"><i data-lucide="pause-circle"></i></button>
       <button type="button" class="act-btn vc-substituir-btn" data-action="substitute" aria-label="Substituir versão" title="Substituir versão"><i data-lucide="replace"></i></button>
-      <button type="button" class="act-btn vc-descontinuar-btn" data-action="delete" aria-label="Descontinuar versão" title="Descontinuar versão"><i data-lucide="x-circle"></i></button>
+      <button type="button" class="act-btn vc-descontinuar-btn" data-action="discontinue" aria-label="Descontinuar versão" title="Descontinuar versão"><i data-lucide="x-circle"></i></button>
+      <button type="button" class="act-btn vc-delete-btn" data-action="delete" aria-label="Excluir versão" title="Excluir versão"><i data-lucide="trash-2"></i></button>
     `;
 
     const modal = document.getElementById('version-substitute-modal');
@@ -350,12 +358,14 @@
       const status = currentCard?.dataset.versionStatus || '';
       const isDraft = status === 'rascunho';
       const isActive = status === 'ativa';
+      const isInactive = status === 'inativa';
       setVisible('view', !isDraft);
       setVisible('edit', isDraft);
       setVisible('activate', isDraft);
       setVisible('suspend', isActive);
       setVisible('substitute', isActive);
-      setVisible('delete', isActive);
+      setVisible('discontinue', isActive);
+      setVisible('delete', isDraft || isInactive);
       button('substitute').disabled = currentCard?.dataset.hasSubstitution !== '1';
       bar.setAttribute('aria-label', `Ações da ${currentCard?.dataset.versionLabel || 'versão'}`);
     };
@@ -408,7 +418,8 @@
       if (action === 'view' || action === 'edit') window.location.href = currentCard.dataset.versionUrl;
       if (action === 'activate') actionForm('vc-activate-form')?.requestSubmit();
       if (action === 'suspend') actionForm('vc-inativar-form')?.requestSubmit();
-      if (action === 'delete') actionForm('vc-descontinuar-form')?.requestSubmit();
+      if (action === 'discontinue') actionForm('vc-descontinuar-form')?.requestSubmit();
+      if (action === 'delete') actionForm('vc-delete-form')?.requestSubmit();
       if (action === 'substitute') openSubstitution();
     });
 

@@ -130,7 +130,7 @@
     <!-- Buscar -->
     <div class="input-group" id="grp-busca-impressoes">
       <span class="input-chip" aria-hidden="true"><i class="lucide" data-lucide="search"></i></span>
-      <input id="busca-impressoes" type="search" placeholder="Buscar por atividade, grupo ou tipo…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
+      <input id="busca-impressoes" type="search" placeholder="Buscar por atividade…" aria-label="Buscar" value="{{ request.args.get('q','') }}">
       <button id="busca-clear" class="busca-clear" type="button" aria-label="Limpar busca" hidden><i class="lucide" data-lucide="x"></i></button>
     </div>
 
@@ -201,6 +201,7 @@
     <div class="menu-item" data-field="nome">Nome</div>
     <div class="menu-item" data-field="grupo">Grupo</div>
     <div class="menu-item" data-field="tipo_atividade">Tipo</div>
+    <div class="menu-item" data-field="versoes">Versões</div>
     <div class="menu-item" data-field="limitacao">Limitações</div>
   </div>
   <div class="menu-meta">Direção: <strong id="dir-label">{{ 'DESC' if request.args.get('dir','asc')=='desc' else 'ASC' }}</strong></div>
@@ -309,7 +310,7 @@
 
     {% if atividades and atividades|length %}
       {% for a in atividades %}
-  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}">
+  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-search-text="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}">
           <div class="cell left ellipsis">{{ a.tipo_atividade }}</div>
           <div class="cell left ellipsis">{{ a.nome }}</div>
           <div class="cell center ellipsis" title="{{ a.grupo }}">
@@ -941,8 +942,7 @@
         const action = btn.getAttribute('data-action');
         if (action === 'view'){
           if (currentBaseId){
-            const base = "{{ url_for('admin_catalogo_editar_versao', base_id=0, versao_id=0) }}".replace('/0/versoes/0/editar', '/' + currentBaseId + '/versoes/' + currentId + '/editar');
-            window.navigateWithReturnTo(base, { view: 1 });
+            window.location.href = "{{ url_for('admin_catalogo_versao_detalhe', base_id=0) }}".replace('/0', '/' + currentBaseId);
           } else {
             const base = "{{ url_for('admin_editar_atividade', atividade_id=0) }}".replace('/0','/' + currentId);
             window.navigateWithReturnTo(base, { view: 1 });

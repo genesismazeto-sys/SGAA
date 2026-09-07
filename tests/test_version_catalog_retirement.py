@@ -73,6 +73,7 @@ def test_version_detail_and_exact_source_form_remain_reachable(retirement_env):
         ("POST", "/admin/catalogo-versoes/999999/versoes/999999/ativar"),
         ("POST", "/admin/catalogo-versoes/999999/versoes/999999/inativar"),
         ("POST", "/admin/catalogo-versoes/999999/versoes/999999/descontinuar"),
+        ("POST", "/admin/catalogo-versoes/999999/versoes/999999/excluir"),
         ("POST", "/admin/catalogo-versoes/999999/versoes/999999/substituir"),
     ],
 )

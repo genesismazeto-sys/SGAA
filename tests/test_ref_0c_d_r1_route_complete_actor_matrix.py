@@ -37,7 +37,7 @@ ARTIFACT_PATH = Path(__file__).parent / "_artifacts" / "route_inventory_baseline
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 ADMIN_ACCESS_LEVELS = ("admin_total", "administrativo", "consultivo")
 
-CANONICAL_REQUIREMENT_MATRIX_DIGEST = "17a2900f9c8b20c0ef558bb9ff3bd09ef1484899511badd891cc44f10553e93e"
+CANONICAL_REQUIREMENT_MATRIX_DIGEST = "98de88ba6c58a3b6da4f6d17749c06bb42c9b435ce34ccbce34049cd5a33d796"
 CANONICAL_PROFILE_DIGESTS = {
     "admin_total": "8100f29522b3bea3cd55d37f2e35bd04a7e663e014669237b5ef7646777a77ae",
     "administrativo": "bce039124b87b716dfc6c0c78a75a0a08b563fa8d452dbd148931cd733da759c",

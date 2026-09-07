@@ -15,6 +15,14 @@ ACTIVITY_VERSION_SEMANTIC_FIELDS = frozenset({
 })
 
 
+class ActivityVersionDeleteBlocked(ValueError):
+    def __init__(self, code: str, *, count: int = 0, reference_label: str = ""):
+        super().__init__(code)
+        self.code = code
+        self.count = count
+        self.reference_label = reference_label
+
+
 def parse_documentos_json(raw) -> list[str]:
     """Robustly parse documentos list from various legacy formats.
     Accepts: JSON array (string), JSON-encoded string, Python-like list with single quotes,
@@ -243,7 +251,8 @@ def get_atividade_versao_by_id(conn, versao_id: int):
 def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
     """
     Retorna contagens de uso de uma atividade_versao em outras tabelas
-    (matriz_atividade_versao_item, requisicoes, atividade_transicao).
+    (matriz_atividade_versao_item, requisicoes, atividade_transicao e
+    sucessoras que apontam para esta versão como predecessora).
     Estritamente read-only — usado para bloquear edição de versões em uso.
     """
     matriz_itens = conn.execute(
@@ -262,13 +271,75 @@ def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
         "SELECT COUNT(*) FROM atividade_transicao WHERE to_atividade_versao_id = ?",
         (versao_id,),
     ).fetchone()[0]
+    versoes_sucessoras = conn.execute(
+        "SELECT COUNT(*) FROM atividade_versao WHERE versao_anterior_id = ?",
+        (versao_id,),
+    ).fetchone()[0]
     return {
         "matriz_atividade_versao_item": matriz_itens,
         "requisicoes": requisicoes,
         "atividade_transicao_origem": transicoes_origem,
         "atividade_transicao_destino": transicoes_destino,
-        "total": matriz_itens + requisicoes + transicoes_origem + transicoes_destino,
+        "atividade_versao_sucessora": versoes_sucessoras,
+        "total": (
+            matriz_itens
+            + requisicoes
+            + transicoes_origem
+            + transicoes_destino
+            + versoes_sucessoras
+        ),
     }
+
+
+def assert_activity_version_can_be_safely_deleted(
+    conn,
+    *,
+    base_id: int,
+    versao_id: int,
+):
+    """Return the exact disposable version or raise a concrete safe reason.
+
+    The caller must own the write transaction. This helper performs every
+    delete-eligibility read without mutating or repairing related records.
+    """
+    version = conn.execute(
+        "SELECT * FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",
+        (versao_id, base_id),
+    ).fetchone()
+    if version is None:
+        raise ActivityVersionDeleteBlocked("wrong_base_or_version")
+
+    status = str(version["status"] or "").strip().lower()
+    if status == "ativa":
+        raise ActivityVersionDeleteBlocked("active")
+    if status not in {"rascunho", "inativa"}:
+        raise ActivityVersionDeleteBlocked("lifecycle_frozen")
+
+    usage = get_atividade_versao_usage_counts(conn, versao_id)
+    reference_checks = (
+        ("matriz_atividade_versao_item", "Matriz"),
+        ("requisicoes", "requisição"),
+        ("atividade_transicao_origem", "transição como origem"),
+        ("atividade_transicao_destino", "transição como destino"),
+        ("atividade_versao_sucessora", "versão sucessora como predecessora"),
+    )
+    for usage_key, reference_label in reference_checks:
+        count = int(usage[usage_key])
+        if count:
+            raise ActivityVersionDeleteBlocked(
+                "referenced",
+                count=count,
+                reference_label=reference_label,
+            )
+
+    surviving_count = conn.execute(
+        "SELECT COUNT(*) FROM atividade_versao "
+        "WHERE atividade_base_id = ? AND id <> ?",
+        (base_id, versao_id),
+    ).fetchone()[0]
+    if int(surviving_count) < 1:
+        raise ActivityVersionDeleteBlocked("sole_version")
+    return version
 
 
 def can_activity_version_be_mutated_in_place(conn, versao_id: int) -> bool:
@@ -286,6 +357,7 @@ def can_activity_version_be_mutated_in_place(conn, versao_id: int) -> bool:
         usage["requisicoes"]
         or usage["atividade_transicao_origem"]
         or usage["atividade_transicao_destino"]
+        or usage["atividade_versao_sucessora"]
         or is_activity_version_referenced_by_assigned_matrix(conn, versao_id)
     )
 
@@ -466,6 +538,7 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
 
 __all__ = [
     'parse_documentos_json',
+    'ActivityVersionDeleteBlocked',
     '_normalize_atividade_grupo',
     '_canonicalize_tipo_limitacao',
     '_parse_non_negative_form_number',
@@ -477,6 +550,7 @@ __all__ = [
     'get_next_numero_versao',
     'get_atividade_versao_by_id',
     'get_atividade_versao_usage_counts',
+    'assert_activity_version_can_be_safely_deleted',
     'can_activity_version_be_mutated_in_place',
     'apply_activity_version_semantic_changes',
     'apply_latest_activity_version_semantic_changes',

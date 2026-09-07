@@ -449,6 +449,7 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_catalogo_ativar_versao",    # R13 POST .../ativar
         "admin_catalogo_inativar_versao",  # R14 POST .../inativar
         "admin_catalogo_descontinuar_versao",  # R15 POST .../descontinuar
+        "admin_catalogo_excluir_versao",       # POST .../excluir
         "admin_catalogo_substituir_versao",    # R16 POST .../substituir
     }:
         return _permission("atividades", "edit")

@@ -382,6 +382,13 @@
       "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/editar"
     },
     {
+      "endpoint": "admin_catalogo_excluir_versao",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/excluir"
+    },
+    {
       "endpoint": "admin_catalogo_inativar_versao",
       "methods": [
         "POST"

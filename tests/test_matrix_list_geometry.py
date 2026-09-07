@@ -157,7 +157,7 @@ def test_course_list_template_and_grid_have_the_same_six_columns():
     assert grid.group(1).count("minmax(") == 6
 
 
-def test_activity_list_shows_total_versions_for_each_base_row(tmp_path):
+def test_activity_list_shows_one_base_row_with_exact_total_versions(tmp_path):
     with isolated_versioned_app_env(tmp_path, "activity-list-geometry.db") as env:
         login_admin(env["client"])
         with main.app.app_context():
@@ -183,8 +183,9 @@ def test_activity_list_shows_total_versions_for_each_base_row(tmp_path):
             if f'data-base-id="{base_id}"' in segment
         ]
 
-        assert len(matching_rows) == 3
-        for row in matching_rows:
-            cells = re.findall(r'<div class="cell[^"]*"[^>]*>(.*?)</div>', row, re.DOTALL)
-            assert len(cells) == 5
-            assert cells[3].strip() == "3"
+        assert len(matching_rows) == 1
+        cells = re.findall(
+            r'<div class="cell[^"]*"[^>]*>(.*?)</div>', matching_rows[0], re.DOTALL
+        )
+        assert len(cells) == 5
+        assert cells[3].strip() == "3"

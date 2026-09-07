@@ -58,6 +58,7 @@ HIGH_CONFIDENCE_POLICIES = {
     ("admin_catalogo_ativar_versao", "POST"): ("atividades", "edit"),
     ("admin_catalogo_inativar_versao", "POST"): ("atividades", "edit"),
     ("admin_catalogo_descontinuar_versao", "POST"): ("atividades", "edit"),
+    ("admin_catalogo_excluir_versao", "POST"): ("atividades", "edit"),
     ("admin_catalogo_substituir_versao", "POST"): ("atividades", "edit"),
     # matrizes/edit (R21; R17-R20 retired)
     ("admin_matriz_nova_versao_card", "POST"): ("matrizes", "edit"),
@@ -69,7 +70,7 @@ HIGH_CONFIDENCE_POLICIES = {
 
 
 def test_high_confidence_policy_count_matches_current_surface():
-    assert len(HIGH_CONFIDENCE_POLICIES) == 12
+    assert len(HIGH_CONFIDENCE_POLICIES) == 13
 
 
 @pytest.mark.parametrize(

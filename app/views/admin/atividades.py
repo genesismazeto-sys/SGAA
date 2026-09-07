@@ -54,6 +54,7 @@ from app.matrix_scope import (
 from app.uploads import ALLOWED_CSV, save_upload
 from app.text import normalize_header
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.views.admin.activity_version_delete import admin_catalogo_excluir_versao
 from app.web.filters import (
     append_conditions_sql,
     append_text_contains_condition,
@@ -77,7 +78,7 @@ ATIVIDADES_IMPORT_REQUIRED_HEADERS = (
 
 
 def _canonical_activity_rows_sql() -> str:
-    return """SELECT v.id, v.atividade_base_id AS base_id, v.grupo,
+    return """SELECT v.id, b.id AS base_id, v.grupo,
                      b.nome_conceito AS nome, b.descricao,
                      v.ch_por_evento AS horas_sugeridas,
                      CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
@@ -85,8 +86,17 @@ def _canonical_activity_rows_sql() -> str:
                      CASE WHEN v.limite_semestre IS NOT NULL THEN 'semestral' ELSE 'total' END AS tipo_limitacao,
                      v.limite_total AS limite_horas_total,
                      v.limite_semestre AS limite_horas_semestral,
-                     v.documentos_json
-                FROM atividade_versao v JOIN atividade_base b ON b.id=v.atividade_base_id"""
+                     v.documentos_json,
+                     (SELECT COUNT(*) FROM atividade_versao counted
+                       WHERE counted.atividade_base_id = b.id) AS total_versoes
+                FROM atividade_base b
+                JOIN atividade_versao v ON v.id = (
+                    SELECT current.id
+                      FROM atividade_versao current
+                     WHERE current.atividade_base_id = b.id
+                     ORDER BY current.numero_versao DESC, current.id DESC
+                     LIMIT 1
+                )"""
 
 
 def _normalize_import_header_name(text: str) -> str:
@@ -536,12 +546,7 @@ def admin_atividades():
     sort_field = (request.args.get('s') or '').strip().lower()
     sort_dir = 'DESC' if (request.args.get('dir') or 'asc').strip().lower() == 'desc' else 'ASC'
     conn = get_db_connection()
-    base_from = (
-        " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
-        " JOIN (SELECT atividade_base_id, COUNT(*) AS total_versoes"
-        "         FROM atividade_versao GROUP BY atividade_base_id) version_counts"
-        "   ON version_counts.atividade_base_id = canonical_activity.base_id"
-    )
+    base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
     where = []
     params = []
     append_text_contains_condition(where, params, 'nome', nome_filter)
@@ -566,6 +571,7 @@ def admin_atividades():
         'nome': f" ORDER BY nome COLLATE NOCASE {sort_dir}, tipo_atividade COLLATE NOCASE ASC, grupo COLLATE NOCASE ASC",
         'grupo': f" ORDER BY grupo COLLATE NOCASE {sort_dir}, nome COLLATE NOCASE ASC",
         'tipo_atividade': f" ORDER BY tipo_atividade COLLATE NOCASE {sort_dir}, grupo COLLATE NOCASE ASC, nome COLLATE NOCASE ASC",
+        'versoes': f" ORDER BY total_versoes {sort_dir}, nome COLLATE NOCASE ASC",
         'limitacao': (
             " ORDER BY "
             f"COALESCE(tem_limitacao, 0) {sort_dir}, "
@@ -579,8 +585,7 @@ def admin_atividades():
     if not order_sql:
         order_sql = " ORDER BY tipo_atividade, grupo, nome" if (not where) else " ORDER BY grupo, nome"
     query = (
-        "SELECT canonical_activity.*, version_counts.total_versoes"
-        + base_from + where_sql + order_sql
+        "SELECT canonical_activity.*" + base_from + where_sql + order_sql
     )
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
     total = conn.execute(count_sql, params).fetchone()[0]
@@ -2003,6 +2008,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ('POST',),
         ),
         LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/excluir',
+            'admin_catalogo_excluir_versao',
+            admin_catalogo_excluir_versao,
+            ('POST',),
+        ),
+        LegacyRouteSpec(
             '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir',
             'admin_catalogo_substituir_versao',
             admin_catalogo_substituir_versao,
@@ -2047,6 +2058,7 @@ __all__ = [
     'admin_catalogo_ativar_versao',
     'admin_catalogo_inativar_versao',
     'admin_catalogo_descontinuar_versao',
+    'admin_catalogo_excluir_versao',
     'admin_catalogo_substituir_versao',
     'LEGACY_ROUTE_SPECS',
     'bp_admin_atividades',
