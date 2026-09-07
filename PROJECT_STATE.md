@@ -29,6 +29,25 @@ Old code rollback artifact: `old-code-779dbb24.zip`, SHA-256
 Full evidence is in the same external custody directory and in
 `docs/PRE_GO_LIVE_PROD1_RESET_CUTOVER_RECORD.md`.
 
+## Activity Version safe delete and Activities catalog identity — CLOSED / LANDED
+
+Activity Version safe deletion and the base-identity Activities catalog landed
+in implementation commit `e3691d0305487cc8d9127dfd55a93f173d053459`.
+Hard deletion is limited to unreferenced draft/inactive versions when another
+version survives; no relationship repair, cascade cleanup, or renumbering is
+performed. `/admin/atividades` now has `atividade_base` cardinality, uses the
+highest `numero_versao` for version-owned summary fields, and applies filters,
+sorting, pagination, and counts to the same base-granular projection.
+
+Operational verification passed on schema v5: `/health` and
+`/admin/atividades` returned 200; 27 bases rendered as 27 rows; Conferências
+rendered once with two versions; its detail retained v2 and v1. No operational
+draft/inactive disposable fixture existed, so no live delete was attempted.
+The operational database remained byte-identical and integrity `ok`.
+
+Known unrelated absolute geometry-count debt remains non-blocking and was not
+modified or hidden by this landing.
+
 `PRODUCTION_WEB_RUNTIME_ACTIVATION = DEFERRED`. Phase C still requires the final
 HTTPS `APP_PUBLIC_BASE_URL`, externally provisioned `APP_SECRET_KEY` and
 `TOKEN_ENCRYPTION_KEY`, binding/proxy decisions, production `create_app`
