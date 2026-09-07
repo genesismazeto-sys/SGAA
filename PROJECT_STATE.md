@@ -31,19 +31,25 @@ Full evidence is in the same external custody directory and in
 
 ## Activity Version safe delete and Activities catalog identity — CLOSED / LANDED
 
-Activity Version safe deletion and the base-identity Activities catalog landed
-in implementation commit `e3691d0305487cc8d9127dfd55a93f173d053459`.
-Hard deletion is limited to unreferenced draft/inactive versions when another
-version survives; no relationship repair, cascade cleanup, or renumbering is
-performed. `/admin/atividades` now has `atividade_base` cardinality, uses the
-highest `numero_versao` for version-owned summary fields, and applies filters,
-sorting, pagination, and counts to the same base-granular projection.
+Activity Version safe deletion and the base-identity Activities catalog first
+landed in implementation commit `e3691d0305487cc8d9127dfd55a93f173d053459`.
+The deletion requirement was corrected in
+`f243544f89bda276d69f6ad2dfb6c17eaa582aa1`: administrative hard deletion is
+status-independent and is blocked only for a sole version, Matrix use,
+Requisição use, or a surviving version's `versao_anterior_id` dependency.
+Lifecycle transition rows that reference the deleted version are removed in
+the same transaction; no lineage repair, automatic status change, cascade of
+operational use, or renumbering is performed. `/admin/atividades` retains
+`atividade_base` cardinality, uses the highest `numero_versao` for
+version-owned summary fields, and applies filters, sorting, pagination, and
+counts to the same base-granular projection.
 
-Operational verification passed on schema v5: `/health` and
-`/admin/atividades` returned 200; 27 bases rendered as 27 rows; Conferências
-rendered once with two versions; its detail retained v2 and v1. No operational
-draft/inactive disposable fixture existed, so no live delete was attempted.
-The operational database remained byte-identical and integrity `ok`.
+Operational verification passed on schema v5: `/health` returned 200;
+Conferências v2 remained `descontinuada`, rendered the permanent
+`Excluir versão` action, and was read-only eligible with one surviving version
+and zero Matrix, Requisição, or successor-predecessor references. No live
+delete was attempted. The operational database remained byte-identical and
+integrity `ok`.
 
 Known unrelated absolute geometry-count debt remains non-blocking and was not
 modified or hidden by this landing.
