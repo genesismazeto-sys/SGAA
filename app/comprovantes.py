@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Callable
 
 from flask import current_app
-import app.cloud_connections as cloud_connections
 from app.admin_access import _admin_can, _load_admin_access_context
 from app.comprovante_file_validation import MIME_BY_EXTENSION, detect_supported_mime
 from app.comprovante_hierarchy import ensure_request_hierarchy, stored_filename
@@ -20,12 +19,12 @@ from app.requisition_policy import (
 from app.storage.contracts import (
     ComprovanteStorage,
     RemoteObject,
-    StorageAuthorizationError,
-    StorageConfigurationError,
+    StorageConnectionError,
     StorageError,
     StorageIntegrityError,
 )
 from app.storage.google_drive import GoogleDriveComprovanteStorage
+from app.storage.google_connection import resolve_google_managed_storage
 from app.student_documents import resolve_student_document_path
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
@@ -210,42 +209,25 @@ def find_completed_request_retry(
 
 
 def resolve_google_storage(conn) -> ComprovanteStorage:
-    override = current_app.extensions.get("comprovante_storage")
-    if override is not None:
-        return override(conn) if callable(override) else override
-    try:
-        access_token, _identity = cloud_connections.get_authenticated_access_token(conn, "google")
-    except cloud_connections.CloudConnectionError as exc:
-        if exc.debug_code == "AUTH_RECONNECT_REQUIRED":
-            raise StorageAuthorizationError(
-                "A autorização do Google Drive precisa ser renovada."
-            ) from exc
-        if exc.debug_code.startswith("APPLICATION_CREDENTIAL"):
-            raise StorageConfigurationError(
-                "As credenciais do aplicativo Google não estão configuradas corretamente."
-            ) from exc
-        raise StorageError("Não foi possível acessar o Google Drive.") from exc
-    def recover_access_token() -> str:
-        try:
-            recovered, _identity = (
-                cloud_connections.recover_authenticated_access_token_after_401(
-                    conn, "google"
-                )
-            )
-            return recovered
-        except cloud_connections.CloudConnectionError as exc:
-            if exc.debug_code == "AUTH_RECONNECT_REQUIRED":
-                raise StorageAuthorizationError(
-                    "A autorização do Google Drive precisa ser renovada."
-                ) from exc
-            if exc.debug_code.startswith("APPLICATION_CREDENTIAL"):
-                raise StorageConfigurationError(
-                    "As credenciais do aplicativo Google não estão configuradas corretamente."
-                ) from exc
-            raise StorageError("Não foi possível renovar o acesso ao Google Drive.") from exc
+    def comprovante_storage_factory(access_token, *, access_token_refresher):
+        def recover_with_landed_message() -> str:
+            try:
+                return access_token_refresher()
+            except StorageConnectionError as exc:
+                if exc.phase == "refresh":
+                    raise StorageError(
+                        "Não foi possível renovar o acesso ao Google Drive."
+                    ) from exc
+                raise
 
-    return GoogleDriveComprovanteStorage(
-        access_token, access_token_refresher=recover_access_token
+        return GoogleDriveComprovanteStorage(
+            access_token, access_token_refresher=recover_with_landed_message
+        )
+
+    return resolve_google_managed_storage(
+        conn,
+        extension_key="comprovante_storage",
+        storage_factory=comprovante_storage_factory,
     )
 
 

@@ -177,6 +177,7 @@
       <form id="admin-arquivo-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_editar_arquivo', arquivo_id=edit_arquivo.id) if edit_arquivo else url_for('admin_adicionar_arquivo') }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.args.get('return_to', '') }}">
+        <input type="hidden" name="operation_key" value="{{ arquivo_operation_id }}">
         <div class="form-cards-narrow form-cards-narrow--gutter-compact">
           <div class="visibility-switch-row">
             <label class="toggle-switch" aria-label="Alternar visibilidade do arquivo">

@@ -790,7 +790,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 537, (
+    assert len(catalog) == 556, (
         "message catalog count must match the prod-1 baseline through the extraction; "
         f"got {len(catalog)}"
     )
@@ -1023,8 +1023,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 537, (
-        "current catalog baseline must be 537"
+    assert len(messages._message_catalog()) == 556, (
+        "current catalog baseline plus the ARQUIVOS product delta must be 556"
     )
 
     backend_paths = {
@@ -1048,9 +1048,9 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
 def test_green_6_schema_is_exactly_prod1_v1():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 4, f"prod-1 SCHEMA_VERSION must be 4, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 5, f"prod-1 SCHEMA_VERSION must be 5, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3, 4}, (
+    assert versions == {1, 2, 3, 4, 5}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )

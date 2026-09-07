@@ -60,7 +60,7 @@ def test_empty_bootstrap_is_prod1_and_idempotent(tmp_path):
     first = bootstrap_prod1_schema(conn)
     second = bootstrap_prod1_schema(conn)
     assert first == second
-    assert first == {"schema_epoch": "prod-1", "schema_version": 4, "baseline_marker": "first_production_baseline", "table_count": 26}
+    assert first == {"schema_epoch": "prod-1", "schema_version": 5, "baseline_marker": "first_production_baseline", "table_count": 26}
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
     indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     assert tables == EXPECTED_TABLES

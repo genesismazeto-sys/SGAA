@@ -12,6 +12,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.test_arquivos_google_drive import FakeManagedStorage, PDF
 
 
 @pytest.fixture()
@@ -39,8 +40,11 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
     documents_root.mkdir(parents=True, exist_ok=True)
     original_upload_folder = main.app.config.get("UPLOAD_FOLDER")
     original_documents_folder = main.app.config.get("DOCUMENTOS_ALUNOS_FOLDER")
+    original_storage = main.app.extensions.get("arquivo_storage")
+    storage = FakeManagedStorage()
     main.app.config["UPLOAD_FOLDER"] = str(upload_root)
     main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = str(documents_root)
+    main.app.extensions["arquivo_storage"] = storage
 
     try:
         _login_admin(client)
@@ -60,6 +64,7 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
         assert "/admin/arquivos/adicionar" in html
         assert "/admin/arquivos/0/editar" in html
         assert "/admin/arquivos/0/deletar" in html
+        assert re.search(r'name="operation_key" value="[^"]+"', html)
 
         create_response = client.post(
             "/admin/arquivos/adicionar",
@@ -67,7 +72,8 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
                 "titulo": titulo,
                 "descricao": "Descricao inicial",
                 "visivel": "1",
-                "arquivo": (io.BytesIO(b"arquivo-admin"), "arquivo-admin.pdf"),
+                "operation_key": "admin-create-operation",
+                "arquivo": (io.BytesIO(PDF), "arquivo-admin.pdf"),
             },
             content_type="multipart/form-data",
             follow_redirects=False,
@@ -78,16 +84,17 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
         with main.app.app_context():
             conn = main.get_db_connection()
             created = conn.execute(
-                "SELECT id, titulo, descricao, filename, original_filename, visivel FROM admin_arquivos WHERE titulo = ? ORDER BY id DESC LIMIT 1",
+                "SELECT id, titulo, descricao, filename, original_filename, visivel,provider,storage_status,remote_file_id FROM admin_arquivos WHERE titulo = ? ORDER BY id DESC LIMIT 1",
                 (titulo,),
             ).fetchone()
             assert created is not None
             arquivo_id = created["id"]
             assert created["original_filename"] == "arquivo-admin.pdf"
             assert created["visivel"] == 1
+            assert (created["provider"], created["storage_status"]) == ("google", "active")
             saved_upload_path = upload_root / str(created["filename"])
             saved_docs_path = documents_root / str(created["filename"])
-            assert saved_upload_path.is_file()
+            assert not saved_upload_path.exists()
             assert not saved_docs_path.exists()
 
         edit_page_response = client.get(f"/admin/arquivos/{arquivo_id}/editar")
@@ -119,9 +126,10 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
             filename = edited["filename"]
 
         view_response = client.get(f"/admin/arquivos/{arquivo_id}/visualizar")
-        assert view_response.status_code == 302
-        assert "/uploads/" in view_response.headers["Location"]
-        assert filename.replace('\\', '/') in view_response.headers["Location"]
+        assert view_response.status_code == 200
+        assert view_response.data == PDF
+        assert view_response.headers["X-Content-Type-Options"] == "nosniff"
+        assert view_response.headers["Cache-Control"] == "private, no-store"
 
         delete_response = client.post(f"/admin/arquivos/{arquivo_id}/deletar", follow_redirects=False)
         assert delete_response.status_code == 302
@@ -131,9 +139,14 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
             conn = main.get_db_connection()
             deleted = conn.execute("SELECT id FROM admin_arquivos WHERE id = ?", (arquivo_id,)).fetchone()
             assert deleted is None
+        assert storage.trashed == ["remote-1"]
     finally:
         main.app.config["UPLOAD_FOLDER"] = original_upload_folder
         main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = original_documents_folder
+        if original_storage is None:
+            main.app.extensions.pop("arquivo_storage", None)
+        else:
+            main.app.extensions["arquivo_storage"] = original_storage
 
 
 def test_admin_arquivos_edit_flow_reaches_render_target_and_exposes_edit_payload(client):

@@ -6,13 +6,15 @@ import re
 import sqlite3
 
 from app.prod1_comprovantes_ddl import COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
+from app.prod1_arquivos_ddl import ARQUIVOS_V5_SCHEMA_OBJECTS_SQL, ARQUIVOS_V5_TABLE_SQL
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
 COMPROVANTES_GOOGLE_DRIVE_MARKER = "comprovantes_google_drive_cutover"
-LATEST_MIGRATION_MARKER = COMPROVANTES_GOOGLE_DRIVE_MARKER
+ARQUIVOS_GOOGLE_DRIVE_MARKER = "arquivos_google_drive_cutover"
+LATEST_MIGRATION_MARKER = ARQUIVOS_GOOGLE_DRIVE_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -207,11 +209,7 @@ CREATE TABLE reportes (
  FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE CASCADE ON UPDATE CASCADE,
  FOREIGN KEY(admin_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
-CREATE TABLE admin_arquivos (
- id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT NOT NULL, descricao TEXT,
- filename TEXT NOT NULL, original_filename TEXT, visivel INTEGER NOT NULL DEFAULT 1 CHECK(visivel IN (0,1)),
- criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
+__ARQUIVOS_V5_TABLE__;
 CREATE TABLE admin_alertas (
  id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT, mensagem TEXT NOT NULL,
  bg_color TEXT NOT NULL DEFAULT '#eff6ff', border_color TEXT NOT NULL DEFAULT '#bfdbfe',
@@ -240,8 +238,7 @@ CREATE INDEX idx_req_arquivos_req ON requisicao_arquivos(requisicao_id);
 CREATE INDEX idx_req_alert_receipts_user_kind ON requisicao_alerta_receipts(usuario_id,alert_kind);
 CREATE INDEX idx_req_alert_receipts_req ON requisicao_alerta_receipts(requisicao_id);
 CREATE INDEX idx_reportes_aluno_id ON reportes(aluno_id); CREATE INDEX idx_reportes_status ON reportes(status);
-CREATE INDEX idx_reportes_criado_em ON reportes(criado_em); CREATE INDEX idx_admin_arquivos_visivel ON admin_arquivos(visivel);
-CREATE INDEX idx_admin_arquivos_criado_em ON admin_arquivos(criado_em); CREATE INDEX idx_admin_alertas_visivel ON admin_alertas(visivel);
+CREATE INDEX idx_reportes_criado_em ON reportes(criado_em); CREATE INDEX idx_admin_alertas_visivel ON admin_alertas(visivel);
 
 CREATE TRIGGER trg_atividade_versao_prev_same_eixo_insert BEFORE INSERT ON atividade_versao
 FOR EACH ROW WHEN NEW.versao_anterior_id IS NOT NULL AND EXISTS(SELECT 1 FROM atividade_versao p WHERE p.id=NEW.versao_anterior_id AND p.eixo<>NEW.eixo)
@@ -266,6 +263,7 @@ BEFORE UPDATE OF atividade_versao_id,regra_snapshot_json ON requisicoes
 FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_snapshot_json<>OLD.regra_snapshot_json
 BEGIN SELECT RAISE(ABORT,'request snapshot authority is immutable'); END;
 __COMPROVANTES_V4_SCHEMA_OBJECTS__
+__ARQUIVOS_V5_SCHEMA_OBJECTS__
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
@@ -275,14 +273,20 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(3,'remove_matrix_version_metadata','prod-1','{"schema_epoch":"prod-1","removed_fields":["matrizes_atividades.versao","matrizes_atividades.matriz_origem_id"]}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(4,'comprovantes_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
-PRAGMA user_version=4;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(5,'arquivos_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
+PRAGMA user_version=5;
 """.replace(
     "__COMPROVANTES_V4_SCHEMA_OBJECTS__", COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
+).replace(
+    "__ARQUIVOS_V5_TABLE__;", ARQUIVOS_V5_TABLE_SQL
+).replace(
+    "__ARQUIVOS_V5_SCHEMA_OBJECTS__", ARQUIVOS_V5_SCHEMA_OBJECTS_SQL
 )
 
 
 def canonical_prod1_object_sql(kind: str, name: str) -> str:
-    """Return DDL from the single canonical v4 schema authority."""
+    """Return DDL from the single canonical current schema authority."""
     probe = sqlite3.connect(":memory:")
     try:
         probe.executescript(PROD1_SCHEMA_SQL)
@@ -398,6 +402,7 @@ _EXPECTED_PHYSICAL_SIGNATURE: dict[str, object] | None = None
 _PROD1_V1_SIGNATURE_SHA256 = "58b2e8b5dadc8381e03350cb3972a9590844f88c56e1f793e4036e4e6481a877"
 _PROD1_V2_SIGNATURE_SHA256 = "af842dbf7a4a6d93a933463ccfe18f7b4040a0a3a09e9fc799a27c9219ba3df6"
 _PROD1_V3_SIGNATURE_SHA256 = "51b2d17cf814e64e34ccd47360a57bea4e676c30c1023e167a3295c7cea77a41"
+_PROD1_V4_SIGNATURE_SHA256 = "616872df5c5bc29ececce46c361df7a60eaa8a579db3080827028ffddf7f5a57"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -467,6 +472,23 @@ def _validate_prod1_v3_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v3 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v4_schema(conn: sqlite3.Connection) -> None:
+    if _user_version(conn) != 4:
+        raise Prod1SchemaError("prod-1/v4 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v4 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V4_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v4 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v4 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -716,6 +738,11 @@ def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
     return migrate(conn)
 
 
+def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.prod1_arquivos_v5 import migrate_prod1_v4_to_v5 as migrate
+    return migrate(conn)
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
@@ -726,6 +753,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
         (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
         (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -749,12 +777,17 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         if _user_version(conn) == 1:
             migrate_prod1_v1_to_v2(conn)
             migrate_prod1_v2_to_v3(conn)
-            return migrate_prod1_v3_to_v4(conn)
+            migrate_prod1_v3_to_v4(conn)
+            return migrate_prod1_v4_to_v5(conn)
         if _user_version(conn) == 2:
             migrate_prod1_v2_to_v3(conn)
-            return migrate_prod1_v3_to_v4(conn)
+            migrate_prod1_v3_to_v4(conn)
+            return migrate_prod1_v4_to_v5(conn)
         if _user_version(conn) == 3:
-            return migrate_prod1_v3_to_v4(conn)
+            migrate_prod1_v3_to_v4(conn)
+            return migrate_prod1_v4_to_v5(conn)
+        if _user_version(conn) == 4:
+            return migrate_prod1_v4_to_v5(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

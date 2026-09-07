@@ -963,7 +963,7 @@ def _schema_signature(conn):
 
 
 @pytest.mark.parametrize("source_version", [1, 2, 3])
-def test_clean_bootstrap_and_each_supported_migration_share_exact_v4_ddl(source_version):
+def test_clean_bootstrap_and_each_supported_migration_share_exact_v5_ddl(source_version):
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     candidate = sqlite3.connect(":memory:")

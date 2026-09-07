@@ -5,6 +5,7 @@ import random
 import socket
 import time
 from collections.abc import Callable
+from typing import Mapping
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -28,7 +29,7 @@ def _q(value: object) -> str:
     return str(value).replace("\\", "\\\\").replace("'", "\\'")
 
 
-class GoogleDriveComprovanteStorage:
+class GoogleDriveManagedObjectStorage:
     provider = "google"
 
     def __init__(
@@ -207,14 +208,14 @@ class GoogleDriveComprovanteStorage:
         return file_id
 
     def _find_operation(
-        self, parent_id: str, operation_key: str, *, recover_auth: bool = True
+        self, parent_id: str, operation_key: str, object_kind: str, *, recover_auth: bool = True
     ) -> list[dict]:
         query = " and ".join(
             (
                 f"'{_q(parent_id)}' in parents",
                 "trashed=false",
                 "appProperties has { key='sgaaManaged' and value='true' }",
-                "appProperties has { key='sgaaKind' and value='comprovante' }",
+                f"appProperties has {{ key='sgaaKind' and value='{_q(object_kind)}' }}",
                 f"appProperties has {{ key='sgaaOperation' and value='{_q(operation_key)}' }}",
             )
         )
@@ -232,6 +233,16 @@ class GoogleDriveComprovanteStorage:
             reused=reused,
         )
 
+    def find_operation(
+        self, *, parent_id: str, operation_key: str, object_kind: str
+    ) -> RemoteObject | None:
+        matches = self._find_operation(parent_id, operation_key, object_kind)
+        if len(matches) > 1:
+            raise StorageConflictError("Há mais de um arquivo remoto para a mesma operação.")
+        if not matches:
+            return None
+        return self._remote_object(matches[0], parent_id, reused=True)
+
     def upload(
         self,
         *,
@@ -240,13 +251,13 @@ class GoogleDriveComprovanteStorage:
         content: bytes,
         mime_type: str,
         operation_key: str,
-        request_id: int,
-        attachment_id: int,
+        object_kind: str,
+        semantic_properties: Mapping[str, str],
         _authorization_retry: bool = True,
     ) -> RemoteObject:
         starting_generation = self._auth_generation
         matches = self._find_operation(
-            parent_id, operation_key, recover_auth=_authorization_retry
+            parent_id, operation_key, object_kind, recover_auth=_authorization_retry
         )
         if len(matches) > 1:
             raise StorageConflictError("Há mais de um arquivo remoto para a mesma operação.")
@@ -264,10 +275,9 @@ class GoogleDriveComprovanteStorage:
             "parents": [parent_id],
             "appProperties": {
                 "sgaaManaged": "true",
-                "sgaaKind": "comprovante",
+                "sgaaKind": str(object_kind),
                 "sgaaOperation": operation_key,
-                "sgaaRequest": str(request_id),
-                "sgaaAttachment": str(attachment_id),
+                **{str(key): str(value) for key, value in semantic_properties.items()},
             },
         }
         request = self._service.files().create(
@@ -296,10 +306,22 @@ class GoogleDriveComprovanteStorage:
                 content=content,
                 mime_type=mime_type,
                 operation_key=operation_key,
-                request_id=request_id,
-                attachment_id=attachment_id,
+                object_kind=object_kind,
+                semantic_properties=semantic_properties,
                 _authorization_retry=False,
             )
+        except StorageTransientError:
+            matches = self._find_operation(
+                parent_id,
+                operation_key,
+                object_kind,
+                recover_auth=self._auth_generation == starting_generation,
+            )
+            if len(matches) > 1:
+                raise StorageConflictError("Há mais de um arquivo remoto para a mesma operação.")
+            if matches:
+                return self._remote_object(matches[0], parent_id, reused=True)
+            raise
 
     def _set_trashed(self, file_id: str, trashed: bool) -> None:
         def update_once():
@@ -339,4 +361,34 @@ class GoogleDriveComprovanteStorage:
         return self._with_auth_recovery(download_once)
 
 
-__all__ = ["GoogleDriveComprovanteStorage"]
+class GoogleDriveComprovanteStorage(GoogleDriveManagedObjectStorage):
+    """Compatibility wrapper retaining the accepted COMPROVANTES contract."""
+
+    def upload(
+        self,
+        *,
+        parent_id: str,
+        stored_filename: str,
+        content: bytes,
+        mime_type: str,
+        operation_key: str,
+        request_id: int,
+        attachment_id: int,
+        _authorization_retry: bool = True,
+    ) -> RemoteObject:
+        return super().upload(
+            parent_id=parent_id,
+            stored_filename=stored_filename,
+            content=content,
+            mime_type=mime_type,
+            operation_key=operation_key,
+            object_kind="comprovante",
+            semantic_properties={
+                "sgaaRequest": str(request_id),
+                "sgaaAttachment": str(attachment_id),
+            },
+            _authorization_retry=_authorization_retry,
+        )
+
+
+__all__ = ["GoogleDriveComprovanteStorage", "GoogleDriveManagedObjectStorage"]

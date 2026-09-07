@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import pytest
+from flask import Flask
 from googleapiclient.errors import HttpError
 from httplib2 import Response
 
 from app.storage.contracts import StorageConflictError, StorageError, StorageTransientError
-from app.storage.google_drive import GoogleDriveComprovanteStorage
+from app.storage.google_drive import (
+    GoogleDriveComprovanteStorage,
+    GoogleDriveManagedObjectStorage,
+)
+from app.storage.google_connection import resolve_google_managed_storage
 
 
 class ExecuteRequest:
@@ -47,12 +52,23 @@ class UploadRequest:
         return object(), self.payload
 
 
+class FailingUploadRequest:
+    def __init__(self):
+        self.calls = 0
+
+    def next_chunk(self, num_retries=0):
+        assert num_retries == 0
+        self.calls += 1
+        raise OSError("ambiguous upload result")
+
+
 class FakeFiles:
     def __init__(self, list_payloads):
         self.list_payloads = list(list_payloads)
         self.list_requests = []
         self.create_bodies = []
         self.upload_requests = []
+        self.upload_request = None
         self.folder_create_request = None
 
     def list(self, **kwargs):
@@ -65,7 +81,7 @@ class FakeFiles:
     def create(self, **kwargs):
         self.create_bodies.append(kwargs)
         if kwargs.get("media_body") is not None:
-            request = UploadRequest(
+            request = self.upload_request or UploadRequest(
                 {
                     "id": "file-1",
                     "name": kwargs["body"]["name"],
@@ -114,6 +130,123 @@ def test_one_semantic_folder_match_reuses_exact_id():
         parent_id="root", kind="student", semantic_id="7", display_name="New display"
     ) == "folder-existing"
     assert api.create_bodies == []
+
+
+def test_generic_arquivo_upload_uses_domain_properties_and_reconciles_ambiguous_success():
+    service = FakeService(
+        [
+            {"files": []},
+            {
+                "files": [
+                    {
+                        "id": "arquivo-existing",
+                        "name": "ARQ-file.pdf",
+                        "parents": ["arquivos-root"],
+                        "size": "4",
+                        "sha256Checksum": "sha",
+                    }
+                ]
+            },
+        ]
+    )
+    service.api.upload_request = FailingUploadRequest()
+    adapter = GoogleDriveManagedObjectStorage(
+        "token", service=service, retry_delays=(0,)
+    )
+    result = adapter.upload(
+        parent_id="arquivos-root",
+        stored_filename="ARQ-file.pdf",
+        content=b"data",
+        mime_type="application/pdf",
+        operation_key="arquivo-op",
+        object_kind="arquivo",
+        semantic_properties={"sgaaArquivo": "41"},
+    )
+    assert result.file_id == "arquivo-existing" and result.reused
+    assert len(service.api.create_bodies) == 1
+    properties = service.api.create_bodies[0]["body"]["appProperties"]
+    assert properties == {
+        "sgaaManaged": "true",
+        "sgaaKind": "arquivo",
+        "sgaaOperation": "arquivo-op",
+        "sgaaArquivo": "41",
+    }
+
+
+def test_generic_connection_factory_uses_canonical_401_recovery(monkeypatch):
+    from app import cloud_connections
+
+    calls = []
+    monkeypatch.setattr(
+        cloud_connections,
+        "get_authenticated_access_token",
+        lambda conn, provider: calls.append(("initial", conn, provider)) or ("stale", "owner"),
+    )
+    monkeypatch.setattr(
+        cloud_connections,
+        "recover_authenticated_access_token_after_401",
+        lambda conn, provider: calls.append(("recover", conn, provider)) or ("fresh", "owner"),
+    )
+    built = {}
+
+    def factory(token, *, access_token_refresher):
+        built["token"] = token
+        built["refresher"] = access_token_refresher
+        return built
+
+    app = Flask(__name__)
+    conn = object()
+    with app.app_context():
+        resolved = resolve_google_managed_storage(
+            conn,
+            extension_key="missing-test-override",
+            storage_factory=factory,
+        )
+        assert resolved is built
+        assert built["token"] == "stale"
+        assert built["refresher"]() == "fresh"
+    assert calls == [("initial", conn, "google"), ("recover", conn, "google")]
+
+
+def test_comprovantes_forced_refresh_restores_landed_message_without_forking_oauth(
+    monkeypatch
+):
+    from app import cloud_connections, comprovantes
+
+    calls = []
+    monkeypatch.setattr(
+        cloud_connections,
+        "get_authenticated_access_token",
+        lambda conn, provider: calls.append(("initial", conn, provider)) or ("stale", "owner"),
+    )
+
+    def fail_canonical_recovery(conn, provider):
+        calls.append(("recover", conn, provider))
+        raise cloud_connections.CloudConnectionError(
+            "temporary refresh failure", debug_code="TOKEN_REFRESH_TRANSIENT"
+        )
+
+    monkeypatch.setattr(
+        cloud_connections,
+        "recover_authenticated_access_token_after_401",
+        fail_canonical_recovery,
+    )
+    built = {}
+
+    class CompatibilityStorage:
+        def __init__(self, token, *, access_token_refresher):
+            built["token"] = token
+            built["refresher"] = access_token_refresher
+
+    monkeypatch.setattr(comprovantes, "GoogleDriveComprovanteStorage", CompatibilityStorage)
+    app = Flask(__name__)
+    conn = object()
+    with app.app_context():
+        comprovantes.resolve_google_storage(conn)
+        with pytest.raises(StorageError) as captured:
+            built["refresher"]()
+    assert str(captured.value) == "Não foi possível renovar o acesso ao Google Drive."
+    assert calls == [("initial", conn, "google"), ("recover", conn, "google")]
 
 
 def test_multiple_semantic_folder_matches_are_a_hard_conflict():

@@ -4,13 +4,14 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_schema import (
+    BASELINE_MARKER,
     COMPROVANTES_GOOGLE_DRIVE_MARKER,
     SCHEMA_EPOCH,
     Prod1SchemaError,
     _quote_identifier,
     _validate_prod1_v3_schema,
+    _validate_prod1_v4_schema,
     canonical_prod1_object_sql,
-    validate_prod1_schema,
 )
 
 
@@ -125,7 +126,7 @@ def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
              '{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}'),
         )
         conn.execute("PRAGMA user_version=4")
-        validate_prod1_schema(conn)
+        _validate_prod1_v4_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v4 integrity check failed")
         conn.execute("COMMIT")
@@ -135,4 +136,14 @@ def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
-    return validate_prod1_schema(conn)
+    _validate_prod1_v4_schema(conn)
+    return {
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 4,
+        "baseline_marker": BASELINE_MARKER,
+        "table_count": len(
+            conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        ),
+    }

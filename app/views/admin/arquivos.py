@@ -8,7 +8,7 @@ LegacyRouteSpec.
 
 from __future__ import annotations
 
-import logging
+import io
 import os
 
 from flask import (
@@ -17,15 +17,24 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
+    session,
     url_for,
 )
 
 from app.admin_files import get_admin_arquivo
+from app.arquivos import (
+    ArquivoError,
+    create_arquivo,
+    delete_arquivo,
+    new_arquivo_operation_id,
+    read_arquivo_content,
+    remove_legacy_arquivo_file,
+    update_arquivo,
+)
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
-from app.paths import _path_within_root
-from app.uploads import ALLOWED_ATTACHMENTS, _allowed, save_upload
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
     append_conditions_sql,
@@ -34,9 +43,6 @@ from app.web.filters import (
     get_text_query_value,
 )
 from utils.messages import flash
-
-
-logger = logging.getLogger("main")
 
 
 def _redirect_admin_arquivos_return(default_endpoint: str = "admin_arquivos", **values):
@@ -66,6 +72,7 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
 
     sql = """
         SELECT id, titulo, descricao, filename, original_filename, visivel,
+               storage_status, failure_code,
                strftime('%d/%m/%Y', criado_em) AS data_upload, criado_em
           FROM admin_arquivos
     """
@@ -75,6 +82,7 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
 
 
 def _save_admin_arquivo_payload(conn, *, arquivo=None, titulo=None, descricao=None, visivel=1, existing=None):
+    """Compatibility parser; storage persistence belongs to app.arquivos."""
     ensure_admin_arquivos_table(conn)
     titulo = (titulo or "").strip()
     descricao = (descricao or "").strip() or None
@@ -83,31 +91,14 @@ def _save_admin_arquivo_payload(conn, *, arquivo=None, titulo=None, descricao=No
     if not titulo:
         raise ValueError("Informe o nome do arquivo.")
 
-    filename = existing["filename"] if existing else None
-    original_filename = existing["original_filename"] if existing else None
-    new_saved_file = None
-    if arquivo and getattr(arquivo, "filename", ""):
-        if not _allowed(arquivo.filename, ALLOWED_ATTACHMENTS):
-            raise ValueError("Envie um arquivo PDF, PNG ou JPG válido.")
-        new_saved_file = save_upload(
-            arquivo,
-            ALLOWED_ATTACHMENTS,
-            prefix="admin-arquivo",
-            subdir="admin_arquivos",
-        )
-        filename = new_saved_file
-        original_filename = arquivo.filename
-
-    if not filename:
+    if not (arquivo and getattr(arquivo, "filename", "")) and not existing:
         raise ValueError("Selecione um arquivo para enviar.")
 
     return {
         "titulo": titulo,
         "descricao": descricao,
         "visivel": visivel,
-        "filename": filename,
-        "original_filename": original_filename,
-        "new_saved_file": new_saved_file,
+        "arquivo": arquivo,
     }
 
 
@@ -118,17 +109,9 @@ def _best_effort_remove_admin_arquivo_file(rel_path):
         upload_root = current_app.config.get("UPLOAD_FOLDER")
         if not upload_root:
             return
-        file_path = os.path.normpath(os.path.join(upload_root, rel_path))
-        if not _path_within_root(file_path, upload_root):
-            logger.warning(
-                f"Remocao ignorada: caminho de arquivo admin '{rel_path}' resolvido para "
-                f"'{file_path}' fora de UPLOAD_FOLDER '{upload_root}'"
-            )
-            return
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-    except Exception as exc:
-        logger.warning(f"Falha ao remover arquivo admin '{rel_path}': {exc}")
+        remove_legacy_arquivo_file(str(upload_root), str(rel_path))
+    except (ArquivoError, OSError, ValueError):
+        return
 
 
 @admin_required
@@ -243,6 +226,9 @@ def admin_arquivos():
         "admin_arquivos.html",
         arquivos=arquivos,
         edit_arquivo=edit_arquivo,
+        arquivo_operation_id=(
+            request.args.get("operation_id") or new_arquivo_operation_id()
+        ),
         filter_schema=filter_schema,
     )
 
@@ -250,33 +236,23 @@ def admin_arquivos():
 @admin_required
 def admin_adicionar_arquivo():
     conn = get_db_connection()
+    operation_id = request.form.get("operation_key") or new_arquivo_operation_id()
     try:
-        payload = _save_admin_arquivo_payload(
+        create_arquivo(
             conn,
-            arquivo=request.files.get("arquivo"),
+            file_storage=request.files.get("arquivo"),
             titulo=request.form.get("titulo"),
             descricao=request.form.get("descricao"),
             visivel=request.form.get("visivel", "1"),
+            uploader_user_id=int(session["user_id"]),
+            operation_key=operation_id,
+            max_file_bytes=int(current_app.config["MAX_CONTENT_LENGTH"]),
         )
-        conn.execute(
-            """
-            INSERT INTO admin_arquivos (titulo, descricao, filename, original_filename, visivel)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                payload["titulo"],
-                payload["descricao"],
-                payload["filename"],
-                payload["original_filename"],
-                payload["visivel"],
-            ),
-        )
-        conn.commit()
         flash("Arquivo cadastrado com sucesso.", "success")
         return _redirect_admin_arquivos_return()
-    except ValueError as exc:
-        flash(str(exc), "error")
-        return redirect(url_for("admin_arquivos"))
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
+        return redirect(url_for("admin_arquivos", operation_id=operation_id))
 
 
 @admin_required
@@ -291,37 +267,32 @@ def admin_editar_arquivo(arquivo_id):
         return redirect(url_for("admin_arquivos", edit_arquivo=arquivo_id))
 
     try:
-        payload = _save_admin_arquivo_payload(
+        cleanup_complete = update_arquivo(
             conn,
-            arquivo=request.files.get("arquivo"),
+            arquivo_id=arquivo_id,
+            file_storage=request.files.get("arquivo"),
             titulo=request.form.get("titulo"),
             descricao=request.form.get("descricao"),
             visivel=request.form.get("visivel", "1"),
-            existing=arquivo,
+            uploader_user_id=int(session["user_id"]),
+            operation_key=request.form.get("operation_key"),
+            max_file_bytes=int(current_app.config["MAX_CONTENT_LENGTH"]),
+            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
         )
-        conn.execute(
-            """
-            UPDATE admin_arquivos
-               SET titulo = ?, descricao = ?, filename = ?, original_filename = ?, visivel = ?
-             WHERE id = ?
-            """,
-            (
-                payload["titulo"],
-                payload["descricao"],
-                payload["filename"],
-                payload["original_filename"],
-                payload["visivel"],
-                arquivo_id,
-            ),
-        )
-        conn.commit()
-        if payload["new_saved_file"] and arquivo["filename"] != payload["new_saved_file"]:
-            _best_effort_remove_admin_arquivo_file(arquivo["filename"])
-        flash("Arquivo atualizado com sucesso.", "success")
+        if cleanup_complete:
+            flash("Arquivo atualizado com sucesso.", "success")
+        else:
+            flash("Arquivo atualizado; a limpeza anterior será repetida.", "warning")
         return _redirect_admin_arquivos_return()
-    except ValueError as exc:
-        flash(str(exc), "error")
-        return redirect(url_for("admin_arquivos", edit_arquivo=arquivo_id))
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
+        return redirect(
+            url_for(
+                "admin_arquivos",
+                edit_arquivo=arquivo_id,
+                operation_id=request.form.get("operation_key") or new_arquivo_operation_id(),
+            )
+        )
 
 
 @admin_required
@@ -331,8 +302,26 @@ def admin_visualizar_arquivo(arquivo_id):
     if not arquivo:
         flash("Arquivo não encontrado.", "error")
         return redirect(url_for("admin_arquivos"))
-    safe_filename = os.path.normpath(arquivo["filename"]).replace("\\", "/").lstrip("/")
-    return redirect(url_for("uploaded_file", filename=safe_filename))
+    try:
+        content, mime_type, download_name = read_arquivo_content(
+            conn,
+            arquivo,
+            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
+        )
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
+        return redirect(url_for("admin_arquivos"))
+    response = send_file(
+        io.BytesIO(content),
+        mimetype=mime_type,
+        as_attachment=False,
+        download_name=download_name,
+        conditional=False,
+        max_age=0,
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @admin_required
@@ -343,10 +332,15 @@ def admin_deletar_arquivo(arquivo_id):
         flash("Arquivo não encontrado.", "error")
         return redirect(url_for("admin_arquivos"))
 
-    conn.execute("DELETE FROM admin_arquivos WHERE id = ?", (arquivo_id,))
-    conn.commit()
-    _best_effort_remove_admin_arquivo_file(arquivo["filename"])
-    flash("Arquivo excluído com sucesso.", "success")
+    try:
+        delete_arquivo(
+            conn,
+            arquivo_id,
+            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
+        )
+        flash("Arquivo excluído com sucesso.", "success")
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
     return _redirect_admin_arquivos_return()
 
 

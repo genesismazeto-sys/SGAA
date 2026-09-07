@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Mapping, Protocol
 
 
 class StorageError(RuntimeError):
@@ -9,6 +9,14 @@ class StorageError(RuntimeError):
 
     code = "STORAGE_ERROR"
     retryable = False
+
+
+class StorageConnectionError(StorageError):
+    code = "GOOGLE_CONNECTION_FAILED"
+
+    def __init__(self, message: str, *, phase: str):
+        super().__init__(message)
+        self.phase = phase
 
 
 class StorageTransientError(StorageError):
@@ -42,7 +50,7 @@ class RemoteObject:
     reused: bool = False
 
 
-class ComprovanteStorage(Protocol):
+class ManagedObjectStorage(Protocol):
     provider: str
 
     def ensure_folder(self, *, parent_id: str, kind: str, semantic_id: str, display_name: str) -> str: ...
@@ -55,9 +63,13 @@ class ComprovanteStorage(Protocol):
         content: bytes,
         mime_type: str,
         operation_key: str,
-        request_id: int,
-        attachment_id: int,
+        object_kind: str,
+        semantic_properties: Mapping[str, str],
     ) -> RemoteObject: ...
+
+    def find_operation(
+        self, *, parent_id: str, operation_key: str, object_kind: str
+    ) -> RemoteObject | None: ...
 
     def trash(self, file_id: str) -> None: ...
 
@@ -66,11 +78,28 @@ class ComprovanteStorage(Protocol):
     def download(self, file_id: str) -> bytes: ...
 
 
+class ComprovanteStorage(Protocol):
+    provider: str
+
+    def ensure_folder(self, *, parent_id: str, kind: str, semantic_id: str, display_name: str) -> str: ...
+
+    def upload(
+        self, *, parent_id: str, stored_filename: str, content: bytes,
+        mime_type: str, operation_key: str, request_id: int, attachment_id: int,
+    ) -> RemoteObject: ...
+
+    def trash(self, file_id: str) -> None: ...
+    def untrash(self, file_id: str) -> None: ...
+    def download(self, file_id: str) -> bytes: ...
+
+
 __all__ = [
     "ComprovanteStorage",
+    "ManagedObjectStorage",
     "RemoteObject",
     "StorageAuthorizationError",
     "StorageConfigurationError",
+    "StorageConnectionError",
     "StorageConflictError",
     "StorageError",
     "StorageIntegrityError",

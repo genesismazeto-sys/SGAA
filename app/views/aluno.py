@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import io
 import json
 import os
 import re
@@ -9,13 +10,12 @@ from typing import Any
 
 from flask import (
     Blueprint,
-    abort,
     current_app,
     jsonify,
     redirect,
     render_template,
     request,
-    send_from_directory,
+    send_file,
     session,
     url_for,
 )
@@ -23,6 +23,7 @@ from flask import (
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
 from app.admin_alerts import list_active_admin_alertas
 from app.admin_files import get_admin_arquivo
+from app.arquivos import ArquivoError, read_arquivo_content
 from app.auth import aluno_required
 from app.comprovantes import (
     ComprovanteError,
@@ -1030,6 +1031,7 @@ def aluno_arquivos():
                criado_em
           FROM admin_arquivos
          WHERE visivel = 1
+           AND storage_status IN ('legacy_active','active','replacement_cleanup_pending')
       ORDER BY datetime(criado_em) DESC, id DESC
         """
     ).fetchall()
@@ -1162,7 +1164,26 @@ def aluno_visualizar_arquivo(arquivo_id: int):
     if not arquivo or not arquivo["visivel"]:
         flash("Arquivo não encontrado.", "error")
         return redirect(_aluno_url("aluno_arquivos"))
-    return redirect(url_for("uploaded_file", filename=arquivo["filename"]))
+    try:
+        content, mime_type, download_name = read_arquivo_content(
+            conn,
+            arquivo,
+            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
+        )
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
+        return redirect(_aluno_url("aluno_arquivos"))
+    response = send_file(
+        io.BytesIO(content),
+        mimetype=mime_type,
+        as_attachment=False,
+        download_name=download_name,
+        conditional=False,
+        max_age=0,
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @bp_aluno.route("/aluno/arquivos/download/<int:arquivo_id>")
@@ -1174,22 +1195,25 @@ def aluno_baixar_arquivo(arquivo_id: int):
         flash("Arquivo não encontrado.", "error")
         return redirect(_aluno_url("aluno_arquivos"))
 
-    safe_rel = os.path.normpath(arquivo["filename"]).lstrip("/")
-    base = os.path.abspath(current_app.config["UPLOAD_FOLDER"])
-    abs_path = os.path.abspath(os.path.join(base, safe_rel))
-    if not abs_path.startswith(base):
-        abort(403)
-
-    rel_dir = os.path.dirname(safe_rel)
-    rel_name = os.path.basename(safe_rel)
-    resp = send_from_directory(
-        os.path.join(current_app.config["UPLOAD_FOLDER"], rel_dir),
-        rel_name,
+    try:
+        content, mime_type, download_name = read_arquivo_content(
+            conn,
+            arquivo,
+            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
+        )
+    except ArquivoError as exc:
+        flash(exc.user_message, "error")
+        return redirect(_aluno_url("aluno_arquivos"))
+    resp = send_file(
+        io.BytesIO(content),
+        mimetype=mime_type,
         as_attachment=True,
-        download_name=arquivo["original_filename"] or rel_name,
+        download_name=download_name,
+        conditional=False,
+        max_age=0,
     )
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("Cache-Control", "private, max-age=3600")
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Cache-Control"] = "private, no-store"
     return resp
 
 

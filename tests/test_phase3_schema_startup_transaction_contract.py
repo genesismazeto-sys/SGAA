@@ -21,13 +21,14 @@ def test_single_init_owner_and_no_main_bridge():
     assert "_get_main_db_helpers" not in app_defs
 
 
-def test_migration_registry_is_exactly_prod1_v1_to_v4():
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 4
+def test_migration_registry_is_exactly_prod1_v1_to_v5():
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 5
     assert [(version, marker) for version, marker, _ in db_maintenance.SCHEMA_MIGRATIONS] == [
         (1, "first_production_baseline"),
         (2, "remove_norma_domain"),
         (3, "remove_matrix_version_metadata"),
         (4, "comprovantes_google_drive_cutover"),
+        (5, "arquivos_google_drive_cutover"),
     ]
     assert all(owner.__module__ == "app.prod1_schema" for _, _, owner in db_maintenance.SCHEMA_MIGRATIONS)
 

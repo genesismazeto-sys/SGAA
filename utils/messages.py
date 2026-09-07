@@ -43,7 +43,7 @@ FRONTEND_MESSAGE_BLOCK_PATTERNS = (
     (re.compile(r"\b(?:const|let|var)\s+message\s*=\s*(?P<body>.*?);", re.DOTALL), "confirm"),
 )
 FRONTEND_LINE_KEYS = ("deleteMessageSingle", "deleteMessageMultiple")
-BACKEND_VALUE_ERROR_TYPES = {"ValueError", "RuntimeError"}
+BACKEND_VALUE_ERROR_TYPES = {"ValueError", "RuntimeError", "ArquivoError"}
 BACKEND_SINK_NAMES = {"flash", "flash_error", "flash_success", "flash_info", "resolve_user_message"}
 PAYLOAD_KEYS = {"message", "mensagem", "titulo", "title"}
 EXCLUDED_FRONTEND_NAME_PARTS = ("backup", "copia", "krthinkpad", "demo")
@@ -429,6 +429,8 @@ def _iter_backend_files() -> list[Path]:
     files = [
         PROJECT_ROOT / "main.py",
         PROJECT_ROOT / "app" / "academics.py",
+        # ARQUIVOS v5: domain-service errors are rendered by route adapters.
+        PROJECT_ROOT / "app" / "arquivos.py",
         PROJECT_ROOT / "app" / "auth.py",
         PROJECT_ROOT / "app" / "db_maintenance.py",
         # UT-6: novo dono canonico do alerta de atualizacao do aluno

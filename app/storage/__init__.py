@@ -1,8 +1,10 @@
 """Provider-neutral storage boundaries."""
 
 from app.storage.contracts import (
+    ManagedObjectStorage,
     RemoteObject,
     StorageAuthorizationError,
+    StorageConnectionError,
     StorageConfigurationError,
     StorageConflictError,
     StorageError,
@@ -12,7 +14,9 @@ from app.storage.contracts import (
 
 __all__ = [
     "RemoteObject",
+    "ManagedObjectStorage",
     "StorageAuthorizationError",
+    "StorageConnectionError",
     "StorageConfigurationError",
     "StorageConflictError",
     "StorageError",

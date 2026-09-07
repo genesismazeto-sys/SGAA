@@ -17,6 +17,7 @@ from app.academics import (
 )
 from app.auth import DEFAULT_ACCESS_PASSWORDS, default_access_level_for_user_type
 from app.prod1_schema import (
+    ARQUIVOS_GOOGLE_DRIVE_MARKER,
     BASELINE_MARKER,
     COMPROVANTES_GOOGLE_DRIVE_MARKER,
     LATEST_MIGRATION_MARKER,
@@ -134,6 +135,7 @@ SCHEMA_MIGRATIONS = (
     (2, NORMA_REMOVAL_MARKER, bootstrap_prod1_schema),
     (3, MATRIX_VERSION_REMOVAL_MARKER, bootstrap_prod1_schema),
     (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, bootstrap_prod1_schema),
+    (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, bootstrap_prod1_schema),
 )
 
 
