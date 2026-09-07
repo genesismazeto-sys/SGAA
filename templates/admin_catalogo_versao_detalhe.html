@@ -169,10 +169,10 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               </form>
             {% endif %}
-            {% if status_key in ['rascunho', 'inativa'] %}
+            {% if versoes|length > 1 %}
               <form hidden class="vc-delete-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_excluir_versao', base_id=base.id, versao_id=v.id) }}"
-                    onsubmit="return window.confirm('Excluir definitivamente a versão v{{ v.numero_versao }}? Esta exclusão é permanente.');">
+                    onsubmit="return window.confirm('Excluir definitivamente a versão v{{ v.numero_versao }}? Esta ação é permanente.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               </form>
             {% endif %}
@@ -358,14 +358,13 @@
       const status = currentCard?.dataset.versionStatus || '';
       const isDraft = status === 'rascunho';
       const isActive = status === 'ativa';
-      const isInactive = status === 'inativa';
       setVisible('view', !isDraft);
       setVisible('edit', isDraft);
       setVisible('activate', isDraft);
       setVisible('suspend', isActive);
       setVisible('substitute', isActive);
       setVisible('discontinue', isActive);
-      setVisible('delete', isDraft || isInactive);
+      setVisible('delete', rows.length > 1);
       button('substitute').disabled = currentCard?.dataset.hasSubstitution !== '1';
       bar.setAttribute('aria-label', `Ações da ${currentCard?.dataset.versionLabel || 'versão'}`);
     };

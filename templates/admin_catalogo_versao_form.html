@@ -15,6 +15,7 @@
   .versao-switcher .vs-label{ font-size:13px; font-weight:500; color:var(--text-secondary); white-space:nowrap; }
   .versao-switcher .control{ min-width:220px; }
   .versao-switcher .vs-actions{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .versao-switcher .vs-actions form{ margin:0; }
   @media (max-width:720px){
     .versao-switcher{ flex-wrap:wrap; }
     .versao-switcher .vs-actions{ margin-left:0; }
@@ -47,6 +48,16 @@
   </select>
   <div class="vs-actions">
     <a class="btn" href="{{ nova_versao_url }}"><i class="lucide" data-lucide="plus"></i><span class="btn-label">Criar nova versão</span></a>
+    {% if not is_clone_create and versao_atual_id and versao_switcher|length > 1 %}
+      <form class="version-delete-form" method="post"
+            action="{{ url_for('admin_catalogo_excluir_versao', base_id=base.id, versao_id=versao_atual_id) }}"
+            onsubmit="return window.confirm('Excluir definitivamente a versão v{{ versao_switcher|selectattr('id', 'equalto', versao_atual_id)|map(attribute='numero_versao')|first }}? Esta ação é permanente.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn danger">
+          <i class="lucide" data-lucide="trash-2"></i><span class="btn-label">Excluir versão</span>
+        </button>
+      </form>
+    {% endif %}
   </div>
 </div>
 {% endif %}

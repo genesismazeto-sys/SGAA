@@ -18,27 +18,17 @@ from utils.messages import flash
 def _flash_delete_block(exc: ActivityVersionDeleteBlocked) -> None:
     if exc.code == "wrong_base_or_version":
         flash("Versão não encontrada para esta atividade-base.", "error")
-    elif exc.code == "active":
+    elif exc.code == "matrix_reference":
+        flash("Não é possível excluir: versão vinculada a Matriz.", "error")
+    elif exc.code == "request_reference":
+        flash("Não é possível excluir: versão vinculada a Requisição.", "error")
+    elif exc.code == "successor_reference":
         flash(
-            "Versão ativa não pode ser excluída. Inative-a antes de tentar novamente.",
-            "error",
-        )
-    elif exc.code == "lifecycle_frozen":
-        flash(
-            "Somente versões em rascunho ou inativas podem ser excluídas.",
-            "error",
-        )
-    elif exc.code == "referenced":
-        flash(
-            f"Não é possível excluir: a versão possui {exc.count} "
-            f"referência(s) em {exc.reference_label}.",
+            "Não é possível excluir: versão utilizada como versão anterior por outra versão.",
             "error",
         )
     elif exc.code == "sole_version":
-        flash(
-            "A única versão de uma atividade-base não pode ser excluída.",
-            "error",
-        )
+        flash("Não é possível excluir: única versão da atividade.", "error")
     else:
         flash("Erro seguro ao excluir versão; nenhuma alteração foi aplicada.", "error")
 
@@ -55,6 +45,11 @@ def admin_catalogo_excluir_versao(base_id: int, versao_id: int):
             conn,
             base_id=base_id,
             versao_id=versao_id,
+        )
+        conn.execute(
+            "DELETE FROM atividade_transicao "
+            "WHERE from_atividade_versao_id = ? OR to_atividade_versao_id = ?",
+            (versao_id, versao_id),
         )
         deleted = conn.execute(
             "DELETE FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",

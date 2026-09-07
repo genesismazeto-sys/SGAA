@@ -309,29 +309,6 @@ def assert_activity_version_can_be_safely_deleted(
     if version is None:
         raise ActivityVersionDeleteBlocked("wrong_base_or_version")
 
-    status = str(version["status"] or "").strip().lower()
-    if status == "ativa":
-        raise ActivityVersionDeleteBlocked("active")
-    if status not in {"rascunho", "inativa"}:
-        raise ActivityVersionDeleteBlocked("lifecycle_frozen")
-
-    usage = get_atividade_versao_usage_counts(conn, versao_id)
-    reference_checks = (
-        ("matriz_atividade_versao_item", "Matriz"),
-        ("requisicoes", "requisição"),
-        ("atividade_transicao_origem", "transição como origem"),
-        ("atividade_transicao_destino", "transição como destino"),
-        ("atividade_versao_sucessora", "versão sucessora como predecessora"),
-    )
-    for usage_key, reference_label in reference_checks:
-        count = int(usage[usage_key])
-        if count:
-            raise ActivityVersionDeleteBlocked(
-                "referenced",
-                count=count,
-                reference_label=reference_label,
-            )
-
     surviving_count = conn.execute(
         "SELECT COUNT(*) FROM atividade_versao "
         "WHERE atividade_base_id = ? AND id <> ?",
@@ -339,6 +316,20 @@ def assert_activity_version_can_be_safely_deleted(
     ).fetchone()[0]
     if int(surviving_count) < 1:
         raise ActivityVersionDeleteBlocked("sole_version")
+
+    usage = get_atividade_versao_usage_counts(conn, versao_id)
+    reference_checks = (
+        ("matriz_atividade_versao_item", "matrix_reference"),
+        ("requisicoes", "request_reference"),
+        ("atividade_versao_sucessora", "successor_reference"),
+    )
+    for usage_key, block_code in reference_checks:
+        count = int(usage[usage_key])
+        if count:
+            raise ActivityVersionDeleteBlocked(
+                block_code,
+                count=count,
+            )
     return version
 
 

@@ -301,7 +301,7 @@ def test_safe_delete_route_updates_single_base_row_count_two_to_one(env, monkeyp
     client = env["client"]
     _login_admin(client)
     name = f"Delete Integration {uuid.uuid4().hex}"
-    base_id, (v1, v2) = _seed_base(name, [{"status": "ativa"}, {"status": "rascunho"}])
+    base_id, (v1, v2) = _seed_base(name, [{"status": "ativa"}, {"status": "descontinuada"}])
     with main.app.app_context():
         conn = main.get_db_connection()
         v1_before = dict(conn.execute("SELECT * FROM atividade_versao WHERE id=?", (v1,)).fetchone())

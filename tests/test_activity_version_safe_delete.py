@@ -88,10 +88,14 @@ def _response_text(response):
     return response.get_data(as_text=True)
 
 
-def test_unreferenced_draft_v2_with_surviving_v1_is_deleted(env):
+@pytest.mark.parametrize(
+    "status",
+    ["rascunho", "ativa", "inativa", "descontinuada", "substituida"],
+)
+def test_unused_version_is_deleted_regardless_of_lifecycle_status(env, status):
     client = env["client"]
     _login(client)
-    base_id, (v1, v2) = _seed_base_with_versions("ativa", "rascunho")
+    base_id, (v1, v2) = _seed_base_with_versions("ativa", status)
 
     response = _post_delete(client, base_id, v2)
 
@@ -99,31 +103,6 @@ def test_unreferenced_draft_v2_with_surviving_v1_is_deleted(env):
     assert _version(v2) is None
     assert _version(v1) is not None
     assert "Versão excluída definitivamente com sucesso." in _response_text(response)
-
-
-def test_unreferenced_inactive_v2_is_deleted(env):
-    client = env["client"]
-    _login(client)
-    base_id, (_, v2) = _seed_base_with_versions("ativa", "inativa")
-
-    _post_delete(client, base_id, v2)
-
-    assert _version(v2) is None
-
-
-@pytest.mark.parametrize("status", ["ativa", "descontinuada", "substituida"])
-def test_lifecycle_frozen_statuses_are_blocked(env, status):
-    client = env["client"]
-    _login(client)
-    base_id, (_, target) = _seed_base_with_versions("rascunho", status)
-
-    response = _post_delete(client, base_id, target)
-
-    assert _version(target) is not None
-    if status == "ativa":
-        assert "Inative-a antes de tentar novamente" in _response_text(response)
-    else:
-        assert "Somente versões em rascunho ou inativas" in _response_text(response)
 
 
 def _insert_matrix_reference(base_id, version_id):
@@ -161,32 +140,37 @@ def _insert_request_reference(version_id):
 
 
 @pytest.mark.parametrize("direction", ["origin", "destination"])
-def test_transition_origin_and_destination_references_are_blocked(env, direction):
+def test_transition_origin_and_destination_rows_are_deleted_with_version(env, direction):
     client = env["client"]
     _login(client)
     base_id, (other, target) = _seed_base_with_versions("rascunho", "inativa")
     with main.app.app_context():
         conn = main.get_db_connection()
         origin, destination = (target, other) if direction == "origin" else (other, target)
-        conn.execute(
+        transition_id = conn.execute(
             "INSERT INTO atividade_transicao"
             "(from_atividade_versao_id,to_atividade_versao_id,tipo_transicao) "
-            "VALUES(?,?,'mesmo_eixo')",
+            "VALUES(?,?,'mesmo_eixo') RETURNING id",
             (origin, destination),
-        )
+        ).fetchone()[0]
         conn.commit()
 
-    response = _post_delete(client, base_id, target)
+    _post_delete(client, base_id, target)
 
-    assert _version(target) is not None
-    assert f"transição como {direction.replace('origin', 'origem').replace('destination', 'destino')}" in _response_text(response)
+    assert _version(target) is None
+    assert _version(other) is not None
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        assert conn.execute(
+            "SELECT id FROM atividade_transicao WHERE id=?", (transition_id,)
+        ).fetchone() is None
 
 
 @pytest.mark.parametrize(
     "reference_factory,expected_reason",
     [
-        (_insert_matrix_reference, "referência(s) em Matriz"),
-        (lambda _base_id, version_id: _insert_request_reference(version_id), "referência(s) em requisição"),
+        (_insert_matrix_reference, "versão vinculada a Matriz"),
+        (lambda _base_id, version_id: _insert_request_reference(version_id), "versão vinculada a Requisição"),
     ],
 )
 def test_matrix_and_request_references_are_blocked(env, reference_factory, expected_reason):
@@ -219,7 +203,7 @@ def test_successor_predecessor_reference_is_reported_and_blocked(env):
 
     assert _version(target) is not None
     assert _version(v1) is not None
-    assert "versão sucessora como predecessora" in _response_text(response)
+    assert "utilizada como versão anterior por outra versão" in _response_text(response)
 
 
 def test_sole_version_is_blocked(env):
@@ -230,7 +214,7 @@ def test_sole_version_is_blocked(env):
     response = _post_delete(client, base_id, target)
 
     assert _version(target) is not None
-    assert "A única versão" in _response_text(response)
+    assert "única versão da atividade" in _response_text(response)
 
 
 def test_wrong_base_version_pair_is_blocked(env):
@@ -337,7 +321,7 @@ def test_success_removes_only_selected_version_and_does_not_renumber(env):
         assert related_after == related_before
 
 
-def test_ui_offers_permanent_delete_only_for_potentially_deletable_statuses(env):
+def test_ui_offers_permanent_delete_for_every_status_when_another_version_survives(env):
     client = env["client"]
     _login(client)
     base_id, version_ids = _seed_base_with_versions(
@@ -347,15 +331,44 @@ def test_ui_offers_permanent_delete_only_for_potentially_deletable_statuses(env)
     html = _response_text(client.get(f"/admin/catalogo-versoes/{base_id}"))
     delete_forms = re.findall(r'<form hidden class="vc-delete-form".*?</form>', html, re.S)
 
-    assert len(delete_forms) == 2
+    assert len(delete_forms) == 5
     rendered_delete_ids = {
         int(re.search(r'data-version-id="(\d+)"', form).group(1))
         for form in delete_forms
     }
-    assert rendered_delete_ids == {version_ids[0], version_ids[1]}
-    assert "Excluir definitivamente a versão v1? Esta exclusão é permanente." in html
+    assert rendered_delete_ids == set(version_ids)
+    assert "Excluir definitivamente a versão v1? Esta ação é permanente." in html
     assert 'data-action="delete" aria-label="Excluir versão"' in html
+    assert "setVisible('delete', rows.length > 1);" in html
     assert 'data-action="discontinue" aria-label="Descontinuar versão"' in html
+
+    for version_id in version_ids:
+        version_html = _response_text(
+            client.get(
+                f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar"
+            )
+        )
+        assert 'class="version-delete-form"' in version_html
+        assert (
+            f'/admin/catalogo-versoes/{base_id}/versoes/{version_id}/excluir'
+            in version_html
+        )
+        assert "Esta ação é permanente." in version_html
+        assert ">Excluir versão</span>" in version_html
+
+
+def test_ui_does_not_offer_delete_for_the_sole_version(env):
+    client = env["client"]
+    _login(client)
+    base_id, (target,) = _seed_base_with_versions("ativa")
+
+    html = _response_text(client.get(f"/admin/catalogo-versoes/{base_id}"))
+    version_html = _response_text(
+        client.get(f"/admin/catalogo-versoes/{base_id}/versoes/{target}/editar")
+    )
+
+    assert 'class="vc-delete-form"' not in html
+    assert 'class="version-delete-form"' not in version_html
 
 
 def test_csrf_and_rbac_prevent_delete_without_mutation(env):
@@ -382,7 +395,7 @@ def test_csrf_and_rbac_prevent_delete_without_mutation(env):
 def test_fk_integrity_conflict_rolls_back_with_safe_error(env, monkeypatch):
     client = env["client"]
     _login(client)
-    base_id, (_, target) = _seed_base_with_versions("rascunho", "inativa")
+    base_id, (v1, target) = _seed_base_with_versions("rascunho", "inativa")
     with main.app.app_context():
         conn = main.get_db_connection()
         successor = conn.execute(
@@ -390,6 +403,12 @@ def test_fk_integrity_conflict_rolls_back_with_safe_error(env, monkeypatch):
             "(atividade_base_id,eixo,grupo,numero_versao,status,versao_anterior_id) "
             "VALUES(?,'AAC','1 - Successor',3,'rascunho',?) RETURNING id",
             (base_id, target),
+        ).fetchone()[0]
+        transition_id = conn.execute(
+            "INSERT INTO atividade_transicao"
+            "(from_atividade_versao_id,to_atividade_versao_id,tipo_transicao) "
+            "VALUES(?,?,'mesmo_eixo') RETURNING id",
+            (v1, target),
         ).fetchone()[0]
         conn.commit()
 
@@ -402,6 +421,10 @@ def test_fk_integrity_conflict_rolls_back_with_safe_error(env, monkeypatch):
 
     assert _version(target) is not None
     assert _version(successor) is not None
+    with main.app.app_context():
+        assert main.get_db_connection().execute(
+            "SELECT id FROM atividade_transicao WHERE id=?", (transition_id,)
+        ).fetchone() is not None
     assert "uma referência protegida ainda existe" in _response_text(response)
 
 
@@ -412,17 +435,15 @@ def test_safe_delete_user_messages_are_owned_by_the_message_catalog():
     }
 
     assert "Versão excluída definitivamente com sucesso." in defaults
+    assert "Não é possível excluir: versão vinculada a Matriz." in defaults
+    assert "Não é possível excluir: versão vinculada a Requisição." in defaults
     assert (
-        "Versão ativa não pode ser excluída. Inative-a antes de tentar novamente."
+        "Não é possível excluir: versão utilizada como versão anterior por outra versão."
         in defaults
     )
-    assert (
-        "Não é possível excluir: a versão possui {value_1} "
-        "referência(s) em {value_2}."
-        in defaults
-    )
+    assert "Não é possível excluir: única versão da atividade." in defaults
     assert (
         "Excluir definitivamente a versão v{{ v.numero_versao }}? "
-        "Esta exclusão é permanente."
+        "Esta ação é permanente."
         in defaults
     )
