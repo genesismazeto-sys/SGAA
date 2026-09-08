@@ -2086,3 +2086,30 @@ The current documentation candidate does not claim its own publication.
 independently accepted and published. No `main` action, migration v4, physical
 schema cleanup, UT-18, DS-9, or deployment is authorized or required by this
 record.
+
+## DEFAULT-HOURS-AUTHORITY-FIX — CLOSED / ACCEPTED / LANDED
+
+Root cause was the New Matrix form's literal `160` AAC / `80` AEU defaults.
+The accepted product decision makes persisted Settings keys
+`horas_padrao_academica` and `horas_padrao_extensao` the canonical application
+default authority. The implementation removes schema-ensure mutation from the
+settings read path, passes `get_horas_settings(conn)` through the New Matrix
+renderer as `horas_defaults`, and leaves explicit POST values and existing
+Matrix rows authoritative.
+
+Technical scope is exactly `app/settings.py`, `app/views/admin/matrizes.py`,
+`templates/admin_matriz_form.html`, and
+`tests/test_matrix_default_hours_authority.py`. RED was 3 failed / 1 passed;
+the frozen GREEN test was 4 passed; the qualified bounded lane was 40 passed.
+The canonical candidate result was 1538 passed / 136 skipped / 67 failed;
+the clean-entry baseline was 1534 passed / 136 skipped / 67 failed. The full
+differential is 67 `PRE_EXISTING_IDENTICAL`, with zero candidate-only,
+signature-different, or baseline-only failures. Those 67 failures remain
+accepted pre-existing test debt and were not repaired.
+
+Independent review disposition: `ACCEPT_WITH_NON_BLOCKING_FINDINGS` /
+`READY_FOR_CLOSEOUT`. Schema AEU=80 defaults remain out of scope; suggested
+future negative tests were not added. No Matrix, Activity, Version, Turma, or
+database row changed. Canonical `database.db` remained byte-identical,
+SHA-256 `E5800FDADBD3863919B9FD031103135D67BFC404E9030FA37A01949D5DBD642F`,
+with no SQLite sidecars.

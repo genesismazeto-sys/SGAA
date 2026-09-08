@@ -24,6 +24,7 @@ from app.matrix_scope import (
     _matriz_status_label,
     is_matrix_assigned,
 )
+from app.settings import get_horas_settings
 from app.web.filters import (
     append_conditions_sql,
     append_text_contains_condition,
@@ -564,6 +565,7 @@ def _render_matriz_form(
 ):
     cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
     matriz_id = matriz["id"] if matriz else None
+    horas_defaults = get_horas_settings(conn) if not matriz_id else None
     activity_tabs_enabled = bool(matriz_id)
     if active_tab not in {"dados", "aac", "aea"}:
         active_tab = "dados"
@@ -605,6 +607,7 @@ def _render_matriz_form(
         matriz_id=matriz_id,
         cursos=cursos,
         matriz=matriz,
+        horas_defaults=horas_defaults,
         submit_label="Salvar matriz" if not matriz_id else "Salvar alterações",
         back_url=url_for("admin_matrizes"),
         cancel_label="Voltar",

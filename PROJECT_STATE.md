@@ -2212,6 +2212,30 @@ remains frozen and unchanged.
 
 `AGENT_HANDOFF.md` remains frozen and unchanged.
 
+## DEFAULT HOURS AUTHORITY FIX — CLOSED / ACCEPTED / LANDED
+
+- Root cause: New Matrix creation rendered literal `160` AAC / `80` AEU
+  defaults instead of the persisted application Settings authority.
+- Product decision: `horas_padrao_academica` and `horas_padrao_extensao` in
+  Settings are canonical for New Matrix defaults.
+- Implementation: read-only `get_horas_settings(conn)` feeds the Matrix
+  renderer and `horas_defaults`; the template remains request-owned on POST
+  and persisted-row-owned for existing Matrix display/edit.
+- Scope: `app/settings.py`, `app/views/admin/matrizes.py`,
+  `templates/admin_matriz_form.html`, and the frozen authority test.
+- RED: 3 failed / 1 passed. Focused GREEN: 4 passed; qualified Matrix,
+  Settings, course, and metadata lane: 40 passed.
+- Canonical suite: candidate 1538 passed / 136 skipped / 67 failed;
+  clean-entry baseline 1534 passed / 136 skipped / 67 failed.
+  Differential: 67 `PRE_EXISTING_IDENTICAL`, 0 candidate-only, 0 signature
+  differences, 0 baseline-only.
+- Independent review: `ACCEPT_WITH_NON_BLOCKING_FINDINGS` / `READY_FOR_CLOSEOUT`.
+  Schema AEU=80 defaults remain explicitly out of scope; no hardening tests
+  were added; no Matrix, Activity, Version, Turma, or database row changed.
+- Database custody: unchanged SHA-256
+  `E5800FDADBD3863919B9FD031103135D67BFC404E9030FA37A01949D5DBD642F`;
+  no SQLite sidecars. `AGENT_HANDOFF.md` remains frozen and unchanged.
+
 ## COMPROVANTES GOOGLE DRIVE — CLOSED / ACCEPTED / LANDED
 
 - Requisition comprovantes now use canonical `requisicao_arquivos` custody with

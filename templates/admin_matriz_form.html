@@ -606,7 +606,7 @@
       <label class="row-label">Horas AAC obrigatórias</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
-        <input class="control" type="number" name="horas_aac_obrigatorias" min="0" value="{{ matriz.horas_aac_obrigatorias if matriz else 160 }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="number" name="horas_aac_obrigatorias" min="0" value="{{ matriz.horas_aac_obrigatorias if matriz else horas_defaults.horas_padrao_academica }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -614,7 +614,7 @@
       <label class="row-label">Horas AEU obrigatórias</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="book-open-check"></i></div>
-        <input class="control" type="number" name="horas_extensao_obrigatorias" min="0" value="{{ matriz.horas_extensao_obrigatorias if matriz else 80 }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="number" name="horas_extensao_obrigatorias" min="0" value="{{ matriz.horas_extensao_obrigatorias if matriz else horas_defaults.horas_padrao_extensao }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 

@@ -171,7 +171,6 @@ def save_return_response_settings(conn, payload: dict[str, str]) -> dict[str, st
 
 
 def get_horas_settings(conn) -> dict[str, int]:
-    ensure_app_settings_schema(conn)
     settings = get_app_settings(conn)
     try:
         academica = max(
