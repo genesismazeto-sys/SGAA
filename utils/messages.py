@@ -436,6 +436,9 @@ def _iter_backend_files() -> list[Path]:
         # UT-6: novo dono canonico do alerta de atualizacao do aluno
         # (get_student_request_update_alert saiu de main.py).
         PROJECT_ROOT / "app" / "requisitions.py",
+        # Student import validation errors are rendered by the admin route.
+        PROJECT_ROOT / "app" / "student_import.py",
+        PROJECT_ROOT / "app" / "services" / "student_import_service.py",
         PROJECT_ROOT / "app" / "settings.py",
         PROJECT_ROOT / "app" / "uploads.py",
         # UT-3: novos donos canonicos de sinks de mensagem movidos de main.py

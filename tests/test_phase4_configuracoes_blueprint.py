@@ -615,7 +615,9 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
             "app/db_maintenance.py",
             "app/requisitions.py",
             "app/settings.py",
+            "app/student_import.py",
             "app/uploads.py",
+            "app/services/student_import_service.py",
             # UT-3: canonical owners of the message sinks moved out of main.py
             # (_admin_access_denied_response -> authz_gate,
             # handle_large_upload -> errors).  app/web/context.py is absent on

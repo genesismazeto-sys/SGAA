@@ -112,6 +112,12 @@ FC08_BODY_CHANGES = {
     "_build_admin_dashboard_turma_cards",
     "_matrizes_by_curso",
 }
+STUDENT_IMPORT_BASELINE_COMMIT = "1796c1e17b7cbd53148631f08b897f53c98590aa"
+STUDENT_IMPORT_HANDLER_NAMES = {
+    "admin_adicionar_turma",
+    "admin_editar_turma",
+    "admin_turmas_importar",
+}
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
@@ -679,6 +685,246 @@ def _baseline_main_tree() -> ast.Module:
     return ast.parse(_baseline_main_source(), filename="main.py@cab4c61")
 
 
+def _student_import_baseline_tree() -> ast.Module:
+    result = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{STUDENT_IMPORT_BASELINE_COMMIT}:app/views/admin/alunos_turmas_cursos.py",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=PROJECT_ROOT,
+    )
+    assert result.returncode == 0, result.stderr
+    return ast.parse(result.stdout, filename="alunos_turmas_cursos.py@clean-head")
+
+
+def _function_node(tree: ast.Module, name: str) -> ast.FunctionDef:
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    ]
+    assert len(matches) == 1, f"expected exactly one function {name}"
+    return matches[0]
+
+
+def _request_method_block(function: ast.FunctionDef, method: str) -> ast.If:
+    expected = ast.parse(f"request.method == {method!r}", mode="eval").body
+    matches = [
+        node
+        for node in function.body
+        if isinstance(node, ast.If)
+        and ast.dump(node.test, include_attributes=False)
+        == ast.dump(expected, include_attributes=False)
+    ]
+    assert len(matches) == 1, (
+        f"expected exactly one request.method == {method!r} block in {function.name}"
+    )
+    return matches[0]
+
+
+def _parsed_statements(source: str) -> list[ast.stmt]:
+    return ast.parse(source).body
+
+
+def _ast_sequence_equal(actual: list[ast.stmt], expected: list[ast.stmt]) -> bool:
+    return ast.dump(
+        ast.Module(body=actual, type_ignores=[]), include_attributes=False
+    ) == ast.dump(ast.Module(body=expected, type_ignores=[]), include_attributes=False)
+
+
+def _student_import_guard_errors(
+    candidate_tree: ast.Module, baseline_tree: ast.Module
+) -> list[str]:
+    """Validate only the authorized student-import AST delta, then prove that
+    every remaining statement is identical to the clean HEAD baseline."""
+    errors: list[str] = []
+
+    def check_handler(name: str, mode: str) -> None:
+        candidate = deepcopy(_function_node(candidate_tree, name))
+        baseline = deepcopy(_function_node(baseline_tree, name))
+        candidate_post = _request_method_block(candidate, "POST")
+        baseline_post = _request_method_block(baseline, "POST")
+        try:
+            import_path = candidate_post.body[20]
+            candidate_try = candidate_post.body[21]
+            baseline_try = baseline_post.body[20]
+            assert isinstance(candidate_try, ast.Try)
+            assert isinstance(baseline_try, ast.Try)
+        except (AssertionError, IndexError):
+            errors.append(f"{name}: authorized delta shape")
+            return
+
+        if not _ast_sequence_equal(
+            [import_path], _parsed_statements("import_path = None")
+        ):
+            errors.append(f"{name}: import_path initialization")
+
+        if mode == "add":
+            expected_service = _parsed_statements(
+                """
+imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
+form_sync = sync_turma_form_students(
+    conn,
+    turma_id,
+    request.form.getlist("aluno_nome[]"),
+    request.form.getlist("aluno_email[]"),
+    request.form.getlist("aluno_matricula[]"),
+    request.form.getlist("aluno_situacao[]"),
+    request.form.getlist("aluno_importado[]"),
+    imported_rows=imported_rows,
+)
+if not form_sync.has_imported_rows:
+    resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+"""
+            )
+            if not _ast_sequence_equal(candidate_try.body[2:5], expected_service):
+                errors.append(f"{name}: parser/service call structure")
+            candidate_try.body[2:5] = deepcopy(baseline_try.body[2:9])
+        else:
+            expected_service = _parsed_statements(
+                """
+imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
+form_sync = sync_turma_form_students(
+    conn,
+    turma_id,
+    request.form.getlist("aluno_nome[]"),
+    request.form.getlist("aluno_email[]"),
+    request.form.getlist("aluno_matricula[]"),
+    request.form.getlist("aluno_situacao[]"),
+    request.form.getlist("aluno_importado[]"),
+    imported_rows=imported_rows,
+)
+posted_mats = set(form_sync.matriculas)
+"""
+            )
+            expected_resequence = _parsed_statements(
+                """
+if not form_sync.has_imported_rows:
+    resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+"""
+            )
+            if not _ast_sequence_equal(candidate_try.body[1:4], expected_service):
+                errors.append(f"{name}: parser/service call structure")
+            if not _ast_sequence_equal(
+                candidate_try.body[8:9], expected_resequence
+            ):
+                errors.append(f"{name}: imported-row resequence boundary")
+            candidate_try.body[8:9] = deepcopy(baseline_try.body[12:13])
+            candidate_try.body[1:4] = deepcopy(baseline_try.body[1:8])
+
+        if len(candidate_try.handlers) != 1 or len(baseline_try.handlers) != 1:
+            errors.append(f"{name}: exception handler shape")
+        else:
+            expected_handler = _parsed_statements("conn.rollback()") + deepcopy(
+                baseline_try.handlers[0].body
+            )
+            if not _ast_sequence_equal(
+                candidate_try.handlers[0].body, expected_handler
+            ):
+                errors.append(f"{name}: rollback boundary")
+            candidate_try.handlers[0].body = deepcopy(baseline_try.handlers[0].body)
+
+        if not _ast_sequence_equal(
+            candidate_try.finalbody,
+            _parsed_statements("_remove_student_import_upload(import_path)"),
+        ):
+            errors.append(f"{name}: upload cleanup boundary")
+        candidate_try.finalbody = deepcopy(baseline_try.finalbody)
+        del candidate_post.body[20]
+        if not _ast_sequence_equal(candidate.body, baseline.body):
+            errors.append(f"{name}: mutation outside authorized delta")
+
+    check_handler("admin_adicionar_turma", "add")
+    check_handler("admin_editar_turma", "edit")
+
+    name = "admin_turmas_importar"
+    candidate = deepcopy(_function_node(candidate_tree, name))
+    baseline = deepcopy(_function_node(baseline_tree, name))
+    candidate_post = _request_method_block(candidate, "POST")
+    baseline_post = _request_method_block(baseline, "POST")
+    expected_missing_file = _parsed_statements(
+        """
+if not arquivo or arquivo.filename == "":
+    flash("Selecione um arquivo CSV, XLSX ou XLS.", "error")
+    return redirect(url_for("admin_turmas_importar"))
+"""
+    )
+    expected_upload = _parsed_statements(
+        """
+try:
+    filename = save_upload(
+        arquivo,
+        ALLOWED_STUDENT_IMPORTS,
+        prefix=f"turma{turma_id}",
+        subdir="turmas_imports",
+    )
+except ValueError:
+    flash("Envie um arquivo CSV, XLSX ou XLS válido.", "error")
+    return redirect(url_for("admin_turmas_importar"))
+"""
+    )
+    expected_processing = _parsed_statements(
+        """
+conn = get_db_connection()
+try:
+    rows = parse_student_import(path)
+    result = import_students_into_turma(
+        conn,
+        turma_id,
+        rows,
+        on_conflict=(request.form.get("on_conflict") or "update").strip().lower(),
+    )
+    conn.commit()
+    msg = resolve_user_message(
+        f"Importação concluída. Importados: {result.imported}. Criados: {result.created}. Atualizados: {result.updated}."
+    )
+    if result.skipped:
+        msg += " " + resolve_user_message(
+            f"Registros existentes ignorados: {result.skipped}."
+        )
+    flash(msg, "success")
+    return redirect(url_for("admin_turmas"))
+except StudentImportError as exc:
+    conn.rollback()
+    flash(f"Falha ao importar planilha: {exc}", "error")
+    return redirect(url_for("admin_turmas", import_csv=1))
+except Exception:
+    conn.rollback()
+    logger.exception("Erro inesperado ao importar alunos para a turma")
+    flash(
+        "Falha ao importar planilha. Verifique o arquivo e tente novamente.",
+        "error",
+    )
+    return redirect(url_for("admin_turmas", import_csv=1))
+finally:
+    try:
+        os.remove(path)
+    except OSError:
+        logger.warning("Não foi possível remover o arquivo temporário da importação.")
+"""
+    )
+    if len(candidate_post.body) != 8:
+        errors.append(f"{name}: authorized delta shape")
+    else:
+        if not _ast_sequence_equal(candidate_post.body[3:4], expected_missing_file):
+            errors.append(f"{name}: file requirement delta")
+        if not _ast_sequence_equal(candidate_post.body[4:5], expected_upload):
+            errors.append(f"{name}: upload format delta")
+        if not _ast_sequence_equal(candidate_post.body[6:8], expected_processing):
+            errors.append(f"{name}: parser/service call structure")
+        candidate_post.body[3:5] = deepcopy(baseline_post.body[3:5])
+        candidate_post.body[6:8] = deepcopy(baseline_post.body[6:8])
+        candidate.body.insert(1, deepcopy(baseline.body[1]))
+        if not _ast_sequence_equal(candidate.body, baseline.body):
+            errors.append(f"{name}: mutation outside authorized delta")
+
+    return errors
+
+
 def _live_moved_rules(app):
     return [rule for rule in app.url_map.iter_rules() if rule.endpoint in ROUTE_NAMES]
 
@@ -1050,6 +1296,44 @@ def test_module_directly_consumes_accepted_neutral_owners():
 # ---------------------------------------------------------------------------
 
 
+def test_student_import_handlers_match_clean_head_plus_exact_authorized_delta():
+    assert _student_import_guard_errors(
+        _tree(MODULE_PATH), _student_import_baseline_tree()
+    ) == []
+
+
+def test_student_import_guard_rejects_changed_required_parser_call():
+    candidate_tree = _tree(MODULE_PATH)
+    handler = _function_node(candidate_tree, "admin_turmas_importar")
+    parser_names = [
+        node
+        for node in ast.walk(handler)
+        if isinstance(node, ast.Name) and node.id == "parse_student_import"
+    ]
+    assert len(parser_names) == 1
+    parser_names[0].id = "parse_student_import_changed"
+
+    assert "admin_turmas_importar: parser/service call structure" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
+def test_student_import_guard_rejects_unrelated_handler_mutation():
+    candidate_tree = _tree(MODULE_PATH)
+    handler = _function_node(candidate_tree, "admin_adicionar_turma")
+    schema_calls = [
+        node
+        for node in ast.walk(handler)
+        if isinstance(node, ast.Name) and node.id == "ensure_turmas_matriz_schema"
+    ]
+    assert len(schema_calls) == 1
+    schema_calls[0].id = "ensure_turmas_matriz_schema_changed"
+
+    assert "admin_adicionar_turma: mutation outside authorized delta" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
 def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
     baseline_tree = _baseline_main_tree()
     module = _canonical_module()
@@ -1062,6 +1346,11 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         module_body = _function_body_dump(module_tree, name)
         assert baseline_body is not None, f"baseline main.py has no function {name}"
         assert module_body is not None, f"module has no function {name}"
+        if name in STUDENT_IMPORT_HANDLER_NAMES:
+            # These functions are governed above against the exact clean HEAD
+            # plus the explicit student-import AST delta. The historical
+            # cab4c61 comparison cannot express that later bounded change.
+            continue
         if name in R1_KW_DELETIONS and name not in FC08_BODY_CHANGES:
             expected = _drop_render_template_kwarg(
                 baseline_tree, name, R1_KW_DELETIONS[name]

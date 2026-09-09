@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Importar Alunos (CSV){% endblock %}
+{% block title %}Importar Alunos (CSV/XLSX/XLS){% endblock %}
 
 {% block content %}
-<h1 class="main-title">Importar Alunos (CSV)</h1>
+<h1 class="main-title">Importar Alunos (CSV/XLSX/XLS)</h1>
 
 <form action="{{ url_for('admin_turmas_importar') }}"
       method="post"
@@ -23,35 +23,13 @@
         </select>
       </div>
 
-      <!-- Arquivo CSV -->
-      <label class="field-label" for="csv_arquivo">Arquivo CSV *</label>
+      <!-- Arquivo de importação -->
+      <label class="field-label" for="csv_arquivo">Arquivo CSV/XLSX/XLS *</label>
       <div class="field-card file-card" data-file-card>
         <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
-        <input class="file-input" id="csv_arquivo" name="csv_arquivo" type="file" accept=".csv" required>
+        <input class="file-input" id="csv_arquivo" name="csv_arquivo" type="file" accept=".csv,.xlsx,.xls" required>
         <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
         <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="paperclip"></i><span>Anexar</span></div>
-      </div>
-
-      <!-- Delimitador (opcional) -->
-      <label class="field-label" for="delimiter">Delimitador</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="split-square-horizontal"></i></div>
-        <select id="delimiter" name="delimiter" class="control">
-          <option value="," selected>Vírgula (,)</option>
-          <option value=";">Ponto e vírgula (;)</option>
-          <option value="|">Pipe (|)</option>
-          <option value="\t">Tab (\t)</option>
-        </select>
-      </div>
-
-      <!-- Primeira linha é cabeçalho -->
-      <label class="field-label" for="has_header">Cabeçalho</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="list"></i></div>
-        <select id="has_header" name="has_header" class="control">
-          <option value="1" selected>Primeira linha é cabeçalho</option>
-          <option value="0">Sem cabeçalho</option>
-        </select>
       </div>
 
       <!-- Comportamento de conflito -->
@@ -66,8 +44,8 @@
 
       <!-- Ajuda (fora de cards, seguindo padrão) -->
       <div class="flash">
-        Formato esperado das colunas: <strong>nome, email, matricula, status</strong>.
-        O <em>status</em> aceita “Ativo” ou “Inativo”. Demais campos serão ignorados.
+        Formato obrigatório: <strong>Aluno, E-mail, Matricula</strong>, nesta ordem.
+        A Situação não faz parte do arquivo; alunos importados recebem automaticamente <strong>Ativo</strong>.
       </div>
     </div>
 

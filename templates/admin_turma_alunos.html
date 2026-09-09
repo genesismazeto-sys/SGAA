@@ -8,12 +8,12 @@
   <div class="filters"></div>
   <div style="display:flex; gap:8px; align-items:center;">
     <a class="btn btn-nova-alinhado" href="{{ '/admin/turmas/' ~ turma.id ~ '/adicionar_aluno' }}"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon btn-icon-plus icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg><span class="btn-label">Adicionar</span></a>
-    <!-- Importar CSV: botão idêntico ao adicionar, com upload e post automático -->
+    <!-- Importação em lote: upload e POST automáticos -->
     <form id="form-importar-turma" method="post" action="{{ url_for('admin_turmas_importar') }}" enctype="multipart/form-data" style="display:inline;">
       <input type="hidden" name="turma_id" value="{{ turma.id }}">
       <label for="csv2" class="btn">
-  <i class="lucide" data-lucide="file-up"></i> Importar CSV (matrícula,nome,email)
-        <input id="csv2" name="csv_arquivo" type="file" accept=".csv" style="display:none">
+  <i class="lucide" data-lucide="file-up"></i> Importar CSV/XLSX/XLS (Aluno, E-mail, Matricula)
+        <input id="csv2" name="csv_arquivo" type="file" accept=".csv,.xlsx,.xls" style="display:none">
       </label>
     </form>
   </div>

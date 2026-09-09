@@ -1,7 +1,6 @@
 # coding: utf-8
 from __future__ import annotations
 
-import csv
 import logging
 import os
 import re
@@ -35,9 +34,14 @@ from app.db import (
 from app.db_maintenance import ensure_matrizes_atividades_table
 from app.matrix_scope import _matriz_option_label, get_effective_matriz_for_turma
 from app.security.passwords import hash_password
-from app.text import normalize_header, ptbr_text_sort_key
+from app.services.student_import_service import (
+    import_students_into_turma,
+    sync_turma_form_students,
+)
+from app.student_import import StudentImportError, parse_student_import
+from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
-from app.uploads import ALLOWED_CSV, save_upload
+from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
 from app.user_accounts import (
     _access_defaults_map,
     _default_password_for_user_type,
@@ -85,6 +89,44 @@ def resolve_existing_aluno_by_identifiers(conn, matricula, email):
     if aluno_por_matricula and aluno_por_email and aluno_por_matricula["id"] != aluno_por_email["id"]:
         raise ValueError("Conflito entre matrícula e e-mail: os dados informados pertencem a alunos diferentes.")
     return aluno_por_matricula or aluno_por_email
+
+
+def _remove_student_import_upload(path: str | None) -> None:
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except OSError:
+        logger.warning("Não foi possível remover o arquivo temporário da importação.")
+
+
+def _parse_turma_form_import_upload(turma_id: int):
+    arquivo = request.files.get("student_import_file")
+    preview_has_import = any(
+        str(value).strip().lower() in {"1", "true", "yes"}
+        for value in request.form.getlist("aluno_importado[]")
+    )
+    if not arquivo or not arquivo.filename:
+        if preview_has_import:
+            raise StudentImportError(
+                "O arquivo CSV, XLSX ou XLS da pré-visualização deve acompanhar o formulário."
+            )
+        return (), None
+    try:
+        filename = save_upload(
+            arquivo,
+            ALLOWED_STUDENT_IMPORTS,
+            prefix=f"turma{turma_id}",
+            subdir="turmas_imports",
+        )
+    except ValueError as exc:
+        raise StudentImportError("Envie um arquivo CSV, XLSX ou XLS válido.") from exc
+    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    try:
+        return tuple(parse_student_import(path)), path
+    except Exception:
+        _remove_student_import_upload(path)
+        raise
 
 
 def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
@@ -961,6 +1003,7 @@ def admin_adicionar_turma():
             flash("Código de turma já existente.", "error")
             return redirect(url_for("admin_adicionar_turma"))
 
+        import_path = None
         try:
             cur = conn.execute(
                 """
@@ -970,70 +1013,29 @@ def admin_adicionar_turma():
                 (codigo, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
             )
             turma_id = cur.lastrowid
+            imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
 
-            # Processar alunos do formulário (cadastro em massa inline)
-            nomes = request.form.getlist("aluno_nome[]")
-            emails = request.form.getlist("aluno_email[]")
-            mats  = request.form.getlist("aluno_matricula[]")
-            sits  = request.form.getlist("aluno_situacao[]")
-
-            def map_status_db(s):
-                return "Ativo" if (s or "").upper() == "ATIVO" else "Inativo"
-
-            if nomes or emails or mats:
-                for i in range(max(len(nomes), len(emails), len(mats))):
-                    nome_i = (nomes[i] if i < len(nomes) else "").strip()
-                    email_i = (emails[i] if i < len(emails) else "").strip()
-                    mat_i = (mats[i] if i < len(mats) else "").strip()
-                    sit_i = (sits[i] if i < len(sits) else "ATIVO").strip().upper()
-                    if not (nome_i or email_i or mat_i):
-                        continue
-                    if not mat_i:
-                        # exigir matrícula para evitar violar NOT NULL/UNIQUE
-                        continue
-                    # Se houver usuário com este email, reusar; se não, criar apenas se email existir
-                    usuario_id = None
-                    if email_i:
-                        u = conn.execute("SELECT id FROM usuarios WHERE email=?", (email_i,)).fetchone()
-                        if u:
-                            usuario_id = u[0] if isinstance(u, tuple) else u["id"]
-                            normalize_usuario_access_for_user_type(conn, usuario_id)
-                        else:
-                            # criar usuário aluno com a senha padrão configurada para o nível usuario
-                            try:
-                                c2 = create_usuario_with_default_password(
-                                    conn,
-                                    nome_i or email_i.split("@")[0],
-                                    email_i,
-                                    "aluno",
-                                )
-                                usuario_id = c2.lastrowid
-                            except sqlite3.IntegrityError:
-                                # email pode existir em outra conta; não cria usuário, segue sem
-                                usuario_id = None
-                    # Upsert em alunos pela matrícula
-                    # Upsert em alunos por matrícula ou e-mail para reaproveitar cadastros já existentes.
-                    a = resolve_existing_aluno_by_identifiers(conn, mat_i, email_i)
-                    if a:
-                        conn.execute(
-                            "UPDATE alunos SET nome=?, matricula=?, email=?, turma_id=?, status=? WHERE id=?",
-                            (nome_i or a["nome"], mat_i, email_i or None, turma_id, map_status_db(sit_i), a["id"])
-                        )
-                        if usuario_id:
-                            conn.execute("UPDATE alunos SET usuario_id=? WHERE id=?", (usuario_id, a["id"]))
-                    else:
-                        conn.execute(
-                            "INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?,?,?,?,?,?)",
-                            (usuario_id, nome_i or "", mat_i, email_i or None, turma_id, map_status_db(sit_i))
-                        )
-
-            resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+            form_sync = sync_turma_form_students(
+                conn,
+                turma_id,
+                request.form.getlist("aluno_nome[]"),
+                request.form.getlist("aluno_email[]"),
+                request.form.getlist("aluno_matricula[]"),
+                request.form.getlist("aluno_situacao[]"),
+                request.form.getlist("aluno_importado[]"),
+                imported_rows=imported_rows,
+            )
+            if not form_sync.has_imported_rows:
+                resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
 
             conn.commit()
             flash("Turma criada com sucesso.", "success")
             return redirect(url_for("admin_turmas"))
         except (sqlite3.IntegrityError, ValueError) as e:
+            conn.rollback()
             flash(f"Erro ao criar turma: {e}", "error")
+        finally:
+            _remove_student_import_upload(import_path)
 
     suggested = proximo_numero_turma_por_curso(default_curso_id) if default_curso_id else 1
     return render_template("admin_adicionar_turma.html",
@@ -1099,6 +1101,7 @@ def admin_editar_turma(turma_id):
             flash("Código de turma já existente.", "error")
             return redirect(url_for("admin_editar_turma", turma_id=turma_id))
 
+        import_path = None
         try:
             conn.execute(
                 """
@@ -1108,59 +1111,19 @@ def admin_editar_turma(turma_id):
                 """,
                 (codigo_novo, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo_novo, turma_id)
             )
+            imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
 
-            # Atualizar alunos vinculados via formulário
-            nomes = request.form.getlist("aluno_nome[]")
-            emails = request.form.getlist("aluno_email[]")
-            mats  = request.form.getlist("aluno_matricula[]")
-            sits  = request.form.getlist("aluno_situacao[]")
-
-            def map_status_db(s):
-                return "Ativo" if (s or "").upper() == "ATIVO" else "Inativo"
-
-            posted_mats = set()
-            for i in range(max(len(nomes), len(emails), len(mats))):
-                nome_i = (nomes[i] if i < len(nomes) else "").strip()
-                email_i = (emails[i] if i < len(emails) else "").strip()
-                mat_i = (mats[i] if i < len(mats) else "").strip()
-                sit_i = (sits[i] if i < len(sits) else "ATIVO").strip().upper()
-                if not (nome_i or email_i or mat_i):
-                    continue
-                if not mat_i:
-                    continue
-                posted_mats.add(mat_i)
-                # encontrar ou criar usuario se email presente
-                usuario_id = None
-                if email_i:
-                    u = conn.execute("SELECT id FROM usuarios WHERE email=?", (email_i,)).fetchone()
-                    if u:
-                        usuario_id = u[0] if isinstance(u, tuple) else u["id"]
-                        normalize_usuario_access_for_user_type(conn, usuario_id)
-                    else:
-                        try:
-                            c2 = create_usuario_with_default_password(
-                                conn,
-                                nome_i or email_i.split("@")[0],
-                                email_i,
-                                "aluno",
-                            )
-                            usuario_id = c2.lastrowid
-                        except sqlite3.IntegrityError:
-                            usuario_id = None
-                # upsert por matrícula ou e-mail para reaproveitar alunos já cadastrados e apenas relinkar a turma.
-                a = resolve_existing_aluno_by_identifiers(conn, mat_i, email_i)
-                if a:
-                    conn.execute(
-                        "UPDATE alunos SET nome=?, matricula=?, email=?, turma_id=?, status=? WHERE id=?",
-                        (nome_i or a["nome"], mat_i, email_i or None, turma_id, map_status_db(sit_i), a["id"])
-                    )
-                    if usuario_id:
-                        conn.execute("UPDATE alunos SET usuario_id=? WHERE id=?", (usuario_id, a["id"]))
-                else:
-                    conn.execute(
-                        "INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?,?,?,?,?,?)",
-                        (usuario_id, nome_i or "", mat_i, email_i or None, turma_id, map_status_db(sit_i))
-                    )
+            form_sync = sync_turma_form_students(
+                conn,
+                turma_id,
+                request.form.getlist("aluno_nome[]"),
+                request.form.getlist("aluno_email[]"),
+                request.form.getlist("aluno_matricula[]"),
+                request.form.getlist("aluno_situacao[]"),
+                request.form.getlist("aluno_importado[]"),
+                imported_rows=imported_rows,
+            )
+            posted_mats = set(form_sync.matriculas)
 
             # Desvincular alunos que foram removidos da lista
             atuais = conn.execute("SELECT matricula FROM alunos WHERE turma_id = ?", (turma_id,)).fetchall()
@@ -1169,13 +1132,17 @@ def admin_editar_turma(turma_id):
             for m in to_unlink:
                 conn.execute("UPDATE alunos SET turma_id = NULL WHERE matricula = ?", (m,))
 
-            resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+            if not form_sync.has_imported_rows:
+                resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
 
             conn.commit()
             flash("Turma atualizada com sucesso.", "success")
             return redirect(url_for("admin_turmas"))
         except (sqlite3.IntegrityError, ValueError) as e:
+            conn.rollback()
             flash(f"Erro ao atualizar turma: {e}", "error")
+        finally:
+            _remove_student_import_upload(import_path)
 
     # Carregar alunos da turma para edição inline
     alunos = conn.execute(
@@ -1309,15 +1276,13 @@ def admin_detalhes_turma(turma_id):
     )
 
 
-# ====== Importar Alunos (CSV) para uma Turma ======
+# ====== Importar Alunos (CSV/XLSX/XLS) para uma Turma ======
 
 @admin_required
 def admin_turmas_importar():
     if request.method == "GET":
         # Fluxo oficial de importacao acontece no modal de /admin/turmas.
         return redirect(url_for("admin_turmas"))
-
-    conn = get_db_connection()
 
     if request.method == "POST":
         turma_id = request.form.get("turma_id", type=int)
@@ -1327,71 +1292,52 @@ def admin_turmas_importar():
             flash("Selecione a turma de destino.", "error")
             return redirect(url_for("admin_turmas_importar"))
         if not arquivo or arquivo.filename == "":
-            flash("Selecione um arquivo CSV.", "error")
+            flash("Selecione um arquivo CSV, XLSX ou XLS.", "error")
             return redirect(url_for("admin_turmas_importar"))
 
-        # Salva arquivo
         try:
-            filename = save_upload(arquivo, ALLOWED_CSV, prefix=f"turma{turma_id}", subdir=f"turmas_imports")
+            filename = save_upload(
+                arquivo,
+                ALLOWED_STUDENT_IMPORTS,
+                prefix=f"turma{turma_id}",
+                subdir="turmas_imports",
+            )
         except ValueError:
-            flash("Envie um arquivo CSV válido.", "error")
+            flash("Envie um arquivo CSV, XLSX ou XLS válido.", "error")
             return redirect(url_for("admin_turmas_importar"))
         path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
 
-        sucesso, nao_encontrados, erros = 0, 0, 0
+        conn = get_db_connection()
         try:
-            with open(path, "r", encoding="utf-8-sig", newline="") as f:
-                # Detecta delimitador
-                sample = f.read(2048)
-                f.seek(0)
-                try:
-                    dialect = csv.Sniffer().sniff(sample)
-                except csv.Error:
-                    dialect = csv.excel
-                reader = csv.DictReader(f, dialect=dialect)
-
-                # Normaliza nomes de colunas
-                field_map = {normalize_header(h): h for h in reader.fieldnames or []}
-                col_matricula = field_map.get("matricula")
-                col_email = field_map.get("email")
-
-                if not (col_matricula or col_email):
-                    flash("O CSV precisa ter a coluna 'matrícula' ou 'email'.", "error")
-                    return redirect(url_for("admin_turmas_importar"))
-
-                for row in reader:
-                    try:
-                        matricula = (row.get(col_matricula, "") if col_matricula else "").strip()
-                        email = (row.get(col_email, "") if col_email else "").strip()
-
-                        achou = None
-                        if matricula:
-                            achou = conn.execute("SELECT usuario_id FROM alunos WHERE matricula = ?", (matricula,)).fetchone()
-                        if not achou and email:
-                            achou = conn.execute("SELECT usuario_id FROM alunos WHERE email = ?", (email,)).fetchone()
-
-                        if achou:
-                            conn.execute("UPDATE alunos SET turma_id = ? WHERE usuario_id = ?", (turma_id, achou["usuario_id"]))
-                            sucesso += 1
-                        else:
-                            nao_encontrados += 1
-                    except Exception:
-                        erros += 1
-
-            resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+            rows = parse_student_import(path)
+            result = import_students_into_turma(
+                conn,
+                turma_id,
+                rows,
+                on_conflict=(request.form.get("on_conflict") or "update").strip().lower(),
+            )
             conn.commit()
-            msg = resolve_user_message(f"Importação concluída. Vinculados: {sucesso}.")
-            if nao_encontrados:
-                msg += " " + resolve_user_message(f"Não encontrados: {nao_encontrados}.")
-            if erros:
-                msg += " " + resolve_user_message(f"Linhas com erro: {erros}.")
+            msg = resolve_user_message(
+                f"Importação concluída. Importados: {result.imported}. Criados: {result.created}. Atualizados: {result.updated}."
+            )
+            if result.skipped:
+                msg += " " + resolve_user_message(f"Registros existentes ignorados: {result.skipped}.")
             flash(msg, "success")
             return redirect(url_for("admin_turmas"))
-        except Exception as e:
-            logger.error(f"Erro ao importar CSV de turmas: {e}")
-            traceback.print_exc()
-            flash(f"Falha ao processar CSV: {e}", "error")
-            return redirect(url_for("admin_turmas_importar"))
+        except StudentImportError as exc:
+            conn.rollback()
+            flash(f"Falha ao importar planilha: {exc}", "error")
+            return redirect(url_for("admin_turmas", import_csv=1))
+        except Exception:
+            conn.rollback()
+            logger.exception("Erro inesperado ao importar alunos para a turma")
+            flash("Falha ao importar planilha. Verifique o arquivo e tente novamente.", "error")
+            return redirect(url_for("admin_turmas", import_csv=1))
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                logger.warning("Não foi possível remover o arquivo temporário da importação.")
 
 
 bp_admin_alunos_turmas_cursos = Blueprint("admin_alunos_turmas_cursos_blueprint", __name__)

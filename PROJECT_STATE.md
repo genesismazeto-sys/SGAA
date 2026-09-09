@@ -2616,3 +2616,67 @@ remains the next independent visual defect. It is not fixed here.
 - Historical message-catalog debt remains 11 and is outside this front.
 
 `AGENT_HANDOFF.md` remains frozen and unchanged.
+
+## STUDENT BULK IMPORT CSV / XLSX / XLS CONTRACT FIX — FINAL GATE PASSED / APPROVED FOR LANDING
+
+- Independent adversarial review rejected the initial uncommitted candidate for
+  four material findings: non-student account merging, split `usuarios`/`alunos`
+  identity, unsafe Matricula coercion, and divergent live Add/Edit pipelines.
+- A second independent review qualified the identity findings but rejected the
+  next intermediate for Decimal non-finites, legacy-XLS formula provenance,
+  Edit-roster/file collisions, and a whole-handler Phase 4 exemption.
+- The final independent gate returned `PASS / READY_FOR_CLOSEOUT`; the
+  implementation is accepted and approved for landing.
+- The later remediation preserves the exact `Aluno`, `E-mail`, `Matricula`
+  CSV/XLSX/XLS contract and canonical imported status `Ativo`. CSV, XLSX, XLS,
+  modal import, Add Turma, and Edit Turma now converge on format-aware parsing,
+  one normalized row model, shared identity validation, shared persistence, and
+  one caller-owned transaction. The original file is server authority; browser
+  preview is convenience only.
+- Existing legitimate student updates synchronize the linked `usuarios` and
+  `alunos` mirrors. Cross-student, conflicting-email, non-student-account,
+  orphan-account, and missing-linked-user identities fail closed without silent
+  repair or account-type changes. By explicit supervisor product adjudication,
+  the modal may retain its skip/update choice while Add/Edit use fixed UPDATE;
+  identical conflict-policy controls across the three surfaces are not required.
+  Update yields canonical `Ativo`, and modal skip preserves identity/status.
+- Matricula preserves textual identifiers and safely deterministic numeric or
+  explicit zero-format values. Detectable XLSX/XLS dates, errors, booleans,
+  float and Decimal non-finites, and unsafe floating artifacts are rejected.
+  The custom raw-BIFF formula-provenance parser and private `xlrd` access were
+  removed as unnecessary scope by supervisor adjudication. Legacy XLS now uses
+  the public `xlrd` cell representation; a formula exposed only as a cached
+  scalar with unavailable provenance is normalized as that scalar. Universal
+  XLS formula detection is not claimed.
+- Edit form rows that represent the current target-Turma roster are reconciled
+  with overlapping authoritative import rows before common duplicate validation;
+  the import row owns the canonical update. New/manual duplicates still reject.
+- The opaque complete-handler AST SHA allowlist was removed. The Phase 4 guard
+  now compares each of `admin_adicionar_turma`, `admin_editar_turma`, and
+  `admin_turmas_importar` with exact clean HEAD, normalizes only the explicit
+  student-import AST statements, verifies the canonical parser/service calls,
+  and requires the entire remainder to stay baseline-equivalent. Mutation
+  controls prove that both a changed parser call and an unrelated statement
+  outside the authorized delta are rejected.
+- Material RED evidence was `15 failed / 6 passed` before remediation. Final
+  second-review RED evidence was `6 failed / 1 passed`; final direct
+  material/contract evidence after the final scope cleanup is `57 passed`; the
+  three Phase 4 positive/negative guard controls pass, and the broader focused
+  Turma/student/upload/RBAC/CSRF lane has `105 passed` with only separately
+  established canonical debt excluded. Real post-mutation
+  failures roll back earlier writes in modal, Add, and Edit paths.
+  Dependency-qualified pytest, compileall, flake8, and `git diff --check` passed.
+- The canonical suite remains non-green: final frozen candidate `63 failed / 1602 passed /
+  136 skipped`; exact clean HEAD with the required byte-identical database
+  bootstrap produced `64 failed / 1541 passed / 136 skipped`. Failing-node
+  comparison has zero candidate-only failures and one baseline-only failure
+  (`test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visible`);
+  material worsening is zero and the scoped unresolved count is zero. The prior
+  benign failure-message representation analysis is unchanged and was not
+  reopened. No unrelated gate debt was repaired.
+- XLSX remains on `openpyxl==3.1.2`; runtime legacy-XLS reading adds
+  `xlrd==2.0.2`; dev-only legacy-XLS fixtures add `xlwt==1.3.0`.
+- Operational `database.db` remained byte-identical at SHA-256
+  `ADA8F75F54762A647F454C2486599ED5D46021E16F971015E39E72D8FA936F50`;
+  no SQLite sidecars were created. The final gate accepted the implementation
+  for landing; this governance record is part of that single authorized UT.

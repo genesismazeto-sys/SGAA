@@ -4,7 +4,7 @@
 {% block content %}
 <h1 class="main-title">Editar Turma</h1>
 
-<form method="POST">
+<form method="POST" enctype="multipart/form-data">
   <div class="page-m30">
     <div class="form-cards-narrow">
     <div class="form-row">
@@ -103,8 +103,8 @@
           <div class="turma-alunos-actions turma-alunos-actions-left"></div>
           <h3 class="turma-alunos-title">Alunos da turma</h3>
           <div class="turma-alunos-actions turma-alunos-actions-right" style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
-            <input type="file" id="csv-import" accept=".csv,.xlsx" hidden>
-            <button type="button" class="btn secondary small" id="btn-importar-csv" title="Importar CSV/XLSX (matricula,nome,email)" aria-label="Importar CSV/XLSX"><i class="lucide" data-lucide="file-up"></i></button>
+            <input type="file" id="csv-import" name="student_import_file" accept=".csv,.xlsx,.xls" hidden>
+            <button type="button" class="btn secondary small" id="btn-importar-csv" title="Importar CSV/XLSX/XLS (Aluno, E-mail, Matricula)" aria-label="Importar CSV/XLSX/XLS"><i class="lucide" data-lucide="file-up"></i></button>
             <button type="button" class="btn secondary small" id="btn-remover-aluno" title="Remover aluno selecionado" disabled><i class="lucide" data-lucide="minus"></i></button>
             <button type="button" class="btn secondary small" id="btn-adicionar-aluno" title="Adicionar aluno"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
           </div>
@@ -127,6 +127,7 @@
               <div class="turma-aluno-row">
                 <div class="turma-aluno-row-shell">
                   <div class="turma-aluno-chip">{{ loop.index }}</div>
+                  <input type="hidden" name="aluno_importado[]" value="0">
                   <div class="turma-aluno-row-inner">
                     <div class="turma-aluno-card">
                       <input type="text" name="aluno_nome[]" placeholder="Nome do aluno" value="{{ al.nome or '' }}" autocomplete="off">
@@ -172,6 +173,7 @@
 </form>
 <!-- Leitor XLSX (SheetJS) para suportar planilhas no navegador -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="{{ url_for('static', filename='js/student-import-preview.js') }}"></script>
 
 <script>
   // Itens: Alunos da Turma - add/remove, selecao e reindexacao (#)
@@ -189,6 +191,7 @@
     function alunoRowEl(){ const row = document.createElement('div'); row.className = 'turma-aluno-row'; row.innerHTML = `
         <div class="turma-aluno-row-shell">
           <div class="turma-aluno-chip">#</div>
+          <input type="hidden" name="aluno_importado[]" value="0">
           <div class="turma-aluno-row-inner">
             <div class="turma-aluno-card"><input type="text" name="aluno_nome[]" placeholder="Nome do aluno" autocomplete="off"></div>
             <div class="turma-aluno-card"><input type="email" name="aluno_email[]" placeholder="E-mail" autocomplete="off"></div>
@@ -208,11 +211,10 @@
         </div>
         <div class="turma-aluno-row-actions"><button type="button" class="turma-aluno-remove" title="Excluir aluno" aria-label="Excluir aluno" data-remove-aluno><i class="lucide" data-lucide="minus"></i></button></div>`;
       row.addEventListener('click', (ev)=>{ const target = ev.target; const isFormControl = target.closest('input, select, textarea, button, a'); if (isFormControl) return; row.classList.toggle('selected'); }); return row; }
-    function addAluno(nome, email, matricula='', situacao='ATIVO'){ const r = alunoRowEl(); rowsBox?.appendChild(r); const nomeEl = r.querySelector('input[name="aluno_nome[]"]'); const emailEl = r.querySelector('input[name="aluno_email[]"]'); const matEl = r.querySelector('input[name="aluno_matricula[]"]'); const sitEl = r.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); if (nomeEl) nomeEl.value = nome || ''; if (emailEl) emailEl.value = email || ''; if (matEl) matEl.value = matricula || ''; if (sitEl) sitEl.value = situacao || 'ATIVO'; try{ (window.App?.Util?.icones || window.lucide?.createIcons)?.(); }catch(_){ } reindexChips(); wireStatusArrow(r); }
+    function addAluno(nome, email, matricula='', situacao='ATIVO', importado=false){ const r = alunoRowEl(); rowsBox?.appendChild(r); const nomeEl = r.querySelector('input[name="aluno_nome[]"]'); const emailEl = r.querySelector('input[name="aluno_email[]"]'); const matEl = r.querySelector('input[name="aluno_matricula[]"]'); const sitEl = r.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); const importadoEl = r.querySelector('input[type="hidden"][name="aluno_importado[]"]'); if (nomeEl) nomeEl.value = nome || ''; if (emailEl) emailEl.value = email || ''; if (matEl) matEl.value = matricula || ''; if (sitEl) sitEl.value = situacao || 'ATIVO'; if (importadoEl) importadoEl.value = importado ? '1' : '0'; if (importado){ r.dataset.importPreview = '1'; [nomeEl, emailEl, matEl].forEach((field)=>{ if (field) field.readOnly = true; }); const statusArrow = r.querySelector('[data-status-arrow]'); const removeButton = r.querySelector('[data-remove-aluno]'); if (statusArrow) statusArrow.disabled = true; if (removeButton) removeButton.disabled = true; } try{ (window.App?.Util?.icones || window.lucide?.createIcons)?.(); }catch(_){ } reindexChips(); wireStatusArrow(r); }
 
-    function parseCSVText(text){ const lines = String(text||'').split(/\r?\n/).filter(x=>x.trim().length); if (!lines.length){ alert('CSV vazio.'); return; } const head = (lines[0]||'').toLowerCase(); let headerMap = null; let start = 0; if (/(matr(?:i|\u00ed)cula|matricula)/.test(head) && head.includes('nome') && head.includes('email')){ const cols = lines[0].split(/,|;|\t/).map(s=> (s||'').trim().toLowerCase()); headerMap = { mat: cols.findIndex(c=> /(matr(?:i|\u00ed)cula|matricula)/.test(c) ), nome: cols.findIndex(c=> c.includes('nome') ), email: cols.findIndex(c=> c.includes('email') ), }; start = 1; } let added = 0; for (let i=start; i<lines.length; i++){ const parts = lines[i].split(/,|;|\t/).map(s=> (s||'').trim()); const mat = headerMap ? (parts[headerMap.mat]||'') : (parts[0]||''); const nome = headerMap ? (parts[headerMap.nome]||'') : (parts[1]||''); const email = headerMap ? (parts[headerMap.email]||'') : (parts[2]||''); if (!mat && !nome && !email) continue; addAluno(nome, email, mat); added++; } if (added>0){ sortRowsByNome(); alert(`${added} aluno(s) adicionados a partir do CSV.`); } else alert('Nenhuma linha válida encontrada no CSV.'); }
-    function parseXLSXFile(file){ if (!window.XLSX){ alert('Leitor de XLSX não carregado.'); return; } const reader = new FileReader(); reader.onload = (e)=>{ try{ const data = new Uint8Array(e.target.result); const wb = XLSX.read(data, { type:'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json(ws, { header:1 }); if (!rows || !rows.length){ alert('Planilha vazia.'); return; } let headerMap = null; let start = 0; const first = (rows[0]||[]).map(v => String(v||'').toLowerCase()); const hasHeader = first.some(c=>/(matr(?:i|\u00ed)cula|matricula)/.test(c)) && first.some(c=>c.includes('nome')) && first.some(c=>c.includes('email')); if (hasHeader){ headerMap = { mat: first.findIndex(c=> /(matr(?:i|\u00ed)cula|matricula)/.test(c) ), nome: first.findIndex(c=> c.includes('nome') ), email: first.findIndex(c=> c.includes('email') ), }; start = 1; } let added = 0; for (let i=start; i<rows.length; i++){ const r = rows[i] || []; const mat = headerMap ? String(r[headerMap.mat]||'').trim() : String(r[0]||'').trim(); const nome = headerMap ? String(r[headerMap.nome]||'').trim() : String(r[1]||'').trim(); const email = headerMap ? String(r[headerMap.email]||'').trim() : String(r[2]||'').trim(); if (!mat && !nome && !email) continue; addAluno(nome, email, mat); added++; } if (added>0){ sortRowsByNome(); alert(`${added} aluno(s) adicionados a partir do XLSX.`); } else alert('Nenhuma linha válida encontrada no XLSX.'); } catch(err){ console.error(err); alert('Erro ao ler XLSX.'); } }; reader.readAsArrayBuffer(file); }
-    fileImp?.addEventListener('change', ()=>{ const f = fileImp.files && fileImp.files[0]; if (!f){ return; } const name = (f.name||'').toLowerCase(); if (name.endsWith('.xlsx') || name.endsWith('.xls')){ parseXLSXFile(f); } else { const reader = new FileReader(); reader.onload = () => parseCSVText(reader.result); reader.readAsText(f, 'utf-8'); } fileImp.value = ''; });
+    async function parseStudentImportFile(file){ try{ const rows = await window.StudentImportPreview.read(file); rowsBox?.querySelectorAll('[data-import-preview="1"]').forEach((row)=> row.remove()); rows.forEach(({ aluno, email, matricula }) => addAluno(aluno, email, matricula, 'ATIVO', true)); sortRowsByNome(); alert(`${rows.length} aluno(s) adicionados a partir do arquivo.`); } catch(err){ console.error(err); alert(err?.message || 'Erro ao ler CSV/XLSX/XLS.'); } }
+    fileImp?.addEventListener('change', ()=>{ const f = fileImp.files && fileImp.files[0]; if (!f){ return; } parseStudentImportFile(f); });
 
     const STATUS_STYLES = { 'ATIVO': { label:'Ativo', cls:'success', tone:'positive' }, 'TRANCADO': { label:'Trancado', cls:'warning', tone:'neutral' }, 'CONCLUIDO': { label:'Concluído', cls:'danger', tone:'positive' } };
     function wireStatusArrow(scope){ scope.querySelectorAll('.status-cell').forEach(cell =>{ const hidden = cell.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); const badge  = cell.querySelector('[data-status-badge]'); const arrow  = cell.querySelector('[data-status-arrow]'); if (!hidden || !badge || !arrow) return; const sync = ()=>{ const s = STATUS_STYLES[hidden.value] || STATUS_STYLES['ATIVO']; badge.textContent = s.label; badge.classList.remove('success','warning','danger','status-positive','status-neutral','status-caution','status-negative','status-info'); badge.classList.add(s.cls, `status-${s.tone}`); arrow.value = hidden.value; }; sync(); arrow.addEventListener('change', ()=>{ hidden.value = arrow.value; sync(); }); }); }

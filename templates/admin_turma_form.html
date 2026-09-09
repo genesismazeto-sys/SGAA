@@ -34,13 +34,6 @@
       <i class="lucide" data-lucide="list-plus"></i> Gerar lista
     </button>
 
-    <div class="field" style="margin-left:auto;">
-      <label for="csv">Ou importar de CSV (nome,email)</label>
-      <input id="csv" name="csv" type="file" accept=".csv">
-    </div>
-    <button class="btn" type="button" id="btnLerCSV">
-      <i class="lucide" data-lucide="file-up"></i> Ler CSV
-    </button>
   </div>
 
   <!-- Tabela dinâmica de alunos (nome/email) -->
@@ -75,11 +68,6 @@
         </div>
         <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
           <button class="btn" type="button" id="btnAddLinha" title="Adicionar linha"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg> Adicionar linha</button>
-          <!-- Botão icon-only: Importar CSV (nome,email) -->
-          <input id="miniCsv" type="file" accept=".csv" hidden>
-          <button class="btn" type="button" id="btnMiniCsv" title="Importar CSV (nome,email)" aria-label="Importar CSV">
-            <i class="lucide" data-lucide="file-up"></i>
-          </button>
           <button class="btn" type="button" id="btnLimpar"><i class="lucide" data-lucide="trash"></i> Limpar lista</button>
         </div>
       </div>
@@ -105,8 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAdd = document.getElementById('btnAddLinha');
   const btnLimpar = document.getElementById('btnLimpar');
   const inputQtd = document.getElementById('qtd');
-  const inputCSV = document.getElementById('csv');
-  const btnLerCSV = document.getElementById('btnLerCSV');
 
   function addLinha(nome = '', email = '') {
     const idx = tbl.children.length + 1;
@@ -132,37 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
     tbl.innerHTML = '';
   });
 
-  function parseCSVFile(file) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const txt = String(reader.result || '');
-      const lines = txt.split(/\r?\n/).filter(x => x.trim().length);
-      if (!lines.length) { alert('Arquivo CSV vazio.'); return; }
-      const first = (lines[0] || '').toLowerCase();
-      const start = (first.includes('nome') && first.includes('email')) ? 1 : 0;
-      for (let i = start; i < lines.length; i++) {
-        const [nome, email] = lines[i].split(/,|;|\t/).map(s => (s || '').trim());
-        if (nome || email) addLinha(nome, email);
-      }
-      alert('Linhas adicionadas a partir do CSV. Revise antes de salvar.');
-    };
-    reader.readAsText(file, 'utf-8');
-  }
-
-  btnLerCSV?.addEventListener('click', () => {
-    const f = inputCSV.files?.[0];
-    if (!f) { alert('Selecione um arquivo CSV primeiro.'); return; }
-    parseCSVFile(f);
-  });
-
-  // Botão icon-only ao lado do +
-  const miniCsv = document.getElementById('miniCsv');
-  const btnMini = document.getElementById('btnMiniCsv');
-  btnMini?.addEventListener('click', () => miniCsv?.click());
-  miniCsv?.addEventListener('change', () => {
-    const f = miniCsv.files?.[0];
-    if (f) parseCSVFile(f);
-  });
 });
 </script>
 {% endblock %}

@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 
 ALLOWED_ATTACHMENTS = {"pdf", "png", "jpg", "jpeg"}
 ALLOWED_CSV = {"csv"}
+ALLOWED_STUDENT_IMPORTS = {"csv", "xlsx", "xls"}
 ALLOWED_REPORTE_SCREENSHOTS = {"png", "jpg", "jpeg", "webp"}
 _UPLOAD_PATH_ERROR = "Caminho de upload inválido."
 
@@ -62,6 +63,7 @@ def save_upload(
 __all__ = [
     "ALLOWED_ATTACHMENTS",
     "ALLOWED_CSV",
+    "ALLOWED_STUDENT_IMPORTS",
     "ALLOWED_REPORTE_SCREENSHOTS",
     "_allowed",
     "_unique_filename",
