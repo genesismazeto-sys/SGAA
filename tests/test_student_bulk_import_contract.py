@@ -259,3 +259,42 @@ def test_ui_advertises_only_the_canonical_three_column_contract():
     assert "parseCSVFile" not in combined
     assert "sheet_to_json" not in combined
     assert "sheet_to_json" in preview_source
+
+
+def test_live_add_and_edit_pages_own_local_reader_and_nonblocking_fallback():
+    turma_id = _seed_turma()
+    with main.app.app_context():
+        conn = app_db.get_db_connection()
+        admin = conn.execute(
+            "SELECT id, nome FROM usuarios WHERE tipo='admin' ORDER BY id LIMIT 1"
+        ).fetchone()
+        assert admin is not None
+
+    client = main.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["user_id"] = int(admin["id"])
+        flask_session["user_name"] = admin["nome"]
+        flask_session["user_type"] = "admin"
+
+    reader_response = client.get("/static/vendor/xlsx.full.min.js")
+    assert reader_response.status_code == 200
+
+    responses = (
+        client.get("/admin/adicionar_turma"),
+        client.get(f"/admin/editar_turma/{turma_id}"),
+    )
+    for response in responses:
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        local_reader = "/static/vendor/xlsx.full.min.js"
+        preview = "/static/js/student-import-preview.js"
+        assert local_reader in html
+        assert "cdn.jsdelivr.net/npm/xlsx" not in html
+        assert html.index(local_reader) < html.index(preview)
+        assert "StudentImportPreview.isAvailable()" in html
+        assert "Pré-visualização indisponível; o arquivo será processado ao salvar." in html
+
+    modal_response = client.get("/admin/turmas")
+    assert modal_response.status_code == 200
+    modal_html = modal_response.get_data(as_text=True)
+    assert f'<option value="{turma_id}">' in modal_html

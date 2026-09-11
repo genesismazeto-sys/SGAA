@@ -74,5 +74,9 @@
     });
   }
 
-  global.StudentImportPreview = Object.freeze({ read });
+  function isAvailable() {
+    return Boolean(global.XLSX);
+  }
+
+  global.StudentImportPreview = Object.freeze({ isAvailable, read });
 })(window);

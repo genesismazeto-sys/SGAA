@@ -890,6 +890,13 @@ def admin_turmas():
         query += " LIMIT ? OFFSET ?"
         params_exec += [per_page, offset]
     turmas = conn.execute(query, params_exec).fetchall()
+    import_turmas = conn.execute(
+        """
+        SELECT id, COALESCE(NULLIF(TRIM(codigo), ''), NULLIF(TRIM(nome), ''), 'Turma ' || id) AS nome
+          FROM turmas
+      ORDER BY LOWER(COALESCE(NULLIF(TRIM(codigo), ''), NULLIF(TRIM(nome), ''), '')), id
+        """
+    ).fetchall()
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
     cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
     filter_schema = [
@@ -944,6 +951,7 @@ def admin_turmas():
     return render_template(
         "admin_turmas.html",
         turmas=turmas,
+        import_turmas=import_turmas,
         page=page,
         per_page=per_page,
         total=total,

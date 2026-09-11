@@ -110,6 +110,7 @@
             <button type="button" class="btn secondary small" id="btn-adicionar-aluno" title="Adicionar aluno"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
           </div>
         </div>
+        <p class="help" id="student-import-preview-status" hidden aria-live="polite"></p>
         <div class="turma-alunos-content">
         
         <div class="turma-aluno-row header">
@@ -376,8 +377,8 @@
   });
 </script>
 
-<!-- Leitor XLSX (SheetJS) para suportar planilhas no navegador -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Leitor XLSX (SheetJS) local para suportar planilhas no navegador -->
+<script src="{{ url_for('static', filename='vendor/xlsx.full.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/student-import-preview.js') }}"></script>
 
 <script>
@@ -388,6 +389,7 @@
     const btnRemove = document.getElementById('btn-remover-aluno');
     const btnImp = document.getElementById('btn-importar-csv');
     const fileImp = document.getElementById('csv-import');
+    const previewStatus = document.getElementById('student-import-preview-status');
     const alunoNomeCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', usage: 'sort' });
 
     function reindexChips(){
@@ -486,8 +488,19 @@
     }
 
     async function parseStudentImportFile(file){
+      if (!window.StudentImportPreview || !window.StudentImportPreview.isAvailable()) {
+        if (previewStatus) {
+          previewStatus.textContent = 'Pré-visualização indisponível; o arquivo será processado ao salvar.';
+          previewStatus.hidden = false;
+        }
+        return;
+      }
       try {
         const rows = await window.StudentImportPreview.read(file);
+        if (previewStatus) {
+          previewStatus.textContent = '';
+          previewStatus.hidden = true;
+        }
         rowsBox?.querySelectorAll('[data-import-preview="1"]').forEach((row) => row.remove());
         rows.forEach(({ aluno, email, matricula }) => addAluno(aluno, email, matricula, 'ATIVO', true));
         sortRowsByNome();

@@ -109,6 +109,7 @@
             <button type="button" class="btn secondary small" id="btn-adicionar-aluno" title="Adicionar aluno"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg></button>
           </div>
         </div>
+        <p class="help" id="student-import-preview-status" hidden aria-live="polite"></p>
         <div class="turma-alunos-content">
           <div class="turma-aluno-row header">
             <div class="turma-aluno-row-shell">
@@ -171,8 +172,8 @@
     </div>
   </div>
 </form>
-<!-- Leitor XLSX (SheetJS) para suportar planilhas no navegador -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Leitor XLSX (SheetJS) local para suportar planilhas no navegador -->
+<script src="{{ url_for('static', filename='vendor/xlsx.full.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/student-import-preview.js') }}"></script>
 
 <script>
@@ -183,6 +184,7 @@
     const btnRemove = document.getElementById('btn-remover-aluno');
     const btnImp = document.getElementById('btn-importar-csv');
     const fileImp = document.getElementById('csv-import');
+    const previewStatus = document.getElementById('student-import-preview-status');
     const alunoNomeCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', usage: 'sort' });
 
     function reindexChips(){ rowsBox?.querySelectorAll('.turma-aluno-row .turma-aluno-chip')?.forEach((chip, idx)=>{ chip.textContent = String(idx + 1); }); }
@@ -213,7 +215,29 @@
       row.addEventListener('click', (ev)=>{ const target = ev.target; const isFormControl = target.closest('input, select, textarea, button, a'); if (isFormControl) return; row.classList.toggle('selected'); }); return row; }
     function addAluno(nome, email, matricula='', situacao='ATIVO', importado=false){ const r = alunoRowEl(); rowsBox?.appendChild(r); const nomeEl = r.querySelector('input[name="aluno_nome[]"]'); const emailEl = r.querySelector('input[name="aluno_email[]"]'); const matEl = r.querySelector('input[name="aluno_matricula[]"]'); const sitEl = r.querySelector('input[type="hidden"][name="aluno_situacao[]"]'); const importadoEl = r.querySelector('input[type="hidden"][name="aluno_importado[]"]'); if (nomeEl) nomeEl.value = nome || ''; if (emailEl) emailEl.value = email || ''; if (matEl) matEl.value = matricula || ''; if (sitEl) sitEl.value = situacao || 'ATIVO'; if (importadoEl) importadoEl.value = importado ? '1' : '0'; if (importado){ r.dataset.importPreview = '1'; [nomeEl, emailEl, matEl].forEach((field)=>{ if (field) field.readOnly = true; }); const statusArrow = r.querySelector('[data-status-arrow]'); const removeButton = r.querySelector('[data-remove-aluno]'); if (statusArrow) statusArrow.disabled = true; if (removeButton) removeButton.disabled = true; } try{ (window.App?.Util?.icones || window.lucide?.createIcons)?.(); }catch(_){ } reindexChips(); wireStatusArrow(r); }
 
-    async function parseStudentImportFile(file){ try{ const rows = await window.StudentImportPreview.read(file); rowsBox?.querySelectorAll('[data-import-preview="1"]').forEach((row)=> row.remove()); rows.forEach(({ aluno, email, matricula }) => addAluno(aluno, email, matricula, 'ATIVO', true)); sortRowsByNome(); alert(`${rows.length} aluno(s) adicionados a partir do arquivo.`); } catch(err){ console.error(err); alert(err?.message || 'Erro ao ler CSV/XLSX/XLS.'); } }
+    async function parseStudentImportFile(file){
+      if (!window.StudentImportPreview || !window.StudentImportPreview.isAvailable()) {
+        if (previewStatus) {
+          previewStatus.textContent = 'Pré-visualização indisponível; o arquivo será processado ao salvar.';
+          previewStatus.hidden = false;
+        }
+        return;
+      }
+      try {
+        const rows = await window.StudentImportPreview.read(file);
+        if (previewStatus) {
+          previewStatus.textContent = '';
+          previewStatus.hidden = true;
+        }
+        rowsBox?.querySelectorAll('[data-import-preview="1"]').forEach((row)=> row.remove());
+        rows.forEach(({ aluno, email, matricula }) => addAluno(aluno, email, matricula, 'ATIVO', true));
+        sortRowsByNome();
+        alert(`${rows.length} aluno(s) adicionados a partir do arquivo.`);
+      } catch(err){
+        console.error(err);
+        alert(err?.message || 'Erro ao ler CSV/XLSX/XLS.');
+      }
+    }
     fileImp?.addEventListener('change', ()=>{ const f = fileImp.files && fileImp.files[0]; if (!f){ return; } parseStudentImportFile(f); });
 
     const STATUS_STYLES = { 'ATIVO': { label:'Ativo', cls:'success', tone:'positive' }, 'TRANCADO': { label:'Trancado', cls:'warning', tone:'neutral' }, 'CONCLUIDO': { label:'Concluído', cls:'danger', tone:'positive' } };
