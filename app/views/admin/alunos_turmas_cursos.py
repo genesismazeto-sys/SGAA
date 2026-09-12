@@ -43,6 +43,7 @@ from app.student_matrix import (
     StudentMatrixError,
     list_assignable_matrices_for_student,
     matrix_for_turma_assignment,
+    parse_submitted_matriz_id,
     resolve_student_matrix_for_edit,
 )
 from app.text import ptbr_text_sort_key
@@ -750,9 +751,13 @@ def admin_editar_aluno(usuario_id):
         turma_id_anterior = aluno["turma_id"]
         # Campo ausente = edição sem intenção sobre a matriz; vazio = "Sem matriz".
         matriz_submetida = "matriz_id" in request.form
-        matriz_escolhida = request.form.get("matriz_id", type=int)
+        matriz_bruta = request.form.get("matriz_id")
 
         try:
+            # Valor não vazio e inválido é requisição malformada, nunca uma limpeza.
+            matriz_escolhida = (
+                parse_submitted_matriz_id(matriz_bruta) if matriz_submetida else None
+            )
             if senha:
                 hashed_password = hash_password(senha)
                 conn.execute("UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?", (nome, email, hashed_password, usuario_id))

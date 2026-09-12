@@ -2868,12 +2868,22 @@ remains the next independent visual defect. It is not fixed here.
   in-memory or temporary databases. The verified pre-v6 backup
   `D:\Projetos\SGAA_backups\database-pre-v6-20260912-091732.db` is intact.
 - Runtime safety: a live SGAA runtime was found at entry (`python main.py`,
-  PID 5540 with reloader child PID 28608, working directory
-  `D:\Projetos\SGAA_clean_baseline`). Because the Werkzeug reloader would have
-  loaded dirty candidate code against the operational database on the first
-  source edit, that process tree was stopped before any edit and was not
-  restarted. Sidecar presence follows normal WAL/SHM lifecycle and is not
-  corruption.
+  parent PID 5540 with child PID 28608, working directory
+  `D:\Projetos\SGAA_clean_baseline`). That process tree was stopped before any
+  edit and was not restarted. Sidecar presence follows normal WAL/SHM lifecycle
+  and is not corruption.
+  - Correction (UT-AM2H): this entry originally described PID 28608 as a
+    Werkzeug reloader child and justified the stop by the reloader picking up
+    dirty candidate code. That rationale is inaccurate. `run.bat` sets no
+    `FLASK_DEBUG` and `main.py` defaults it to `0`, so the app runs
+    `app.run(debug=False)` with the reloader off. The observed parent/child pair
+    is the venv launcher/shim re-exec chain —
+    `%LOCALAPPDATA%\SGAA\venv\Scripts\python.exe main.py` re-execing the base
+    interpreter with the same argv — which is present regardless of debug mode.
+    Stopping the runtime before dirty-source editing was nevertheless the
+    correct and mandated custody action, because the operational process was
+    using the canonical workspace and the operational database. Only the
+    rationale is corrected; the custody action and its outcome stand.
 - This UT is source-qualified only. Nothing was staged, committed, pushed or
   published, and no operational data was mutated. Landing is not claimed and
   awaits independent review and authorization.

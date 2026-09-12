@@ -1,8 +1,30 @@
 from __future__ import annotations
 
+import re
+
 
 class StudentMatrixError(ValueError):
     """Raised when a student Matrix would conflict with the academic Curso."""
+
+
+# Somente digitos ASCII: int() aceitaria "1_0", digitos unicode e espacos.
+_SUBMITTED_MATRIZ_ID_RE = re.compile(r"-?[0-9]+")
+
+
+def parse_submitted_matriz_id(raw: str | None) -> int | None:
+    """Read a submitted Matrix choice without confusing "none" with garbage.
+
+    An empty submission is the explicit "Sem matriz" choice and clears the
+    authority. Anything else must name a Matrix, so a non-empty value that is
+    not a plain integer is a malformed request and fails closed here instead of
+    being silently coerced into a clear.
+    """
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if not _SUBMITTED_MATRIZ_ID_RE.fullmatch(value):
+        raise StudentMatrixError("A matriz acadêmica selecionada é inválida.")
+    return int(value)
 
 
 def _turma_scope(conn, turma_id: int | None):
@@ -206,6 +228,7 @@ __all__ = [
     "get_allowed_activity_version_ids_for_student",
     "list_assignable_matrices_for_student",
     "matrix_for_turma_assignment",
+    "parse_submitted_matriz_id",
     "resolve_student_matrix_for_edit",
     "validate_student_matrix_for_turma",
 ]
