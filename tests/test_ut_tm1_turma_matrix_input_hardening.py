@@ -28,7 +28,9 @@ from tests.versioned_test_support import isolated_versioned_app_env
 # Mesmo conjunto usado em UT-AM2H: nenhum destes valores nomeia uma matriz.
 MALFORMED = ("abc", "1a", "a1", "1.5", "1,5", "null", "None", "NaN", "-", "1e3", "1_0", "+5")
 
-PARSER_REJECTION = "matriz acadêmica selecionada é inválida"
+STUDENT_PARSER_REJECTION = "matriz acadêmica selecionada é inválida"
+TURMA_SYNTAX_REJECTION = "matriz selecionada é inválida"
+NONEXISTENT_REJECTION = "matriz selecionada não existe"
 COMPATIBILITY_REJECTION = "não pertence ao curso informado"
 
 # Turma 1 do dataset de referencia: PPA-T10, numero 10, matriz 1, sem alunos.
@@ -185,10 +187,10 @@ def test_turma_path_reuses_the_shared_submitted_matrix_parser():
     import app.student_matrix as student_matrix
 
     assert turmas_view.parse_submitted_matriz_id is student_matrix.parse_submitted_matriz_id
-    # E a recusa de sintaxe na Turma e literalmente a mensagem do parser.
+    # O parser compartilhado preserva a mensagem da superficie Aluno.
     with pytest.raises(StudentMatrixError) as excinfo:
         parse_submitted_matriz_id("abc")
-    assert PARSER_REJECTION in str(excinfo.value)
+    assert STUDENT_PARSER_REJECTION in str(excinfo.value)
 
 
 def test_resolver_delegates_syntax_and_keeps_compatibility(tmp_path):
@@ -203,17 +205,17 @@ def test_resolver_delegates_syntax_and_keeps_compatibility(tmp_path):
             # Sintaxe invalida: recusada sem nem consultar o banco.
             resolved, error = turmas_view._resolve_turma_matriz_id(conn, course_id, "abc")
             assert resolved is None
-            assert PARSER_REJECTION in error
+            assert TURMA_SYNTAX_REJECTION in error
 
             # Em branco continua sendo a escolha explicita "Sem matriz".
             assert turmas_view._resolve_turma_matriz_id(conn, course_id, "") == (None, None)
             assert turmas_view._resolve_turma_matriz_id(conn, course_id, None) == (None, None)
 
-            # Sintaxe valida: quem decide e a compatibilidade existente.
+            # Sintaxe valida: o resolvedor separa existencia e compatibilidade.
             assert turmas_view._resolve_turma_matriz_id(conn, course_id, "1") == (1, None)
             resolved, error = turmas_view._resolve_turma_matriz_id(conn, course_id, "99999")
             assert resolved is None
-            assert COMPATIBILITY_REJECTION in error
+            assert NONEXISTENT_REJECTION in error
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +236,7 @@ def test_edit_turma_rejects_malformed_matrix_and_preserves_the_previous_one(tmp_
         # Recusa controlada, e nao um sucesso silencioso.
         categories, messages = zip(*_take_flashes(env["client"]))
         assert "error" in categories
-        assert any(PARSER_REJECTION in message for message in messages)
+        assert any(TURMA_SYNTAX_REJECTION in message for message in messages)
         assert not any("atualizada com sucesso" in message for message in messages)
 
         after = _turma_state(TURMA_ID)
@@ -360,7 +362,7 @@ def test_add_turma_with_malformed_matrix_creates_no_turma(tmp_path):
 
         assert response.status_code == 302
         messages = [message for _, message in _take_flashes(env["client"])]
-        assert any(PARSER_REJECTION in message for message in messages)
+        assert any(TURMA_SYNTAX_REJECTION in message for message in messages)
         assert not any("criada com sucesso" in message for message in messages)
         # Nenhuma turma nasceu, nem com matriz nem sem matriz.
         assert _turma_by_codigo("PPA-T90") is None
@@ -495,5 +497,5 @@ def test_non_empty_out_of_range_matrix_is_rejected_instead_of_clearing(tmp_path,
 
         assert response.status_code == 302
         messages = [message for _, message in _take_flashes(env["client"])]
-        assert any(COMPATIBILITY_REJECTION in message for message in messages)
+        assert any(NONEXISTENT_REJECTION in message for message in messages)
         assert _turma_state(TURMA_ID)["matriz_id"] == TURMA_MATRIZ_ID

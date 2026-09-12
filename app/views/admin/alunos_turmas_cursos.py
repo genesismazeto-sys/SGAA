@@ -175,16 +175,16 @@ def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: str |
         matriz_id = parse_submitted_matriz_id(
             posted_matriz_id if posted_matriz_id is None else str(posted_matriz_id)
         )
-    except StudentMatrixError as e:
-        return None, str(e)
+    except StudentMatrixError:
+        return None, "A matriz selecionada é inválida."
     # Somente o campo em branco limpa; "0" nomeia uma matriz que nao existe.
     if matriz_id is None:
         return None, None
-    matriz = conn.execute(
-        "SELECT * FROM matrizes_atividades WHERE id = ? AND curso_id = ?",
-        (matriz_id, curso_id),
-    ).fetchone()
+    # Existence and Curso compatibility are distinct rejection states.
+    matriz = conn.execute("SELECT id, curso_id FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
     if not matriz:
+        return None, "A matriz selecionada não existe."
+    if matriz["curso_id"] != curso_id:
         return None, "A matriz selecionada não pertence ao curso informado."
     return matriz["id"], None
 
