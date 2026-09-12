@@ -11,6 +11,10 @@ import sys
 import pytest
 from flask import Flask, request, url_for
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -641,7 +645,9 @@ def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_ow
     messages_module._message_catalog.cache_clear()
     catalog = messages_module._message_catalog()
 
-    assert len(catalog) == 556
+    assert_catalog_matches_canonical_baseline(
+        catalog, context="PHASE 4 configuracoes"
+    )
     assert {
         key: catalog[key]["default_text"] for key in MOVED_MESSAGE_DEFAULTS
     } == MOVED_MESSAGE_DEFAULTS

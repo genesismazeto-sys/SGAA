@@ -81,6 +81,12 @@ from app.auth import get_admin_permission_requirement
 
 import main
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "demo.py"
@@ -800,10 +806,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 556, (
-        "message catalog count must match the prod-1 baseline through the extraction; "
-        f"got {len(catalog)}"
-    )
+    assert_catalog_matches_canonical_baseline(catalog, context="UT-15 RED L")
 
     backend_paths = {
         path.relative_to(PROJECT_ROOT).as_posix()
@@ -1073,9 +1076,8 @@ def test_green_8_csrf_zero_delta_and_snapshot_custody(tmp_path):
             f"canonical CSRF snapshot missing: {snapshot_path.name}"
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
-        rows = report["rows"]
-        assert len(rows) == 77, (
-            f"snapshot {suffix} must keep the known 78-row contract"
+        rows = assert_csrf_snapshot_matches_canonical_baseline(
+            report, context=f"UT-15 {suffix}"
         )
 
         demo_rows = [
@@ -1139,12 +1141,13 @@ def test_green_10_hooks_main_stays_zero():
     )
 
 
-def test_green_11_route_inventory_matches_prod1_live_surface():
+def test_green_11_route_inventory_matches_canonical_live_surface():
+    # UT-BR2-ABC: the global inventory counts (127/126) were a stale copy of the
+    # versioned artifact.  UT-15's own concern is the two retired surfaces below.
+    assert_live_route_surface_matches_canonical_baseline(context="UT-15 GREEN 11")
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"
@@ -1152,9 +1155,9 @@ def test_green_11_route_inventory_matches_prod1_live_surface():
     )
 
 
-def test_green_12_message_catalog_stays_536():
+def test_green_12_message_catalog_stays_canonical():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 556, (
-        "current catalog baseline plus the ARQUIVOS product delta must be 556"
+    assert_catalog_matches_canonical_baseline(
+        messages_module._message_catalog(), context="UT-15 GREEN 12"
     )

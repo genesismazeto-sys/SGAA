@@ -25,7 +25,8 @@ GROUP C — Versioning integrity (MOVE, DO NOT CHANGE):
   ``utils.messages._iter_backend_files()`` does NOT scan ``app/versioning/**``
   (verified: it covers main.py + an explicit list + ``app/views/**`` only),
   so implementation must register ``app/versioning/integrity.py`` in
-  ``_iter_backend_files()``; the message catalog must stay exactly 536 (the
+  ``_iter_backend_files()``; the message catalog must stay exactly the
+  canonical key set owned by ``tests/canonical_baseline_support.py`` (the
   strings move with the function; no add/remove/change).
 
 Explicitly NOT authorized (must remain in main; any RED expectation that
@@ -87,6 +88,12 @@ if BASE not in sys.path:
 
 from app.auth import get_admin_permission_requirement
 from app.views import aluno as aluno_view_module
+
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+    assert_route_inventory_artifact_is_canonical,
+)
 
 import main
 
@@ -350,9 +357,10 @@ def test_red_g_message_scanner_covers_target_exactly_once_catalog_stays():
         "app/versioning/integrity.py must be registered exactly once in "
         "utils.messages._iter_backend_files()"
     )
-    assert len(messages_module._message_catalog()) == 556, (
-        "message catalog baseline plus the ARQUIVOS product delta must stay 556 (strings "
-        f"move with the function); got {len(messages_module._message_catalog())}"
+    # UT-BR2-ABC: the strings move with the function, so the canonical key set
+    # must be untouched -- delegated to the single catalog owner.
+    assert_catalog_matches_canonical_baseline(
+        messages_module._message_catalog(), context="UT-16 RED G"
     )
 
 
@@ -514,10 +522,10 @@ def test_green_4_ut17_firewall_three_routes_unchanged():
 
 def test_green_5_architecture_invariants():
     app = main.app
-    routes = list(app.url_map.iter_rules())
-    assert len(routes) == 127, f"routes must match the retired catalog surface, got {len(routes)}"
-    assert len(app.view_functions) == 126, (
-        f"distinct endpoints must match prod-1, got {len(app.view_functions)}"
+    # UT-BR2-ABC: the live rule/endpoint totals are delegated to the canonical
+    # route-inventory owner instead of being re-frozen per suite.
+    routes = assert_live_route_surface_matches_canonical_baseline(
+        app, context="UT-16 GREEN 5"
     )
     unmapped = [
         (rule.rule, method)
@@ -553,11 +561,10 @@ def test_green_6_artifact_repository_custody():
         "canonical CSRF snapshots may carry only the FC-07-authorized "
         f"three-message delta: {report}"
     )
+    assert_route_inventory_artifact_is_canonical(context="UT-16 GREEN 6")
     relative = "tests/_artifacts/route_inventory_baseline.json"
     data = json.loads((PROJECT_ROOT / relative).read_text(encoding="utf-8-sig"))
     routes = data["routes"]
-    assert len(routes) == 127
-    assert len({row["rule"] for row in routes}) == 126
     assert not any(row["rule"] == "/admin/mapeamento-legado" for row in routes)
     assert not any(
         row["endpoint"] == "admin_diagnostico_versioned_shadow_reads"

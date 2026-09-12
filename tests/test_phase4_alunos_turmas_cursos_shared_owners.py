@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -306,7 +310,9 @@ def test_academic_owner_remains_in_canonical_message_catalog():
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
 
-    assert len(catalog) == 556
+    assert_catalog_matches_canonical_baseline(
+        catalog, context="PHASE 4-B6 shared owners"
+    )
     entry = catalog["msg_4642b1608cf6a126"]
     assert entry["default_text"] == "Turma sem código para gerar matrícula."
     assert any(

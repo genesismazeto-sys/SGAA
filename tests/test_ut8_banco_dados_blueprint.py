@@ -34,6 +34,9 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 from app import db as app_db_module
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+)
 from tests.conftest import PYTEST_RUNTIME_ROOT
 
 import main
@@ -624,14 +627,11 @@ def test_red_i_factory_default_registers_20_and_opt_out_registers_none():
     assert len(default_rules) > 0, "default factory sanity check"
 
 
-def test_red_j_target_is_scanned_and_catalog_remains_536():
+def test_red_j_target_is_scanned_and_catalog_remains_canonical():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 556, (
-        "message catalog count must match the canonical baseline; "
-        f"got {len(catalog)}"
-    )
+    assert_catalog_matches_canonical_baseline(catalog, context="UT-8 RED J")
 
     backend_paths = {
         path.relative_to(PROJECT_ROOT).as_posix()
@@ -848,11 +848,11 @@ def test_green_8_manual_backup_intercepted_at_orchestrator_seam_no_network(isola
     )
 
 
-def test_green_10_message_catalog_536_and_views_recursive_coverage():
+def test_green_10_message_catalog_canonical_and_views_recursive_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 556, (
-        "current catalog baseline plus the ARQUIVOS product delta must be 556"
+    assert_catalog_matches_canonical_baseline(
+        messages._message_catalog(), context="UT-8 GREEN 10"
     )
 
     backend_paths = {

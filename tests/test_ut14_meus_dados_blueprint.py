@@ -87,6 +87,12 @@ from flask import session
 
 import main
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "meus_dados.py"
@@ -650,9 +656,8 @@ def test_red_k_csrf_owner_state_aware_and_frozen_row_shape():
             f"canonical CSRF snapshot missing: {snapshot_path.name}"
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
-        rows = report["rows"]
-        assert len(rows) == 77, (
-            f"snapshot {suffix} must keep the known 78-row contract"
+        rows = assert_csrf_snapshot_matches_canonical_baseline(
+            report, context=f"UT-14 {suffix}"
         )
 
         meus_dados_rows = [row for row in rows if row["route"] == "/admin/meus_dados"]
@@ -685,10 +690,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages as messages_module
 
     catalog = messages_module._message_catalog()
-    assert len(catalog) == 556, (
-        "message catalog count must match the prod-1 baseline through the extraction; "
-        f"got {len(catalog)}"
-    )
+    assert_catalog_matches_canonical_baseline(catalog, context="UT-14 RED L")
 
     backend_paths = {
         path.relative_to(PROJECT_ROOT).as_posix()
@@ -853,10 +855,11 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
-    rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 128, f"routes must match prod-1 plus admin report creation, got {len(rules)}"
-    assert len(main.app.view_functions) == 127, (
-        f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
+    # UT-BR2-ABC: the live rule/endpoint totals are delegated to the canonical
+    # route-inventory owner (exact live-vs-artifact equality + artifact digest),
+    # which also detects pairing changes the two scalars could not see.
+    rules = assert_live_route_surface_matches_canonical_baseline(
+        context="UT-14 GREEN 4"
     )
 
     unmapped = [
@@ -876,8 +879,8 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
 def test_green_5_message_catalog_schema_and_reverse_dependencies():
     from utils import messages as messages_module
 
-    assert len(messages_module._message_catalog()) == 556, (
-        "current catalog baseline plus the ARQUIVOS product delta must be 556"
+    assert_catalog_matches_canonical_baseline(
+        messages_module._message_catalog(), context="UT-14 GREEN 5"
     )
 
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION

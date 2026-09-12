@@ -8,6 +8,10 @@ import sqlite3
 import subprocess
 import sys
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -219,7 +223,9 @@ def test_settings_messages_remain_in_catalog_under_neutral_owner():
 
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
-    assert len(catalog) == 556
+    assert_catalog_matches_canonical_baseline(
+        catalog, context="PHASE 4 requisicoes shared owners"
+    )
     for key in SETTINGS_MESSAGE_KEYS:
         usages = catalog[key]["usages"]
         assert usages

@@ -15,6 +15,15 @@ from app import create_app
 from app.auth import get_admin_permission_requirement
 from app.views.admin import LegacyRouteRegistrationError, register_legacy_blueprint
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_inventory_matches_canonical_baseline,
+    canonical_message_catalog,
+    MATRIX_VERSION_SURFACE_RETIRED_ROUTES,
+    reconcile_historical_csrf_snapshot,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MAIN_PATH = PROJECT_ROOT / "main.py"
@@ -828,31 +837,15 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
-        retired_routes = {
-            "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
-            "/admin/matrizes/<int:matriz_id>/versoes/definir",
-            "/admin/matrizes/<int:matriz_id>/versoes/remover",
-        }
-        old_snapshot["rows"] = [
-            row for row in old_snapshot["rows"]
-            if row["route"] != "/admin/normas-atividade/nova"
-            and row["route"] not in retired_routes
-        ]
-        old_snapshot["summary"]["page_statuses"] = [
-            item for item in old_snapshot["summary"]["page_statuses"]
-            if item["path"] not in {
-                "/admin/normas-atividade",
-                "/admin/normas-atividade/nova",
-                "/admin/matrizes/1/versoes",
-                "/admin/catalogo-versoes",
-            }
-        ]
-        old_snapshot["summary"]["total_mutating_routes"] -= 3
-        old_snapshot["summary"]["status_counts"]["ok_rendered_form_token"] -= 2
-        old_snapshot["summary"]["status_counts"]["ok_specific_regression_test"] -= 1
+        # UT-BR2-ABC: the Normas-domain + Matrix-version-surface retirement
+        # ledger is owned once by tests/canonical_baseline_support.py.
+        reconcile_historical_csrf_snapshot(old_snapshot)
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 74
+        assert_csrf_snapshot_matches_canonical_baseline(
+            new_snapshot, context=f"PHASE 4-B4.2 {snapshot_path.name}"
+        )
+        assert len(old_rows) == len(new_rows)
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]
@@ -1174,37 +1167,36 @@ def test_csrf_snapshots_prove_exactly_five_owner_only_deltas_when_regenerated():
 # =====================================================================
 
 
-def test_route_inventory_baseline_matches_live_retired_surface_counts():
-    import main
+def test_route_inventory_baseline_keeps_the_requisicoes_cohort_and_retired_surface():
+    """B4.2 local concern: the Requisicoes cohort is present, the retired one is not.
 
+    UT-BR2-ABC retired this suite's private copy of the global inventory counts
+    (124/123/123): a stale duplicate of the versioned artifact that
+    ``tests/test_route_inventory_snapshot.py`` owns exactly.
+    """
     raw = ROUTE_INVENTORY_PATH.read_bytes()
-    data = json.loads(raw.decode("utf-8"))
-    assert data["schema_version"] == 1
-    assert data["generated_from"] == "main.app.url_map"
-    routes = data["routes"]
-    assert len(routes) == 124
-    assert len({entry["rule"] for entry in routes}) == 123
-    non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 123
+    assert_live_route_inventory_matches_canonical_baseline(context="PHASE 4-B4.2")
 
+    routes = json.loads(raw.decode("utf-8"))["routes"]
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
     }
-    live_triples = {
-        (rule.rule, rule.endpoint, tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)))
-        for rule in main.app.url_map.iter_rules()
-        if set(rule.methods or ()) & BUSINESS_METHODS
-    }
-    assert live_triples == baseline_triples
+    for rule, endpoint, methods in ROUTE_MATRIX:
+        assert (rule, endpoint, methods) in baseline_triples, (
+            f"B4.2 route must stay in the canonical inventory: {rule} -> {endpoint}"
+        )
+    for retired in MATRIX_VERSION_SURFACE_RETIRED_ROUTES:
+        assert not any(entry["rule"] == retired for entry in routes), (
+            f"retired Matrix version surface route must stay out of the "
+            f"inventory: {retired}"
+        )
     assert ROUTE_INVENTORY_PATH.read_bytes() == raw
 
 
-def test_message_catalog_count_matches_retired_surface_state():
-    from utils import messages
-
-    messages._message_catalog.cache_clear()
-    catalog = messages._message_catalog()
-    assert len(catalog) == 526
+def test_message_catalog_matches_canonical_baseline():
+    assert_catalog_matches_canonical_baseline(
+        canonical_message_catalog(), context="PHASE 4-B4.2"
+    )
 
 
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():

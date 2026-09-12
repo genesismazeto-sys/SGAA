@@ -41,6 +41,11 @@ from pathlib import Path
 
 import main
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    canonical_message_catalog,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 MAIN_OWNED_HOOKS_FUTURE: set[str] = set()
@@ -206,12 +211,16 @@ def test_message_scanner_includes_future_authz_gate_and_errors_owners(monkeypatc
 # pins the two files that DO need coverage (authz_gate.py, errors.py).
 
 
-def test_message_catalog_count_stays_536_green_control():
-    """Preserved invariant (must stay GREEN at RED entry and after UT-3)."""
-    from utils import messages
+def test_message_catalog_stays_canonical_green_control():
+    """Preserved invariant (must stay GREEN at RED entry and after UT-3).
 
-    messages._message_catalog.cache_clear()
-    assert len(messages._message_catalog()) == 556
+    UT-BR2-ABC: the global catalog truth is owned by
+    ``tests/canonical_baseline_support.py``; UT-3's own concern is only that
+    moving the hooks changed nothing about it.
+    """
+    assert_catalog_matches_canonical_baseline(
+        canonical_message_catalog(), context="UT-3 app hooks"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════

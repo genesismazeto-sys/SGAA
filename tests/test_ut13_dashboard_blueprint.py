@@ -103,6 +103,12 @@ from app.auth import get_admin_permission_requirement
 
 import main
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "dashboard.py"
@@ -632,10 +638,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 556, (
-        "message catalog count must match the canonical baseline; "
-        f"got {len(catalog)}"
-    )
+    assert_catalog_matches_canonical_baseline(catalog, context="UT-13 RED L")
 
     backend_paths = {
         path.relative_to(PROJECT_ROOT).as_posix()
@@ -846,10 +849,11 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
-    rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 128, f"routes must stay baseline plus admin report creation, got {len(rules)}"
-    assert len(main.app.view_functions) == 127, (
-        f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
+    # UT-BR2-ABC: the live rule/endpoint totals are delegated to the canonical
+    # route-inventory owner (exact live-vs-artifact equality + artifact digest),
+    # which also detects pairing changes the two scalars could not see.
+    rules = assert_live_route_surface_matches_canonical_baseline(
+        context="UT-13 GREEN 4"
     )
 
     unmapped = [
@@ -866,11 +870,11 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     )
 
 
-def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
+def test_green_5_message_catalog_canonical_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 556, (
-        "current catalog baseline plus the ARQUIVOS product delta must be 556"
+    assert_catalog_matches_canonical_baseline(
+        messages._message_catalog(), context="UT-13 GREEN 5"
     )
 
     backend_paths = {
@@ -1126,8 +1130,11 @@ def test_green_12_pending_response_metrics_behavior(tmp_path):
 def test_green_14_csrf_zero_dashboard_partition_and_cumulative_projection():
     # Dashboard cohort contributes ZERO mutating rows: /admin/dashboard is
     # GET-only.  The historical cumulative owner-delta projections therefore
-    # remain 35 (alunos/turmas/cursos), 43 (matrizes) and 48 (requisicoes) --
-    # no regeneration of the canonical snapshots is authorized or expected.
+    # stay exactly where their owning suites pin them -- 36 in
+    # test_phase4_alunos_turmas_cursos_blueprint, 41 in
+    # test_phase4_matrizes_blueprint, 46 in test_phase4_requisicoes_blueprint
+    # (UT-BR2-ABC corrected the stale 35/43/48 recital that used to sit here) --
+    # and no regeneration of the canonical snapshots is authorized or expected.
     snapshot_dir = PROJECT_ROOT / "tests" / "_artifacts"
     for suffix in ("shadow_off", "shadow_on"):
         snapshot_path = snapshot_dir / f"csrf_inventory_{suffix}.json"
@@ -1135,9 +1142,8 @@ def test_green_14_csrf_zero_dashboard_partition_and_cumulative_projection():
             f"canonical CSRF snapshot missing: {snapshot_path.name}"
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
-        rows = report["rows"]
-        assert len(rows) == 77, (
-            f"snapshot {suffix} must keep the known 78-row contract"
+        rows = assert_csrf_snapshot_matches_canonical_baseline(
+            report, context=f"UT-13 {suffix}"
         )
 
         dashboard_rows = [row for row in rows if row["route"] == DASHBOARD_RULE]

@@ -11,6 +11,7 @@ import pytest
 import main
 from app.student_matrix import StudentMatrixError, parse_submitted_matriz_id
 from app.views.admin import alunos_turmas_cursos as turmas_view
+from tests import canonical_baseline_support as governance
 from tests.canonical_matrix_test_support import login_admin
 from tests.versioned_test_support import isolated_versioned_app_env
 from utils import messages
@@ -21,11 +22,13 @@ INVALID_TURMA = "A matriz selecionada é inválida."
 NONEXISTENT_TURMA = "A matriz selecionada não existe."
 INCOMPATIBLE_TURMA = "A matriz selecionada não pertence ao curso informado."
 
-PARENT_CATALOG_COUNT = 548
-CANDIDATE_CATALOG_COUNT = 554
-PARENT_CATALOG_KEYS_SHA256 = (
-    "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
-)
+# UT-BR2-ABC: MX3's parent/candidate counts and the frozen parent key digest are
+# the canonical catalog baseline, so they are declared once in
+# tests/canonical_baseline_support.py and consumed here.  MX3 keeps sole
+# ownership of the exact six-key StudentMatrixError delta below.
+PARENT_CATALOG_COUNT = governance.PARENT_CATALOG_COUNT
+CANDIDATE_CATALOG_COUNT = governance.CANONICAL_CATALOG_COUNT
+PARENT_CATALOG_KEYS_SHA256 = governance.PARENT_CATALOG_KEYS_SHA256
 NEW_STUDENT_MATRIX_KEYS = {
     "msg_0b2541cb6783e532": INVALID_STUDENT,
     "msg_6c846efc640f4a94": "A matriz acadêmica selecionada não existe.",

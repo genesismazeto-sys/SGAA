@@ -849,6 +849,8 @@ def test_v4_to_v5_preserves_admin_arquivos_autoincrement_high_water():
 def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visible():
     from utils import messages
 
+    from tests import canonical_baseline_support as governance
+
     expected_service_keys = {
         "msg_03838cf4375b19ba", "msg_37e2b83d1d482dda", "msg_3a41da0ccaf4fb87",
         "msg_4352c3bedf64fdb3", "msg_50e2ec3c13d4bacf", "msg_5d39cfef2de1d430",
@@ -872,39 +874,46 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     assert service_keys == expected_service_keys | preexisting_shared_keys
     assert "msg_adc145990771728c" in catalog
     assert "msg_68e61511e6b7b342" not in catalog
-    head_actual, head_expected, legitimate_net_delta = 526, 537, 19
+    # UT-BR2-ABC: the named delta ledger this test used to re-type inline is now
+    # owned once by tests/canonical_baseline_support.py (CATALOG_LEDGER), so the
+    # 24 suites that consumed a frozen copy of its total cannot drift apart
+    # again.  What stays here is this test's own concern: the ARQUIVOS service
+    # owns exactly its key set, and the ledger still reconciles against the
+    # FC-07 head whose 11-key baseline debt is deliberately kept visible.
+    assert {"msg_34c6fdd255ae0c6e", "msg_c52418de2740e169"} <= set(catalog)
+    assert governance.CATALOG_FC07_HEAD_ACTUAL == 526
+    assert governance.CATALOG_FC07_HEAD_EXPECTED == 537
+    assert governance.CATALOG_FC07_NET_PRODUCT_DELTA == 19
     # UT-AM1 retired exactly one message, "Selecione uma matriz para a turma."
     # (msg_4d8251747aafd60d), because a Turma Matrix became an optional default
     # instead of a required field.  UT-AM1 adds no new catalogued message.
-    student_matrix_net_delta = -1
     # UT-AM2 adds exactly two catalogued messages, both on the admin Edit Aluno
     # surface that now assigns the student-owned academic Matrix explicitly:
     # "Matriz academica" (msg_34c6fdd255ae0c6e) labels the control and
     # "Sem matriz" (msg_c52418de2740e169) is the explicit clear-to-NULL choice.
-    # No message is retired, so the net delta is +2.
-    explicit_matrix_assignment_net_delta = 2
-    assert {"msg_34c6fdd255ae0c6e", "msg_c52418de2740e169"} <= set(catalog)
-    # UT-TM1/TM2 added the two unique neutral Turma validation messages.
-    # They belong to MX3's exact parent state, not to the MX3 candidate delta.
-    turma_matrix_validation_net_delta = 2
-    parent_count = (
-        head_actual
-        + legitimate_net_delta
-        + student_matrix_net_delta
-        + explicit_matrix_assignment_net_delta
-        + turma_matrix_validation_net_delta
-    )
-    assert parent_count == 548
+    # UT-TM1/TM2 added the two unique neutral Turma validation messages; they
+    # belong to MX3's exact parent state, not to the MX3 candidate delta.
+    assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
+        526,
+        19,
+        -1,
+        2,
+        2,
+        6,
+    ], "the named catalog delta ledger must stay exactly these six terms"
+    assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
     # key, so the exact catalog-key delta is +6 with no removal/replacement.
-    student_matrix_error_ownership_net_delta = 6
-    assert (
-        len(catalog)
-        == parent_count + student_matrix_error_ownership_net_delta
-        == 554
+    assert governance.CATALOG_LEDGER[-1][1] == 6
+    governance.assert_catalog_matches_canonical_baseline(
+        catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert (head_expected + legitimate_net_delta) - len(catalog) == 2
+    assert governance.CANONICAL_CATALOG_COUNT == 554
+    assert (
+        governance.CATALOG_FC07_HEAD_EXPECTED
+        + governance.CATALOG_FC07_NET_PRODUCT_DELTA
+    ) - len(catalog) == governance.CATALOG_VISIBLE_BASELINE_DEBT == 2
 
 
 def test_legacy_path_escape_is_rejected(service_env, tmp_path):

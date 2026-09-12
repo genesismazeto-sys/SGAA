@@ -17,7 +17,9 @@ The contract covered here (GREEN targets):
      rule/method collisions;
   7. ``main`` identities for the 6 handlers and 15 helpers;
   8. ``admin_editar_matriz`` keeps the B5-P ``app.admin_access`` owner;
-  9. route-inventory baseline byte-identical, message catalog == 526, CSRF
+  9. route-inventory baseline and message catalog identical to the canonical
+     baselines owned by ``tests/canonical_baseline_support.py`` (UT-BR2-ABC
+     retired this module's private copies of both global scalars), CSRF
      snapshots show exactly 5 surviving Matrizes owner-only deltas plus the
      later blueprint deltas, canonical SQLite never opened;
   10. ``_get_grupos_atividade`` and ``_get_matriz_active_norma_ids`` remain
@@ -44,6 +46,15 @@ from flask import Flask, request, url_for
 from app import create_app
 from app.auth import get_admin_permission_requirement
 from app.views.admin import LegacyRouteRegistrationError, register_legacy_blueprint
+
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_inventory_matches_canonical_baseline,
+    canonical_message_catalog,
+    MATRIX_VERSION_SURFACE_RETIRED_ROUTES,
+    reconcile_historical_csrf_snapshot,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -951,41 +962,42 @@ def test_admin_access_owner_preserved_in_matrizes_access_consumers():
 
 
 # ---------------------------------------------------------------------------
-# 9. Route inventory byte-identical + catalog 536 + CSRF 8 owner-only deltas
+# 9. Route inventory + catalog delegated to the canonical baseline owner;
+#    CSRF 5 surviving Matrizes owner-only deltas
 # ---------------------------------------------------------------------------
 
 
-def test_route_inventory_baseline_matches_live_retired_surface_counts():
-    import main
+def test_route_inventory_baseline_keeps_the_matrizes_cohort_and_retired_surface():
+    """B5 local concern: the Matrizes cohort is present, the retired one is not.
 
+    UT-BR2-ABC retired this suite's private copy of the global inventory counts
+    (123/122/122) -- a stale duplicate of the versioned artifact that
+    ``tests/test_route_inventory_snapshot.py`` owns exactly.  The global truth is
+    delegated; what stays here is B5's own reading of the artifact.
+    """
     raw = ROUTE_INVENTORY_PATH.read_bytes()
-    data = json.loads(raw.decode("utf-8"))
-    assert data["schema_version"] == 1
-    assert data["generated_from"] == "main.app.url_map"
-    routes = data["routes"]
-    assert len(routes) == 123
-    assert len({entry["rule"] for entry in routes}) == 122
-    non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 122
+    assert_live_route_inventory_matches_canonical_baseline(context="PHASE 4-B5")
 
+    routes = json.loads(raw.decode("utf-8"))["routes"]
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
     }
-    live_triples = {
-        (rule.rule, rule.endpoint, tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)))
-        for rule in main.app.url_map.iter_rules()
-        if set(rule.methods or ()) & BUSINESS_METHODS
-    }
-    assert live_triples == baseline_triples
+    for rule, endpoint, methods in ROUTE_MATRIX:
+        assert (rule, endpoint, methods) in baseline_triples, (
+            f"B5 route must stay in the canonical inventory: {rule} -> {endpoint}"
+        )
+    for retired in MATRIX_VERSION_SURFACE_RETIRED_ROUTES:
+        assert not any(entry["rule"] == retired for entry in routes), (
+            f"retired Matrix version surface route must stay out of the "
+            f"inventory: {retired}"
+        )
     assert ROUTE_INVENTORY_PATH.read_bytes() == raw
 
 
-def test_message_catalog_count_matches_retired_surface_state():
-    from utils import messages
-
-    messages._message_catalog.cache_clear()
-    catalog = messages._message_catalog()
-    assert len(catalog) == 526
+def test_message_catalog_matches_canonical_baseline():
+    assert_catalog_matches_canonical_baseline(
+        canonical_message_catalog(), context="PHASE 4-B5"
+    )
 
 
 def test_canonical_sqlite_never_opened_during_isolated_flow(tmp_path):
@@ -1059,31 +1071,17 @@ def test_csrf_snapshots_prove_exactly_five_surviving_owner_only_deltas():
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
-        retired_routes = {
-            "/admin/matrizes/<int:matriz_id>/atividades/nova/<string:active_tab>",
-            "/admin/matrizes/<int:matriz_id>/versoes/definir",
-            "/admin/matrizes/<int:matriz_id>/versoes/remover",
-        }
-        old_snapshot["rows"] = [
-            row for row in old_snapshot["rows"]
-            if row["route"] != "/admin/normas-atividade/nova"
-            and row["route"] not in retired_routes
-        ]
-        old_snapshot["summary"]["page_statuses"] = [
-            item for item in old_snapshot["summary"]["page_statuses"]
-            if item["path"] not in {
-                "/admin/normas-atividade",
-                "/admin/normas-atividade/nova",
-                "/admin/matrizes/1/versoes",
-                "/admin/catalogo-versoes",
-            }
-        ]
-        old_snapshot["summary"]["total_mutating_routes"] -= 3
-        old_snapshot["summary"]["status_counts"]["ok_rendered_form_token"] -= 2
-        old_snapshot["summary"]["status_counts"]["ok_specific_regression_test"] -= 1
+        # UT-BR2-ABC: this reconciliation ledger (Normas domain removal + Matrix
+        # version surface retirement) used to be re-typed in each suite that
+        # compares a historical era against the canonical snapshot.  It is now
+        # declared once in tests/canonical_baseline_support.py.
+        reconcile_historical_csrf_snapshot(old_snapshot)
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 74
+        assert_csrf_snapshot_matches_canonical_baseline(
+            new_snapshot, context=f"PHASE 4-B5 {snapshot_path.name}"
+        )
+        assert len(old_rows) == len(new_rows)
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]

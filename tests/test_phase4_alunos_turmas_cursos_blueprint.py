@@ -34,9 +34,10 @@ Contract covered here (GREEN targets):
      three moved handlers carry no ``periodo_corrente`` reference and no
      template in ``templates/**`` contains the token;
   9. RBAC exact VIEW 6 / EDIT 13 / FULL 5 for all 24 pairs;
- 10. route inventory 20814 bytes, SHA256
-     ``6e32148cd1988d5e405c9d11bdbda285359f72d5fc7eca8bd5ef8da9b83049fa`` and
-      live URL contract unchanged; message catalog exactly 536; final CSRF
+ 10. route inventory and message catalog stay identical to the canonical
+      baselines owned by ``tests/canonical_baseline_support.py`` (UT-BR2-ABC
+      retired this module's private copies of those two global scalars) and the
+      live URL contract is unchanged; final CSRF
       snapshots differ from baseline ``cab4c61`` by exactly 27 POST owner-only
       deltas in each shadow: 11 B6 (main ->
       app.views.admin.alunos_turmas_cursos) + 11 UT-8 Banco de Dados (main ->
@@ -52,7 +53,6 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-import hashlib
 import inspect
 import json
 import os
@@ -66,6 +66,14 @@ from flask import request, url_for
 from app import create_app
 from app.auth import get_admin_permission_requirement
 from app.views.admin import LegacyRouteRegistrationError, register_legacy_blueprint
+
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_inventory_matches_canonical_baseline,
+    canonical_message_catalog,
+    reconcile_historical_csrf_snapshot,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -121,8 +129,11 @@ STUDENT_IMPORT_HANDLER_NAMES = {
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
-ROUTE_INVENTORY_BYTES = 20171
-ROUTE_INVENTORY_SHA256 = "2cbdfe85b7cb995a72e185f774714af13397a65bf143730198387c076f77778e"
+# UT-BR2-ABC: the route inventory byte count and SHA used to be frozen here.
+# Both were copies of the versioned artifact that
+# tests/test_route_inventory_snapshot.py already owns byte-for-byte, and both
+# rotted two extractions behind it.  B6's own concern -- the live URL contract
+# is unchanged by the extraction -- is asserted below via the canonical owner.
 
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
@@ -286,13 +297,16 @@ ALLOWED_CSRF_STATUSES = {
 
 C1_COURSE_DETAIL_PAGE_PATH = "/admin/cursos/2"
 C1_ARQUIVOS_PAGE_PATH = "/admin/arquivos?edit_arquivo=1"
-C1_STATUS_COUNTS_OLD = {
-    "ok_dynamic_form_token": 14,
-    "ok_rendered_form_token": 54,
-}
-C1_STATUS_COUNTS_NEW = {
-    "ok_dynamic_form_token": 13,
-    "ok_rendered_form_token": 55,
+# UT-BR2-ABC: these used to be two pairs of absolute bucket totals (14/54 ->
+# 13/55), an era-frozen copy of the canonical snapshot's summary that drifted the
+# moment the Matrix version surface was retired.  C1's actual concern is purely
+# local and signed: the FC-07 Arquivos edit row reclassifies from a dynamic-form
+# token to a rendered-form token, and no other bucket moves.  Absolute bucket
+# totals are the canonical snapshot's concern; row-level ``status`` values are
+# still compared field-by-field for every row in ``_assert_c1_archivos_rows``.
+C1_STATUS_COUNT_DELTAS = {
+    "ok_dynamic_form_token": -1,
+    "ok_rendered_form_token": 1,
 }
 C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
 C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"
@@ -360,10 +374,12 @@ def _assert_c1_reconciled_summary(old_summary, new_summary):
     old_counts = old_summary["status_counts"]
     new_counts = new_summary["status_counts"]
     assert set(old_counts) == set(new_counts)
-    for status, old_value in C1_STATUS_COUNTS_OLD.items():
-        assert old_counts.get(status) == old_value
-        assert new_counts.get(status) == C1_STATUS_COUNTS_NEW[status]
-    for status in set(old_counts) - set(C1_STATUS_COUNTS_OLD):
+    for status, delta in C1_STATUS_COUNT_DELTAS.items():
+        assert new_counts[status] - old_counts[status] == delta, (
+            f"C1 status bucket {status} must move by exactly {delta:+d}; "
+            f"old={old_counts[status]} new={new_counts[status]}"
+        )
+    for status in set(old_counts) - set(C1_STATUS_COUNT_DELTAS):
         assert old_counts[status] == new_counts[status]
 
     old_pages_all = old_summary["page_statuses"]
@@ -1579,40 +1595,33 @@ def test_no_template_references_periodo_corrente():
 # ---------------------------------------------------------------------------
 
 
-def test_route_inventory_baseline_is_byte_identical_and_live_url_contract_unchanged():
-    import main
+def test_route_inventory_baseline_is_canonical_and_live_url_contract_unchanged():
+    """B6 local concern: the extraction moved handlers, not the URL contract.
 
+    UT-BR2-ABC delegates the global inventory truth to the canonical owner
+    (exact live-vs-artifact equality plus the artifact digest), and keeps B6's
+    own reads: the artifact is the file this suite reads, every B6 route/method
+    pairing is still present with its endpoint, and reading it is side-effect
+    free.
+    """
     raw = ROUTE_INVENTORY_PATH.read_bytes()
-    assert len(raw) == ROUTE_INVENTORY_BYTES
-    assert hashlib.sha256(raw).hexdigest() == ROUTE_INVENTORY_SHA256
+    assert_live_route_inventory_matches_canonical_baseline(context="PHASE 4-B6")
 
-    data = json.loads(raw.decode("utf-8"))
-    assert data["schema_version"] == 1
-    assert data["generated_from"] == "main.app.url_map"
-    routes = data["routes"]
-    assert len(routes) == 127
-    assert len({entry["rule"] for entry in routes}) == 126
-    non_static = [entry for entry in routes if entry["rule"] != "/static/<path:filename>"]
-    assert len(non_static) == 126
-
+    routes = json.loads(raw.decode("utf-8"))["routes"]
     baseline_triples = {
         (entry["rule"], entry["endpoint"], tuple(entry["methods"])) for entry in routes
     }
-    live_triples = {
-        (rule.rule, rule.endpoint, tuple(sorted(set(rule.methods or ()) & BUSINESS_METHODS)))
-        for rule in main.app.url_map.iter_rules()
-        if set(rule.methods or ()) & BUSINESS_METHODS
-    }
-    assert live_triples == baseline_triples
+    for rule, endpoint, methods in ROUTE_MATRIX:
+        assert (rule, endpoint, methods) in baseline_triples, (
+            f"B6 route must stay in the canonical inventory: {rule} -> {endpoint}"
+        )
     assert ROUTE_INVENTORY_PATH.read_bytes() == raw
 
 
-def test_message_catalog_count_remains_536():
-    from utils import messages
-
-    messages._message_catalog.cache_clear()
-    catalog = messages._message_catalog()
-    assert len(catalog) == 556
+def test_message_catalog_remains_canonical():
+    assert_catalog_matches_canonical_baseline(
+        canonical_message_catalog(), context="PHASE 4-B6"
+    )
 
 
 def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted():
@@ -1630,14 +1639,21 @@ def test_csrf_snapshots_prove_exactly_eleven_b6_owner_only_deltas_when_extracted
         old_snapshot = json.loads(old_result.stdout)
         new_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
-        old_snapshot["rows"] = [row for row in old_snapshot["rows"] if row["route"] != "/admin/normas-atividade/nova"]
-        old_snapshot["summary"]["page_statuses"] = [
-            item for item in old_snapshot["summary"]["page_statuses"]
-            if item["path"] not in {"/admin/normas-atividade", "/admin/normas-atividade/nova"}
-        ]
+        # UT-BR2-ABC: the retirements that separate the ``cab4c61`` era from the
+        # canonical snapshot (Normas domain removal + Matrix version surface
+        # retirement) are a named ledger owned by canonical_baseline_support, not
+        # an ad-hoc filter re-typed per suite.
+        reconcile_historical_csrf_snapshot(old_snapshot)
         old_rows = old_snapshot["rows"]
         new_rows = new_snapshot["rows"]
-        assert len(old_rows) == len(new_rows) == 77
+        # The absolute total is the canonical owner's concern; B6's concern is
+        # that the reconciled historical era and the current era hold the same
+        # protected rows in the same order, so the owner-only deltas below are
+        # the *only* difference between them.
+        assert_csrf_snapshot_matches_canonical_baseline(
+            new_snapshot, context=f"PHASE 4-B6 {snapshot_path.name}"
+        )
+        assert len(old_rows) == len(new_rows)
         assert [row["route"] for row in old_rows] == [row["route"] for row in new_rows]
 
         old_summary = old_snapshot["summary"]

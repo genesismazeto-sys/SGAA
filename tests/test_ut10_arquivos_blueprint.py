@@ -57,6 +57,12 @@ from app.auth import get_admin_permission_requirement
 
 import main
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "arquivos.py"
@@ -708,10 +714,8 @@ def test_red_k_csrf_snapshots_show_exactly_three_arquivos_owner_only_deltas():
             f"canonical CSRF snapshot missing: {snapshot_path.name}"
         )
         report = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
-        rows = report["rows"]
-        assert len(rows) == 77, (
-            "known cumulative current snapshot contract: 78 mutating rows "
-            f"per snapshot, got {len(rows)}"
+        rows = assert_csrf_snapshot_matches_canonical_baseline(
+            report, context=f"UT-10 {suffix}"
         )
 
         partition = [
@@ -790,10 +794,7 @@ def test_red_l_message_scanner_auto_covers_target_without_registration():
     from utils import messages
 
     catalog = messages._message_catalog()
-    assert len(catalog) == 556, (
-        "message catalog count must match the prod-1 baseline through the extraction; "
-        f"got {len(catalog)}"
-    )
+    assert_catalog_matches_canonical_baseline(catalog, context="UT-10 RED L")
 
     backend_paths = {
         path.relative_to(PROJECT_ROOT).as_posix()
@@ -999,10 +1000,11 @@ def test_green_3_rbac_exact_matches_and_live_endpoint_set():
 
 
 def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
-    rules = list(main.app.url_map.iter_rules())
-    assert len(rules) == 128, f"routes must match prod-1 plus admin report creation, got {len(rules)}"
-    assert len(main.app.view_functions) == 127, (
-        f"distinct endpoints must match prod-1, got {len(main.app.view_functions)}"
+    # UT-BR2-ABC: the live rule/endpoint totals are delegated to the canonical
+    # route-inventory owner (exact live-vs-artifact equality + artifact digest),
+    # which also detects pairing changes the two scalars could not see.
+    rules = assert_live_route_surface_matches_canonical_baseline(
+        context="UT-10 GREEN 4"
     )
 
     business = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -1020,11 +1022,11 @@ def test_green_4_global_invariants_routes_endpoints_rbac_hooks():
     )
 
 
-def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
+def test_green_5_message_catalog_canonical_and_views_recursive_scanner_coverage():
     from utils import messages
 
-    assert len(messages._message_catalog()) == 556, (
-        "current catalog baseline plus the ARQUIVOS product delta must be 556"
+    assert_catalog_matches_canonical_baseline(
+        messages._message_catalog(), context="UT-10 GREEN 5"
     )
 
     backend_paths = {

@@ -86,6 +86,13 @@ if BASE not in sys.path:
 import main  # noqa: E402  (module-level import is safe; conftest imports main first)
 import app.db as app_db_module  # noqa: E402
 
+from tests.canonical_baseline_support import (  # noqa: E402
+    assert_catalog_matches_canonical_baseline,
+    assert_csrf_snapshot_matches_canonical_baseline,
+    assert_live_route_surface_matches_canonical_baseline,
+    assert_route_inventory_artifact_is_canonical,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TARGET_PATH = PROJECT_ROOT / "app" / "views" / "files.py"
@@ -546,11 +553,10 @@ def test_green_2_entry_baseline_fingerprints_match_frozen_constants():
 
 
 def test_green_3_live_route_and_endpoint_invariants():
+    # UT-BR2-ABC: the live rule/endpoint totals are delegated to the canonical
+    # route-inventory owner; UT-17's own concern is the three infra endpoints.
+    assert_live_route_surface_matches_canonical_baseline(context="UT-17 GREEN 3")
     rules = _live_rules()
-    assert len(rules) == 128, f"routes must stay baseline plus admin report creation, got {len(rules)}"
-    assert len(main.app.view_functions) == 127, (
-        f"distinct endpoints must stay 128, got {len(main.app.view_functions)}"
-    )
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         assert endpoint in main.app.view_functions, f"endpoint {endpoint} missing"
         matches = [rule for rule in rules if rule.endpoint == endpoint]
@@ -602,11 +608,11 @@ def test_green_5_rbac_unmapped_stays_zero():
     )
 
 
-def test_green_6_message_catalog_stays_536():
+def test_green_6_message_catalog_stays_canonical():
     from utils.messages import _message_catalog
 
-    assert len(_message_catalog()) == 556, (
-        "message catalog must match the canonical baseline"
+    assert_catalog_matches_canonical_baseline(
+        _message_catalog(), context="UT-17 GREEN 6"
     )
 
 
@@ -679,9 +685,10 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     import json
 
-    route_data = json.loads(ROUTE_INVENTORY_ARTIFACT.read_text(encoding="utf-8"))
+    route_data = assert_route_inventory_artifact_is_canonical(
+        context="UT-17 GREEN 10"
+    )
     routes = route_data["routes"]
-    assert len(routes) == 127, "route inventory artifact must exclude the retired catalog index"
     for endpoint, expected_rule in INFRA_ENDPOINTS.items():
         matching = [
             item
@@ -694,8 +701,9 @@ def test_green_10_artifacts_git_canonical_zero_delta():
 
     for artifact in (CSRF_ON_ARTIFACT, CSRF_OFF_ARTIFACT):
         data = json.loads(artifact.read_text(encoding="utf-8"))
-        rows = data["rows"]
-        assert len(rows) == 77, f"{artifact.name} must keep 78 rows"
+        rows = assert_csrf_snapshot_matches_canonical_baseline(
+            data, context=f"UT-17 GREEN 10 {artifact.name}"
+        )
         infra_routes = {
             "/uploads/<path:filename>",
             "/health",

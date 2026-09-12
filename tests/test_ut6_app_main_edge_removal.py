@@ -29,6 +29,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.canonical_baseline_support import (
+    assert_catalog_matches_canonical_baseline,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -48,7 +52,9 @@ LITERAL_IMPORT_MECHANISMS = frozenset(
 
 MESSAGE_KEY = "msg_b340e19ed2686d57"
 MESSAGE_DEFAULT_TEXT = "Houve atualizações nas suas solicitações."
-MESSAGE_CATALOG_SIZE = 556
+# UT-BR2-ABC: the catalog size is no longer frozen here.  It is owned once by
+# tests/canonical_baseline_support.py; UT-6 only asserts that moving the sink
+# leaves that canonical baseline untouched.
 
 FUTURE_URLS_MODULE = "app.web.urls"
 FUTURE_REQUISITIONS_MODULE = "app.requisitions"
@@ -864,9 +870,11 @@ def _catalog_entry() -> dict:
     return entry
 
 
-def test_contract_h_catalog_size_is_preserved() -> None:
-    """GREEN control: moving the sink must not change the catalog size."""
-    assert len(_messages_module()._message_catalog()) == MESSAGE_CATALOG_SIZE
+def test_contract_h_catalog_is_preserved() -> None:
+    """GREEN control: moving the sink must not change the catalog key set."""
+    assert_catalog_matches_canonical_baseline(
+        _messages_module()._message_catalog(), context="UT-6 contract H"
+    )
 
 
 def test_contract_h_catalog_entry_default_text_is_preserved() -> None:
