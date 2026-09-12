@@ -989,12 +989,15 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 
 .form-row{ position:relative; min-height:var(--btn-h); }
 
+form label{ white-space:nowrap; }
+
 .field-label,
 .row-label{
   position:absolute;
   right:calc(100% + var(--form-gap));
   top:50%; transform:translateY(-50%);
   width:var(--form-label-w);
+  min-width:max-content;
   text-align:right;
   font-size:var(--font-size-small);
   color:var(--text-secondary);

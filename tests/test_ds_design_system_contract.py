@@ -196,6 +196,41 @@ def test_tokens_file_declares_tokens_only():
     assert not bad_props, f"tokens.css must only declare custom properties, found: {bad_props}"
 
 
+def test_shared_form_labels_never_wrap(pages):
+    """The canonical form-label primitives and required marker stay on one line."""
+    path = PROJECT_ROOT / GLOBAL_CSS
+    declarations = ds.parse_declarations(path.read_text(encoding="utf-8"), GLOBAL_CSS)
+    white_space = {
+        declaration.selector: declaration.value
+        for declaration in declarations
+        if not declaration.context and declaration.prop == "white-space"
+    }
+    min_width = {
+        declaration.selector: declaration.value
+        for declaration in declarations
+        if not declaration.context and declaration.prop == "min-width"
+    }
+
+    assert white_space.get("form label") == "nowrap"
+    assert min_width.get(".row-label") == "max-content"
+    assert min_width.get(".field-label") == "max-content"
+
+    conflicting_overrides = sorted(
+        {
+            (ds.rel_path(page), declaration.selector, declaration.value)
+            for page in pages
+            for declaration in ds.page_stream(page)
+            if declaration.prop == "white-space"
+            and declaration.value != "nowrap"
+            and "label" in declaration.selector
+        }
+    )
+    assert not conflicting_overrides, (
+        "form-label selectors must not override the shared no-wrap invariant: "
+        f"{conflicting_overrides}"
+    )
+
+
 # -------------------------------------------------------------- RATCHET
 
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
