@@ -43,7 +43,12 @@ FRONTEND_MESSAGE_BLOCK_PATTERNS = (
     (re.compile(r"\b(?:const|let|var)\s+message\s*=\s*(?P<body>.*?);", re.DOTALL), "confirm"),
 )
 FRONTEND_LINE_KEYS = ("deleteMessageSingle", "deleteMessageMultiple")
-BACKEND_VALUE_ERROR_TYPES = {"ValueError", "RuntimeError", "ArquivoError"}
+BACKEND_VALUE_ERROR_TYPES = {
+    "ValueError",
+    "RuntimeError",
+    "ArquivoError",
+    "StudentMatrixError",
+}
 BACKEND_SINK_NAMES = {"flash", "flash_error", "flash_success", "flash_info", "resolve_user_message"}
 PAYLOAD_KEYS = {"message", "mensagem", "titulo", "title"}
 EXCLUDED_FRONTEND_NAME_PARTS = ("backup", "copia", "krthinkpad", "demo")
@@ -438,6 +443,8 @@ def _iter_backend_files() -> list[Path]:
         PROJECT_ROOT / "app" / "requisitions.py",
         # Student import validation errors are rendered by the admin route.
         PROJECT_ROOT / "app" / "student_import.py",
+        # Student Matrix validation errors are rendered by student/admin routes.
+        PROJECT_ROOT / "app" / "student_matrix.py",
         PROJECT_ROOT / "app" / "services" / "student_import_service.py",
         PROJECT_ROOT / "app" / "settings.py",
         PROJECT_ROOT / "app" / "uploads.py",

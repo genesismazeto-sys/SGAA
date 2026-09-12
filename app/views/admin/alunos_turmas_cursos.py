@@ -1059,7 +1059,6 @@ def admin_adicionar_turma():
             return redirect(url_for("admin_adicionar_turma"))
         if matriz_error:
             # Recusa controlada antes de qualquer escrita: nenhuma turma nasce.
-            conn.rollback()
             flash(matriz_error, "error")
             return redirect(url_for("admin_adicionar_turma"))
 
@@ -1161,7 +1160,6 @@ def admin_editar_turma(turma_id):
         if matriz_error:
             # Recusa controlada antes do UPDATE: matriz anterior e demais
             # campos da mesma submissao permanecem como estavam.
-            conn.rollback()
             flash(matriz_error, "error")
             return redirect(url_for("admin_editar_turma", turma_id=turma_id))
 

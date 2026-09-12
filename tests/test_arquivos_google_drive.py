@@ -884,16 +884,27 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # No message is retired, so the net delta is +2.
     explicit_matrix_assignment_net_delta = 2
     assert {"msg_34c6fdd255ae0c6e", "msg_c52418de2740e169"} <= set(catalog)
-    assert (
-        len(catalog)
-        == head_actual
+    # UT-TM1/TM2 added the two unique neutral Turma validation messages.
+    # They belong to MX3's exact parent state, not to the MX3 candidate delta.
+    turma_matrix_validation_net_delta = 2
+    parent_count = (
+        head_actual
         + legitimate_net_delta
         + student_matrix_net_delta
         + explicit_matrix_assignment_net_delta
-        == 546
+        + turma_matrix_validation_net_delta
     )
-    assert head_expected + legitimate_net_delta == 556
-    assert (head_expected + legitimate_net_delta) - len(catalog) == 10
+    assert parent_count == 548
+    # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
+    # defaults become owned; "Aluno não encontrado." already had a catalog
+    # key, so the exact catalog-key delta is +6 with no removal/replacement.
+    student_matrix_error_ownership_net_delta = 6
+    assert (
+        len(catalog)
+        == parent_count + student_matrix_error_ownership_net_delta
+        == 554
+    )
+    assert (head_expected + legitimate_net_delta) - len(catalog) == 2
 
 
 def test_legacy_path_escape_is_rejected(service_env, tmp_path):

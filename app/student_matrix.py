@@ -24,7 +24,15 @@ def parse_submitted_matriz_id(raw: str | None) -> int | None:
         return None
     if not _SUBMITTED_MATRIZ_ID_RE.fullmatch(value):
         raise StudentMatrixError("A matriz acadêmica selecionada é inválida.")
-    return int(value)
+    try:
+        return int(value)
+    except ValueError as exc:
+        # Python 3.11+ limits decimal-to-int conversion size. Keep that safety
+        # boundary local and surface every integer-like conversion rejection
+        # through the same controlled validation path as malformed syntax.
+        raise StudentMatrixError(
+            "A matriz acadêmica selecionada é inválida."
+        ) from exc
 
 
 def _turma_scope(conn, turma_id: int | None):

@@ -774,7 +774,9 @@ def _student_import_guard_errors(
             errors.append(f"{name}: submitted-matrix read")
         candidate_post.body[1:2] = deepcopy(baseline_post.body[1:2])
 
-        # UT-TM1: a recusa da matriz passa a desfazer a transacao antes de sair.
+        # UT-MX3: the final rejection body is the exact historical no-write
+        # branch. The retired defensive rollback, DML, commits, and unrelated
+        # rejection mutations are all outside this authorized shape.
         candidate_reject = candidate_post.body[13]
         baseline_reject = baseline_post.body[13]
         if not (
@@ -782,11 +784,8 @@ def _student_import_guard_errors(
         ):
             errors.append(f"{name}: matrix rejection shape")
         else:
-            if not _ast_sequence_equal(
-                candidate_reject.body,
-                _parsed_statements("conn.rollback()") + deepcopy(baseline_reject.body),
-            ):
-                errors.append(f"{name}: matrix rejection rollback boundary")
+            if not _ast_sequence_equal(candidate_reject.body, baseline_reject.body):
+                errors.append(f"{name}: matrix rejection exact no-write body")
             candidate_reject.body = deepcopy(baseline_reject.body)
 
         if mode == "add":
@@ -1376,15 +1375,37 @@ def test_student_import_guard_rejects_reverting_the_hardened_matrix_read():
     )
 
 
-def test_student_import_guard_rejects_dropping_the_matrix_rejection_rollback():
-    """UT-TM1: the matrix rejection path must keep undoing the transaction."""
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "conn.rollback()",
+        "conn.commit()",
+        'conn.execute("DELETE FROM turmas")',
+    ),
+)
+def test_student_import_guard_rejects_matrix_rejection_transaction_mutation(statement):
+    """UT-MX3: the pre-write rejection branch stays exactly no-write."""
     candidate_tree = _tree(MODULE_PATH)
     post = _request_method_block(
         _function_node(candidate_tree, "admin_adicionar_turma"), "POST"
     )
-    del post.body[13].body[0]
+    post.body[13].body[0:0] = _parsed_statements(statement)
 
-    assert "admin_adicionar_turma: matrix rejection rollback boundary" in (
+    assert "admin_adicionar_turma: matrix rejection exact no-write body" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
+def test_student_import_guard_rejects_unrelated_matrix_rejection_body_mutation():
+    candidate_tree = _tree(MODULE_PATH)
+    post = _request_method_block(
+        _function_node(candidate_tree, "admin_editar_turma"), "POST"
+    )
+    post.body[13].body[-1:] = _parsed_statements(
+        'return redirect(url_for("admin_turmas"))'
+    )
+
+    assert "admin_editar_turma: matrix rejection exact no-write body" in (
         _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
     )
 
