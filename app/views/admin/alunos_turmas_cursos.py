@@ -162,12 +162,27 @@ def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
     return grouped
 
 
-def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: int | None):
-    if not posted_matriz_id:
+def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: str | int | None):
+    """Resolve a submitted Turma Matrix choice into an id or a rejection reason.
+
+    Receives the raw submitted value. Blank is the explicit "Sem matriz" choice
+    because a Turma Matrix is optional, so only a blank clears it: syntax is
+    delegated to the shared submitted-Matrix parser, which makes a non-empty
+    malformed value a controlled rejection instead of collapsing it into that
+    clear. Existence and Curso compatibility remain decided here.
+    """
+    try:
+        matriz_id = parse_submitted_matriz_id(
+            posted_matriz_id if posted_matriz_id is None else str(posted_matriz_id)
+        )
+    except StudentMatrixError as e:
+        return None, str(e)
+    # Somente o campo em branco limpa; "0" nomeia uma matriz que nao existe.
+    if matriz_id is None:
         return None, None
     matriz = conn.execute(
         "SELECT * FROM matrizes_atividades WHERE id = ? AND curso_id = ?",
-        (posted_matriz_id, curso_id),
+        (matriz_id, curso_id),
     ).fetchone()
     if not matriz:
         return None, "A matriz selecionada não pertence ao curso informado."
@@ -1022,7 +1037,8 @@ def admin_adicionar_turma():
 
     if request.method == "POST":
         curso_id = request.form.get("curso_id", type=int)
-        matriz_id, matriz_error = _resolve_turma_matriz_id(conn, curso_id, request.form.get("matriz_id", type=int))
+        # Valor bruto: o backend decide sintaxe, nunca o coercitivo type=int.
+        matriz_id, matriz_error = _resolve_turma_matriz_id(conn, curso_id, request.form.get("matriz_id"))
         ano_inicio = request.form.get("ano_inicio", type=int) or date.today().year
         semestre_inicio = request.form.get("semestre_inicio", type=int) or semestre_atual_hoje()
         ano_fim = request.form.get("ano_fim", type=int)
@@ -1042,6 +1058,8 @@ def admin_adicionar_turma():
             flash("Curso inválido.", "error")
             return redirect(url_for("admin_adicionar_turma"))
         if matriz_error:
+            # Recusa controlada antes de qualquer escrita: nenhuma turma nasce.
+            conn.rollback()
             flash(matriz_error, "error")
             return redirect(url_for("admin_adicionar_turma"))
 
@@ -1120,7 +1138,8 @@ def admin_editar_turma(turma_id):
 
     if request.method == "POST":
         curso_id = request.form.get("curso_id", type=int)
-        matriz_id, matriz_error = _resolve_turma_matriz_id(conn, curso_id, request.form.get("matriz_id", type=int))
+        # Valor bruto: o backend decide sintaxe, nunca o coercitivo type=int.
+        matriz_id, matriz_error = _resolve_turma_matriz_id(conn, curso_id, request.form.get("matriz_id"))
         ano_inicio = request.form.get("ano_inicio", type=int)
         semestre_inicio = request.form.get("semestre_inicio", type=int)
         ano_fim = request.form.get("ano_fim", type=int)
@@ -1140,6 +1159,9 @@ def admin_editar_turma(turma_id):
             flash("Curso inválido.", "error")
             return redirect(url_for("admin_editar_turma", turma_id=turma_id))
         if matriz_error:
+            # Recusa controlada antes do UPDATE: matriz anterior e demais
+            # campos da mesma submissao permanecem como estavam.
+            conn.rollback()
             flash(matriz_error, "error")
             return redirect(url_for("admin_editar_turma", turma_id=turma_id))
 

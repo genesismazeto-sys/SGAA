@@ -763,6 +763,32 @@ def _student_import_guard_errors(
         ):
             errors.append(f"{name}: import_path initialization")
 
+        # UT-TM1: o valor bruto de matriz_id chega ao resolvedor, sem type=int.
+        if not _ast_sequence_equal(
+            candidate_post.body[1:2],
+            _parsed_statements(
+                "matriz_id, matriz_error = _resolve_turma_matriz_id("
+                'conn, curso_id, request.form.get("matriz_id"))'
+            ),
+        ):
+            errors.append(f"{name}: submitted-matrix read")
+        candidate_post.body[1:2] = deepcopy(baseline_post.body[1:2])
+
+        # UT-TM1: a recusa da matriz passa a desfazer a transacao antes de sair.
+        candidate_reject = candidate_post.body[13]
+        baseline_reject = baseline_post.body[13]
+        if not (
+            isinstance(candidate_reject, ast.If) and isinstance(baseline_reject, ast.If)
+        ):
+            errors.append(f"{name}: matrix rejection shape")
+        else:
+            if not _ast_sequence_equal(
+                candidate_reject.body,
+                _parsed_statements("conn.rollback()") + deepcopy(baseline_reject.body),
+            ):
+                errors.append(f"{name}: matrix rejection rollback boundary")
+            candidate_reject.body = deepcopy(baseline_reject.body)
+
         if mode == "add":
             expected_service = _parsed_statements(
                 """
@@ -1330,6 +1356,35 @@ def test_student_import_guard_rejects_unrelated_handler_mutation():
     schema_calls[0].id = "ensure_turmas_matriz_schema_changed"
 
     assert "admin_adicionar_turma: mutation outside authorized delta" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
+def test_student_import_guard_rejects_reverting_the_hardened_matrix_read():
+    """UT-TM1: going back to the coercive read is not an authorized delta."""
+    candidate_tree = _tree(MODULE_PATH)
+    post = _request_method_block(
+        _function_node(candidate_tree, "admin_editar_turma"), "POST"
+    )
+    post.body[1:2] = _parsed_statements(
+        "matriz_id, matriz_error = _resolve_turma_matriz_id("
+        'conn, curso_id, request.form.get("matriz_id", type=int))'
+    )
+
+    assert "admin_editar_turma: submitted-matrix read" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
+def test_student_import_guard_rejects_dropping_the_matrix_rejection_rollback():
+    """UT-TM1: the matrix rejection path must keep undoing the transaction."""
+    candidate_tree = _tree(MODULE_PATH)
+    post = _request_method_block(
+        _function_node(candidate_tree, "admin_adicionar_turma"), "POST"
+    )
+    del post.body[13].body[0]
+
+    assert "admin_adicionar_turma: matrix rejection rollback boundary" in (
         _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
     )
 
