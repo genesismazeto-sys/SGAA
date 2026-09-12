@@ -45,11 +45,11 @@ def test_exact_matrix_selects_aac_then_aeu_version(workflow_env):
     with main.app.app_context():
         conn = main.get_db_connection()
         aluno_id = _student_id(conn)
-        conn.execute("UPDATE alunos SET turma_id=1 WHERE id=?", (aluno_id,))
+        conn.execute("UPDATE alunos SET turma_id=1,matriz_id=1 WHERE id=?", (aluno_id,))
         aac = prepare_versioned_requisicao_snapshot(
             conn, flow_origin="student_create", aluno_id=aluno_id, atividade_versao_id=27
         )
-        conn.execute("UPDATE alunos SET turma_id=2 WHERE id=?", (aluno_id,))
+        conn.execute("UPDATE alunos SET turma_id=2,matriz_id=2 WHERE id=?", (aluno_id,))
         aeu = prepare_versioned_requisicao_snapshot(
             conn, flow_origin="student_create", aluno_id=aluno_id, atividade_versao_id=55
         )
@@ -61,7 +61,7 @@ def test_snapshot_remains_frozen_after_live_version_change(workflow_env):
     with main.app.app_context():
         conn = main.get_db_connection()
         aluno_id = _student_id(conn)
-        conn.execute("UPDATE alunos SET turma_id=1 WHERE id=?", (aluno_id,))
+        conn.execute("UPDATE alunos SET turma_id=1,matriz_id=1 WHERE id=?", (aluno_id,))
         prepared = prepare_versioned_requisicao_snapshot(
             conn, flow_origin="student_create", aluno_id=aluno_id, atividade_versao_id=27
         )

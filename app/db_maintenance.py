@@ -25,6 +25,7 @@ from app.prod1_schema import (
     NORMA_REMOVAL_MARKER,
     SCHEMA_EPOCH,
     SCHEMA_VERSION,
+    STUDENT_MATRIX_AUTHORITY_MARKER,
     Prod1SchemaError,
     bootstrap_prod1_schema,
     get_prod1_schema_status,
@@ -136,6 +137,7 @@ SCHEMA_MIGRATIONS = (
     (3, MATRIX_VERSION_REMOVAL_MARKER, bootstrap_prod1_schema),
     (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, bootstrap_prod1_schema),
     (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, bootstrap_prod1_schema),
+    (6, STUDENT_MATRIX_AUTHORITY_MARKER, bootstrap_prod1_schema),
 )
 
 

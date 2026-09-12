@@ -41,7 +41,11 @@ from app.db_maintenance import (
     ensure_reportes_table,
     ensure_usuario_profile_schema,
 )
-from app.matrix_scope import get_effective_matriz_for_turma
+from app.student_matrix import (
+    StudentMatrixError,
+    assign_student_to_turma,
+    get_effective_matrix_for_student,
+)
 from app.versioning.request_history import (
     APPROVED_STATUSES,
     SnapshotProcessingAuthority,
@@ -191,8 +195,8 @@ def _get_aluno_scope(conn, usuario_id: int):
         """
         SELECT a.id AS aluno_id,
                a.turma_id,
-               t.curso_id AS turma_curso_id,
-               t.matriz_id AS turma_matriz_id
+               a.matriz_id AS aluno_matriz_id,
+               t.curso_id AS turma_curso_id
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
          WHERE a.usuario_id = ?
@@ -205,11 +209,7 @@ def _get_effective_matriz_for_usuario(conn, usuario_id: int):
     aluno_scope = _get_aluno_scope(conn, usuario_id)
     if not aluno_scope:
         return None, None
-    matriz = get_effective_matriz_for_turma(
-        conn,
-        aluno_scope["turma_curso_id"],
-        aluno_scope["turma_matriz_id"],
-    )
+    matriz = get_effective_matrix_for_student(conn, aluno_scope["aluno_id"])
     return aluno_scope, matriz
 
 
@@ -550,14 +550,14 @@ def aluno_dashboard():
 
     aluno_info = conn.execute(
         """
-        SELECT a.*, t.id AS turma_rel_id, t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id,
+        SELECT a.*, t.id AS turma_rel_id, t.curso_id AS turma_curso_id,
                c.nome AS curso_nome, c.codigo AS curso_codigo,
                m.nome AS matriz_nome,
                m.horas_aac_obrigatorias, m.horas_extensao_obrigatorias
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
           LEFT JOIN cursos c ON c.id = t.curso_id
-          LEFT JOIN matrizes_atividades m ON m.id = t.matriz_id
+          LEFT JOIN matrizes_atividades m ON m.id = a.matriz_id AND m.curso_id=t.curso_id
          WHERE a.usuario_id = ?
         """,
         (usuario_id,),
@@ -566,7 +566,7 @@ def aluno_dashboard():
         flash("Dados do aluno não encontrados.", "error")
         return redirect(url_for("login"))
 
-    matriz_aluno = get_effective_matriz_for_turma(conn, aluno_info["turma_curso_id"], aluno_info["turma_matriz_id"])
+    matriz_aluno = get_effective_matrix_for_student(conn, aluno_info["id"])
     meta_horas_academicas = (
         matriz_aluno["horas_aac_obrigatorias"]
         if matriz_aluno and matriz_aluno["horas_aac_obrigatorias"] is not None
@@ -941,9 +941,10 @@ def aluno_meus_dados():
                 )
             session["user_name"] = nome
 
+            assign_student_to_turma(conn, aluno["aluno_id"], turma_id)
             conn.execute(
-                "UPDATE alunos SET nome = ?, matricula = ?, email = ?, turma_id = ? WHERE usuario_id = ?",
-                (nome, matricula, email, turma_id, usuario_id),
+                "UPDATE alunos SET nome = ?, matricula = ?, email = ? WHERE usuario_id = ?",
+                (nome, matricula, email, usuario_id),
             )
 
             remove_foto = request.form.get("remove_foto") == "1"
@@ -974,13 +975,18 @@ def aluno_meus_dados():
             flash("Seus dados foram atualizados com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
         except sqlite3.IntegrityError as exc:
+            conn.rollback()
             if "UNIQUE constraint failed: usuarios.email" in str(exc):
                 flash("Erro: Já existe outro usuário com este e-mail.", "error")
             elif "UNIQUE constraint failed: alunos.matricula" in str(exc):
                 flash("Erro: Já existe outro aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao atualizar dados: {exc}", "error")
+        except StudentMatrixError as exc:
+            conn.rollback()
+            flash(str(exc), "error")
         except Exception as exc:
+            conn.rollback()
             flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
 
     turmas = conn.execute(

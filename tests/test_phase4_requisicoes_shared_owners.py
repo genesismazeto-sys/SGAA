@@ -130,7 +130,12 @@ def test_b41_main_and_configuracoes_import_from_neutral_owners():
 
 def test_b41_aluno_consumes_matrix_scope_directly_and_drops_only_that_lazy_edge():
     source = ALUNO_PATH.read_text(encoding="utf-8")
-    assert "get_effective_matriz_for_turma" in _imports_from(ALUNO_PATH, "app.matrix_scope")
+    # UT-AM1: the student's academic Matrix authority moved from the Turma
+    # default (app.matrix_scope.get_effective_matriz_for_turma) to
+    # alunos.matriz_id, owned by app.student_matrix.  The B4.1 contract this
+    # test guards is unchanged: Aluno consumes that authority through a direct
+    # canonical import from its neutral owner, never through a lazy main edge.
+    assert "get_effective_matrix_for_student" in _imports_from(ALUNO_PATH, "app.student_matrix")
     tree = ast.parse(source, filename=str(ALUNO_PATH))
     helper = next(
         node

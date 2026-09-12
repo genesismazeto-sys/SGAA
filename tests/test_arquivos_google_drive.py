@@ -28,6 +28,7 @@ from app.prod1_schema import (
     migrate_prod1_v2_to_v3,
     migrate_prod1_v3_to_v4,
     migrate_prod1_v4_to_v5,
+    migrate_prod1_v5_to_v6,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -197,7 +198,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -234,6 +235,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
         "local_legacy", "legacy_active", "admin_arquivos/old.pdf"
     )
     assert row["remote_file_id"] is None and row["operation_key"] is None
+    migrate_prod1_v5_to_v6(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)
@@ -871,9 +873,17 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     assert "msg_adc145990771728c" in catalog
     assert "msg_68e61511e6b7b342" not in catalog
     head_actual, head_expected, legitimate_net_delta = 526, 537, 19
-    assert len(catalog) == head_actual + legitimate_net_delta == 545
+    # UT-AM1 retired exactly one message, "Selecione uma matriz para a turma."
+    # (msg_4d8251747aafd60d), because a Turma Matrix became an optional default
+    # instead of a required field.  UT-AM1 adds no new catalogued message.
+    student_matrix_net_delta = -1
+    assert (
+        len(catalog)
+        == head_actual + legitimate_net_delta + student_matrix_net_delta
+        == 544
+    )
     assert head_expected + legitimate_net_delta == 556
-    assert (head_expected + legitimate_net_delta) - len(catalog) == 11
+    assert (head_expected + legitimate_net_delta) - len(catalog) == 12
 
 
 def test_legacy_path_escape_is_rejected(service_env, tmp_path):

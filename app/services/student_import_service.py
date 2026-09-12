@@ -9,6 +9,7 @@ from app.student_import import (
     StudentImportRow,
     normalize_student_import_values,
 )
+from app.student_matrix import matrix_for_turma_assignment
 from app.user_accounts import (
     create_usuario_with_default_password,
     normalize_usuario_access_for_user_type,
@@ -96,6 +97,12 @@ def _validated_linked_user(conn, row: StudentImportRow, existing):
 
 def _persist_student_row(conn, turma_id: int, row: StudentImportRow, status: str, existing, linked_user) -> str:
     if existing:
+        matriz_id = matrix_for_turma_assignment(
+            conn,
+            current_matriz_id=existing["matriz_id"],
+            turma_id=turma_id,
+            current_turma_id=existing["turma_id"],
+        )
         conn.execute(
             "UPDATE usuarios SET nome=?, email=? WHERE id=?",
             (row.aluno, row.email, linked_user["id"]),
@@ -104,10 +111,10 @@ def _persist_student_row(conn, turma_id: int, row: StudentImportRow, status: str
         conn.execute(
             """
             UPDATE alunos
-               SET nome=?, email=?, matricula=?, turma_id=?, status=?
+               SET nome=?, email=?, matricula=?, turma_id=?, matriz_id=?, status=?
              WHERE id=?
             """,
-            (row.aluno, row.email, row.matricula, turma_id, status, existing["id"]),
+            (row.aluno, row.email, row.matricula, turma_id, matriz_id, status, existing["id"]),
         )
         return "updated"
 
@@ -116,10 +123,20 @@ def _persist_student_row(conn, turma_id: int, row: StudentImportRow, status: str
     ).lastrowid
     conn.execute(
         """
-        INSERT INTO alunos (usuario_id,nome,email,matricula,turma_id,status)
-        VALUES (?,?,?,?,?,?)
+        INSERT INTO alunos (usuario_id,nome,email,matricula,turma_id,matriz_id,status)
+        VALUES (?,?,?,?,?,?,?)
         """,
-        (usuario_id, row.aluno, row.email, row.matricula, turma_id, status),
+        (
+            usuario_id,
+            row.aluno,
+            row.email,
+            row.matricula,
+            turma_id,
+            matrix_for_turma_assignment(
+                conn, current_matriz_id=None, turma_id=turma_id
+            ),
+            status,
+        ),
     )
     return "created"
 

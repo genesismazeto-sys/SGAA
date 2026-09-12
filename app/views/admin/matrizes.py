@@ -988,8 +988,11 @@ def admin_excluir_matrizes():
 
     placeholders = ", ".join("?" for _ in matriz_ids)
     if conn.execute(
-        f"SELECT 1 FROM turmas WHERE matriz_id IN ({placeholders}) LIMIT 1",
-        matriz_ids,
+        f"""SELECT 1 FROM turmas WHERE matriz_id IN ({placeholders})
+            UNION ALL
+            SELECT 1 FROM alunos WHERE matriz_id IN ({placeholders})
+            LIMIT 1""",
+        [*matriz_ids, *matriz_ids],
     ).fetchone() is not None:
         flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
         return redirect(url_for("admin_matrizes"))

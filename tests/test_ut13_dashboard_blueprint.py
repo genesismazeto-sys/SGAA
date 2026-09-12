@@ -894,9 +894,9 @@ def test_green_5_message_catalog_536_and_views_recursive_scanner_coverage():
 def test_green_6_schema_version_four():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 5, f"prod-1 SCHEMA_VERSION must be 5, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 6, f"prod-1 SCHEMA_VERSION must be 6, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3, 4, 5}, (
+    assert versions == {1, 2, 3, 4, 5, 6}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )

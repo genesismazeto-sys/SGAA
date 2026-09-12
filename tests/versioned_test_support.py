@@ -281,14 +281,15 @@ def seed_reference_versioned_dataset(conn) -> None:
     ).fetchone()["id"]
     conn.execute(
         """
-        INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, matriz_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             usuario_id,
             "Aluno Base Versionado",
             "PPA.TESTE.0001",
             "aluno.base.versionado@example.com",
+            2,
             2,
             "Ativo",
         ),

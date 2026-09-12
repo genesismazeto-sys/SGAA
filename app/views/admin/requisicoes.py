@@ -28,10 +28,9 @@ from app.db_maintenance import (
 )
 from app.matrix_scope import (
     _matriz_option_label,
-    get_allowed_activity_version_ids_for_turma_matrix,
-    is_activity_version_allowed_for_turma_matrix,
 )
 from app.requisitions import auto_indefer_devolvidas
+from app.student_matrix import get_allowed_activity_version_ids_for_student
 from app.storage.contracts import StorageError
 from app.text import normalize_header
 from app.uploads import _allowed, save_upload
@@ -241,7 +240,7 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
         """
         SELECT a.id, a.nome, a.matricula, a.turma_id,
                t.nome AS turma_nome, t.codigo AS turma_codigo,
-               t.curso_id, t.matriz_id AS turma_matriz_id
+               t.curso_id
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
          WHERE a.id = ?
@@ -250,10 +249,8 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
     ).fetchone()
     if not row:
         return None
-    allowed_activity_ids, matriz = get_allowed_activity_version_ids_for_turma_matrix(
-        conn,
-        row["curso_id"],
-        row["turma_matriz_id"],
+    allowed_activity_ids, matriz = get_allowed_activity_version_ids_for_student(
+        conn, row["id"]
     )
     turma_label = row["turma_codigo"] or row["turma_nome"] or "Sem turma"
     return {
@@ -351,7 +348,7 @@ def admin_requisicoes():
                COALESCE(t.codigo, t.nome, 'Sem turma') AS aluno_turma_legacy,
                COALESCE(t.codigo, t.nome, 'Sem turma') AS turma_codigo,
                t.curso_id          AS turma_curso_id,
-               t.matriz_id         AS turma_matriz_id,
+               a.matriz_id         AS aluno_matriz_id,
                r.atividade_versao_id AS exact_activity_version_id
     """
     query = select_cols + base_from
@@ -458,12 +455,10 @@ def admin_requisicoes():
             read_requisicao_snapshot_for_processing(item).authority
             is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
         )
-        cache_key = (item.get("turma_curso_id"), item.get("turma_matriz_id"))
+        cache_key = item.get("aluno_id")
         if cache_key not in matrix_scope_cache:
-            matrix_scope_cache[cache_key] = get_allowed_activity_version_ids_for_turma_matrix(
-                conn,
-                item.get("turma_curso_id"),
-                item.get("turma_matriz_id"),
+            matrix_scope_cache[cache_key] = get_allowed_activity_version_ids_for_student(
+                conn, item.get("aluno_id")
             )
         allowed_activity_ids, matriz = matrix_scope_cache[cache_key]
         item["matrix_scope_issue"] = item.get("atividade_versao_id") not in allowed_activity_ids
@@ -787,7 +782,7 @@ def admin_editar_requisicao(req_id):
         """
         SELECT r.*, a.turma_id,
                t.curso_id AS turma_curso_id,
-               t.matriz_id AS turma_matriz_id
+               a.matriz_id AS aluno_matriz_id
           FROM requisicoes r
           LEFT JOIN alunos a ON a.id = r.aluno_id
           LEFT JOIN turmas t ON t.id = a.turma_id
@@ -830,10 +825,8 @@ def admin_editar_requisicao(req_id):
     if not atividade_id:
         atividade_id = requisicao["atividade_versao_id"]
 
-    allowed_activity_ids, _matriz = get_allowed_activity_version_ids_for_turma_matrix(
-        conn,
-        requisicao["turma_curso_id"],
-        requisicao["turma_matriz_id"],
+    allowed_activity_ids, _matriz = get_allowed_activity_version_ids_for_student(
+        conn, requisicao["aluno_id"]
     )
     current_atividade_id = requisicao["atividade_versao_id"]
     if (
@@ -953,7 +946,7 @@ def admin_api_requisicao(req_id):
         """
         SELECT r.*, a.nome as aluno_nome, a.turma_id as turma_id,
              COALESCE(t.codigo, t.nome, 'Sem turma') as turma_label,
-             t.curso_id as turma_curso_id, t.matriz_id as turma_matriz_id,
+             t.curso_id as turma_curso_id, a.matriz_id as aluno_matriz_id,
                r.atividade_versao_id AS exact_activity_version_id
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
@@ -1070,7 +1063,7 @@ def admin_processar_requisicao(req_id):
         SELECT r.*, al.nome as aluno_nome,
                al.id AS aluno_rel_id, al.turma_id AS aluno_turma_id,
                t.id AS turma_rel_id,
-               t.curso_id AS turma_curso_id, t.matriz_id AS turma_matriz_id
+               t.curso_id AS turma_curso_id, al.matriz_id AS aluno_matriz_id
         FROM requisicoes r
         LEFT JOIN alunos al ON r.aluno_id = al.id
         LEFT JOIN turmas t ON t.id = al.turma_id

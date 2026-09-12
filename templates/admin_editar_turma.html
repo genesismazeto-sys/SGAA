@@ -33,7 +33,7 @@
       <label class="row-label">Matrizes de atividades</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="layers-3"></i></div>
-        <select class="control" name="matriz_id" id="matriz_id" required></select>
+        <select class="control" name="matriz_id" id="matriz_id"></select>
       </div>
     </div>
 
@@ -287,16 +287,16 @@
       if (!options.length){
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = 'Nenhuma matriz cadastrada para este curso';
+        emptyOption.textContent = 'Sem matriz';
         matrizSel.appendChild(emptyOption);
-        matrizSel.disabled = true;
+        matrizSel.disabled = false;
         matrizSel.value = '';
         return;
       }
       matrizSel.disabled = false;
       const placeholder = document.createElement('option');
       placeholder.value = '';
-      placeholder.textContent = 'Selecione a matriz';
+      placeholder.textContent = 'Sem matriz';
       matrizSel.appendChild(placeholder);
       options.forEach((item) => {
         const option = document.createElement('option');

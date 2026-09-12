@@ -30,13 +30,17 @@ def _matriz_option_label(row) -> str:
 
 
 def is_matrix_assigned(conn, matriz_id: int | None) -> bool:
-    """Return whether at least one Turma currently points to this Matrix."""
+    """Return whether a Turma default or student authority points to this Matrix."""
     if not matriz_id:
         return False
     return (
         conn.execute(
-            "SELECT EXISTS(SELECT 1 FROM turmas WHERE matriz_id = ?)",
-            (matriz_id,),
+            """SELECT EXISTS(
+                   SELECT 1 FROM turmas WHERE matriz_id = ?
+                   UNION ALL
+                   SELECT 1 FROM alunos WHERE matriz_id = ?
+               )""",
+            (matriz_id, matriz_id),
         ).fetchone()[0]
         == 1
     )
@@ -55,8 +59,11 @@ def is_activity_version_referenced_by_assigned_matrix(
             SELECT EXISTS(
                 SELECT 1
                   FROM matriz_atividade_versao_item mavi
-                  JOIN turmas t ON t.matriz_id = mavi.matriz_id
                  WHERE mavi.atividade_versao_id = ?
+                   AND (
+                       EXISTS(SELECT 1 FROM turmas t WHERE t.matriz_id=mavi.matriz_id)
+                       OR EXISTS(SELECT 1 FROM alunos a WHERE a.matriz_id=mavi.matriz_id)
+                   )
             )
             """,
             (atividade_versao_id,),
@@ -77,8 +84,11 @@ def is_activity_base_referenced_by_assigned_matrix(
             SELECT EXISTS(
                 SELECT 1
                   FROM matriz_atividade_versao_item mavi
-                  JOIN turmas t ON t.matriz_id = mavi.matriz_id
                  WHERE mavi.atividade_base_id = ?
+                   AND (
+                       EXISTS(SELECT 1 FROM turmas t WHERE t.matriz_id=mavi.matriz_id)
+                       OR EXISTS(SELECT 1 FROM alunos a WHERE a.matriz_id=mavi.matriz_id)
+                   )
             )
             """,
             (atividade_base_id,),

@@ -24,22 +24,24 @@ def test_matrix_resolver_accepts_only_its_exact_selected_version(versioned_env):
     assert missing["status"] == "not_found"
 
 
-def test_student_resolver_uses_exact_turma_matrix(versioned_env):
+def test_student_resolver_uses_exact_student_matrix_across_turma_transfer(versioned_env):
+    from app.student_matrix import assign_student_to_turma
+
     with main.app.app_context():
         conn = main.get_db_connection()
         aluno_id = conn.execute(
             "SELECT id FROM alunos WHERE matricula='PPA.TESTE.0001'"
         ).fetchone()["id"]
-        conn.execute("UPDATE alunos SET turma_id=1 WHERE id=?", (aluno_id,))
+        conn.execute("UPDATE alunos SET turma_id=1,matriz_id=1 WHERE id=?", (aluno_id,))
         first = resolver.resolver_versao_por_aluno(
             conn, aluno_id=aluno_id, atividade_versao_id=27
         )
-        conn.execute("UPDATE alunos SET turma_id=2 WHERE id=?", (aluno_id,))
+        assign_student_to_turma(conn, aluno_id, 2)
         second = resolver.resolver_versao_por_aluno(
-            conn, aluno_id=aluno_id, atividade_versao_id=55
+            conn, aluno_id=aluno_id, atividade_versao_id=27
         )
     assert first["matriz_id_efetiva"] == 1
-    assert second["matriz_id_efetiva"] == 2
+    assert second["matriz_id_efetiva"] == 1
 
 
 def test_inactive_selected_version_fails_closed(versioned_env):

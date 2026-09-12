@@ -2680,3 +2680,97 @@ remains the next independent visual defect. It is not fixed here.
   `ADA8F75F54762A647F454C2486599ED5D46021E16F971015E39E72D8FA936F50`;
   no SQLite sidecars were created. The final gate accepted the implementation
   for landing; this governance record is part of that single authorized UT.
+
+## UT-AM1 STUDENT MATRIX AUTHORITY — QUALIFIED / NOT LANDED
+
+- Option B is selected and implemented: `alunos.matriz_id` is the current
+  student academic Matrix authority; `turmas.matriz_id` is an optional Turma
+  default/suggestion only and is never read as student academic authority.
+- prod-1 schema advances to v6 (`student_matrix_authority`).
+  `alunos.matriz_id` is nullable, `FOREIGN KEY(matriz_id) REFERENCES
+  matrizes_atividades(id) ON DELETE RESTRICT ON UPDATE CASCADE`, indexed by
+  `idx_alunos_matriz_id`. `app/db_maintenance.SCHEMA_MIGRATIONS` registers
+  `(6, student_matrix_authority, bootstrap_prod1_schema)` under the single
+  `app.prod1_schema` owner, matching the v4→v5 precedent.
+- The migration backfill is exactly: initialize `alunos.matriz_id` from
+  `turmas.matriz_id` only when the student's Matrix is NULL, the student has a
+  current Turma, that Turma has a Matrix, and that Matrix belongs to the Turma's
+  Curso. Everything else stays NULL. No latest/vigente/newest/arbitrary/
+  snapshot/Activity-Version inference exists anywhere in the migration.
+- A Turma may be created and edited with no Matrix. The Add/Edit Turma selector
+  is no longer `required`, always offers an explicit `Sem matriz` option, and a
+  blank submission persists `turmas.matriz_id = NULL`. An existing default may
+  be cleared. A posted Matrix must belong to the selected Curso.
+- Turma transfer preserves an existing student Matrix; a NULL student Matrix is
+  initialized from a compatible destination Turma default on an actual Turma
+  change; a NULL student Matrix with no compatible default stays NULL; a Matrix
+  incompatible with the destination Curso fails closed. Initialization is
+  deliberately restricted to real Turma moves so that editing a Turma's default
+  can never cascade into the students already in it.
+- Changing or clearing a Turma default never alters `alunos.matriz_id` for
+  existing students. Detaching a student from a Turma clears `turma_id` only and
+  preserves the student's Matrix authority.
+- Historical request semantics are unchanged: exact `atividade_versao_id`,
+  `regra_snapshot_json`, `horas_solicitadas`, `horas_deferidas`, `status`, and
+  the stored Turma snapshot survive Turma transfer, explicit Matrix change,
+  Turma-default churn, and later successor Activity Versions. No historical
+  Turma is reconstructed and no lazy current-Turma snapshot backfill is newly
+  invoked by this UT.
+- Matrix deletion is blocked by student references at both layers: the database
+  FK RESTRICT and the application delete-eligibility guard, which now considers
+  `turmas.matriz_id` and `alunos.matriz_id`.
+- Known remaining limitation, unchanged and explicitly out of this UT's scope:
+  historical cohort attribution. `list_approved_request_history` still reports
+  the student's current `turma_id` rather than `turma_id_snapshot`, so the admin
+  dashboard's per-student attainment buckets and per-Turma hour aggregates still
+  derive their goal hours from `turmas.matriz_id`
+  (`app/views/admin/dashboard.py`). That module is untouched by this UT.
+- The B4.1 Phase 4 contract clause stating that Aluno consumes
+  `get_effective_matriz_for_turma` directly is superseded: Aluno now consumes
+  `get_effective_matrix_for_student` from `app.student_matrix`. The historical
+  Phase 4 contract documents were left as written; the live guard was updated.
+- Message catalog net delta is exactly −1: `msg_4d8251747aafd60d`
+  ("Selecione uma matriz para a turma.") was retired because a Turma Matrix is
+  now optional. No message was added. Catalog is 544.
+- Evidence on final candidate bytes: canonical suite `64 failed / 1612 passed /
+  136 skipped`; exact clean HEAD `a5af575a1a0837b583be76b23476042416225442`
+  with the byte-identical database bootstrap produced `64 failed / 1603 passed /
+  136 skipped`. Failing-node comparison is CANDIDATE_ONLY 0, BASELINE_ONLY 0,
+  MATERIAL_WORSENING 0, UNRESOLVED 0; eighteen pre-existing message-catalog and
+  route-inventory failures shift their reported count by one, which is the
+  authorized message delta above. Focused lane is `328 passed / 12 failed`, and
+  all twelve are the same pre-existing canonical debt. compileall and
+  `git diff --check` pass; `node --check` passes on both changed Turma
+  templates; flake8 is declared in `requirements-dev.txt` but is not installed
+  in the executing interpreter, so it was reported rather than installed.
+- Operational `database.db` was NOT migrated. It remains byte-identical at
+  SHA-256 `ADA8F75F54762A647F454C2486599ED5D46021E16F971015E39E72D8FA936F50`,
+  434176 bytes, `PRAGMA user_version = 5`. All migration qualification ran on
+  isolated copies. A read-only inspection created transient zero-length
+  `database.db-wal` and `database.db-shm` sidecars; file content is unchanged.
+- This UT is source-qualified only. Nothing was staged, committed, pushed, or
+  published, and no operational migration was performed.
+- Independent review returned `ACCEPT_WITH_NON_BLOCKING_FINDINGS`. Supervisor
+  decision is `APPROVED WITH CONSTRAINTS / READY_TO_LAND`; no further
+  architectural review is required for UT-AM1. Findings F1-F10 are non-blocking
+  and were deliberately not implemented in this UT: dashboard historical
+  Turma/cohort attribution stays a KNOWN_FUTURE_LIMITATION, an explicit
+  student-Matrix admin UI and Turma-less student Matrix assignment are follow-up
+  UTs, detach centralization is future hardening, and stale wording, dead code
+  and test hardening are separate cleanup work.
+- The prod-1 v6 source is qualified and source landing is authorized. The
+  operational database migration has NOT occurred: `database.db` remains at
+  `PRAGMA user_version = 5`, SHA-256
+  `ADA8F75F54762A647F454C2486599ED5D46021E16F971015E39E72D8FA936F50`,
+  434176 bytes. The operational v5 -> v6 migration is a separate authorized step
+  after source landing.
+- At closeout a live SGAA runtime (`python main.py`, PID 8052, 127.0.0.1:5000,
+  started before this session's edits) was found active against this workspace.
+  It still holds the pre-UT v5 code in memory, and the operational database was
+  verified unchanged at v5 from the SQLite header bytes without opening a
+  connection. Because a legitimate runtime is active, the disclosed stale
+  `database.db-wal` (0 bytes) and `database.db-shm` (32768 bytes) sidecars were
+  left in place rather than removed. Restarting that process after this landing
+  would auto-apply the v6 migration to the operational database through the
+  normal startup bootstrap; it must be stopped or deliberately migrated as part
+  of the separate authorized operational step.

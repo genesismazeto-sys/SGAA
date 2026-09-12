@@ -41,6 +41,7 @@ from app.db_maintenance import (
     ensure_usuario_profile_schema,
 )
 from app.security.passwords import hash_password
+from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
 from app.user_accounts import _access_defaults_map
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -422,7 +423,7 @@ def admin_acesso_salvar():
             )
             usuario_id = cursor.lastrowid
 
-        aluno_existente = conn.execute("SELECT id, turma_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
+        aluno_existente = conn.execute("SELECT id, turma_id, matriz_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
         if user_type == "aluno":
             dup_matricula = conn.execute(
                 "SELECT id FROM alunos WHERE matricula = ? AND usuario_id <> ?",
@@ -433,21 +434,37 @@ def admin_acesso_salvar():
                 flash("Já existe um aluno com esta matrícula.", "error")
                 return redirect(url_for("admin_acesso"))
             if aluno_existente:
+                matriz_id = matrix_for_turma_assignment(
+                    conn,
+                    current_matriz_id=aluno_existente["matriz_id"],
+                    turma_id=turma_id,
+                    current_turma_id=aluno_existente["turma_id"],
+                )
                 conn.execute(
                     """
                     UPDATE alunos
-                       SET nome = ?, email = ?, matricula = ?, turma_id = ?, status = ?
+                       SET nome = ?, email = ?, matricula = ?, turma_id = ?, matriz_id = ?, status = ?
                      WHERE usuario_id = ?
                     """,
-                    (nome, email, matricula, turma_id, status_aluno, usuario_id),
+                    (nome, email, matricula, turma_id, matriz_id, status_aluno, usuario_id),
                 )
             else:
                 conn.execute(
                     """
-                    INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, matriz_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (usuario_id, nome, matricula, email, turma_id, status_aluno),
+                    (
+                        usuario_id,
+                        nome,
+                        matricula,
+                        email,
+                        turma_id,
+                        matrix_for_turma_assignment(
+                            conn, current_matriz_id=None, turma_id=turma_id
+                        ),
+                        status_aluno,
+                    ),
                 )
         elif aluno_existente:
             conn.execute(
@@ -467,7 +484,7 @@ def admin_acesso_salvar():
         _persist_user_access_overrides(conn, usuario_id, nivel_acesso, access_overrides if user_type == "admin" else {})
 
         conn.commit()
-    except sqlite3.IntegrityError as exc:
+    except (sqlite3.IntegrityError, StudentMatrixError) as exc:
         conn.rollback()
         flash(f"Falha ao salvar acesso: {exc}", "error")
         return redirect(url_for("admin_acesso"))

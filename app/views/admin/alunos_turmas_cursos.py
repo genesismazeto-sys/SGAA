@@ -39,6 +39,7 @@ from app.services.student_import_service import (
     sync_turma_form_students,
 )
 from app.student_import import StudentImportError, parse_student_import
+from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
 from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
@@ -157,7 +158,7 @@ def _matrizes_by_curso(conn) -> dict[str, list[dict[str, object]]]:
 
 def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: int | None):
     if not posted_matriz_id:
-        return None, "Selecione uma matriz para a turma."
+        return None, None
     matriz = conn.execute(
         "SELECT * FROM matrizes_atividades WHERE id = ? AND curso_id = ?",
         (posted_matriz_id, curso_id),
@@ -683,8 +684,11 @@ def admin_adicionar_aluno():
             hashed_password = hash_password(senha_final)
             cursor = create_usuario_with_default_access(conn, nome, email, hashed_password, "aluno")
             usuario_id = cursor.lastrowid
-            conn.execute("INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, status) VALUES (?, ?, ?, ?, ?, ?)",
-                         (usuario_id, nome, matricula, email, turma_id, status))
+            matriz_id = matrix_for_turma_assignment(
+                conn, current_matriz_id=None, turma_id=turma_id
+            )
+            conn.execute("INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, matriz_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (usuario_id, nome, matricula, email, turma_id, matriz_id, status))
             resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
             conn.commit()
             flash("Aluno adicionado com sucesso.", "success")
@@ -696,7 +700,11 @@ def admin_adicionar_aluno():
                 flash("Erro: Já existe um aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao adicionar aluno: {e}", "error")
+        except StudentMatrixError as e:
+            conn.rollback()
+            flash(str(e), "error")
         except Exception as e:
+            conn.rollback()
             flash(f"Erro inesperado ao adicionar aluno: {e}", "error")
 
     # Compat: templates antigos esperam (id, nome). Exibo código como "nome".
@@ -718,7 +726,7 @@ def admin_adicionar_aluno():
 def admin_editar_aluno(usuario_id):
     conn = get_db_connection()
     aluno = conn.execute("""
-      SELECT u.id as usuario_id, u.nome, u.email, a.matricula, a.turma_id, a.status\x20
+      SELECT u.id as usuario_id, u.nome, u.email, a.matricula, a.turma_id, a.matriz_id, a.status\x20
       FROM usuarios u\x20
       JOIN alunos a ON u.id = a.usuario_id\x20
       WHERE u.id = ?
@@ -742,20 +750,31 @@ def admin_editar_aluno(usuario_id):
                 conn.execute("UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?", (nome, email, hashed_password, usuario_id))
             else:
                 conn.execute("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?", (nome, email, usuario_id))
-            conn.execute("UPDATE alunos SET nome = ?, matricula = ?, email = ?, turma_id = ?, status = ? WHERE usuario_id = ?",
-                         (nome, matricula, email, turma_id, status, usuario_id))
+            matriz_id = matrix_for_turma_assignment(
+                conn,
+                current_matriz_id=aluno["matriz_id"],
+                turma_id=turma_id,
+                current_turma_id=turma_id_anterior,
+            )
+            conn.execute("UPDATE alunos SET nome = ?, matricula = ?, email = ?, turma_id = ?, matriz_id = ?, status = ? WHERE usuario_id = ?",
+                         (nome, matricula, email, turma_id, matriz_id, status, usuario_id))
             resequence_turma_aluno_matriculas_for_ids(conn, turma_id_anterior, turma_id)
             conn.commit()
             flash("Aluno atualizado com sucesso.", "success")
             return redirect(url_for("admin_alunos"))
         except sqlite3.IntegrityError as e:
+            conn.rollback()
             if "UNIQUE constraint failed: usuarios.email" in str(e):
                 flash("Erro: Já existe outro usuário com este e-mail.", "error")
             elif "UNIQUE constraint failed: alunos.matricula" in str(e):
                 flash("Erro: Já existe outro aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao atualizar aluno: {e}", "error")
+        except StudentMatrixError as e:
+            conn.rollback()
+            flash(str(e), "error")
         except Exception as e:
+            conn.rollback()
             flash(f"Erro inesperado ao atualizar aluno: {e}", "error")
 
     turmas = conn.execute("""

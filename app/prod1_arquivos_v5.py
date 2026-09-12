@@ -9,7 +9,7 @@ from app.prod1_schema import (
     _quote_identifier,
     _validate_prod1_v4_schema,
     canonical_prod1_object_sql,
-    validate_prod1_schema,
+    _validate_prod1_v5_schema,
 )
 
 
@@ -79,7 +79,7 @@ def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
             ),
         )
         conn.execute("PRAGMA user_version=5")
-        validate_prod1_schema(conn)
+        _validate_prod1_v5_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v5 integrity check failed")
         conn.execute("COMMIT")
@@ -89,7 +89,12 @@ def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
-    return validate_prod1_schema(conn)
+    _validate_prod1_v5_schema(conn)
+    return {
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 5,
+        "baseline_marker": "first_production_baseline",
+    }
 
 
 __all__ = ["migrate_prod1_v4_to_v5"]

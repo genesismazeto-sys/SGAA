@@ -8,13 +8,14 @@ import sqlite3
 from app.prod1_comprovantes_ddl import COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 from app.prod1_arquivos_ddl import ARQUIVOS_V5_SCHEMA_OBJECTS_SQL, ARQUIVOS_V5_TABLE_SQL
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
 COMPROVANTES_GOOGLE_DRIVE_MARKER = "comprovantes_google_drive_cutover"
 ARQUIVOS_GOOGLE_DRIVE_MARKER = "arquivos_google_drive_cutover"
-LATEST_MIGRATION_MARKER = ARQUIVOS_GOOGLE_DRIVE_MARKER
+STUDENT_MATRIX_AUTHORITY_MARKER = "student_matrix_authority"
+LATEST_MIGRATION_MARKER = STUDENT_MATRIX_AUTHORITY_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -117,10 +118,11 @@ CREATE TABLE turmas (
 );
 CREATE TABLE alunos (
  id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER UNIQUE, nome TEXT NOT NULL,
- matricula TEXT UNIQUE NOT NULL, email TEXT UNIQUE, turma_id INTEGER, foto_perfil TEXT,
+ matricula TEXT UNIQUE NOT NULL, email TEXT UNIQUE, turma_id INTEGER, matriz_id INTEGER, foto_perfil TEXT,
  status TEXT DEFAULT 'Ativo' CHECK(status IN ('Ativo','Inativo')),
  FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL ON UPDATE CASCADE,
- FOREIGN KEY(turma_id) REFERENCES turmas(id) ON DELETE RESTRICT ON UPDATE CASCADE
+ FOREIGN KEY(turma_id) REFERENCES turmas(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+ FOREIGN KEY(matriz_id) REFERENCES matrizes_atividades(id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE TABLE grupos_def (
  tipo_atividade TEXT NOT NULL CHECK(tipo_atividade IN ('Acadêmica Complementar','Extensão Universitária')),
@@ -223,7 +225,8 @@ CREATE INDEX idx_backup_logs_provider_created ON backup_logs(provider,created_at
 CREATE INDEX idx_turmas_status ON turmas(status); CREATE INDEX idx_turmas_curso ON turmas(curso_id);
 CREATE INDEX idx_turmas_matriz ON turmas(matriz_id); CREATE INDEX idx_alunos_usuario_id ON alunos(usuario_id);
 CREATE INDEX idx_alunos_matricula ON alunos(matricula); CREATE INDEX idx_alunos_email ON alunos(email);
-CREATE INDEX idx_alunos_turma_id ON alunos(turma_id); CREATE INDEX idx_atividade_versao_base ON atividade_versao(atividade_base_id);
+CREATE INDEX idx_alunos_turma_id ON alunos(turma_id); CREATE INDEX idx_alunos_matriz_id ON alunos(matriz_id);
+CREATE INDEX idx_atividade_versao_base ON atividade_versao(atividade_base_id);
 CREATE INDEX idx_atividade_versao_eixo ON atividade_versao(eixo);
 CREATE INDEX idx_atividade_versao_status ON atividade_versao(status); CREATE INDEX idx_atividade_transicao_from ON atividade_transicao(from_atividade_versao_id);
 CREATE INDEX idx_atividade_transicao_to ON atividade_transicao(to_atividade_versao_id); CREATE INDEX idx_atividade_transicao_tipo ON atividade_transicao(tipo_transicao);
@@ -275,7 +278,9 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(4,'comprovantes_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(5,'arquivos_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
-PRAGMA user_version=5;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(6,'student_matrix_authority','prod-1','{"schema_epoch":"prod-1","authority":"alunos.matriz_id","turma_matrix_semantics":"optional_default"}');
+PRAGMA user_version=6;
 """.replace(
     "__COMPROVANTES_V4_SCHEMA_OBJECTS__", COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 ).replace(
@@ -403,6 +408,7 @@ _PROD1_V1_SIGNATURE_SHA256 = "58b2e8b5dadc8381e03350cb3972a9590844f88c56e1f793e4
 _PROD1_V2_SIGNATURE_SHA256 = "af842dbf7a4a6d93a933463ccfe18f7b4040a0a3a09e9fc799a27c9219ba3df6"
 _PROD1_V3_SIGNATURE_SHA256 = "51b2d17cf814e64e34ccd47360a57bea4e676c30c1023e167a3295c7cea77a41"
 _PROD1_V4_SIGNATURE_SHA256 = "616872df5c5bc29ececce46c361df7a60eaa8a579db3080827028ffddf7f5a57"
+_PROD1_V5_SIGNATURE_SHA256 = "1c0c4fcaf32b1109f0c7ca5c4959c5af241b9ca81987df0f34e12a4a3459ab25"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -489,6 +495,24 @@ def _validate_prod1_v4_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v4 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v5_schema(conn: sqlite3.Connection) -> None:
+    if _user_version(conn) != 5:
+        raise Prod1SchemaError("prod-1/v5 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v5 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V5_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v5 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v5 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -743,6 +767,11 @@ def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
     return migrate(conn)
 
 
+def migrate_prod1_v5_to_v6(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.prod1_student_matrix_v6 import migrate_prod1_v5_to_v6 as migrate
+    return migrate(conn)
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
@@ -754,6 +783,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
         (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
         (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (6, STUDENT_MATRIX_AUTHORITY_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -778,16 +808,22 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v1_to_v2(conn)
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
-            return migrate_prod1_v4_to_v5(conn)
+            migrate_prod1_v4_to_v5(conn)
+            return migrate_prod1_v5_to_v6(conn)
         if _user_version(conn) == 2:
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
-            return migrate_prod1_v4_to_v5(conn)
+            migrate_prod1_v4_to_v5(conn)
+            return migrate_prod1_v5_to_v6(conn)
         if _user_version(conn) == 3:
             migrate_prod1_v3_to_v4(conn)
-            return migrate_prod1_v4_to_v5(conn)
+            migrate_prod1_v4_to_v5(conn)
+            return migrate_prod1_v5_to_v6(conn)
         if _user_version(conn) == 4:
-            return migrate_prod1_v4_to_v5(conn)
+            migrate_prod1_v4_to_v5(conn)
+            return migrate_prod1_v5_to_v6(conn)
+        if _user_version(conn) == 5:
+            return migrate_prod1_v5_to_v6(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

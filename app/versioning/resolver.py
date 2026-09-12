@@ -133,8 +133,11 @@ def resolver_versao_por_matriz(conn, *, matriz_id, atividade_versao_id):
 def resolver_versao_por_aluno(conn, *, aluno_id, atividade_versao_id):
     row = conn.execute(
         """
-        SELECT t.matriz_id
-          FROM alunos aluno JOIN turmas t ON t.id=aluno.turma_id
+        SELECT aluno.matriz_id
+          FROM alunos aluno
+          JOIN turmas t ON t.id=aluno.turma_id
+          JOIN matrizes_atividades m
+            ON m.id=aluno.matriz_id AND m.curso_id=t.curso_id
          WHERE aluno.id=?
         """,
         (aluno_id,),
