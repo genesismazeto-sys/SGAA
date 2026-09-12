@@ -2774,3 +2774,215 @@ remains the next independent visual defect. It is not fixed here.
   would auto-apply the v6 migration to the operational database through the
   normal startup bootstrap; it must be stopped or deliberately migrated as part
   of the separate authorized operational step.
+
+## UT-AM2 EXPLICIT STUDENT MATRIX ASSIGNMENT — QUALIFIED / NOT LANDED
+
+- UT-AM2 makes the UT-AM1 student-owned authority operable by an administrator.
+  `alunos.matriz_id` remains the current student academic Matrix authority and
+  `turmas.matriz_id` remains an optional Turma default/suggestion only. No
+  schema change was made or required: prod-1 remains v6, `SCHEMA_VERSION`,
+  `schema_migrations` and the prod-1 migration files are untouched.
+- `app/student_matrix.py` stays the sole owner of Matrix compatibility. It gains
+  `validate_student_matrix_for_turma`, which resolves an explicitly chosen
+  Matrix against the Turma that scopes it: the target Matrix must exist; a
+  student bound to a Turma may only hold a Matrix of that Turma's Curso; a
+  student with `turma_id IS NULL` may hold any existing Matrix, because the
+  chosen Matrix itself establishes the academic Curso context. A NULL target
+  clears the authority. `assign_student_matrix` now delegates to that validator
+  instead of binding a NULL `curso_id`, which is the exact defect behind AM1
+  finding F5.
+- `resolve_student_matrix_for_edit` reconciles a simultaneous Turma and Matrix
+  edit. An explicitly submitted Matrix wins and is validated against the
+  destination Turma, so the previous Turma can never veto the new choice and the
+  new Turma can never silently replace it. With no explicit submission the
+  ordinary AM1 Turma-reassignment rules apply unchanged, including fail-closed
+  cross-Curso transfer. `list_assignable_matrices_for_student` supplies the
+  option set with Curso context.
+- The admin surface is the existing Edit Aluno workflow
+  (`/admin/editar_aluno/<usuario_id>`,
+  `app/views/admin/alunos_turmas_cursos.admin_editar_aluno`,
+  `templates/admin_editar_aluno.html`). The control is labelled
+  `Matriz acadêmica`, never `Matriz da turma`, shows the student's current
+  Matrix as the selected option, offers an explicit `Sem matriz` choice, and
+  labels every Matrix with its Curso. A student in a Turma is offered only
+  same-Curso Matrices; a Turma-less student is offered all Matrices with Curso
+  identification. A current Matrix outside the offered set is still rendered
+  selected so no save can silently substitute a different Matrix. Backend
+  validation remains authoritative. An absent `matriz_id` field means "no
+  intent about the Matrix" and preserves the existing authority, so POSTs from
+  the read-only view and from any other caller are unchanged.
+- Validation failure is atomic: the request rolls back, the previous
+  `alunos.matriz_id` survives, a controlled error is flashed, and no other
+  student field is partially written. This is asserted behaviourally, not by
+  source inspection.
+- Explicit student Matrix assignment never writes `turmas.matriz_id`, and
+  changing a Turma default still never alters a student's Matrix.
+- Historical request data is untouched by a Matrix change:
+  `atividade_versao_id`, `regra_snapshot_json`, `horas_solicitadas`,
+  `horas_deferidas`, `status`, `turma_id_snapshot` and `turma_codigo_snapshot`
+  are byte-identical before and after, so a 10 h approval under Version 1 stays
+  a 10 h approval under Version 1.
+- AM1 finding F8 now has a dedicated behavioural regression: a student in a
+  Turma whose default Matrix exists and is populated, with
+  `alunos.matriz_id IS NULL`, resolves to no Matrix and to an empty allowed
+  Activity-Version set. It does not fall back to `turmas.matriz_id`. The test
+  carries a positive control, and a deliberate `COALESCE(a.matriz_id,
+  t.matriz_id)` mutation was confirmed to fail it.
+- Wording: the touched surfaces use `Matriz acadêmica`. The domain error string
+  became "A matriz acadêmica não pertence ao curso da turma do aluno." because
+  the Turma, not the student, is what supplies the Curso constraint. The stale
+  aluno-facing strings "matriz da turma" / "matriz da sua turma"
+  (`app/views/aluno.py` lines 861, 862, 1654 and
+  `app/versioning/snapshots.py` line 16) were deliberately NOT changed: those
+  pages are not touched by this feature and editing them would be the broad
+  unrelated copy-edit sweep this UT forbids. They remain open AM1 cleanup.
+- Message catalog net delta is exactly +2 and nothing was retired:
+  `msg_34c6fdd255ae0c6e` ("Matriz acadêmica") and `msg_c52418de2740e169`
+  ("Sem matriz"), both on the Edit Aluno surface. Catalog moves 544 -> 546. The
+  authorized delta is reconciled in the designated ledger,
+  `tests/test_arquivos_google_drive.py::test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visible`,
+  whose visible baseline-debt gap narrows from 12 to 10. The other hardcoded
+  catalog constants (526, 536, 556) are pre-existing, mutually contradictory
+  baseline debt and were deliberately left alone.
+- Evidence on final candidate bytes: focused AM2 lane `23 passed`; matrix
+  authority/scope lane `54 passed`; canonical suite
+  `65 failed / 1634 passed / 136 skipped`. The exact clean-parent differential
+  against `3be78d318a04d4003b8afe20b4457978e281a230`, run in an isolated
+  worktree, produced `66 failed / 1610 passed / 136 skipped`. Failing-node
+  comparison is CANDIDATE_ONLY 0, MATERIAL_WORSENING 0, UNRESOLVED 0; the 65
+  shared failures are pre-existing canonical debt and were not repaired. The
+  single parent-only failure,
+  `test_ut5_backup_package.py::test_cli_backup_sync_runs_isolated_with_app_context_only`,
+  is an artifact of the differential method: a fresh worktree carries no
+  untracked `database.db`. compileall and `git diff --check` pass; flake8 is
+  declared in `requirements-dev.txt` but is not installed in the executing
+  interpreter, so it was reported rather than installed.
+- The AM2 route tests own a private prod-1 database rather than the shared
+  session database, because earlier suites leave a non-prod-1 schema behind and
+  full-suite ordering would otherwise break them. This was found by running the
+  canonical suite, not assumed.
+- Operational `database.db` was not modified at any point. It is byte-identical
+  before and after at SHA-256
+  `097f3fe8acb0e553a4b63d9e6d6c0a9ffe33229af624753955f3a93309ffe420`,
+  450560 bytes, `PRAGMA user_version = 6`. All development and tests ran on
+  in-memory or temporary databases. The verified pre-v6 backup
+  `D:\Projetos\SGAA_backups\database-pre-v6-20260912-091732.db` is intact.
+- Runtime safety: a live SGAA runtime was found at entry (`python main.py`,
+  PID 5540 with reloader child PID 28608, working directory
+  `D:\Projetos\SGAA_clean_baseline`). Because the Werkzeug reloader would have
+  loaded dirty candidate code against the operational database on the first
+  source edit, that process tree was stopped before any edit and was not
+  restarted. Sidecar presence follows normal WAL/SHM lifecycle and is not
+  corruption.
+- This UT is source-qualified only. Nothing was staged, committed, pushed or
+  published, and no operational data was mutated. Landing is not claimed and
+  awaits independent review and authorization.
+
+### UT-AM2 corrective pass — Turma-less student Matrix is effective
+
+- Supervisor review returned `BLOCKED — ONE MATERIAL CONTRACT MISS`. The first
+  AM2 candidate stored a Turma-less student's Matrix correctly but resolved it
+  through an INNER JOIN on `turmas`, so a detached student had no effective
+  Matrix. That violated the UT-AM2 contract clause "the explicitly selected
+  Matrix itself establishes the student's current academic Matrix/course
+  context" and is fixed here, not deferred to AM3.
+- `get_effective_matrix_for_student` now joins the authority directly
+  (`JOIN matrizes_atividades m ON m.id=a.matriz_id`) and `LEFT JOIN`s the Turma,
+  admitting the row only when `a.turma_id IS NULL` or the Turma exists and
+  `m.curso_id = t.curso_id`. The Matrix value is never derived from the Turma;
+  the Turma is only ever a compatibility check.
+- Resolution semantics are now: Turma-less with Matrix M resolves to M;
+  Turma-bound with a compatible own Matrix resolves to that Matrix;
+  `alunos.matriz_id IS NULL` resolves to nothing with no fallback to
+  `turmas.matriz_id`; a corrupt Turma-bound incompatible pairing fails closed
+  and does not adopt the Turma default. "No Turma" and "no academic Matrix" are
+  now distinct outcomes.
+- `app/versioning/resolver.resolver_versao_por_aluno` had an identical duplicate
+  of the INNER JOIN gate. It now delegates to
+  `app.student_matrix.get_effective_matrix_for_student`, so the compatibility
+  rule has exactly one owner. `app/versioning/resolver.py` gains a top-level
+  import of `app.student_matrix`, which introduces no cycle because
+  `app.student_matrix` imports nothing.
+- Deliberately not changed after review: `app/comprovantes.py`
+  `capture_student_turma_snapshot` keeps its independent, legitimate
+  `TURMA_REQUIRED` rule; `app/views/aluno.py` already routes academic hours
+  through `get_effective_matrix_for_student` and its Turma-gated Matrix columns
+  are unconsumed, so it was left alone rather than dead-code-cleaned;
+  `app/prod1_student_matrix_v6.py`, `app/matrix_scope.py` and the admin Turma
+  `tm.*` joins are Turma-default paths and are untouched. Admin Requisições
+  selects `a.matriz_id` under a `LEFT JOIN`, so it was never gated.
+- `tests/test_matriz_versao_contract.py::test_student_without_turma_matrix_fails_closed`
+  encoded the superseded coupling: it detached a student who still held
+  `matriz_id = 2` and asserted "student has no effective matrix". It now nulls
+  the Matrix as well, so it pins NO ACADEMIC MATRIX rather than NO TURMA, and a
+  new sibling `test_detached_student_keeps_its_academic_matrix_effective` pins
+  that a detached student still resolves its own Matrix and that a version
+  outside that Matrix fails with "version is not selected by matrix". This is an
+  authorized contract supersession, recorded rather than silently rewritten.
+- Seven new regression cases cover effective Matrix, allowed Activity Versions
+  and the version resolver for the Turma-less student, the Turma-less NULL
+  Matrix, the Turma-bound compatible Matrix, the Turma-bound NULL Matrix
+  no-fallback, and the corrupt incompatible pairing. Four mutation classes were
+  proven to fail them: restoring the INNER JOIN Turma gate fails all three
+  Turma-less cases; `COALESCE(a.matriz_id, t.matriz_id)` fails both no-fallback
+  cases; dropping the Curso check fails the corrupt-pairing case; and
+  re-implementing the gate inside `resolver.py` fails the resolver case.
+- No schema change: prod-1 remains v6. The message catalog is unchanged by this
+  pass and stays at 546.
+- Evidence on final candidate bytes: AM2 lane `30 passed`; focused lane
+  `128 passed`; canonical suite `65 failed / 1642 passed / 136 skipped` against
+  clean parent `3be78d318a04d4003b8afe20b4457978e281a230`
+  (`66 failed / 1610 passed / 136 skipped`). CANDIDATE_ONLY 0,
+  MATERIAL_WORSENING 0, UNRESOLVED 0; the 65 shared failures are pre-existing
+  canonical debt. compileall and `git diff --check` pass; flake8 remains
+  uninstalled in the executing interpreter and was reported, not installed.
+- Operational `database.db` remains byte-identical at SHA-256
+  `097f3fe8acb0e553a4b63d9e6d6c0a9ffe33229af624753955f3a93309ffe420`,
+  450560 bytes, `PRAGMA user_version = 6`. The runtime remained stopped
+  throughout this corrective pass and was not restarted for tests. Nothing was
+  staged, committed or pushed.
+
+### UT-AM2 final review and landing
+
+- Independent review returned `ACCEPT_WITH_NON_BLOCKING_FINDINGS`. Supervisor
+  decision is `APPROVED WITH CONSTRAINTS / READY_TO_LAND`. Landing is authorized
+  and is performed in this pass; the commit SHA is recorded by git history
+  rather than asserted here.
+- Final accepted contract. `alunos.matriz_id` is the current academic Matrix
+  authority and `turmas.matriz_id` is an optional Turma default/suggestion.
+  Effective resolution is: Turma-less student with Matrix M resolves to M;
+  Turma-bound student with a same-Curso Matrix M resolves to M; a NULL student
+  Matrix resolves to nothing with NO fallback to `turmas.matriz_id`; and a
+  Turma-bound incompatible Matrix/Curso state fails closed. Explicit admin
+  assignment supports assign, change, `Sem matriz`/clear, Turma-less students,
+  and a simultaneous Turma + Matrix edit validated against the destination
+  Turma. Historical request, version and hour records remain immutable.
+- The superseded "no Turma implies no effective Matrix" assertion in
+  `tests/test_matriz_versao_contract.py` is recorded as an
+  AUTHORIZED_CONTRACT_UPDATE, not a silent test rewrite: it now pins NO ACADEMIC
+  MATRIX, and the detached-but-matriculated case is pinned by its new sibling.
+- Accepted non-blocking findings, deliberately NOT addressed in this UT and
+  carried as FUTURE_HARDENING:
+  - F1: a malformed authenticated POST such as `matriz_id=not-an-int` converts
+    to `None` and therefore behaves like an explicit `Sem matriz`. The rendered
+    UI cannot produce that value. Behaviour is unchanged for this landing; a
+    malformed non-empty `matriz_id` should eventually be rejected rather than
+    interpreted as an explicit NULL.
+  - F2: the out-of-set current-Matrix preselection branch is behaviourally
+    correct but has no dedicated regression test.
+- Explicitly still out of scope: stale aluno-facing Matrix wording outside the
+  AM2 surface, dashboard historical cohort attribution, comprovantes
+  historical-Turma lazy backfill, dead `matrix_scope` helpers, detach
+  centralization, and the enrollment-history model.
+- Operational schema remains prod-1 v6. No migration was authorized, required or
+  performed. No operational student data was mutated at any point during
+  implementation, qualification or review; all work ran on in-memory and
+  temporary databases. The operational `database.db` stayed byte-identical at
+  SHA-256 `097f3fe8acb0e553a4b63d9e6d6c0a9ffe33229af624753955f3a93309ffe420`,
+  450560 bytes, `PRAGMA user_version = 6`, and the pre-v6 backup
+  `D:\Projetos\SGAA_backups\database-pre-v6-20260912-091732.db` (SHA-256
+  `ada8f75f54762a647f454c2486599ed5d46021e16f971015e39e72d8fa936f50`,
+  434176 bytes) is untouched.
+- The SGAA runtime remained stopped from before the first source edit through
+  review, and is restored only after successful remote verification of this
+  landing.

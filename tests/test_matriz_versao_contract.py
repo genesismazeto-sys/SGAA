@@ -64,12 +64,41 @@ def test_resolver_is_read_only(env):
 
 
 def test_student_without_turma_matrix_fails_closed(env):
+    """No academic Matrix fails closed.
+
+    UT-AM2 supersedes the previous coupling in which detaching a student from a
+    Turma alone produced "no effective matrix": the authority is
+    ``alunos.matriz_id``, so absence of a Matrix -- not absence of a Turma -- is
+    what fails closed here.  The detached-but-matriculated case is pinned by
+    ``test_detached_student_keeps_its_academic_matrix_effective``.
+    """
     with main.app.app_context():
         conn = main.get_db_connection()
         aluno_id = conn.execute("SELECT id FROM alunos WHERE matricula='PPA.TESTE.0001'").fetchone()["id"]
-        conn.execute("UPDATE alunos SET turma_id=NULL WHERE id=?", (aluno_id,))
+        conn.execute("UPDATE alunos SET turma_id=NULL,matriz_id=NULL WHERE id=?", (aluno_id,))
         result = resolver.resolver_versao_por_aluno(conn, aluno_id=aluno_id, atividade_versao_id=27)
     assert result == {"status": "not_found", "reason": "student has no effective matrix"}
+
+
+def test_detached_student_keeps_its_academic_matrix_effective(env):
+    """Detaching from a Turma must not erase the student's academic Matrix."""
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        aluno = conn.execute(
+            "SELECT id,matriz_id FROM alunos WHERE matricula='PPA.TESTE.0001'"
+        ).fetchone()
+        conn.execute("UPDATE alunos SET turma_id=NULL WHERE id=?", (aluno["id"],))
+        resolvido = resolver.resolver_versao_por_aluno(
+            conn, aluno_id=aluno["id"], atividade_versao_id=29
+        )
+        # Versao 27 nao pertence a matriz do aluno: falha por selecao, nao por Turma.
+        fora = resolver.resolver_versao_por_aluno(
+            conn, aluno_id=aluno["id"], atividade_versao_id=27
+        )
+    assert resolvido["status"] == "resolved"
+    assert resolvido["matriz_id_efetiva"] == aluno["matriz_id"]
+    assert resolvido["atividade_versao_id"] == 29
+    assert fora == {"status": "not_found", "reason": "version is not selected by matrix"}
 
 
 def test_matrix_listing_contains_only_explicit_canonical_items(env):

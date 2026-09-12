@@ -877,13 +877,23 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # (msg_4d8251747aafd60d), because a Turma Matrix became an optional default
     # instead of a required field.  UT-AM1 adds no new catalogued message.
     student_matrix_net_delta = -1
+    # UT-AM2 adds exactly two catalogued messages, both on the admin Edit Aluno
+    # surface that now assigns the student-owned academic Matrix explicitly:
+    # "Matriz academica" (msg_34c6fdd255ae0c6e) labels the control and
+    # "Sem matriz" (msg_c52418de2740e169) is the explicit clear-to-NULL choice.
+    # No message is retired, so the net delta is +2.
+    explicit_matrix_assignment_net_delta = 2
+    assert {"msg_34c6fdd255ae0c6e", "msg_c52418de2740e169"} <= set(catalog)
     assert (
         len(catalog)
-        == head_actual + legitimate_net_delta + student_matrix_net_delta
-        == 544
+        == head_actual
+        + legitimate_net_delta
+        + student_matrix_net_delta
+        + explicit_matrix_assignment_net_delta
+        == 546
     )
     assert head_expected + legitimate_net_delta == 556
-    assert (head_expected + legitimate_net_delta) - len(catalog) == 12
+    assert (head_expected + legitimate_net_delta) - len(catalog) == 10
 
 
 def test_legacy_path_escape_is_rejected(service_env, tmp_path):

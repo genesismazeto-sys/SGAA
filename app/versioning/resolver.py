@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.student_matrix import get_effective_matrix_for_student
+
 
 _MATRIZ_STATUS_LABELS = {
     "rascunho": "Rascunho",
@@ -131,21 +133,13 @@ def resolver_versao_por_matriz(conn, *, matriz_id, atividade_versao_id):
 
 
 def resolver_versao_por_aluno(conn, *, aluno_id, atividade_versao_id):
-    row = conn.execute(
-        """
-        SELECT aluno.matriz_id
-          FROM alunos aluno
-          JOIN turmas t ON t.id=aluno.turma_id
-          JOIN matrizes_atividades m
-            ON m.id=aluno.matriz_id AND m.curso_id=t.curso_id
-         WHERE aluno.id=?
-        """,
-        (aluno_id,),
-    ).fetchone()
-    if not row or not row["matriz_id"]:
+    # A autoridade de matriz academica pertence a app.student_matrix; aqui nao
+    # se reimplementa a regra de compatibilidade com a Turma.
+    matriz = get_effective_matrix_for_student(conn, aluno_id)
+    if not matriz:
         return {"status": "not_found", "reason": "student has no effective matrix"}
     return resolver_versao_por_matriz(
-        conn, matriz_id=row["matriz_id"], atividade_versao_id=atividade_versao_id
+        conn, matriz_id=int(matriz["id"]), atividade_versao_id=atividade_versao_id
     )
 
 

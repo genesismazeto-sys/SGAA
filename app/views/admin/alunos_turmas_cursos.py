@@ -39,7 +39,12 @@ from app.services.student_import_service import (
     sync_turma_form_students,
 )
 from app.student_import import StudentImportError, parse_student_import
-from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
+from app.student_matrix import (
+    StudentMatrixError,
+    list_assignable_matrices_for_student,
+    matrix_for_turma_assignment,
+    resolve_student_matrix_for_edit,
+)
 from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
@@ -743,6 +748,9 @@ def admin_editar_aluno(usuario_id):
         status = request.form["status"]
         senha = request.form.get("senha")
         turma_id_anterior = aluno["turma_id"]
+        # Campo ausente = edição sem intenção sobre a matriz; vazio = "Sem matriz".
+        matriz_submetida = "matriz_id" in request.form
+        matriz_escolhida = request.form.get("matriz_id", type=int)
 
         try:
             if senha:
@@ -750,11 +758,13 @@ def admin_editar_aluno(usuario_id):
                 conn.execute("UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?", (nome, email, hashed_password, usuario_id))
             else:
                 conn.execute("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?", (nome, email, usuario_id))
-            matriz_id = matrix_for_turma_assignment(
+            matriz_id = resolve_student_matrix_for_edit(
                 conn,
                 current_matriz_id=aluno["matriz_id"],
-                turma_id=turma_id,
                 current_turma_id=turma_id_anterior,
+                turma_id=turma_id,
+                explicit_matriz_id=matriz_escolhida,
+                matrix_explicitly_submitted=matriz_submetida,
             )
             conn.execute("UPDATE alunos SET nome = ?, matricula = ?, email = ?, turma_id = ?, matriz_id = ?, status = ? WHERE usuario_id = ?",
                          (nome, matricula, email, turma_id, matriz_id, status, usuario_id))
@@ -783,7 +793,22 @@ def admin_editar_aluno(usuario_id):
          WHERE t.status='Ativa'
       ORDER BY t.ano_inicio DESC, t.semestre_inicio DESC, nome
     """).fetchall()
-    return render_template("admin_editar_aluno.html", aluno=aluno, turmas=turmas)
+    matrizes = list_assignable_matrices_for_student(conn, aluno["turma_id"])
+    matriz_atual = None
+    if aluno["matriz_id"]:
+        matriz_atual = conn.execute("""
+            SELECT m.id, m.nome, c.nome AS curso_nome, c.codigo AS curso_codigo
+              FROM matrizes_atividades m
+              JOIN cursos c ON c.id = m.curso_id
+             WHERE m.id = ?
+        """, (aluno["matriz_id"],)).fetchone()
+    return render_template(
+        "admin_editar_aluno.html",
+        aluno=aluno,
+        turmas=turmas,
+        matrizes=matrizes,
+        matriz_atual=matriz_atual,
+    )
 
 
 @admin_required

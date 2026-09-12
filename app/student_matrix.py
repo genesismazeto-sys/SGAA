@@ -71,38 +71,114 @@ def assign_student_to_turma(conn, aluno_id: int, turma_id: int | None) -> int | 
     return matriz_id
 
 
+def validate_student_matrix_for_turma(
+    conn, *, matriz_id: int | None, turma_id: int | None
+) -> int | None:
+    """Resolve an explicitly chosen Matrix against the Turma that scopes it.
+
+    A Turma constrains the choice to its own Curso. Without a Turma there is no
+    Curso to validate against, so the chosen Matrix itself establishes the
+    student's academic Curso context.
+    """
+    if matriz_id is None:
+        return None
+    matriz = conn.execute(
+        "SELECT id,curso_id FROM matrizes_atividades WHERE id=?", (matriz_id,)
+    ).fetchone()
+    if not matriz:
+        raise StudentMatrixError("A matriz acadêmica selecionada não existe.")
+    if turma_id is not None:
+        turma = _turma_scope(conn, turma_id)
+        if matriz["curso_id"] != turma["curso_id"]:
+            raise StudentMatrixError(
+                "A matriz acadêmica não pertence ao curso da turma do aluno."
+            )
+    return int(matriz["id"])
+
+
 def assign_student_matrix(conn, aluno_id: int, matriz_id: int | None) -> int | None:
+    """Explicitly set the student's academic Matrix authority."""
     aluno = conn.execute(
-        """
-        SELECT a.id,t.curso_id
-          FROM alunos a LEFT JOIN turmas t ON t.id=a.turma_id
-         WHERE a.id=?
-        """,
-        (aluno_id,),
+        "SELECT id,turma_id FROM alunos WHERE id=?", (aluno_id,)
     ).fetchone()
     if not aluno:
         raise StudentMatrixError("Aluno não encontrado.")
-    if matriz_id is not None:
-        valid = conn.execute(
-            "SELECT 1 FROM matrizes_atividades WHERE id=? AND curso_id=?",
-            (matriz_id, aluno["curso_id"]),
-        ).fetchone()
-        if not valid:
-            raise StudentMatrixError("A matriz acadêmica não pertence ao curso do aluno.")
-        matriz_id = int(matriz_id)
+    matriz_id = validate_student_matrix_for_turma(
+        conn, matriz_id=matriz_id, turma_id=aluno["turma_id"]
+    )
     conn.execute("UPDATE alunos SET matriz_id=? WHERE id=?", (matriz_id, aluno_id))
     return matriz_id
 
 
+def resolve_student_matrix_for_edit(
+    conn,
+    *,
+    current_matriz_id: int | None,
+    current_turma_id: int | None,
+    turma_id: int | None,
+    explicit_matriz_id: int | None,
+    matrix_explicitly_submitted: bool,
+) -> int | None:
+    """Reconcile a simultaneous Turma and academic Matrix edit.
+
+    An explicitly submitted Matrix wins and is validated against the destination
+    Turma, so the previous Turma can never veto the new choice and the new Turma
+    can never silently replace it. Without an explicit choice the ordinary Turma
+    reassignment rules preserve whatever authority the student already holds.
+    """
+    if not matrix_explicitly_submitted:
+        return matrix_for_turma_assignment(
+            conn,
+            current_matriz_id=current_matriz_id,
+            turma_id=turma_id,
+            current_turma_id=current_turma_id,
+        )
+    return validate_student_matrix_for_turma(
+        conn, matriz_id=explicit_matriz_id, turma_id=turma_id
+    )
+
+
+def list_assignable_matrices_for_student(conn, turma_id: int | None):
+    """Matrices an admin may explicitly assign, carrying Curso context for labels."""
+    if turma_id is not None:
+        return conn.execute(
+            """
+            SELECT m.id,m.nome,m.status,c.nome AS curso_nome,c.codigo AS curso_codigo
+              FROM turmas t
+              JOIN matrizes_atividades m ON m.curso_id=t.curso_id
+              JOIN cursos c ON c.id=m.curso_id
+             WHERE t.id=?
+          ORDER BY m.nome
+            """,
+            (turma_id,),
+        ).fetchall()
+    return conn.execute(
+        """
+        SELECT m.id,m.nome,m.status,c.nome AS curso_nome,c.codigo AS curso_codigo
+          FROM matrizes_atividades m
+          JOIN cursos c ON c.id=m.curso_id
+      ORDER BY c.nome,m.nome
+        """
+    ).fetchall()
+
+
 def get_effective_matrix_for_student(conn, aluno_id: int):
+    """Resolve the student's academic Matrix authority.
+
+    The value always comes from ``alunos.matriz_id``; a Turma is never its
+    source. A Turma-bound student additionally requires Curso compatibility, so
+    a stale or corrupt pairing fails closed instead of silently adopting the
+    Turma default. A Turma-less student resolves against the Matrix itself,
+    which supplies its own Curso identity. "No Turma" is not "no Matrix".
+    """
     return conn.execute(
         """
         SELECT m.*
           FROM alunos a
-          JOIN turmas t ON t.id=a.turma_id
-          JOIN matrizes_atividades m
-            ON m.id=a.matriz_id AND m.curso_id=t.curso_id
+          JOIN matrizes_atividades m ON m.id=a.matriz_id
+          LEFT JOIN turmas t ON t.id=a.turma_id
          WHERE a.id=?
+           AND (a.turma_id IS NULL OR (t.id IS NOT NULL AND m.curso_id=t.curso_id))
         """,
         (aluno_id,),
     ).fetchone()
@@ -128,5 +204,8 @@ __all__ = [
     "assign_student_to_turma",
     "get_effective_matrix_for_student",
     "get_allowed_activity_version_ids_for_student",
+    "list_assignable_matrices_for_student",
     "matrix_for_turma_assignment",
+    "resolve_student_matrix_for_edit",
+    "validate_student_matrix_for_turma",
 ]

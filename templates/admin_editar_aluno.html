@@ -68,6 +68,24 @@
       </div>
     </div>
 
+    {% set matriz_ids = matrizes | map(attribute='id') | list %}
+    <div class="form-row">
+      <label class="row-label">{{ user_message("Matriz acadêmica") }}</label>
+      <div class="field-card">
+        <div class="field-chip"><i class="lucide" data-lucide="layers-3"></i></div>
+        <select class="control" name="matriz_id" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <option value="" {{ 'selected' if not aluno.matriz_id else '' }}>{{ user_message("Sem matriz") }}</option>
+          {# Mantem a matriz vigente selecionavel mesmo se sair da lista compativel. #}
+          {% if matriz_atual and matriz_atual.id not in matriz_ids %}
+            <option value="{{ matriz_atual.id }}" selected>{{ matriz_atual.nome }} — {{ matriz_atual.curso_codigo or matriz_atual.curso_nome }}</option>
+          {% endif %}
+          {% for m in matrizes %}
+            <option value="{{ m.id }}" {{ 'selected' if m.id == aluno.matriz_id else '' }}>{{ m.nome }} — {{ m.curso_codigo or m.curso_nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
     <div class="form-row">
       <label class="row-label">{{ user_message("Status") }}</label>
       <div class="field-card">
