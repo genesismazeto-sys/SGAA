@@ -49,10 +49,11 @@ if BASE not in sys.path:
 import main
 from app import auth
 from app.web import authz_gate
+from tests import canonical_rbac_test_support as rbac
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
-BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+BUSINESS_METHODS = rbac.BUSINESS_METHODS
 
 
 def _resolved_rule(path: str, method: str = "GET"):
@@ -140,15 +141,57 @@ def test_callback_like_name_or_outside_admin_rule_is_not_governed():
 
 
 def test_every_current_governed_business_pair_has_exactly_one_policy():
-    governed = []
-    for rule in main.app.url_map.iter_rules():
-        for method in set(rule.methods or ()) & BUSINESS_METHODS:
-            result = auth.classify_governed_admin_request(rule.endpoint, rule, method)
-            if result["governed"]:
-                governed.append(result)
-                assert bool(result["requirement"]) != bool(result["exemption"])
-                assert result["kind"] in {"requirement", "exemption"}
-    assert len(governed) == 130  # 127 /admin pairs + 3 approved external callbacks.
+    """Fail-closed policy ownership, re-derived from the live URL map.
+
+    UT-BR2-D NOTE: this used to end on ``len(governed) == 130  # 127 /admin
+    pairs + 3 approved external callbacks``.  That scalar asserted only the
+    *sum*: it would have passed unchanged if four admin pairs had left the
+    boundary while four non-admin pairs joined it, and it rotted anyway as the
+    route surface moved to 123 admin pairs.  Both sides of the composition are
+    now reconstructed as identity sets, and the per-pair "exactly one
+    applicable policy" contract is delegated to the canonical RBAC owner.
+
+    The derivation deliberately starts from ``main.app.url_map`` rather than
+    from the committed route artifact, so this gate stays an independent check
+    on the *live* application rather than a second read of the same file.
+    """
+    live_routes = [
+        {
+            "endpoint": rule.endpoint,
+            "methods": sorted(set(rule.methods or ()) & BUSINESS_METHODS),
+            "rule": rule.rule,
+        }
+        for rule in main.app.url_map.iter_rules()
+    ]
+    classification = rbac.classify_inventory(routes=live_routes)
+
+    assert classification.unresolved == ()
+    assert classification.ambiguous == ()
+    assert rbac.policy_ownership_violations(classification) == []
+    assert rbac.admin_boundary_violations(classification) == []
+    assert rbac.exemption_registry_violations() == []
+
+    governed = rbac.governed_identities(classification)
+    requirements = rbac.requirement_identities(classification)
+    assert {requirement.combination for requirement in requirements} == governed
+
+    admin = {identity for identity in governed if rbac.is_admin_rule(identity.rule)}
+    external = governed - admin
+    expected_admin = set()
+    expected_external = set()
+    for entry in live_routes:
+        for method in entry["methods"]:
+            identity = rbac.Combination(entry["rule"], entry["endpoint"], method)
+            if rbac.is_admin_rule(entry["rule"]):
+                expected_admin.add(identity)
+            if method in auth.NON_ADMIN_RBAC_GOVERNED_ENDPOINTS.get(entry["endpoint"], frozenset()):
+                expected_external.add(identity)
+
+    assert admin == expected_admin, "every /admin business pair must be governed, and only those"
+    assert external == expected_external, (
+        "the only governed non-admin pairs are the declared external callbacks"
+    )
+    assert governed == admin | external
 
 
 def test_new_governed_unmapped_pair_is_detected_without_route_registration():

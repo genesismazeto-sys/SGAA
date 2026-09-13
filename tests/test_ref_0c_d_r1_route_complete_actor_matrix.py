@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import sys
 import uuid
 from pathlib import Path
@@ -29,20 +28,22 @@ if BASE not in sys.path:
 
 import main
 from app import auth
+from tests import canonical_rbac_test_support as rbac
+from tests.canonical_baseline_support import (
+    assert_route_inventory_artifact_is_canonical,
+)
 from tests.versioned_test_support import isolated_versioned_app_env
 from utils.messages import ensure_message_overrides_schema
 
 
 ARTIFACT_PATH = Path(__file__).parent / "_artifacts" / "route_inventory_baseline.json"
-BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
-ADMIN_ACCESS_LEVELS = ("admin_total", "administrativo", "consultivo")
-
-CANONICAL_REQUIREMENT_MATRIX_DIGEST = "98de88ba6c58a3b6da4f6d17749c06bb42c9b435ce34ccbce34049cd5a33d796"
-CANONICAL_PROFILE_DIGESTS = {
-    "admin_total": "8100f29522b3bea3cd55d37f2e35bd04a7e663e014669237b5ef7646777a77ae",
-    "administrativo": "bce039124b87b716dfc6c0c78a75a0a08b563fa8d452dbd148931cd733da759c",
-    "consultivo": "b592479780c57f1d9820bef4fb5f476a7a6caf178f262ca594c29f009da9bbb0",
-}
+# UT-BR2-D: the RBAC derivation, the admin boundary and the actor/denial matrices
+# are owned by ``tests/canonical_rbac_test_support.py``.  This suite keeps its own
+# semantic proofs -- classification invariants, URL roundtrip, HTTP denial replay,
+# filesystem isolation, database immutability -- and delegates the global identity
+# sets there instead of re-freezing a private copy of each total.
+BUSINESS_METHODS = rbac.BUSINESS_METHODS
+ADMIN_ACCESS_LEVELS = rbac.ADMIN_ACCESS_LEVELS
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,31 +81,26 @@ def _classify(rule_text: str, endpoint: str, method: str) -> dict:
     return auth.classify_governed_admin_request(endpoint, _find_live_rule(rule_text, endpoint), method)
 
 
-def _get_all_governed_pairs():
-    pairs = []
-    baseline = _load_baseline()
-    for entry in baseline["routes"]:
-        for m in entry["methods"]:
-            cls = _classify(entry["rule"], entry["endpoint"], m)
-            if cls["governed"] and cls["kind"] == "requirement":
-                r, s = cls["requirement"]
-                pairs.append((entry["rule"], entry["endpoint"], m, r, s))
-    return pairs
+def _live_inventory_routes() -> list[dict]:
+    """Artifact-shaped entries built from the live URL map, not from the artifact."""
+    return [
+        {
+            "endpoint": rule.endpoint,
+            "methods": sorted(set(rule.methods or ()) & BUSINESS_METHODS),
+            "rule": rule.rule,
+        }
+        for rule in main.app.url_map.iter_rules()
+    ]
 
 
-_GOVERNED_PAIRS = _get_all_governed_pairs()
-
-
-def _profile_digest(level: str) -> str:
-    data = auth.PROFILE_RESOURCE_SCOPES.get(level, {})
-    raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _requirement_matrix_digest() -> str:
-    rows = sorted((ep, m, r, s) for _, ep, m, r, s in _GOVERNED_PAIRS)
-    raw = json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+# The canonical classification is derived once, from the route artifact *after*
+# it has been checked against its pinned digest, against the live URL map.  The
+# two module-level projections below keep the historical tuple shapes --
+# ``(rule, endpoint, method, resource, scope)`` and that plus a level -- so the
+# HTTP replay further down is unchanged; they are now exact, deterministically
+# ordered identity sets rather than lists whose lengths were frozen separately.
+_CLASSIFICATION = rbac.canonical_classification()
+_GOVERNED_PAIRS = rbac.canonical_requirements_in_order(_CLASSIFICATION)
 
 
 # ---------------------------------------------------------------------------
@@ -401,17 +397,10 @@ def _logout(client) -> None:
 # Denied-case helpers
 # ---------------------------------------------------------------------------
 
-def _is_denied(level: str, resource: str, scope: str) -> bool:
-    eff = auth.PROFILE_RESOURCE_SCOPES.get(level, {}).get(resource, "none")
-    return not auth.permission_scope_satisfies(eff, scope)
-
-
-_DENIED_CASES = [
-    (rule_text, endpoint, method, resource, scope, level)
-    for rule_text, endpoint, method, resource, scope in _GOVERNED_PAIRS
-    for level in ADMIN_ACCESS_LEVELS
-    if _is_denied(level, resource, scope)
-]
+# The exact set of actor/policy combinations whose canonical decision is deny,
+# in deterministic order.  Replayed case by case over HTTP below; the HTTP tests
+# assert identity-set equality against this tuple, never a case count.
+_DENIED_CASES = rbac.canonical_denial_cases(_CLASSIFICATION)
 
 
 def _assert_browser_denial(resp, ctx: str) -> None:
@@ -482,26 +471,94 @@ def test_baseline_matches_live_inventory():
     assert _build_live_inventory() == _load_baseline()
 
 
-def test_baseline_has_129_rules():
-    assert len(_load_baseline()["routes"]) == 128
+def test_route_artifact_is_pinned_to_the_canonical_url_contract():
+    """Replaces ``len(routes) == 128``.
+
+    The rule count was a lossy shadow of the URL contract: it could not tell a
+    deleted route plus an added route from no change at all.  The canonical
+    owner pins the full (rule, endpoint, methods) identity digest instead, so
+    this suite's entire RBAC derivation is anchored to a reviewed artifact.
+    """
+    assert_route_inventory_artifact_is_canonical(context="REF-0C-D-R1")
 
 
-def test_baseline_has_158_combinations():
-    total = sum(len(r["methods"]) for r in _load_baseline()["routes"])
-    assert total == 156
+def test_combinations_partition_into_governed_and_non_governed():
+    """Replaces ``combinations == 156``.
+
+    Every business combination of the artifact is classified exactly once, into
+    exactly one side of the boundary, with nothing unresolvable or ambiguous.
+    """
+    expected = frozenset(
+        rbac.Combination(entry["rule"], entry["endpoint"], method)
+        for entry in _load_baseline()["routes"]
+        for method in entry["methods"]
+    )
+    combinations = rbac.combination_identities(_CLASSIFICATION)
+    governed = rbac.governed_identities(_CLASSIFICATION)
+    non_governed = rbac.non_governed_identities(_CLASSIFICATION)
+
+    assert _CLASSIFICATION.unresolved == (), (
+        f"inventory identities absent from the live URL map: {_CLASSIFICATION.unresolved}"
+    )
+    assert _CLASSIFICATION.ambiguous == (), (
+        f"inventory identities resolving to several live rules: {_CLASSIFICATION.ambiguous}"
+    )
+    assert combinations == expected
+    assert len(_CLASSIFICATION.combinations) == len(combinations), "duplicate combination identity"
+    assert governed | non_governed == combinations
+    assert governed & non_governed == frozenset()
 
 
 # ---------------------------------------------------------------------------
 # Part 2 — Governed classification invariants
 # ---------------------------------------------------------------------------
 
-def test_governed_requirement_count_is_132():
-    req = sum(1 for cls in (
-        _classify(e["rule"], e["endpoint"], m)
-        for e in _load_baseline()["routes"]
-        for m in e["methods"]
-    ) if cls["governed"] and cls["kind"] == "requirement")
-    assert req == 130
+def test_governed_set_is_exactly_the_requirement_carrying_set():
+    """Replaces ``governed requirements == 130``.
+
+    The count could not distinguish "an admin route lost its policy while an
+    unrelated route gained one".  The contract is that the governed partition
+    and the requirement-carrying set are the *same* identities, and that their
+    (endpoint, method, resource, scope) projection still hashes to the pinned
+    requirement matrix.
+    """
+    requirements = rbac.requirement_identities(_CLASSIFICATION)
+    assert {requirement.combination for requirement in requirements} == rbac.governed_identities(
+        _CLASSIFICATION
+    )
+    assert len(requirements) == len(rbac.governed_identities(_CLASSIFICATION))
+    assert rbac.requirement_matrix_digest(requirements) == rbac.CANONICAL_REQUIREMENT_MATRIX_DIGEST
+
+
+def test_governed_set_is_the_admin_boundary_plus_the_declared_external_callbacks():
+    """The exact composition the old ``== 130`` comment described in prose.
+
+    ``130  # 127 /admin pairs + 3 approved external callbacks`` asserted the
+    sum only.  Here each side of that sum is reconstructed as an identity set,
+    so the two can no longer drift in opposite directions and cancel out.
+    """
+    governed = rbac.governed_identities(_CLASSIFICATION)
+    admin = {identity for identity in governed if rbac.is_admin_rule(identity.rule)}
+    external = governed - admin
+
+    expected_admin = set()
+    expected_external = set()
+    for rule in main.app.url_map.iter_rules():
+        for method in sorted(set(rule.methods or ()) & BUSINESS_METHODS):
+            identity = rbac.Combination(rule.rule, rule.endpoint, method)
+            if rbac.is_admin_rule(rule.rule):
+                expected_admin.add(identity)
+            if method in auth.NON_ADMIN_RBAC_GOVERNED_ENDPOINTS.get(rule.endpoint, frozenset()):
+                expected_external.add(identity)
+
+    assert admin == expected_admin, (
+        "every /admin business pair, and only those, must be inside the boundary"
+    )
+    assert external == expected_external, (
+        "the only governed non-admin pairs are the declared external callbacks"
+    )
+    assert admin & external == set()
+    assert admin | external == governed
 
 
 def test_all_governed_requirement_kind():
@@ -545,16 +602,49 @@ def test_requirement_equals_get_admin_permission_requirement():
 
 
 def test_requirement_matrix_digest_lock():
-    assert _requirement_matrix_digest() == CANONICAL_REQUIREMENT_MATRIX_DIGEST
+    assert (
+        rbac.requirement_matrix_digest(_GOVERNED_PAIRS)
+        == rbac.CANONICAL_REQUIREMENT_MATRIX_DIGEST
+    )
 
 
-def test_non_governed_count_is_26():
-    ng = sum(1 for cls in (
-        _classify(e["rule"], e["endpoint"], m)
-        for e in _load_baseline()["routes"]
-        for m in e["methods"]
-    ) if not cls["governed"])
-    assert ng == 26
+def test_policy_ownership_is_exactly_one_policy_per_governed_pair():
+    """No missing policy, no duplicate policy, and no fail-open required scope."""
+    assert rbac.policy_ownership_violations(_CLASSIFICATION) == []
+
+
+def test_no_admin_combination_is_outside_the_governed_boundary():
+    """The admin fail-closed invariant that ``non_governed == 26`` never carried.
+
+    Bumping that scalar to 27 would have silently accepted "one aluno route
+    left the non-governed set and one /admin route joined it".  This asserts
+    the security property directly: no ``/admin`` business combination may sit
+    outside the boundary, whatever the size of either partition.
+    """
+    assert rbac.admin_boundary_violations(_CLASSIFICATION) == []
+    assert rbac.exemption_registry_violations() == []
+    stranded = sorted(
+        identity
+        for identity in rbac.non_governed_identities(_CLASSIFICATION)
+        if rbac.is_admin_rule(identity.rule)
+    )
+    assert stranded == [], f"admin combinations outside the governed boundary: {stranded}"
+
+
+def test_non_governed_surface_is_explicitly_categorized():
+    """Replaces ``non_governed == 26``.
+
+    Every combination outside the boundary must be claimed by exactly one
+    named, non-admin boundary category with a written rationale.  There is no
+    catch-all bucket, so a route that silently stops being governed fails here
+    until it is classified on purpose.
+    """
+    identities = rbac.non_governed_identities(_CLASSIFICATION)
+    assert rbac.non_governed_category_violations(identities) == []
+    assert (
+        rbac.identities_digest(identities)
+        == rbac.CANONICAL_NON_GOVERNED_IDENTITIES_SHA256
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +653,9 @@ def test_non_governed_count_is_26():
 
 def test_profile_digests_match_canonical():
     for level in ADMIN_ACCESS_LEVELS:
-        assert _profile_digest(level) == CANONICAL_PROFILE_DIGESTS[level], f"{level} digest mismatch"
+        assert rbac.profile_digest(level) == rbac.CANONICAL_PROFILE_DIGESTS[level], (
+            f"{level} digest mismatch"
+        )
 
 
 def test_admin_total_has_full_for_all():
@@ -588,20 +680,51 @@ def test_consultivo_security_resources_are_none():
 
 
 # ---------------------------------------------------------------------------
-# Part 4 — Permission-layer matrix (259 allowed, 137 denied)
+# Part 4 — Permission-layer matrix
 # ---------------------------------------------------------------------------
 
+def test_canonical_denial_matrix_is_the_exact_derived_set():
+    """The denial matrix, reconstructed from the two pinned anchors.
+
+    Replaces ``total_denied == 136``.  The denial set is fully determined by the
+    requirement matrix and the profile scopes, both digest-pinned above, so it
+    is derived here rather than typed -- and then pinned as an *identity*
+    digest, so a change to either anchor has to be acknowledged where its
+    security meaning lives.
+    """
+    actors = rbac.actor_identities(_GOVERNED_PAIRS)
+    denials = rbac.denial_identities(actors)
+    allowances = rbac.allowance_identities(actors)
+
+    assert rbac.actor_matrix_violations(_GOVERNED_PAIRS, actors) == []
+    assert denials | allowances == actors
+    assert denials & allowances == frozenset()
+    assert frozenset(_DENIED_CASES) == denials
+    assert len(_DENIED_CASES) == len(denials), "duplicate denial identity"
+    assert (
+        rbac.identities_digest(denials) == rbac.CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256
+    )
+
+
 def test_permission_layer_matrix(env):
+    """Every actor/policy combination evaluated against the real access context.
+
+    The scalar totals this test used to end on (390 / 254 / 136 and the
+    per-level 130/95/29) are replaced by exact set reconstruction: the set the
+    loop actually evaluated must *be* the governed set times the access levels,
+    and the allow/deny split it observed must *be* the canonical split.
+    """
     ids = {l: _make_admin(l) for l in ADMIN_ACCESS_LEVELS}
+    evaluated: set[rbac.ActorCase] = set()
+    observed_allowed: set[rbac.ActorCase] = set()
+    observed_denied: set[rbac.ActorCase] = set()
     with main.app.app_context():
         conn = main.get_db_connection()
-        total_actor_combinations = 0
-        total_allowed = 0
-        total_denied = 0
-        breakdown = {l: {"allowed": 0, "denied": []} for l in ADMIN_ACCESS_LEVELS}
         for rule_text, endpoint, method, resource, scope in _GOVERNED_PAIRS:
             for level in ADMIN_ACCESS_LEVELS:
-                total_actor_combinations += 1
+                actor = rbac.ActorCase(rule_text, endpoint, method, resource, scope, level)
+                assert actor not in evaluated, f"actor combination evaluated twice: {actor}"
+                evaluated.add(actor)
                 ctx = main._load_admin_access_context(conn, ids[level])
                 ctx_str = _case_context(endpoint, rule_text, method, level, resource, scope)
                 assert ctx["access_level"] == level, f"ctx access_level mismatch for {ctx_str}"
@@ -619,43 +742,94 @@ def test_permission_layer_matrix(env):
                     f"but permission_scope_satisfies({eff},{scope}) = {expected} "
                     f"for {ctx_str}"
                 )
-                if expected:
-                    total_allowed += 1
-                    breakdown[level]["allowed"] += 1
-                else:
-                    total_denied += 1
-                    breakdown[level]["denied"].append((rule_text, endpoint, method, resource, scope))
-    assert total_actor_combinations == 390, (
-        f"total_actor_combinations={total_actor_combinations}"
-    )
-    assert total_allowed == 254, f"total_allowed={total_allowed}"
-    assert total_denied == 136, f"total_denied={total_denied}"
-    assert total_allowed + total_denied == total_actor_combinations, (
-        f"allowed={total_allowed} + denied={total_denied} "
-        f"!= actor combinations={total_actor_combinations}"
-    )
-    assert breakdown["admin_total"]["allowed"] == 130
-    assert breakdown["admin_total"]["denied"] == []
-    assert breakdown["administrativo"]["allowed"] == 95
-    assert len(breakdown["administrativo"]["denied"]) == 35
-    assert breakdown["consultivo"]["allowed"] == 29
-    assert len(breakdown["consultivo"]["denied"]) == 101
+                assert can == rbac.canonical_decision(level, resource, scope), (
+                    f"live decision diverged from the canonical decision for {ctx_str}"
+                )
+                (observed_allowed if can else observed_denied).add(actor)
+
+    assert rbac.actor_matrix_violations(_GOVERNED_PAIRS, evaluated) == []
+    assert observed_denied == rbac.denial_identities(evaluated)
+    assert observed_allowed == rbac.allowance_identities(evaluated)
+    assert observed_allowed | observed_denied == evaluated
+    assert observed_allowed & observed_denied == set()
+    assert observed_denied == frozenset(_DENIED_CASES)
+
+    # Per-level structure, restated from the profile semantics rather than from
+    # the decision function, so the two have to agree independently.
+    security = auth.SECURITY_RESTRICTED_RESOURCES
+    denied_requirements = {
+        level: {actor.requirement for actor in observed_denied if actor.level == level}
+        for level in ADMIN_ACCESS_LEVELS
+    }
+    governed = set(_GOVERNED_PAIRS)
+
+    # admin_total holds "full" everywhere: it is denied nothing.
+    assert denied_requirements["admin_total"] == set()
+
+    # administrativo holds "none" on the security resources and "full" elsewhere.
+    assert denied_requirements["administrativo"] == {
+        requirement for requirement in governed if requirement.resource in security
+    }
+
+    # consultivo holds "none" on security, "edit" on meus_dados and "view" elsewhere.
+    assert denied_requirements["consultivo"] == {
+        requirement
+        for requirement in governed
+        if requirement.resource in security
+        or (requirement.resource == "meus_dados" and requirement.scope == "full")
+        or (
+            requirement.resource not in security
+            and requirement.resource != "meus_dados"
+            and requirement.scope != "view"
+        )
+    }
 
 
 # ---------------------------------------------------------------------------
 # Part 5 — URL builder for dynamic governed routes
 # ---------------------------------------------------------------------------
 
-def test_dynamic_governed_count_53_combos_43_rules():
-    re_conv = re.compile(r"<[^>]+>")
-    combos = set()
-    rules = set()
-    for rule_text, endpoint, method, res, scope in _GOVERNED_PAIRS:
-        if re_conv.search(rule_text):
-            combos.add((rule_text, endpoint, method))
-            rules.add((endpoint, rule_text))
-    assert len(combos) == 53, f"dynamic route+endpoint+method combos={len(combos)}"
-    assert len(rules) == 43, f"dynamic governed rules={len(rules)}"
+def test_dynamic_and_static_governed_requirements_partition_exactly():
+    """Replaces ``dynamic combos == 53`` / ``dynamic rules == 43``.
+
+    The two counts could both stay correct while a parameterised admin route was
+    swapped for a static one.  The contract here is the exact identity subset:
+    dynamic and static must partition the governed requirement set, every member
+    must genuinely carry (or not carry) a converter, and the dynamic identities
+    must still hash to the pinned set -- so a dynamic governed route cannot
+    silently disappear.
+    """
+    requirements = rbac.requirement_identities(_CLASSIFICATION)
+    dynamic = rbac.dynamic_requirement_identities(requirements)
+    static = rbac.static_requirement_identities(requirements)
+
+    assert rbac.dynamic_partition_violations(requirements, dynamic, static) == []
+    assert dynamic, "the governed surface must still contain parameterised routes"
+    assert (
+        rbac.identities_digest(dynamic)
+        == rbac.CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256
+    )
+
+
+def test_every_dynamic_governed_route_still_generates_and_resolves():
+    """Generation/resolution ownership for the parameterised governed surface.
+
+    ``_build_url_for_governed`` builds the URL from the live Rule and asserts the
+    URL matches back to that same Rule object, endpoint, method and arguments,
+    so this also proves no dynamic governed route is shadowed by another rule.
+    """
+    requirements = rbac.requirement_identities(_CLASSIFICATION)
+    dynamic = rbac.dynamic_requirement_identities(requirements)
+    resolved = set()
+    for requirement in sorted(dynamic):
+        url, _ = _build_url_for_governed(
+            requirement.rule, requirement.endpoint, requirement.method
+        )
+        assert not rbac.DYNAMIC_SEGMENT_RE.search(url), (
+            f"built URL still holds a converter placeholder: {url} for {requirement}"
+        )
+        resolved.add(requirement)
+    assert resolved == dynamic
 
 
 def test_converter_unsupported_types_hard_fail():
@@ -689,15 +863,24 @@ def test_converter_any_with_items():
 
 
 def test_url_roundtrip(env):
+    """Every baseline combination builds a URL that resolves back to itself.
+
+    Replaces ``len(built) == 156``: the roundtrip set is compared to the exact
+    combination identity set, so a route that stops building -- or one that
+    builds but resolves to a *different* rule -- is caught by identity rather
+    than by a total that a second, compensating change could restore.
+    """
     baseline = _load_baseline()
-    built = set()
+    built = {}
     for entry in baseline["routes"]:
         rule_text = entry["rule"]
         endpoint = entry["endpoint"]
         for method in entry["methods"]:
+            identity = rbac.Combination(rule_text, endpoint, method)
             url, _ = _build_url_for_governed(rule_text, endpoint, method)
-            built.add((endpoint, method, url, rule_text))
-    assert len(built) == 156, f"roundtrip count={len(built)} expected 156 (all baseline combinations)"
+            assert identity not in built, f"combination built twice: {identity}"
+            built[identity] = url
+    assert frozenset(built) == rbac.combination_identities(_CLASSIFICATION)
 
 
 def test_live_governed_converters_are_int_and_string_only(env):
@@ -849,7 +1032,7 @@ def test_fingerprint_in_transaction_invariant(env):
 def _run_browser_denials(env):
     client = env["client"]
     ids = {l: _make_admin(l) for l in ADMIN_ACCESS_LEVELS}
-    executed = 0
+    executed: set[rbac.ActorCase] = set()
     for idx, (rule_text, endpoint, method, resource, scope, level) in enumerate(_DENIED_CASES):
         user_id = ids[level]
         ctx = _case_context(endpoint, rule_text, method, level, resource, scope)
@@ -866,7 +1049,7 @@ def _run_browser_denials(env):
             resp = client.open(url, method=method)
             _assert_browser_denial(resp, ctx)
             assert not sentinel_state["raised"], f"browser: sentinel raised for {ctx}"
-            executed += 1
+            executed.add(rbac.ActorCase(rule_text, endpoint, method, resource, scope, level))
         finally:
             _restore_view(main.app, endpoint, orig)
             _logout(client)
@@ -876,10 +1059,27 @@ def _run_browser_denials(env):
             assert not conn.in_transaction, f"browser: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"browser: fingerprint mismatch for {ctx}"
-    assert executed == 136, f"browser denied cases executed={executed} expected 136"
+    _assert_denial_replay_is_complete(executed, "browser")
 
 
-def test_browser_denial_all_137_cases(env):
+def _assert_denial_replay_is_complete(executed, label: str) -> None:
+    """The replayed cases must be the canonical denial set, identity by identity.
+
+    Replaces ``executed == 136``.  A count cannot tell "two actors stopped being
+    denied and two new ones started" from "nothing changed"; set equality names
+    the exact combination that gained access.
+    """
+    canonical = frozenset(_DENIED_CASES)
+    executed = frozenset(executed)
+    missing = sorted(canonical - executed)
+    unexpected = sorted(executed - canonical)
+    assert missing == [], f"{label}: canonical denial cases never replayed: {missing}"
+    assert unexpected == [], f"{label}: replayed cases outside the denial set: {unexpected}"
+    assert executed == canonical
+    assert executed == rbac.denial_identities(rbac.actor_identities(_GOVERNED_PAIRS))
+
+
+def test_browser_denial_covers_every_canonical_denial_case(env):
     _run_browser_denials(env)
 
 
@@ -893,7 +1093,7 @@ def _restore_view(app, endpoint: str, original) -> None:
 def _run_ajax_denials(env):
     client = env["client"]
     ids = {l: _make_admin(l) for l in ADMIN_ACCESS_LEVELS}
-    executed = 0
+    executed: set[rbac.ActorCase] = set()
     for idx, (rule_text, endpoint, method, resource, scope, level) in enumerate(_DENIED_CASES):
         user_id = ids[level]
         ctx = _case_context(endpoint, rule_text, method, level, resource, scope)
@@ -943,7 +1143,7 @@ def _run_ajax_denials(env):
                 "response headers", sensitive, ctx,
             )
             _check_surface(raw, "raw response body", sensitive, ctx)
-            executed += 1
+            executed.add(rbac.ActorCase(rule_text, endpoint, method, resource, scope, level))
         finally:
             _restore_view(main.app, endpoint, orig)
             _logout(client)
@@ -953,10 +1153,10 @@ def _run_ajax_denials(env):
             assert not conn.in_transaction, f"AJAX: open transaction after request for {ctx}"
         fp_after = _capture_fingerprint(env, ctx)
         assert fp_before == fp_after, f"AJAX: fingerprint mismatch for {ctx}"
-    assert executed == 136, f"AJAX denied cases executed={executed} expected 136"
+    _assert_denial_replay_is_complete(executed, "AJAX")
 
 
-def test_ajax_denial_all_137_cases(env):
+def test_ajax_denial_covers_every_canonical_denial_case(env):
     _run_ajax_denials(env)
 
 
