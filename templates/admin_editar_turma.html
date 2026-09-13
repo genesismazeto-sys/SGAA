@@ -316,31 +316,27 @@
     const monthInp = document.getElementById('inicio_month_picker');
     if (monthBtn && monthInp){ monthBtn.addEventListener('click', ()=>{ if (monthInp.showPicker) monthInp.showPicker(); else monthInp.focus(); }); monthInp.addEventListener('change', ()=>{ const v = monthInp.value; if (v && /^\d{4}-\d{2}$/.test(v)){ const [yStr, mStr] = v.split('-'); const y = parseInt(yStr,10); const m = parseInt(mStr,10); if (!isNaN(y) && !isNaN(m)){ if (anoI) anoI.value = y; if (semI) semI.value = (m <= 6 ? '1' : '2'); recompute(); } } }); }
     const form = document.querySelector('form[method="POST"]');
-    form && form.addEventListener('submit', (ev)=>{
-      recompute();
-      // Salvar uma turma com muitos alunos leva segundos (hash de senha por
-      // aluno) segurando o lock de escrita do banco. Um segundo POST simultaneo
-      // batia no lock e virava 500, mesmo com a primeira gravacao concluida.
-      if (form.dataset.submitting === '1'){ ev.preventDefault(); return; }
-      form.dataset.submitting = '1';
-      const saveBtn = form.querySelector('button[type="submit"]');
-      setTimeout(()=>{
-        if (!saveBtn) return;
-        saveBtn.disabled = true;
-        const label = saveBtn.querySelector('.btn-label');
-        if (label) label.textContent = 'Salvando...';
-      }, 0);
-    });
-    // Voltar pelo historico nao pode deixar o formulario travado.
-    window.addEventListener('pageshow', ()=>{
-      if (!form) return;
-      delete form.dataset.submitting;
-      const saveBtn = form.querySelector('button[type="submit"]');
+    const saveBtn = form && form.querySelector('button[type="submit"]');
+    const marcarSalvando = (salvando)=>{
       if (!saveBtn) return;
-      saveBtn.disabled = false;
+      // Nunca usar `disabled`: o csrf-shim reenvia o form com este botao como
+      // submitter. Barrar o clique ja evita o envio duplicado e nao interfere.
+      saveBtn.setAttribute('aria-disabled', salvando ? 'true' : 'false');
+      saveBtn.style.pointerEvents = salvando ? 'none' : '';
+      saveBtn.style.opacity = salvando ? '0.6' : '';
       const label = saveBtn.querySelector('.btn-label');
-      if (label) label.textContent = 'Salvar';
+      if (label) label.textContent = salvando ? 'Salvando...' : 'Salvar';
+    };
+    form && form.addEventListener('submit', ()=>{
+      recompute();
+      // Sem preventDefault aqui em hipotese alguma: o csrf-shim cancela o
+      // submit nativo, renova o token e reenvia via requestSubmit(), o que
+      // dispara este mesmo evento de novo. Cancelar esse reenvio prendia o
+      // formulario em "Salvando..." para sempre, sem nunca enviar.
+      setTimeout(()=> marcarSalvando(true), 0);
     });
+    // Voltar pelo historico nao pode deixar o botao preso em "Salvando...".
+    window.addEventListener('pageshow', ()=> marcarSalvando(false));
   });
 </script>
 {% endblock %}

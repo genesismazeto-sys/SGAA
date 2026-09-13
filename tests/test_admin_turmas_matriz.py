@@ -1,3 +1,4 @@
+import pathlib
 import re
 
 import main
@@ -318,3 +319,56 @@ def test_turma_save_does_not_rehash_existing_student_passwords(tmp_path):
             assert senha_depois == senha_antes
         finally:
             werkzeug.security.generate_password_hash = original
+
+
+TURMA_FORM_TEMPLATES = (
+    "templates/admin_adicionar_turma.html",
+    "templates/admin_editar_turma.html",
+)
+
+
+def _submit_handler_block(template_path):
+    """Trecho do template entre o lookup do form e o handler de pageshow.
+
+    Comentarios saem fora: eles explicam justamente o que nao pode existir no
+    codigo, e contariam como falso positivo.
+    """
+    html = pathlib.Path(template_path).read_text(encoding="utf-8")
+    start = html.index("const form = document.querySelector('form[method=\"POST\"]');")
+    end = html.index("window.addEventListener('pageshow'", start)
+    return "\n".join(
+        re.sub(r"//.*$", "", linha) for linha in html[start:end].splitlines()
+    )
+
+
+def test_turma_form_submit_handler_never_cancels_the_submit():
+    """O handler de submit nao pode cancelar o envio, nunca.
+
+    static/js/csrf-shim.js intercepta todo submit, da preventDefault, renova o
+    token e reenvia via requestSubmit() -- o que dispara o evento submit outra
+    vez. Uma trava anti-duplo-clique que chamasse preventDefault cancelava
+    justamente esse reenvio: o form nunca era enviado e o botao ficava preso em
+    "Salvando..." para sempre.
+    """
+    for template_path in TURMA_FORM_TEMPLATES:
+        bloco = _submit_handler_block(template_path)
+        assert "preventDefault" not in bloco, (
+            f"{template_path}: preventDefault no handler de submit mata o "
+            "reenvio do csrf-shim e trava o formulario"
+        )
+
+
+def test_turma_form_save_button_is_not_disabled_on_submit():
+    """O botao Salvar e o submitter que o csrf-shim passa para requestSubmit().
+
+    Desabilita-lo durante o envio poe esse reenvio em risco; barrar o clique
+    via pointer-events da o mesmo efeito sem tocar no submitter.
+    """
+    for template_path in TURMA_FORM_TEMPLATES:
+        bloco = _submit_handler_block(template_path)
+        assert ".disabled = true" not in bloco, (
+            f"{template_path}: nao desabilite o botao usado como submitter"
+        )
+        assert "pointerEvents" in bloco, (
+            f"{template_path}: o reclique deve ser barrado via pointer-events"
+        )
