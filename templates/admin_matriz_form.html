@@ -805,7 +805,7 @@
     {% endif %}
 
   <div class="form-actions center">
-      <a class="btn" href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab=active_tab) }}">{{ 'Voltar' if composition_locked else 'Cancelar' }}</a>
+      <a class="btn" href="{{ back_url or url_for('admin_matrizes') }}">{{ 'Voltar' if composition_locked else 'Cancelar' }}</a>
       {% if not composition_locked %}
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       {% endif %}
