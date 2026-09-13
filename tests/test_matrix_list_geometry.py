@@ -11,6 +11,27 @@ from tests.versioned_test_support import isolated_versioned_app_env
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Exact identity of every canonical scrollable card-grid scope. Discovery is the
+# `impressoes-cards-scroll` wrapper in templates/*.html; a scope entering or leaving
+# that surface must be reclassified here instead of drifting past a tolerant count.
+CANONICAL_SCROLLABLE_CARD_GRID_SCOPES = {
+    "imp-acesso",
+    "imp-alertas",
+    "imp-alunos",
+    "imp-areq",
+    "imp-arquivos",
+    "imp-atividades",
+    "imp-curso-turmas",
+    "imp-cursos",
+    "imp-matrizes",
+    "imp-reportes",
+    "imp-req",
+    "imp-rpt-aluno",
+    "imp-turma-detalhe",
+    "imp-turmas",
+    "imp-version-detail",
+}
+
 
 def test_every_scrollable_card_grid_owns_its_complete_responsive_width():
     css = (ROOT / "static" / "css" / "components" / "list-cards.css").read_text(
@@ -52,7 +73,7 @@ def test_every_scrollable_card_grid_owns_its_complete_responsive_width():
                     re.DOTALL,
                 ), f"{scope} must declare the minimum width of its complete grid"
 
-    assert len(audited_scopes) == 16
+    assert audited_scopes == CANONICAL_SCROLLABLE_CARD_GRID_SCOPES
 
 
 def test_matrix_list_template_and_grid_have_the_same_six_columns():

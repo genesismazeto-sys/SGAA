@@ -18,6 +18,7 @@ CANONICAL_FLOATING_BARS = {
     "admin_alunos.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
     "admin_arquivos.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
     "admin_atividades.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
+    "admin_catalogo_versao_detalhe.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
     "admin_cursos.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
     "admin_detalhes_turma.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
     "admin_matrizes.html": {"view": "eye", "edit": "edit", "delete": "trash-2"},
@@ -41,6 +42,30 @@ ADMIN_DELETE_FLOATING_BARS = {
     "admin_requisicoes.html": "requisicoes",
     "admin_turmas.html": "turmas",
 }
+
+# Deletion-capable floating toolbars do not all mutate the same way. Each family below
+# owns a different deletion contract, and together they must exactly partition the
+# discovered deletion-capable surface so a new toolbar cannot ship a delete action
+# without being classified into one of them.
+CSRF_FORM_DELETE_FLOATING_BARS = {
+    "admin_catalogo_versao_detalhe.html": "vc-delete-form",
+}
+
+STUDENT_OWNED_DELETE_FLOATING_BARS = frozenset({"aluno_minhas_requisicoes.html"})
+
+DELETE_GOVERNANCE_FAMILIES = {
+    "permission-url": frozenset(ADMIN_DELETE_FLOATING_BARS),
+    "csrf-form": frozenset(CSRF_FORM_DELETE_FLOATING_BARS),
+    "student-owned": STUDENT_OWNED_DELETE_FLOATING_BARS,
+}
+
+
+def _discovered_floating_bars() -> set:
+    return {
+        path.name
+        for path in TEMPLATES.glob("*.html")
+        if "bar.id = 'pedido-actions-float'" in path.read_text(encoding="utf-8")
+    }
 
 
 def _toolbar_script() -> str:
@@ -137,12 +162,21 @@ def test_activity_delete_action_keeps_permission_url_and_confirmation_contract()
 
 
 def test_census_covers_every_canonical_floating_toolbar():
-    actual = sorted(
-        path.name
-        for path in TEMPLATES.glob("*.html")
-        if "bar.id = 'pedido-actions-float'" in path.read_text(encoding="utf-8")
-    )
-    assert actual == sorted(CANONICAL_FLOATING_BARS)
+    discovered = _discovered_floating_bars()
+    assert sorted(discovered) == sorted(CANONICAL_FLOATING_BARS)
+
+    families = list(DELETE_GOVERNANCE_FAMILIES.items())
+    for index, (family, members) in enumerate(families):
+        for other_family, other_members in families[index + 1 :]:
+            assert not members & other_members, f"{family} overlaps {other_family}"
+
+    governed_deletions = frozenset().union(*DELETE_GOVERNANCE_FAMILIES.values())
+    deletion_capable = {
+        template_name
+        for template_name in discovered
+        if 'data-action="delete"' in _floating_markup(template_name)
+    }
+    assert deletion_capable == governed_deletions
 
 
 def test_canonical_floating_semantic_actions_use_the_design_system_icons():
@@ -182,6 +216,21 @@ def test_every_deletion_capable_floating_toolbar_keeps_its_full_contract():
     assert "?delete=1" in student_source
 
 
+def test_csrf_form_floating_deletions_bind_confirmation_and_token_to_the_form():
+    for template_name, form_class in CSRF_FORM_DELETE_FLOATING_BARS.items():
+        source = (TEMPLATES / template_name).read_text(encoding="utf-8")
+        markup = _floating_markup(template_name)
+        assert 'data-action="delete"' in markup, template_name
+        assert 'data-lucide="trash-2"' in markup, template_name
+
+        form = source.split(f'class="{form_class}"', 1)[1].split("</form>", 1)[0]
+        assert 'method="post"' in form, template_name
+        assert 'onsubmit="return window.confirm(' in form, template_name
+        assert 'name="csrf_token" value="{{ csrf_token() }}"' in form, template_name
+        assert f"actionForm('{form_class}')?.requestSubmit();" in source, template_name
+        assert "data-delete-url" not in source, template_name
+
+
 def test_floating_delete_actions_reuse_confirmation_and_csrf_contracts():
     contracts = {
         "admin_arquivos.html": ("if (!confirm('Tem certeza que deseja excluir este arquivo?')) return;", "window.setFormActionWithReturnTo(form"),
@@ -189,6 +238,10 @@ def test_floating_delete_actions_reuse_confirmation_and_csrf_contracts():
         "admin_reportes.html": ("if (!confirm('Tem certeza que deseja excluir este reporte? Esta ação não pode ser desfeita.')) return;", "fetch(deleteUrl"),
         "admin_detalhes_turma.html": ("if (!confirm(`Excluir ${currentAlunoNome}?`)) return;", "window.ensureFormCsrfToken?.(formEl);"),
         "admin_matrizes.html": ("if (!confirm('Tem certeza que deseja excluir esta matriz?')) return;", "appendCsrfToken(form);"),
+        "admin_catalogo_versao_detalhe.html": (
+            "onsubmit=\"return window.confirm('Excluir definitivamente a versão v{{ v.numero_versao }}? Esta ação é permanente.');\"",
+            "if (action === 'delete') actionForm('vc-delete-form')?.requestSubmit();",
+        ),
     }
     for template_name, (confirmation, mutation) in contracts.items():
         source = (TEMPLATES / template_name).read_text(encoding="utf-8")
