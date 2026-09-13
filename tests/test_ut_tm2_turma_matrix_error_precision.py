@@ -247,7 +247,11 @@ def test_exact_turma_return_messages_are_owned_by_the_catalog():
     catalog = messages._message_catalog()
     entries = {entry["default_text"]: entry for entry in catalog.values()}
 
-    expected_lines = {INVALID: 179, NONEXISTENT: 186, INCOMPATIBLE: 188}
+    # NOVA-REQUISICAO-MATRIX-1 shifted these two lines down: the owner module
+    # imports two more names from app.student_matrix for the explicit
+    # "Aplicar matriz aos alunos sem matriz" action. The three return
+    # statements themselves are unchanged, and the pin stays exact.
+    expected_lines = {INVALID: 181, NONEXISTENT: 188, INCOMPATIBLE: 190}
     for text, source_line in expected_lines.items():
         assert text in entries
         assert entries[text]["kinds"] == ("return-message",)

@@ -33,7 +33,7 @@ Contract covered here (GREEN targets):
      ``_build_admin_dashboard_turma_cards`` still resolves/calls it; the exact
      three moved handlers carry no ``periodo_corrente`` reference and no
      template in ``templates/**`` contains the token;
-  9. RBAC exact VIEW 6 / EDIT 13 / FULL 5 for all 24 pairs;
+  9. RBAC exact VIEW 6 / EDIT 14 / FULL 5 for all 25 pairs;
  10. route inventory and message catalog stay identical to the canonical
       baselines owned by ``tests/canonical_baseline_support.py`` (UT-BR2-ABC
       retired this module's private copies of those two global scalars) and the
@@ -165,9 +165,24 @@ ROUTE_MATRIX = (
     ("/admin/editar_turma/<int:turma_id>", "admin_editar_turma", ("GET", "POST")),
     ("/admin/deletar_turma/<int:turma_id>", "admin_deletar_turma", ("POST",)),
     ("/admin/turma/<int:turma_id>", "admin_detalhes_turma", ("GET",)),
+    (
+        "/admin/turma/<int:turma_id>/aplicar-matriz-alunos",
+        "admin_turma_aplicar_matriz_alunos",
+        ("POST",),
+    ),
     ("/admin/turmas/importar", "admin_turmas_importar", ("GET", "POST")),
 )
 ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
+
+# NOVA-REQUISICAO-MATRIX-1: the explicit "Aplicar matriz aos alunos sem matriz"
+# action is new surface, introduced by the Nova Requisição incident fix. It has
+# no cab4c61 ancestor to be AST-compared against, because saving a Turma must
+# never initialize a student's Matrix implicitly; only this endpoint may. It is
+# exempt from the historical body comparison alone — its route, RBAC and CSRF
+# classifications below stay exact like every other endpoint.
+POST_BASELINE_ROUTE_NAMES = {
+    "admin_turma_aplicar_matriz_alunos",
+}
 
 HELPER_NAMES = (
     "resolve_existing_aluno_by_identifiers",
@@ -216,9 +231,10 @@ RBAC_MATRIX = {
     "admin_editar_turma": ("turmas", "edit"),
     "admin_deletar_turma": ("turmas", "full"),
     "admin_detalhes_turma": ("turmas", "view"),
+    "admin_turma_aplicar_matriz_alunos": ("turmas", "edit"),
     "admin_turmas_importar": ("turmas", "full"),
 }
-RBAC_SCOPE_COUNTS = {"view": 6, "edit": 13, "full": 5}
+RBAC_SCOPE_COUNTS = {"view": 6, "edit": 14, "full": 5}
 
 CSRF_MUTATING_PAIRS = {
     "/admin/cursos/adicionar": "admin_adicionar_curso",
@@ -233,6 +249,11 @@ CSRF_MUTATING_PAIRS = {
     "/admin/deletar_turma/<int:turma_id>": "admin_deletar_turma",
     "/admin/turmas/importar": "admin_turmas_importar",
 }
+# NOVA-REQUISICAO-MATRIX-1 is deliberately absent from the ledger above: that
+# dict records the 11 mutating routes the B6 extraction moved out of main.py,
+# and this endpoint never lived in main.py. Its CSRF protection is asserted by
+# the canonical inventory in tests/test_csrf_inventory_audit.py like every
+# other mutating surface.
 
 # UT-8: the 11 Banco de Dados POST handlers extracted to
 # app.views.admin.banco_dados.  They appear as additional owner-only deltas in
@@ -1039,7 +1060,7 @@ def test_canonical_owner_module_blueprint_and_spec_triple():
     assert blueprint.name == BLUEPRINT_NAME
     specs = module.LEGACY_ROUTE_SPECS
     assert isinstance(specs, tuple)
-    assert len(specs) == 17
+    assert len(specs) == 18
     assert tuple((spec.rule, spec.endpoint, spec.methods) for spec in specs) == ROUTE_MATRIX
     with pytest.raises((AttributeError, TypeError)):
         specs[0].endpoint = "changed"
@@ -1107,14 +1128,14 @@ print(json.dumps({"main_imported": False, "filesystem_delta": [], "database_crea
     }
 
 
-def test_route_specs_exactly_17_endpoints_and_24_pairs_with_no_extra():
+def test_route_specs_exactly_18_endpoints_and_25_pairs_with_no_extra():
     module = _canonical_module()
     specs = module.LEGACY_ROUTE_SPECS
-    assert len(specs) == 17
-    assert len({spec.endpoint for spec in specs}) == 17
+    assert len(specs) == 18
+    assert len({spec.endpoint for spec in specs}) == 18
     pairs = {(spec.rule, method) for spec in specs for method in spec.methods}
-    assert len(pairs) == 24
-    assert sum(len(spec.methods) for spec in specs) == 24
+    assert len(pairs) == 25
+    assert sum(len(spec.methods) for spec in specs) == 25
     assert {spec.endpoint for spec in specs} == set(ROUTE_NAMES)
     assert not (set(ROUTE_NAMES) & EXCLUDED_ENDPOINTS)
     assert all(rule.startswith("/admin/") for rule, _, _ in ROUTE_MATRIX)
@@ -1187,7 +1208,7 @@ def test_two_independent_factory_apps_each_register_each_route_once():
 
     assert _route_tuples(first) == set(ROUTE_MATRIX)
     assert _route_tuples(second) == set(ROUTE_MATRIX)
-    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 17
+    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 18
     assert first is not second
 
 
@@ -1197,7 +1218,7 @@ def test_duplicate_blueprint_registration_fails_explicitly():
 
     with pytest.raises(LegacyRouteRegistrationError, match="already registered"):
         register_legacy_blueprint(app, getattr(module, BLUEPRINT_VAR))
-    assert len(_live_moved_rules(app)) == 17
+    assert len(_live_moved_rules(app)) == 18
 
 
 @pytest.mark.parametrize("collision_kind", ["endpoint", "rule_method"])
@@ -1229,12 +1250,12 @@ def test_no_namespaced_endpoint_alias_or_duplicate_rule_exists():
     app = _factory()
     moved = _live_moved_rules(app)
 
-    assert len(moved) == 17
+    assert len(moved) == 18
     assert not any(
         rule.endpoint.startswith(f"{BLUEPRINT_NAME}.") for rule in app.url_map.iter_rules()
     )
     assert not any("." in rule.endpoint for rule in moved)
-    assert len({rule.rule for rule in moved}) == 17
+    assert len({rule.rule for rule in moved}) == 18
     for expected_rule, expected_endpoint, expected_methods in ROUTE_MATRIX:
         matches = [
             rule
@@ -1264,13 +1285,13 @@ def test_legacy_url_for_and_request_endpoint_behavior():
 # ---------------------------------------------------------------------------
 
 
-def test_rbac_requirements_remain_exact_for_all_24_pairs():
+def test_rbac_requirements_remain_exact_for_all_25_pairs():
     for _, endpoint, methods in ROUTE_MATRIX:
         for method in methods:
             assert get_admin_permission_requirement(endpoint, method) == RBAC_MATRIX[endpoint]
 
 
-def test_rbac_scope_counts_remain_exact_view6_edit13_full5():
+def test_rbac_scope_counts_remain_exact_view6_edit14_full5():
     from collections import Counter
 
     counts: Counter = Counter()
@@ -1291,8 +1312,8 @@ def test_main_compatibility_exports_are_identity_imports_and_app_uses_canonical_
     import main
 
     module = _canonical_module()
-    assert len(MOVED_SYMBOLS) == 27
-    assert len(set(MOVED_SYMBOLS)) == 27
+    assert len(MOVED_SYMBOLS) == 28
+    assert len(set(MOVED_SYMBOLS)) == 28
     for name in MOVED_SYMBOLS:
         assert getattr(main, name) is getattr(module, name)
     for name in ROUTE_NAMES:
@@ -1445,6 +1466,10 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         filename=str(module.__file__),
     )
     for name in MOVED_SYMBOLS:
+        if name in POST_BASELINE_ROUTE_NAMES:
+            # Surface created after cab4c61; see NOVA-REQUISICAO-MATRIX-1 above.
+            # It has no historical body to be equivalent to.
+            continue
         baseline_body = _function_body_dump(baseline_tree, name)
         module_body = _function_body_dump(module_tree, name)
         assert baseline_body is not None, f"baseline main.py has no function {name}"

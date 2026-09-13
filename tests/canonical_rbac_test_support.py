@@ -714,9 +714,17 @@ def profile_digest(level: str, profiles=None) -> str:
 
 
 # The requirement matrix is the primary RBAC anchor: which (endpoint, method)
-# pair requires which (resource, scope).  Inherited unchanged from REF-0C-D-R1.
+# pair requires which (resource, scope).  Inherited from REF-0C-D-R1.
+#
+# NOVA-REQUISICAO-MATRIX-1: re-anchored for exactly one added governed pair,
+# (admin_turma_aplicar_matriz_alunos, POST) -> ("turmas", "edit"), the explicit
+# "Aplicar matriz aos alunos sem matriz" action. The action writes
+# alunos.matriz_id, so it carries the same scope as editing a Turma and is
+# deliberately not "view" nor "full". CANONICAL_NON_GOVERNED_IDENTITIES_SHA256
+# below is unchanged, which is the proof that the new route is governed rather
+# than an unguarded surface.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "98de88ba6c58a3b6da4f6d17749c06bb42c9b435ce34ccbce34049cd5a33d796"
+    "b66b5f025ccd355f3d446323d60d21187e45f5427299ed4a3a01053fcacd3358"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -733,11 +741,14 @@ CANONICAL_PROFILE_DIGESTS = {
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
     "a8ceef4cfe307ce75731d9a22f9fba6200964036984df3746c7121896c5f3899"
 )
+# NOVA-REQUISICAO-MATRIX-1: the new rule carries a <int:turma_id> segment, so
+# it joins the dynamic projection; and being governed by ("turmas", "edit") it
+# adds the corresponding denied actors to the denial projection.
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
-    "b7544cb0ca095be49aa141e50d36b958af35645009ef3c22ee84482f97e10b90"
+    "c9fad239148c0ba68d07b258173f3e54100cfa2a21dc366b57dea8107878b97d"
 )
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "cbb2c5d8970dfb60ebc7347a93ac25a855df6d5c2082673ad65aafed22fc8610"
+    "bf1f33907ba556c1fd72eb9ba12cfff391c9b841847a1997ff07b7f9aed19418"
 )
 
 

@@ -401,6 +401,7 @@ from app.views.admin.alunos_turmas_cursos import (
     admin_editar_aluno,
     admin_editar_curso,
     admin_editar_turma,
+    admin_turma_aplicar_matriz_alunos,
     admin_turmas,
     admin_turmas_importar,
     admin_visualizar_curso,

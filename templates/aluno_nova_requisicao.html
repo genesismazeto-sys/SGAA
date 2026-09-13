@@ -234,7 +234,18 @@
 
     const allOptions = Array.from(atvSel.options);
 
-    // Constrói mapa: tipo -> { numero: descricao }
+    // Chave do grupo, usada tanto na montagem do mapa quanto na filtragem para
+    // que as duas projeções não divirjam. Um grupo fora da forma "N - Descrição"
+    // — como o "NA" da Extensão Universitária — continua sendo um grupo e é
+    // indexado pela própria string; descartá-lo tornaria suas atividades
+    // inalcançáveis mesmo estando na matriz do aluno.
+    function grupoKey(valor){
+      const g = (valor||'').trim();
+      const m = g.match(/^(\d+)\s*-\s*(.*)$/);
+      return m ? m[1] : g;
+    }
+
+    // Constrói mapa: tipo -> { chave: descricao }
     function buildGruposPorTipo(){
       const map = { 'Acadêmica Complementar': {}, 'Extensão Universitária': {} };
       allOptions.forEach(opt => {
@@ -242,12 +253,10 @@
         const g = (opt.getAttribute('data-grupo')||'').trim();
         if (!t || !g) return;
         const m = g.match(/^(\d+)\s*-\s*(.*)$/);
-        if (m){
-          const n = m[1];
-          const d = m[2];
-          if (!map[t]) map[t] = {};
-          if (n && !map[t][n]) map[t][n] = d;
-        }
+        const n = m ? m[1] : g;
+        const d = m ? m[2] : g;
+        if (!map[t]) map[t] = {};
+        if (n && !map[t][n]) map[t][n] = d;
       });
       return map;
     }
@@ -256,7 +265,15 @@
     function populateNumeros(){
       const t = tipoSel.value || 'Acadêmica Complementar';
       const map = gruposPorTipo[t] || {};
-      const nums = Object.keys(map).sort((a,b)=> parseInt(a,10)-parseInt(b,10));
+      // Numerados primeiro, em ordem numérica; os demais em ordem alfabética.
+      // parseInt sozinho devolveria NaN e tornaria a ordenação indefinida.
+      const nums = Object.keys(map).sort((a,b)=>{
+        const na = parseInt(a,10), nb = parseInt(b,10);
+        const aNum = !Number.isNaN(na), bNum = !Number.isNaN(nb);
+        if (aNum && bNum) return na - nb;
+        if (aNum !== bNum) return aNum ? -1 : 1;
+        return a.localeCompare(b);
+      });
       numSel.innerHTML = '';
       const optDash = document.createElement('option'); optDash.value=''; optDash.textContent='-'; numSel.appendChild(optDash);
       nums.forEach(n=>{ const op=document.createElement('option'); op.value=n; op.textContent=n; numSel.appendChild(op); });
@@ -274,7 +291,9 @@
     function syncHidden(){
       const n = (numSel.value||'').trim();
       const d = (descInput.value||'').trim();
-      hidGrupo.value = n && d ? `${n} - ${d}` : (n || '');
+      // Grupo sem numeração tem chave e descrição iguais: reemitir "NA - NA"
+      // inventaria um rótulo que não existe no catálogo.
+      hidGrupo.value = n && d && n !== d ? `${n} - ${d}` : (n || '');
     }
 
     function applyAtividadesFilter(){
@@ -286,7 +305,9 @@
         const isPlaceholder = opt.getAttribute('data-placeholder') === '1';
         const topt = (opt.getAttribute('data-tipo')||'').toLowerCase();
         const g    = (opt.getAttribute('data-grupo')||'');
-        const gnum = (g.split(' - ')[0]||'').trim().toLowerCase();
+        // Mesma projeção da montagem do mapa: um split cru quebraria qualquer
+        // grupo não numerado que contenha " - ".
+        const gnum = grupoKey(g).toLowerCase();
         let show = false;
         if (isPlaceholder){
           show = true; // sempre exibe placeholder

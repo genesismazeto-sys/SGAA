@@ -729,6 +729,13 @@
       "rule": "/admin/turma/<int:turma_id>"
     },
     {
+      "endpoint": "admin_turma_aplicar_matriz_alunos",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/turma/<int:turma_id>/aplicar-matriz-alunos"
+    },
+    {
       "endpoint": "admin_turmas",
       "methods": [
         "GET"

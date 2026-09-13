@@ -172,6 +172,26 @@
 
   <div class="turma-topbar-spacer" aria-hidden="true"></div>
 
+  {#
+    Acao administrativa explicita, deliberadamente separada de "Salvar Turma":
+    salvar a turma nunca atribui matriz a aluno nenhum, porque a matriz da turma
+    e apenas um padrao sugerido e um "Sem matriz" escolhido pelo admin precisa
+    sobreviver a qualquer save. So este POST inicializa os alunos sem matriz.
+  #}
+  {% if alunos_sem_matriz %}
+  <form method="post"
+        action="{{ url_for('admin_turma_aplicar_matriz_alunos', turma_id=turma.id) }}"
+        class="turma-aplicar-matriz-form"
+        data-aplicar-matriz-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn" type="submit" data-aplicar-matriz-submit
+            title="Atribui a matriz da turma apenas aos alunos que estao sem matriz">
+      <i class="lucide" data-lucide="wand-2"></i>
+      <span class="btn-label">Aplicar matriz aos alunos sem matriz ({{ alunos_sem_matriz }})</span>
+    </button>
+  </form>
+  {% endif %}
+
   <a class="btn" href="{{ url_for('admin_turmas') }}">
     <i class="lucide" data-lucide="arrow-left"></i>
     <span class="btn-label">Voltar</span>
@@ -532,6 +552,29 @@
     });
 
     if (window.lucide) lucide.createIcons();
+  })();
+</script>
+
+{#
+  Bloco proprio de proposito: a confirmacao da acao explicita nao pode depender
+  do bootstrap da toolbar acima. Se aquele IIFE falhar, o formulario ainda
+  precisa confirmar antes de escrever matriz em aluno.
+#}
+<script>
+  (function(){
+    const form = document.querySelector('[data-aplicar-matriz-form]');
+    if (!form) return;
+    const semMatriz = {{ alunos_sem_matriz|default(0)|int }};
+    form.addEventListener('submit', (e) => {
+      if (form.dataset.confirmed === '1') return;
+      e.preventDefault();
+      const msg = `Aplicar a matriz da turma a ${semMatriz} aluno(s) sem matriz?\n\n`
+        + 'Alunos que ja possuem matriz nao serao alterados.';
+      if (!confirm(msg)) return;
+      form.dataset.confirmed = '1';
+      window.ensureFormCsrfToken?.(form);
+      form.requestSubmit ? form.requestSubmit() : form.submit();
+    });
   })();
 </script>
 {% endblock %}

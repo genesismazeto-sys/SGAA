@@ -43,9 +43,18 @@ NEW_STUDENT_MATRIX_KEYS = {
         "A matriz acadêmica do aluno não pertence ao curso da turma de destino."
     ),
 }
-ALL_STUDENT_MATRIX_DEFAULTS = set(NEW_STUDENT_MATRIX_KEYS.values()) | {
-    "Aluno não encontrado."
+# NOVA-REQUISICAO-MATRIX-1 added one further StudentMatrixError default, for
+# the explicit "Aplicar matriz aos alunos sem matriz" action. It belongs to that
+# term, not to UT-MX3's +6 above, but the owner-set assertion below covers every
+# default the module raises.
+POST_MX3_STUDENT_MATRIX_DEFAULTS = {
+    "A turma não possui matriz padrão definida.",
 }
+ALL_STUDENT_MATRIX_DEFAULTS = (
+    set(NEW_STUDENT_MATRIX_KEYS.values())
+    | {"Aluno não encontrado."}
+    | POST_MX3_STUDENT_MATRIX_DEFAULTS
+)
 
 
 def _oversized_decimal() -> str:
@@ -309,7 +318,13 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
         key: catalog[key]["default_text"] for key in NEW_STUDENT_MATRIX_KEYS
     } == NEW_STUDENT_MATRIX_KEYS
 
-    parent_keys = set(catalog) - set(NEW_STUDENT_MATRIX_KEYS)
+    # Terms appended after UT-MX3 also have to come off to recover MX3's
+    # parent state; only MX3's own keys are this suite's delta.
+    parent_keys = (
+        set(catalog)
+        - set(NEW_STUDENT_MATRIX_KEYS)
+        - set(governance.NOVA_REQUISICAO_MATRIX_KEYS)
+    )
     assert len(parent_keys) == PARENT_CATALOG_COUNT
     digest = hashlib.sha256("\n".join(sorted(parent_keys)).encode()).hexdigest()
     assert digest == PARENT_CATALOG_KEYS_SHA256

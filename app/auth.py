@@ -458,7 +458,11 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
 
     if endpoint in {"admin_turmas", "admin_detalhes_turma"}:
         return _permission("turmas", "view")
-    if endpoint in {"admin_adicionar_turma", "admin_editar_turma"}:
+    if endpoint in {
+        "admin_adicionar_turma",
+        "admin_editar_turma",
+        "admin_turma_aplicar_matriz_alunos",
+    }:
         return _permission("turmas", "edit")
     if endpoint in {"admin_deletar_turma", "admin_turmas_importar"}:
         return _permission("turmas", "full")

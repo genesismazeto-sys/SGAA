@@ -140,6 +140,47 @@ def assign_student_matrix(conn, aluno_id: int, matriz_id: int | None) -> int | N
     return matriz_id
 
 
+def count_students_without_matrix_in_turma(conn, turma_id: int) -> int:
+    """How many students of this Turma hold no Matrix authority at all."""
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM alunos WHERE turma_id=? AND matriz_id IS NULL",
+            (turma_id,),
+        ).fetchone()[0]
+    )
+
+
+def apply_turma_default_to_students_without_matrix(conn, turma_id: int) -> int:
+    """Explicitly hand the Turma default to the students that hold no authority.
+
+    Enrolling students before the Turma had a default leaves them without a
+    Matrix, and the Turma default is only a suggestion, so no ordinary Turma
+    write may adopt it on their behalf — an admin who chose "Sem matriz" for a
+    student must keep that choice through any number of saves. This is the
+    administrator asking for that initialization explicitly, for one Turma, so
+    it is allowed to replace NULL here and only here.
+
+    Scope is exactly the students of this Turma whose ``matriz_id IS NULL``: an
+    authority already recorded is never replaced, no ``turma_id`` is touched,
+    the Turma default itself is untouched, and no other Turma is reached. The
+    Curso compatibility of the default is decided by ``_turma_scope``, so a
+    stale or cross-Curso pairing fails closed instead of being propagated.
+
+    Returns the number of students initialized. The caller owns the transaction.
+    """
+    turma = _turma_scope(conn, turma_id)
+    if turma is None:
+        raise StudentMatrixError("A turma de destino não existe.")
+    matriz_id = turma["compatible_default_matrix_id"]
+    if matriz_id is None:
+        raise StudentMatrixError("A turma não possui matriz padrão definida.")
+    cursor = conn.execute(
+        "UPDATE alunos SET matriz_id=? WHERE turma_id=? AND matriz_id IS NULL",
+        (int(matriz_id), turma_id),
+    )
+    return int(cursor.rowcount)
+
+
 def resolve_student_matrix_for_edit(
     conn,
     *,
@@ -230,8 +271,10 @@ def get_allowed_activity_version_ids_for_student(conn, aluno_id: int):
 
 __all__ = [
     "StudentMatrixError",
+    "apply_turma_default_to_students_without_matrix",
     "assign_student_matrix",
     "assign_student_to_turma",
+    "count_students_without_matrix_in_turma",
     "get_effective_matrix_for_student",
     "get_allowed_activity_version_ids_for_student",
     "list_assignable_matrices_for_student",

@@ -41,6 +41,8 @@ from app.services.student_import_service import (
 from app.student_import import StudentImportError, parse_student_import
 from app.student_matrix import (
     StudentMatrixError,
+    apply_turma_default_to_students_without_matrix,
+    count_students_without_matrix_in_turma,
     list_assignable_matrices_for_student,
     matrix_for_turma_assignment,
     parse_submitted_matriz_id,
@@ -1364,7 +1366,45 @@ def admin_detalhes_turma(turma_id):
         filter_schema=filter_schema,
         periodo_label=_periodo_label_for_turma_row(turma),
         matriz_label=_turma_effective_matriz_label(conn, turma),
+        alunos_sem_matriz=count_students_without_matrix_in_turma(conn, turma["id"]),
     )
+
+
+@admin_required
+def admin_turma_aplicar_matriz_alunos(turma_id):
+    """Explicit admin action: give the Turma default to its Matrix-less students.
+
+    Deliberately its own POST endpoint instead of a step inside Salvar Turma.
+    Saving a Turma must keep treating its Matrix as a suggestion, so a student
+    left without one — including an admin who picked "Sem matriz" — survives any
+    number of ordinary saves. Only this request, which the administrator has to
+    ask for, initializes them.
+    """
+    conn = get_db_connection()
+    ensure_turmas_matriz_schema(conn)
+    turma = conn.execute("SELECT id FROM turmas WHERE id = ?", (turma_id,)).fetchone()
+    if not turma:
+        flash("Turma não encontrada.", "error")
+        return redirect(url_for("admin_turmas"))
+    try:
+        initialized = apply_turma_default_to_students_without_matrix(conn, turma_id)
+        conn.commit()
+    except StudentMatrixError as exc:
+        conn.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
+    except Exception as exc:
+        conn.rollback()
+        flash(f"Erro ao aplicar a matriz aos alunos: {exc}", "error")
+        return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
+    if initialized:
+        flash(
+            f"Matriz aplicada a {initialized} aluno(s) sem matriz.",
+            "success",
+        )
+    else:
+        flash("Nenhum aluno sem matriz nesta turma.", "info")
+    return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
 
 
 # ====== Importar Alunos (CSV/XLSX/XLS) para uma Turma ======
@@ -1518,6 +1558,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("GET",),
         ),
         LegacyRouteSpec(
+            "/admin/turma/<int:turma_id>/aplicar-matriz-alunos",
+            "admin_turma_aplicar_matriz_alunos",
+            admin_turma_aplicar_matriz_alunos,
+            ("POST",),
+        ),
+        LegacyRouteSpec(
             "/admin/turmas/importar",
             "admin_turmas_importar",
             admin_turmas_importar,
@@ -1543,6 +1589,7 @@ __all__ = [
     "admin_editar_aluno",
     "admin_editar_curso",
     "admin_editar_turma",
+    "admin_turma_aplicar_matriz_alunos",
     "admin_turmas",
     "admin_turmas_importar",
     "admin_visualizar_curso",
