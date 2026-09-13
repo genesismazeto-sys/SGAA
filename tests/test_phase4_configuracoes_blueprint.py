@@ -21,6 +21,66 @@ MAIN_PATH = PROJECT_ROOT / "main.py"
 ADMIN_PACKAGE = PROJECT_ROOT / "app" / "views" / "admin"
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
+EXPECTED_ADMIN_PACKAGE_FILES = frozenset(
+    {
+        "__init__.py",
+        "acesso.py",
+        "activity_version_delete.py",  # exact-version deletion workflow owner
+        "alertas.py",
+        "alunos_turmas_cursos.py",
+        "arquivos.py",
+        "atividades.py",
+        "banco_dados.py",
+        "configuracoes.py",
+        "dashboard.py",
+        "demo.py",  # canonical UT-15 Demo route owner
+        "matrizes.py",
+        "meus_dados.py",
+        "reportes.py",
+        "requisicoes.py",
+        "versioning.py",
+    }
+)
+
+EXPECTED_BACKEND_MESSAGE_FILES = frozenset(
+    {
+        "app/academics.py",
+        "app/arquivos.py",
+        "app/auth.py",
+        "app/db_maintenance.py",
+        "app/requisitions.py",
+        "app/services/student_import_service.py",
+        "app/settings.py",
+        "app/student_import.py",
+        "app/student_matrix.py",
+        "app/uploads.py",
+        "app/versioning/integrity.py",
+        "app/views/admin/__init__.py",
+        "app/views/admin/acesso.py",
+        "app/views/admin/activity_version_delete.py",
+        "app/views/admin/alertas.py",
+        "app/views/admin/alunos_turmas_cursos.py",
+        "app/views/admin/arquivos.py",
+        "app/views/admin/atividades.py",
+        "app/views/admin/banco_dados.py",
+        "app/views/admin/configuracoes.py",
+        "app/views/admin/dashboard.py",
+        "app/views/admin/demo.py",
+        "app/views/admin/matrizes.py",
+        "app/views/admin/meus_dados.py",
+        "app/views/admin/reportes.py",
+        "app/views/admin/requisicoes.py",
+        "app/views/admin/versioning.py",
+        "app/views/aluno.py",
+        "app/views/comprovantes.py",
+        "app/views/core.py",
+        "app/views/files.py",
+        "app/web/authz_gate.py",
+        "app/web/errors.py",
+        "main.py",
+    }
+)
+
 ROUTE_MATRIX = (
     ("/admin/configuracoes", "admin_configuracoes", ("GET",)),
     (
@@ -556,28 +616,8 @@ def test_message_save_and_reset_routes_preserve_persistence(monkeypatch):
 
 def test_admin_package_has_no_main_import_or_dynamic_equivalent():
     assert ADMIN_PACKAGE.is_dir()
-    sources = list(ADMIN_PACKAGE.glob("*.py"))
-    expected_package_files = {
-        "__init__.py",
-        "acesso.py",
-        "alunos_turmas_cursos.py",
-        "alertas.py",
-        "arquivos.py",
-        "atividades.py",
-        "banco_dados.py",
-        "configuracoes.py",
-        "dashboard.py",
-        "matrizes.py",
-        "meus_dados.py",
-        "requisicoes.py",
-        "versioning.py",
-        "reportes.py",
-    }
-    if (ADMIN_PACKAGE / "demo.py").exists():
-        # UT-15 seam: the exact admin-package inventory gains demo.py only
-        # once the real Demo target exists; no wildcard and no relaxation.
-        expected_package_files.add("demo.py")
-    assert {path.name for path in sources} == expected_package_files
+    sources = sorted(ADMIN_PACKAGE.glob("*.py"))
+    assert {path.name for path in sources} == EXPECTED_ADMIN_PACKAGE_FILES
 
     for path in sources:
         source = path.read_text(encoding="utf-8")
@@ -602,41 +642,11 @@ def test_backend_message_inventory_recurses_deterministically_without_duplicates
 
     assert relative_paths == sorted(relative_paths)
     assert len(relative_paths) == len(set(relative_paths))
-    assert "main.py" in relative_paths
-    assert "app/auth.py" in relative_paths
-    assert "app/db_maintenance.py" in relative_paths
-    assert "app/settings.py" in relative_paths
-    assert "app/uploads.py" in relative_paths
-    assert "app/views/admin/atividades.py" in relative_paths
-    assert "app/views/admin/configuracoes.py" in relative_paths
+    assert set(relative_paths) == EXPECTED_BACKEND_MESSAGE_FILES
     assert all(path.endswith(".py") for path in relative_paths)
+    assert all("\\" not in path for path in relative_paths)
     assert all("__pycache__" not in Path(path).parts for path in relative_paths)
-    assert all(
-        path in {
-            "main.py",
-            "app/academics.py",
-            "app/auth.py",
-            "app/db_maintenance.py",
-            "app/requisitions.py",
-            "app/settings.py",
-            "app/student_import.py",
-            "app/uploads.py",
-            "app/services/student_import_service.py",
-            # UT-3: canonical owners of the message sinks moved out of main.py
-            # (_admin_access_denied_response -> authz_gate,
-            # handle_large_upload -> errors).  app/web/context.py is absent on
-            # purpose: it forwards an already-resolved catalog and owns no sink.
-            "app/web/authz_gate.py",
-            "app/web/errors.py",
-            # UT-16 seam (TEST_CONTRACT_SEAM / LEGITIMATE_UT16_COCHANGE): the
-            # scanner now intentionally covers the new canonical message-
-            # bearing owner app/versioning/integrity.py (explicit entry only;
-            # no recursive app/versioning scanning).
-            "app/versioning/integrity.py",
-        }
-        or path.startswith("app/views/")
-        for path in relative_paths
-    )
+    assert all(not path.startswith(("templates/", "static/")) for path in relative_paths)
 
 
 def test_moved_message_catalog_entries_keep_keys_defaults_and_canonical_usage_owner():

@@ -1,43 +1,9 @@
-"""UT-7 RED — helpers ``matrizes`` -> ``app.activity_catalog``.
+"""UT-7 ownership contract for activity-catalog helpers.
 
-RED-only mission: the canonical owner move is NOT yet implemented.  This module
-freezes the future architecture contract so that it fails ONLY on the
-ownership/import-direction assertions, while the behavior baseline (frozen from
-the current accepted helpers) stays GREEN.  Mixed discrimination is intended:
-
-    behavior baseline  = GREEN  (proves current behavior is the reference)
-    architecture       = RED    (proves the owner move does not exist yet)
-
-Contract targets:
-
-  A. CANONICAL OWNER — ``app.activity_catalog`` must define both helpers as
-     top-level functions.  Currently FAILS: they are defined in
-     ``app.views.admin.atividades``.
-
-  B. OLD OWNER IS FACADE — ``app.views.admin.atividades`` must not define them
-     (it may only import/re-export).  Currently FAILS: both local defs exist.
-
-  C. MATRIZES EDGE REMOVED — ``app.views.admin.matrizes`` must import neither
-     helper from ``app.views.admin.atividades``.  Currently FAILS: line 36
-     imports both.
-
-  D. MATRIZES CONSUMES CANONICAL OWNER — ``app.views.admin.matrizes`` must
-     import both helpers from ``app.activity_catalog``.  Currently FAILS.
-
-  E. FACADE / IDENTITY — after the move:
-       views._build_grupo_label  is catalog._build_grupo_label
-       views._canonicalize_tipo_limitacao is catalog._canonicalize_tipo_limitacao
-       main._build_grupo_label   is catalog._build_grupo_label
-       main._canonicalize_tipo_limitacao is catalog._canonicalize_tipo_limitacao
-     All lookups are getattr-guarded with a sentinel so the absent canonical
-     attributes produce a normal assertion failure, never AttributeError.
-
-  F. BEHAVIOR PRESERVATION — a frozen expected-value table based on measured
-     current behavior.  Must PASS at RED time against the existing
-     atividades-owned helpers.
-
-No production file is modified, no existing test is modified, and the module
-never relies on ImportError / AttributeError / collection failure.
+Both helpers are defined by ``app.activity_catalog`` and re-exported through the
+legacy facades. ``matrizes`` consumes only ``_canonicalize_tipo_limitacao``;
+``_build_grupo_label`` is retired from that consumer and must not return there
+as an import, local copy, or semantic dependency.
 """
 from __future__ import annotations
 
@@ -50,6 +16,8 @@ VIEW_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "atividades.py"
 MATRIZES_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "matrizes.py"
 
 TARGET_HELPERS = frozenset({"_build_grupo_label", "_canonicalize_tipo_limitacao"})
+MATRIZES_REQUIRED_HELPERS = frozenset({"_canonicalize_tipo_limitacao"})
+MATRIZES_RETIRED_HELPERS = frozenset({"_build_grupo_label"})
 
 _MISSING = object()
 
@@ -78,6 +46,14 @@ def _imports_from(tree: ast.Module, module_name: str) -> set[str]:
 
 def _file_tree(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+
+
+def _loaded_names(tree: ast.Module) -> set[str]:
+    return {
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -149,17 +125,18 @@ def test_matrizes_has_no_import_edge_to_atividades_for_helpers():
 
 
 # ---------------------------------------------------------------------------
-# D. Matrizes consumes the canonical owner (RED)
+# D. Matrizes consumes only its surviving canonical helper
 # ---------------------------------------------------------------------------
 
 
-def test_matrizes_imports_both_helpers_from_canonical_owner():
-    from_catalog = _imports_from(_file_tree(MATRIZES_PATH), "app.activity_catalog")
-    missing = sorted(TARGET_HELPERS - from_catalog)
-    assert not missing, (
-        "app.views.admin.matrizes must import from app.activity_catalog: %s; "
-        "missing: %s" % (", ".join(sorted(TARGET_HELPERS)), ", ".join(missing))
-    )
+def test_matrizes_imports_only_required_helper_from_canonical_owner():
+    tree = _file_tree(MATRIZES_PATH)
+    from_catalog = _imports_from(tree, "app.activity_catalog")
+    assert from_catalog & TARGET_HELPERS == MATRIZES_REQUIRED_HELPERS
+    assert not (_top_level_functions(tree) & TARGET_HELPERS)
+    loaded = _loaded_names(tree)
+    assert MATRIZES_REQUIRED_HELPERS <= loaded
+    assert not (MATRIZES_RETIRED_HELPERS & loaded)
 
 
 # ---------------------------------------------------------------------------

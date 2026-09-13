@@ -130,10 +130,21 @@ def test_academic_defaults_and_turma_code_contract():
 def test_upload_policy_preserves_exact_sets_and_validation_behavior():
     assert uploads.ALLOWED_ATTACHMENTS == {"pdf", "png", "jpg", "jpeg"}
     assert uploads.ALLOWED_REPORTE_SCREENSHOTS == {"png", "jpg", "jpeg", "webp"}
-    assert aluno_views._is_allowed_attachment("comprovante.PDF", uploads.ALLOWED_ATTACHMENTS)
-    assert aluno_views._is_allowed_attachment("captura.WEBP", uploads.ALLOWED_REPORTE_SCREENSHOTS)
-    assert not aluno_views._is_allowed_attachment("arquivo.exe", uploads.ALLOWED_ATTACHMENTS)
-    assert not aluno_views._is_allowed_attachment("sem_extensao", uploads.ALLOWED_ATTACHMENTS)
+    assert uploads._allowed("comprovante.PDF", uploads.ALLOWED_ATTACHMENTS)
+    assert uploads._allowed("relatorio.final.PDF", uploads.ALLOWED_ATTACHMENTS)
+    assert uploads._allowed("captura.WEBP", uploads.ALLOWED_REPORTE_SCREENSHOTS)
+    assert not uploads._allowed("arquivo.exe", uploads.ALLOWED_ATTACHMENTS)
+    assert not uploads._allowed("sem_extensao", uploads.ALLOWED_ATTACHMENTS)
+    assert not uploads._allowed("arquivo.", uploads.ALLOWED_ATTACHMENTS)
+    assert uploads.save_upload.__globals__["_allowed"] is uploads._allowed
+
+    aluno_tree = ast.parse(inspect.getsource(aluno_views))
+    aluno_top_level_functions = {
+        node.name
+        for node in aluno_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "_is_allowed_attachment" not in aluno_top_level_functions
 
 
 
