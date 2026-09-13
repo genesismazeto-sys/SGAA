@@ -1244,13 +1244,27 @@ def admin_deletar_turma(turma_id):
     try:
         alunos_vinc = conn.execute("SELECT COUNT(*) FROM alunos WHERE turma_id = ?", (turma_id,)).fetchone()[0]
         if alunos_vinc:
+            # A recusa precisa carregar status proprio: a exclusao pela lista e
+            # um fetch(), que segue o 302 ate a listagem e le 200 OK. O flash ia
+            # embora no corpo descartado e a turma so "nao sumia", sem aviso.
+            # Literal repetido de proposito: o catalogo de mensagens editaveis
+            # so indexa o texto quando ele esta no proprio ponto de chamada.
+            if _is_ajax_request():
+                return jsonify(
+                    {"ok": False, "error": "Não é possível excluir: há alunos vinculados a esta turma."}
+                ), 409
             flash("Não é possível excluir: há alunos vinculados a esta turma.", "error")
             return redirect(url_for("admin_turmas"))
 
         conn.execute("DELETE FROM turmas WHERE id=?", (turma_id,))
         conn.commit()
+        if _is_ajax_request():
+            return jsonify({"ok": True, "deleted": turma_id})
         flash("Turma deletada com sucesso.", "success")
     except Exception as e:
+        conn.rollback()
+        if _is_ajax_request():
+            return jsonify({"ok": False, "error": f"Erro ao deletar turma: {e}"}), 500
         flash(f"Erro ao deletar turma: {e}", "error")
     return redirect(url_for("admin_turmas"))
 

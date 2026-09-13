@@ -19,9 +19,14 @@ def test_password_module_exports_exact_public_api():
     assert passwords.__all__ == [
         "check_password",
         "hash_password",
+        "hash_password_batch",
         "is_legacy_password_hash",
     ]
     assert list(inspect.signature(passwords.hash_password).parameters) == ["password"]
+    assert list(inspect.signature(passwords.hash_password_batch).parameters) == [
+        "password",
+        "count",
+    ]
     assert list(inspect.signature(passwords.check_password).parameters) == [
         "stored_password",
         "provided_password",
@@ -29,6 +34,27 @@ def test_password_module_exports_exact_public_api():
     assert list(inspect.signature(passwords.is_legacy_password_hash).parameters) == [
         "stored_password",
     ]
+
+
+def test_password_hash_batch_matches_repeated_single_hashing():
+    """Lote é só paralelismo: mesmo algoritmo, salt próprio por hash."""
+    hashes = passwords.hash_password_batch("senha-forte", 6)
+
+    assert len(hashes) == 6
+    assert len(set(hashes)) == 6, "cada hash precisa manter salt próprio"
+    for password_hash in hashes:
+        assert password_hash.startswith("pbkdf2:sha256:600000$")
+        assert passwords.check_password(password_hash, "senha-forte") is True
+        assert passwords.check_password(password_hash, "senha-incorreta") is False
+
+
+def test_password_hash_batch_handles_degenerate_counts():
+    assert passwords.hash_password_batch("senha-forte", 0) == []
+    assert passwords.hash_password_batch("senha-forte", -1) == []
+
+    single = passwords.hash_password_batch("senha-forte", 1)
+    assert len(single) == 1
+    assert passwords.check_password(single[0], "senha-forte") is True
 
 
 def test_modern_password_hash_preserves_algorithm_and_verification():

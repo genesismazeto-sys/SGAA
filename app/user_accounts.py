@@ -4,7 +4,7 @@ from app.auth import (
     default_access_level_for_user_type,
 )
 from app.db_maintenance import ensure_usuario_access_schema
-from app.security.passwords import hash_password
+from app.security.passwords import hash_password, hash_password_batch
 
 
 def _access_defaults_map(conn) -> dict[str, str]:
@@ -40,6 +40,19 @@ def create_usuario_with_default_access(conn, nome: str, email: str, senha_hash: 
 def create_usuario_with_default_password(conn, nome: str, email: str, user_type: str):
     senha_padrao = _default_password_for_user_type(conn, user_type)
     return create_usuario_with_default_access(conn, nome, email, hash_password(senha_padrao), user_type)
+
+
+def prepare_default_password_hashes(conn, user_type: str, count: int) -> list[str]:
+    """Hashes da senha padrão prontos para ``count`` novos usuários do tipo.
+
+    Serve para criação em lote: o custo do PBKDF2 sai do laço de gravação e
+    passa a rodar em paralelo antes dele. Os hashes são intercambiáveis entre
+    si (mesma senha, salts distintos), então podem ser consumidos em qualquer
+    ordem.
+    """
+    if count <= 0:
+        return []
+    return hash_password_batch(_default_password_for_user_type(conn, user_type), count)
 
 
 def normalize_usuario_access_for_user_type(conn, usuario_id: int | None):

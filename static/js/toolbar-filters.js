@@ -43,7 +43,13 @@
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
       if (!response.ok){
-        throw new Error('delete-failed');
+        // O servidor explica a recusa (ex.: turma com alunos vinculados). Sem
+        // ler isso, a mensagem generica escondia o motivo real da exclusao.
+        let detail = '';
+        try{ detail = (await response.json())?.error || ''; }catch(_){ }
+        const error = new Error(detail || 'delete-failed');
+        error.detail = detail;
+        throw error;
       }
     }
   }
@@ -1019,8 +1025,8 @@
       try{
         await postDeleteUrls(deleteUrls);
         window.location.reload();
-      }catch(_error){
-        window.alert('Não foi possível concluir a exclusão em lote.');
+      }catch(error){
+        window.alert(error?.detail || 'Não foi possível concluir a exclusão em lote.');
         bulkDeleteButton.disabled = false;
         selectAllButton.disabled = false;
       }
@@ -1136,8 +1142,8 @@
           await postDeleteUrls(deleteUrls);
           window.location.reload();
         }
-      }catch(_error){
-        window.alert('Não foi possível concluir a exclusão em lote.');
+      }catch(error){
+        window.alert(error?.detail || 'Não foi possível concluir a exclusão em lote.');
         button.disabled = false;
         selectAllAction.disabled = false;
         syncMenu();

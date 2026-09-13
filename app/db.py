@@ -39,7 +39,11 @@ DEFAULT_HORAS_EXTENSAO = 160
 
 def get_db_connection():
     if "db" not in g:
-        g.db = sqlite3.connect(DATABASE)
+        # NOTA: uma gravacao longa (ex.: criar dezenas de alunos, cada um com
+        # hash PBKDF2 de 600k iteracoes) segura o lock de escrita do SQLite por
+        # dezenas de segundos. Com o timeout padrao de 5s qualquer requisicao
+        # concorrente morria em "database is locked" (HTTP 500); agora ela espera.
+        g.db = sqlite3.connect(DATABASE, timeout=30.0)
         g.db.row_factory = sqlite3.Row
         try:
             g.db.create_collation("PTBR_NOACCENT", ptbr_sqlite_collation)

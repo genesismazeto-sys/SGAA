@@ -38,15 +38,15 @@
     </div>
 
     <div class="form-row">
-      <label class="row-label">Inicio/Fim</label>
+      <label class="row-label">Início/fim</label>
       <div class="split-2-card-row">
         <!-- Inicio -->
         <div class="field-card">
           <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
           <div class="inicio-grid">
             <select class="control" name="semestre_inicio" id="semestre_inicio">
-              <option value="1" {{ 'selected' if turma.semestre_inicio == 1 else '' }}>1</option>
-              <option value="2" {{ 'selected' if turma.semestre_inicio == 2 else '' }}>2</option>
+              <option value="1" {{ 'selected' if turma.semestre_inicio == 1 else '' }}>1S</option>
+              <option value="2" {{ 'selected' if turma.semestre_inicio == 2 else '' }}>2S</option>
             </select>
             <div class="input-with-icon">
               <input class="control" type="text" inputmode="numeric" pattern="[0-9]{4}" name="ano_inicio" id="ano_inicio" value="{{ turma.ano_inicio or '' }}" placeholder="AAAA" style="padding-right:28px;">
@@ -315,7 +315,32 @@
     const monthBtn = document.getElementById('inicio_month_btn');
     const monthInp = document.getElementById('inicio_month_picker');
     if (monthBtn && monthInp){ monthBtn.addEventListener('click', ()=>{ if (monthInp.showPicker) monthInp.showPicker(); else monthInp.focus(); }); monthInp.addEventListener('change', ()=>{ const v = monthInp.value; if (v && /^\d{4}-\d{2}$/.test(v)){ const [yStr, mStr] = v.split('-'); const y = parseInt(yStr,10); const m = parseInt(mStr,10); if (!isNaN(y) && !isNaN(m)){ if (anoI) anoI.value = y; if (semI) semI.value = (m <= 6 ? '1' : '2'); recompute(); } } }); }
-    const form = document.querySelector('form[method="POST"]'); form && form.addEventListener('submit', recompute);
+    const form = document.querySelector('form[method="POST"]');
+    form && form.addEventListener('submit', (ev)=>{
+      recompute();
+      // Salvar uma turma com muitos alunos leva segundos (hash de senha por
+      // aluno) segurando o lock de escrita do banco. Um segundo POST simultaneo
+      // batia no lock e virava 500, mesmo com a primeira gravacao concluida.
+      if (form.dataset.submitting === '1'){ ev.preventDefault(); return; }
+      form.dataset.submitting = '1';
+      const saveBtn = form.querySelector('button[type="submit"]');
+      setTimeout(()=>{
+        if (!saveBtn) return;
+        saveBtn.disabled = true;
+        const label = saveBtn.querySelector('.btn-label');
+        if (label) label.textContent = 'Salvando...';
+      }, 0);
+    });
+    // Voltar pelo historico nao pode deixar o formulario travado.
+    window.addEventListener('pageshow', ()=>{
+      if (!form) return;
+      delete form.dataset.submitting;
+      const saveBtn = form.querySelector('button[type="submit"]');
+      if (!saveBtn) return;
+      saveBtn.disabled = false;
+      const label = saveBtn.querySelector('.btn-label');
+      if (label) label.textContent = 'Salvar';
+    });
   });
 </script>
 {% endblock %}

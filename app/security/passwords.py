@@ -1,14 +1,20 @@
 import base64
 import hashlib
 import logging
+import os
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 
 
 __all__ = [
     "check_password",
     "hash_password",
+    "hash_password_batch",
     "is_legacy_password_hash",
 ]
+
+# PBKDF2 de 600k iterações custa ~280ms; em lote isso domina o request.
+_HASH_BATCH_MAX_WORKERS = 8
 
 
 def hash_password(password: str) -> str:
@@ -20,6 +26,24 @@ def hash_password(password: str) -> str:
     from werkzeug.security import generate_password_hash
 
     return generate_password_hash(str(password or ""), method="pbkdf2:sha256:600000")
+
+
+def hash_password_batch(password: str, count: int) -> list[str]:
+    """``count`` hashes independentes da mesma senha, calculados em paralelo.
+
+    Idêntico a chamar ``hash_password`` ``count`` vezes — cada hash mantém o
+    próprio salt aleatório. A diferença é só o tempo: o PBKDF2 roda em C
+    liberando a GIL, então threads paralelizam de verdade. Criar uma turma com
+    dezenas de alunos serializava ~280ms por aluno segurando o lock de escrita
+    do SQLite o tempo inteiro.
+    """
+    if count <= 0:
+        return []
+    if count == 1:
+        return [hash_password(password)]
+    workers = min(count, os.cpu_count() or 2, _HASH_BATCH_MAX_WORKERS)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(lambda _: hash_password(password), range(count)))
 
 
 def is_legacy_password_hash(stored_password: str) -> bool:

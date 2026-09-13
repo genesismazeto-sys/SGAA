@@ -120,6 +120,17 @@ FC08_BODY_CHANGES = {
     "_build_admin_dashboard_turma_cards",
     "_matrizes_by_curso",
 }
+# AJAX-DELETE-FEEDBACK-1: deleting from the listing is a ``fetch()`` that
+# follows the 302 to the listing and reads 200 OK, so the "alunos vinculados"
+# refusal was swallowed together with the discarded flash -- the row simply
+# stayed put with no message at all. ``admin_deletar_turma`` now answers AJAX
+# callers with its own status (409 refusal / 500 failure) and a JSON reason,
+# mirroring the shape ``admin_deletar_aluno`` already had. The non-AJAX
+# flash+redirect path and the refusal message itself are unchanged.
+AJAX_DELETE_FEEDBACK_BODY_CHANGES = {
+    "admin_deletar_turma",
+}
+
 STUDENT_IMPORT_BASELINE_COMMIT = "1796c1e17b7cbd53148631f08b897f53c98590aa"
 STUDENT_IMPORT_HANDLER_NAMES = {
     "admin_adicionar_turma",
@@ -1451,6 +1462,9 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
                 f"moved body differs from baseline beyond the R1 keyword "
                 f"deletion for {name}"
             )
+        elif name in AJAX_DELETE_FEEDBACK_BODY_CHANGES:
+            # Declared bounded change; see AJAX-DELETE-FEEDBACK-1 above.
+            continue
         elif name not in FC08_BODY_CHANGES:
             assert module_body == baseline_body, f"moved body differs from baseline for {name}"
 

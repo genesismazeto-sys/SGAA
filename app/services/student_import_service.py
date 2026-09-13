@@ -11,8 +11,10 @@ from app.student_import import (
 )
 from app.student_matrix import matrix_for_turma_assignment
 from app.user_accounts import (
+    create_usuario_with_default_access,
     create_usuario_with_default_password,
     normalize_usuario_access_for_user_type,
+    prepare_default_password_hashes,
 )
 
 
@@ -95,7 +97,37 @@ def _validated_linked_user(conn, row: StudentImportRow, existing):
     return linked_user
 
 
-def _persist_student_row(conn, turma_id: int, row: StudentImportRow, status: str, existing, linked_user) -> str:
+def _count_rows_needing_new_usuario(conn, rows: Sequence[StudentImportRow]) -> int:
+    """Quantos alunos do lote são novos, sem levantar erro.
+
+    Espelha exatamente a condição que leva ``_persist_student_row`` a criar um
+    usuário (``existing`` vazio em ``_resolve_existing_student``), mas só com
+    leituras: a validação e a ordem dos erros continuam sendo do laço de
+    gravação. Serve apenas para dimensionar o pré-cálculo dos hashes; se errar,
+    erra para mais e o excedente é descartado.
+    """
+    total = 0
+    for row in rows:
+        by_matricula = conn.execute(
+            "SELECT 1 FROM alunos WHERE matricula=?", (row.matricula,)
+        ).fetchone()
+        by_email = conn.execute(
+            "SELECT 1 FROM alunos WHERE LOWER(email)=LOWER(?)", (row.email,)
+        ).fetchone()
+        if not by_matricula and not by_email:
+            total += 1
+    return total
+
+
+def _persist_student_row(
+    conn,
+    turma_id: int,
+    row: StudentImportRow,
+    status: str,
+    existing,
+    linked_user,
+    pending_password_hashes: list[str] | None = None,
+) -> str:
     if existing:
         matriz_id = matrix_for_turma_assignment(
             conn,
@@ -118,9 +150,14 @@ def _persist_student_row(conn, turma_id: int, row: StudentImportRow, status: str
         )
         return "updated"
 
-    usuario_id = create_usuario_with_default_password(
-        conn, row.aluno, row.email, "aluno"
-    ).lastrowid
+    if pending_password_hashes:
+        usuario = create_usuario_with_default_access(
+            conn, row.aluno, row.email, pending_password_hashes.pop(), "aluno"
+        )
+    else:
+        # Sem hash pré-calculado sobrando, o caminho original assume.
+        usuario = create_usuario_with_default_password(conn, row.aluno, row.email, "aluno")
+    usuario_id = usuario.lastrowid
     conn.execute(
         """
         INSERT INTO alunos (usuario_id,nome,email,matricula,turma_id,matriz_id,status)
@@ -169,6 +206,13 @@ def _persist_rows(
         seen_emails[email_key] = row.source_row
         seen_matriculas[row.matricula] = row.source_row
 
+    # Hash da senha padrão é o custo dominante da gravação em lote. Calculado
+    # aqui, em paralelo e fora do laço, ele deixa de somar ~280ms por aluno ao
+    # tempo em que a transação segura o lock de escrita do banco.
+    pending_password_hashes = prepare_default_password_hashes(
+        conn, "aluno", _count_rows_needing_new_usuario(conn, [row for row, _ in items])
+    )
+
     created = updated = skipped = 0
     for row, status in items:
         try:
@@ -178,7 +222,7 @@ def _persist_rows(
                 skipped += 1
                 continue
             outcome = _persist_student_row(
-                conn, turma_id, row, status, existing, linked_user
+                conn, turma_id, row, status, existing, linked_user, pending_password_hashes
             )
             created += outcome == "created"
             updated += outcome == "updated"
