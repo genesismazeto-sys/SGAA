@@ -156,10 +156,9 @@ def _isolated_presets_app(tmp_path, monkeypatch):
 
     `configuracoes_presets` is a prod-1 physical-contract table.  The legacy
     migration scenario drops it so that `presets_api.ensure_presets_schema`
-    re-creates it, and that DDL text is not byte-identical to the canonical
-    `PROD1_SCHEMA_SQL` one.  Running that against the shared pytest session
-    database would leave its physical schema signature permanently outside the
-    prod-1 contract, so every later test reaching `validate_prod1_schema`
+    re-creates it, and then rewrites its rows from the legacy JSON file.
+    Running that against the shared pytest session database would mutate a
+    contract table out from under every later test reaching `validate_prod1_schema`
     (e.g. any request through `ensure_turmas_matriz_schema`) would fail.  The
     scenario therefore owns its own database; `monkeypatch` guarantees every
     rebinding is restored even if the body raises.

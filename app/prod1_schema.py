@@ -7,6 +7,7 @@ import sqlite3
 
 from app.prod1_comprovantes_ddl import COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 from app.prod1_arquivos_ddl import ARQUIVOS_V5_SCHEMA_OBJECTS_SQL, ARQUIVOS_V5_TABLE_SQL
+from app.prod1_presets_ddl import CONFIGURACOES_PRESETS_TABLE_SQL
 SCHEMA_EPOCH = "prod-1"
 SCHEMA_VERSION = 6
 BASELINE_MARKER = "first_production_baseline"
@@ -66,11 +67,7 @@ CREATE TABLE configuracoes_backup (
  chave TEXT PRIMARY KEY, valor TEXT NOT NULL,
  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE configuracoes_presets (
- tipo TEXT NOT NULL CHECK(tipo IN ('respostas','emails')), preset_id INTEGER NOT NULL,
- titulo TEXT NOT NULL, texto TEXT NOT NULL DEFAULT '',
- atualizado_em TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(tipo,preset_id)
-);
+__CONFIGURACOES_PRESETS_TABLE__;
 CREATE TABLE cloud_accounts (
  id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, account_email TEXT,
  token_json TEXT NOT NULL, connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -282,6 +279,8 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(6,'student_matrix_authority','prod-1','{"schema_epoch":"prod-1","authority":"alunos.matriz_id","turma_matrix_semantics":"optional_default"}');
 PRAGMA user_version=6;
 """.replace(
+    "__CONFIGURACOES_PRESETS_TABLE__", CONFIGURACOES_PRESETS_TABLE_SQL
+).replace(
     "__COMPROVANTES_V4_SCHEMA_OBJECTS__", COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 ).replace(
     "__ARQUIVOS_V5_TABLE__;", ARQUIVOS_V5_TABLE_SQL

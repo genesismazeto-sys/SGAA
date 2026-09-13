@@ -115,18 +115,27 @@ def _sanitize_presets(payload):
 
 
 def ensure_presets_schema(conn):
-    conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {PRESETS_TABLE} (
-            tipo TEXT NOT NULL CHECK(tipo IN ('respostas', 'emails')),
-            preset_id INTEGER NOT NULL,
-            titulo TEXT NOT NULL,
-            texto TEXT NOT NULL DEFAULT '',
-            atualizado_em TEXT NOT NULL DEFAULT (datetime('now')),
-            PRIMARY KEY (tipo, preset_id)
-        )
-        """
-    )
+    """Create `configuracoes_presets` from the single canonical prod-1 authority.
+
+    `configuracoes_presets` is a prod-1 physical-contract table, so a second
+    literal `CREATE TABLE` here would be a competing DDL authority: any database
+    it created would carry a `sqlite_master.sql` text that `validate_prod1_schema`
+    rejects as `prod-1 physical schema contract mismatch`.  The canonical
+    statement in `app.prod1_presets_ddl` is the only definition, and it is
+    executed verbatim so the stored DDL matches bootstrap byte for byte.
+
+    Existing tables are left untouched -- the statement runs only when absent,
+    never as a rebuild or a formatting normalization.
+    """
+    # Import tardio evita ciclo: app.__init__ importa presets_api durante bootstrap.
+    from app.prod1_presets_ddl import CONFIGURACOES_PRESETS_TABLE_SQL
+
+    already_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (PRESETS_TABLE,)
+    ).fetchone()
+    if already_exists:
+        return
+    conn.execute(CONFIGURACOES_PRESETS_TABLE_SQL)
 
 
 def _load_legacy_presets_file():
