@@ -339,16 +339,20 @@ def test_probe_d_denial_flipped_to_allow_is_caught():
     )
 
 
-def test_probe_d_fail_open_requirement_scope_is_caught():
-    """A required scope that does not normalize degrades to "none" -- allowing everyone.
+def test_probe_d_invalid_requirement_scope_is_caught():
+    """A required scope that is not canonical is a policy-configuration defect.
 
-    ``permission_scope_satisfies`` normalizes an unknown required scope to
-    ``none``, whose rank is 0, so *every* actor satisfies it.  No count-based
-    check could ever see this; the zero-privilege probe in
-    ``policy_ownership_violations`` does.
+    UT-SEC1 hardened the product primitive: an unrecognized required scope no
+    longer degrades to the zero-rank ``none`` scope, so it now denies *every*
+    actor instead of allowing them.  The governance guard therefore reports it
+    as an invalid policy rather than as a fail-open one -- the defect stays
+    visible, and the probe proves the repaired behavior.
     """
-    assert auth.permission_scope_satisfies("none", "delete") is True, (
-        "precondition: an unrecognized required scope is satisfied by everyone"
+    assert auth.permission_scope_satisfies("none", "delete") is False, (
+        "precondition: an unrecognized required scope is satisfied by nobody"
+    )
+    assert auth.permission_scope_satisfies("full", "delete") is False, (
+        "precondition: not even the maximum actor scope satisfies an invalid requirement"
     )
     rule = Rule(PROBE_ADMIN_RULE, endpoint=PROBE_ADMIN_ENDPOINT, methods={"GET"})
 
@@ -361,6 +365,45 @@ def test_probe_d_fail_open_requirement_scope_is_caught():
                 "governed": True,
                 "kind": "requirement",
                 "requirement": ("alunos", "delete"),
+                "exemption": None,
+            }
+        return auth.classify_governed_admin_request(endpoint, url_rule, method)
+
+    routes = _canonical_routes() + [
+        {"endpoint": PROBE_ADMIN_ENDPOINT, "methods": ["GET"], "rule": PROBE_ADMIN_RULE}
+    ]
+    classification = rbac.classify_inventory(
+        routes=routes, rules=_live_rules() + [rule], classify=classify
+    )
+    assert any(
+        "invalid policy" in v for v in rbac.policy_ownership_violations(classification)
+    )
+
+
+def test_probe_d_fail_open_requirement_scope_is_caught():
+    """An explicit ``none`` requirement is canonical but denies nobody.
+
+    This is the residual fail-OPEN shape after UT-SEC1: ``none`` *is* a valid
+    scope, so the invalid-policy guard does not fire, and only the
+    zero-privilege probe can see that the requirement can never deny.
+    """
+    assert auth.is_valid_permission_scope("none") is True, (
+        "precondition: none is a canonical scope, not an invalid one"
+    )
+    assert auth.permission_scope_satisfies("none", "none") is True, (
+        "precondition: the zero-privilege actor satisfies an explicit none requirement"
+    )
+    rule = Rule(PROBE_ADMIN_RULE, endpoint=PROBE_ADMIN_ENDPOINT, methods={"GET"})
+
+    def classify(endpoint, url_rule, method):
+        if endpoint == PROBE_ADMIN_ENDPOINT:
+            return {
+                "endpoint": endpoint,
+                "rule": url_rule.rule,
+                "method": method,
+                "governed": True,
+                "kind": "requirement",
+                "requirement": ("alunos", "none"),
                 "exemption": None,
             }
         return auth.classify_governed_admin_request(endpoint, url_rule, method)

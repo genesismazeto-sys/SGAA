@@ -159,9 +159,45 @@ def permission_scope_label(scope: str) -> str:
     }.get(normalize_permission_scope(scope), "Sem acesso")
 
 
+# Sentinel that cannot collide with any canonical scope or alias.  The shared
+# normalizer answers "unrecognized" with its caller-chosen fallback, which makes
+# an unknown value indistinguishable from the canonical scope used as fallback.
+# Required-scope parsing is the one caller that must tell those apart.
+_UNRESOLVED_REQUIRED_SCOPE = "\x00unresolved-required-scope"
+
+
+def normalize_required_permission_scope(raw) -> str | None:
+    """Parse a *required* scope on the authorization trust boundary.
+
+    Returns ``None`` -- never a fallback -- when ``raw`` does not name a
+    canonical scope.  ``normalize_permission_scope`` keeps its permissive
+    fallback contract for its actor/persisted/display callers; only the
+    authorization comparison is strict.
+    """
+    required = normalize_permission_scope(raw, _UNRESOLVED_REQUIRED_SCOPE)
+    return required if required in ACCESS_SCOPE_RANK else None
+
+
+def is_valid_permission_scope(raw) -> bool:
+    """True when ``raw`` names a canonical scope, directly or through an alias."""
+    return normalize_required_permission_scope(raw) is not None
+
+
 def permission_scope_satisfies(current_scope: str, required_scope: str) -> bool:
+    required = normalize_required_permission_scope(required_scope)
+    if required is None:
+        # Fail closed.  An unrecognized requirement is an authorization
+        # *configuration* defect, never a grant: previously it fell back to the
+        # zero-rank "none" scope, which every actor satisfies.  Denying keeps
+        # the misconfiguration a safe 403 instead of promoting it to an
+        # uncontrolled 500 on a template or request path.
+        logger.warning(
+            "event=authz_invalid_required_scope required_scope=%r", required_scope
+        )
+        return False
+    # An unknown *current* (actor) scope still degrades to "none": holding an
+    # unreadable grant must mean holding nothing, not an error.
     current = normalize_permission_scope(current_scope)
-    required = normalize_permission_scope(required_scope)
     return ACCESS_SCOPE_RANK[current] >= ACCESS_SCOPE_RANK[required]
 
 

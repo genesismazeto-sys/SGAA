@@ -343,6 +343,7 @@ def policy_ownership_violations(
     resources=None,
     satisfies=None,
     direct_lookup=None,
+    scope_is_valid=None,
 ) -> list[str]:
     """Exactly one applicable authorization policy per governed business pair.
 
@@ -350,8 +351,9 @@ def policy_ownership_violations(
     governed pair with no policy, a governed pair with two policies
     (requirement *and* exemption -- the classifier reports that as
     ``invalid_configuration``), a requirement naming an unknown resource, a
-    requirement whose scope silently falls back to allow, and a requirement
-    that disagrees with the direct ``get_admin_permission_requirement`` lookup.
+    requirement whose scope is not a canonical scope, a requirement that no
+    actor can fail, and a requirement that disagrees with the direct
+    ``get_admin_permission_requirement`` lookup.
     """
     from app import auth
 
@@ -361,6 +363,8 @@ def policy_ownership_violations(
         satisfies = auth.permission_scope_satisfies
     if direct_lookup is None:
         direct_lookup = auth.get_admin_permission_requirement
+    if scope_is_valid is None:
+        scope_is_valid = auth.is_valid_permission_scope
     resources = frozenset(resources)
 
     violations: list[str] = []
@@ -406,10 +410,20 @@ def policy_ownership_violations(
             violations.append(
                 f"requirement names unknown resource {resource!r}: {_fmt(combination)}"
             )
-        # A required scope that does not normalize to a known scope silently
-        # degrades to "none", which every actor satisfies -- a fail-OPEN policy
-        # that no count-based check could ever see.
-        if satisfies(ZERO_PRIVILEGE_SCOPE, scope):
+        # UT-SEC1: a required scope that does not normalize to a canonical scope
+        # is an authorization-configuration defect.  The product primitive now
+        # denies it (fail-closed), so the zero-privilege probe below can no
+        # longer see it -- this check is what keeps it visible at the
+        # governance layer.
+        if not scope_is_valid(scope):
+            violations.append(
+                f"requirement scope {scope!r} is not a canonical permission scope "
+                f"(invalid policy): {_fmt(combination)}"
+            )
+        # A requirement the zero-privilege actor already satisfies -- an
+        # explicit "none" -- cannot deny anyone: a fail-OPEN policy that no
+        # count-based check could ever see.
+        elif satisfies(ZERO_PRIVILEGE_SCOPE, scope):
             violations.append(
                 f"requirement scope {scope!r} is satisfied by the zero-privilege actor "
                 f"(fail-open policy): {_fmt(combination)}"
