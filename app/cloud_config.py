@@ -50,6 +50,44 @@ def get_google_oauth_config() -> dict[str, str]:
     }
 
 
+def get_google_picker_config() -> dict[str, object]:
+    """Authoritative Google Picker configuration: machine store first, env second.
+
+    Picker needs three values, and the OAuth client id is one of them, so the
+    "configured" verdict is decided here rather than recomposed by each caller.
+    ``api_key`` is returned because the Picker runtime cannot work without it;
+    every other consumer should read ``configured`` instead.
+
+    Fails closed: a store that exists but cannot be opened yields the same empty,
+    unconfigured shape as an absent one, so an unreadable store never degrades
+    into an accidental environment read.
+    """
+    try:
+        stored = _stored_provider("google")
+        client_id = get_google_oauth_config()["client_id"]
+    except MachineSecretsError:
+        return {"api_key": "", "app_id": "", "configured": False, "source": "ERROR"}
+    api_key = _first(stored, "picker_api_key", "GOOGLE_PICKER_API_KEY")
+    app_id = _first(stored, "app_id", "GOOGLE_APP_ID")
+    configured = bool(client_id and api_key and app_id)
+    stored_configured = all(
+        bool(str(stored.get(key) or "").strip())
+        for key in ("client_id", "picker_api_key", "app_id")
+    )
+    return {
+        "api_key": api_key,
+        "app_id": app_id,
+        "configured": configured,
+        "source": (
+            "MACHINE_LOCAL_DPAPI"
+            if stored_configured
+            else "ENVIRONMENT"
+            if configured
+            else "ABSENT"
+        ),
+    }
+
+
 def get_onedrive_oauth_config() -> dict[str, str]:
     stored = _stored_provider("onedrive")
     return {

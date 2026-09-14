@@ -38,6 +38,7 @@ import app.db as app_db
 from app.cloud_config import (
     get_application_credential_status,
     get_google_oauth_config,
+    get_google_picker_config,
     get_onedrive_oauth_config,
     get_public_base_url_setting,
 )
@@ -465,8 +466,20 @@ def _build_database_admin_context(conn):
         onedrive_client_id = onedrive_config["client_id"]
         onedrive_tenant_id = onedrive_config["tenant_id"]
         oauth_public_base_url_setting = get_public_base_url_setting()
-    google_picker_api_key = str(os.environ.get("GOOGLE_PICKER_API_KEY") or "").strip()
-    google_app_id = str(os.environ.get("GOOGLE_APP_ID") or "").strip()
+    # Picker configuration comes from the same authoritative resolver as the
+    # OAuth credentials -- machine store first, legacy environment second.  The
+    # environment is never read here: a connected Google account whose Picker
+    # values live only in the machine store would otherwise report "configured"
+    # as false and the folder selector would be unusable.
+    google_picker_config = get_google_picker_config()
+    if cloud_store_unavailable:
+        google_picker_api_key = ""
+        google_app_id = ""
+        google_picker_configured = False
+    else:
+        google_picker_api_key = str(google_picker_config["api_key"])
+        google_app_id = str(google_picker_config["app_id"])
+        google_picker_configured = bool(google_picker_config["configured"])
 
     return {
         "schema_status": schema_status,
@@ -504,7 +517,11 @@ def _build_database_admin_context(conn):
         "google_client_id": google_client_id,
         "google_picker_api_key": google_picker_api_key,
         "google_app_id": google_app_id,
-        "google_picker_configured": bool(google_client_id and google_picker_api_key and google_app_id),
+        "google_picker_configured": google_picker_configured,
+        # A boolean only: enough for the form to offer "leave blank to keep the
+        # current key", never enough to disclose the key itself.
+        "google_picker_api_key_present": bool(google_picker_api_key),
+        "google_picker_config_source": str(google_picker_config["source"]),
         "google_backup_logs": google_backup_logs,
         "onedrive_account_email": onedrive_account_email,
         "onedrive_backup_logs": onedrive_backup_logs,
@@ -1532,6 +1549,17 @@ def admin_banco_dados_drive_settings():
                 client_id=request.form.get("client_id") or "",
                 client_secret=request.form.get("client_secret") or "",
                 tenant_id=request.form.get("tenant_id") or "",
+                # Same "only what was submitted is written" rule as the fields
+                # above: absent means the card did not represent the field, so
+                # a credentials-only POST leaves Picker configuration intact.
+                picker_api_key=(
+                    request.form.get("picker_api_key")
+                    if "picker_api_key" in request.form
+                    else None
+                ),
+                app_id=(
+                    request.form.get("app_id") if "app_id" in request.form else None
+                ),
             )
             if base_url_submitted:
                 # Still the one canonical value: both cards render and write it.

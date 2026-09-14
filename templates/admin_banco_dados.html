@@ -776,6 +776,15 @@
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
+          {% if google_picker_configured %}
+            <div class="db-provider-line is-muted">
+              <span>Seleção de pasta: {{ 'configuração segura desta máquina' if google_picker_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' }}</span>
+            </div>
+          {% elif gdrive_connected %}
+            <div class="db-provider-line is-warning" data-google-picker-missing>
+              <span>Seleção de pasta indisponível: informe a Chave de API do Google Picker e o ID do aplicativo abaixo.</span>
+            </div>
+          {% endif %}
         </div>
 
         {% if drive_settings.gdrive_last_upload_error %}
@@ -825,7 +834,7 @@
                 {% if not gdrive_connected %}
                   title="Conecte o Google Drive antes de selecionar a pasta."
                 {% elif not google_picker_configured %}
-                  title="Google Picker não configurado."
+                  title="Informe a Chave de API do Google Picker e o ID do aplicativo nas configurações do Google Drive."
                 {% else %}
                   title="Selecionar pasta de destino no Google Drive"
                 {% endif %}
@@ -875,6 +884,20 @@
                 <label for="google_client_secret">Chave secreta</label>
                 <input id="google_client_secret" type="password" name="client_secret" value="" class="db-path-input" spellcheck="false" autocomplete="new-password">
                 <small>Deixe em branco para manter a chave atual.</small>
+              </div>
+              <div class="db-field">
+                <label for="google_picker_api_key">Chave de API do Google Picker</label>
+                <input id="google_picker_api_key" type="password" name="picker_api_key" value="" class="db-path-input" spellcheck="false" autocomplete="new-password">
+                {% if google_picker_api_key_present %}
+                  <small>Deixe em branco para manter a chave atual.</small>
+                {% else %}
+                  <small>Chave de API do mesmo projeto Google Cloud, com a Google Picker API ativada. Necessária para escolher a pasta de destino.</small>
+                {% endif %}
+              </div>
+              <div class="db-field">
+                <label for="google_app_id">ID do aplicativo (Google App ID)</label>
+                <input id="google_app_id" class="db-path-input" type="text" name="app_id" value="{{ google_app_id }}" spellcheck="false" autocomplete="off">
+                <small>Número do projeto no Google Cloud Console. Não é o ID do cliente OAuth.</small>
               </div>
 
               <div class="db-provider-config-footer">
@@ -1731,7 +1754,7 @@
             || code === "GOOGLE_PICKER_API_KEY_MISSING"
             || code === "GOOGLE_APP_ID_MISSING"
           ) {
-            return "Google Picker não configurado. Configure GOOGLE_PICKER_API_KEY e GOOGLE_APP_ID.";
+            return "Seleção de pasta indisponível: informe a Chave de API do Google Picker e o ID do aplicativo nas configurações do Google Drive e salve.";
           }
           if (code === "GIS_SCRIPT_BLOCKED" || code === "GAPI_SCRIPT_BLOCKED") {
             return "Script do Google Picker bloqueado pelo navegador ou pela Content-Security-Policy.";

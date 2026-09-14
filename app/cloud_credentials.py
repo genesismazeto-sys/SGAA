@@ -9,10 +9,13 @@ never reach the repository.
 
 Three invariants drive the design:
 
-* ``client_secret`` is write-only.  A blank submission means *preserve the
-  stored secret*, so the key is omitted from the submitted values instead of
-  being sent as ``""`` -- ``update_machine_oauth_configuration`` writes every
-  key it receives, and an empty string would silently destroy the credential.
+* ``client_secret`` and the Google ``picker_api_key`` are write-only.  A blank
+  submission means *preserve the stored value*, so the key is omitted from the
+  submitted values instead of being sent as ``""`` --
+  ``update_machine_oauth_configuration`` writes every key it receives, and an
+  empty string would silently destroy the credential.  Identifiers that are
+  rendered back to the administrator -- ``client_id``, ``tenant_id``,
+  ``app_id`` -- do not share that rule: for them a blank box is a clear.
 * Google and OneDrive are independently configurable, and neither provider save
   touches ``public_base_url``: provider writes always pass
   ``public_base_url=None``.  The shared address has its own entry point.
@@ -67,9 +70,21 @@ PROVIDER_IDENTIFIER_FIELDS: dict[str, tuple[str, ...]] = {
     "onedrive": ("client_id", "tenant_id"),
 }
 
+# Fields a provider card may additionally carry.  They are *optional* on the
+# wire in both senses: a card that does not represent one leaves it untouched,
+# and a represented-but-blank one is not an error.  Google Picker is usable
+# without them only in the sense that the rest of the provider still works, so
+# refusing a credentials save over an empty Picker field would be wrong.
+PROVIDER_OPTIONAL_FIELDS: dict[str, tuple[str, ...]] = {
+    "google": ("picker_api_key", "app_id"),
+    "onedrive": (),
+}
+
 _FIELD_LABELS = {
     "client_id": "ID do cliente",
     "tenant_id": "ID do diretório (tenant)",
+    "app_id": "ID do aplicativo",
+    "picker_api_key": "chave de API do Google Picker",
 }
 
 _PROVIDER_LABELS = {"google": "Google Drive", "onedrive": "OneDrive"}
@@ -127,19 +142,19 @@ def _normalize_identifier(value: str, *, field: str, provider: str) -> str:
     return text
 
 
-def _normalize_secret(value: str) -> str:
+def _normalize_secret(value: str, *, label: str = "A chave secreta") -> str:
     # Never echoed, never logged, never returned to a template.
     secret = str(value or "").strip()
     if len(secret) > _MAX_SECRET_LENGTH:
         raise CloudCredentialsError(
-            "A chave secreta informada não tem um formato válido. "
+            f"{label} informada não tem um formato válido. "
             "Copie o valor exatamente como aparece no portal do provedor."
         )
     return secret
 
 
-def stored_secret_is_present(provider: str) -> bool:
-    """Whether a client secret is already held for ``provider``.
+def _stored_field_is_present(provider: str, field: str) -> bool:
+    """Whether ``field`` already holds a value for ``provider`` in the store.
 
     Fails closed: an unreadable store raises instead of reporting "absent",
     which would invite a caller to overwrite credentials it could not read.
@@ -151,7 +166,21 @@ def stored_secret_is_present(provider: str) -> bool:
     stored = providers.get(normalized)
     if not isinstance(stored, dict):
         return False
-    return bool(str(stored.get("client_secret") or "").strip())
+    return bool(str(stored.get(field) or "").strip())
+
+
+def stored_secret_is_present(provider: str) -> bool:
+    """Whether a client secret is already held for ``provider``."""
+    return _stored_field_is_present(provider, "client_secret")
+
+
+def stored_picker_api_key_is_present(provider: str = "google") -> bool:
+    """Whether a Google Picker API key is already held in the machine store.
+
+    The boolean is the *only* thing the admin form is allowed to learn about a
+    stored Picker key: enough to say "leave blank to keep it", never the value.
+    """
+    return _stored_field_is_present(provider, "picker_api_key")
 
 
 def save_application_credentials(
@@ -160,11 +189,24 @@ def save_application_credentials(
     client_id: str,
     client_secret: str,
     tenant_id: str = "",
+    picker_api_key: str | None = None,
+    app_id: str | None = None,
 ) -> dict[str, object]:
     """Persist one provider's application credentials in the machine store.
 
-    Returns ``{"provider", "secret_rotated"}``.  Never returns, logs or raises
-    the submitted secret.
+    ``picker_api_key`` and ``app_id`` use ``None`` for *the submitting card did
+    not represent this field*, which is what keeps a credentials-only POST from
+    erasing Picker configuration it never showed.  A represented field carries a
+    string, and the two differ in what blank means: ``app_id`` is rendered back,
+    so blank is a deliberate clear, while ``picker_api_key`` is write-only, so
+    blank means *keep the stored key* exactly as ``client_secret`` does.
+
+    Every field is normalized before anything is written, and the write itself
+    is a single store update, so an invalid field leaves the stored
+    configuration untouched rather than half-written.
+
+    Returns ``{"provider", "secret_rotated", "picker_api_key_rotated"}``.  Never
+    returns, logs or raises the submitted secret or Picker key.
     """
     normalized = normalize_provider(provider)
     submitted = {"client_id": client_id, "tenant_id": tenant_id}
@@ -174,6 +216,33 @@ def save_application_credentials(
         )
         for field in PROVIDER_IDENTIFIER_FIELDS[normalized]
     }
+
+    optional_submitted = {"picker_api_key": picker_api_key, "app_id": app_id}
+    for field, raw in optional_submitted.items():
+        if raw is None:
+            continue
+        if field not in PROVIDER_OPTIONAL_FIELDS[normalized]:
+            raise CloudCredentialsError(
+                f"O campo {_FIELD_LABELS[field]} não pertence à configuração "
+                f"{_PROVIDER_LABELS[normalized]}."
+            )
+
+    picker_key = ""
+    if picker_api_key is not None:
+        picker_key = _normalize_secret(
+            picker_api_key, label="A chave de API do Google Picker"
+        )
+        if picker_key:
+            # Write-only, exactly like client_secret: only present when newly typed.
+            values["picker_api_key"] = picker_key
+    if app_id is not None:
+        # Rendered back to the administrator, so an empty box is a clear, not a
+        # preserve.  A non-empty one still has to look like an identifier.
+        values["app_id"] = (
+            _normalize_identifier(app_id, field="app_id", provider=normalized)
+            if str(app_id or "").strip()
+            else ""
+        )
 
     secret = _normalize_secret(client_secret)
     if secret:
@@ -199,7 +268,11 @@ def save_application_credentials(
         normalized,
         "substituída" if secret else "preservada",
     )
-    return {"provider": normalized, "secret_rotated": bool(secret)}
+    return {
+        "provider": normalized,
+        "secret_rotated": bool(secret),
+        "picker_api_key_rotated": bool(picker_key),
+    }
 
 
 def normalize_public_base_url(value: str) -> str:
