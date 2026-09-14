@@ -841,14 +841,18 @@ def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
     assert "url_for('static', filename='img/onedrive.svg')" in template
     assert "url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg')" not in template
     assert "url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg')" not in template
-    assert "<strong>OneDrive callback:</strong>" in template
+    # OneDrive stays a fully configurable provider: its card -- not a separate
+    # technical panel -- owns the Microsoft-specific tenant field.
+    onedrive_card = template.split('<section class="db-provider-card">')[2]
+    assert 'name="tenant_id"' in onedrive_card
+    assert 'name="action" value="save_credentials"' in onedrive_card
     # The admin surface must never carry manual-setup instructions: the
     # machine-local secure store is prepared by the canonical startup
     # preflight, not by a command the operator has to type.
     assert "configure_cloud_oauth" not in template
     assert "Fernet" not in template
     assert "TOKEN_ENCRYPTION_KEY" not in template
-    assert "As credenciais do aplicativo ficam protegidas nesta máquina" in template
+    assert "Deixe em branco para manter a chave atual." in template
 
 
 def test_user_facing_paths_do_not_log_or_store_application_secrets():

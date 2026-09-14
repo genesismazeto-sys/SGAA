@@ -473,6 +473,151 @@ def test_credential_actions_leave_destination_settings_untouched(
 
 
 # ---------------------------------------------------------------------------
+# 7b. The provider card saves its whole editable configuration in one POST
+# ---------------------------------------------------------------------------
+
+
+def _google_card_payload(**overrides) -> dict:
+    payload = {
+        "provider": "google",
+        "action": "save_credentials",
+        "app_public_base_url": "http://localhost:5000",
+        "client_id": "google-client-id",
+        "client_secret": GOOGLE_SECRET,
+        "gdrive_dest_folder": "Backups/sistema",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_card_save_writes_credentials_and_the_shared_address_together(
+    machine_store, admin_client
+):
+    response = _post(
+        admin_client,
+        _google_card_payload(app_public_base_url="https://sgaa.example.br/"),
+    )
+
+    assert "Credenciais do Google Drive salvas" in response.get_data(as_text=True)
+    assert _stored("google") == {
+        "client_id": "google-client-id",
+        "client_secret": GOOGLE_SECRET,
+    }
+    assert _runtime()["public_base_url"] == "https://sgaa.example.br"
+    assert _read_drive_settings()["gdrive_dest_folder"] == "Backups/sistema"
+
+
+def test_either_card_updates_the_one_shared_address_without_the_other_provider(
+    machine_store, admin_client
+):
+    _seed("google", {"client_id": "google-client-id", "client_secret": GOOGLE_SECRET})
+    _seed(
+        "onedrive",
+        {
+            "client_id": "onedrive-client-id",
+            "client_secret": ONEDRIVE_SECRET,
+            "tenant_id": "tenant-uuid",
+        },
+    )
+    onedrive_before = _stored("onedrive")
+
+    _post(admin_client, _google_card_payload(app_public_base_url="https://from-google.example.br"))
+    assert _runtime()["public_base_url"] == "https://from-google.example.br"
+    assert _stored("onedrive") == onedrive_before
+
+    google_before = _stored("google")
+    _post(
+        admin_client,
+        {
+            "provider": "onedrive",
+            "action": "save_credentials",
+            "app_public_base_url": "https://from-onedrive.example.br",
+            "client_id": "onedrive-client-id",
+            "client_secret": "",
+            "tenant_id": "tenant-uuid",
+        },
+    )
+    assert _runtime()["public_base_url"] == "https://from-onedrive.example.br"
+    assert _stored("google") == google_before
+    # Still one canonical value, not a per-provider copy.
+    assert cloud_config.get_public_base_url_setting() == "https://from-onedrive.example.br"
+
+
+def test_card_save_with_a_blank_secret_still_preserves_the_stored_one(
+    machine_store, admin_client
+):
+    _seed("google", {"client_id": "original", "client_secret": GOOGLE_SECRET},
+          public_base_url="http://localhost:5000")
+
+    _post(admin_client, _google_card_payload(client_id="rotated", client_secret=""))
+
+    assert _stored("google") == {
+        "client_id": "rotated",
+        "client_secret": GOOGLE_SECRET,
+    }
+
+
+def test_card_save_with_an_invalid_address_writes_nothing(machine_store, admin_client):
+    _seed("google", {"client_id": "original", "client_secret": GOOGLE_SECRET},
+          public_base_url="https://sgaa.example.br")
+    before = _stored("google")
+
+    response = _post(
+        admin_client,
+        _google_card_payload(
+            client_id="rotated",
+            client_secret="rotated-secret",
+            app_public_base_url="https://x.example/path",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert "Credenciais do Google Drive salvas" not in response.get_data(as_text=True)
+    assert _stored("google") == before
+    assert _runtime()["public_base_url"] == "https://sgaa.example.br"
+
+
+def test_card_save_preserves_the_non_editable_automatic_backup_flag(
+    machine_store, admin_client
+):
+    """The switch is not editable yet, so a card save must not reset it to 0."""
+    _set_drive_settings({"gdrive_enabled": "1", "gdrive_dest_folder": "Backups/preservado"})
+
+    _post(admin_client, _google_card_payload(gdrive_dest_folder="Backups/preservado"))
+
+    settings = _read_drive_settings()
+    assert settings["gdrive_enabled"] == "1"
+    assert settings["gdrive_dest_folder"] == "Backups/preservado"
+
+
+def test_card_save_writes_the_flag_only_when_the_card_declares_it_editable(
+    machine_store, admin_client
+):
+    _set_drive_settings({"gdrive_enabled": "1"})
+
+    # Declared editable and unchecked -> the decision is honoured.
+    _post(
+        admin_client,
+        _google_card_payload(gdrive_enabled_submitted="1"),
+    )
+    assert _read_drive_settings()["gdrive_enabled"] == "0"
+
+    _post(
+        admin_client,
+        _google_card_payload(gdrive_enabled_submitted="1", gdrive_enabled="1"),
+    )
+    assert _read_drive_settings()["gdrive_enabled"] == "1"
+
+
+def test_card_save_never_resets_a_folder_it_did_not_carry(machine_store, admin_client):
+    _set_drive_settings({"gdrive_dest_folder": "Backups/escolhido"})
+
+    _post(admin_client, _google_card_payload(gdrive_dest_folder="   "))
+
+    assert _read_drive_settings()["gdrive_dest_folder"] == "Backups/escolhido"
+
+
+# ---------------------------------------------------------------------------
 # 8. Missing store is a normal first-configuration flow
 # ---------------------------------------------------------------------------
 
@@ -776,34 +921,115 @@ def test_ordinary_ui_carries_no_manual_setup_instruction(machine_store, admin_cl
     page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
     for term in FORBIDDEN_UI_TERMS:
         assert term not in page, f"rendered page carries {term!r}"
-    assert "Deixe a chave secreta em branco para manter a que já está guardada." in page
-    assert "Configuração técnica OAuth" in page
+    assert "Deixe em branco para manter a chave atual." in page
+    # The separate technical OAuth panel and its manual-setup prose are gone:
+    # the provider cards are now the whole configuration surface.
+    for retired in (
+        "Configuração técnica OAuth",
+        "Cadastre este callback no Google Cloud.",
+        "Google callback:",
+        "OneDrive callback:",
+        "Depois de salvar as credenciais",
+        "Endereço público do sistema",
+        "Situação atual:",
+    ):
+        assert retired not in page, f"retired technical text survives: {retired!r}"
+    # The hint about preserving the stored secret is helper text, never a
+    # placeholder rendered inside the password input.
+    assert "Manter a atual" not in page
 
 
-def test_credential_controls_stay_outside_the_pinned_provider_actions():
+def test_each_provider_card_owns_its_whole_configuration_form():
+    """One card, one non-nested form, one Salvar -- and no panel beside them."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8-sig")
 
-    assert template.count('<div class="db-provider-secondary">') == 2
-    for block in template.split('<div class="db-provider-secondary">')[1:]:
-        pinned = block.split('<div class="db-oauth-meta">')[0]
-        assert "save_credentials" not in pinned
-        assert "save_public_base_url" not in pinned
+    for retired in ("db-oauth-meta", "db-oauth-config", "save_public_base_url"):
+        assert retired not in template, f"template still carries {retired!r}"
 
-    # The credential forms live in the shared OAuth configuration area.
-    config_area = template.split('<div class="db-oauth-config">', 1)[1].split(
-        "</article>", 1
-    )[0]
-    assert config_area.count('name="action" value="save_credentials"') == 2
-    assert config_area.count('name="action" value="save_public_base_url"') == 1
-    # Every one of the three forms carries the CSRF token of the reused route.
-    forms = config_area.split("<form ")[1:]
-    assert len(forms) == 3
-    assert all(
-        'name="csrf_token" value="{{ csrf_token() }}"' in form for form in forms
+    cards = template.split('<section class="db-provider-card">')[1:]
+    assert len(cards) == 2
+    assert template.count('<div class="db-provider-secondary">') == 2
+
+    for card, prefix in zip(cards, ("gdrive", "onedrive")):
+        actions, marker, tail = card.partition(
+            '<form method="post" action="{{ url_for(\'admin_banco_dados_drive_settings\') }}"'
+            ' class="db-provider-config">'
+        )
+        assert marker, f"{prefix} card must own a configuration form"
+
+        # The pinned provider actions still come first and stay credential-free.
+        assert '<div class="db-provider-secondary">' in actions
+        assert "save_credentials" not in actions
+        assert 'name="client_id"' not in actions
+        assert 'name="app_public_base_url"' not in actions
+
+        config_form = tail.split("</form>", 1)[0]
+        assert 'name="csrf_token" value="{{ csrf_token() }}"' in config_form
+        assert config_form.count('name="action" value="save_credentials"') == 1
+        assert f'name="provider" value="{"google" if prefix == "gdrive" else "onedrive"}"' in (
+            config_form
+        )
+        # Everything the card represents travels in that one submission.
+        for field in ("app_public_base_url", "client_id", "client_secret"):
+            assert f'name="{field}"' in config_form, f"{prefix} card lost {field}"
+        assert f'name="{prefix}_dest_folder"' in config_form
+        assert f'name="{prefix}_enabled"' in config_form
+        # Exactly one Salvar, and no nested form.
+        assert config_form.count("<form") == 0
+        assert config_form.count('type="submit"') == 1
+        assert config_form.count("db-provider-config-footer") == 1
+
+    google_form, onedrive_form = (
+        card.split('class="db-provider-config">', 1)[1].split("</form>", 1)[0]
+        for card in cards
     )
-    assert all(
-        "url_for('admin_banco_dados_drive_settings')" in form for form in forms
+    assert 'name="tenant_id"' not in google_form
+    assert 'name="tenant_id"' in onedrive_form
+
+
+def test_both_cards_report_their_own_credential_source(machine_store, admin_client):
+    """Symmetric cards: each reports its own state, neither hardcodes it."""
+    _seed("google", {"client_id": "g", "client_secret": GOOGLE_SECRET})
+
+    page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
+
+    cards = page.split('<section class="db-provider-card">')[1:]
+    assert len(cards) == 2
+    google_card, onedrive_card = cards
+    # Google is configured, OneDrive is not -- the same line, different truth.
+    assert (
+        "Credenciais do aplicativo: configuração segura desta máquina" in google_card
     )
+    assert "Credenciais do aplicativo: ausentes" in onedrive_card
+
+    _seed(
+        "onedrive",
+        {
+            "client_id": "onedrive-client-id",
+            "client_secret": ONEDRIVE_SECRET,
+            "tenant_id": "tenant-uuid",
+        },
+    )
+    onedrive_card = admin_client.get("/admin/banco-dados").get_data(as_text=True).split(
+        '<section class="db-provider-card">'
+    )[2]
+    assert (
+        "Credenciais do aplicativo: configuração segura desta máquina" in onedrive_card
+    )
+
+
+def test_both_cards_render_one_canonical_public_base_url(machine_store, admin_client):
+    """The shared address may appear twice; it is still a single value."""
+    _seed("google", {"client_id": "g", "client_secret": GOOGLE_SECRET},
+          public_base_url="https://sgaa.example.br")
+
+    page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
+
+    for element_id in ("google_app_public_base_url", "onedrive_app_public_base_url"):
+        assert (
+            f'id="{element_id}" class="db-path-input" type="url" '
+            'name="app_public_base_url" value="https://sgaa.example.br"'
+        ) in page, f"{element_id} does not render the canonical address"
 
 
 def test_reconnect_remains_a_separate_action_after_configuring(
@@ -815,7 +1041,17 @@ def test_reconnect_remains_a_separate_action_after_configuring(
 
     assert 'href="/admin/backup/google/connect"' in page
     assert 'href="/admin/backup/onedrive/connect"' not in page or "Conectar" in page
-    assert "Depois de salvar as credenciais, use <strong>Conectar</strong>" in page
+    # Connect stays a link outside the configuration form, so a card save can
+    # never double as an authorization.
+    template = TEMPLATE_PATH.read_text(encoding="utf-8-sig")
+    for card in template.split('<section class="db-provider-card">')[1:]:
+        config_form = card.split('class="db-provider-config">', 1)[1].split(
+            "</form>", 1
+        )[0]
+        assert "connect" not in config_form
+        assert "oauth_disconnect" not in config_form
+        assert "cloud-folder" not in config_form
+        assert "test_connection" not in config_form
     # Saving credentials alone must not fabricate an authorization.
     with main.app.app_context():
         conn = main.get_db_connection()

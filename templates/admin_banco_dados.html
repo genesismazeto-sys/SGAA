@@ -168,14 +168,21 @@
     .db-config-grid > .db-field:nth-child(2),
     .db-inline-settings > .db-field{ min-width:0; }
     .db-card form{ width:100%; }
+    /* A form that only wraps a button is an action, not a card body: left at
+       100% it fills the row and pins its button to the left edge regardless of
+       how the action row is justified. */
+    .db-card .db-actions > form{ width:auto; }
     .db-card form > .db-note{ margin-top:10px; max-width:96ch; }
     .db-card form > .db-actions{
       justify-content:flex-end;
       padding-top:10px;
       border-top:1px solid #edf2f7;
     }
+    /* A card-level action row whose form sits inside it, rather than around
+       it, still ends the card and lands on the same right edge as the form
+       footers above. */
     .db-card > .db-note + .db-actions,
-    .db-card > p + .db-actions{ margin-top:12px; }
+    .db-card > p + .db-actions{ margin-top:12px; justify-content:flex-end; }
     /* ── Card/section header bar (matches Configurações style) ── */
     .db-card-head {
       display:flex; align-items:center; justify-content:space-between;
@@ -292,48 +299,11 @@
       color:#475569;
       flex:0 0 auto;
     }
-    .db-oauth-meta{
-      margin-top:12px;
-      padding-top:12px;
-      border-top:1px solid #e2e8f0;
-      display:grid;
-      gap:6px;
+    .db-cloud-store-warning{
+      margin:12px 0 0;
       font-size:12.5px;
-      color:#475569;
-    }
-    .db-oauth-meta-head{
-      margin:0;
-      font-size:12.5px;
-      font-weight:600;
-      color:#0f172a;
-    }
-    .db-oauth-meta-note{
-      margin:0;
-      font-size:12px;
-      color:#64748b;
+      color:#b45309;
       line-height:1.35;
-    }
-    .db-oauth-config{
-      margin-top:10px;
-      padding-top:10px;
-      border-top:1px solid #e2e8f0;
-      display:grid;
-      gap:14px;
-    }
-    .db-oauth-config-form{ display:grid; gap:6px; }
-    .db-oauth-config-row{
-      display:grid;
-      grid-template-columns:minmax(0, 1fr) auto;
-      gap:10px;
-      align-items:end;
-      margin-top:2px;
-    }
-    .db-oauth-config-form:not(:first-child) .db-oauth-config-row{
-      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)) auto;
-    }
-    @media (max-width:900px){
-      .db-oauth-config-row{ grid-template-columns:1fr; align-items:stretch; }
-      .db-oauth-config-form:not(:first-child) .db-oauth-config-row{ grid-template-columns:1fr; }
     }
     .db-provider-line.is-muted{ color:#475569; }
     .db-provider-line.is-warning{ color:#92400e; }
@@ -400,34 +370,47 @@
       height:16px;
       flex:0 0 auto;
     }
-    .db-provider-toggle-form{
+    /* Provider configuration: a continuation of the card, not a card inside it. */
+    .db-provider-config{
       margin:0;
-      width:100%;
+      display:grid;
+      gap:10px;
+      min-width:0;
     }
-    .db-provider-toggle-row{
+    .db-provider-config .db-field input{ width:100%; }
+    .db-provider-config-footer{
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:12px;
+      flex-wrap:wrap;
       padding-top:14px;
       border-top:1px solid #e2e8f0;
     }
-    .db-provider-toggle-row.is-disabled .db-provider-toggle-label{
+    .db-provider-config-toggle{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .db-provider-config-toggle.is-disabled .db-provider-toggle-label{
       color:#64748b;
     }
-    .db-provider-toggle-row.is-disabled .toggle-switch{
+    .db-provider-config-toggle.is-disabled .toggle-switch{
       opacity:.68;
+    }
+    .db-provider-config-footer .btn{
+      flex:0 0 auto;
+      width:auto;
+      /* Holds the button against the right edge both on the shared row and on
+         its own line once the footer wraps, which space-between cannot do. */
+      margin-left:auto;
     }
     .db-provider-toggle-label{
       font-size:13px;
       font-weight:600;
       color:#0f172a;
       line-height:1.35;
-    }
-    .db-provider-toggle-noscript{
-      display:flex;
-      justify-content:flex-end;
-      padding-top:10px;
     }
     .db-provider-log{
       margin-top:2px;
@@ -561,11 +544,10 @@
       .db-recovery-row,
       .db-drive-grid { grid-template-columns:1fr; }
       .db-toggle-field{ padding-bottom:0; }
-      .db-card form > .db-actions{ justify-content:flex-start; }
+      .db-card form > .db-actions,
+      .db-card > .db-note + .db-actions,
+      .db-card > p + .db-actions{ justify-content:flex-start; }
       .db-provider-secondary{ grid-template-columns:1fr; }
-      .db-provider-toggle-row{
-        align-items:flex-start;
-      }
       .db-folder-modal{
         align-items:flex-end;
         padding:0;
@@ -578,6 +560,8 @@
     }
     @media (max-width: 520px){
       .db-provider-secondary{ grid-template-columns:1fr; }
+      .db-provider-config-footer{ flex-direction:column; align-items:stretch; }
+      .db-provider-config-footer .btn{ width:100%; justify-content:center; }
     }
   </style>
 {% endblock %}
@@ -727,6 +711,15 @@
     {% endif %}
 
     <div class="db-drive-sep"></div>
+    {#
+      Single declaration of whether the per-provider "Incluir no backup automático"
+      switch is editable yet. It gates both the `disabled` attribute and the
+      `<prefix>_enabled_submitted` marker, so the card save only ever writes the
+      flag when the card could actually change it -- an unchanged, non-editable
+      switch is preserved rather than reset to 0.
+    #}
+    {% set auto_backup_toggle_editable = false %}
+    {% set auto_backup_toggle_title = 'Disponível quando o backup automático for ativado.' %}
     <div class="db-drive-grid{% if not onedrive_ui_enabled %} is-google-only{% endif %}">
       {# Google Drive #}
       <section class="db-provider-card">
@@ -853,25 +846,44 @@
             </div>
           </div>
 
-          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-toggle-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="provider" value="google">
-            <input type="hidden" name="gdrive_dest_folder" value="{{ google_folder_label or drive_settings.gdrive_dest_folder or 'Backups/sistema' }}">
-            <div class="db-provider-toggle-row is-disabled">
-              <span class="db-provider-toggle-label" title="Disponível quando o backup automático for ativado.">Incluir no backup automático</span>
-              <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático" title="Disponível quando o backup automático for ativado.">
-                <input type="checkbox" name="gdrive_enabled" value="1" {% if drive_settings.gdrive_enabled == '1' %}checked{% endif %} disabled aria-disabled="true" title="Disponível quando o backup automático for ativado.">
-                <span class="toggle-switch-slider" aria-hidden="true"></span>
-              </label>
-            </div>
-            <noscript>
-              <div class="db-provider-toggle-noscript">
-                <button type="submit" class="btn">
-                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar uso
+          {% if not cloud_store_unavailable %}
+            <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="provider" value="google">
+              <input type="hidden" name="action" value="save_credentials">
+              <input type="hidden" name="gdrive_dest_folder" value="{{ google_folder_label or drive_settings.gdrive_dest_folder or 'Backups/sistema' }}">
+              {% if auto_backup_toggle_editable %}
+                <input type="hidden" name="gdrive_enabled_submitted" value="1">
+              {% endif %}
+
+              <div class="db-field">
+                <label for="google_app_public_base_url">APP_PUBLIC_BASE_URL</label>
+                <input id="google_app_public_base_url" class="db-path-input" type="url" name="app_public_base_url" value="{{ oauth_public_base_url_setting }}" placeholder="http://localhost:5000" spellcheck="false" autocomplete="off">
+              </div>
+              <div class="db-field">
+                <label for="google_client_id">ID do cliente</label>
+                <input id="google_client_id" class="db-path-input" type="text" name="client_id" value="{{ google_client_id }}" spellcheck="false" autocomplete="off">
+              </div>
+              <div class="db-field">
+                <label for="google_client_secret">Chave secreta</label>
+                <input id="google_client_secret" type="password" name="client_secret" value="" class="db-path-input" spellcheck="false" autocomplete="new-password">
+                <small>Deixe em branco para manter a chave atual.</small>
+              </div>
+
+              <div class="db-provider-config-footer">
+                <div class="db-provider-config-toggle{% if not auto_backup_toggle_editable %} is-disabled{% endif %}">
+                  <span class="db-provider-toggle-label" title="{{ auto_backup_toggle_title }}">Incluir no backup automático</span>
+                  <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático" title="{{ auto_backup_toggle_title }}">
+                    <input type="checkbox" name="gdrive_enabled" value="1" {% if drive_settings.gdrive_enabled == '1' %}checked{% endif %} {% if not auto_backup_toggle_editable %}disabled aria-disabled="true"{% endif %} title="{{ auto_backup_toggle_title }}">
+                    <span class="toggle-switch-slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <button type="submit" class="btn primary">
+                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
                 </button>
               </div>
-            </noscript>
-          </form>
+            </form>
+          {% endif %}
         {% endif %}
 
         {% if google_backup_logs %}
@@ -951,6 +963,9 @@
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_folder_label or 'SGAA - Backups' }}">{{ onedrive_folder_label or 'SGAA - Backups' }}</span>
           </div>
+          <div class="db-provider-line is-muted">
+            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
+          </div>
         </div>
 
         {% if drive_settings.onedrive_last_upload_error %}
@@ -1024,25 +1039,48 @@
             </div>
           </div>
 
-          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-toggle-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="provider" value="onedrive">
-            <input type="hidden" name="onedrive_dest_folder" value="{{ onedrive_folder_label or drive_settings.onedrive_dest_folder or 'SGAA - Backups' }}">
-            <div class="db-provider-toggle-row is-disabled">
-              <span class="db-provider-toggle-label" title="Disponível quando o backup automático for ativado.">Incluir no backup automático</span>
-              <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático" title="Disponível quando o backup automático for ativado.">
-                <input type="checkbox" name="onedrive_enabled" value="1" {% if drive_settings.onedrive_enabled == '1' %}checked{% endif %} disabled aria-disabled="true" title="Disponível quando o backup automático for ativado.">
-                <span class="toggle-switch-slider" aria-hidden="true"></span>
-              </label>
-            </div>
-            <noscript>
-              <div class="db-provider-toggle-noscript">
-                <button type="submit" class="btn">
-                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar uso
+          {% if not cloud_store_unavailable %}
+            <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="provider" value="onedrive">
+              <input type="hidden" name="action" value="save_credentials">
+              <input type="hidden" name="onedrive_dest_folder" value="{{ onedrive_folder_label or drive_settings.onedrive_dest_folder or 'SGAA - Backups' }}">
+              {% if auto_backup_toggle_editable %}
+                <input type="hidden" name="onedrive_enabled_submitted" value="1">
+              {% endif %}
+
+              <div class="db-field">
+                <label for="onedrive_app_public_base_url">APP_PUBLIC_BASE_URL</label>
+                <input id="onedrive_app_public_base_url" class="db-path-input" type="url" name="app_public_base_url" value="{{ oauth_public_base_url_setting }}" placeholder="http://localhost:5000" spellcheck="false" autocomplete="off">
+              </div>
+              <div class="db-field">
+                <label for="onedrive_client_id">ID do cliente</label>
+                <input id="onedrive_client_id" class="db-path-input" type="text" name="client_id" value="{{ onedrive_client_id }}" spellcheck="false" autocomplete="off">
+              </div>
+              <div class="db-field">
+                <label for="onedrive_tenant_id">ID do diretório (tenant)</label>
+                <input id="onedrive_tenant_id" class="db-path-input" type="text" name="tenant_id" value="{{ onedrive_tenant_id }}" spellcheck="false" autocomplete="off">
+              </div>
+              <div class="db-field">
+                <label for="onedrive_client_secret">Chave secreta</label>
+                <input id="onedrive_client_secret" type="password" name="client_secret" value="" class="db-path-input" spellcheck="false" autocomplete="new-password">
+                <small>Deixe em branco para manter a chave atual.</small>
+              </div>
+
+              <div class="db-provider-config-footer">
+                <div class="db-provider-config-toggle{% if not auto_backup_toggle_editable %} is-disabled{% endif %}">
+                  <span class="db-provider-toggle-label" title="{{ auto_backup_toggle_title }}">Incluir no backup automático</span>
+                  <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático" title="{{ auto_backup_toggle_title }}">
+                    <input type="checkbox" name="onedrive_enabled" value="1" {% if drive_settings.onedrive_enabled == '1' %}checked{% endif %} {% if not auto_backup_toggle_editable %}disabled aria-disabled="true"{% endif %} title="{{ auto_backup_toggle_title }}">
+                    <span class="toggle-switch-slider" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <button type="submit" class="btn primary">
+                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
                 </button>
               </div>
-            </noscript>
-          </form>
+            </form>
+          {% endif %}
         {% endif %}
 
         {% if onedrive_backup_logs %}
@@ -1087,90 +1125,9 @@
         <strong>Configuração OAuth:</strong> {{ oauth_config_error }}
       </p>
     {% endif %}
-    <div class="db-oauth-meta">
-      <p class="db-oauth-meta-head">Configuração técnica OAuth</p>
-      <p class="db-oauth-meta-note">Cadastre este callback no Google Cloud.</p>
-      <p class="db-oauth-meta-note">As credenciais do aplicativo ficam protegidas nesta máquina, vinculadas à conta Windows usada na instalação. Elas não são exibidas nem gravadas no repositório.</p>
-      <div><strong>APP_PUBLIC_BASE_URL:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ oauth_public_base_url or '—' }}">{{ oauth_public_base_url or '—' }}</span></div>
-      {% if not oauth_config_error %}
-        <div><strong>Google callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ google_oauth_callback_uri or '—' }}">{{ google_oauth_callback_uri or '—' }}</span></div>
-        {% if onedrive_ui_enabled %}
-          <div><strong>OneDrive callback:</strong> <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_oauth_callback_uri or '—' }}">{{ onedrive_oauth_callback_uri or '—' }}</span></div>
-        {% endif %}
-      {% endif %}
-
-      {% if cloud_store_unavailable %}
-        <p class="db-oauth-meta-note" style="color:#b45309;">O armazenamento seguro desta máquina não pôde ser aberto. Nada foi apagado: as credenciais existentes continuam guardadas e a configuração fica indisponível até que esta instalação seja aberta pela conta Windows usada na instalação.</p>
-      {% elif auth_can('banco_dados', 'edit') %}
-        <div class="db-oauth-config">
-          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-oauth-config-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="save_public_base_url">
-            <p class="db-oauth-meta-head">Endereço público do sistema</p>
-            <p class="db-oauth-meta-note">Base dos endereços de callback registrados no provedor. Vale para o Google e para o OneDrive.</p>
-            <div class="db-oauth-config-row">
-              <div class="db-field">
-                <label for="app_public_base_url">APP_PUBLIC_BASE_URL</label>
-                <input id="app_public_base_url" class="db-path-input" type="url" name="app_public_base_url" value="{{ oauth_public_base_url_setting }}" placeholder="http://localhost:5000" spellcheck="false" autocomplete="off">
-              </div>
-              <button type="submit" class="btn">
-                <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar endereço
-              </button>
-            </div>
-          </form>
-
-          <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-oauth-config-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="provider" value="google">
-            <input type="hidden" name="action" value="save_credentials">
-            <p class="db-oauth-meta-head">Credenciais do aplicativo Google</p>
-            <p class="db-oauth-meta-note">Situação atual: {{ 'configuradas nesta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}. Deixe a chave secreta em branco para manter a que já está guardada.</p>
-            <div class="db-oauth-config-row">
-              <div class="db-field">
-                <label for="google_client_id">ID do cliente</label>
-                <input id="google_client_id" class="db-path-input" type="text" name="client_id" value="{{ google_client_id }}" spellcheck="false" autocomplete="off">
-              </div>
-              <div class="db-field">
-                <label for="google_client_secret">Chave secreta</label>
-                <input id="google_client_secret" type="password" name="client_secret" value="" placeholder="Manter a atual" spellcheck="false" autocomplete="new-password">
-              </div>
-              <button type="submit" class="btn">
-                <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar credenciais
-              </button>
-            </div>
-          </form>
-
-          {% if onedrive_ui_enabled %}
-            <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-oauth-config-form">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="provider" value="onedrive">
-              <input type="hidden" name="action" value="save_credentials">
-              <p class="db-oauth-meta-head">Credenciais do aplicativo OneDrive</p>
-              <p class="db-oauth-meta-note">Situação atual: {{ 'configuradas nesta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}. Deixe a chave secreta em branco para manter a que já está guardada.</p>
-              <div class="db-oauth-config-row">
-                <div class="db-field">
-                  <label for="onedrive_client_id">ID do cliente</label>
-                  <input id="onedrive_client_id" class="db-path-input" type="text" name="client_id" value="{{ onedrive_client_id }}" spellcheck="false" autocomplete="off">
-                </div>
-                <div class="db-field">
-                  <label for="onedrive_client_secret">Chave secreta</label>
-                  <input id="onedrive_client_secret" type="password" name="client_secret" value="" placeholder="Manter a atual" spellcheck="false" autocomplete="new-password">
-                </div>
-                <div class="db-field">
-                  <label for="onedrive_tenant_id">ID do diretório (tenant)</label>
-                  <input id="onedrive_tenant_id" class="db-path-input" type="text" name="tenant_id" value="{{ onedrive_tenant_id }}" spellcheck="false" autocomplete="off">
-                </div>
-                <button type="submit" class="btn">
-                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar credenciais
-                </button>
-              </div>
-            </form>
-          {% endif %}
-
-          <p class="db-oauth-meta-note">Depois de salvar as credenciais, use <strong>Conectar</strong> no cartão do provedor para autorizar a conta.</p>
-        </div>
-      {% endif %}
-    </div>
+    {% if cloud_store_unavailable %}
+      <p class="db-cloud-store-warning">O armazenamento seguro desta máquina não pôde ser aberto. Nada foi apagado: as credenciais existentes continuam guardadas e a configuração fica indisponível até que esta instalação seja aberta pela conta Windows usada na instalação.</p>
+    {% endif %}
   </article>
 
   {# ────────── Operações ────────── #}

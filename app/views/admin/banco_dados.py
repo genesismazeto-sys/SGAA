@@ -1512,16 +1512,50 @@ def admin_banco_dados_drive_settings():
         return redirect(url_for("admin_banco_dados"))
 
     if action == "save_credentials":
+        # One provider card is one editable unit: its application credentials,
+        # the shared public address and its destination settings arrive in a
+        # single submission.  Every field beyond the credentials is optional on
+        # the wire and only what was actually submitted is written, so the card
+        # never resets a setting it did not represent and a credentials-only
+        # POST keeps exactly its former semantics.
+        base_url_submitted = "app_public_base_url" in request.form
+        normalized_base_url = ""
         try:
+            # Validated before anything is written: an invalid address must not
+            # leave the credentials half-saved.
+            if base_url_submitted:
+                normalized_base_url = _cloud_credentials.normalize_public_base_url(
+                    request.form.get("app_public_base_url") or ""
+                )
             _cloud_credentials.save_application_credentials(
                 provider=provider,
                 client_id=request.form.get("client_id") or "",
                 client_secret=request.form.get("client_secret") or "",
                 tenant_id=request.form.get("tenant_id") or "",
             )
+            if base_url_submitted:
+                # Still the one canonical value: both cards render and write it.
+                _cloud_credentials.save_public_base_url(normalized_base_url)
         except _cloud_credentials.CloudCredentialsError as exc:
             flash(str(exc), "error")
             return redirect(url_for("admin_banco_dados"))
+
+        prefix = "gdrive" if provider == "google" else "onedrive"
+        destination_updates = {}
+        dest_folder = (request.form.get(f"{prefix}_dest_folder") or "").strip()
+        if dest_folder:
+            destination_updates[f"{prefix}_dest_folder"] = dest_folder
+        # A checkbox that is absent is indistinguishable from one that is
+        # unchecked, so the card states explicitly when it carries a decision.
+        if request.form.get(f"{prefix}_enabled_submitted"):
+            destination_updates[f"{prefix}_enabled"] = (
+                "1" if request.form.get(f"{prefix}_enabled") else "0"
+            )
+        if destination_updates:
+            conn = get_db_connection()
+            _save_drive_config(conn, destination_updates)
+            conn.commit()
+
         if provider == "google":
             flash("Credenciais do Google Drive salvas com segurança nesta máquina.", "success")
         else:
