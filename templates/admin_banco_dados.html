@@ -178,11 +178,20 @@
       padding-top:10px;
       border-top:1px solid #edf2f7;
     }
-    /* A card-level action row whose form sits inside it, rather than around
-       it, still ends the card and lands on the same right edge as the form
-       footers above. */
     .db-card > .db-note + .db-actions,
-    .db-card > p + .db-actions{ margin-top:12px; justify-content:flex-end; }
+    .db-card > p + .db-actions{ margin-top:12px; }
+    /* A lead paragraph and the single action it describes share one row: the
+       text takes the free width, the button keeps its natural width on the
+       right edge, and there is no empty band between them. */
+    .db-card-lead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      gap:16px;
+    }
+    .db-card-lead > p{ flex:1 1 320px; min-width:0; margin:0; }
+    .db-card-lead > .db-actions{ flex:0 0 auto; margin-top:0; }
     /* ── Card/section header bar (matches Configurações style) ── */
     .db-card-head {
       display:flex; align-items:center; justify-content:space-between;
@@ -544,9 +553,7 @@
       .db-recovery-row,
       .db-drive-grid { grid-template-columns:1fr; }
       .db-toggle-field{ padding-bottom:0; }
-      .db-card form > .db-actions,
-      .db-card > .db-note + .db-actions,
-      .db-card > p + .db-actions{ justify-content:flex-start; }
+      .db-card form > .db-actions{ justify-content:flex-start; }
       .db-provider-secondary{ grid-template-columns:1fr; }
       .db-folder-modal{
         align-items:flex-end;
@@ -1135,15 +1142,17 @@
     <div class="db-card-head">
       <span class="db-section-label">Operações</span>
     </div>
-    <p>Use o backup manual para criar um snapshot imediato e atualizar a cópia em nuvem. Antes de restaurar, o sistema salva automaticamente uma cópia de segurança da base atual.</p>
-    <div class="db-actions">
+    <div class="db-card-lead">
+      <p>Use o backup manual para criar um snapshot imediato e atualizar a cópia em nuvem. Antes de restaurar, o sistema salva automaticamente uma cópia de segurança da base atual.</p>
       {% if auth_can('banco_dados', 'edit') %}
-        <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn primary">
-            <i class="lucide" data-lucide="database"></i>Gerar backup agora
-          </button>
-        </form>
+        <div class="db-actions">
+          <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn primary">
+              <i class="lucide" data-lucide="database"></i>Gerar backup agora
+            </button>
+          </form>
+        </div>
       {% endif %}
     </div>
 
