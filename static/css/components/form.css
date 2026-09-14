@@ -197,11 +197,18 @@
 }
 
 /* Read-only — "shown, not editable". Deliberately NOT disabled semantics:
-   full readability, still focusable, normal cursor. */
-.field-card:has(.control[readonly]){
+   full readability, still focusable, normal cursor.
+
+   Scoped like the disabled block above: a composed card only reads as
+   read-only when nothing inside it is still editable, and the muted text
+   lands on the read-only control itself rather than on every control sharing
+   the card. Without that, one read-only half was enough to grey out its
+   editable sibling — the Grupo card put an active <select> and its read-only
+   description side by side, and the select rendered as if it were disabled. */
+.field-card:has(.control[readonly]):not(:has(.control:not([readonly]):not(:disabled))){
   background:var(--field-readonly-bg);
 }
-.field-card:has(.control[readonly]) .control{
+.field-card .control[readonly]{
   color:var(--text-secondary);
   background:transparent;
 }
