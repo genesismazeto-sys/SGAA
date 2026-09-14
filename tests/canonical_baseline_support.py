@@ -66,13 +66,10 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
     ("UT-TM1/UT-TM2 neutral Turma Matrix validation messages", 2),
     ("UT-MX3 StudentMatrixError default-text ownership", 6),
     (
-        "NOVA-REQUISICAO-MATRIX-1 explicit 'Aplicar matriz aos alunos sem "
-        "matriz' action: 'A turma nao possui matriz padrao definida.' "
-        "(msg_ae7fdb4d25c62c41), 'Erro ao aplicar a matriz aos alunos: "
-        "{value_1}' (msg_20db2e5fcd2821d2), 'Matriz aplicada a {value_1} "
-        "aluno(s) sem matriz.' (msg_e594c097b4297571) and 'Nenhum aluno sem "
-        "matriz nesta turma.' (msg_0e35cfc5d2245e07)",
-        4,
+        "TMA1 Turma-Matrix authority: 'Definida pela turma' "
+        "(msg_35110e5b7a30e863) replaces the individual Matrix selector for a "
+        "Turma-bound student, whose Matrix now comes from the Turma",
+        1,
     ),
 )
 
@@ -86,18 +83,6 @@ PARENT_CATALOG_COUNT = sum(
 )
 CANONICAL_CATALOG_COUNT = sum(delta for _term, delta in CATALOG_LEDGER)
 
-# The four keys the NOVA-REQUISICAO-MATRIX-1 term adds. Named here so the
-# MX3 parent-state probes can subtract every post-MX3 addition and still
-# reconstruct the frozen PARENT_CATALOG_KEYS_SHA256 key set.
-NOVA_REQUISICAO_MATRIX_KEYS = frozenset(
-    {
-        "msg_ae7fdb4d25c62c41",  # A turma não possui matriz padrão definida.
-        "msg_20db2e5fcd2821d2",  # Erro ao aplicar a matriz aos alunos: {value_1}
-        "msg_e594c097b4297571",  # Matriz aplicada a {value_1} aluno(s) sem matriz.
-        "msg_0e35cfc5d2245e07",  # Nenhum aluno sem matriz nesta turma.
-    }
-)
-
 # FC-07 head reconciliation.  The FC-07 era *expected* 537 keys while the actual
 # head was 526: an 11-key baseline debt this project keeps deliberately visible
 # rather than papering over.  After every named product delta the residual is 2.
@@ -105,9 +90,9 @@ CATALOG_FC07_HEAD_ACTUAL = CATALOG_LEDGER[0][1]
 CATALOG_FC07_NET_PRODUCT_DELTA = CATALOG_LEDGER[1][1]
 CATALOG_FC07_HEAD_EXPECTED = 537
 # The residual is a historical reconciliation of the FC-07 era, so it is
-# measured against the ledger through UT-MX3 — the state in which it was
-# established — and not against the live total. Otherwise every later product
-# message would silently restate a debt that was incurred once and never grew.
+# measured against the ledger through UT-MX3 -- the state in which it was
+# established -- not against the live total. Otherwise every later product
+# message would silently restate a debt incurred once and never grown.
 CATALOG_DEBT_ANCHOR_COUNT = sum(
     delta for _term, delta in CATALOG_LEDGER[: MX3_LEDGER_INDEX + 1]
 )
@@ -122,7 +107,7 @@ PARENT_CATALOG_KEYS_SHA256 = (
     "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
 )
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "b7f13d8afba85acd345597f929ace601594227b321697f23bddd3019d58ab2f0"
+    "4984b39ca1c6740e40e94ebd8066fd5796d208800ae3265701e485d4a296c767"
 )
 
 
@@ -203,12 +188,10 @@ CANONICAL_ROUTE_RULE_COUNT = len(
 # Independent pin on the artifact itself.  Without it the derived counts above
 # would follow any edit of the JSON; with it, a deliberate URL-contract change
 # has to be declared here, exactly once, on top of regenerating the artifact.
-# NOVA-REQUISICAO-MATRIX-1: declared URL-contract change adding exactly one
-# rule, POST /admin/turma/<int:turma_id>/aplicar-matriz-alunos, the explicit
-# "Aplicar matriz aos alunos sem matriz" admin action. No existing rule,
-# endpoint or method set is altered.
+TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
+
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "a250534b23dec42bafa51b5685bc25232bb3bd3d10051f1691aa267da74ed167"
+    "7ba3d5001c50e264db60f5ef2c368d8dce28234e6218d24a81a4ccb492ec1255"
 )
 
 

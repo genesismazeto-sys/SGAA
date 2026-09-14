@@ -893,8 +893,6 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # "Sem matriz" (msg_c52418de2740e169) is the explicit clear-to-NULL choice.
     # UT-TM1/TM2 added the two unique neutral Turma validation messages; they
     # belong to MX3's exact parent state, not to the MX3 candidate delta.
-    # NOVA-REQUISICAO-MATRIX-1 appends the seventh term: the four messages of
-    # the explicit "Aplicar matriz aos alunos sem matriz" admin action.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -902,7 +900,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         2,
         2,
         6,
-        4,
+        1,
     ], "the named catalog delta ledger must stay exactly these seven terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
@@ -912,15 +910,13 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 558
-    # Measured at the UT-MX3 anchor: the residual is historical and must not
-    # move because a later term added product messages.
-    anchor_catalog = set(catalog) - set(governance.NOVA_REQUISICAO_MATRIX_KEYS)
-    assert len(anchor_catalog) == governance.CATALOG_DEBT_ANCHOR_COUNT
+    assert governance.CANONICAL_CATALOG_COUNT == 555
     assert (
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
-    ) - len(anchor_catalog) == governance.CATALOG_VISIBLE_BASELINE_DEBT == 2
+    ) - len(set(catalog) - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)) == (
+        governance.CATALOG_VISIBLE_BASELINE_DEBT
+    ) == 2
 
 
 def test_legacy_path_escape_is_rejected(service_env, tmp_path):

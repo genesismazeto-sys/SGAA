@@ -18,24 +18,25 @@ def build_turma_aluno_matricula(turma_codigo, ordem, total_alunos):
     return f"{codigo}.{ordem:0{width}d}"
 
 
-def resequence_turma_aluno_matriculas(conn, turma_id):
+def _turma_resequence_plan(conn, turma_id):
+    """The ordered students of a Turma and the code their matrículas derive from."""
     if not turma_id:
-        return
+        return None
 
     turma = conn.execute("SELECT codigo FROM turmas WHERE id = ?", (turma_id,)).fetchone()
     if not turma:
-        return
+        return None
 
     turma_codigo = str(turma["codigo"] or "").strip()
     if not turma_codigo:
-        return
+        return None
 
     alunos = conn.execute(
         "SELECT id, nome, email FROM alunos WHERE turma_id = ?",
         (turma_id,),
     ).fetchall()
     if not alunos:
-        return
+        return None
 
     alunos_ordenados = sorted(
         alunos,
@@ -45,22 +46,50 @@ def resequence_turma_aluno_matriculas(conn, turma_id):
             row["id"],
         ),
     )
+    return turma_codigo, alunos_ordenados
 
-    temporarias = [
-        (f"__TMP_RESEQ__{turma_id}__{row['id']}__{secrets.token_hex(4)}", row["id"])
-        for row in alunos_ordenados
-    ]
-    conn.executemany("UPDATE alunos SET matricula = ? WHERE id = ?", temporarias)
 
-    total_alunos = len(alunos_ordenados)
-    finais = [
-        (build_turma_aluno_matricula(turma_codigo, ordem, total_alunos), row["id"])
-        for ordem, row in enumerate(alunos_ordenados, start=1)
-    ]
-    conn.executemany("UPDATE alunos SET matricula = ? WHERE id = ?", finais)
+def _hold_matriculas(conn, rows, turma_id):
+    """Park these matrículas on unique placeholders so finals can be assigned."""
+    conn.executemany(
+        "UPDATE alunos SET matricula = ? WHERE id = ?",
+        [
+            (f"__TMP_RESEQ__{turma_id}__{row['id']}__{secrets.token_hex(4)}", row["id"])
+            for row in rows
+        ],
+    )
+
+
+def _assign_final_matriculas(conn, turma_codigo, rows):
+    total_alunos = len(rows)
+    conn.executemany(
+        "UPDATE alunos SET matricula = ? WHERE id = ?",
+        [
+            (build_turma_aluno_matricula(turma_codigo, ordem, total_alunos), row["id"])
+            for ordem, row in enumerate(rows, start=1)
+        ],
+    )
+
+
+def resequence_turma_aluno_matriculas(conn, turma_id):
+    plan = _turma_resequence_plan(conn, turma_id)
+    if plan is None:
+        return
+    turma_codigo, alunos_ordenados = plan
+    _hold_matriculas(conn, alunos_ordenados, turma_id)
+    _assign_final_matriculas(conn, turma_codigo, alunos_ordenados)
 
 
 def resequence_turma_aluno_matriculas_for_ids(conn, *turma_ids):
+    """Resequence several Turmas as one operation.
+
+    The placeholder pass has to cover every Turma involved before any final
+    matrícula is written. Holding them one Turma at a time only protects rows
+    inside that Turma, and a student who just moved out of it still occupies a
+    name it is about to hand to somebody else — the transfer then dies on
+    ``UNIQUE constraint failed: alunos.matricula``. Parking all of them first
+    makes the outcome independent of the order the Turmas are passed in.
+    """
     turma_ids_validos = []
     for turma_id in turma_ids:
         if turma_id in (None, ""):
@@ -68,5 +97,14 @@ def resequence_turma_aluno_matriculas_for_ids(conn, *turma_ids):
         turma_id_int = int(turma_id)
         if turma_id_int not in turma_ids_validos:
             turma_ids_validos.append(turma_id_int)
+
+    planos = []
     for turma_id in turma_ids_validos:
-        resequence_turma_aluno_matriculas(conn, turma_id)
+        plano = _turma_resequence_plan(conn, turma_id)
+        if plano is not None:
+            planos.append((turma_id, *plano))
+
+    for turma_id, _turma_codigo, alunos_ordenados in planos:
+        _hold_matriculas(conn, alunos_ordenados, turma_id)
+    for _turma_id, turma_codigo, alunos_ordenados in planos:
+        _assign_final_matriculas(conn, turma_codigo, alunos_ordenados)

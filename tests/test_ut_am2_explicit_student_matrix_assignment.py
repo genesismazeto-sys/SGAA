@@ -317,8 +317,8 @@ def test_nonexistent_matrix_is_rejected_for_a_turma_less_student():
 # --------------------------------------------------------------------------
 
 
-def test_null_student_matrix_does_not_fall_back_to_the_turma_default():
-    """A Turma default must never stand in for a missing student authority."""
+def test_turma_bound_student_is_governed_by_the_turma_matrix():
+    """A student who belongs to a Turma is governed by that Turma's Matrix."""
     from app.student_matrix import (
         get_allowed_activity_version_ids_for_student,
         get_effective_matrix_for_student,
@@ -350,24 +350,26 @@ def test_null_student_matrix_does_not_fall_back_to_the_turma_default():
         "SELECT matriz_id FROM turmas WHERE id=?", (data["t1"],)
     ).fetchone()[0] == data["m1"]
 
-    assert get_effective_matrix_for_student(conn, data["nullmatrix"]) is None
+    # Sem copiar nada para alunos.matriz_id, a matriz da Turma ja governa.
+    efetiva = get_effective_matrix_for_student(conn, data["nullmatrix"])
+    assert efetiva is not None
+    assert efetiva["id"] == data["m1"]
 
     allowed, matriz = get_allowed_activity_version_ids_for_student(
         conn, data["nullmatrix"]
     )
-    assert matriz is None
-    assert allowed == set()
-    assert version not in allowed
+    assert matriz["id"] == data["m1"]
+    assert allowed == {version}
 
-    # Controle: com autoridade propria a mesma versao passa a ser elegivel.
+    # Controle: mover o aluno para uma Turma sem matriz padrao nao deixa
+    # nenhuma matriz anterior sobreviver.
     conn.execute(
-        "UPDATE alunos SET matriz_id=? WHERE id=?", (data["m1"], data["nullmatrix"])
+        "UPDATE turmas SET matriz_id=NULL WHERE id=?", (data["t1"],)
     )
-    allowed_com_matriz, matriz_com = get_allowed_activity_version_ids_for_student(
+    assert get_effective_matrix_for_student(conn, data["nullmatrix"]) is None
+    assert get_allowed_activity_version_ids_for_student(
         conn, data["nullmatrix"]
-    )
-    assert matriz_com is not None
-    assert allowed_com_matriz == {version}
+    ) == (set(), None)
 
 
 # --------------------------------------------------------------------------
@@ -512,8 +514,8 @@ def test_turma_bound_student_with_compatible_matrix_still_resolves_its_own():
     )
 
 
-def test_turma_bound_student_with_null_matrix_never_adopts_the_turma_default():
-    """TEST 6 — the widened resolver must not have opened a fallback."""
+def test_turma_bound_student_with_null_matrix_uses_the_turma_matrix():
+    """TEST 6 — no per-student copy is needed for the Turma Matrix to apply."""
     from app.student_matrix import (
         get_allowed_activity_version_ids_for_student,
         get_effective_matrix_for_student,
@@ -528,21 +530,22 @@ def test_turma_bound_student_with_null_matrix_never_adopts_the_turma_default():
         "SELECT matriz_id FROM turmas WHERE id=?", (data["t1"],)
     ).fetchone()[0] == data["m1"]
 
-    assert get_effective_matrix_for_student(conn, data["nullmatrix"]) is None
+    assert get_effective_matrix_for_student(conn, data["nullmatrix"])["id"] == data["m1"]
     allowed, matriz = get_allowed_activity_version_ids_for_student(
         conn, data["nullmatrix"]
     )
-    assert (allowed, matriz) == (set(), None)
+    assert matriz["id"] == data["m1"]
+    assert allowed == {v_m1}
     assert (
         resolver_versao_por_aluno(
             conn, aluno_id=data["nullmatrix"], atividade_versao_id=v_m1
         )["status"]
-        == "not_found"
+        != "not_found"
     )
 
 
-def test_corrupt_incompatible_turma_matrix_pairing_fails_closed():
-    """TEST 7 — stale data fails closed instead of adopting the Turma default."""
+def test_stale_student_matrix_never_outranks_the_current_turma():
+    """TEST 7 — a left-over alunos.matriz_id is ignored, not honoured."""
     from app.student_matrix import (
         get_allowed_activity_version_ids_for_student,
         get_effective_matrix_for_student,
@@ -552,23 +555,46 @@ def test_corrupt_incompatible_turma_matrix_pairing_fails_closed():
     conn = _database()
     data = _seed(conn)
     _base, v_m1, v_other = _seed_matrix_content(conn, data)
-    # Estado que a validacao de escrita impede; simulado como corrupcao.
+    # Residuo de uma turma anterior: a matriz do aluno aponta para outro curso.
     conn.execute(
         "UPDATE alunos SET turma_id=?, matriz_id=? WHERE id=?",
         (data["t1"], data["other"], data["student"]),
     )
 
-    assert get_effective_matrix_for_student(conn, data["student"]) is None
+    # A Turma atual governa; o residuo nao e adotado nem bloqueia.
+    assert get_effective_matrix_for_student(conn, data["student"])["id"] == data["m1"]
     allowed, matriz = get_allowed_activity_version_ids_for_student(conn, data["student"])
-    assert (allowed, matriz) == (set(), None)
-    # Nem a matriz incompativel do aluno nem o padrao da Turma sao adotados.
-    for versao in (v_m1, v_other):
-        assert (
-            resolver_versao_por_aluno(
-                conn, aluno_id=data["student"], atividade_versao_id=versao
-            )["status"]
-            == "not_found"
-        )
+    assert matriz["id"] == data["m1"]
+    assert allowed == {v_m1}
+    assert v_other not in allowed
+    assert (
+        resolver_versao_por_aluno(
+            conn, aluno_id=data["student"], atividade_versao_id=v_other
+        )["status"]
+        == "not_found"
+    )
+
+
+def test_cross_course_turma_matrix_pairing_fails_closed():
+    """A Turma pointing at another Curso's Matrix exposes nothing."""
+    from app.student_matrix import (
+        get_allowed_activity_version_ids_for_student,
+        get_effective_matrix_for_student,
+    )
+
+    conn = _database()
+    data = _seed(conn)
+    _base, v_m1, v_other = _seed_matrix_content(conn, data)
+    # Corrupcao no unico lugar que agora decide: a matriz da propria Turma.
+    conn.execute(
+        "UPDATE turmas SET matriz_id=? WHERE id=?", (data["other"], data["t1"])
+    )
+
+    assert get_effective_matrix_for_student(conn, data["student"]) is None
+    assert get_allowed_activity_version_ids_for_student(conn, data["student"]) == (
+        set(),
+        None,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -820,9 +846,20 @@ def _post_editar(test_client, ids, **overrides):
     )
 
 
+def _detach_from_turma(ids):
+    """Leave the student without a Turma, where the explicit Matrix still rules."""
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            "UPDATE alunos SET turma_id=NULL WHERE usuario_id=?", (ids["usuario"],)
+        )
+        conn.commit()
+
+
 def test_edit_aluno_page_shows_current_academic_matrix_and_sem_matriz(client):
     _login_admin(client)
     ids = _seed_route_fixture("UI1")
+    _detach_from_turma(ids)
 
     response = client.get(f"/admin/editar_aluno/{ids['usuario']}")
     assert response.status_code == 200
@@ -834,52 +871,65 @@ def test_edit_aluno_page_shows_current_academic_matrix_and_sem_matriz(client):
     assert 'name="matriz_id"' in html
     # A matriz vigente do aluno aparece marcada como selecionada.
     assert f'<option value="{ids["m1"]}" selected>' in html
-    # A outra matriz do mesmo Curso e ofertada; a de outro Curso nao.
+    # Sem Turma nao ha Curso que escope a lista: todas sao ofertadas.
     assert f'value="{ids["m2"]}"' in html
-    assert f'value="{ids["other"]}"' not in html
+    assert f'value="{ids["other"]}"' in html
+
+
+def test_edit_aluno_page_hides_the_matrix_control_for_a_turma_bound_student(client):
+    """With a Turma, the Matrix comes from it: no selector, only what governs."""
+    _login_admin(client)
+    ids = _seed_route_fixture("UI2")
+
+    html = client.get(f"/admin/editar_aluno/{ids['usuario']}").get_data(as_text=True)
+
+    assert "Matriz acadêmica" in html
+    assert 'name="matriz_id"' not in html
+    assert "Definida pela turma" in html
 
 
 def test_edit_aluno_post_assigns_matrix_without_touching_turma_default(client):
     _login_admin(client)
     ids = _seed_route_fixture("P1")
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids, matriz_id=str(ids["m2"]))
+    response = _post_editar(client, ids, turma_id="", matriz_id=str(ids["m2"]))
     assert response.status_code == 200
 
     estado = _aluno_state(ids["usuario"])
     assert estado["matriz_id"] == ids["m2"]
-    assert estado["turma_id"] == ids["t1"]
+    assert estado["turma_id"] is None
     assert _turma_default(ids["t1"]) == ids["m1"]
 
 
-def test_edit_aluno_post_rejects_cross_curso_matrix_and_preserves_previous(client):
+def test_edit_aluno_post_ignores_a_matrix_submitted_for_a_turma_bound_student(client):
+    """No individual override exists for him, so the value cannot take effect."""
     _login_admin(client)
     ids = _seed_route_fixture("P2")
 
-    response = _post_editar(client, ids, nome="Nome Rejeitado", matriz_id=str(ids["other"]))
+    response = _post_editar(client, ids, matriz_id=str(ids["other"]))
     assert response.status_code == 200
-    # Erro controlado, e nao sucesso silencioso.
     html = response.get_data(as_text=True)
-    assert "não pertence ao curso da turma do aluno" in html
-    assert "Aluno atualizado com sucesso" not in html
+    # Nao e erro: e simplesmente um campo sem autoridade.
+    assert "Aluno atualizado com sucesso" in html
 
     estado = _aluno_state(ids["usuario"])
-    assert estado["matriz_id"] == ids["m1"]
     assert estado["turma_id"] == ids["t1"]
-    # Rollback: nenhum outro dado do aluno foi parcialmente gravado.
+    assert estado["matriz_id"] is None
+    assert _turma_default(ids["t1"]) == ids["m1"]
+    from app.student_matrix import get_effective_matrix_for_student
+
     with main.app.app_context():
         conn = main.get_db_connection()
-        nome_persistido = conn.execute(
-            "SELECT nome FROM alunos WHERE usuario_id=?", (ids["usuario"],)
-        ).fetchone()[0]
-    assert nome_persistido != "Nome Rejeitado"
+        assert get_effective_matrix_for_student(conn, ids["aluno"])["id"] == ids["m1"]
 
 
 def test_edit_aluno_post_clears_matrix_when_sem_matriz_is_chosen(client):
     _login_admin(client)
     ids = _seed_route_fixture("P3")
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids, matriz_id="")
+    response = _post_editar(client, ids, turma_id="", matriz_id="")
     assert response.status_code == 200
 
     assert _aluno_state(ids["usuario"])["matriz_id"] is None
@@ -888,8 +938,9 @@ def test_edit_aluno_post_clears_matrix_when_sem_matriz_is_chosen(client):
 def test_edit_aluno_post_without_matrix_field_leaves_matrix_untouched(client):
     _login_admin(client)
     ids = _seed_route_fixture("P4")
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids)
+    response = _post_editar(client, ids, turma_id="")
     assert response.status_code == 200
 
     assert _aluno_state(ids["usuario"])["matriz_id"] == ids["m1"]

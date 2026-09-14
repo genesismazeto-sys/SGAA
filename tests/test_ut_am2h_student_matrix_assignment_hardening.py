@@ -224,6 +224,21 @@ def _corrupt_to_out_of_set_matrix(ids):
         conn.commit()
 
 
+def _detach_from_turma(ids):
+    """Leave the student without a Turma.
+
+    The explicit Matrix authority only exists for a student who has no Turma:
+    a Turma-bound student is governed by the Turma's Matrix, so the individual
+    selector is neither rendered nor accepted for him.
+    """
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            "UPDATE alunos SET turma_id=NULL WHERE usuario_id=?", (ids["usuario"],)
+        )
+        conn.commit()
+
+
 def _aluno_state(usuario_id):
     with main.app.app_context():
         conn = main.get_db_connection()
@@ -358,11 +373,38 @@ def test_explicit_empty_matrix_still_clears_to_null(client):
 def test_absent_matrix_field_still_preserves_the_current_matrix(client):
     _login_admin(client)
     ids = _seed_route_fixture("M5")
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids)
+    response = _post_editar(client, ids, turma_id="")
     assert response.status_code == 200
 
     assert _aluno_state(ids["usuario"])["matriz_id"] == ids["m1"]
+
+
+def test_turma_bound_student_is_not_offered_an_individual_matrix_control(client):
+    """The Turma governs him, so no selector may claim otherwise."""
+    _login_admin(client)
+    ids = _seed_route_fixture("TB1")
+
+    html = client.get(f"/admin/editar_aluno/{ids['usuario']}").get_data(as_text=True)
+
+    assert 'name="matriz_id"' not in html
+    assert "Definida pela turma" in html
+
+
+def test_turma_bound_student_ignores_a_submitted_matrix(client):
+    """A stale or handcrafted matriz_id cannot become authority."""
+    _login_admin(client)
+    ids = _seed_route_fixture("TB2")
+
+    response = _post_editar(client, ids, matriz_id=str(ids["m2"]))
+    assert response.status_code == 200
+    assert "Aluno atualizado com sucesso" in response.get_data(as_text=True)
+
+    estado = _aluno_state(ids["usuario"])
+    assert estado["turma_id"] == ids["t1"]
+    assert estado["matriz_id"] is None
+    assert _turma_default(ids["t1"]) == ids["m1"]
 
 
 # --------------------------------------------------------------------------
@@ -375,6 +417,7 @@ def test_out_of_set_current_matrix_is_rendered_and_selected(client):
     _login_admin(client)
     ids = _seed_route_fixture("O1")
     _corrupt_to_out_of_set_matrix(ids)
+    _detach_from_turma(ids)
 
     response = client.get(f"/admin/editar_aluno/{ids['usuario']}")
     assert response.status_code == 200
@@ -386,10 +429,10 @@ def test_out_of_set_current_matrix_is_rendered_and_selected(client):
 
         conn = main.get_db_connection()
         selecionaveis = {
-            row["id"] for row in list_assignable_matrices_for_student(conn, ids["t1"])
+            row["id"] for row in list_assignable_matrices_for_student(conn, None)
         }
-    assert selecionaveis == {ids["m1"], ids["m2"]}
-    assert ids["other"] not in selecionaveis
+    # Sem turma nao ha Curso que escope a lista: todas sao atribuiveis.
+    assert {ids["m1"], ids["m2"], ids["other"]} <= selecionaveis
 
     select = _matriz_select(html)
     # Ainda assim a matriz vigente e renderizada e marcada como selecionada.
@@ -408,19 +451,16 @@ def test_absent_submit_preserves_the_out_of_set_current_matrix(client):
     _login_admin(client)
     ids = _seed_route_fixture("O2")
     _corrupt_to_out_of_set_matrix(ids)
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids)
+    response = _post_editar(client, ids, turma_id="")
     assert response.status_code == 200
 
     estado = _aluno_state(ids["usuario"])
-    # A matriz persistida continua sendo a vigente, corrompida e tudo.
+    # A matriz persistida continua sendo a vigente.
     assert estado["matriz_id"] == ids["other"]
-    # Nenhuma substituicao silenciosa por uma matriz compativel.
+    # Nenhuma substituicao silenciosa por outra matriz.
     assert estado["matriz_id"] not in (ids["m1"], ids["m2"])
-    # O par incompativel falha fechado em vez de ser gravado como valido.
-    html = response.get_data(as_text=True)
-    assert "Aluno atualizado com sucesso" not in html
-    assert "não pertence ao curso da turma de destino" in html
 
 
 def test_explicit_compatible_matrix_corrects_the_out_of_set_pairing(client):
@@ -428,33 +468,37 @@ def test_explicit_compatible_matrix_corrects_the_out_of_set_pairing(client):
     _login_admin(client)
     ids = _seed_route_fixture("O3")
     _corrupt_to_out_of_set_matrix(ids)
+    _detach_from_turma(ids)
 
-    response = _post_editar(client, ids, matriz_id=str(ids["m2"]))
+    response = _post_editar(client, ids, turma_id="", matriz_id=str(ids["m2"]))
     assert response.status_code == 200
     assert "Aluno atualizado com sucesso" in response.get_data(as_text=True)
 
     estado = _aluno_state(ids["usuario"])
     assert estado["matriz_id"] == ids["m2"]
-    assert estado["turma_id"] == ids["t1"]
+    assert estado["turma_id"] is None
     assert _turma_default(ids["t1"]) == ids["m1"]
 
 
-def test_resubmitting_the_incompatible_current_matrix_fails_closed(client):
-    """Scenario C: re-affirming the corrupt choice is rejected, not accepted."""
+def test_giving_a_turma_to_a_corrupt_student_hands_authority_to_the_turma(client):
+    """Scenario C: a Turma settles the pairing; the stale column is dropped."""
     _login_admin(client)
     ids = _seed_route_fixture("O4")
     _corrupt_to_out_of_set_matrix(ids)
 
-    response = _post_editar(client, ids, nome="Nome Rejeitado", matriz_id=str(ids["other"]))
+    response = _post_editar(client, ids, turma_id=str(ids["t1"]))
     assert response.status_code == 200
-    html = response.get_data(as_text=True)
-    assert "Aluno atualizado com sucesso" not in html
-    assert "não pertence ao curso da turma do aluno" in html
+    assert "Aluno atualizado com sucesso" in response.get_data(as_text=True)
 
     estado = _aluno_state(ids["usuario"])
-    # Sem substituicao silenciosa e sem limpeza: o estado anterior permanece.
-    assert estado["matriz_id"] == ids["other"]
-    assert estado["nome"] != "Nome Rejeitado"
+    assert estado["turma_id"] == ids["t1"]
+    # A matriz de outro Curso nao sobrevive a entrada numa turma.
+    assert estado["matriz_id"] is None
+    from app.student_matrix import get_effective_matrix_for_student
+
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        assert get_effective_matrix_for_student(conn, ids["aluno"])["id"] == ids["m1"]
 
 
 # --------------------------------------------------------------------------

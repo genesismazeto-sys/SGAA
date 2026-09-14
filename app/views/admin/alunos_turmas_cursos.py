@@ -41,8 +41,6 @@ from app.services.student_import_service import (
 from app.student_import import StudentImportError, parse_student_import
 from app.student_matrix import (
     StudentMatrixError,
-    apply_turma_default_to_students_without_matrix,
-    count_students_without_matrix_in_turma,
     list_assignable_matrices_for_student,
     matrix_for_turma_assignment,
     parse_submitted_matriz_id,
@@ -780,17 +778,30 @@ def admin_editar_aluno(usuario_id):
                 conn.execute("UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?", (nome, email, hashed_password, usuario_id))
             else:
                 conn.execute("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?", (nome, email, usuario_id))
-            matriz_id = resolve_student_matrix_for_edit(
-                conn,
-                current_matriz_id=aluno["matriz_id"],
-                current_turma_id=turma_id_anterior,
-                turma_id=turma_id,
-                explicit_matriz_id=matriz_escolhida,
-                matrix_explicitly_submitted=matriz_submetida,
-            )
+            if turma_id is not None:
+                # Aluno com turma é governado pela matriz da turma. Não existe
+                # override individual para ele, então nada submetido aqui pode
+                # virar autoridade — inclusive um valor antigo que tenha vindo
+                # oculto no formulário. Limpar a coluna deixa o registro dizendo
+                # exatamente o que é verdade: a autoridade está na turma.
+                matriz_id = None
+            else:
+                matriz_id = resolve_student_matrix_for_edit(
+                    conn,
+                    current_matriz_id=aluno["matriz_id"],
+                    current_turma_id=turma_id_anterior,
+                    turma_id=turma_id,
+                    explicit_matriz_id=matriz_escolhida,
+                    matrix_explicitly_submitted=matriz_submetida,
+                )
             conn.execute("UPDATE alunos SET nome = ?, matricula = ?, email = ?, turma_id = ?, matriz_id = ?, status = ? WHERE usuario_id = ?",
                          (nome, matricula, email, turma_id, matriz_id, status, usuario_id))
-            resequence_turma_aluno_matriculas_for_ids(conn, turma_id_anterior, turma_id)
+            # A matrícula submetida neste formulário é a do administrador e fica
+            # como está: renumerar logo em seguida contradiria o campo que ele
+            # acabou de preencher e faria uma simples troca de turma renomear o
+            # aluno. Resequenciamento continua sendo operação de turma
+            # (salvar turma, importar turma), não efeito colateral de editar um
+            # aluno.
             conn.commit()
             flash("Aluno atualizado com sucesso.", "success")
             return redirect(url_for("admin_alunos"))
@@ -815,9 +826,25 @@ def admin_editar_aluno(usuario_id):
          WHERE t.status='Ativa'
       ORDER BY t.ano_inicio DESC, t.semestre_inicio DESC, nome
     """).fetchall()
-    matrizes = list_assignable_matrices_for_student(conn, aluno["turma_id"])
+    # Só o aluno sem turma tem matriz própria para escolher. Com turma, a
+    # autoridade é a matriz da turma, e oferecer um seletor cujo valor seria
+    # ignorado só enganaria o administrador.
+    matriz_governada_por_turma = aluno["turma_id"] is not None
+    matrizes = (
+        [] if matriz_governada_por_turma
+        else list_assignable_matrices_for_student(conn, None)
+    )
     matriz_atual = None
-    if aluno["matriz_id"]:
+    if matriz_governada_por_turma:
+        matriz_atual = conn.execute("""
+            SELECT m.id, m.nome, c.nome AS curso_nome, c.codigo AS curso_codigo
+              FROM turmas t
+              JOIN matrizes_atividades m
+                ON m.id = t.matriz_id AND m.curso_id = t.curso_id
+              JOIN cursos c ON c.id = m.curso_id
+             WHERE t.id = ?
+        """, (aluno["turma_id"],)).fetchone()
+    elif aluno["matriz_id"]:
         matriz_atual = conn.execute("""
             SELECT m.id, m.nome, c.nome AS curso_nome, c.codigo AS curso_codigo
               FROM matrizes_atividades m
@@ -830,6 +857,7 @@ def admin_editar_aluno(usuario_id):
         turmas=turmas,
         matrizes=matrizes,
         matriz_atual=matriz_atual,
+        matriz_governada_por_turma=matriz_governada_por_turma,
     )
 
 
@@ -1366,45 +1394,7 @@ def admin_detalhes_turma(turma_id):
         filter_schema=filter_schema,
         periodo_label=_periodo_label_for_turma_row(turma),
         matriz_label=_turma_effective_matriz_label(conn, turma),
-        alunos_sem_matriz=count_students_without_matrix_in_turma(conn, turma["id"]),
     )
-
-
-@admin_required
-def admin_turma_aplicar_matriz_alunos(turma_id):
-    """Explicit admin action: give the Turma default to its Matrix-less students.
-
-    Deliberately its own POST endpoint instead of a step inside Salvar Turma.
-    Saving a Turma must keep treating its Matrix as a suggestion, so a student
-    left without one — including an admin who picked "Sem matriz" — survives any
-    number of ordinary saves. Only this request, which the administrator has to
-    ask for, initializes them.
-    """
-    conn = get_db_connection()
-    ensure_turmas_matriz_schema(conn)
-    turma = conn.execute("SELECT id FROM turmas WHERE id = ?", (turma_id,)).fetchone()
-    if not turma:
-        flash("Turma não encontrada.", "error")
-        return redirect(url_for("admin_turmas"))
-    try:
-        initialized = apply_turma_default_to_students_without_matrix(conn, turma_id)
-        conn.commit()
-    except StudentMatrixError as exc:
-        conn.rollback()
-        flash(str(exc), "error")
-        return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
-    except Exception as exc:
-        conn.rollback()
-        flash(f"Erro ao aplicar a matriz aos alunos: {exc}", "error")
-        return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
-    if initialized:
-        flash(
-            f"Matriz aplicada a {initialized} aluno(s) sem matriz.",
-            "success",
-        )
-    else:
-        flash("Nenhum aluno sem matriz nesta turma.", "info")
-    return redirect(url_for("admin_detalhes_turma", turma_id=turma_id))
 
 
 # ====== Importar Alunos (CSV/XLSX/XLS) para uma Turma ======
@@ -1558,12 +1548,6 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("GET",),
         ),
         LegacyRouteSpec(
-            "/admin/turma/<int:turma_id>/aplicar-matriz-alunos",
-            "admin_turma_aplicar_matriz_alunos",
-            admin_turma_aplicar_matriz_alunos,
-            ("POST",),
-        ),
-        LegacyRouteSpec(
             "/admin/turmas/importar",
             "admin_turmas_importar",
             admin_turmas_importar,
@@ -1589,7 +1573,6 @@ __all__ = [
     "admin_editar_aluno",
     "admin_editar_curso",
     "admin_editar_turma",
-    "admin_turma_aplicar_matriz_alunos",
     "admin_turmas",
     "admin_turmas_importar",
     "admin_visualizar_curso",

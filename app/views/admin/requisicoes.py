@@ -460,8 +460,13 @@ def admin_requisicoes():
             matrix_scope_cache[cache_key] = get_allowed_activity_version_ids_for_student(
                 conn, item.get("aluno_id")
             )
-        allowed_activity_ids, matriz = matrix_scope_cache[cache_key]
-        item["matrix_scope_issue"] = item.get("atividade_versao_id") not in allowed_activity_ids
+        _allowed_activity_ids, matriz = matrix_scope_cache[cache_key]
+        # Historico e governado pelo proprio snapshot da requisicao. A matriz
+        # vigente do aluno acompanha a turma atual, entao uma transferencia
+        # legitima deixa requisicoes anteriores fora da matriz de agora — isso
+        # e esperado, nao irregular. So a ausencia de snapshot autoritativo
+        # deixa uma requisicao sem regra que a governe.
+        item["matrix_scope_issue"] = not item["snapshot_versionado_presente"]
         item["matrix_scope_label"] = _matriz_option_label(matriz) if matriz else None
         requisicoes.append(item)
     # Carregar atividades e documentos obrigatórios (para reuso do form do aluno no modal admin)

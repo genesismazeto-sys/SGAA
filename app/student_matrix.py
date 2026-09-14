@@ -140,47 +140,6 @@ def assign_student_matrix(conn, aluno_id: int, matriz_id: int | None) -> int | N
     return matriz_id
 
 
-def count_students_without_matrix_in_turma(conn, turma_id: int) -> int:
-    """How many students of this Turma hold no Matrix authority at all."""
-    return int(
-        conn.execute(
-            "SELECT COUNT(*) FROM alunos WHERE turma_id=? AND matriz_id IS NULL",
-            (turma_id,),
-        ).fetchone()[0]
-    )
-
-
-def apply_turma_default_to_students_without_matrix(conn, turma_id: int) -> int:
-    """Explicitly hand the Turma default to the students that hold no authority.
-
-    Enrolling students before the Turma had a default leaves them without a
-    Matrix, and the Turma default is only a suggestion, so no ordinary Turma
-    write may adopt it on their behalf — an admin who chose "Sem matriz" for a
-    student must keep that choice through any number of saves. This is the
-    administrator asking for that initialization explicitly, for one Turma, so
-    it is allowed to replace NULL here and only here.
-
-    Scope is exactly the students of this Turma whose ``matriz_id IS NULL``: an
-    authority already recorded is never replaced, no ``turma_id`` is touched,
-    the Turma default itself is untouched, and no other Turma is reached. The
-    Curso compatibility of the default is decided by ``_turma_scope``, so a
-    stale or cross-Curso pairing fails closed instead of being propagated.
-
-    Returns the number of students initialized. The caller owns the transaction.
-    """
-    turma = _turma_scope(conn, turma_id)
-    if turma is None:
-        raise StudentMatrixError("A turma de destino não existe.")
-    matriz_id = turma["compatible_default_matrix_id"]
-    if matriz_id is None:
-        raise StudentMatrixError("A turma não possui matriz padrão definida.")
-    cursor = conn.execute(
-        "UPDATE alunos SET matriz_id=? WHERE turma_id=? AND matriz_id IS NULL",
-        (int(matriz_id), turma_id),
-    )
-    return int(cursor.rowcount)
-
-
 def resolve_student_matrix_for_edit(
     conn,
     *,
@@ -234,22 +193,47 @@ def list_assignable_matrices_for_student(conn, turma_id: int | None):
 
 
 def get_effective_matrix_for_student(conn, aluno_id: int):
-    """Resolve the student's academic Matrix authority.
+    """Resolve the Matrix that governs the student's NEW work.
 
-    The value always comes from ``alunos.matriz_id``; a Turma is never its
-    source. A Turma-bound student additionally requires Curso compatibility, so
-    a stale or corrupt pairing fails closed instead of silently adopting the
-    Turma default. A Turma-less student resolves against the Matrix itself,
-    which supplies its own Curso identity. "No Turma" is not "no Matrix".
+    A student who belongs to a Turma is governed by that Turma's Matrix. Moving
+    from Turma A to Turma B therefore changes which activities the next request
+    may use immediately, with no per-student copy to keep in step and nothing to
+    re-apply by hand. ``alunos.matriz_id`` is deliberately not consulted for a
+    Turma-bound student, so a value left over from Turma A can never outrank
+    Turma B.
+
+    This governs only what may be requested from now on. Work already submitted
+    keeps its own rules: every requisicao carries ``regra_snapshot_json``, and
+    that snapshot — not this function — is the authority for historical hours,
+    limits and activity identity. Changing Turma never rewrites, migrates or
+    recalculates it.
+
+    Curso compatibility is still required, so a Turma pointing at a Matrix from
+    another Curso fails closed instead of exposing foreign activities. A Turma
+    without a Matrix yields none, for the same reason.
+
+    A student with no Turma has no Turma to be governed by, so the explicitly
+    assigned ``alunos.matriz_id`` answers for them and supplies its own Curso
+    identity. "No Turma" is still not "no Matrix".
     """
+    turma_bound = conn.execute(
+        """
+        SELECT m.*
+          FROM alunos a
+          JOIN turmas t ON t.id=a.turma_id
+          JOIN matrizes_atividades m ON m.id=t.matriz_id AND m.curso_id=t.curso_id
+         WHERE a.id=?
+        """,
+        (aluno_id,),
+    ).fetchone()
+    if turma_bound is not None:
+        return turma_bound
     return conn.execute(
         """
         SELECT m.*
           FROM alunos a
           JOIN matrizes_atividades m ON m.id=a.matriz_id
-          LEFT JOIN turmas t ON t.id=a.turma_id
-         WHERE a.id=?
-           AND (a.turma_id IS NULL OR (t.id IS NOT NULL AND m.curso_id=t.curso_id))
+         WHERE a.id=? AND a.turma_id IS NULL
         """,
         (aluno_id,),
     ).fetchone()
@@ -271,10 +255,8 @@ def get_allowed_activity_version_ids_for_student(conn, aluno_id: int):
 
 __all__ = [
     "StudentMatrixError",
-    "apply_turma_default_to_students_without_matrix",
     "assign_student_matrix",
     "assign_student_to_turma",
-    "count_students_without_matrix_in_turma",
     "get_effective_matrix_for_student",
     "get_allowed_activity_version_ids_for_student",
     "list_assignable_matrices_for_student",
