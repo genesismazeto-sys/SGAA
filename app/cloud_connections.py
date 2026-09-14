@@ -126,6 +126,15 @@ def update_cloud_account_token(
     token_json: str,
     account_email: str | None = None,
 ) -> None:
+    # Custody invariant: a stored authorization is never replaced by an empty
+    # one.  When the machine-local key cannot open an existing token the
+    # decrypted value is "", and overwriting the row would destroy the only
+    # copy of an authorization that a reconnect could still replace cleanly.
+    if not str(token_json or "").strip():
+        raise CloudConnectionError(
+            "A conexão de nuvem precisa ser refeita nesta máquina. Use Reconectar.",
+            debug_code="TOKEN_WRITE_REFUSED_EMPTY",
+        )
     encrypted = encrypt_token_json_for_storage(token_json, env=_runtime_env())
     if account_email is None:
         conn.execute(

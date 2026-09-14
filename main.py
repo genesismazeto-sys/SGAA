@@ -1018,6 +1018,13 @@ _rebind_legacy_aluno_exports()
 # ===================== Run =====================
 
 if __name__ == "__main__":
+    # Canonical startup preflight: the machine-local secret infrastructure is
+    # prepared here, before the first request, never lazily during an Activity
+    # save, a Request save, an attachment upload or a backup.  It is owned by
+    # app.startup_preflight and never blocks the launch.
+    from app.startup_preflight import run_startup_preflight
+
+    run_startup_preflight()
     with app.app_context():
         init_db()
     debug_mode = (

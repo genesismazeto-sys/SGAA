@@ -28,6 +28,15 @@ if not exist "%PYTHON_EXE%" (
 	exit /b 1
 )
 
+rem Application-owned startup preflight. This file implements no cryptography:
+rem app.startup_preflight guarantees the machine-local secret store exists and
+rem never blocks the launch.
+"%PYTHON_EXE%" -m app.startup_preflight
+if errorlevel 1 (
+	echo [run2.bat] Local infrastructure preflight could not complete.
+	echo [run2.bat] SGAA will still start; cloud connections may be unavailable.
+)
+
 powershell -NoProfile -Command ^
 	"$listener = Get-NetTCPConnection -LocalPort %APP_PORT% -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; " ^
 	"if (-not $listener) { exit 0 }; " ^

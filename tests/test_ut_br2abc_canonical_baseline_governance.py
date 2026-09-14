@@ -29,7 +29,7 @@ from tests import canonical_baseline_support as governance
 
 
 def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
-    """555 exists exactly once, as the sum of named product deltas."""
+    """558 exists exactly once, as the sum of named product deltas."""
     terms = dict(
         (term, delta) for term, delta in governance.CATALOG_LEDGER
     )
@@ -37,12 +37,18 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
     assert governance.PARENT_CATALOG_COUNT == 548, (
         "UT-MX3's exact parent state is the ledger up to the UT-MX3 term"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 555
+    assert governance.CANONICAL_CATALOG_COUNT == 558
     assert governance.CATALOG_LEDGER[governance.MX3_LEDGER_INDEX][1] == 6, (
         "the UT-MX3 StudentMatrixError ownership delta is exactly +6"
     )
-    assert governance.CATALOG_LEDGER[-1][1] == 1, (
+    assert governance.CATALOG_LEDGER[-2][1] == 1, (
         "the TMA1 Turma-Matrix authority delta is exactly +1"
+    )
+    assert governance.CATALOG_LEDGER[-1][1] == 3 == len(
+        governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS
+    ), (
+        "the CR1 cloud-credential recovery delta is exactly +3, one term per "
+        "declared key"
     )
     # Parent + every term from UT-MX3 onward reconstructs the canonical total.
     assert (
@@ -91,7 +97,7 @@ def test_catalog_control_rejects_one_unauthorized_addition():
     }
     with pytest.raises(AssertionError) as captured:
         governance.assert_catalog_matches_canonical_baseline(catalog)
-    assert "556" in str(captured.value)
+    assert f"got {governance.CANONICAL_CATALOG_COUNT + 1}" in str(captured.value)
 
 
 def test_catalog_control_rejects_one_unauthorized_removal():
@@ -100,7 +106,7 @@ def test_catalog_control_rejects_one_unauthorized_removal():
     del catalog[victim]
     with pytest.raises(AssertionError) as captured:
         governance.assert_catalog_matches_canonical_baseline(catalog)
-    assert "554" in str(captured.value)
+    assert f"got {governance.CANONICAL_CATALOG_COUNT - 1}" in str(captured.value)
 
 
 def test_catalog_control_rejects_a_same_size_key_rename():
@@ -123,6 +129,7 @@ def test_catalog_parent_digest_still_governs_the_mx3_parent_state():
         set(catalog)
         - set(NEW_STUDENT_MATRIX_KEYS)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
+        - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
     )
     assert len(parent_keys) == governance.PARENT_CATALOG_COUNT
     assert (

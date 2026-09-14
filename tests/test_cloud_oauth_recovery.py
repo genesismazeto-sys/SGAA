@@ -842,8 +842,13 @@ def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
     assert "url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg')" not in template
     assert "url_for('uploaded_file', filename='Microsoft_OneDrive_Icon_(2025_-_present).svg')" not in template
     assert "<strong>OneDrive callback:</strong>" in template
-    assert "tools/configure_cloud_oauth.py --provider google" in template
-    assert "tools/configure_cloud_oauth.py --provider both" not in template
+    # The admin surface must never carry manual-setup instructions: the
+    # machine-local secure store is prepared by the canonical startup
+    # preflight, not by a command the operator has to type.
+    assert "configure_cloud_oauth" not in template
+    assert "Fernet" not in template
+    assert "TOKEN_ENCRYPTION_KEY" not in template
+    assert "As credenciais do aplicativo ficam protegidas nesta máquina" in template
 
 
 def test_user_facing_paths_do_not_log_or_store_application_secrets():

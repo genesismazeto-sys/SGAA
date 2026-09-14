@@ -33,11 +33,13 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import app.cloud_connections as _cloud_connections
+import app.cloud_credentials as _cloud_credentials
 import app.db as app_db
 from app.cloud_config import (
     get_application_credential_status,
     get_google_oauth_config,
     get_onedrive_oauth_config,
+    get_public_base_url_setting,
 )
 from app.auth import admin_required
 from app.backup import orchestrator as _backup_orchestrator
@@ -447,6 +449,22 @@ def _build_database_admin_context(conn):
         if google_application_status["source"] != "ERROR"
         else ""
     )
+    # An existing-but-unreadable machine store surfaces as source == "ERROR".
+    # Nothing is repaired here: the credential form is disabled and the stored
+    # bytes are left alone.
+    cloud_store_unavailable = "ERROR" in {
+        google_application_status["source"],
+        onedrive_application_status["source"],
+    }
+    if cloud_store_unavailable:
+        onedrive_client_id = ""
+        onedrive_tenant_id = ""
+        oauth_public_base_url_setting = ""
+    else:
+        onedrive_config = get_onedrive_oauth_config()
+        onedrive_client_id = onedrive_config["client_id"]
+        onedrive_tenant_id = onedrive_config["tenant_id"]
+        oauth_public_base_url_setting = get_public_base_url_setting()
     google_picker_api_key = str(os.environ.get("GOOGLE_PICKER_API_KEY") or "").strip()
     google_app_id = str(os.environ.get("GOOGLE_APP_ID") or "").strip()
 
@@ -495,6 +513,10 @@ def _build_database_admin_context(conn):
         "google_folder_label": google_folder_label or (drive_settings.get("gdrive_dest_folder") or "Backups/sistema"),
         "onedrive_folder_label": onedrive_folder_label or (drive_settings.get("onedrive_dest_folder") or "SGAA - Backups"),
         "oauth_public_base_url": oauth_context["oauth_public_base_url"],
+        "oauth_public_base_url_setting": oauth_public_base_url_setting,
+        "onedrive_client_id": onedrive_client_id,
+        "onedrive_tenant_id": onedrive_tenant_id,
+        "cloud_store_unavailable": cloud_store_unavailable,
         "google_oauth_callback_uri": oauth_context["google_oauth_callback_uri"],
         "onedrive_oauth_callback_uri": oauth_context["onedrive_oauth_callback_uri"],
         "oauth_config_error": oauth_context["oauth_config_error"],
@@ -1469,12 +1491,44 @@ def admin_banco_dados_oauth_disconnect():
 
 @admin_required
 def admin_banco_dados_drive_settings():
+    action = (request.form.get("action") or "").strip()
+
+    # Shared infrastructure: the public OAuth address belongs to neither
+    # provider, so it is handled before the provider gate.
+    if action == "save_public_base_url":
+        try:
+            _cloud_credentials.save_public_base_url(
+                request.form.get("app_public_base_url") or ""
+            )
+        except _cloud_credentials.CloudCredentialsError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_banco_dados"))
+        flash("Endereço público OAuth salvo.", "success")
+        return redirect(url_for("admin_banco_dados"))
+
     provider = request.form.get("provider") or ""
     if provider not in ("google", "onedrive"):
         flash("Provedor inválido.", "error")
         return redirect(url_for("admin_banco_dados"))
 
-    if (request.form.get("action") or "").strip() == "test_connection":
+    if action == "save_credentials":
+        try:
+            _cloud_credentials.save_application_credentials(
+                provider=provider,
+                client_id=request.form.get("client_id") or "",
+                client_secret=request.form.get("client_secret") or "",
+                tenant_id=request.form.get("tenant_id") or "",
+            )
+        except _cloud_credentials.CloudCredentialsError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_banco_dados"))
+        if provider == "google":
+            flash("Credenciais do Google Drive salvas com segurança nesta máquina.", "success")
+        else:
+            flash("Credenciais do OneDrive salvas com segurança nesta máquina.", "success")
+        return redirect(url_for("admin_banco_dados"))
+
+    if action == "test_connection":
         conn = get_db_connection()
         try:
             result = _cloud_connections.test_connection(conn, provider)

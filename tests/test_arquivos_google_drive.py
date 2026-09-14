@@ -901,7 +901,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         2,
         6,
         1,
-    ], "the named catalog delta ledger must stay exactly these seven terms"
+        3,
+    ], "the named catalog delta ledger must stay exactly these eight terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -910,11 +911,17 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 555
+    assert governance.CANONICAL_CATALOG_COUNT == 558
+    # The residual is anchored on the ledger through UT-MX3, so every term
+    # appended after it comes back off the live key set before comparing.
     assert (
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
-    ) - len(set(catalog) - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)) == (
+    ) - len(
+        set(catalog)
+        - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
+        - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
+    ) == (
         governance.CATALOG_VISIBLE_BASELINE_DEBT
     ) == 2
 

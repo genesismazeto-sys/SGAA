@@ -21,9 +21,28 @@ _STORE_FILENAME = "cloud-oauth.dpapi"
 _DPAPI_DESCRIPTION = "SGAA cloud OAuth credentials"
 _CRYPTPROTECT_UI_FORBIDDEN = 0x01
 
+# Canonical outcomes of ensure_machine_secret_infrastructure().
+INFRASTRUCTURE_CREATED = "created"
+INFRASTRUCTURE_REUSED = "reused"
+INFRASTRUCTURE_ENVIRONMENT = "environment"
+
+_STORE_UNAVAILABLE_MESSAGE = (
+    "O armazenamento seguro desta maquina nao pode ser preparado agora."
+)
+
 
 class MachineSecretsError(RuntimeError):
-    pass
+    """Machine-local secret storage failure.
+
+    ``str()`` is a product-level message: it is safe to show to an operator and
+    never names an environment variable, a script or a cryptographic primitive.
+    ``debug_detail`` carries the technical cause for logs and diagnostics.
+    """
+
+    def __init__(self, message: str, *, debug_detail: str = ""):
+        super().__init__(message)
+        self.user_message = message
+        self.debug_detail = debug_detail or message
 
 
 class _DataBlob(ctypes.Structure):
@@ -34,7 +53,8 @@ def get_machine_secrets_path() -> str:
     local_app_data = (os.getenv("LOCALAPPDATA") or "").strip()
     if not local_app_data:
         raise MachineSecretsError(
-            "LOCALAPPDATA indisponivel. Configure as credenciais OAuth em uma conta Windows local valida."
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="LOCALAPPDATA indisponivel para o processo SGAA",
         )
     return os.path.join(local_app_data, "SGAA", "secrets", _STORE_FILENAME)
 
@@ -47,7 +67,10 @@ def _blob_from_bytes(payload: bytes) -> tuple[_DataBlob, object]:
 
 def _protect_bytes(payload: bytes) -> bytes:
     if os.name != "nt":
-        raise MachineSecretsError("O armazenamento seguro OAuth requer Windows DPAPI.")
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="o armazenamento seguro requer Windows DPAPI",
+        )
     source, source_buffer = _blob_from_bytes(payload)
     result = _DataBlob()
     crypt32 = ctypes.windll.crypt32
@@ -63,7 +86,10 @@ def _protect_bytes(payload: bytes) -> bytes:
     )
     del source_buffer
     if not ok:
-        raise MachineSecretsError("Windows DPAPI nao conseguiu proteger as credenciais OAuth.")
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="CryptProtectData falhou ao proteger o armazenamento local",
+        )
     try:
         return ctypes.string_at(result.pbData, result.cbData)
     finally:
@@ -72,7 +98,10 @@ def _protect_bytes(payload: bytes) -> bytes:
 
 def _unprotect_bytes(payload: bytes) -> bytes:
     if os.name != "nt":
-        raise MachineSecretsError("O armazenamento seguro OAuth requer Windows DPAPI.")
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="o armazenamento seguro requer Windows DPAPI",
+        )
     source, source_buffer = _blob_from_bytes(payload)
     result = _DataBlob()
     crypt32 = ctypes.windll.crypt32
@@ -89,7 +118,9 @@ def _unprotect_bytes(payload: bytes) -> bytes:
     del source_buffer
     if not ok:
         raise MachineSecretsError(
-            "As credenciais OAuth desta instalacao nao podem ser abertas pela conta Windows atual."
+            "As conexoes de nuvem desta instalacao pertencem a outra conta Windows. "
+            "Entre com a conta Windows usada na instalacao ou reconecte o provedor.",
+            debug_detail="CryptUnprotectData falhou para a conta Windows atual",
         )
     try:
         return ctypes.string_at(result.pbData, result.cbData)
@@ -112,9 +143,15 @@ def load_machine_secrets(*, path: str | None = None) -> dict[str, Any]:
     except MachineSecretsError:
         raise
     except Exception as exc:
-        raise MachineSecretsError("O arquivo seguro de credenciais OAuth esta invalido.") from exc
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="o arquivo do armazenamento local esta corrompido ou ilegivel",
+        ) from exc
     if not isinstance(payload, dict) or payload.get("version") != _STORE_VERSION:
-        raise MachineSecretsError("A versao do arquivo seguro de credenciais OAuth nao e suportada.")
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="versao do armazenamento local nao suportada",
+        )
     payload.setdefault("runtime", {})
     payload.setdefault("providers", {})
     return payload
@@ -150,23 +187,65 @@ def save_machine_secrets(payload: dict[str, Any], *, path: str | None = None) ->
     return store_path
 
 
+def generate_token_encryption_key() -> str:
+    """Single place where a machine-local token-encryption key is minted."""
+    try:
+        from cryptography.fernet import Fernet
+    except Exception as exc:
+        raise MachineSecretsError(
+            _STORE_UNAVAILABLE_MESSAGE,
+            debug_detail="cryptography nao esta instalado; rode pip install -r requirements.txt",
+        ) from exc
+    return Fernet.generate_key().decode("ascii")
+
+
 def get_machine_token_encryption_key(*, create: bool = False) -> str:
     payload = load_machine_secrets()
     runtime = payload.get("runtime") if isinstance(payload.get("runtime"), dict) else {}
     key = str(runtime.get("token_encryption_key") or "").strip()
     if key or not create:
         return key
-    try:
-        from cryptography.fernet import Fernet
-    except Exception as exc:
-        raise MachineSecretsError(
-            "Dependencia cryptography ausente. Rode pip install -r requirements.txt."
-        ) from exc
-    key = Fernet.generate_key().decode("ascii")
+    key = generate_token_encryption_key()
     runtime["token_encryption_key"] = key
     payload["runtime"] = runtime
     save_machine_secrets(payload)
     return key
+
+
+def ensure_machine_secret_infrastructure() -> dict[str, str]:
+    """Canonical owner of machine-local secret bootstrap.
+
+    Guarantees that the machine-local token-encryption key exists in the
+    DPAPI-protected store and returns the same key on every later call.  It is
+    idempotent, never overwrites an existing key, and never touches operational
+    data.  A pre-existing ``TOKEN_ENCRYPTION_KEY`` in the environment takes
+    precedence and suppresses store creation, so legacy installs keep working
+    and keep decrypting the tokens they already hold.
+
+    Raises ``MachineSecretsError`` when the store cannot be prepared; callers
+    decide whether that is fatal.  SGAA's startup preflight treats it as a
+    degraded-cloud condition, never as a startup failure.
+    """
+    if (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip():
+        return {
+            "status": INFRASTRUCTURE_ENVIRONMENT,
+            "store_path": "",
+            "detail": "chave fornecida pelo ambiente; armazenamento local nao foi alterado",
+        }
+    store_path = get_machine_secrets_path()
+    existing = get_machine_token_encryption_key(create=False)
+    if existing:
+        return {
+            "status": INFRASTRUCTURE_REUSED,
+            "store_path": store_path,
+            "detail": "chave local ja existente reutilizada",
+        }
+    get_machine_token_encryption_key(create=True)
+    return {
+        "status": INFRASTRUCTURE_CREATED,
+        "store_path": store_path,
+        "detail": "chave local criada e protegida pela conta Windows atual",
+    }
 
 
 def update_machine_oauth_configuration(
@@ -192,11 +271,5 @@ def update_machine_oauth_configuration(
         runtime["public_base_url"] = str(public_base_url or "").strip().rstrip("/")
         payload["runtime"] = runtime
     if not str((payload.get("runtime") or {}).get("token_encryption_key") or "").strip():
-        try:
-            from cryptography.fernet import Fernet
-        except Exception as exc:
-            raise MachineSecretsError(
-                "Dependencia cryptography ausente. Rode pip install -r requirements.txt."
-            ) from exc
-        payload["runtime"]["token_encryption_key"] = Fernet.generate_key().decode("ascii")
+        payload["runtime"]["token_encryption_key"] = generate_token_encryption_key()
     save_machine_secrets(payload)

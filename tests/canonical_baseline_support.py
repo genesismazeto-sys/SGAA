@@ -71,6 +71,16 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "Turma-bound student, whose Matrix now comes from the Turma",
         1,
     ),
+    (
+        "CR1 cloud application-credential recovery: Banco de Dados now "
+        "configures the Google/OneDrive application credentials and the shared "
+        "public OAuth address as a normal product action, adding "
+        "'Credenciais do Google Drive salvas com segurança nesta máquina.' "
+        "(msg_5f1896e86e5e5197), 'Credenciais do OneDrive salvas com segurança "
+        "nesta máquina.' (msg_47eb6cef00e56a30) and 'Endereço público OAuth "
+        "salvo.' (msg_2b8b193d37a30c8f)",
+        3,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -107,7 +117,18 @@ PARENT_CATALOG_KEYS_SHA256 = (
     "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
 )
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "4984b39ca1c6740e40e94ebd8066fd5796d208800ae3265701e485d4a296c767"
+    "70ee71639173adf9c5bc541a2a4966138ed5d6cfeaea465bb731088395cc8ce1"
+)
+
+# Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
+# to subtract every term appended after it, so each such term declares its keys
+# here exactly once instead of being re-typed at each reconstruction site.
+CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS = frozenset(
+    {
+        "msg_5f1896e86e5e5197",
+        "msg_47eb6cef00e56a30",
+        "msg_2b8b193d37a30c8f",
+    }
 )
 
 

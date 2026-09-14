@@ -1,3 +1,15 @@
+"""At-rest encryption for ``cloud_accounts.token_json``.
+
+The machine-local encryption key is owned by ``app.machine_secrets`` and is
+created by the canonical startup preflight (``app.startup_preflight``).  This
+module only consumes it.
+
+Error contract: ``str(exc)`` is always a product-level, actionable message.  It
+never names an environment variable, a maintenance script or a cryptographic
+primitive — those belong in ``exc.debug_detail``, which is logged here and
+available to diagnostics.
+"""
+
 import logging
 import os
 from typing import Final
@@ -8,18 +20,34 @@ from app.machine_secrets import MachineSecretsError, get_machine_token_encryptio
 logger = logging.getLogger(__name__)
 
 _TOKEN_PREFIX: Final[str] = "fernet:"
-_KEY_HINT: Final[str] = (
-    'python -c "from cryptography.fernet import Fernet; '
-    'print(Fernet.generate_key().decode())"'
+
+RECONNECT_USER_MESSAGE: Final[str] = (
+    "A conexão de nuvem precisa ser refeita nesta máquina. "
+    "Acesse Banco de Dados > Google Drive e use Reconectar."
+)
+UNAVAILABLE_USER_MESSAGE: Final[str] = (
+    "As conexões de nuvem estão temporariamente indisponíveis nesta máquina. "
+    "Acesse Banco de Dados > Google Drive e use Reconectar."
 )
 
 
 class TokenEncryptionError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, debug_detail: str = ""):
+        super().__init__(message)
+        self.user_message = message
+        self.debug_detail = debug_detail or message
 
 
 class TokenEncryptionConfigError(TokenEncryptionError):
     pass
+
+
+def _raise_config_error(user_message: str, debug_detail: str, *, cause=None):
+    logger.warning("Configuração de criptografia de token indisponível: %s", debug_detail)
+    error = TokenEncryptionConfigError(user_message, debug_detail=debug_detail)
+    if cause is not None:
+        raise error from cause
+    raise error
 
 
 def _normalize_env(env: str | None = None) -> str:
@@ -40,9 +68,11 @@ def _import_fernet():
     try:
         from cryptography.fernet import Fernet, InvalidToken
     except Exception as exc:
-        raise TokenEncryptionConfigError(
-            "Dependencia cryptography ausente. Rode pip install -r requirements.txt."
-        ) from exc
+        _raise_config_error(
+            UNAVAILABLE_USER_MESSAGE,
+            "cryptography nao esta instalado; rode pip install -r requirements.txt",
+            cause=exc,
+        )
     return Fernet, InvalidToken
 
 
@@ -53,7 +83,7 @@ def get_token_encryption_key() -> str:
     try:
         return get_machine_token_encryption_key(create=False)
     except MachineSecretsError as exc:
-        raise TokenEncryptionConfigError(str(exc)) from exc
+        _raise_config_error(str(exc), exc.debug_detail, cause=exc)
 
 
 def is_token_encryption_configured() -> bool:
@@ -68,24 +98,25 @@ def validate_token_encryption_configuration(*, env: str | None = None) -> None:
     normalized_env = _normalize_env(env)
     key = get_token_encryption_key()
     if not key:
-        raise TokenEncryptionConfigError(
-            "Chave de criptografia OAuth ausente. Execute tools/configure_cloud_oauth.py "
-            "para criar a configuracao segura desta maquina. "
-            f"Compatibilidade legada: gere uma chave com {_KEY_HINT} e defina TOKEN_ENCRYPTION_KEY fora do Git."
+        _raise_config_error(
+            RECONNECT_USER_MESSAGE,
+            "chave de criptografia local ausente; o preflight de inicializacao nao a criou",
         )
 
     Fernet, InvalidToken = _import_fernet()
     try:
         Fernet(key.encode("utf-8"))
     except Exception as exc:
-        raise TokenEncryptionConfigError(
-            "Chave de criptografia OAuth invalida. Reconfigure o armazenamento seguro desta maquina. "
-            f"Compatibilidade legada: gere uma chave Fernet com {_KEY_HINT}."
-        ) from exc
+        _raise_config_error(
+            RECONNECT_USER_MESSAGE,
+            "chave de criptografia local presente mas invalida para Fernet",
+            cause=exc,
+        )
 
     if normalized_env == "production" and not key:
-        raise TokenEncryptionConfigError(
-            "APP_ENV=production exige TOKEN_ENCRYPTION_KEY configurada."
+        _raise_config_error(
+            RECONNECT_USER_MESSAGE,
+            "APP_ENV=production exige uma chave de criptografia de token configurada",
         )
 
 
@@ -106,9 +137,9 @@ def decrypt_token_json_from_storage(token_json: str, *, env: str | None = None) 
     normalized_env = _normalize_env(env)
     if not is_token_json_encrypted(stored_value):
         if normalized_env == "production":
-            raise TokenEncryptionConfigError(
-                "Token OAuth armazenado sem criptografia em cloud_accounts. "
-                "Configure TOKEN_ENCRYPTION_KEY e reconecte a conta."
+            _raise_config_error(
+                RECONNECT_USER_MESSAGE,
+                "token OAuth armazenado sem criptografia em cloud_accounts sob APP_ENV=production",
             )
         logger.warning(
             "cloud_accounts.token_json em formato legado sem criptografia detectado no ambiente %s.",
@@ -121,13 +152,18 @@ def decrypt_token_json_from_storage(token_json: str, *, env: str | None = None) 
     cipher = Fernet(get_token_encryption_key().encode("utf-8"))
     encrypted_blob = stored_value[len(_TOKEN_PREFIX):].strip()
     if not encrypted_blob:
-        raise TokenEncryptionConfigError(
-            "Token OAuth criptografado inválido em cloud_accounts. Reconecte a conta."
+        _raise_config_error(
+            RECONNECT_USER_MESSAGE,
+            "token OAuth criptografado invalido em cloud_accounts (payload vazio)",
         )
     try:
         return cipher.decrypt(encrypted_blob.encode("utf-8")).decode("utf-8")
     except InvalidToken as exc:
-        raise TokenEncryptionConfigError(
-            "Não foi possível descriptografar token_json de cloud_accounts. "
-            "Verifique TOKEN_ENCRYPTION_KEY ou reconecte a conta."
-        ) from exc
+        # The stored token was encrypted under a key this machine no longer
+        # holds.  The token is left untouched: the account is simply classified
+        # as reconnect-required by app.cloud_connections.
+        _raise_config_error(
+            RECONNECT_USER_MESSAGE,
+            "token OAuth de cloud_accounts nao pode ser descriptografado com a chave local atual",
+            cause=exc,
+        )
