@@ -109,6 +109,7 @@
           <button class="menu-item" type="button" id="req-action-view" disabled><i class="lucide" data-lucide="eye"></i><span>{{ user_message("Ver") }}</span></button>
           <button class="menu-item" type="button" id="req-action-edit" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="edit"></i><span>{{ user_message("Editar") }}</span></button>
           <button class="menu-item" type="button" id="req-action-process" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="circle-check-big"></i><span>{{ user_message("Processar") }}</span></button>
+          <button class="menu-item" type="button" id="req-action-email" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="mail"></i><span>{{ user_message("Enviar e-mail") }}</span></button>
           <button class="menu-item danger" type="button" id="req-action-delete" disabled {% if not can_requisicoes_full %}hidden{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
         </div>
         <div class="menu-hint" id="req-actions-hint">{{ user_message("Selecione uma linha para habilitar as ações.") }}</div>
@@ -142,6 +143,40 @@
     <button class="btn" type="button" id="sort-close">{{ user_message("Fechar") }}</button>
   </div>
   
+</div>
+
+<!-- Modal: Confirmação de envio de e-mail -->
+<div id="req-email-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-email-title">
+    <div class="modal-header">
+      <h3 id="req-email-title"><i class="lucide" data-lucide="mail"></i> {{ user_message("Enviar e-mail de resposta") }}</h3>
+      <button class="btn" id="req-email-close" type="button" aria-label="{{ user_message('Fechar') }}"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="req-email-summary" class="req-email-summary"></div>
+      <div id="req-email-template" class="req-email-template"></div>
+      <div id="req-email-warnings" class="req-email-warnings" hidden></div>
+      <div id="req-email-resend-block" class="req-email-resend" hidden>
+        <div id="req-email-resend-list" class="req-email-resend-list"></div>
+        <label class="req-email-resend-ack">
+          <input type="checkbox" id="req-email-resend-ack">
+          <span>{{ user_message("Confirmo o reenvio mesmo assim, ciente de que o aluno pode receber o e-mail duas vezes.") }}</span>
+        </label>
+      </div>
+      <div class="req-email-recipients-head">{{ user_message("Destinatários") }}</div>
+      <div id="req-email-recipients" class="req-email-recipients"></div>
+      <details id="req-email-preview-wrap" class="req-email-preview-wrap">
+        <summary>{{ user_message("Pré-visualizar mensagem") }}</summary>
+        <div class="req-email-preview-subject" id="req-email-preview-subject"></div>
+        <pre class="req-email-preview" id="req-email-preview"></pre>
+      </details>
+      <div id="req-email-result" class="req-email-result" hidden></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="req-email-cancel" type="button">{{ user_message("Cancelar") }}</button>
+      <button class="btn btn-primary" id="req-email-confirm" type="button">{{ user_message("Enviar") }}</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: Pré-ajustes (Requisições) -->
@@ -180,10 +215,30 @@
         <div class="presets-field-block">
           <label class="presets-field-label" for="preset-title-input">{{ user_message("Título") }}</label>
           <input type="text" id="preset-title-input" class="control" placeholder="{{ user_message('Título do modelo') }}" autocomplete="off">
+          <span class="presets-field-hint" id="preset-title-hint" hidden>{{ user_message("Nome interno do modelo. Não é o assunto do e-mail.") }}</span>
+        </div>
+        <div class="presets-field-block" id="preset-subject-block" hidden>
+          <label class="presets-field-label" for="preset-subject-input">{{ user_message("Assunto do e-mail") }}</label>
+          <input type="text" id="preset-subject-input" class="control" placeholder="{{ user_message('Assunto enviado ao aluno') }}" autocomplete="off">
         </div>
         <div class="presets-field-block">
           <label class="presets-field-label" for="preset-textarea">{{ user_message("Conteúdo") }}</label>
           <textarea id="preset-textarea" class="control" style="min-height:120px;resize:vertical" rows="3" placeholder="{{ user_message('Digite o conteúdo do modelo') }}"></textarea>
+        </div>
+        <div class="presets-field-block" id="preset-default-block" hidden>
+          <label class="presets-default-row">
+            <input type="checkbox" id="preset-default-input">
+            <span>{{ user_message("Usar este modelo como padrão no envio de e-mails") }}</span>
+          </label>
+        </div>
+        <div class="presets-field-block" id="preset-placeholders-block" hidden>
+          <span class="presets-field-label">{{ user_message("Campos disponíveis") }}</span>
+          <div class="presets-placeholders" id="preset-placeholders">
+            {% for token, help_text in email_placeholder_help %}
+              <button type="button" class="presets-ph" data-token="{{ token }}" title="{{ help_text }}">{{ token }}</button>
+            {% endfor %}
+          </div>
+          <span class="presets-field-hint">{{ user_message("Clique para inserir no conteúdo.") }}</span>
         </div>
       </div>
     </div>
@@ -194,6 +249,67 @@
 </div>
 
 <style>
+/* Indicador de e-mail pendente (escopo local) */
+.req-id-cell{ display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.req-id-cell .req-email-pending{ width:14px; height:14px; color:#2563eb; flex:0 0 auto; }
+.req-id-cell .req-email-pending.is-error{ color:#dc2626; }
+
+/* Contador da barra flutuante em modo lote */
+.pedido-actions-float .act-count{
+  display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 6px;
+  margin-right:2px; border-radius:999px; background:#2563eb; color:#fff;
+  font-size:12px; font-weight:600;
+}
+
+/* Modal de confirmação de envio */
+#req-email-modal .modal-card{ width:min(640px, calc(100vw - 32px)); }
+.req-email-summary{ font-size:15px; font-weight:600; margin-bottom:4px; }
+.req-email-template{ font-size:12px; color:#71717a; margin-bottom:10px; }
+.req-email-warnings{
+  border:1px solid #fecaca; background:#fef2f2; color:#b91c1c;
+  border-radius:8px; padding:8px 10px; font-size:12px; margin-bottom:10px;
+}
+.req-email-recipients-head{ font-size:12px; font-weight:600; color:#52525b; margin-bottom:4px; }
+.req-email-recipients{ max-height:180px; overflow:auto; border:1px solid #e4e4e7; border-radius:8px; }
+.req-email-recipient{
+  display:grid; grid-template-columns:1fr 1.2fr auto; gap:8px; align-items:center;
+  padding:6px 10px; font-size:13px; border-bottom:1px solid #f4f4f5;
+}
+.req-email-recipient:last-child{ border-bottom:none; }
+.req-email-recipient.is-blocked{ background:#fef2f2; color:#b91c1c; }
+.req-email-recipient .r-mail{ color:#71717a; font-size:12px; }
+.req-email-recipient .r-qtd{ font-variant-numeric:tabular-nums; color:#71717a; }
+.req-email-recipient.is-unresolved{ background:#fffbeb; }
+.req-email-recipient.is-unresolved .r-nome::after{ content:" ⚠"; color:#b45309; }
+
+/* Reenvio de tentativa não confirmada: exige aceite explícito */
+.req-email-resend{
+  border:1px solid #fde68a; background:#fffbeb; color:#92400e;
+  border-radius:8px; padding:8px 10px; font-size:12px; margin-bottom:10px;
+}
+.req-email-resend-list{ margin-bottom:6px; }
+.req-email-resend-ack{ display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-weight:600; }
+.req-email-resend-ack input{ margin-top:2px; flex:0 0 auto; }
+.req-email-preview-wrap{ margin-top:10px; }
+.req-email-preview-wrap summary{ cursor:pointer; font-size:12px; color:#2563eb; }
+.req-email-preview-subject{ font-size:12px; font-weight:600; margin:8px 0 4px; }
+.req-email-preview{
+  white-space:pre-wrap; font-size:12px; background:#fafafa; border:1px solid #e4e4e7;
+  border-radius:8px; padding:10px; max-height:220px; overflow:auto; margin:0;
+}
+.req-email-result{ margin-top:10px; font-size:13px; font-weight:500; }
+
+/* Pré-definições: assunto, padrão e placeholders */
+.presets-field-hint{ display:block; font-size:11px; color:#71717a; margin-top:4px; }
+.presets-default-row{ display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+.presets-placeholders{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.presets-ph{
+  border:1px solid #e4e4e7; background:#fafafa; border-radius:999px;
+  padding:3px 9px; font-size:11px; font-family:ui-monospace,monospace;
+  color:#3f3f46; cursor:pointer;
+}
+.presets-ph:hover{ background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+
 /* Estilos do modal de Pré-ajustes (escopo local) */
 #req-presets-modal .modal-card{ width:min(900px, calc(100vw - 32px)); }
 /* Header */
@@ -301,12 +417,60 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (titleInput) item.titulo = titleInput.value;
     const ta = document.getElementById('preset-textarea');
     if (ta) item.texto = ta.value;
+    if (currentTipo === 'emails'){
+      const subj = document.getElementById('preset-subject-input');
+      if (subj) item.assunto = subj.value;
+      const def = document.getElementById('preset-default-input');
+      if (def){
+        // Exactly one default: designating this model clears the others.
+        if (def.checked){
+          (presetsData.emails || []).forEach(x => { x.is_default = (x.id === item.id) ? 1 : 0; });
+        } else {
+          item.is_default = 0;
+        }
+      }
+    }
     // também atualiza o label na lista esquerda
     if (titleInput) {
       const listInput = listBox.querySelector(`input[data-id="${item.id}"]`);
       if (listInput) listInput.value = item.titulo;
     }
   }
+
+  function syncPresetEmailFields(){
+    const isEmail = currentTipo === 'emails';
+    const item = getSelectedPreset();
+    document.getElementById('preset-subject-block')?.toggleAttribute('hidden', !isEmail);
+    document.getElementById('preset-default-block')?.toggleAttribute('hidden', !isEmail);
+    document.getElementById('preset-placeholders-block')?.toggleAttribute('hidden', !isEmail);
+    document.getElementById('preset-title-hint')?.toggleAttribute('hidden', !isEmail);
+    const subj = document.getElementById('preset-subject-input');
+    if (subj){
+      subj.value = (isEmail && item) ? (item.assunto || '') : '';
+      subj.disabled = !canRequisicoesEdit || !item;
+    }
+    const def = document.getElementById('preset-default-input');
+    if (def){
+      def.checked = !!(isEmail && item && item.is_default);
+      def.disabled = !canRequisicoesEdit || !item;
+    }
+  }
+  window.syncPresetEmailFields = syncPresetEmailFields;
+
+  // Placeholder chips insert at the caret of the body editor.
+  document.getElementById('preset-placeholders')?.addEventListener('click', (e)=>{
+    const chip = e.target.closest('.presets-ph');
+    if (!chip || !canRequisicoesEdit) return;
+    const ta = document.getElementById('preset-textarea');
+    if (!ta || ta.disabled) return;
+    const token = chip.getAttribute('data-token') || '';
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + token.length;
+    ta.focus();
+    syncSelectedPresetDraft();
+  });
 
   // Insere o botão Salvar no footer, se não existir
   const footer = overlay?.querySelector('.modal-footer');
@@ -416,6 +580,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (!item) {
       if (titleInput) { titleInput.value = ''; titleInput.disabled = true; }
       if (ta) { ta.value = ''; ta.disabled = true; }
+      syncPresetEmailFields();
       updatePresetsSaveState();
       return;
     }
@@ -437,6 +602,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
         item.texto = ta.value;
       };
     }
+    syncPresetEmailFields();
+    const subj = document.getElementById('preset-subject-input');
+    if (subj){
+      subj.oninput = function(){
+        if (!canRequisicoesEdit) return;
+        item.assunto = this.value;
+      };
+    }
+    const def = document.getElementById('preset-default-input');
+    if (def){
+      def.onchange = function(){
+        if (!canRequisicoesEdit) return;
+        if (this.checked){
+          (presetsData.emails || []).forEach(x => { x.is_default = (x.id === item.id) ? 1 : 0; });
+        } else {
+          item.is_default = 0;
+        }
+      };
+    }
     updatePresetsSaveState();
   }
 
@@ -452,7 +636,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Se não houver nenhum modelo, adiciona um modelo inicial
     if ((presetsData[currentTipo] || []).length === 0) {
       let novoTitulo = currentTipo === 'respostas' ? reqMessageTemplates.newJustification : reqMessageTemplates.newResponse;
-      presetsData[currentTipo].push({ id: 1, titulo: novoTitulo, texto: '' });
+      const seed = { id: 1, titulo: novoTitulo, texto: '' };
+      if (currentTipo === 'emails'){ seed.assunto = ''; seed.is_default = 0; }
+      presetsData[currentTipo].push(seed);
     }
     window.lucide?.createIcons?.();
     renderList();
@@ -483,7 +669,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let novoTitulo = reqMessageTemplates.newModel;
     if(currentTipo === 'respostas') novoTitulo = reqMessageTemplates.newJustification;
     if(currentTipo === 'emails') novoTitulo = reqMessageTemplates.newResponse;
-    arr.push({ id: novoId, titulo: novoTitulo, texto: "" });
+    const novoItem = { id: novoId, titulo: novoTitulo, texto: "" };
+    if (currentTipo === 'emails'){ novoItem.assunto = ''; novoItem.is_default = 0; }
+    arr.push(novoItem);
     selectedId = novoId;
     renderList();
     renderContent();
@@ -565,7 +753,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
   'organizeBy': user_message('Organizar por'),
   'process': user_message('Processar'),
   'reopen': user_message('Reabrir'),
-  'selectRowHint': user_message('Selecione uma linha para habilitar as ações.')
+  'selectRowHint': user_message('Selecione uma linha para habilitar as ações.'),
+  'sendEmail': user_message('Enviar e-mail'),
+  'sendEmailCount': user_message('Enviar e-mail ({value_1})'),
+  'selectedCount': user_message('{value_1} requisições selecionadas.'),
+  'mixedSelectionHint': user_message('Todas as requisições selecionadas precisam ter e-mail pendente.'),
+  'emailConfirmTitle': user_message('Enviar e-mail de resposta'),
+  'emailSummary': user_message('{value_1} requisições · {value_2} alunos · {value_3} e-mails'),
+  'emailTemplateLabel': user_message('Modelo'),
+  'emailSending': user_message('Enviando…'),
+  'emailGenericError': user_message('Não foi possível concluir o envio.'),
+  'emailResendUnconfirmed': user_message('a tentativa anterior não foi confirmada pelo provedor.')
 }|tojson }}</script>
 
 <!-- Lista no formato de cards (com header sticky) -->
@@ -659,8 +857,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <span class="req-atividade-name">{{ r.atividade_nome or '-' }}</span>
           </div>
         {% endset %}
+        {# Icon present == this request's CURRENT decision still awaits e-mail. #}
+        {% set is_email_pendente = r.id in (email_pendentes or []) %}
+        {% set is_email_falha = r.id in (email_falhas or []) %}
+        {% set id_cell %}
+          <span class="req-id-cell">
+            <span class="req-id-value">{{ r.id }}</span>
+            {% if is_email_pendente %}
+              <i class="lucide req-email-pending{{ ' is-error' if is_email_falha else '' }}"
+                 data-lucide="{{ 'mail-warning' if is_email_falha else 'mail' }}"
+                 role="img"
+                 aria-label="{{ user_message('E-mail pendente — última tentativa falhou.') if is_email_falha else user_message('E-mail pendente de envio') }}"
+                 title="{{ user_message('E-mail pendente — última tentativa falhou.') if is_email_falha else user_message('E-mail pendente de envio') }}"></i>
+            {% endif %}
+          </span>
+        {% endset %}
         {{ cl.row([
-          {'class': 'center', 'content': (r.id|string)},
+          {'class': 'center', 'content': id_cell},
           {'class': 'left', 'content': data_solicitacao_fmt },
           {'class': 'left', 'content': data_processamento_fmt },
           {'class': 'left ellipsis', 'content': r.aluno_nome or ''},
@@ -683,6 +896,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           'data-data-evento': _de_iso,
           'data-observacao': (r.observacao or '')|e,
           'data-snapshot-versioned': '1' if r.snapshot_versionado_presente else '0',
+          'data-email-pending': '1' if is_email_pendente else '0',
           'data-delete-url': (url_for('admin_excluir_requisicao', req_id=r.id) if can_requisicoes_full else '')
         }) }}
       {% endfor %}
@@ -723,6 +937,143 @@ document.addEventListener('DOMContentLoaded', ()=>{
       ...toolbarQuery
     });
 
+    // Confirmação de envio de e-mail (preview -> envio explícito)
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const modal    = document.getElementById('req-email-modal');
+      if (!modal) return;
+      const elSummary   = document.getElementById('req-email-summary');
+      const elTemplate  = document.getElementById('req-email-template');
+      const elWarnings  = document.getElementById('req-email-warnings');
+      const elRecipients= document.getElementById('req-email-recipients');
+      const elPreview   = document.getElementById('req-email-preview');
+      const elPrevSubj  = document.getElementById('req-email-preview-subject');
+      const elPrevWrap  = document.getElementById('req-email-preview-wrap');
+      const elResult    = document.getElementById('req-email-result');
+      const btnConfirm  = document.getElementById('req-email-confirm');
+      const btnCancel   = document.getElementById('req-email-cancel');
+      const btnClose    = document.getElementById('req-email-close');
+      const elResend    = document.getElementById('req-email-resend-block');
+      const elResendList= document.getElementById('req-email-resend-list');
+      const ackResend   = document.getElementById('req-email-resend-ack');
+
+      let currentIds = [];
+      let unresolvedIds = [];   // alunos whose last attempt was never confirmed
+      let lastPreview = null;   // payload the dialog is currently showing
+      let inFlight = false;     // local double-submit guard
+
+      function close(){ modal.hidden = true; inFlight = false; }
+      function postJson(url, body){
+        return fetch(url, {
+          method:'POST',
+          headers: buildPostHeaders({ 'Content-Type':'application/json' }),
+          body: JSON.stringify(body)
+        }).then(async res => ({ ok: res.ok, status: res.status, data: await res.json().catch(()=>({})) }));
+      }
+
+      window.openRequisicoesEmailConfirm = async function(ids){
+        if (!Array.isArray(ids) || !ids.length) return;
+        currentIds = ids;
+        inFlight = false;
+        elResult.hidden = true; elResult.textContent = '';
+        elWarnings.hidden = true; elWarnings.innerHTML = '';
+        elRecipients.innerHTML = '';
+        elPreview.textContent = ''; elPrevSubj.textContent = '';
+        elSummary.textContent = reqMessageTemplates.emailSending;
+        elTemplate.textContent = '';
+        unresolvedIds = [];
+        lastPreview = null;
+        if (elResend){ elResend.hidden = true; elResendList.innerHTML = ''; }
+        if (ackResend){ ackResend.checked = false; }
+        btnConfirm.disabled = true;
+        modal.hidden = false;
+        window.lucide?.createIcons?.();
+
+        const { ok, data } = await postJson('{{ url_for("admin_requisicoes_email_preview") }}', { requisicao_ids: ids });
+        if (!ok || !data.ok){
+          elSummary.textContent = data.error || reqMessageTemplates.emailGenericError;
+          return;
+        }
+        elSummary.textContent = window.appFormatMessage(reqMessageTemplates.emailSummary, {
+          value_1: data.requisicoes, value_2: data.alunos, value_3: data.emails
+        });
+        elTemplate.textContent = reqMessageTemplates.emailTemplateLabel + ': ' + (data.modelo?.titulo || '');
+
+        const blocked = (data.destinatarios || []).filter(d => d.bloqueio);
+        if (blocked.length || !data.transporte_pronto){
+          elWarnings.hidden = false;
+          const items = blocked.map(d => `<div>• ${d.aluno_nome}: ${d.bloqueio}</div>`);
+          if (!data.transporte_pronto) items.unshift(`<div>• ${data.transporte_mensagem}</div>`);
+          elWarnings.innerHTML = items.join('');
+        }
+        elRecipients.innerHTML = (data.destinatarios || []).map(d => `
+          <div class="req-email-recipient${d.bloqueio ? ' is-blocked' : ''}${d.reenvio_incerto ? ' is-unresolved' : ''}">
+            <span class="r-nome">${d.aluno_nome}</span>
+            <span class="r-mail">${d.destinatario || '—'}</span>
+            <span class="r-qtd">${d.quantidade}</span>
+          </div>`).join('');
+
+        // A previous attempt for this exact set was never confirmed by the
+        // provider. Sending again may duplicate it, so the send stays blocked
+        // until the administrator accepts that risk explicitly.
+        unresolvedIds = Array.isArray(data.reenvio_incerto) ? data.reenvio_incerto : [];
+        if (elResend && unresolvedIds.length){
+          elResend.hidden = false;
+          elResendList.innerHTML = (data.destinatarios || [])
+            .filter(d => d.reenvio_incerto)
+            .map(d => `<div>• ${d.aluno_nome}: ${reqMessageTemplates.emailResendUnconfirmed}</div>`)
+            .join('');
+        }
+
+        const first = (data.destinatarios || []).find(d => !d.bloqueio);
+        if (first){
+          elPrevWrap.hidden = false;
+          elPrevSubj.textContent = first.assunto;
+          elPreview.textContent = first.previa;
+        } else {
+          elPrevWrap.hidden = true;
+        }
+        lastPreview = data;
+        syncConfirmState();
+      };
+
+      /* Sending requires: a usable default model, a ready transport, at least
+         one deliverable recipient, and -- when any recipient has an unconfirmed
+         previous attempt -- an explicit duplicate-risk acknowledgement. */
+      function syncConfirmState(){
+        const p = lastPreview;
+        const ready = !!(p && p.emails > 0 && p.transporte_pronto);
+        const ackPending = unresolvedIds.length > 0 && !(ackResend && ackResend.checked);
+        btnConfirm.disabled = !ready || ackPending;
+      }
+      ackResend?.addEventListener('change', syncConfirmState);
+
+      btnConfirm?.addEventListener('click', async ()=>{
+        if (inFlight || btnConfirm.disabled) return;
+        inFlight = true;                 // guards double click / browser retry
+        btnConfirm.disabled = true;
+        elResult.hidden = false;
+        elResult.textContent = reqMessageTemplates.emailSending;
+        const body = { requisicao_ids: currentIds };
+        // Only the students the administrator actually acknowledged are released.
+        if (unresolvedIds.length && ackResend && ackResend.checked){
+          body.confirmar_reenvio = unresolvedIds;
+        }
+        const { ok, data } = await postJson('{{ url_for("admin_requisicoes_email_enviar") }}', body);
+        elResult.textContent = (data && (data.mensagem || data.error)) || reqMessageTemplates.emailGenericError;
+        if (ok && data && data.enviados){
+          setTimeout(()=>{ window.location.reload(); }, 1200);
+        } else {
+          inFlight = false;
+          btnConfirm.disabled = false;
+        }
+      });
+
+      btnCancel?.addEventListener('click', close);
+      btnClose?.addEventListener('click', close);
+      modal.addEventListener('click', (e)=>{ if (e.target === modal) close(); });
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
+    });
+
     // Seleção de linha + menu de Ações
     document.addEventListener('DOMContentLoaded', ()=>{
       const rowSelectionApi = window.initToolbarRowSelection?.({
@@ -740,6 +1091,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const itmView  = document.getElementById('req-action-view');
       const itmEdit  = document.getElementById('req-action-edit');
       const itmProc  = document.getElementById('req-action-process');
+      const itmEmail = document.getElementById('req-action-email');
       const itmDel   = document.getElementById('req-action-delete');
       if (!actBtn || !actMenu) return;
 
@@ -754,12 +1106,33 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }
       toolbarQuery.bindDismissOnViewportChange(actMenu, closeMenu);
 
+      // Every selected request must have a pending e-mail; a partial batch is
+      // never silently narrowed.
+      function selectionAllEmailPending(rows){
+        return rows.length > 0 && rows.every(r => r.getAttribute('data-email-pending') === '1');
+      }
+      window.requisicoesSelectionAllEmailPending = selectionAllEmailPending;
+
       function syncItems(){
         const rows = rowSelectionApi.getSelectedRows();
+        // Single-row actions stay strictly single-row: with a multi-selection
+        // `row` is null, so Ver/Editar/Processar/Excluir cannot silently act on
+        // an arbitrary first row.
         const row  = rows.length === 1 ? rows[0] : null;
         const st   = (row?.getAttribute('data-status') || '').trim().toLowerCase();
         const isPending = !st || st.includes('pend') || st.includes('aguard');
         const hasRow = !!row;
+        if (itmEmail){
+          const canEmail = canRequisicoesEdit && selectionAllEmailPending(rows);
+          itmEmail.disabled = !canEmail;
+          itmEmail.hidden = !canRequisicoesEdit;
+          const emailLabel = itmEmail.querySelector('span');
+          if (emailLabel){
+            emailLabel.textContent = rows.length > 1
+              ? window.appFormatMessage(reqMessageTemplates.sendEmailCount, { value_1: rows.length })
+              : reqMessageTemplates.sendEmail;
+          }
+        }
         if (itmView)  { itmView.disabled  = !hasRow; }
         if (itmEdit)  {
           const canUseEdit = canRequisicoesEdit && hasRow && isPending;
@@ -783,9 +1156,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
           itmDel.disabled = !canRequisicoesFull || !hasRow;
           itmDel.hidden = !canRequisicoesFull;
         }
-        if (hint)     { hint.textContent  = hasRow ? '' : reqMessageTemplates.selectRowHint; }
+        if (hint)     {
+          if (rows.length > 1){
+            hint.textContent = selectionAllEmailPending(rows)
+              ? window.appFormatMessage(reqMessageTemplates.selectedCount, { value_1: rows.length })
+              : reqMessageTemplates.mixedSelectionHint;
+          } else {
+            hint.textContent = hasRow ? '' : reqMessageTemplates.selectRowHint;
+          }
+        }
       }
       window.requisicoesActionsSync = syncItems;
+
+      itmEmail?.addEventListener('click', ()=>{
+        if (!canRequisicoesEdit || itmEmail.disabled) return;
+        closeMenu();
+        const ids = rowSelectionApi.getSelectedRows()
+          .map(r => parseInt(r.getAttribute('data-req-id'), 10))
+          .filter(Number.isFinite);
+        window.openRequisicoesEmailConfirm?.(ids);
+      });
 
       actBtn.addEventListener('click', ()=>{ if (actMenu.hidden) openMenu(); else closeMenu(); });
       actMenu.addEventListener('click', (e)=>{ e.stopPropagation(); });
@@ -1503,12 +1893,52 @@ document.addEventListener('DOMContentLoaded', ()=>{
     bar.setAttribute('role','toolbar');
     bar.setAttribute('aria-label','Ações da requisição selecionada');
     bar.innerHTML = `
+      <span class="act-count" data-role="selection-count" hidden></span>
       ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="process" aria-label="Processar requisição" title="Processar"><i data-lucide="circle-check-big"></i></button>' : ''}
       ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar requisição" title="Editar"><i data-lucide="edit"></i></button>' : ''}
       <button type="button" class="act-btn" data-action="view" aria-label="Ver requisição" title="Ver"><i data-lucide="eye"></i></button>
+      ${canRequisicoesEdit ? '<button type="button" class="act-btn" data-action="email" aria-label="Enviar e-mail" title="Enviar e-mail"><i data-lucide="mail"></i></button>' : ''}
       ${canRequisicoesFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir requisição" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
     `;
     window.lucide?.createIcons?.();
+
+    const countEl = bar.querySelector('[data-role="selection-count"]');
+    const singleOnlyActions = ['process','edit','view','delete'];
+
+    function selectedRows(){
+      return window.requisicoesRowSelectionApi?.getSelectedRows?.() || [];
+    }
+    function allSelectedPending(rows){
+      return rows.length > 0 && rows.every(r => r.getAttribute('data-email-pending') === '1');
+    }
+    /* Batch mode hides every action that only makes sense for one request, so a
+       multi-selection can never trigger a single-request operation. */
+    function applyBatchMode(rows){
+      const batch = rows.length > 1;
+      singleOnlyActions.forEach(name => {
+        const btn = bar.querySelector(`button[data-action="${name}"]`);
+        if (btn) btn.hidden = batch;
+      });
+      if (countEl){
+        countEl.hidden = !batch;
+        countEl.textContent = batch ? String(rows.length) : '';
+      }
+      const emailBtn = bar.querySelector('button[data-action="email"]');
+      if (emailBtn){
+        emailBtn.hidden = !canRequisicoesEdit || !allSelectedPending(rows);
+      }
+      return batch;
+    }
+    window.requisicoesFloatingBarSync = function(){
+      const rows = selectedRows();
+      if (rows.length > 1){
+        applyBatchMode(rows);
+        positionFor(rows[rows.length - 1]);
+        show();
+      } else {
+        applyBatchMode(rows);
+      }
+    };
 
     const scrollWrap = document.querySelector('#requisicoes-scroll-container');
     let hideTimer = null;
@@ -1534,6 +1964,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const st = (card?.getAttribute('data-status') || '').toLowerCase();
         const btn = bar.querySelector('button[data-action="process"]');
         const editBtn = bar.querySelector('button[data-action="edit"]');
+        // Single-request hover: e-mail offered only when THIS request is pending.
+        const emailBtn = bar.querySelector('button[data-action="email"]');
+        if (emailBtn && selectedRows().length <= 1){
+          emailBtn.hidden = !canRequisicoesEdit
+            || card?.getAttribute('data-email-pending') !== '1';
+        }
         if (!canRequisicoesEdit || !btn) return;
         const isPending = (st.indexOf('pend') !== -1);
         if (editBtn){
@@ -1561,13 +1997,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
     scrollWrap?.addEventListener('mouseover', (e)=>{
       const card = e.target.closest('.impresso-card');
       if (!card || card.classList.contains('header')) return;
+      // With a multi-selection active the bar stays in batch mode: hovering a
+      // row must not silently re-target the batch to that single request.
+      if (selectedRows().length > 1){
+        window.requisicoesFloatingBarSync();
+        return;
+      }
       currentId = card.getAttribute('data-req-id');
       currentCard = card;
+      applyBatchMode(selectedRows());
       positionFor(currentCard);
       updatePrimaryActionFor(currentCard);
       show();
     });
-    scrollWrap?.addEventListener('mouseleave', scheduleHide);
+    scrollWrap?.addEventListener('mouseleave', ()=>{
+      if (selectedRows().length > 1) return;   // batch bar is not hover-owned
+      scheduleHide();
+    });
+    // Keep the bar in sync with the shared selection authority.
+    scrollWrap?.addEventListener('click', ()=>{ setTimeout(()=>window.requisicoesFloatingBarSync(), 0); });
     bar.addEventListener('mouseenter', cancelHide);
     bar.addEventListener('mouseleave', scheduleHide);
     window.addEventListener('scroll', ()=>{ if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
@@ -1703,8 +2151,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     bar.addEventListener('click', (e)=>{
       const btn = e.target.closest('button.act-btn');
-      if (!btn || !currentId) return;
+      if (!btn) return;
       const action = btn.getAttribute('data-action');
+      // E-mail is the one batch-capable action and uses the SAME selected-row
+      // authority; it falls back to the hovered row only when nothing is selected.
+      if (action === 'email'){
+        if (!canRequisicoesEdit) return;
+        const rows = selectedRows();
+        const ids = rows.length
+          ? rows.map(r => parseInt(r.getAttribute('data-req-id'), 10))
+          : (currentId ? [parseInt(currentId, 10)] : []);
+        const valid = ids.filter(Number.isFinite);
+        if (!valid.length) return;
+        window.openRequisicoesEmailConfirm?.(valid);
+        return;
+      }
+      if (!currentId) return;
       if (action === 'view'){
         loadReqAndOpen('view');
       } else if (action === 'edit'){

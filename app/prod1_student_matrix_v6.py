@@ -3,12 +3,13 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_schema import (
+    BASELINE_MARKER,
     SCHEMA_EPOCH,
     STUDENT_MATRIX_AUTHORITY_MARKER,
     Prod1SchemaError,
     _validate_prod1_v5_schema,
+    _validate_prod1_v6_schema,
     canonical_prod1_object_sql,
-    validate_prod1_schema,
 )
 
 
@@ -80,7 +81,7 @@ def migrate_prod1_v5_to_v6(conn: sqlite3.Connection) -> dict[str, object]:
             ),
         )
         conn.execute("PRAGMA user_version=6")
-        validate_prod1_schema(conn)
+        _validate_prod1_v6_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v6 integrity check failed")
         conn.execute("COMMIT")
@@ -90,7 +91,12 @@ def migrate_prod1_v5_to_v6(conn: sqlite3.Connection) -> dict[str, object]:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
-    return validate_prod1_schema(conn)
+    _validate_prod1_v6_schema(conn)
+    return {
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 6,
+        "baseline_marker": BASELINE_MARKER,
+    }
 
 
 __all__ = ["migrate_prod1_v5_to_v6"]

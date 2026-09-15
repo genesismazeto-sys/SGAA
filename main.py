@@ -351,6 +351,8 @@ from app.views.admin.requisicoes import (
     admin_nova_requisicao,
     admin_processar_requisicao,
     admin_requisicoes,
+    admin_requisicoes_email_enviar,
+    admin_requisicoes_email_preview,
 )
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,

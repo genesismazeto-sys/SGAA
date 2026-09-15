@@ -715,8 +715,10 @@ def profile_digest(level: str, profiles=None) -> str:
 
 # The requirement matrix is the primary RBAC anchor: which (endpoint, method)
 # pair requires which (resource, scope).  Inherited unchanged from REF-0C-D-R1.
+# REN1: +2 entries, both (requisicoes, edit) -- the e-mail preview and send
+# endpoints. No pre-existing requirement changed.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "98de88ba6c58a3b6da4f6d17749c06bb42c9b435ce34ccbce34049cd5a33d796"
+    "13f5a2869a53d8367a25c75437e0931cc2cb40ddef735bba69069fcdbaf378c1"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -736,8 +738,10 @@ CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
     "b7544cb0ca095be49aa141e50d36b958af35645009ef3c22ee84482f97e10b90"
 )
+# REN1: +2 denials, both denying `consultivo` the e-mail endpoints -- the
+# read-only administrative level must not be able to send student e-mail.
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "cbb2c5d8970dfb60ebc7347a93ac25a855df6d5c2082673ad65aafed22fc8610"
+    "9433ba27b0cb40888652aa5d33faf49fadc86a5b2b6150e92b8faeef9fcef7f1"
 )
 
 

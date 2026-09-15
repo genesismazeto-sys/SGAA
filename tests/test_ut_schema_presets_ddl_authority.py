@@ -209,6 +209,9 @@ def test_recreated_presets_table_keeps_canonical_constraints(tmp_path):
             ("titulo", "TEXT", 1, 0),
             ("texto", "TEXT", 1, 0),
             ("atualizado_em", "TEXT", 1, 0),
+            # prod-1/v7: outbound subject + explicit default designation.
+            ("assunto", "TEXT", 1, 0),
+            ("is_default", "INTEGER", 1, 0),
         ]
 
         with pytest.raises(sqlite3.IntegrityError):

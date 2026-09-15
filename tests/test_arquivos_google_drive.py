@@ -29,6 +29,7 @@ from app.prod1_schema import (
     migrate_prod1_v3_to_v4,
     migrate_prod1_v4_to_v5,
     migrate_prod1_v5_to_v6,
+    migrate_prod1_v6_to_v7,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -198,7 +199,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -236,6 +237,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     )
     assert row["remote_file_id"] is None and row["operation_key"] is None
     migrate_prod1_v5_to_v6(conn)
+    migrate_prod1_v6_to_v7(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)
@@ -902,7 +904,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         6,
         1,
         3,
-    ], "the named catalog delta ledger must stay exactly these eight terms"
+        22,
+    ], "the named catalog delta ledger must stay exactly these nine terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -911,7 +914,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 558
+    assert governance.CANONICAL_CATALOG_COUNT == 580
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
@@ -921,6 +924,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         set(catalog)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
+        - set(governance.REN1_REQUEST_EMAIL_KEYS)
     ) == (
         governance.CATALOG_VISIBLE_BASELINE_DEBT
     ) == 2

@@ -431,7 +431,13 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_api_aluno_requisicao_scope",
     }:
         return _permission("requisicoes", "view")
-    if endpoint in {"admin_nova_requisicao", "admin_editar_requisicao", "admin_processar_requisicao"}:
+    if endpoint in {
+        "admin_nova_requisicao",
+        "admin_editar_requisicao",
+        "admin_processar_requisicao",
+        "admin_requisicoes_email_preview",
+        "admin_requisicoes_email_enviar",
+    }:
         return _permission("requisicoes", "edit")
     if endpoint == "admin_excluir_requisicao":
         return _permission("requisicoes", "full")

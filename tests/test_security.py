@@ -137,7 +137,14 @@ def test_presets_post_persists_object_payload_for_responses_and_emails(client):
 
     loaded = client.get("/admin/api/presets")
     assert loaded.status_code == 200
-    assert loaded.get_json() == payload
+    # prod-1/v7: e-mail models additionally round-trip assunto/is_default.
+    # Justificativas keep their historical shape exactly.
+    assert loaded.get_json() == {
+        "respostas": payload["respostas"],
+        "emails": [
+            {**payload["emails"][0], "assunto": "", "is_default": 0},
+        ],
+    }
 
 
 LEGACY_PRESETS_PAYLOAD = {
@@ -146,6 +153,14 @@ LEGACY_PRESETS_PAYLOAD = {
     ],
     "emails": [
         {"id": 9, "titulo": "Legado email", "texto": "Email legado"},
+    ],
+}
+
+# The same legacy payload as it reads back after the v7 e-mail extension.
+LEGACY_PRESETS_PAYLOAD_LOADED = {
+    "respostas": LEGACY_PRESETS_PAYLOAD["respostas"],
+    "emails": [
+        {**LEGACY_PRESETS_PAYLOAD["emails"][0], "assunto": "", "is_default": 0},
     ],
 }
 
@@ -219,7 +234,7 @@ def test_presets_get_migrates_legacy_json_to_database(tmp_path, monkeypatch):
     response, rows = _run_legacy_presets_migration(tmp_path, monkeypatch)
 
     assert response.status_code == 200
-    assert response.get_json() == LEGACY_PRESETS_PAYLOAD
+    assert response.get_json() == LEGACY_PRESETS_PAYLOAD_LOADED
     assert rows == [
         {"tipo": "emails", "preset_id": 9, "titulo": "Legado email", "texto": "Email legado"},
         {"tipo": "respostas", "preset_id": 3, "titulo": "Legado justificativa", "texto": "Texto legado"},

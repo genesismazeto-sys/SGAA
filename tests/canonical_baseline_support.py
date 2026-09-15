@@ -81,6 +81,15 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "salvo.' (msg_2b8b193d37a30c8f)",
         3,
     ),
+    (
+        "REN1 request e-mail notifications: the Requisições list gains the "
+        "e-mail-pending row indicator, the selection-aware 'Enviar e-mail' "
+        "action in both the Ações menu and the floating bar, the send "
+        "confirmation/preview dialog including the unconfirmed-resend "
+        "acknowledgement, and the Pré-definições → E-mails de resposta "
+        "subject/default/placeholder editor surface",
+        22,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -116,8 +125,11 @@ CATALOG_VISIBLE_BASELINE_DEBT = (
 PARENT_CATALOG_KEYS_SHA256 = (
     "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
 )
+# REN1: +22 keys (558 -> 580) for the request e-mail notification surface.
+# Verified additive: removing exactly REN1_REQUEST_EMAIL_KEYS from the live
+# catalog reproduces the parent commit's 558-key digest 70ee7163... bit-for-bit.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "70ee71639173adf9c5bc541a2a4966138ed5d6cfeaea465bb731088395cc8ce1"
+    "d4ab5f220d79aee491be67d2ae00d226d817a07578fe5970f8f97df67ebff1e8"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -128,6 +140,38 @@ CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS = frozenset(
         "msg_5f1896e86e5e5197",
         "msg_47eb6cef00e56a30",
         "msg_2b8b193d37a30c8f",
+    }
+)
+
+# REN1 request e-mail notifications.  Removing exactly these 22 keys from the
+# live catalog reproduces the previous 558-key baseline digest, which is the
+# proof that this term is purely additive.
+REN1_REQUEST_EMAIL_KEYS = frozenset(
+    {
+        # Unconfirmed-resend acknowledgement: an attempt whose outcome the
+        # provider never confirmed may not be resent without explicit consent.
+        "msg_babc490aa98abf35",  # Confirmo o reenvio mesmo assim...
+        "msg_20eb3b2761b50aed",  # a tentativa anterior nao foi confirmada...
+        "msg_7750d57868a1664b",  # E-mail pendente de envio
+        "msg_bbef131134b59b54",  # E-mail pendente - ultima tentativa falhou.
+        "msg_7515e4ab6b475885",  # Enviar e-mail
+        "msg_be31194418051eef",  # Enviar e-mail ({value_1})
+        "msg_24325ddb7752090e",  # {value_1} requisicoes selecionadas.
+        "msg_a5b5d5343ac8b8cb",  # Todas as requisicoes selecionadas precisam...
+        "msg_771f5b72615911fd",  # Enviar e-mail de resposta
+        "msg_f618afe119154c21",  # {value_1} requisicoes - {value_2} alunos...
+        "msg_b3a01bef14b4bd4d",  # Modelo
+        "msg_5e91dcdc5796506a",  # Enviando...
+        "msg_b6651f8b5faa2b3e",  # Nao foi possivel concluir o envio.
+        "msg_38f5682235059385",  # Destinatarios
+        "msg_2ac37ab5583ac46d",  # Pre-visualizar mensagem
+        "msg_a91a95517c038bab",  # Enviar
+        "msg_429c06a0a120bf5a",  # Nome interno do modelo...
+        "msg_b354c345c6677949",  # Assunto do e-mail
+        "msg_f94bfb6bda0978ac",  # Assunto enviado ao aluno
+        "msg_8c65a50ebbda9d19",  # Usar este modelo como padrao...
+        "msg_41210911d2e66292",  # Campos disponiveis
+        "msg_b84bd6a7db10ccf6",  # Clique para inserir no conteudo.
     }
 )
 
@@ -211,8 +255,10 @@ CANONICAL_ROUTE_RULE_COUNT = len(
 # has to be declared here, exactly once, on top of regenerating the artifact.
 TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 
+# REN1: +2 entries (125 -> 127) for the Requisições e-mail preview/send surface.
+# No existing route identity changed; the diff is additive only.
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "7ba3d5001c50e264db60f5ef2c368d8dce28234e6218d24a81a4ccb492ec1255"
+    "a582cc0e8d7407cf6122fcc2eb65dcba29b06cb242184971bfed3c8fcb7c4545"
 )
 
 

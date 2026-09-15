@@ -15,7 +15,16 @@ DEFAULT_UPLOAD_FOLDER = "SGAA - Backups"
 # NOTE:
 # Do not include reserved OIDC scopes such as "offline_access" here.
 # MSAL adds reserved scopes internally during the auth request flow.
-SCOPES = ["User.Read", "Files.ReadWrite"]
+#
+# This is the single canonical delegated scope set for the live Microsoft
+# identity. `app/cloud_drives.py` carries a sibling `_ONEDRIVE_SCOPE` string,
+# but that raw-OAuth helper has no importers and is unreachable legacy code, so
+# it is deliberately left untouched rather than changed for cosmetic symmetry.
+#
+# Mail.Send is delegated: SGAA sends as the connected user via POST /me/sendMail
+# and never spoofs From.
+SCOPES = ["User.Read", "Files.ReadWrite", "Mail.Send"]
+MAIL_SEND_SCOPE = "Mail.Send"
 logger = logging.getLogger(__name__)
 
 class OneDriveServiceError(RuntimeError):
@@ -216,6 +225,127 @@ def fetch_account_email(access_token: str) -> str:
 
     data = response.json() if response.content else {}
     return str(data.get("mail") or data.get("userPrincipalName") or "").strip()
+
+
+class MailSendIndeterminate(OneDriveServiceError):
+    """The request may or may not have reached Graph.
+
+    Raised when the transport fails in a way that cannot distinguish "never
+    delivered" from "delivered but the response was lost" (connection reset,
+    read timeout, 5xx after the body was written).  Callers must NOT auto-retry
+    on this: doing so risks sending a student a duplicate e-mail.
+    """
+
+
+def token_grants_mail_send(token_json: str) -> bool:
+    """Whether the stored delegated grant already covers Mail.Send.
+
+    Read-only: inspects the persisted scope list recorded at connection time.
+    Never triggers an interactive reconnect.
+    """
+    try:
+        payload = _parse_token_json(token_json)
+    except OneDriveServiceError:
+        return False
+    granted = payload.get("scopes")
+    if not isinstance(granted, list):
+        return False
+    return MAIL_SEND_SCOPE.lower() in {str(item).strip().lower() for item in granted}
+
+
+def send_mail_with_access_token(
+    *,
+    access_token: str,
+    to_address: str,
+    subject: str,
+    body_text: str,
+    save_to_sent_items: bool = True,
+) -> dict[str, Any]:
+    """POST /me/sendMail as the connected delegated identity.
+
+    ``From`` is deliberately never set -- Graph stamps the authenticated mailbox.
+    """
+    config = _load_config()
+    requests = _import_requests()
+    payload = {
+        "message": {
+            "subject": subject,
+            "body": {"contentType": "Text", "content": body_text},
+            "toRecipients": [{"emailAddress": {"address": to_address}}],
+        },
+        "saveToSentItems": bool(save_to_sent_items),
+    }
+    try:
+        response = requests.post(
+            f"{config.graph_base_url}/me/sendMail",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+    except Exception as exc:  # transport-level: outcome genuinely unknown
+        raise MailSendIndeterminate(
+            "Não foi possível confirmar o envio do e-mail. "
+            "Verifique a caixa de itens enviados antes de tentar novamente.",
+            debug_code="MAIL_SEND_INDETERMINATE",
+        ) from exc
+
+    if response.status_code in (200, 202):
+        return {"status": "sent", "http_status": response.status_code}
+
+    try:
+        error_payload = response.json() if response.content else {}
+    except ValueError:
+        error_payload = {}
+    code = ""
+    if isinstance(error_payload, dict):
+        code = str((error_payload.get("error") or {}).get("code") or "").strip().lower()
+
+    if response.status_code == 401:
+        raise OneDriveServiceError(
+            "Token expirado e sem refresh válido. Reconecte o OneDrive/Microsoft.",
+            debug_code="AUTH_RECONNECT_REQUIRED",
+            http_status=401,
+        )
+    if response.status_code == 403:
+        raise OneDriveServiceError(
+            "Reconecte o OneDrive/Microsoft para autorizar o envio de e-mails.",
+            debug_code="MAIL_SEND_SCOPE_REQUIRED",
+            http_status=403,
+        )
+    if response.status_code >= 500:
+        raise MailSendIndeterminate(
+            "O serviço da Microsoft não confirmou o envio. "
+            "Verifique a caixa de itens enviados antes de tentar novamente.",
+            debug_code="MAIL_SEND_INDETERMINATE",
+            http_status=response.status_code,
+        )
+    raise OneDriveServiceError(
+        f"Falha no envio de e-mail (HTTP {response.status_code}).",
+        debug_code=(code or "MAIL_SEND_FAILED").upper(),
+        http_status=response.status_code,
+    )
+
+
+def send_mail(
+    *, token_json: str, to_address: str, subject: str, body_text: str
+) -> tuple[dict[str, Any], str]:
+    """Acquire a delegated token silently and send. Returns (result, token_json)."""
+    if not token_grants_mail_send(token_json):
+        raise OneDriveServiceError(
+            "Reconecte o OneDrive/Microsoft para autorizar o envio de e-mails.",
+            debug_code="MAIL_SEND_SCOPE_REQUIRED",
+        )
+    access_token, updated_token_json, _ = _acquire_access_token(token_json)
+    result = send_mail_with_access_token(
+        access_token=access_token,
+        to_address=to_address,
+        subject=subject,
+        body_text=body_text,
+    )
+    return result, updated_token_json
 
 
 def _serialize_cache_payload(cache, account_email: str = "") -> str:

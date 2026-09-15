@@ -66,7 +66,7 @@ def _is_safe_string(value, max_len: int = MAX_STRING_LEN) -> bool:
     return isinstance(value, str) and len(value) <= max_len
 
 
-def _sanitize_preset_item(item, kind: str):
+def _sanitize_preset_item(item, kind: str, *, tipo: str = "respostas"):
     if not isinstance(item, dict):
         raise ValueError(f"{kind} inválido.")
 
@@ -81,11 +81,33 @@ def _sanitize_preset_item(item, kind: str):
     if not _is_safe_string(texto):
         raise ValueError(f"{kind} inválido.")
 
-    return {
+    sanitized = {
         "id": preset_id,
         "titulo": titulo,
         "texto": texto,
     }
+
+    if tipo != "emails":
+        # Justificativas keep their historical shape exactly.
+        return sanitized
+
+    # prod-1/v7: e-mail models additionally own an outbound subject and may be
+    # designated the single default used by the Requisições send action.
+    # Import tardio evita ciclo durante bootstrap.
+    from app.request_email_render import PlaceholderError, validate_template
+
+    assunto = item.get("assunto", "")
+    if not _is_safe_string(assunto, max_len=MAX_TITLE_LEN):
+        raise ValueError(f"{kind} inválido.")
+    try:
+        validate_template(assunto, allow_block=False)
+        validate_template(texto, allow_block=True)
+    except PlaceholderError as exc:
+        raise ValueError(str(exc)) from exc
+
+    sanitized["assunto"] = assunto
+    sanitized["is_default"] = 1 if item.get("is_default") else 0
+    return sanitized
 
 
 def _sanitize_presets(payload):
@@ -100,17 +122,23 @@ def _sanitize_presets(payload):
         raise ValueError("Listas excedem o limite de entradas.")
     seen_ids = {"respostas": set(), "emails": set()}
     for item in respostas:
-        sanitized = _sanitize_preset_item(item, "Justificativa")
+        sanitized = _sanitize_preset_item(item, "Justificativa", tipo="respostas")
         if sanitized["id"] in seen_ids["respostas"]:
             raise ValueError("Justificativa inválida.")
         seen_ids["respostas"].add(sanitized["id"])
         out["respostas"].append(sanitized)
     for item in emails:
-        sanitized = _sanitize_preset_item(item, "Modelo de e-mail")
+        sanitized = _sanitize_preset_item(item, "Modelo de e-mail", tipo="emails")
         if sanitized["id"] in seen_ids["emails"]:
             raise ValueError("Modelo de e-mail inválido.")
         seen_ids["emails"].add(sanitized["id"])
         out["emails"].append(sanitized)
+
+    # At most one default; ux_configuracoes_presets_default enforces this
+    # physically, so reject rather than silently picking a winner.
+    defaults = [item for item in out["emails"] if item.get("is_default")]
+    if len(defaults) > 1:
+        raise ValueError("Apenas um modelo de e-mail pode ser o padrão.")
     return out
 
 
@@ -126,9 +154,17 @@ def ensure_presets_schema(conn):
 
     Existing tables are left untouched -- the statement runs only when absent,
     never as a rebuild or a formatting normalization.
+
+    prod-1/v7 added ``ux_configuracoes_presets_default``.  Dropping the table
+    drops its indexes too, so the index is recreated alongside it; otherwise the
+    recreated table would be physically incomplete and ``validate_prod1_schema``
+    would reject the database.
     """
     # Import tardio evita ciclo: app.__init__ importa presets_api durante bootstrap.
-    from app.prod1_presets_ddl import CONFIGURACOES_PRESETS_TABLE_SQL
+    from app.prod1_presets_ddl import (
+        CONFIGURACOES_PRESETS_DEFAULT_INDEX_SQL,
+        CONFIGURACOES_PRESETS_TABLE_SQL,
+    )
 
     already_exists = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (PRESETS_TABLE,)
@@ -136,6 +172,7 @@ def ensure_presets_schema(conn):
     if already_exists:
         return
     conn.execute(CONFIGURACOES_PRESETS_TABLE_SQL)
+    conn.execute(CONFIGURACOES_PRESETS_DEFAULT_INDEX_SQL)
 
 
 def _load_legacy_presets_file():
@@ -152,10 +189,18 @@ def _replace_presets_in_db(conn, data):
         for item in data.get(tipo, []):
             conn.execute(
                 f"""
-                INSERT INTO {PRESETS_TABLE} (tipo, preset_id, titulo, texto, atualizado_em)
-                VALUES (?, ?, ?, ?, datetime('now'))
+                INSERT INTO {PRESETS_TABLE}
+                    (tipo, preset_id, titulo, texto, atualizado_em, assunto, is_default)
+                VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
                 """,
-                (tipo, item["id"], item["titulo"], item.get("texto", "")),
+                (
+                    tipo,
+                    item["id"],
+                    item["titulo"],
+                    item.get("texto", ""),
+                    item.get("assunto", ""),
+                    1 if item.get("is_default") else 0,
+                ),
             )
 
 
@@ -180,20 +225,74 @@ def load_presets():
     out = {"respostas": [], "emails": []}
     rows = conn.execute(
         f"""
-        SELECT tipo, preset_id, titulo, texto
+        SELECT tipo, preset_id, titulo, texto, assunto, is_default
           FROM {PRESETS_TABLE}
          ORDER BY tipo, preset_id
         """
     ).fetchall()
     for row in rows:
-        out[str(row["tipo"])].append(
-            {
-                "id": int(row["preset_id"]),
-                "titulo": str(row["titulo"]),
-                "texto": str(row["texto"] or ""),
-            }
-        )
+        tipo = str(row["tipo"])
+        item = {
+            "id": int(row["preset_id"]),
+            "titulo": str(row["titulo"]),
+            "texto": str(row["texto"] or ""),
+        }
+        if tipo == "emails":
+            item["assunto"] = str(row["assunto"] or "")
+            item["is_default"] = int(row["is_default"] or 0)
+        out[tipo].append(item)
     return out
+
+
+class DefaultEmailPresetError(RuntimeError):
+    """No e-mail model is designated as the default for the send action."""
+
+
+def get_default_email_preset(conn):
+    """The explicitly designated *and usable* outbound model.
+
+    Never falls back to "first row", smallest id, or a hardcoded title: if no
+    model is marked default the caller must tell the administrator to choose
+    one, rather than silently mailing students from an arbitrary template.
+
+    Being marked default is necessary but not sufficient.  A model with an empty
+    subject or an empty body is a half-configured draft, and sending from it
+    would put an empty-subject or empty-body message in a student's inbox, so it
+    is refused here with the same actionable error class as "no default at all".
+    ``ux_configuracoes_presets_default`` already guarantees this query can match
+    at most one row.
+    """
+    row = conn.execute(
+        f"""
+        SELECT preset_id, titulo, texto, assunto
+          FROM {PRESETS_TABLE}
+         WHERE tipo='emails' AND is_default=1
+        """
+    ).fetchone()
+    if row is None:
+        raise DefaultEmailPresetError(
+            "Nenhum modelo de e-mail padrão foi definido em "
+            "Pré-definições → E-mails de resposta."
+        )
+    titulo = str(row["titulo"])
+    assunto = str(row["assunto"] or "")
+    texto = str(row["texto"] or "")
+    missing = []
+    if not assunto.strip():
+        missing.append("assunto")
+    if not texto.strip():
+        missing.append("conteúdo")
+    if missing:
+        raise DefaultEmailPresetError(
+            f"O modelo de e-mail padrão \"{titulo}\" está incompleto: preencha "
+            f"{' e '.join(missing)} em Pré-definições → E-mails de resposta."
+        )
+    return {
+        "id": int(row["preset_id"]),
+        "titulo": titulo,
+        "texto": texto,
+        "assunto": assunto,
+    }
 
 
 def save_presets(data):

@@ -29,6 +29,20 @@ from app.db_maintenance import (
 from app.matrix_scope import (
     _matriz_option_label,
 )
+from app.request_email_dispatch import (
+    build_plan,
+    dispatch,
+    summarize,
+    unresolved_student_ids,
+)
+from app.request_email_render import PLACEHOLDER_HELP
+from app.request_email_notifications import (
+    FINAL_DECISION_STATUSES,
+    failed_request_ids,
+    pending_request_ids,
+    record_final_decision_event,
+    supersede_pending_event,
+)
 from app.requisitions import auto_indefer_devolvidas
 from app.student_matrix import get_allowed_activity_version_ids_for_student
 from app.storage.contracts import StorageError
@@ -614,6 +628,9 @@ def admin_requisicoes():
         },
     ]
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
+    visible_ids = [row["id"] for row in requisicoes]
+    email_pendentes = pending_request_ids(conn, visible_ids)
+    email_falhas = failed_request_ids(conn, visible_ids) & email_pendentes
     return render_template(
         "admin_requisicoes.html",
         requisicoes=requisicoes,
@@ -627,6 +644,9 @@ def admin_requisicoes():
         docs_por_atividade=docs_por_atividade,
         filter_schema=filter_schema,
         comprovantes_operation_id=new_comprovante_operation_id(),
+        email_pendentes=email_pendentes,
+        email_falhas=email_falhas,
+        email_placeholder_help=PLACEHOLDER_HELP,
     )
 
 
@@ -1239,6 +1259,19 @@ def admin_processar_requisicao(req_id):
             f"UPDATE requisicoes SET {', '.join(set_parts)} WHERE id = ?",
             params,
         )
+
+        # RULING 3 -- the ONLY place a notification generation is born. This is
+        # the explicit administrator confirmation path; maintenance transitions
+        # such as auto_indefer_devolvidas never reach here.
+        if status in FINAL_DECISION_STATUSES:
+            record_final_decision_event(
+                conn, requisicao_id=req_id, decided_at=data_processamento
+            )
+        elif status == "Pendente":
+            # Reabrir: the decision awaiting communication no longer describes
+            # reality. Already-sent history is untouched.
+            supersede_pending_event(conn, requisicao_id=req_id)
+
         conn.commit()
         flash("Requisição processada com sucesso.", "success")
         return redirect(url_for("admin_requisicoes"))
@@ -1250,6 +1283,136 @@ def admin_processar_requisicao(req_id):
         snapshot_diag=snapshot_diag,
         snapshot_display_enabled=snapshot_display_enabled,
     )
+
+
+def _selected_request_ids(payload) -> list[int]:
+    raw = payload.get("requisicao_ids") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return []
+    ids: list[int] = []
+    for value in raw[:500]:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0 and parsed not in ids:
+            ids.append(parsed)
+    return ids
+
+
+def _confirmed_resend_ids(payload) -> list[int]:
+    """``aluno_id`` values the administrator explicitly cleared for resend."""
+    raw = payload.get("confirmar_reenvio") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return []
+    ids: list[int] = []
+    for value in raw[:500]:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0 and parsed not in ids:
+            ids.append(parsed)
+    return ids
+
+
+def _resolve_email_template(conn):
+    from presets_api import DefaultEmailPresetError, get_default_email_preset
+
+    try:
+        return get_default_email_preset(conn), None
+    except DefaultEmailPresetError as exc:
+        return None, str(exc)
+
+
+def _email_plan_response(conn, req_ids):
+    """Shared preview/confirmation payload. Sends nothing."""
+    template, template_error = _resolve_email_template(conn)
+    if template is None:
+        return None, None, jsonify({"ok": False, "error": template_error}), 400
+
+    pending = pending_request_ids(conn, req_ids)
+    missing = [req_id for req_id in req_ids if req_id not in pending]
+    if missing:
+        return None, None, jsonify({
+            "ok": False,
+            "error": "Há requisições selecionadas sem e-mail pendente.",
+            "nao_pendentes": missing,
+        }), 409
+
+    plan = build_plan(conn, req_ids, template)
+    return plan, template, None, None
+
+
+@admin_required
+def admin_requisicoes_email_preview():
+    """Confirmation step: counts, recipients, blockers and a rendered preview."""
+    conn = get_db_connection()
+    req_ids = _selected_request_ids(request.get_json(silent=True) or {})
+    if not req_ids:
+        return jsonify({"ok": False, "error": "Nenhuma requisição selecionada."}), 400
+
+    plan, template, error_response, status_code = _email_plan_response(conn, req_ids)
+    if error_response is not None:
+        return error_response, status_code
+
+    from app.services.mail_service import mail_transport_status
+
+    transport = mail_transport_status(conn)
+    # Students whose exact planned send already has an unconfirmed attempt: the
+    # administrator has to see that BEFORE confirming, not in the result line.
+    unresolved = unresolved_student_ids(conn, plan)
+    return jsonify({
+        "ok": True,
+        "requisicoes": sum(entry["quantidade"] for entry in plan),
+        "alunos": len(plan),
+        "emails": len([entry for entry in plan if not entry["blocked"]]),
+        "modelo": {"id": template["id"], "titulo": template["titulo"]},
+        "transporte_pronto": bool(transport["ready"]),
+        "transporte_mensagem": transport["message"],
+        "reenvio_incerto": sorted(unresolved),
+        "destinatarios": [
+            {
+                "aluno_id": entry["aluno_id"],
+                "aluno_nome": entry["aluno_nome"],
+                "destinatario": entry["destinatario"],
+                "quantidade": entry["quantidade"],
+                "bloqueio": entry["blocked"],
+                "assunto": entry["assunto"],
+                "previa": entry["corpo"],
+                "reenvio_incerto": entry["aluno_id"] in unresolved,
+            }
+            for entry in plan
+        ],
+    })
+
+
+@admin_required
+def admin_requisicoes_email_enviar():
+    """Explicit send. Never reached by merely opening the actions menu."""
+    conn = get_db_connection()
+    req_ids = _selected_request_ids(request.get_json(silent=True) or {})
+    if not req_ids:
+        return jsonify({"ok": False, "error": "Nenhuma requisição selecionada."}), 400
+
+    plan, template, error_response, status_code = _email_plan_response(conn, req_ids)
+    if error_response is not None:
+        return error_response, status_code
+
+    # Explicit acknowledgement that a previous unconfirmed attempt may already
+    # have been delivered and a duplicate is acceptable for these students.
+    payload = request.get_json(silent=True) or {}
+    confirmed = _confirmed_resend_ids(payload)
+    result = dispatch(conn, plan, template, confirmed_resend=confirmed)
+    return jsonify({
+        "ok": result["failed"] == 0 and result["held"] == 0,
+        "mensagem": summarize(result),
+        "enviados": result["sent"],
+        "falhas": result["failed"],
+        "ignorados": result["skipped"],
+        "retidos": result["held"],
+        "resultados": result["outcomes"],
+    })
 
 
 bp_admin_requisicoes = Blueprint("admin_requisicoes_blueprint", __name__)
@@ -1311,6 +1474,18 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             admin_processar_requisicao,
             ("GET", "POST"),
         ),
+        LegacyRouteSpec(
+            "/admin/requisicoes/email/preview",
+            "admin_requisicoes_email_preview",
+            admin_requisicoes_email_preview,
+            ("POST",),
+        ),
+        LegacyRouteSpec(
+            "/admin/requisicoes/email/enviar",
+            "admin_requisicoes_email_enviar",
+            admin_requisicoes_email_enviar,
+            ("POST",),
+        ),
     ),
 )
 
@@ -1327,6 +1502,8 @@ __all__ = [
     "admin_nova_requisicao",
     "admin_processar_requisicao",
     "admin_requisicoes",
+    "admin_requisicoes_email_enviar",
+    "admin_requisicoes_email_preview",
     "bp_admin_requisicoes",
     "_append_requisicao_arquivos",
     "_get_admin_requisicao_scope_for_aluno",

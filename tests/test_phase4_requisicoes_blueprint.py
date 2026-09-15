@@ -51,8 +51,15 @@ ROUTE_MATRIX = (
         ("GET",),
     ),
     ("/admin/processar_requisicao/<int:req_id>", "admin_processar_requisicao", ("GET", "POST")),
+    # REN1 request e-mail notifications: explicit preview + send surface.
+    ("/admin/requisicoes/email/preview", "admin_requisicoes_email_preview", ("POST",)),
+    ("/admin/requisicoes/email/enviar", "admin_requisicoes_email_enviar", ("POST",)),
 )
 ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
+# B4.2 froze this cohort at 9 specs / 12 rule-method pairs. REN1 adds the two
+# POST-only e-mail endpoints, so the contract is now 11 specs / 14 pairs.
+COHORT_SPEC_COUNT = 11
+COHORT_RULE_METHOD_PAIRS = 14
 
 HELPER_NAMES = (
     "_normalize_requisicao_data_evento",
@@ -72,9 +79,13 @@ RBAC_MATRIX = {
     "admin_api_requisicao": ("requisicoes", "view"),
     "admin_api_aluno_requisicao_scope": ("requisicoes", "view"),
     "admin_processar_requisicao": ("requisicoes", "edit"),
+    "admin_requisicoes_email_preview": ("requisicoes", "edit"),
+    "admin_requisicoes_email_enviar": ("requisicoes", "edit"),
 }
 
 RBAC_SCOPE_COUNTS = {"view": 4, "edit": 5, "full": 3}
+# REN1 adds two Requisições-edit endpoints on top of the frozen B4.2 counts.
+RBAC_SCOPE_COUNTS_CURRENT = {"view": 4, "edit": 7, "full": 3}
 
 CSRF_MUTATING_PAIRS = {
     "/admin/importar_requisicoes": "admin_importar_requisicoes",
@@ -563,12 +574,12 @@ def _materialize_rule(rule: str, req_id: int = 1, aluno_id: int = 1) -> str:
 # =====================================================================
 
 
-def test_b42_contract_is_exactly_nine_specs_and_twelve_rule_method_pairs():
-    assert len(ROUTE_MATRIX) == 9
-    assert len(ROUTE_NAMES) == len(set(ROUTE_NAMES)) == 9
-    assert sum(len(methods) for _, _, methods in ROUTE_MATRIX) == 12
+def test_requisicoes_cohort_contract_is_exact():
+    assert len(ROUTE_MATRIX) == COHORT_SPEC_COUNT
+    assert len(ROUTE_NAMES) == len(set(ROUTE_NAMES)) == COHORT_SPEC_COUNT
+    assert sum(len(methods) for _, _, methods in ROUTE_MATRIX) == COHORT_RULE_METHOD_PAIRS
     pairs = {(rule, method) for rule, _, methods in ROUTE_MATRIX for method in methods}
-    assert len(pairs) == 12
+    assert len(pairs) == COHORT_RULE_METHOD_PAIRS
     assert all(method in BUSINESS_METHODS for _, _, methods in ROUTE_MATRIX for method in methods)
     assert all(rule.startswith("/admin/") for rule, _, _ in ROUTE_MATRIX)
 
@@ -635,12 +646,12 @@ print(json.dumps({"main_imported": False, "filesystem_delta": [], "database_crea
     }
 
 
-def test_exactly_nine_immutable_route_specs_match_legacy_matrix():
+def test_immutable_route_specs_match_legacy_matrix():
     module = _canonical_module()
     specs = module.LEGACY_ROUTE_SPECS
 
     assert isinstance(specs, tuple)
-    assert len(specs) == 9
+    assert len(specs) == COHORT_SPEC_COUNT
     assert tuple((spec.rule, spec.endpoint, spec.methods) for spec in specs) == ROUTE_MATRIX
     with pytest.raises((AttributeError, TypeError)):
         specs[0].endpoint = "changed"
@@ -685,7 +696,7 @@ def test_two_independent_factory_apps_each_register_each_route_once():
 
     assert _route_tuples(first) == set(ROUTE_MATRIX)
     assert _route_tuples(second) == set(ROUTE_MATRIX)
-    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 9
+    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == COHORT_SPEC_COUNT
     assert first is not second
 
 
@@ -695,7 +706,7 @@ def test_duplicate_blueprint_registration_fails_explicitly():
 
     with pytest.raises(LegacyRouteRegistrationError, match="already registered"):
         register_legacy_blueprint(app, module.bp_admin_requisicoes)
-    assert len(_live_moved_rules(app)) == 9
+    assert len(_live_moved_rules(app)) == COHORT_SPEC_COUNT
 
 
 @pytest.mark.parametrize("collision_kind", ["endpoint", "rule_method"])
@@ -726,13 +737,13 @@ def test_no_namespaced_endpoint_alias_or_duplicate_rule_exists():
     app = _factory()
     moved = _live_moved_rules(app)
 
-    assert len(moved) == 9
+    assert len(moved) == COHORT_SPEC_COUNT
     assert not any(
         rule.endpoint.startswith("admin_requisicoes_blueprint.")
         for rule in app.url_map.iter_rules()
     )
     assert not any("." in rule.endpoint for rule in moved)
-    assert len({rule.rule for rule in moved}) == 9
+    assert len({rule.rule for rule in moved}) == COHORT_SPEC_COUNT
     for expected_rule, expected_endpoint, expected_methods in ROUTE_MATRIX:
         matches = [
             rule
@@ -797,13 +808,13 @@ def test_main_no_longer_defines_moved_bodies_or_route_decorators():
 # =====================================================================
 
 
-def test_rbac_requirements_remain_exact_for_twelve_pairs():
+def test_rbac_requirements_remain_exact_for_every_cohort_pair():
     for _, endpoint, methods in ROUTE_MATRIX:
         for method in methods:
             assert get_admin_permission_requirement(endpoint, method) == RBAC_MATRIX[endpoint]
 
 
-def test_rbac_scope_counts_remain_exact_4_view_5_edit_3_full():
+def test_rbac_scope_counts_remain_exact():
     from collections import Counter
 
     counts: Counter = Counter()
@@ -812,7 +823,7 @@ def test_rbac_scope_counts_remain_exact_4_view_5_edit_3_full():
             resource, scope = get_admin_permission_requirement(endpoint, method)
             assert resource == "requisicoes"
             counts[scope] += 1
-    assert dict(counts) == RBAC_SCOPE_COUNTS
+    assert dict(counts) == RBAC_SCOPE_COUNTS_CURRENT
 
 
 # =====================================================================

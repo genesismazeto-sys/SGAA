@@ -315,6 +315,7 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
         - set(NEW_STUDENT_MATRIX_KEYS)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
+        - set(governance.REN1_REQUEST_EMAIL_KEYS)
     )
     assert len(parent_keys) == PARENT_CATALOG_COUNT
     digest = hashlib.sha256("\n".join(sorted(parent_keys)).encode()).hexdigest()

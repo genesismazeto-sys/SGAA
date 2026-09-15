@@ -7,16 +7,21 @@ import sqlite3
 
 from app.prod1_comprovantes_ddl import COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 from app.prod1_arquivos_ddl import ARQUIVOS_V5_SCHEMA_OBJECTS_SQL, ARQUIVOS_V5_TABLE_SQL
-from app.prod1_presets_ddl import CONFIGURACOES_PRESETS_TABLE_SQL
+from app.prod1_presets_ddl import (
+    CONFIGURACOES_PRESETS_DEFAULT_INDEX_SQL,
+    CONFIGURACOES_PRESETS_TABLE_SQL,
+)
+from app.prod1_notifications_ddl import NOTIFICATIONS_V7_SCHEMA_OBJECTS_SQL
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
 COMPROVANTES_GOOGLE_DRIVE_MARKER = "comprovantes_google_drive_cutover"
 ARQUIVOS_GOOGLE_DRIVE_MARKER = "arquivos_google_drive_cutover"
 STUDENT_MATRIX_AUTHORITY_MARKER = "student_matrix_authority"
-LATEST_MIGRATION_MARKER = STUDENT_MATRIX_AUTHORITY_MARKER
+REQUEST_EMAIL_NOTIFICATIONS_MARKER = "request_email_notifications"
+LATEST_MIGRATION_MARKER = REQUEST_EMAIL_NOTIFICATIONS_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -26,10 +31,11 @@ EXPECTED_TABLES = frozenset({
     "admin_alertas", "admin_arquivos", "alunos", "atividade_base",
     "atividade_transicao", "atividade_versao", "backup_logs", "cloud_accounts",
     "cloud_drive_settings", "configuracoes_acesso", "configuracoes_app",
-    "configuracoes_backup", "configuracoes_presets", "cursos", "grupos_def",
-    "matriz_atividade_versao_item", "matrizes_atividades",
+    "configuracoes_backup", "configuracoes_presets", "cursos", "email_envios",
+    "grupos_def", "matriz_atividade_versao_item", "matrizes_atividades",
     "mensagens_editaveis", "reportes",
-    "requisicao_alerta_receipts", "requisicao_arquivos", "requisicoes",
+    "requisicao_alerta_receipts", "requisicao_arquivos",
+    "requisicao_email_eventos", "requisicoes",
     "schema_migrations", "turmas", "usuarios", "usuarios_permissoes_acesso",
 })
 LEGACY_TABLES = frozenset({"atividades", "atividade_legacy_map", "matrizes_atividades_itens"})
@@ -264,6 +270,8 @@ FOR EACH ROW WHEN NEW.atividade_versao_id<>OLD.atividade_versao_id OR NEW.regra_
 BEGIN SELECT RAISE(ABORT,'request snapshot authority is immutable'); END;
 __COMPROVANTES_V4_SCHEMA_OBJECTS__
 __ARQUIVOS_V5_SCHEMA_OBJECTS__
+__CONFIGURACOES_PRESETS_DEFAULT_INDEX__;
+__NOTIFICATIONS_V7_SCHEMA_OBJECTS__
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
@@ -277,9 +285,15 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(5,'arquivos_google_drive_cutover','prod-1','{"schema_epoch":"prod-1","storage_provider":"google","legacy_provider":"local_legacy"}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(6,'student_matrix_authority','prod-1','{"schema_epoch":"prod-1","authority":"alunos.matriz_id","turma_matrix_semantics":"optional_default"}');
-PRAGMA user_version=6;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(7,'request_email_notifications','prod-1','{"schema_epoch":"prod-1","outbox":"email_envios","decision_events":"requisicao_email_eventos","backfill":"none"}');
+PRAGMA user_version=7;
 """.replace(
     "__CONFIGURACOES_PRESETS_TABLE__", CONFIGURACOES_PRESETS_TABLE_SQL
+).replace(
+    "__CONFIGURACOES_PRESETS_DEFAULT_INDEX__", CONFIGURACOES_PRESETS_DEFAULT_INDEX_SQL
+).replace(
+    "__NOTIFICATIONS_V7_SCHEMA_OBJECTS__", NOTIFICATIONS_V7_SCHEMA_OBJECTS_SQL
 ).replace(
     "__COMPROVANTES_V4_SCHEMA_OBJECTS__", COMPROVANTES_V4_SCHEMA_OBJECTS_SQL
 ).replace(
@@ -408,6 +422,7 @@ _PROD1_V2_SIGNATURE_SHA256 = "af842dbf7a4a6d93a933463ccfe18f7b4040a0a3a09e9fc799
 _PROD1_V3_SIGNATURE_SHA256 = "51b2d17cf814e64e34ccd47360a57bea4e676c30c1023e167a3295c7cea77a41"
 _PROD1_V4_SIGNATURE_SHA256 = "616872df5c5bc29ececce46c361df7a60eaa8a579db3080827028ffddf7f5a57"
 _PROD1_V5_SIGNATURE_SHA256 = "1c0c4fcaf32b1109f0c7ca5c4959c5af241b9ca81987df0f34e12a4a3459ab25"
+_PROD1_V6_SIGNATURE_SHA256 = "6a9fee84c940016527594fe3d0d944f74dad58657288e3f3015e6e581aca7ac6"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -512,6 +527,31 @@ def _validate_prod1_v5_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v5 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v6_schema(conn: sqlite3.Connection) -> None:
+    """Recognize the frozen prod-1/v6 predecessor exactly.
+
+    v6 is no longer reproducible from ``PROD1_SCHEMA_SQL`` (which now describes
+    v7), so the contract is pinned by its historical digest, exactly as v1-v5
+    are.
+    """
+    if _user_version(conn) != 6:
+        raise Prod1SchemaError("prod-1/v6 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (6, STUDENT_MATRIX_AUTHORITY_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v6 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V6_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v6 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v6 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -771,6 +811,11 @@ def migrate_prod1_v5_to_v6(conn: sqlite3.Connection) -> dict[str, object]:
     return migrate(conn)
 
 
+def migrate_prod1_v6_to_v7(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.prod1_notifications_v7 import migrate_prod1_v6_to_v7 as migrate
+    return migrate(conn)
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
@@ -783,6 +828,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
         (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
         (6, STUDENT_MATRIX_AUTHORITY_MARKER, SCHEMA_EPOCH),
+        (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -808,21 +854,28 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
             migrate_prod1_v4_to_v5(conn)
-            return migrate_prod1_v5_to_v6(conn)
+            migrate_prod1_v5_to_v6(conn)
+            return migrate_prod1_v6_to_v7(conn)
         if _user_version(conn) == 2:
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
             migrate_prod1_v4_to_v5(conn)
-            return migrate_prod1_v5_to_v6(conn)
+            migrate_prod1_v5_to_v6(conn)
+            return migrate_prod1_v6_to_v7(conn)
         if _user_version(conn) == 3:
             migrate_prod1_v3_to_v4(conn)
             migrate_prod1_v4_to_v5(conn)
-            return migrate_prod1_v5_to_v6(conn)
+            migrate_prod1_v5_to_v6(conn)
+            return migrate_prod1_v6_to_v7(conn)
         if _user_version(conn) == 4:
             migrate_prod1_v4_to_v5(conn)
-            return migrate_prod1_v5_to_v6(conn)
+            migrate_prod1_v5_to_v6(conn)
+            return migrate_prod1_v6_to_v7(conn)
         if _user_version(conn) == 5:
-            return migrate_prod1_v5_to_v6(conn)
+            migrate_prod1_v5_to_v6(conn)
+            return migrate_prod1_v6_to_v7(conn)
+        if _user_version(conn) == 6:
+            return migrate_prod1_v6_to_v7(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

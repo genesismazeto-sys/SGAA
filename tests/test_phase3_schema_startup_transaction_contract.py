@@ -21,8 +21,8 @@ def test_single_init_owner_and_no_main_bridge():
     assert "_get_main_db_helpers" not in app_defs
 
 
-def test_migration_registry_is_exactly_prod1_v1_to_v6():
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 6
+def test_migration_registry_is_exactly_prod1_v1_to_v7():
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 7
     assert [(version, marker) for version, marker, _ in db_maintenance.SCHEMA_MIGRATIONS] == [
         (1, "first_production_baseline"),
         (2, "remove_norma_domain"),
@@ -30,6 +30,7 @@ def test_migration_registry_is_exactly_prod1_v1_to_v6():
         (4, "comprovantes_google_drive_cutover"),
         (5, "arquivos_google_drive_cutover"),
         (6, "student_matrix_authority"),
+        (7, "request_email_notifications"),
     ]
     assert all(owner.__module__ == "app.prod1_schema" for _, _, owner in db_maintenance.SCHEMA_MIGRATIONS)
 

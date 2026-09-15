@@ -714,6 +714,20 @@
       "rule": "/admin/requisicoes/<int:req_id>/excluir"
     },
     {
+      "endpoint": "admin_requisicoes_email_enviar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/email/enviar"
+    },
+    {
+      "endpoint": "admin_requisicoes_email_preview",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/email/preview"
+    },
+    {
       "endpoint": "admin_nova_requisicao",
       "methods": [
         "GET",

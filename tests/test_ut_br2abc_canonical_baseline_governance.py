@@ -29,7 +29,7 @@ from tests import canonical_baseline_support as governance
 
 
 def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
-    """558 exists exactly once, as the sum of named product deltas."""
+    """580 exists exactly once, as the sum of named product deltas."""
     terms = dict(
         (term, delta) for term, delta in governance.CATALOG_LEDGER
     )
@@ -37,18 +37,24 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
     assert governance.PARENT_CATALOG_COUNT == 548, (
         "UT-MX3's exact parent state is the ledger up to the UT-MX3 term"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 558
+    assert governance.CANONICAL_CATALOG_COUNT == 580
     assert governance.CATALOG_LEDGER[governance.MX3_LEDGER_INDEX][1] == 6, (
         "the UT-MX3 StudentMatrixError ownership delta is exactly +6"
     )
-    assert governance.CATALOG_LEDGER[-2][1] == 1, (
+    assert governance.CATALOG_LEDGER[-3][1] == 1, (
         "the TMA1 Turma-Matrix authority delta is exactly +1"
     )
-    assert governance.CATALOG_LEDGER[-1][1] == 3 == len(
+    assert governance.CATALOG_LEDGER[-2][1] == 3 == len(
         governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS
     ), (
         "the CR1 cloud-credential recovery delta is exactly +3, one term per "
         "declared key"
+    )
+    assert governance.CATALOG_LEDGER[-1][1] == 22 == len(
+        governance.REN1_REQUEST_EMAIL_KEYS
+    ), (
+        "the REN1 request e-mail notification delta is exactly +22, one term "
+        "per declared key"
     )
     # Parent + every term from UT-MX3 onward reconstructs the canonical total.
     assert (
@@ -63,9 +69,9 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
 
 def test_derived_projections_agree_with_the_versioned_artifacts():
     """Every count the suites now delegate is read off the canonical artifacts."""
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 125
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 124
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 124
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 127
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 126
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 126
     assert governance.CANONICAL_CSRF_ROW_COUNT == 74
     assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 67
     assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 74
@@ -130,6 +136,7 @@ def test_catalog_parent_digest_still_governs_the_mx3_parent_state():
         - set(NEW_STUDENT_MATRIX_KEYS)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
+        - set(governance.REN1_REQUEST_EMAIL_KEYS)
     )
     assert len(parent_keys) == governance.PARENT_CATALOG_COUNT
     assert (
@@ -158,7 +165,7 @@ def test_route_control_rejects_a_deleted_business_route():
     data["routes"] = [entry for entry in data["routes"] if entry is not victim]
     with pytest.raises(AssertionError) as captured:
         governance.assert_route_inventory_artifact_is_canonical(data)
-    assert "124" in str(captured.value)
+    assert "126" in str(captured.value)
 
 
 def test_route_control_rejects_an_unauthorized_added_route():
@@ -172,7 +179,7 @@ def test_route_control_rejects_an_unauthorized_added_route():
     )
     with pytest.raises(AssertionError) as captured:
         governance.assert_route_inventory_artifact_is_canonical(data)
-    assert "126" in str(captured.value)
+    assert "128" in str(captured.value)
 
 
 def test_route_control_rejects_a_changed_rule_endpoint_pairing():

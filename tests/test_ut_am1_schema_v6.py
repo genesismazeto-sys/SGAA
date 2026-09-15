@@ -43,8 +43,9 @@ def test_current_schema_is_v6_with_nullable_indexed_student_matrix_fk():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     bootstrap_prod1_schema(conn)
-    assert SCHEMA_VERSION == 6
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    # AM1's student-Matrix authority survives later epochs; the current head is v7.
+    assert SCHEMA_VERSION == 7
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
     columns = {row["name"]: row for row in conn.execute("PRAGMA table_info(alunos)")}
     assert columns["matriz_id"]["notnull"] == 0
     fks = conn.execute("PRAGMA foreign_key_list(alunos)").fetchall()
@@ -110,8 +111,10 @@ def test_v5_to_v6_copy_backfills_only_current_valid_turma_default(tmp_path):
     assert conn.execute(
         "SELECT matriz_id FROM alunos WHERE id=?", (seeded_ids["aluno_id"],)
     ).fetchone()["matriz_id"] == seeded_ids["m1"]
+    # AM1's marker is recorded at its own version (6); later epochs append
+    # their own rows rather than rewriting this one.
     assert conn.execute(
-        "SELECT version,name FROM schema_migrations WHERE version=?", (SCHEMA_VERSION,)
+        "SELECT version,name FROM schema_migrations WHERE version=?", (6,)
     ).fetchone()["name"] == STUDENT_MATRIX_AUTHORITY_MARKER
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
