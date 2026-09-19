@@ -94,6 +94,9 @@ HELPER_NAMES = (
     "_resolve_onedrive_redirect_uri",
     "_resolve_google_redirect_uri",
     "_onedrive_connect_diagnostics",
+    # REN2: read-only Mail.Send capability probe, reported separately from the
+    # OneDrive connection status.
+    "_onedrive_mail_capability",
     "_build_oauth_redirect_context",
     "_get_cloud_folder_account",
     "_get_current_schema_status_for_restore",

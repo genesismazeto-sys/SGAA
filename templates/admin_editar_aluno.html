@@ -2,6 +2,21 @@
 {% extends "base.html" %}
 {% from 'components/icons.html' import school_icon %}
 {% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{#
+  Ver Aluno e uma tela de consulta, nao um formulario desligado. `disabled`
+  comunica "nao se aplica" e o DS o pinta como tal (texto terciario, borda
+  morta, cursor not-allowed); usa-lo aqui cinzentava a tela inteira so para
+  dizer o que o titulo ja diz. O estado certo e o read-only do DS-7 —
+  "mostrado, nao editavel": legivel, focavel, cursor normal.
+
+  Os controles que nao tem read-only nativo (os <select> de Turma, Matriz e
+  Status) nao viram <select disabled>: em modo consulta eles rendem o valor
+  selecionado como texto estatico no mesmo field-card, sem seta de dropdown
+  e sem nome de campo — nada aqui e submetido.
+#}
+{% set turma_atual = (turmas | selectattr('id', 'equalto', aluno.turma_id) | list | first) if aluno.turma_id else None %}
+{% set matriz_label = (matriz_atual.nome ~ ' — ' ~ (matriz_atual.curso_codigo or matriz_atual.curso_nome)) if matriz_atual else user_message('Sem matriz') %}
+{% set status_label = user_message("Ativo") if aluno.status == 'Ativo' else user_message("Inativo") %}
 {% block title %}{{ user_message('Ver Aluno') if readonly else user_message('Editar Aluno') }}{% endblock %}
 
 {% block extra_head %}
@@ -21,7 +36,7 @@
       <label class="row-label">{{ user_message("Nome") }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="user"></i></div>
-        <input class="control" type="text" name="nome" value="{{ aluno.nome }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+        <input class="control" type="text" name="nome" value="{{ aluno.nome }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -29,16 +44,23 @@
       <label class="row-label">{{ user_message("E-mail") }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="mail"></i></div>
-        <input class="control" type="email" name="email" value="{{ aluno.email }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+        <input class="control" type="email" name="email" value="{{ aluno.email }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
+    {#
+      "Nova Senha (opcional)" e um controle de TROCA, nao um valor do aluno:
+      nao existe senha para exibir e nunca existiu. Em consulta a linha sai
+      inteira — um campo de senha vazio e read-only so anunciaria material que
+      a tela nao tem e nao pode mostrar.
+    #}
+    {% if not readonly %}
     <div class="form-row">
       <label class="row-label">{{ user_message("Nova Senha (opcional)") }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="lock"></i></div>
         <div class="pw-wrapper">
-          <input class="control" type="password" name="senha" placeholder="{{ user_message('Deixe em branco para manter') }}" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <input class="control" type="password" name="senha" placeholder="{{ user_message('Deixe em branco para manter') }}">
           <button type="button" class="pw-toggle" aria-label="{{ user_message('Mostrar senha') }}" aria-pressed="false">
             <svg class="pw-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
             <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
@@ -46,12 +68,13 @@
         </div>
       </div>
     </div>
+    {% endif %}
 
     <div class="form-row">
       <label class="row-label">{{ user_message("Matrícula") }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="id-card"></i></div>
-        <input class="control" type="text" name="matricula" value="{{ aluno.matricula }}" required {% if readonly %}disabled aria-readonly="true"{% endif %}>
+        <input class="control" type="text" name="matricula" value="{{ aluno.matricula }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -59,12 +82,18 @@
       <label class="row-label">{{ user_message("Turma") }}</label>
       <div class="field-card">
         <div class="field-chip">{{ school_icon() }}</div>
-        <select class="control" name="turma_id" {% if readonly %}disabled aria-readonly="true"{% endif %}>
-          <option value="">—</option>
-          {% for t in turmas %}
-            <option value="{{ t.id }}" {{ 'selected' if t.id == aluno.turma_id else '' }}>{{ t.nome }}</option>
-          {% endfor %}
-        </select>
+        {% if readonly %}
+          <input class="control" type="text" readonly aria-readonly="true"
+                 aria-label="{{ user_message('Turma') }}"
+                 value="{{ turma_atual.nome if turma_atual else '—' }}">
+        {% else %}
+          <select class="control" name="turma_id">
+            <option value="">—</option>
+            {% for t in turmas %}
+              <option value="{{ t.id }}" {{ 'selected' if t.id == aluno.turma_id else '' }}>{{ t.nome }}</option>
+            {% endfor %}
+          </select>
+        {% endif %}
       </div>
     </div>
 
@@ -82,12 +111,17 @@
           #}
           <input class="control" type="text" readonly aria-readonly="true"
                  aria-label="{{ user_message('Matriz acadêmica') }}"
-                 value="{{ (matriz_atual.nome ~ ' — ' ~ (matriz_atual.curso_codigo or matriz_atual.curso_nome)) if matriz_atual else user_message('Sem matriz') }}">
+                 value="{{ matriz_label }}">
           <div class="field-chip chip-right" title="{{ user_message('Definida pela turma') }}">
             <i class="lucide" data-lucide="lock"></i><span>{{ user_message("Definida pela turma") }}</span>
           </div>
+        {% elif readonly %}
+          {# Sem turma a autoridade e individual, mas consultar nao e escolher. #}
+          <input class="control" type="text" readonly aria-readonly="true"
+                 aria-label="{{ user_message('Matriz acadêmica') }}"
+                 value="{{ matriz_label }}">
         {% else %}
-          <select class="control" name="matriz_id" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+          <select class="control" name="matriz_id">
             <option value="" {{ 'selected' if not aluno.matriz_id else '' }}>{{ user_message("Sem matriz") }}</option>
             {# Mantem a matriz vigente selecionavel mesmo se sair da lista compativel. #}
             {% if matriz_atual and matriz_atual.id not in matriz_ids %}
@@ -105,10 +139,16 @@
       <label class="row-label">{{ user_message("Status") }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
-        <select class="control" name="status" {% if readonly %}disabled aria-readonly="true"{% endif %}>
-          <option {{ 'selected' if aluno.status=='Ativo' else '' }}>{{ user_message("Ativo") }}</option>
-          <option {{ 'selected' if aluno.status=='Inativo' else '' }}>{{ user_message("Inativo") }}</option>
-        </select>
+        {% if readonly %}
+          <input class="control" type="text" readonly aria-readonly="true"
+                 aria-label="{{ user_message('Status') }}"
+                 value="{{ status_label }}">
+        {% else %}
+          <select class="control" name="status">
+            <option {{ 'selected' if aluno.status=='Ativo' else '' }}>{{ user_message("Ativo") }}</option>
+            <option {{ 'selected' if aluno.status=='Inativo' else '' }}>{{ user_message("Inativo") }}</option>
+          </select>
+        {% endif %}
       </div>
     </div>
 

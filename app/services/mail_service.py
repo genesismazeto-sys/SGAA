@@ -37,9 +37,20 @@ from services.onedrive_service import (
 
 MAIL_PROVIDER = "onedrive"
 
-RECONNECT_MESSAGE = (
-    "Reconecte o OneDrive/Microsoft para autorizar o envio de e-mails."
+# Connection and mail authorization are DIFFERENT capabilities. A delegated
+# token obtained before Mail.Send existed still grants full OneDrive/files
+# access, so describing that account as "disconnected" is simply wrong.
+CONNECT_MESSAGE = (
+    "Conecte uma conta Microsoft para habilitar o envio de e-mails."
 )
+AUTHORIZE_MAIL_MESSAGE = (
+    "Autorize o envio de e-mails para a conta Microsoft conectada."
+)
+AUTHORIZE_MAIL_CTA = "Autorizar envio de e-mails"
+CONNECT_CTA = "Conectar Microsoft"
+
+# Back-compat alias: existing callers that imported the old single message.
+RECONNECT_MESSAGE = AUTHORIZE_MAIL_MESSAGE
 
 # Deliberately conservative: structural validation only, no deliverability claim.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
@@ -96,36 +107,73 @@ def sanitize_provider_error(error: BaseException | str) -> str:
 
 
 def mail_transport_status(conn) -> dict[str, object]:
-    """Read-only readiness probe. Never triggers an interactive reconnect."""
+    """Read-only capability probe. Never reconnects and never writes a token.
+
+    Reports provider connection and mail authorization as two independent
+    facts, so a healthy OneDrive account missing only ``Mail.Send`` is reported
+    as connected-but-unauthorized rather than disconnected.
+    """
     from app.cloud_connections import get_active_cloud_account
+
+    def _authorize_url() -> str:
+        # The existing OneDrive connect route performs incremental consent for
+        # the canonical scope set and never disconnects first, so it is safe to
+        # reuse as the permission-upgrade path.
+        try:
+            from flask import url_for
+
+            return url_for("admin_banco_dados_oauth_start", provider=MAIL_PROVIDER)
+        except Exception:
+            return ""
 
     account = get_active_cloud_account(conn, MAIL_PROVIDER)
     if not account:
         return {
             "ready": False,
             "reason": "not_connected",
-            "message": RECONNECT_MESSAGE,
+            "provider_connected": False,
+            "provider_status": "disconnected",
+            "message": CONNECT_MESSAGE,
+            "cta_label": CONNECT_CTA,
+            "cta_url": _authorize_url(),
             "account_email": "",
         }
+
     token_json = str(account.get("token_json") or "")
     if not account.get("token_json_available", True) or not token_json:
         return {
             "ready": False,
             "reason": "token_unavailable",
-            "message": RECONNECT_MESSAGE,
+            "provider_connected": False,
+            "provider_status": "needs_reconnection",
+            "message": CONNECT_MESSAGE,
+            "cta_label": CONNECT_CTA,
+            "cta_url": _authorize_url(),
             "account_email": str(account.get("account_email") or ""),
         }
+
     if not token_grants_mail_send(token_json):
+        # Files/OneDrive capability is intact; only the mail permission is
+        # missing. The account stays "Conectado".
         return {
             "ready": False,
             "reason": "scope_missing",
-            "message": RECONNECT_MESSAGE,
+            "provider_connected": True,
+            "provider_status": "connected",
+            "message": AUTHORIZE_MAIL_MESSAGE,
+            "cta_label": AUTHORIZE_MAIL_CTA,
+            "cta_url": _authorize_url(),
             "account_email": str(account.get("account_email") or ""),
         }
+
     return {
         "ready": True,
         "reason": "",
+        "provider_connected": True,
+        "provider_status": "connected",
         "message": "",
+        "cta_label": "",
+        "cta_url": "",
         "account_email": str(account.get("account_email") or ""),
     }
 
@@ -146,7 +194,12 @@ def send_text_email(conn, message: MailMessage) -> dict[str, object]:
     status = mail_transport_status(conn)
     if not status["ready"]:
         raise MailTransportError(
-            str(status["message"]), debug_code="MAIL_SEND_SCOPE_REQUIRED"
+            str(status["message"]),
+            debug_code=(
+                "MAIL_SEND_SCOPE_REQUIRED"
+                if status["reason"] == "scope_missing"
+                else "AUTH_RECONNECT_REQUIRED"
+            ),
         )
 
     try:
@@ -179,6 +232,10 @@ def send_text_email(conn, message: MailMessage) -> dict[str, object]:
 
 
 __all__ = [
+    "AUTHORIZE_MAIL_CTA",
+    "AUTHORIZE_MAIL_MESSAGE",
+    "CONNECT_CTA",
+    "CONNECT_MESSAGE",
     "MAIL_PROVIDER",
     "RECONNECT_MESSAGE",
     "MailMessage",

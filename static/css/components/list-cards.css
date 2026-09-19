@@ -282,7 +282,7 @@
    Scoped Layout Adjustments: Requisições (.imp-req)
    (Moved from inline <style> in admin_requisicoes.html)
    ============================================================= */
-.imp-req{ --imp-list-min-width:1184px; }
+.imp-req{ --imp-list-min-width:1212px; }
 .imp-req { --imp-cols:
   minmax(40px, 48px)   /* ID */
   minmax(88px, 96px)   /* Solicitado em */
@@ -292,8 +292,19 @@
   minmax(52px, 68px)   /* Tipo */
   minmax(72px, 72px)   /* Grupo */
   minmax(280px, 460px) /* Atividade */
+  minmax(28px, 28px)   /* E-mail (sem rótulo) */
   minmax(120px, 160px) /* Status */
 };
+/* Dedicated e-mail-status column: fixed width so every row reserves the same
+   space whether or not an icon is present, header included. */
+.imp-req .impresso-card .cell.req-email-cell{
+  justify-content:center; padding:0; overflow:visible;
+}
+/* This column is intentionally unlabelled and intentionally blank when there is
+   no pending e-mail, so it must opt out of the shared `:empty` em-dash
+   placeholder above -- otherwise the header renders a stray "—".
+   Scoped to .imp-req so every other list keeps the placeholder. */
+.imp-req .impresso-card .cell.req-email-cell:empty::before{ content:none; }
 .imp-req .impresso-card .cell:first-child{ padding:0 4px; }
 .imp-req .impresso-card.header .cell:first-child{ padding:0 4px; }
 .imp-req .impresso-card .cell:nth-child(2){ justify-content:start; }

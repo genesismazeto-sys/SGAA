@@ -370,6 +370,47 @@ def _format_drive_timestamp(ts_iso: str) -> str:
     except Exception:
         return ts_iso
 
+def _onedrive_mail_capability(conn) -> dict:
+    """Mail.Send capability of the connected Microsoft account (read-only).
+
+    Separate from the connection status on purpose: an account connected before
+    Mail.Send was added is fully connected for OneDrive and merely unauthorized
+    for e-mail.  Never reconnects, never writes a token.
+    """
+    from app.services.mail_service import mail_transport_status
+
+    hidden = {
+        "visible": False,
+        "authorized": False,
+        "message": "",
+        "cta_label": "",
+        "cta_url": "",
+    }
+    try:
+        status = mail_transport_status(conn)
+    except Exception:
+        return hidden
+    if status["ready"]:
+        return {
+            "visible": True,
+            "authorized": True,
+            "message": "",
+            "cta_label": "",
+            "cta_url": "",
+        }
+    if status["reason"] != "scope_missing":
+        # Genuinely disconnected: normal connect/reconnect semantics own this,
+        # so no separate mail row is shown at all.
+        return hidden
+    return {
+        "visible": True,
+        "authorized": False,
+        "message": str(status["message"]),
+        "cta_label": str(status["cta_label"]),
+        "cta_url": str(status["cta_url"]),
+    }
+
+
 def _build_database_admin_context(conn):
     settings = _get_runtime_backup_settings(conn)
     oauth_context = _build_oauth_redirect_context()
@@ -506,6 +547,10 @@ def _build_database_admin_context(conn):
             "not_configured" if not onedrive_application_status["configured"] else "connected" if onedrive_connected else "needs_reconnection" if onedrive_last_account else "disconnected"
         ),
         "onedrive_ui_enabled": True,
+        # Mail authorization is a capability of the connected account, not a
+        # connection state: a token issued before Mail.Send existed still has
+        # full files access, so the account stays "Conectado" either way.
+        "onedrive_mail_status": _onedrive_mail_capability(conn),
         "gdrive_connected": google_connected,
         "gdrive_legacy_connection_detected": google_legacy_connection_detected,
         "gdrive_legacy_account_email": google_legacy_account_email,
@@ -1955,5 +2000,5 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
 __all__ = [
     "LEGACY_ROUTE_SPECS",
     "bp_admin_banco_dados",
-"_normalize_backup_directory", "save_backup_settings", "_RETENTION_INTERVAL_OPTIONS", "save_retention_policy", "_CLOUD_FOLDER_PROVIDERS", "_normalize_cloud_folder_provider", "_save_cloud_drive_folder_setting", "_get_cloud_drive_folder_setting", "_extract_oauth_scopes", "_set_active_cloud_account", "_get_active_cloud_account", "_require_cloud_token_encryption_ready", "_update_cloud_account_token", "_record_backup_log", "_list_backup_logs", "_format_drive_timestamp", "_build_database_admin_context", "admin_banco_dados", "_maybe_redirect_to_oauth_callback_host", "_clear_legacy_oauth_session", "_resolve_onedrive_redirect_uri", "_resolve_google_redirect_uri", "_onedrive_connect_diagnostics", "_build_oauth_redirect_context", "admin_backup_google_connect", "google_callback", "admin_backup_google_upload", "admin_backup_onedrive_connect", "onedrive_callback", "admin_backup_onedrive_upload", "_get_cloud_folder_account", "admin_backup_cloud_folders", "admin_backup_cloud_folder", "admin_banco_dados_configuracoes", "admin_banco_dados_retencao", "admin_banco_dados_oauth_start", "auth_callback", "admin_banco_dados_oauth_disconnect", "admin_banco_dados_drive_settings", "admin_banco_dados_backup", "admin_banco_dados_download", "admin_banco_dados_excluir", "_get_current_schema_status_for_restore", "_restore_database_from_source", "admin_banco_dados_restaurar", "admin_banco_dados_restaurar_upload",
+"_normalize_backup_directory", "save_backup_settings", "_RETENTION_INTERVAL_OPTIONS", "save_retention_policy", "_CLOUD_FOLDER_PROVIDERS", "_normalize_cloud_folder_provider", "_save_cloud_drive_folder_setting", "_get_cloud_drive_folder_setting", "_extract_oauth_scopes", "_set_active_cloud_account", "_get_active_cloud_account", "_require_cloud_token_encryption_ready", "_update_cloud_account_token", "_record_backup_log", "_list_backup_logs", "_format_drive_timestamp", "_build_database_admin_context", "admin_banco_dados", "_maybe_redirect_to_oauth_callback_host", "_clear_legacy_oauth_session", "_resolve_onedrive_redirect_uri", "_resolve_google_redirect_uri", "_onedrive_connect_diagnostics", "_onedrive_mail_capability", "_build_oauth_redirect_context", "admin_backup_google_connect", "google_callback", "admin_backup_google_upload", "admin_backup_onedrive_connect", "onedrive_callback", "admin_backup_onedrive_upload", "_get_cloud_folder_account", "admin_backup_cloud_folders", "admin_backup_cloud_folder", "admin_banco_dados_configuracoes", "admin_banco_dados_retencao", "admin_banco_dados_oauth_start", "auth_callback", "admin_banco_dados_oauth_disconnect", "admin_banco_dados_drive_settings", "admin_banco_dados_backup", "admin_banco_dados_download", "admin_banco_dados_excluir", "_get_current_schema_status_for_restore", "_restore_database_from_source", "admin_banco_dados_restaurar", "admin_banco_dados_restaurar_upload",
 ]

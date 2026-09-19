@@ -315,6 +315,9 @@
       line-height:1.35;
     }
     .db-provider-line.is-muted{ color:#475569; }
+    /* Inline action link for the mail-authorization row; matches the card's
+       existing secondary text scale instead of introducing a new control. */
+    .db-mail-cta{ margin-left:6px; font-size:12.5px; font-weight:600; color:#b45309; }
     .db-provider-line.is-warning{ color:#92400e; }
     .db-provider-line span{
       min-width:0;
@@ -638,6 +641,23 @@
               <span class="badge status-pill status-neutral">Desconectado</span>
             {% endif %}
           </div>
+          {# Mail.Send is a capability of the connected account, shown separately
+             so a connected OneDrive is never described as disconnected.
+             Same structure as the provider rows above: label is ordinary card
+             text (colon included), only the STATE lives inside the pill. #}
+          {% if onedrive_mail_status and onedrive_mail_status.visible %}
+            <div>
+              <strong>Envio de e-mails:</strong>
+              {% if onedrive_mail_status.authorized %}
+                <span class="badge status-pill status-positive">Autorizado</span>
+              {% else %}
+                <span class="badge status-pill status-warning">Não autorizado</span>
+                {% if onedrive_mail_status.cta_url %}
+                  <a class="db-mail-cta" href="{{ onedrive_mail_status.cta_url }}">{{ onedrive_mail_status.cta_label }}</a>
+                {% endif %}
+              {% endif %}
+            </div>
+          {% endif %}
           {% if onedrive_last_upload_label %}
             <div><strong>Último upload OneDrive:</strong> {{ onedrive_last_upload_label }}</div>
           {% endif %}

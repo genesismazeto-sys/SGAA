@@ -130,6 +130,47 @@
 .input-with-icon{ display:inline-block; position:relative; }  /* was duplicated in 2 templates */
 
 /* =============================================================
+   TRAILING CHIP ON A PLAIN FIELD CARD
+
+   The right-hand chip anatomy already existed in the DS, but every rule
+   that makes it work was written as `.field-card.file-card .chip-right`:
+   the three-column track lives on .file-card, and the horizontal chip box
+   lives under it. A plain .field-card carrying the same canonical
+   `.field-chip chip-right` markup therefore got neither. It fell back to
+   the 2-column primitive (40px 1fr), so the chip was auto-placed into an
+   IMPLICIT SECOND ROW inside the 40px icon column, and the bare
+   .field-chip rule (display:grid; place-items:center) then stacked its
+   icon above its label inside those 40px. That is the broken governed-
+   Matriz field on /admin/editar_aluno?view=1 — a tall card with the
+   explanatory text running vertically down the icon gutter.
+
+   Generalised, not widened. Both rules carry :not(.file-card), so no file
+   control anywhere can be reached by them and every existing file card
+   renders byte-identically. The generic chip is STATIC, not an action: no
+   pointer cursor and no filled background, because "this value is governed
+   elsewhere" is a caption, not a button. It is the .field-chip divider
+   primitive flipped to the other edge, which is why it needs no new
+   colours of its own.
+   ============================================================= */
+.field-card:not(.file-card):has(> .chip-right){
+  grid-template-columns:40px 1fr auto;
+}
+.field-card:not(.file-card) > .chip-right{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:100%;
+  padding:0 10px;
+  background:transparent;
+  border-right:0;
+  border-left:1px solid var(--border-strong);
+  color:var(--text-secondary);
+  font-size:var(--font-size-small);
+  white-space:nowrap;
+}
+.field-card:not(.file-card) > .chip-right .lucide{ width:16px; height:16px; }
+
+/* =============================================================
    FIELD STATES  (DS-7, approved from real rendered previews)
 
    Every rule below is ADDITIVE except the focus-ring width, which is

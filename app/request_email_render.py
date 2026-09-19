@@ -21,6 +21,11 @@ import re
 from app.presentation import format_date_ptbr
 
 #: Scalar placeholders -- safe anywhere, including the subject line.
+#:
+#: The ``requisicao.*`` and ``data.periodo`` terms agree in number with the
+#: number of decision events in *this student's* e-mail, never with the batch
+#: total: the message is rendered per student, so João's two requests and
+#: Maria's one must read differently.
 SCALAR_PLACEHOLDERS = (
     "saudacao",
     "aluno.nome",
@@ -28,7 +33,11 @@ SCALAR_PLACEHOLDERS = (
     "aluno.matricula",
     "data.inicio",
     "data.fim",
+    "data.periodo",
     "quantidade_requisicoes",
+    "requisicao.possessivo",
+    "requisicao.substantivo",
+    "requisicao.processamento",
 )
 
 #: Block placeholder -- system-generated, body only, never allowed in a subject.
@@ -44,7 +53,18 @@ PLACEHOLDER_HELP = (
     ("{aluno.matricula}", "Matrícula do aluno."),
     ("{data.inicio}", "Data da requisição mais antiga incluída no e-mail."),
     ("{data.fim}", "Data da requisição mais recente incluída no e-mail."),
+    (
+        "{data.periodo}",
+        "Uma data quando o período é um único dia; intervalo quando houver "
+        "datas diferentes.",
+    ),
     ("{quantidade_requisicoes}", "Quantidade de requisições incluídas no e-mail."),
+    (
+        "{requisicao.possessivo}",
+        "Sua / Suas conforme a quantidade de requisições.",
+    ),
+    ("{requisicao.substantivo}", "solicitação / solicitações."),
+    ("{requisicao.processamento}", "foi processada / foram processadas."),
     (
         "{requisicoes}",
         "Insere o detalhamento das requisições selecionadas para o aluno.",
@@ -82,6 +102,15 @@ def first_name(full_name: str | None) -> str:
         if cleaned:
             return cleaned
     return ""
+
+
+def pluralize(count: int, singular: str, plural: str) -> str:
+    """Shared pt-BR count agreement: ``1 requisição`` / ``2 requisições``.
+
+    One rule for the confirmation summary and the e-mail body, so a count can
+    never be glued to a permanently plural noun.
+    """
+    return f"{count} {singular if int(count) == 1 else plural}"
 
 
 def _format_hours(value) -> str:
@@ -140,15 +169,31 @@ def render_request_block(events) -> str:
 def build_context(events, *, aluno_nome, aluno_matricula, moment=None) -> dict[str, str]:
     """Placeholder values for exactly one student's outgoing e-mail."""
     dates = sorted(str(event["data_solicitacao"] or "") for event in events)
+    inicio = format_date_ptbr(dates[0]) if dates else ""
+    fim = format_date_ptbr(dates[-1]) if dates else ""
+    # Grammatical number follows THIS student's event count, not the batch.
+    many = len(events) > 1
+    if not inicio:
+        periodo = ""
+    elif inicio == fim:
+        # One request, or several submitted on the same day: one date, no
+        # invented range.
+        periodo = f"do dia {inicio}"
+    else:
+        periodo = f"de {inicio} a {fim}"
     return {
         "saudacao": greeting_for(moment),
         "aluno.nome": str(aluno_nome or ""),
         "aluno.primeironome": first_name(aluno_nome),
         "aluno.matricula": str(aluno_matricula or ""),
         # Same-day selections legitimately collapse to one date; no fake range.
-        "data.inicio": format_date_ptbr(dates[0]) if dates else "",
-        "data.fim": format_date_ptbr(dates[-1]) if dates else "",
+        "data.inicio": inicio,
+        "data.fim": fim,
+        "data.periodo": periodo,
         "quantidade_requisicoes": str(len(events)),
+        "requisicao.possessivo": "Suas" if many else "Sua",
+        "requisicao.substantivo": "solicitações" if many else "solicitação",
+        "requisicao.processamento": "foram processadas" if many else "foi processada",
         BLOCK_PLACEHOLDER: render_request_block(events),
     }
 
@@ -192,6 +237,7 @@ __all__ = [
     "build_context",
     "first_name",
     "greeting_for",
+    "pluralize",
     "render_request_block",
     "render_student_email",
     "render_template",

@@ -129,7 +129,7 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # Verified additive: removing exactly REN1_REQUEST_EMAIL_KEYS from the live
 # catalog reproduces the parent commit's 558-key digest 70ee7163... bit-for-bit.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "d4ab5f220d79aee491be67d2ae00d226d817a07578fe5970f8f97df67ebff1e8"
+    "e8693abb734d88923393a4ebb426f162a133d5693e804ec7e07449eea4613d98"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -159,7 +159,7 @@ REN1_REQUEST_EMAIL_KEYS = frozenset(
         "msg_24325ddb7752090e",  # {value_1} requisicoes selecionadas.
         "msg_a5b5d5343ac8b8cb",  # Todas as requisicoes selecionadas precisam...
         "msg_771f5b72615911fd",  # Enviar e-mail de resposta
-        "msg_f618afe119154c21",  # {value_1} requisicoes - {value_2} alunos...
+        "msg_10d4b1ed4633f701",  # {value_1} - {value_2} - {value_3} (counts agreed server-side)
         "msg_b3a01bef14b4bd4d",  # Modelo
         "msg_5e91dcdc5796506a",  # Enviando...
         "msg_b6651f8b5faa2b3e",  # Nao foi possivel concluir o envio.

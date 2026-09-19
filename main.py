@@ -446,6 +446,7 @@ from app.views.admin.banco_dados import (
     _resolve_onedrive_redirect_uri,
     _resolve_google_redirect_uri,
     _onedrive_connect_diagnostics,
+    _onedrive_mail_capability,
     _build_oauth_redirect_context,
     _get_cloud_folder_account,
     _get_current_schema_status_for_restore,

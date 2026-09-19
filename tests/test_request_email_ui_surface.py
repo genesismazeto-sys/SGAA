@@ -98,7 +98,10 @@ def test_floating_bar_email_requires_all_selected_pending():
 
 
 def test_hover_does_not_retarget_an_active_batch():
-    assert "if (selectedRows().length > 1){" in TEMPLATE
+    """Repaired: ANY selection owns the bar, not only a multi-selection."""
+    assert "function selectionOwnsBar(){ return selectedRows().length > 0; }" in TEMPLATE
+    block = TEMPLATE.split("scrollWrap?.addEventListener('mouseover'")[1][:600]
+    assert "if (selectionOwnsBar()) return;" in block
 
 
 # --- confirmation step -----------------------------------------------------
@@ -113,7 +116,10 @@ def test_send_opens_confirmation_before_any_send():
 
 def test_confirmation_shows_counts_template_and_recipients():
     assert "emailSummary" in TEMPLATE
-    assert "{value_1} requisições · {value_2} alunos · {value_3} e-mails" in TEMPLATE
+    # Repaired: the nouns are agreed server-side, so the template only joins
+    # three already-formed parts instead of hardcoding plural words.
+    assert "'emailSummary': user_message('{value_1} · {value_2} · {value_3}')" in TEMPLATE
+    assert "value_1: data.resumo_requisicoes" in TEMPLATE
     assert 'id="req-email-recipients"' in TEMPLATE
     assert 'id="req-email-template"' in TEMPLATE
 

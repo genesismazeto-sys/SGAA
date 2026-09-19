@@ -35,7 +35,7 @@ from app.request_email_dispatch import (
     summarize,
     unresolved_student_ids,
 )
-from app.request_email_render import PLACEHOLDER_HELP
+from app.request_email_render import PLACEHOLDER_HELP, pluralize
 from app.request_email_notifications import (
     FINAL_DECISION_STATUSES,
     failed_request_ids,
@@ -1362,14 +1362,26 @@ def admin_requisicoes_email_preview():
     # Students whose exact planned send already has an unconfirmed attempt: the
     # administrator has to see that BEFORE confirming, not in the result line.
     unresolved = unresolved_student_ids(conn, plan)
+    total_reqs = sum(entry["quantidade"] for entry in plan)
+    total_alunos = len(plan)
+    total_emails = len([entry for entry in plan if not entry["blocked"]])
     return jsonify({
         "ok": True,
-        "requisicoes": sum(entry["quantidade"] for entry in plan),
-        "alunos": len(plan),
-        "emails": len([entry for entry in plan if not entry["blocked"]]),
+        "requisicoes": total_reqs,
+        "alunos": total_alunos,
+        "emails": total_emails,
+        # Agreed counts: the noun is chosen next to its number instead of a
+        # permanently plural word being concatenated after it.
+        "resumo_requisicoes": pluralize(total_reqs, "requisição", "requisições"),
+        "resumo_alunos": pluralize(total_alunos, "aluno", "alunos"),
+        "resumo_emails": pluralize(total_emails, "e-mail", "e-mails"),
         "modelo": {"id": template["id"], "titulo": template["titulo"]},
         "transporte_pronto": bool(transport["ready"]),
         "transporte_mensagem": transport["message"],
+        "transporte_motivo": transport["reason"],
+        "transporte_cta": transport.get("cta_label", ""),
+        "transporte_cta_url": transport.get("cta_url", ""),
+        "provedor_conectado": bool(transport.get("provider_connected")),
         "reenvio_incerto": sorted(unresolved),
         "destinatarios": [
             {
