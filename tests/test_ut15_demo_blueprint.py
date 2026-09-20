@@ -82,6 +82,9 @@ from app.auth import get_admin_permission_requirement
 import main
 
 from tests.canonical_baseline_support import (
+    CANONICAL_CSRF_ROWS,
+    CSRF_OFF_ARTIFACT,
+    load_csrf_snapshot,
     assert_catalog_matches_canonical_baseline,
     assert_csrf_snapshot_matches_canonical_baseline,
     assert_live_route_surface_matches_canonical_baseline,
@@ -365,6 +368,15 @@ FC07_MENSAGENS_RESET_ACTIONS = (
 )
 
 MENSAGENS_RESET_ROUTE = "/admin/mensagens/<message_key>/reset"
+PASSWORD_FOUNDATION_ROUTES = frozenset(
+    {
+        "/admin/acesso/ativar-senhas-padrao",
+        "/admin/acesso/<int:usuario_id>/senha-por-email",
+        "/esqueci-minha-senha",
+        "/primeiro-acesso",
+        "/redefinir-senha",
+    }
+)
 
 
 def _mensagens_evidence_entries():
@@ -456,6 +468,37 @@ def _apply_removed_norma_surfaces(expected_obj):
     return expected
 
 
+def _apply_password_foundation_defaults_route(expected_obj):
+    """Apply the reviewed password-foundation CSRF additions exactly."""
+    expected = json.loads(json.dumps(expected_obj))
+    rows = expected.get("rows", [])
+    if any(row.get("route") in PASSWORD_FOUNDATION_ROUTES for row in rows):
+        return None
+    additions = [
+        json.loads(json.dumps(row))
+        for row in CANONICAL_CSRF_ROWS
+        if row["route"] in PASSWORD_FOUNDATION_ROUTES
+    ]
+    rows.extend(additions)
+    rows.sort(key=lambda row: (row["route"], row["method"], row["view_function"]))
+    summary = expected["summary"]
+    summary["total_mutating_routes"] += len(additions)
+    for addition in additions:
+        summary["status_counts"][addition["status"]] += 1
+    public_page = next(
+        page
+        for page in load_csrf_snapshot(CSRF_OFF_ARTIFACT)["summary"]["page_statuses"]
+        if page["path"] == "/esqueci-minha-senha"
+    )
+    login_index = next(
+        index
+        for index, page in enumerate(summary["page_statuses"])
+        if page["path"] == "/login"
+    )
+    summary["page_statuses"].insert(login_index, dict(public_page))
+    return expected
+
+
 def _normalize_mensagens_list_ordering(obj):
     """Deterministic normalization of the ONLY non-semantic ordering in the
     snapshot: the evidence / token_counts_per_form lists of the mensagens
@@ -475,7 +518,8 @@ def _normalize_mensagens_list_ordering(obj):
 
 def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
     """Returns "" when the working semantic object equals HEAD with exactly
-    the three authorized additions applied; a description otherwise. The
+    the reviewed FC-07 and/or password-foundation additions applied; a
+    description otherwise. The
     comparison covers the COMPLETE snapshot structure: rows, routes, methods,
     evidence, token_counts_per_form, summary, status and ownership metadata."""
     # The live HEAD already contains the FC-07 additions. Preserve strict
@@ -492,12 +536,17 @@ def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
         _apply_pg_removed_page_status(head_obj),
         _apply_pg_removed_page_status(expected_fc07),
     ]
-    candidates = [
+    retired_candidates = [
         _apply_removed_norma_surfaces(candidate)
         for candidate in legacy_candidates if candidate is not None
     ]
+    candidates = legacy_candidates + retired_candidates
+    candidates += [
+        _apply_password_foundation_defaults_route(candidate)
+        for candidate in candidates if candidate is not None
+    ]
     if all(candidate is None for candidate in candidates):
-        return "HEAD snapshot has no unique removable Norma surface"
+        return "HEAD snapshot has no recognized authorized transition"
     normalized_work = _normalize_mensagens_list_ordering(work_obj)
     if not any(
         candidate is not None
@@ -510,11 +559,10 @@ def _csrf_snapshot_matches_authorized_delta(head_obj, work_obj) -> str:
 
 def _authorized_csrf_snapshot_delta_report() -> str:
     """Strict snapshot custody: each working canonical CSRF snapshot must be
-    semantically equal to HEAD plus exactly the three FC-07-authorized
-    /admin/mensagens reset additions (exact action family, exact page/kind,
-    token count 1, modeled as exact data), with the complete snapshot
-    structure retained verbatim. Returns "" when it holds; a description
-    otherwise."""
+    semantically equal to HEAD plus only the exact reviewed FC-07 reset
+    additions and/or the password-foundation activation mutation row, with the
+    complete snapshot structure retained verbatim. Returns "" when it holds;
+    a description otherwise."""
     problems = []
     for name in ("csrf_inventory_shadow_off.json", "csrf_inventory_shadow_on.json"):
         relative = f"tests/_artifacts/{name}"

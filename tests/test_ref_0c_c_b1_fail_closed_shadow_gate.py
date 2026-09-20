@@ -51,6 +51,7 @@ from app import auth
 from app.web import authz_gate
 from tests import canonical_rbac_test_support as rbac
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import existing_admin_user_id, stamp_auth_version
 
 
 BUSINESS_METHODS = rbac.BUSINESS_METHODS
@@ -104,6 +105,7 @@ def _login(client, access_level: str) -> None:
         value["user_type"] = "admin"
         value["user_name"] = f"C-B1 {access_level}"
         value["access_level"] = access_level
+        stamp_auth_version(value)
 
 
 def test_resolved_admin_rule_is_governed_and_mapped():
@@ -341,9 +343,14 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
         client = main.app.test_client()
         with client.session_transaction() as value:
             value.clear()
-            value["user_id"] = 999999
+            # Was a synthetic id; the production session guard now reads the
+            # durable credential on every authenticated request, so the actor
+            # has to be a real admin.  What this test asserts is unchanged:
+            # the shadow gate itself loads no access context and no DB state.
+            value["user_id"] = existing_admin_user_id()
             value["user_type"] = "admin"
             value["access_level"] = "admin_total"
+            stamp_auth_version(value)
 
         response = client.get(path)
 
@@ -380,6 +387,7 @@ def test_anonymous_and_aluno_admin_authentication_contracts_are_preserved(env):
         value.clear()
         value["user_id"] = 1
         value["user_type"] = "aluno"
+        stamp_auth_version(value)
     response = client.get("/admin/atividades")
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]

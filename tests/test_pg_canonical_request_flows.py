@@ -10,6 +10,7 @@ from app.versioning.snapshots import (
     read_requisicao_snapshot_for_processing,
 )
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -29,6 +30,7 @@ def _student_identity():
 def _login_student(client, identity):
     with client.session_transaction() as session:
         session.update(user_id=identity["usuario_id"], user_type="aluno", user_name="Aluno")
+        stamp_auth_version(session)
 
 
 def _login_admin(client):
@@ -36,6 +38,7 @@ def _login_admin(client):
         row = main.get_db_connection().execute("SELECT id FROM usuarios WHERE tipo='admin' ORDER BY id LIMIT 1").fetchone()
     with client.session_transaction() as session:
         session.update(user_id=row["id"], user_type="admin", user_name="Admin")
+        stamp_auth_version(session)
 
 
 def _assert_canonical_request(name):

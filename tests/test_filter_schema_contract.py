@@ -10,6 +10,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 SCRIPT_PATTERN = re.compile(
@@ -32,6 +33,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def _login_aluno(client, usuario_id: int, nome: str):
@@ -39,6 +41,7 @@ def _login_aluno(client, usuario_id: int, nome: str):
         sess["user_id"] = usuario_id
         sess["user_type"] = "aluno"
         sess["user_name"] = nome
+        stamp_auth_version(sess)
 
 
 def _extract_filter_schema(html: str):

@@ -30,6 +30,13 @@
       "rule": "/admin/acesso/<int:usuario_id>/resetar-senha"
     },
     {
+      "endpoint": "admin_acesso_senha_por_email",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/<int:usuario_id>/senha-por-email"
+    },
+    {
       "endpoint": "admin_acesso_definir_senha",
       "methods": [
         "POST"
@@ -861,6 +868,14 @@
       "rule": "/csrf-token"
     },
     {
+      "endpoint": "forgot_password",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/esqueci-minha-senha"
+    },
+    {
       "endpoint": "favicon",
       "methods": [
         "GET"
@@ -903,6 +918,22 @@
         "GET"
       ],
       "rule": "/onedrive/callback"
+    },
+    {
+      "endpoint": "first_access",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/primeiro-acesso"
+    },
+    {
+      "endpoint": "reset_password",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "rule": "/redefinir-senha"
     },
     {
       "endpoint": "static",

@@ -19,7 +19,6 @@
                          left-aligned today. Hoisting it silently restyles
                          that page — the visual gate caught exactly this.
      .field-card.file-card  styled in only some templates that render it.
-     .toggle-switch      three templates, two sizes (46x24 and 42x22).
    Those are real differences in the CURRENTLY APPROVED design. Unifying
    them is a redesign decision. See docs/design-system/README.md.
 
@@ -128,6 +127,74 @@
 .import-modal-grid{ box-sizing:border-box; display:grid; gap:12px; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
 .import-modal-grid .field-card{ box-sizing:border-box; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */
 .input-with-icon{ display:inline-block; position:relative; }  /* was duplicated in 2 templates */
+
+/* =============================================================
+   TOGGLE SWITCH
+
+   Shared rectangular switch contract. The default 42x22 form preserves the
+   settings/database consumers; --large preserves the existing 46x24 modal
+   consumers without a page-local clone. Component variables own the two
+   approved geometries while foundation tokens own shared colours and focus.
+   ============================================================= */
+.toggle-switch{
+  --toggle-switch-width:42px;
+  --toggle-switch-height:22px;
+  --toggle-switch-knob-offset:2px;
+  --toggle-switch-knob-travel:20px;
+  --toggle-switch-active:#0f5b99;
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  width:var(--toggle-switch-width);
+  height:var(--toggle-switch-height);
+  flex-shrink:0;
+}
+.toggle-switch--large{
+  --toggle-switch-width:46px;
+  --toggle-switch-height:24px;
+  --toggle-switch-knob-offset:3px;
+  --toggle-switch-knob-travel:22px;
+}
+.toggle-switch input{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+.toggle-switch-slider{
+  position:relative;
+  display:block;
+  width:100%;
+  height:100%;
+  border-radius:3px;
+  background:var(--border-strong);
+  transition:background .18s ease;
+}
+.toggle-switch-slider::before{
+  content:"";
+  position:absolute;
+  top:var(--toggle-switch-knob-offset);
+  left:var(--toggle-switch-knob-offset);
+  width:18px;
+  height:18px;
+  border-radius:15%;
+  background:var(--surface);
+  box-shadow:0 1px 3px rgba(15,23,42,.24);
+  transition:transform .18s ease;
+}
+.toggle-switch input:checked + .toggle-switch-slider{
+  background:var(--toggle-switch-active);
+}
+.toggle-switch input:checked + .toggle-switch-slider::before{
+  transform:translateX(var(--toggle-switch-knob-travel));
+}
+.toggle-switch input:focus-visible + .toggle-switch-slider{
+  outline:2px solid var(--focus-ring-color);
+  outline-offset:2px;
+}
+.toggle-switch input:disabled{ cursor:not-allowed; }
 
 /* =============================================================
    TRAILING CHIP ON A PLAIN FIELD CARD

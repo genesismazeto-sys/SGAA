@@ -3,14 +3,14 @@
 Deliberately knows nothing about Requisições: no request ids, no presets, no
 decision events.  It accepts a recipient, a subject and a plain-text body.
 
-Reuse targets (designed for, not implemented here):
+Consumers:
 
 * request-decision e-mails -- the first consumer;
 * first-access account e-mail;
 * password-recovery e-mail.
 
 See ``docs/mail/AUTH_EMAIL_EXTENSION_POINT.md`` for the auth contracts those
-later consumers must honour.
+consumers honour.
 
 Security
 --------

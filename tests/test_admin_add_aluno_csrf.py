@@ -11,6 +11,11 @@ if BASE not in sys.path:
 
 from app import db as app_db_module
 import main
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    create_usuario_with_access_level,
+    get_usuario_auth_version,
+)
 
 
 def _extract_form_block(html: str, action: str) -> str:
@@ -48,12 +53,17 @@ def _extract_form_block_by_id(html: str, form_id: str) -> str:
 
 
 def _login_admin_user(client, user_id: int, user_name: str) -> None:
+    # A real login stamps the durable auth_version; without it the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), user_id)
     with client.session_transaction() as sess:
         sess["user_id"] = user_id
         sess["user_type"] = "admin"
         sess["user_name"] = user_name
         sess["access_level"] = "admin_total"
         sess["perfil"] = "Admin"
+        sess["auth_version"] = auth_version
 
 
 def _create_support_turma(conn, suffix: str) -> int:
@@ -120,15 +130,14 @@ def _seed_admin_and_support_turma(suffix: str) -> tuple[int, int]:
     with main.app.app_context():
         conn = main.get_db_connection()
         main.ensure_usuario_access_schema(conn)
-        admin_id = conn.execute(
-            "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-            (
-                f"Admin CSRF {suffix}",
-                f"admin.csrf.{suffix}@teste.local",
-                main.hash_password("admin12345"),
-                "admin",
-                "admin_total",
-            ),
+        admin_id = create_usuario_with_access_level(
+            conn,
+            f"Admin CSRF {suffix}",
+            f"admin.csrf.{suffix}@teste.local",
+            main.hash_password("admin12345"),
+            "admin",
+            "admin_total",
+            credential_state=CREDENTIAL_STATE_PERSONAL,
         ).lastrowid
         turma_id = _create_support_turma(conn, suffix)
     return int(admin_id), int(turma_id)
@@ -240,15 +249,14 @@ def test_admin_add_aluno_requires_and_accepts_valid_csrf(
     with main.app.app_context():
         conn = main.get_db_connection()
         main.ensure_usuario_access_schema(conn)
-        admin_id = conn.execute(
-            "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-            (
-                f"Admin Add Aluno {suffix}",
-                f"admin.add.aluno.{suffix}@teste.local",
-                main.hash_password("admin12345"),
-                "admin",
-                "admin_total",
-            ),
+        admin_id = create_usuario_with_access_level(
+            conn,
+            f"Admin Add Aluno {suffix}",
+            f"admin.add.aluno.{suffix}@teste.local",
+            main.hash_password("admin12345"),
+            "admin",
+            "admin_total",
+            credential_state=CREDENTIAL_STATE_PERSONAL,
         ).lastrowid
         turma_id = _create_support_turma(conn, suffix)
 

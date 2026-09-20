@@ -203,21 +203,20 @@ def test_sanitizer_is_the_only_persistable_error_channel():
     assert len(sanitize_provider_error("x" * 5000)) <= 320
 
 
-def test_docs_contract_exists_and_claims_no_auth_implementation():
+def test_docs_contract_exists_and_describes_auth_implementation():
     doc = (
         MODULE_PATH.parents[2] / "docs" / "mail" / "AUTH_EMAIL_EXTENSION_POINT.md"
     ).read_text(encoding="utf-8")
-    assert "Neither is" in doc and "implemented in this front" in doc
+    assert "implemented" in doc
     assert "single-use link" in doc
     assert "never a generated or plaintext" in doc
     # Recovery must not leak account existence.
     assert "generic" in doc.lower()
 
 
-def test_no_auth_recovery_route_was_added_by_this_front():
-    """The extension point is documented, deliberately not wired."""
+def test_auth_recovery_routes_reuse_the_generic_mail_boundary():
     import main
 
     rules = {str(rule) for rule in main.app.url_map.iter_rules()}
-    for forbidden in ("/recuperar-senha", "/primeiro-acesso", "/esqueci-minha-senha"):
-        assert forbidden not in rules
+    assert "/recuperar-senha" not in rules
+    assert {"/primeiro-acesso", "/redefinir-senha", "/esqueci-minha-senha"} <= rules

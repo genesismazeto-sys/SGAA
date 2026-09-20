@@ -266,7 +266,9 @@ def test_live_add_and_edit_pages_own_local_reader_and_nonblocking_fallback():
     with main.app.app_context():
         conn = app_db.get_db_connection()
         admin = conn.execute(
-            "SELECT id, nome FROM usuarios WHERE tipo='admin' ORDER BY id LIMIT 1"
+            "SELECT u.id, u.nome, c.auth_version FROM usuarios u"
+            " JOIN usuario_credenciais c ON c.usuario_id = u.id"
+            " WHERE u.tipo='admin' ORDER BY u.id LIMIT 1"
         ).fetchone()
         assert admin is not None
 
@@ -275,6 +277,7 @@ def test_live_add_and_edit_pages_own_local_reader_and_nonblocking_fallback():
         flask_session["user_id"] = int(admin["id"])
         flask_session["user_name"] = admin["nome"]
         flask_session["user_type"] = "admin"
+        flask_session["auth_version"] = int(admin["auth_version"])
 
     reader_response = client.get("/static/vendor/xlsx.full.min.js")
     assert reader_response.status_code == 200

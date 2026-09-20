@@ -15,6 +15,7 @@ from utils.messages import (
     message_key_for_default,
     resolve_user_message,
 )
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture(scope="module")
@@ -31,6 +32,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def test_admin_messages_page_lists_backend_and_frontend_messages(client):

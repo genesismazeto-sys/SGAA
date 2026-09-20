@@ -23,6 +23,7 @@ from app.prod1_schema import (
     LATEST_MIGRATION_MARKER,
     MATRIX_VERSION_REMOVAL_MARKER,
     NORMA_REMOVAL_MARKER,
+    PASSWORD_FOUNDATION_MARKER,
     REQUEST_EMAIL_NOTIFICATIONS_MARKER,
     SCHEMA_EPOCH,
     SCHEMA_VERSION,
@@ -43,7 +44,13 @@ def ensure_backup_settings_structural_schema(conn) -> None:
 
 def ensure_usuario_access_structural_schema(conn) -> None:
     """Validate central prod-1 ownership of access schema."""
-    _require_prod1_tables(conn, "usuarios", "configuracoes_acesso", "usuarios_permissoes_acesso")
+    _require_prod1_tables(
+        conn,
+        "usuarios",
+        "usuario_credenciais",
+        "configuracoes_acesso",
+        "usuarios_permissoes_acesso",
+    )
 
 
 def seed_usuario_access_default_data(conn) -> None:
@@ -140,6 +147,7 @@ SCHEMA_MIGRATIONS = (
     (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, bootstrap_prod1_schema),
     (6, STUDENT_MATRIX_AUTHORITY_MARKER, bootstrap_prod1_schema),
     (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER, bootstrap_prod1_schema),
+    (8, PASSWORD_FOUNDATION_MARKER, bootstrap_prod1_schema),
 )
 
 

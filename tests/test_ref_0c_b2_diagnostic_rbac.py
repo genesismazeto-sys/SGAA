@@ -6,6 +6,7 @@ import pytest
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 ROUTES = (
@@ -30,6 +31,7 @@ def _login(client, access_level):
         conn.commit()
     with client.session_transaction() as session:
         session.update(user_id=user_id, user_type="admin", user_name="Diagnostic")
+        stamp_auth_version(session)
 
 
 def test_surviving_diagnostics_have_exact_activity_view_requirement():

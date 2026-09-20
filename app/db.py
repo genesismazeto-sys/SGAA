@@ -27,6 +27,12 @@ from app.db_maintenance import (
 from app.security.passwords import hash_password
 from app.text import ptbr_sqlite_collation
 from app.prod1_schema import validate_prod1_schema
+from app.user_accounts import (
+    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PERSONAL,
+    _access_defaults_map,
+    create_usuario_with_access_level,
+)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE = os.getenv("APP_DATABASE", os.path.join(PROJECT_ROOT, "database.db"))
 logger = logging.getLogger(__name__)
@@ -71,6 +77,7 @@ def _app_settings_defaults() -> dict[str, str]:
         "auto_indefer_devolvida": "0",
         "horas_padrao_academica": str(DEFAULT_HORAS_ACADEMICA),
         "horas_padrao_extensao": str(DEFAULT_HORAS_EXTENSAO),
+        "default_passwords_enabled": "1",
     }
 
 
@@ -133,14 +140,18 @@ def init_db():
         "SELECT 1 FROM usuarios WHERE LOWER(email) = ?", (admin_email,)
     ).fetchone()
     if not admin_exists and bootstrap_admin and bootstrap_password:
-        conn.execute(
-            """
-            INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                "Administrador", admin_email, hash_password(bootstrap_password),
-                "admin", "admin_total",
+        configured_default = _access_defaults_map(conn).get("admin_total", "admin123")
+        create_usuario_with_access_level(
+            conn,
+            "Administrador",
+            admin_email,
+            hash_password(bootstrap_password),
+            "admin",
+            "admin_total",
+            credential_state=(
+                CREDENTIAL_STATE_DEFAULT
+                if bootstrap_password == configured_default
+                else CREDENTIAL_STATE_PERSONAL
             ),
         )
     elif not admin_exists and not bootstrap_admin:

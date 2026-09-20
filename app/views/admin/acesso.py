@@ -1,9 +1,8 @@
 # coding: utf-8
 """UT-9: dono canonico do cohort "Acesso".
 
-9 simbolos relocados de main.py por MOVE-VERBATIM (6 rotas, 3 helpers e 0
-constantes). Nenhuma importacao de main; registra apenas rotas legadas via
-LegacyRouteSpec.
+Owner of the Acesso cohort (9 routes and 3 helpers). Nenhuma importacao de
+main; registra apenas rotas legadas via LegacyRouteSpec.
 """
 
 from __future__ import annotations
@@ -41,8 +40,22 @@ from app.db_maintenance import (
     ensure_usuario_profile_schema,
 )
 from app.security.passwords import hash_password
+from app.password_email import issue_and_send_password_email, password_email_status
+from app.password_tokens import PURPOSE_FIRST_ACCESS, PURPOSE_PASSWORD_RESET
+from app.settings import (
+    get_default_passwords_enabled,
+    save_default_passwords_enabled,
+)
 from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
-from app.user_accounts import _access_defaults_map
+from app.user_accounts import (
+    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PERSONAL,
+    _access_defaults_map,
+    create_usuario_with_access_level,
+    get_usuario_auth_version,
+    set_usuario_password_hash,
+    set_usuarios_password_hash,
+)
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
     append_conditions_sql,
@@ -117,6 +130,8 @@ def admin_acesso():
         summary[canonicalize_access_level(row["nivel_acesso"])] = row["total"]
 
     access_defaults = _access_defaults_map(conn)
+    default_passwords_enabled = get_default_passwords_enabled(conn)
+    mail_status = password_email_status(conn)
     turmas = conn.execute(
         "SELECT id, COALESCE(codigo, nome) AS nome FROM turmas ORDER BY nome"
     ).fetchall()
@@ -125,6 +140,7 @@ def admin_acesso():
         FROM usuarios u
         LEFT JOIN alunos a ON a.usuario_id = u.id
         LEFT JOIN turmas t ON t.id = a.turma_id
+        LEFT JOIN usuario_credenciais c ON c.usuario_id = u.id
     """
     where = []
     params = []
@@ -174,7 +190,9 @@ def admin_acesso():
             a.matricula,
             a.status AS aluno_status,
             a.turma_id,
-            COALESCE(t.codigo, t.nome, '') AS turma_label
+            COALESCE(t.codigo, t.nome, '') AS turma_label,
+            c.estado AS credential_state,
+            c.auth_version
         """
         + base_from
         + where_sql
@@ -233,6 +251,13 @@ def admin_acesso():
             "accessOverrides": access_context.get("overrides", {}),
             "effectiveScopes": access_context.get("effective_scopes", {}),
             "scopeGroups": access_context.get("scope_groups", []),
+            "credentialState": row["credential_state"],
+            "emailActionLabel": (
+                "Enviar acesso"
+                if row["credential_state"] == CREDENTIAL_STATE_DEFAULT
+                else "Redefinir por e-mail"
+            ),
+            "emailActionUrl": url_for("admin_acesso_senha_por_email", usuario_id=row["id"]),
         }
 
     filter_schema = [
@@ -319,6 +344,8 @@ def admin_acesso():
         "admin_acesso.html",
         summary=summary,
         access_defaults=access_defaults,
+        default_passwords_enabled=default_passwords_enabled,
+        mail_status=mail_status,
         access_level_choices=access_level_choices,
         access_profile_defaults=access_profile_defaults,
         access_resource_groups=access_resource_groups,
@@ -357,6 +384,17 @@ def admin_acesso_salvar_senhas_default():
             """,
             (nivel, senha_padrao),
         )
+    # Same settings surface, same Save: the activation switch rides along with
+    # the configured values.  It only writes configuracoes_app -- it never
+    # rewrites a configured default or any usuarios.senha hash.
+    #
+    # The panel pairs the checkbox with a hidden "0", so a real submit always
+    # carries the field and an unchecked box is an explicit off.  A caller that
+    # omits the field entirely is only saving passwords and must not silently
+    # disable the mechanism.
+    activation = request.form.getlist("default_passwords_enabled")
+    if activation:
+        save_default_passwords_enabled(conn, "1" in activation)
     conn.commit()
     flash("Senhas padrão atualizadas com sucesso.", "success")
     return redirect(url_for("admin_acesso"))
@@ -407,8 +445,14 @@ def admin_acesso_salvar():
                 return redirect(url_for("admin_acesso"))
             if senha:
                 conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ?, senha = ? WHERE id = ?",
-                    (nome, email, user_type, nivel_acesso, hash_password(senha), usuario_id),
+                    "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
+                    (nome, email, user_type, nivel_acesso, usuario_id),
+                )
+                set_usuario_password_hash(
+                    conn,
+                    usuario_id,
+                    hash_password(senha),
+                    credential_state=CREDENTIAL_STATE_PERSONAL,
                 )
             else:
                 conn.execute(
@@ -417,9 +461,19 @@ def admin_acesso_salvar():
                 )
         else:
             senha_final = senha or defaults.get(nivel_acesso, "admin123")
-            cursor = conn.execute(
-                "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-                (nome, email, hash_password(senha_final), user_type, nivel_acesso),
+            configured_default = defaults.get(nivel_acesso, "admin123")
+            cursor = create_usuario_with_access_level(
+                conn,
+                nome,
+                email,
+                hash_password(senha_final),
+                user_type,
+                nivel_acesso,
+                credential_state=(
+                    CREDENTIAL_STATE_DEFAULT
+                    if not senha
+                    else CREDENTIAL_STATE_PERSONAL
+                ),
             )
             usuario_id = cursor.lastrowid
 
@@ -490,6 +544,8 @@ def admin_acesso_salvar():
         return redirect(url_for("admin_acesso"))
 
     if usuario_id == session.get("user_id"):
+        if senha:
+            session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
         session["user_type"] = user_type
         session["access_level"] = nivel_acesso
         session["perfil"] = access_level_label(nivel_acesso)
@@ -506,6 +562,9 @@ def admin_acesso_salvar():
 def admin_acesso_resetar_senha(usuario_id):
     conn = get_db_connection()
     ensure_usuario_access_schema(conn)
+    if not get_default_passwords_enabled(conn):
+        flash("Ative as senhas padrão antes de aplicá-las a um acesso.", "error")
+        return redirect(url_for("admin_acesso"))
     usuario = conn.execute("SELECT id, nome, nivel_acesso FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
     if not usuario:
         flash("Usuário não encontrado.", "error")
@@ -513,9 +572,53 @@ def admin_acesso_resetar_senha(usuario_id):
     defaults = _access_defaults_map(conn)
     nivel = canonicalize_access_level(usuario["nivel_acesso"])
     nova_senha = defaults.get(nivel, "admin123")
-    conn.execute("UPDATE usuarios SET senha = ? WHERE id = ?", (hash_password(nova_senha), usuario_id))
+    set_usuario_password_hash(
+        conn,
+        usuario_id,
+        hash_password(nova_senha),
+        credential_state=CREDENTIAL_STATE_DEFAULT,
+    )
     conn.commit()
-    flash(f"Senha de {usuario['nome']} resetada para o padrão do nível.", "success")
+    if usuario_id == session.get("user_id"):
+        session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
+    flash(f"Senha padrão aplicada ao acesso de {usuario['nome']}.", "success")
+    return redirect(url_for("admin_acesso"))
+
+
+@admin_required
+def admin_acesso_senha_por_email(usuario_id):
+    conn = get_db_connection()
+    usuario = conn.execute(
+        """
+        SELECT u.id,u.nome,u.email,c.estado
+          FROM usuarios u
+          JOIN usuario_credenciais c ON c.usuario_id=u.id
+         WHERE u.id=?
+        """,
+        (usuario_id,),
+    ).fetchone()
+    if not usuario:
+        flash("Usuário não encontrado.", "error")
+        return redirect(url_for("admin_acesso"))
+
+    purpose = (
+        PURPOSE_FIRST_ACCESS
+        if usuario["estado"] == CREDENTIAL_STATE_DEFAULT
+        else PURPOSE_PASSWORD_RESET
+    )
+    outcome = issue_and_send_password_email(
+        conn,
+        usuario_id=usuario_id,
+        recipient=str(usuario["email"] or ""),
+        user_name=str(usuario["nome"] or ""),
+        purpose=purpose,
+    )
+    if outcome.status == "sent":
+        flash("E-mail de acesso enviado com sucesso.", "success")
+    elif outcome.status == "indeterminate":
+        flash(outcome.detail, "warning")
+    else:
+        flash(outcome.detail or "Não foi possível enviar o e-mail de acesso.", "error")
     return redirect(url_for("admin_acesso"))
 
 
@@ -554,11 +657,15 @@ def admin_acesso_definir_senha():
         flash("Um ou mais acessos selecionados não foram encontrados.", "error")
         return redirect(url_for("admin_acesso"))
 
-    conn.execute(
-        f"UPDATE usuarios SET senha = ? WHERE id IN ({placeholders})",
-        [hash_password(nova_senha), *usuario_ids],
+    set_usuarios_password_hash(
+        conn,
+        usuario_ids,
+        hash_password(nova_senha),
+        credential_state=CREDENTIAL_STATE_PERSONAL,
     )
     conn.commit()
+    if session.get("user_id") in usuario_ids:
+        session["auth_version"] = get_usuario_auth_version(conn, session["user_id"])
 
     if _is_ajax_request():
         return jsonify({"ok": True, "updated": len(usuario_ids)})
@@ -619,6 +726,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("POST",),
         ),
         LegacyRouteSpec(
+            "/admin/acesso/<int:usuario_id>/senha-por-email",
+            "admin_acesso_senha_por_email",
+            admin_acesso_senha_por_email,
+            ("POST",),
+        ),
+        LegacyRouteSpec(
             "/admin/acesso/definir-senha",
             "admin_acesso_definir_senha",
             admin_acesso_definir_senha,
@@ -643,6 +756,7 @@ __all__ = [
     "admin_acesso_deletar",
     "admin_acesso_definir_senha",
     "admin_acesso_resetar_senha",
+    "admin_acesso_senha_por_email",
     "admin_acesso_salvar",
     "admin_acesso_salvar_senhas_default",
     "bp_admin_acesso",

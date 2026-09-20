@@ -25,6 +25,7 @@ import main
 from app import db as app_db_module
 from app.prod1_schema import bootstrap_prod1_schema
 from app.student_matrix import StudentMatrixError, parse_submitted_matriz_id
+from tests.session_support import stamp_auth_version
 
 
 MALFORMED = ("abc", "1a", "a1", "1.5", "1,5", "  ", "null", "None", "NaN", "-", "1e3")
@@ -154,6 +155,7 @@ def _login_admin(test_client):
         sess["user_name"] = "Administrador"
         sess["access_level"] = "admin_total"
         sess["perfil"] = "Admin"
+        stamp_auth_version(sess)
 
 
 def _seed_route_fixture(suffix):

@@ -38,7 +38,7 @@
               <input type="checkbox" id="remember_me" name="remember_me" {% if remember_checked %}checked{% endif %} />
               <span>Lembrar-me</span>
             </label>
-            <a class="login-forgot-link" href="#" aria-disabled="true" onclick="return false;">Esqueceu sua senha?</a>
+            <a class="login-forgot-link" href="{{ url_for('forgot_password') }}">Esqueceu sua senha?</a>
           </div>
 
           <button type="submit">Entrar</button>

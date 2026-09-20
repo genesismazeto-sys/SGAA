@@ -9,6 +9,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.user_accounts import get_usuario_auth_version
 
 
 @pytest.fixture(scope="module")
@@ -20,10 +21,15 @@ def client():
 
 
 def _login_admin(client):
+    # A real login stamps the durable auth_version; without it the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), 1)
     with client.session_transaction() as sess:
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        sess["auth_version"] = auth_version
 
 
 def test_admin_matrizes_page_includes_csrf_for_dynamic_delete_forms(client):

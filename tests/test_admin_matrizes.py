@@ -21,6 +21,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture(scope="module")
@@ -36,6 +37,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def test_admin_matrizes_list_create_transfer_and_delete(client):

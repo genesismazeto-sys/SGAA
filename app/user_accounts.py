@@ -7,6 +7,190 @@ from app.db_maintenance import ensure_usuario_access_schema
 from app.security.passwords import hash_password, hash_password_batch
 
 
+CREDENTIAL_STATE_DEFAULT = "default"
+CREDENTIAL_STATE_PERSONAL = "personal"
+_CREDENTIAL_STATES = {CREDENTIAL_STATE_DEFAULT, CREDENTIAL_STATE_PERSONAL}
+
+
+def _validate_credential_state(state: str) -> str:
+    if state not in _CREDENTIAL_STATES:
+        raise ValueError(f"invalid credential state: {state!r}")
+    return state
+
+
+def set_usuario_credential_state(conn, usuario_id: int, state: str) -> None:
+    state = _validate_credential_state(state)
+    conn.execute(
+        """
+        INSERT INTO usuario_credenciais(usuario_id,estado)
+        VALUES(?,?)
+        ON CONFLICT(usuario_id) DO UPDATE SET
+            estado=excluded.estado,
+            atualizado_em=datetime('now')
+        """,
+        (usuario_id, state),
+    )
+
+
+def get_usuario_credential(conn, usuario_id: int):
+    return conn.execute(
+        "SELECT estado,auth_version FROM usuario_credenciais WHERE usuario_id=?",
+        (int(usuario_id),),
+    ).fetchone()
+
+
+def get_usuario_auth_version(conn, usuario_id: int) -> int | None:
+    row = get_usuario_credential(conn, usuario_id)
+    return int(row["auth_version"] if hasattr(row, "keys") else row[1]) if row else None
+
+
+def _write_usuario_credential_after_password_change(
+    conn,
+    usuario_id: int,
+    state: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO usuario_credenciais(usuario_id,estado,auth_version,atualizado_em)
+        VALUES(?,?,1,datetime('now'))
+        ON CONFLICT(usuario_id) DO UPDATE SET
+            estado=excluded.estado,
+            auth_version=usuario_credenciais.auth_version+1,
+            atualizado_em=excluded.atualizado_em
+        """,
+        (int(usuario_id), state),
+    )
+
+
+def invalidate_usuario_password_tokens(
+    conn,
+    usuario_ids: list[int] | tuple[int, ...],
+    *,
+    except_token_id: int | None = None,
+) -> int:
+    ids = sorted({int(usuario_id) for usuario_id in usuario_ids})
+    if not ids:
+        return 0
+    placeholders = ", ".join("?" for _ in ids)
+    params: list[object] = [*ids]
+    except_clause = ""
+    if except_token_id is not None:
+        except_clause = " AND id <> ?"
+        params.append(int(except_token_id))
+    cursor = conn.execute(
+        f"""
+        UPDATE senha_tokens
+           SET invalidated_at=datetime('now')
+         WHERE usuario_id IN ({placeholders})
+           AND consumed_at IS NULL
+           AND invalidated_at IS NULL
+           {except_clause}
+        """,
+        params,
+    )
+    return int(cursor.rowcount)
+
+
+def create_usuario_with_access_level(
+    conn,
+    nome: str,
+    email: str,
+    senha_hash: str,
+    user_type: str,
+    access_level: str,
+    *,
+    credential_state: str,
+):
+    ensure_usuario_access_schema(conn)
+    cursor = conn.execute(
+        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
+        (nome, email, senha_hash, user_type, access_level),
+    )
+    set_usuario_credential_state(conn, int(cursor.lastrowid), credential_state)
+    return cursor
+
+
+def set_usuarios_password_hash(
+    conn,
+    usuario_ids: list[int] | tuple[int, ...],
+    senha_hash: str,
+    *,
+    credential_state: str,
+    consumed_token_id: int | None = None,
+) -> int:
+    state = _validate_credential_state(credential_state)
+    ids = sorted({int(usuario_id) for usuario_id in usuario_ids})
+    if not ids:
+        return 0
+    if consumed_token_id is not None and len(ids) != 1:
+        raise ValueError("a consumed password token requires exactly one usuario")
+    placeholders = ", ".join("?" for _ in ids)
+    cursor = conn.execute(
+        f"UPDATE usuarios SET senha = ? WHERE id IN ({placeholders})",
+        [senha_hash, *ids],
+    )
+    for usuario_id in ids:
+        _write_usuario_credential_after_password_change(conn, usuario_id, state)
+    invalidate_usuario_password_tokens(
+        conn,
+        ids,
+        except_token_id=consumed_token_id,
+    )
+    if consumed_token_id is not None:
+        consumed = conn.execute(
+            """
+            UPDATE senha_tokens
+               SET consumed_at=datetime('now')
+             WHERE id=? AND usuario_id=?
+               AND consumed_at IS NULL AND invalidated_at IS NULL
+            """,
+            (int(consumed_token_id), ids[0]),
+        )
+        if consumed.rowcount != 1:
+            raise ValueError("password token is no longer active")
+    return int(cursor.rowcount)
+
+
+def set_usuario_password_hash(
+    conn,
+    usuario_id: int,
+    senha_hash: str,
+    *,
+    credential_state: str,
+    consumed_token_id: int | None = None,
+) -> None:
+    updated = set_usuarios_password_hash(
+        conn,
+        [usuario_id],
+        senha_hash,
+        credential_state=credential_state,
+        consumed_token_id=consumed_token_id,
+    )
+    if updated != 1:
+        raise ValueError(f"usuario not found for password write: {usuario_id}")
+
+
+def rehash_usuario_password(conn, usuario_id: int, senha_hash: str) -> None:
+    """Upgrade hash encoding without changing the credential classification."""
+    cursor = conn.execute(
+        "UPDATE usuarios SET senha = ? WHERE id = ?",
+        (senha_hash, usuario_id),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError(f"usuario not found for password rehash: {usuario_id}")
+    credential = conn.execute(
+        """
+        UPDATE usuario_credenciais
+           SET auth_version=auth_version+1,atualizado_em=datetime('now')
+         WHERE usuario_id=?
+        """,
+        (int(usuario_id),),
+    )
+    if credential.rowcount != 1:
+        raise ValueError(f"credential not found for password rehash: {usuario_id}")
+    invalidate_usuario_password_tokens(conn, [int(usuario_id)])
+
+
 def _access_defaults_map(conn) -> dict[str, str]:
     from app.auth import DEFAULT_ACCESS_PASSWORDS, canonicalize_access_level
 
@@ -26,20 +210,40 @@ def _default_password_for_user_type(conn, user_type: str) -> str:
     return _access_defaults_map(conn).get(nivel_acesso, "admin123")
 
 
-def create_usuario_with_default_access(conn, nome: str, email: str, senha_hash: str, user_type: str):
+def create_usuario_with_default_access(
+    conn,
+    nome: str,
+    email: str,
+    senha_hash: str,
+    user_type: str,
+    *,
+    credential_state: str = CREDENTIAL_STATE_PERSONAL,
+):
     from app.auth import default_access_level_for_user_type
 
     ensure_usuario_access_schema(conn)
     nivel_acesso = default_access_level_for_user_type(user_type)
-    return conn.execute(
-        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-        (nome, email, senha_hash, user_type, nivel_acesso),
+    return create_usuario_with_access_level(
+        conn,
+        nome,
+        email,
+        senha_hash,
+        user_type,
+        nivel_acesso,
+        credential_state=credential_state,
     )
 
 
 def create_usuario_with_default_password(conn, nome: str, email: str, user_type: str):
     senha_padrao = _default_password_for_user_type(conn, user_type)
-    return create_usuario_with_default_access(conn, nome, email, hash_password(senha_padrao), user_type)
+    return create_usuario_with_default_access(
+        conn,
+        nome,
+        email,
+        hash_password(senha_padrao),
+        user_type,
+        credential_state=CREDENTIAL_STATE_DEFAULT,
+    )
 
 
 def prepare_default_password_hashes(conn, user_type: str, count: int) -> list[str]:

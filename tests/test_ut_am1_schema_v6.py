@@ -43,9 +43,9 @@ def test_current_schema_is_v6_with_nullable_indexed_student_matrix_fk():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     bootstrap_prod1_schema(conn)
-    # AM1's student-Matrix authority survives later epochs; the current head is v7.
-    assert SCHEMA_VERSION == 7
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
+    # AM1's student-Matrix authority survives later epochs; the current head is v8.
+    assert SCHEMA_VERSION == 8
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
     columns = {row["name"]: row for row in conn.execute("PRAGMA table_info(alunos)")}
     assert columns["matriz_id"]["notnull"] == 0
     fks = conn.execute("PRAGMA foreign_key_list(alunos)").fetchall()

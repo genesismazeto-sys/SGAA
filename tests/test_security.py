@@ -51,10 +51,17 @@ def client():
 
 
 def _login_admin(client):
+    with main.app.app_context():
+        auth_version = int(
+            main.get_db_connection().execute(
+                "SELECT auth_version FROM usuario_credenciais WHERE usuario_id=1"
+            ).fetchone()[0]
+        )
     with client.session_transaction() as sess:
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        sess["auth_version"] = auth_version
 
 
 def test_secret_key_is_not_public_default():

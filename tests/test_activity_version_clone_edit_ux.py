@@ -9,6 +9,7 @@ import pytest
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -27,6 +28,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def _seed(client, *, eixo="AAC", status="rascunho"):

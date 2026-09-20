@@ -12,6 +12,7 @@ import pytest
 
 import main
 import app.request_email_dispatch as dispatch_module
+from tests.session_support import stamp_auth_version
 
 
 
@@ -45,6 +46,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def _conn():

@@ -29,7 +29,7 @@ from tests import canonical_baseline_support as governance
 
 
 def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
-    """580 exists exactly once, as the sum of named product deltas."""
+    """The canonical total is the sum of named product deltas."""
     terms = dict(
         (term, delta) for term, delta in governance.CATALOG_LEDGER
     )
@@ -41,21 +41,25 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
     assert governance.CATALOG_LEDGER[governance.MX3_LEDGER_INDEX][1] == 6, (
         "the UT-MX3 StudentMatrixError ownership delta is exactly +6"
     )
-    assert governance.CATALOG_LEDGER[-3][1] == 1, (
+    assert governance.CATALOG_LEDGER[-4][1] == 1, (
         "the TMA1 Turma-Matrix authority delta is exactly +1"
     )
-    assert governance.CATALOG_LEDGER[-2][1] == 3 == len(
+    assert governance.CATALOG_LEDGER[-3][1] == 3 == len(
         governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS
     ), (
         "the CR1 cloud-credential recovery delta is exactly +3, one term per "
         "declared key"
     )
-    assert governance.CATALOG_LEDGER[-1][1] == 22 == len(
+    assert governance.CATALOG_LEDGER[-2][1] == 22 == len(
         governance.REN1_REQUEST_EMAIL_KEYS
     ), (
         "the REN1 request e-mail notification delta is exactly +22, one term "
         "per declared key"
     )
+    assert governance.CATALOG_LEDGER[-1][1] == (
+        len(governance.PASSWORD_FOUNDATION_ADDED_KEYS)
+        - len(governance.PASSWORD_FOUNDATION_RETIRED_KEYS)
+    ) == 0
     # Parent + every term from UT-MX3 onward reconstructs the canonical total.
     assert (
         governance.PARENT_CATALOG_COUNT
@@ -69,12 +73,12 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
 
 def test_derived_projections_agree_with_the_versioned_artifacts():
     """Every count the suites now delegate is read off the canonical artifacts."""
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 127
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 126
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 126
-    assert governance.CANONICAL_CSRF_ROW_COUNT == 74
-    assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 67
-    assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 74
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 131
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 130
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 130
+    assert governance.CANONICAL_CSRF_ROW_COUNT == 78
+    assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 68
+    assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 78
 
     # Both shadow snapshots are the same canonical inventory.
     off_rows = governance.load_csrf_snapshot(governance.CSRF_OFF_ARTIFACT)["rows"]
@@ -132,7 +136,7 @@ def test_catalog_parent_digest_still_governs_the_mx3_parent_state():
     # Every post-MX3 addition has to come back off, not just MX3's own keys,
     # or the reconstructed "parent" would drift forward with each later term.
     parent_keys = (
-        set(catalog)
+        governance.catalog_keys_before_password_foundation(catalog)
         - set(NEW_STUDENT_MATRIX_KEYS)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
@@ -165,7 +169,7 @@ def test_route_control_rejects_a_deleted_business_route():
     data["routes"] = [entry for entry in data["routes"] if entry is not victim]
     with pytest.raises(AssertionError) as captured:
         governance.assert_route_inventory_artifact_is_canonical(data)
-    assert "126" in str(captured.value)
+    assert f"got {governance.CANONICAL_ROUTE_ENTRY_COUNT - 1}" in str(captured.value)
 
 
 def test_route_control_rejects_an_unauthorized_added_route():
@@ -179,7 +183,7 @@ def test_route_control_rejects_an_unauthorized_added_route():
     )
     with pytest.raises(AssertionError) as captured:
         governance.assert_route_inventory_artifact_is_canonical(data)
-    assert "128" in str(captured.value)
+    assert f"got {governance.CANONICAL_ROUTE_ENTRY_COUNT + 1}" in str(captured.value)
 
 
 def test_route_control_rejects_a_changed_rule_endpoint_pairing():
@@ -230,7 +234,7 @@ def test_csrf_control_rejects_one_removed_protected_row():
     assert victim["route"]
     with pytest.raises(AssertionError) as captured:
         governance.assert_csrf_snapshot_matches_canonical_baseline(snapshot)
-    assert "73" in str(captured.value)
+    assert f"got {governance.CANONICAL_CSRF_ROW_COUNT - 1}" in str(captured.value)
 
 
 def test_csrf_control_rejects_one_undeclared_added_row():
@@ -241,7 +245,7 @@ def test_csrf_control_rejects_one_undeclared_added_row():
     snapshot["rows"].append(template)
     with pytest.raises(AssertionError) as captured:
         governance.assert_csrf_snapshot_matches_canonical_baseline(snapshot)
-    assert "75" in str(captured.value)
+    assert f"got {governance.CANONICAL_CSRF_ROW_COUNT + 1}" in str(captured.value)
 
 
 def test_csrf_control_rejects_a_silently_reowned_row():

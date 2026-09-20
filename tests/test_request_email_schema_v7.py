@@ -1,4 +1,4 @@
-"""prod-1/v7 schema governance for the request e-mail notification outbox."""
+"""prod-1/v7 outbox governance retained under the current v8 schema."""
 
 from __future__ import annotations
 
@@ -27,20 +27,20 @@ def _fresh() -> sqlite3.Connection:
     return conn
 
 
-def test_schema_version_is_seven():
-    assert SCHEMA_VERSION == 7
+def test_current_schema_version_is_eight():
+    assert SCHEMA_VERSION == 8
 
 
 def test_expected_tables_include_outbox():
     assert {"email_envios", "requisicao_email_eventos"} <= EXPECTED_TABLES
 
 
-def test_clean_bootstrap_is_valid_v7():
+def test_clean_bootstrap_is_valid_v8():
     conn = _fresh()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 7
+    assert status["schema_version"] == 8
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
 
 
 def test_v7_marker_recorded():
@@ -50,7 +50,7 @@ def test_v7_marker_recorded():
         (int(r[0]), str(r[1]))
         for r in conn.execute("SELECT version,name FROM schema_migrations ORDER BY version")
     ]
-    assert markers[-1] == (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER)
+    assert (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER) in markers
 
 
 def _build_v6(conn: sqlite3.Connection) -> None:
@@ -61,6 +61,12 @@ def _build_v6(conn: sqlite3.Connection) -> None:
     silently drift into fabricating a shape the real gate would reject.
     """
     bootstrap_prod1_schema(conn)
+    conn.execute("DROP TABLE senha_tokens")
+    conn.execute("DROP TABLE usuario_credenciais")
+    conn.execute(
+        "DELETE FROM configuracoes_app WHERE chave='default_passwords_enabled'"
+    )
+    conn.execute("DELETE FROM schema_migrations WHERE version=8")
     conn.execute("DROP TABLE requisicao_email_eventos")
     conn.execute("DROP TABLE email_envios")
     conn.execute("DROP INDEX ux_configuracoes_presets_default")
@@ -158,13 +164,13 @@ def test_v6_signature_constant_is_pinned():
 
 def test_migration_rejects_non_v6_database():
     conn = _fresh()
-    bootstrap_prod1_schema(conn)  # already v7
+    bootstrap_prod1_schema(conn)  # already current v8
     with pytest.raises(Prod1SchemaError):
         migrate_prod1_v6_to_v7(conn)
 
 
-def test_migrated_v7_matches_bootstrapped_v7(tmp_path):
-    """A migrated database must be physically identical to a fresh one."""
+def test_current_bootstraps_match_physically(tmp_path):
+    """Two current bootstraps must be physically identical."""
     from tests.request_email_support import new_v7_connection
 
     fresh = new_v7_connection()

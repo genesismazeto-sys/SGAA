@@ -28,6 +28,11 @@ if BASE not in sys.path:
 
 import main
 from app import auth
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    get_usuario_auth_version,
+    set_usuario_credential_state,
+)
 from tests import canonical_rbac_test_support as rbac
 from tests.canonical_baseline_support import (
     assert_route_inventory_artifact_is_canonical,
@@ -377,15 +382,21 @@ def _make_admin(access_level: str) -> int:
                 access_level,
             ),
         ).fetchone()["id"]
+        set_usuario_credential_state(conn, uid, CREDENTIAL_STATE_PERSONAL)
         conn.commit()
     return uid
 
 
 def _login(client, user_id: int) -> None:
+    # Mirrors a real login: the durable auth_version has to be stamped or the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), user_id)
     with client.session_transaction() as sess:
         sess["user_id"] = user_id
         sess["user_type"] = "admin"
         sess["user_name"] = "R1 Test"
+        sess["auth_version"] = auth_version
 
 
 def _logout(client) -> None:

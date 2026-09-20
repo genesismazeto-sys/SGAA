@@ -152,7 +152,12 @@ def _persist_student_row(
 
     if pending_password_hashes:
         usuario = create_usuario_with_default_access(
-            conn, row.aluno, row.email, pending_password_hashes.pop(), "aluno"
+            conn,
+            row.aluno,
+            row.email,
+            pending_password_hashes.pop(),
+            "aluno",
+            credential_state="default",
         )
     else:
         # Sem hash pré-calculado sobrando, o caminho original assume.

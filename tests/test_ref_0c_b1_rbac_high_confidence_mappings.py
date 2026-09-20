@@ -36,6 +36,11 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    get_usuario_auth_version,
+    set_usuario_credential_state,
+)
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -109,15 +114,21 @@ def _make_admin(access_level: str) -> int:
                 access_level,
             ),
         ).fetchone()["id"]
+        set_usuario_credential_state(conn, uid, CREDENTIAL_STATE_PERSONAL)
         conn.commit()
     return uid
 
 
 def _login(client, user_id: int) -> None:
+    # Mirrors a real login: the durable auth_version has to be stamped or the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), user_id)
     with client.session_transaction() as sess:
         sess["user_id"] = user_id
         sess["user_type"] = "admin"
         sess["user_name"] = "RBAC Test"
+        sess["auth_version"] = auth_version
 
 
 def _logout(client) -> None:

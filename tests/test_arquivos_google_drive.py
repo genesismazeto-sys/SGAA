@@ -30,6 +30,7 @@ from app.prod1_schema import (
     migrate_prod1_v4_to_v5,
     migrate_prod1_v5_to_v6,
     migrate_prod1_v6_to_v7,
+    migrate_prod1_v7_to_v8,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -199,7 +200,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -238,6 +239,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     assert row["remote_file_id"] is None and row["operation_key"] is None
     migrate_prod1_v5_to_v6(conn)
     migrate_prod1_v6_to_v7(conn)
+    migrate_prod1_v7_to_v8(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)
@@ -895,6 +897,9 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # "Sem matriz" (msg_c52418de2740e169) is the explicit clear-to-NULL choice.
     # UT-TM1/TM2 added the two unique neutral Turma validation messages; they
     # belong to MX3's exact parent state, not to the MX3 candidate delta.
+    # Password foundation Phase 1/2 is the tenth term: eight additions for the
+    # first-access and recovery surfaces against eight retired literals, for a
+    # declared net zero.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -905,7 +910,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         1,
         3,
         22,
-    ], "the named catalog delta ledger must stay exactly these nine terms"
+        0,
+    ], "the named catalog delta ledger must stay exactly these ten terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -921,7 +927,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
     ) - len(
-        set(catalog)
+        governance.catalog_keys_before_password_foundation(catalog)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
         - set(governance.REN1_REQUEST_EMAIL_KEYS)

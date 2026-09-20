@@ -85,8 +85,39 @@ def _legacy_redirect_base(env_key: str, expected_path: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+def _acceptance_base_url_override(env: str) -> str:
+    """Explicit public-base-url override for isolated non-production runtimes.
+
+    Exists so an acceptance runtime can keep PORT, DATABASE and public base URL
+    coherent without mutating the machine-local secret store.  Production
+    ignores it outright: there the trusted authority is always the store, so
+    this can never weaken a real deployment.  It is deliberately a distinct
+    variable from ``APP_PUBLIC_BASE_URL`` -- that one stays a fallback for an
+    unconfigured store, while this one is an opt-in isolation switch.
+    """
+    raw = (os.getenv("APP_ACCEPTANCE_PUBLIC_BASE_URL") or "").strip()
+    if not raw:
+        return ""
+    if env == "production":
+        logger.warning(
+            "APP_ACCEPTANCE_PUBLIC_BASE_URL ignorado em produção: a autoridade "
+            "dos links continua sendo o armazenamento local de segredos."
+        )
+        return ""
+    normalized = _normalize_base_url(raw, source="APP_ACCEPTANCE_PUBLIC_BASE_URL")
+    return _validate_base_url_for_env(normalized, env=env)
+
+
 def get_public_base_url() -> str:
     env = get_app_env()
+    override = _acceptance_base_url_override(env)
+    if override:
+        logger.warning(
+            "Runtime isolado: usando APP_ACCEPTANCE_PUBLIC_BASE_URL=%s no lugar "
+            "do base URL configurado.",
+            override,
+        )
+        return override
     configured = get_public_base_url_setting()
     legacy_google_redirect = (os.getenv("GOOGLE_REDIRECT_URI") or "").strip()
     legacy_onedrive_redirect = (os.getenv("MS_REDIRECT_URI") or "").strip()

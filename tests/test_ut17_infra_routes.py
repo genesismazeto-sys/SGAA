@@ -85,6 +85,11 @@ if BASE not in sys.path:
 
 import main  # noqa: E402  (module-level import is safe; conftest imports main first)
 import app.db as app_db_module  # noqa: E402
+from app.user_accounts import (  # noqa: E402
+    CREDENTIAL_STATE_PERSONAL,
+    create_usuario_with_access_level,
+    get_usuario_auth_version,
+)
 
 from tests.canonical_baseline_support import (  # noqa: E402
     assert_catalog_matches_canonical_baseline,
@@ -274,10 +279,14 @@ def _unique(prefix: str) -> str:
 
 def _seed_usuario(conn, tipo: str, nivel_acesso: str) -> int:
     email = _unique(f"ut17-{tipo}") + "@test.local"
-    cur = conn.execute(
-        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (f"UT17 {tipo}", email, "senha-teste", tipo, nivel_acesso),
+    cur = create_usuario_with_access_level(
+        conn,
+        f"UT17 {tipo}",
+        email,
+        "senha-teste",
+        tipo,
+        nivel_acesso,
+        credential_state=CREDENTIAL_STATE_PERSONAL,
     )
     return int(cur.lastrowid)
 
@@ -300,11 +309,18 @@ def _cleanup_rows(conn, rows: list[tuple[str, int]]) -> None:
 
 
 def _login_session(client, user_id: int, user_type: str) -> None:
+    # A genuine authenticated session carries the durable auth_version stamped
+    # at login; without it the credential-invalidation guard clears the session.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(
+            app_db_module.get_db_connection(), user_id
+        )
     with client.session_transaction() as sess:
         sess.clear()
         sess["user_id"] = user_id
         sess["user_type"] = user_type
         sess["user_name"] = f"UT17 {user_type}"
+        sess["auth_version"] = auth_version
 
 
 def _write_upload_file(rel_path: str, content: bytes, root_key: str = "UPLOAD_FOLDER") -> None:
@@ -619,8 +635,8 @@ def test_green_6_message_catalog_stays_canonical():
 def test_green_7_schema_version_four_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 7, f"prod-1 SCHEMA_VERSION must be 7, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3, 4, 5, 6, 7}, (
+    assert SCHEMA_VERSION == 8, f"prod-1 SCHEMA_VERSION must be 8, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3, 4, 5, 6, 7, 8}, (
         "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"

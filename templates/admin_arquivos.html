@@ -34,13 +34,6 @@
     .modal-card .field-card .field-chip{ height:100%; display:grid; place-items:center; }
     .modal-card .visibility-switch-row{ display:flex; justify-content:center; align-items:center; gap:10px; width:100%; padding:2px 0 0; margin:0 0 4px; }
     .modal-card .visibility-switch-state{ min-width:0; color:var(--text-primary); font-size:var(--font-size-small); font-weight:600; text-align:left; white-space:nowrap; }
-    .modal-card .toggle-switch{ position:relative; display:inline-flex; align-items:center; width:46px; height:24px; }
-    .modal-card .toggle-switch input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
-    .modal-card .toggle-switch-slider{ position:relative; display:block; width:46px; height:24px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
-    .modal-card .toggle-switch-slider::before{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
-    .modal-card .toggle-switch input:checked + .toggle-switch-slider{ background:#0f5b99; }
-    .modal-card .toggle-switch input:checked + .toggle-switch-slider::before{ transform:translateX(22px); }
-    .modal-card .toggle-switch input:focus-visible + .toggle-switch-slider{ outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
     .modal-card .field-card.file-card{ grid-template-columns:40px minmax(0, 1fr) 112px; }
     .modal-card .field-card.file-card .chip-right{ display:flex; align-items:center; justify-content:center; gap:6px; width:112px; min-width:112px; height:var(--btn-h); min-height:var(--btn-h); padding:0 10px; white-space:nowrap; flex-wrap:nowrap; flex:0 0 auto; }
     .modal-card .field-card.file-card .chip-right .lucide{ flex:0 0 auto; }
@@ -180,7 +173,7 @@
         <input type="hidden" name="operation_key" value="{{ arquivo_operation_id }}">
         <div class="form-cards-narrow form-cards-narrow--gutter-compact">
           <div class="visibility-switch-row">
-            <label class="toggle-switch" aria-label="Alternar visibilidade do arquivo">
+            <label class="toggle-switch toggle-switch--large" aria-label="Alternar visibilidade do arquivo">
               <input id="admin-arquivo-visivel-switch" type="checkbox" {% if not edit_arquivo or edit_arquivo.visivel %}checked{% endif %}>
               <span class="toggle-switch-slider" aria-hidden="true"></span>
             </label>

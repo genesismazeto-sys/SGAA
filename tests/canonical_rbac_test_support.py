@@ -463,14 +463,20 @@ NON_GOVERNED_BOUNDARY_CATEGORIES: tuple[NonGovernedCategory, ...] = (
     NonGovernedCategory(
         name="authentication_entry_exit",
         rationale=(
-            "Login and logout establish/destroy the session the admin boundary "
-            "is evaluated against; they cannot themselves require an admin scope."
+            "Login, logout and public password recovery establish or recover the "
+            "credential used by the admin boundary; they cannot require an admin scope."
         ),
         identities=frozenset({
             Combination("/login", "login", "GET"),
             Combination("/login", "login", "POST"),
             Combination("/logout", "logout", "GET"),
             Combination("/logout", "logout", "POST"),
+            Combination("/esqueci-minha-senha", "forgot_password", "GET"),
+            Combination("/esqueci-minha-senha", "forgot_password", "POST"),
+            Combination("/primeiro-acesso", "first_access", "GET"),
+            Combination("/primeiro-acesso", "first_access", "POST"),
+            Combination("/redefinir-senha", "reset_password", "GET"),
+            Combination("/redefinir-senha", "reset_password", "POST"),
         }),
     ),
     NonGovernedCategory(
@@ -715,10 +721,12 @@ def profile_digest(level: str, profiles=None) -> str:
 
 # The requirement matrix is the primary RBAC anchor: which (endpoint, method)
 # pair requires which (resource, scope).  Inherited unchanged from REF-0C-D-R1.
-# REN1: +2 entries, both (requisicoes, edit) -- the e-mail preview and send
-# endpoints. No pre-existing requirement changed.
+# REN1 added two (requisicoes, edit) entries. Password foundation adds the
+# (acesso, full) single-account e-mail mutation entry; the default-password
+# activation rides on the pre-existing senhas-default requirement rather than
+# owning a second endpoint. No pre-existing requirement changed.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "13f5a2869a53d8367a25c75437e0931cc2cb40ddef735bba69069fcdbaf378c1"
+    "a7c9914a7cbc771839b4e1ed1a937f61d1273cbdaae9642c6a1d2cd950dbebaf"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -733,15 +741,17 @@ CANONICAL_PROFILE_DIGESTS = {
 # change in either anchor has to be acknowledged where its security meaning
 # lives: which routes are reachable by parameter, and which actor is denied.
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
-    "a8ceef4cfe307ce75731d9a22f9fba6200964036984df3746c7121896c5f3899"
+    "2ff35e4bd550f5b65cb384a459979314773619bbf11b8598134085c72be345b7"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
-    "b7544cb0ca095be49aa141e50d36b958af35645009ef3c22ee84482f97e10b90"
+    "597a1a54994a3f75e8dd1359e00b6e704eb7135af30751c2481fecc13fc4387a"
 )
-# REN1: +2 denials, both denying `consultivo` the e-mail endpoints -- the
-# read-only administrative level must not be able to send student e-mail.
+# Password foundation adds the expected denials for the non-full Acesso
+# profiles on the single-account password e-mail endpoint. The default-password
+# activation has no endpoint of its own; it is denied through the pre-existing
+# senhas-default requirement.
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "9433ba27b0cb40888652aa5d33faf49fadc86a5b2b6150e92b8faeef9fcef7f1"
+    "274688ce6f60c097cf1f35f898a6cfe720a15e65392482699bc3afc48bdfaf6c"
 )
 
 

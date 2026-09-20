@@ -1,10 +1,22 @@
 """Small builders for matrix tests on the prod-1 authority graph."""
 from __future__ import annotations
 
+import main
+from app.user_accounts import get_usuario_auth_version
+
 
 def login_admin(client) -> None:
+    # A real login stamps the durable auth_version; without it the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), 1)
     with client.session_transaction() as session:
-        session.update(user_id=1, user_type="admin", user_name="Administrador")
+        session.update(
+            user_id=1,
+            user_type="admin",
+            user_name="Administrador",
+            auth_version=auth_version,
+        )
 
 
 def seed_matrix_graph(conn, *, name="Canonical matrix test") -> dict[str, int]:

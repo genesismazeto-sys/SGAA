@@ -38,8 +38,10 @@
     .access-default-card .head i{ color:var(--accent-blue); }
     .access-default-card small{ color:var(--text-tertiary); line-height:1.4; font-size:12px; }
     .access-default-card input{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font-family:monospace; font-size:13px; color:var(--text-primary); background:var(--bg); }
-    .access-note{ display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; }
-    .access-note .lucide{ width:14px; height:14px; color:var(--accent-blue); }
+    .access-defaults-tools{ display:flex; align-items:center; justify-content:flex-end; gap:16px; }
+    .access-mail-status{ display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; white-space:nowrap; }
+    .access-defaults-toggle-form{ display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:0; }
+    .access-defaults-toggle-label{ color:var(--text-secondary); font-size:12px; white-space:nowrap; }
     .access-toolbar-actions{ display:flex; align-items:center; gap:var(--btn-gap); }
     .access-actions-shell .btn[disabled]{ opacity:.55; cursor:not-allowed; }
     .access-actions-menu .menu-item.danger{ color:#b91c1c; }
@@ -49,6 +51,7 @@
     .access-modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.52); backdrop-filter:blur(2px); display:grid; place-items:center; z-index:40; }
     .access-modal-overlay[hidden]{ display:none !important; }
     .access-modal-card{ width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px); overflow:hidden; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,.995), rgba(248,250,252,.975)); box-shadow:0 24px 60px rgba(15,23,42,.22); display:flex; flex-direction:column; }
+    .access-modal-card.access-confirm-card{ width:min(460px, calc(100vw - 32px)); }
     .access-modal-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:18px 22px 14px; border-bottom:1px solid rgba(226,232,240,.9); }
     .access-modal-header h3{ margin:0; display:flex; align-items:center; gap:8px; font-size:17px; letter-spacing:-.01em; }
     .access-modal-header p{ margin:6px 0 0; color:#64748b; font-size:12.5px; line-height:1.45; max-width:62ch; }
@@ -134,7 +137,9 @@
       .access-summary-grid,
       .access-defaults-grid,
       .access-form-grid{ grid-template-columns:1fr; }
-      .access-panel-head{ flex-direction:column; }
+      .access-defaults-head{ align-items:flex-start; flex-direction:column; }
+      .access-defaults-tools{ align-items:flex-start; flex-direction:column; }
+      .access-defaults-toggle-form{ flex-wrap:wrap; justify-content:flex-start; }
       .access-modal-card{ width:min(100vw - 20px, 860px); border-radius:8px; }
     }
   </style>
@@ -187,12 +192,32 @@
 </div>
 
 <section class="access-defaults-panel">
-  <div class="access-defaults-head">
-    <h2><i class="lucide" data-lucide="key-round"></i> {{ user_message("Senhas padrão") }}</h2>
-    <div class="access-note"><i class="lucide" data-lucide="sparkles"></i><span>{{ user_message("Fluxo usual: criar acesso, definir nível e redefinir quando necessário.") }}</span></div>
-  </div>
+  <!-- One settings surface, one form, one Save: the five configured default
+       passwords and the activation switch are persisted by the footer action. -->
   <form method="post" action="{{ url_for('admin_acesso_salvar_senhas_default') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="access-defaults-head">
+      <h2><i class="lucide" data-lucide="key-round"></i> {{ user_message("Senhas padrão") }}</h2>
+      <div class="access-defaults-tools">
+        <div class="access-mail-status">
+          <span>Recuperação por e-mail:</span>
+          <span class="badge status-pill {{ 'status-positive' if mail_status.ready else 'status-neutral' }}">{{ 'Disponível' if mail_status.ready else 'Não disponível' }}</span>
+          {% if not mail_status.ready and mail_status.cta_url %}
+            <a class="btn" href="{{ mail_status.cta_url }}">{{ mail_status.cta_label }}</a>
+          {% endif %}
+        </div>
+        <div class="access-defaults-toggle-form">
+          <span class="access-defaults-toggle-label" id="default-passwords-enabled-label">Ativar senhas padrão</span>
+          {# Paired with the checkbox so an unchecked box is an explicit "0"
+             instead of an absent field -- see admin_acesso_salvar_senhas_default. #}
+          <input type="hidden" name="default_passwords_enabled" value="0">
+          <label class="toggle-switch" aria-labelledby="default-passwords-enabled-label">
+            <input id="default-passwords-enabled" name="default_passwords_enabled" type="checkbox" value="1" {% if default_passwords_enabled %}checked{% endif %}>
+            <span class="toggle-switch-slider" aria-hidden="true"></span>
+          </label>
+        </div>
+      </div>
+    </div>
     <div class="access-defaults-body">
       <div class="access-defaults-grid">
         <div class="access-default-card">
@@ -253,7 +278,7 @@
       </div>
     </div>
     <div class="access-defaults-footer">
-      <button class="btn primary btn--raised" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar senhas padrão") }}</span></button>
+      <button class="btn primary btn--raised" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
     </div>
   </form>
 </section>
@@ -300,7 +325,7 @@
           <div class="menu-list">
             <button class="menu-item" type="button" id="access-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
             <button class="menu-item danger" type="button" id="access-action-delete" {% if not auth_can('acesso', 'full') %}hidden disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
-            <button class="menu-item warn" type="button" id="access-action-reset"><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Redefinir") }}</span></button>
+            <button class="menu-item warn" type="button" id="access-action-reset" {% if not default_passwords_enabled %}disabled{% endif %}><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Aplicar senha padrão") }}</span></button>
             <button class="menu-item" type="button" id="access-action-new-password"><i class="lucide" data-lucide="lock-keyhole"></i><span>{{ user_message("Nova") }}</span></button>
           </div>
           <div class="menu-hint" id="access-actions-hint">{{ user_message("Selecione uma ou mais linhas para habilitar as ações.") }}</div>
@@ -352,9 +377,10 @@
   'passwordModalMultiple': user_message('A nova senha será aplicada aos {value_1} acessos selecionados.'),
   'defaultCurrentWithValue': user_message('Senha padrão atual: {value_1}'),
   'defaultCurrentMissing': user_message('Senha padrão atual não configurada.'),
-  'passwordHelpEdit': user_message('Se ficar em branco, a senha atual será mantida. A redefinição rápida aplica a senha padrão de {value_1}.'),
+  'passwordHelpEdit': user_message('Se ficar em branco, a senha atual será mantida. A aplicação rápida usa a senha padrão de {value_1}.'),
   'passwordHelpCreate': user_message('Se ficar em branco, o sistema aplica a senha padrão de {value_1}.'),
-  'resetConfirm': user_message('Redefinir a senha padrão de {value_1}?')
+  'applyDefaultConfirm': user_message('Aplicar a senha padrão ao acesso de {value_1}?'),
+  'sendEmailConfirm': user_message('Enviar {value_1} para {value_2}?')
 }|tojson }}</script>
 
 <div class="impressoes-cards-scroll imp-acesso" id="acesso-scroll-container">
@@ -392,6 +418,7 @@
           'data-user-has-aluno': 1 if user.has_aluno else 0,
           'data-user-is-self': 1 if user.is_current_user else 0,
           'data-reset-url': url_for('admin_acesso_resetar_senha', usuario_id=user.id),
+          'data-email-url': url_for('admin_acesso_senha_por_email', usuario_id=user.id),
           'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user else ''),
           'data-level-label': user.nivel_label,
         }) }}
@@ -530,6 +557,22 @@
   </div>
 </div>
 
+<div id="access-confirm-modal" class="access-modal-overlay" hidden>
+  <div class="access-modal-card access-confirm-card" role="dialog" aria-modal="true" aria-labelledby="access-confirm-title" aria-describedby="access-confirm-text">
+    <div class="access-modal-header">
+      <div>
+        <h3 id="access-confirm-title"><i class="lucide" data-lucide="circle-help"></i> Confirmar ação</h3>
+        <p id="access-confirm-text"></p>
+      </div>
+      <button class="btn" type="button" id="access-confirm-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="access-modal-footer">
+      <button class="btn" type="button" id="access-confirm-cancel">Cancelar</button>
+      <button class="btn primary btn--raised" type="button" id="access-confirm-submit">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div id="access-password-modal" class="access-modal-overlay" hidden>
   <div class="access-modal-card" role="dialog" aria-modal="true" aria-labelledby="access-password-modal-title">
     <div class="access-modal-header">
@@ -575,6 +618,8 @@
     const accessProfileDefaults = JSON.parse(document.getElementById('access-profile-defaults-data')?.textContent || '{}');
     const accessUsers = JSON.parse(document.getElementById('access-users-data')?.textContent || '{}');
     const accessMessageTemplates = JSON.parse(document.getElementById('access-message-templates')?.textContent || '{}');
+    const defaultPasswordsEnabled = {{ default_passwords_enabled|tojson }};
+    const mailAvailable = {{ mail_status.ready|tojson }};
     const toolbarQuery = window.createToolbarQueryHelpers();
     window.initToolbarLiveSearch?.({ inputSelector: '#busca-acesso', rowsRootSelector: '#acesso-list' });
     window.initToolbarSortMenu?.({
@@ -622,8 +667,14 @@
     const passwordModalCancel = document.getElementById('access-password-modal-cancel');
     const passwordInputNewValue = document.getElementById('access-password-new-value');
     const passwordSelectionCount = document.getElementById('access-password-selection-count');
+    const confirmModal = document.getElementById('access-confirm-modal');
+    const confirmText = document.getElementById('access-confirm-text');
+    const confirmClose = document.getElementById('access-confirm-close');
+    const confirmCancel = document.getElementById('access-confirm-cancel');
+    const confirmSubmit = document.getElementById('access-confirm-submit');
     let selectedRows = [];
     let rowSelectionApi = null;
+    let confirmResolver = null;
 
     const isStudentLevel = (level) => level === 'usuario' || level === 'usuario_teste';
     const levelLabels = {
@@ -670,7 +721,7 @@
       const hasSelection = selectedCount > 0;
 
       actionDeleteButton.disabled = !selectedDeletable || selectedDeletable !== selectedCount;
-      actionResetButton.disabled = !hasSelection;
+      actionResetButton.disabled = !hasSelection || !defaultPasswordsEnabled;
       actionNewPasswordButton.disabled = !hasSelection;
       if (actionSelectAllButton){
         const label = actionSelectAllButton.querySelector('span');
@@ -687,6 +738,36 @@
     function getCsrfTokenValue(){
       return window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     }
+
+    function closeConfirmModal(result){
+      if (confirmModal) confirmModal.hidden = true;
+      const resolver = confirmResolver;
+      confirmResolver = null;
+      resolver?.(result);
+    }
+
+    function confirmAction(message, confirmLabel){
+      if (!confirmModal) return Promise.resolve(false);
+      confirmText.textContent = message;
+      confirmSubmit.textContent = confirmLabel || 'Confirmar';
+      confirmModal.hidden = false;
+      window.lucide?.createIcons?.();
+      setTimeout(() => confirmSubmit?.focus(), 30);
+      return new Promise((resolve) => { confirmResolver = resolve; });
+    }
+
+    function submitPost(url){
+      const formEl = document.createElement('form');
+      formEl.method = 'POST';
+      formEl.action = url;
+      window.ensureFormCsrfToken?.(formEl);
+      document.body.appendChild(formEl);
+      formEl.submit();
+    }
+
+    confirmClose?.addEventListener('click', () => closeConfirmModal(false));
+    confirmCancel?.addEventListener('click', () => closeConfirmModal(false));
+    confirmSubmit?.addEventListener('click', () => closeConfirmModal(true));
 
     function buildPostHeaders(baseHeaders){
       const headers = new Headers(baseHeaders || {});
@@ -900,6 +981,9 @@
       if (event.key === 'Escape' && actionsMenu && !actionsMenu.hidden){
         closeActionsMenu();
       }
+      if (event.key === 'Escape' && confirmModal && !confirmModal.hidden){
+        closeConfirmModal(false);
+      }
     });
 
     actionSelectAllButton?.addEventListener('click', () => {
@@ -928,10 +1012,11 @@
     });
 
     actionResetButton?.addEventListener('click', async () => {
+      if (!defaultPasswordsEnabled) return;
       const selectedRows = getSelectedRowsForPassword();
       if (!selectedRows.length) return;
       const label = selectedRows.length === 1 ? 'o acesso selecionado' : `os ${selectedRows.length} acessos selecionados`;
-      if (!window.confirm(`Redefinir a senha padrão de ${label}?`)) return;
+      if (!await confirmAction(`Aplicar a senha padrão a ${label}?`, 'Aplicar senha padrão')) return;
       closeActionsMenu();
       actionResetButton.disabled = true;
       actionNewPasswordButton.disabled = true;
@@ -1001,7 +1086,8 @@
     bar.innerHTML = `
       {% if auth_can('acesso', 'full') %}
       <button type="button" class="act-btn" data-action="edit" aria-label="Editar acesso" title="Editar"><i data-lucide="edit"></i></button>
-      <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Redefinir senha') }}" title="{{ user_message('Redefinir senha padrão') }}"><i data-lucide="key-round"></i></button>
+      <button type="button" class="act-btn" data-action="email" aria-label="Enviar senha por e-mail" title="Enviar senha por e-mail"><i data-lucide="mail"></i></button>
+      <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Aplicar senha padrão') }}" title="{{ user_message('Aplicar senha padrão') }}" {% if not default_passwords_enabled %}disabled{% endif %}><i data-lucide="key-round"></i></button>
       <button type="button" class="act-btn danger" data-action="delete" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2"></i></button>
       {% endif %}
     `;
@@ -1034,6 +1120,12 @@
       bar.classList.add('is-visible');
       const deleteBtn = bar.querySelector('[data-action="delete"]');
       if (deleteBtn) deleteBtn.disabled = data.isSelf;
+      const emailBtn = bar.querySelector('[data-action="email"]');
+      if (emailBtn){
+        emailBtn.disabled = !data.emailUrl || !mailAvailable;
+        emailBtn.setAttribute('aria-label', data.emailActionLabel || 'Enviar senha por e-mail');
+        emailBtn.setAttribute('title', data.emailActionLabel || 'Enviar senha por e-mail');
+      }
     }
 
     function hideBar(){
@@ -1064,8 +1156,10 @@
         status: card.getAttribute('data-user-status') || 'Ativo',
         isSelf: card.getAttribute('data-user-is-self') === '1',
         resetUrl: card.getAttribute('data-reset-url') || '',
+        emailUrl: card.getAttribute('data-email-url') || '',
         deleteUrl: card.getAttribute('data-delete-url') || '',
-        accessOverrides: getUserPayload(card.getAttribute('data-user-id') || '')?.accessOverrides || {}
+        accessOverrides: getUserPayload(card.getAttribute('data-user-id') || '')?.accessOverrides || {},
+        emailActionLabel: getUserPayload(card.getAttribute('data-user-id') || '')?.emailActionLabel || ''
       });
     });
     scrollWrap?.addEventListener('mouseleave', scheduleHide);
@@ -1074,7 +1168,7 @@
     window.addEventListener('scroll', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
     window.addEventListener('resize', () => { if (bar.classList.contains('is-visible') && currentCard){ positionFor(currentCard); } });
 
-    bar.addEventListener('click', (e) => {
+    bar.addEventListener('click', async (e) => {
       const btn = e.target.closest('button.act-btn');
       if (!btn || !currentData) return;
       const action = btn.getAttribute('data-action');
@@ -1083,14 +1177,24 @@
         return;
       }
       if (action === 'reset'){
-        if (!currentData.resetUrl) return;
-        if (!confirm(window.appFormatMessage(accessMessageTemplates.resetConfirm, { value_1: currentData.nome }))) return;
-        const formEl = document.createElement('form');
-        formEl.method = 'POST';
-        formEl.action = currentData.resetUrl;
-        window.ensureFormCsrfToken?.(formEl);
-        document.body.appendChild(formEl);
-        formEl.submit();
+        if (!defaultPasswordsEnabled || !currentData.resetUrl) return;
+        const confirmed = await confirmAction(
+          window.appFormatMessage(accessMessageTemplates.applyDefaultConfirm, { value_1: currentData.nome }),
+          'Aplicar senha padrão'
+        );
+        if (confirmed) submitPost(currentData.resetUrl);
+        return;
+      }
+      if (action === 'email'){
+        if (!currentData.emailUrl) return;
+        const confirmed = await confirmAction(
+          window.appFormatMessage(accessMessageTemplates.sendEmailConfirm, {
+            value_1: (currentData.emailActionLabel || 'instruções por e-mail').toLowerCase(),
+            value_2: currentData.email
+          }),
+          currentData.emailActionLabel || 'Enviar'
+        );
+        if (confirmed) submitPost(currentData.emailUrl);
         return;
       }
       if (action === 'delete'){

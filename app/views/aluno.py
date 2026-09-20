@@ -59,6 +59,11 @@ from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
 from app.security.passwords import hash_password
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    get_usuario_auth_version,
+    set_usuario_password_hash,
+)
 from app.db import get_db_connection
 from app.student_documents import (
     save_student_document,
@@ -931,8 +936,14 @@ def aluno_meus_dados():
             if senha:
                 hashed_password = hash_password(senha)
                 conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?",
-                    (nome, email, hashed_password, usuario_id),
+                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
+                    (nome, email, usuario_id),
+                )
+                set_usuario_password_hash(
+                    conn,
+                    usuario_id,
+                    hashed_password,
+                    credential_state=CREDENTIAL_STATE_PERSONAL,
                 )
             else:
                 conn.execute(
@@ -972,6 +983,8 @@ def aluno_meus_dados():
                 except ValueError:
                     flash("Foto inválida. Use PNG ou JPG.", "error")
             conn.commit()
+            if senha:
+                session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
             flash("Seus dados foram atualizados com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
         except sqlite3.IntegrityError as exc:

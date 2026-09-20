@@ -28,6 +28,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def _seed_base_e_versao(
@@ -397,6 +399,7 @@ def test_student_templates_do_not_expose_version_catalog_terms(client):
         sess["user_id"] = 9999999  # id inexistente → redirecionamento esperado
         sess["user_type"] = "aluno"
         sess["user_name"] = "Aluno Teste"
+        stamp_auth_version(sess)
 
     forbidden = ["atividade_versao_id", "snapshot versionado", "diagnóstico do snapshot"]
 

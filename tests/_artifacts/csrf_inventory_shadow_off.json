@@ -1,13 +1,13 @@
 {
   "summary": {
-    "total_mutating_routes": 75,
+    "total_mutating_routes": 79,
     "status_counts": {
-      "ok_dynamic_form_token": 13,
-      "ok_rendered_form_token": 53,
+      "ok_dynamic_form_token": 14,
+      "ok_rendered_form_token": 54,
       "not_applicable_documented": 2,
       "ok_api_csrf_contract": 1,
       "ok_fetch_token": 3,
-      "ok_specific_regression_test": 2,
+      "ok_specific_regression_test": 4,
       "ok_logout_or_safe_exception": 1
     },
     "high_risk_routes": 0,
@@ -391,6 +391,12 @@
         "status_code": 200
       },
       {
+        "label": "/esqueci-minha-senha",
+        "path": "/esqueci-minha-senha",
+        "role": "public",
+        "status_code": 200
+      },
+      {
         "label": "/login",
         "path": "/login",
         "role": "public",
@@ -483,6 +489,31 @@
           "page": "/admin/acesso",
           "attr": "data-reset-url",
           "action": "/admin/acesso/3/resetar-senha",
+          "token_mode": "helper_or_hidden"
+        }
+      ],
+      "status": "ok_dynamic_form_token"
+    },
+    {
+      "route": "/admin/acesso/<int:usuario_id>/senha-por-email",
+      "method": "POST",
+      "view_function": "app.views.admin.acesso.admin_acesso_senha_por_email",
+      "template_related": [],
+      "requires_login": "admin",
+      "has_post_form": false,
+      "csrf_in_html": null,
+      "token_counts_per_form": [],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": true,
+      "risk": [],
+      "notes": [],
+      "evidence": [
+        {
+          "kind": "dynamic_form",
+          "page": "/admin/acesso",
+          "attr": "data-email-url",
+          "action": "/admin/acesso/1/senha-por-email",
           "token_mode": "helper_or_hidden"
         }
       ],
@@ -9767,6 +9798,40 @@
       "status": "ok_rendered_form_token"
     },
     {
+      "route": "/esqueci-minha-senha",
+      "method": "POST",
+      "view_function": "app.views.passwords.forgot_password",
+      "template_related": [
+        "forgot_password.html"
+      ],
+      "requires_login": "public",
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [
+        {
+          "page": "/esqueci-minha-senha",
+          "action": "/esqueci-minha-senha",
+          "token_counts": [
+            1
+          ]
+        }
+      ],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": false,
+      "risk": [],
+      "notes": [],
+      "evidence": [
+        {
+          "kind": "rendered_form",
+          "page": "/esqueci-minha-senha",
+          "action": "/esqueci-minha-senha",
+          "token_count": 1
+        }
+      ],
+      "status": "ok_rendered_form_token"
+    },
+    {
       "route": "/login",
       "method": "POST",
       "view_function": "app.views.core.login",
@@ -9820,6 +9885,48 @@
       ],
       "evidence": [],
       "status": "ok_logout_or_safe_exception"
+    },
+    {
+      "route": "/primeiro-acesso",
+      "method": "POST",
+      "view_function": "app.views.passwords.first_access",
+      "template_related": [
+        "set_password.html"
+      ],
+      "requires_login": "public",
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": false,
+      "risk": [],
+      "notes": [
+        "tests/test_password_email_phase2.py::test_public_password_forms_require_csrf"
+      ],
+      "evidence": [],
+      "status": "ok_specific_regression_test"
+    },
+    {
+      "route": "/redefinir-senha",
+      "method": "POST",
+      "view_function": "app.views.passwords.reset_password",
+      "template_related": [
+        "set_password.html"
+      ],
+      "requires_login": "public",
+      "has_post_form": true,
+      "csrf_in_html": true,
+      "token_counts_per_form": [],
+      "has_fetch_post": false,
+      "fetch_sends_token": null,
+      "has_dynamic_form": false,
+      "risk": [],
+      "notes": [
+        "tests/test_password_email_phase2.py::test_public_password_forms_require_csrf"
+      ],
+      "evidence": [],
+      "status": "ok_specific_regression_test"
     }
   ]
 }

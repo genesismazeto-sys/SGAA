@@ -72,7 +72,7 @@ them changes that page.
 | `.form-actions` | 11 templates align it `flex-end`. `404.html` renders `.form-actions` **without** that override and is left-aligned today. The visual gate caught exactly this when it was hoisted. |
 | `.form-cards-narrow` | 12 pages, **three** widths (`0.55`, `0.70`, `0.75 × --form-card-w`). *Superseded in part:* F-5B named those three widths as tokens, and F-5E ended the old `100vw-32px` / `100vw-64px` max-width split below 720px — both families are now bound by their own track there. See §5. |
 | `.field-card.file-card` | Styled in only some of the templates that render it. `admin_requisicoes` paints its chip `#000`; `aluno_nova_requisicao` uses `var(--text-tertiary)`. |
-| `.toggle-switch` | Three templates, **two** sizes: 46×24 (`admin_alertas`) and 42×22 (`admin_banco_dados`, `admin_configuracoes`), with matching slider offsets. |
+| `.toggle-switch` | Shared in `components/form.css`: 42×22 by default; `.toggle-switch--large` preserves the established 46×24 modal geometry. Shape, checked/unchecked appearance, focus-visible and disabled input semantics are shared. |
 | `.modal-card textarea.control.auto-grow` | `admin_alertas` uses `line-height:1.35 / padding:6px`; `admin_arquivos` uses `1.2 / 8px`. |
 
 14 further declarations are outright **divergent** across templates and are

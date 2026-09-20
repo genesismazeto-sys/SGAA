@@ -34,6 +34,10 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 from app import db as app_db_module
+from app.user_accounts import (
+    CREDENTIAL_STATE_DEFAULT,
+    create_usuario_with_access_level,
+)
 from tests.canonical_baseline_support import (
     assert_catalog_matches_canonical_baseline,
 )
@@ -383,9 +387,14 @@ def isolated_env(monkeypatch):
     with app.app_context():
         conn = main.get_db_connection()
         admin_password = main.hash_password("admin123")
-        conn.execute(
-            "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
-            ("Admin Total", "admin_total@ej.edu.br", admin_password, "admin", "admin_total"),
+        create_usuario_with_access_level(
+            conn,
+            "Admin Total",
+            "admin_total@ej.edu.br",
+            admin_password,
+            "admin",
+            "admin_total",
+            credential_state=CREDENTIAL_STATE_DEFAULT,
         )
         conn.execute("DELETE FROM configuracoes_backup")
         main.save_backup_settings(

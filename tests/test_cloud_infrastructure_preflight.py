@@ -32,6 +32,7 @@ from app import cloud_config, cloud_connections, machine_secrets, startup_prefli
 from app.services import token_encryption
 from app.storage import google_connection
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -419,6 +420,7 @@ def test_activity_crud_never_resolves_google_storage(tmp_path, monkeypatch):
         client = env["client"]
         with client.session_transaction() as session:
             session.update(user_id=1, user_type="admin", user_name="Administrador")
+            stamp_auth_version(session)
 
         version_form = {
             "nome_conceito": "Visitas técnicas ou culturais",

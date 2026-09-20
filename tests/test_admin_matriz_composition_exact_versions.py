@@ -8,6 +8,7 @@ import uuid
 import main
 from tests.canonical_matrix_test_support import current_version_id, login_admin, seed_matrix_graph
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 def _assign_matrix(conn, seed: dict[str, int]) -> None:
@@ -246,6 +247,7 @@ def test_consultive_access_is_readonly_and_post_is_denied(tmp_path):
             conn.commit()
         with env["client"].session_transaction() as session:
             session.update(user_id=user_id, user_type="admin", user_name="Consultive Surface A")
+            stamp_auth_version(session)
 
         page = env["client"].get(f"/admin/editar_matriz/{seed['matrix_id']}?tab=aac")
         rendered = page.get_data(as_text=True)

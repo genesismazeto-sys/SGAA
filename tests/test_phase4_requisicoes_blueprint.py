@@ -197,13 +197,17 @@ MEUS_DADOS_MUTATING_PAIRS = {
 
 C1_COURSE_DETAIL_PAGE_PATH = "/admin/cursos/2"
 C1_ARQUIVOS_PAGE_PATH = "/admin/arquivos?edit_arquivo=1"
+# Password foundation adds four reviewed rows to both sides of the comparison
+# (+1 dynamic, +1 rendered, +2 specific-regression), so these derived summary
+# pins move together.  The C1 claim they exist to protect is unchanged: exactly
+# one Arquivos route moves dynamic -> rendered between the two eras.
 C1_STATUS_COUNTS_OLD = {
-    "ok_dynamic_form_token": 14,
-    "ok_rendered_form_token": 52,
+    "ok_dynamic_form_token": 15,
+    "ok_rendered_form_token": 53,
 }
 C1_STATUS_COUNTS_NEW = {
-    "ok_dynamic_form_token": 13,
-    "ok_rendered_form_token": 53,
+    "ok_dynamic_form_token": 14,
+    "ok_rendered_form_token": 54,
 }
 C1_ARQUIVOS_EDIT_ROUTE = "/admin/arquivos/<int:arquivo_id>/editar"
 C1_ARQUIVOS_DELETE_ROUTE = "/admin/arquivos/<int:arquivo_id>/deletar"

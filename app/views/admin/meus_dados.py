@@ -24,6 +24,11 @@ from app.db import get_db_connection
 from app.db_maintenance import ensure_usuario_profile_schema
 from app.security.passwords import hash_password
 from app.uploads import save_upload
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    get_usuario_auth_version,
+    set_usuario_password_hash,
+)
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from utils.messages import flash
 
@@ -51,8 +56,14 @@ def admin_meus_dados():
             if senha:
                 hashed_password = hash_password(senha)
                 conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?",
-                    (nome, email, hashed_password, usuario_id),
+                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
+                    (nome, email, usuario_id),
+                )
+                set_usuario_password_hash(
+                    conn,
+                    usuario_id,
+                    hashed_password,
+                    credential_state=CREDENTIAL_STATE_PERSONAL,
                 )
             else:
                 conn.execute(
@@ -85,6 +96,8 @@ def admin_meus_dados():
                     flash("Foto inválida. Use PNG ou JPG.", "error")
 
             conn.commit()
+            if senha:
+                session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
             flash("Seus dados foram atualizados com sucesso.", "success")
             return redirect(url_for("admin_meus_dados"))
         except sqlite3.IntegrityError as exc:

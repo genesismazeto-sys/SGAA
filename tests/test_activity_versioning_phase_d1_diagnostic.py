@@ -5,6 +5,7 @@ import pytest
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -13,6 +14,7 @@ def diagnostic_client(tmp_path):
         client = env["client"]
         with client.session_transaction() as session:
             session.update(user_id=1, user_type="admin", user_name="Admin")
+            stamp_auth_version(session)
         yield client
 
 

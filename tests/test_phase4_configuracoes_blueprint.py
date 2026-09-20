@@ -11,6 +11,7 @@ import sys
 import pytest
 from flask import Flask, request, url_for
 
+from tests.session_support import stamp_auth_version
 from tests.canonical_baseline_support import (
     assert_catalog_matches_canonical_baseline,
 )
@@ -75,6 +76,7 @@ EXPECTED_BACKEND_MESSAGE_FILES = frozenset(
         "app/views/comprovantes.py",
         "app/views/core.py",
         "app/views/files.py",
+        "app/views/passwords.py",
         "app/web/authz_gate.py",
         "app/web/errors.py",
         "main.py",
@@ -194,6 +196,7 @@ def _admin_session(client):
         session["user_type"] = "admin"
         session["user_name"] = "Phase 4 B1"
         session["access_level"] = "admin_total"
+        stamp_auth_version(session)
 
 
 def _access_context(configuracoes_scope="none", mensagens_scope="none"):

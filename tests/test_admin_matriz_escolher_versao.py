@@ -28,6 +28,7 @@ if BASE not in sys.path:
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,7 @@ def _login(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Admin D7.6D"
+        stamp_auth_version(sess)
 
 
 def _escolher(client, matriz_id, atividade_id, versao_id, tab="aac"):

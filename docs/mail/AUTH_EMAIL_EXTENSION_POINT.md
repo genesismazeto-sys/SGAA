@@ -4,8 +4,8 @@
 a subject and a plain-text body, and knows nothing about Requisições. Request
 e-mails are simply its first consumer.
 
-This document records the contracts for the two planned consumers. **Neither is
-implemented in this front**, and no route, schema or UI for them exists yet.
+This document records the contracts for the two authentication consumers,
+implemented by the password-foundation Phase 2 surface.
 
 ## Why the transport is separate
 
@@ -27,7 +27,7 @@ Any future consumer reuses exactly that, by calling
 * The link carries a cryptographically random token; the account is activated
   only when the student sets their own password.
 * Store only a safe representation (hash) of the token, never the token itself.
-* The token has an expiry and a used/revoked state.
+* The first-access token expires after 72 hours and has a used/revoked state.
 
 ## Password recovery
 
@@ -35,16 +35,20 @@ Any future consumer reuses exactly that, by calling
 * The response must be **generic** and identical whether or not an account
   exists — no account enumeration via message text, status code or timing class.
 * Token: cryptographically random, single-use, stored only as a hash.
-* Token carries an expiry and an explicit used/revoked state.
+* The password-reset token expires after 60 minutes and has an explicit
+  used/revoked state.
 * Completing a password change invalidates outstanding tokens for that account.
 
-## What a future implementation must add
+## Implemented ownership
 
-Only the auth-specific parts:
+The auth-specific parts are owned by:
 
-1. a token table (hash, purpose, expiry, used/revoked, user reference);
-2. the two routes plus their RBAC/CSRF entries;
-3. templates for the two messages.
+1. `senha_tokens` for token hash, purpose, expiry, consumed/revoked state and
+   user reference;
+2. `/esqueci-minha-senha`, `/redefinir-senha` and `/primeiro-acesso`, all with
+   their explicit CSRF/RBAC inventory entries;
+3. `app/password_email.py` and `app/password_tokens.py` for message and token
+   lifecycle policy.
 
 The transport itself requires no change. If it ever does, the change belongs in
 `mail_service`, not in a consumer.

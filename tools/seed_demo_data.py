@@ -8,7 +8,7 @@ if BASE_DIR not in sys.path:
 
 from app import create_app
 from app.db import get_db_connection, init_db
-from app.security.passwords import hash_password
+from app.user_accounts import create_usuario_with_default_password
 
 
 def seed():
@@ -71,10 +71,8 @@ def seed():
             if u:
                 user_id = u[0] if isinstance(u, tuple) else u["id"]
             else:
-                pwd_hash = hash_password("aluno123")
-                cur = conn.execute(
-                    "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?,?,?,?)",
-                    (nome, email, pwd_hash, "aluno"),
+                cur = create_usuario_with_default_password(
+                    conn, nome, email, "aluno"
                 )
                 user_id = cur.lastrowid
 

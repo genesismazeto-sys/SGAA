@@ -98,13 +98,6 @@
     .alerta-pick-btn .lucide{ width:14px; height:14px; margin:0; }
     .modal-card.is-readonly .alerta-pick-btn{ pointer-events:none; opacity:.5; }
     .visibility-switch-state{ min-width:0; color:var(--text-primary); font-size:var(--font-size-small); font-weight:600; text-align:left; white-space:nowrap; }
-    .toggle-switch{ position:relative; display:inline-flex; align-items:center; width:46px; height:24px; }
-    .toggle-switch input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
-    .toggle-switch-slider{ position:relative; display:block; width:46px; height:24px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
-    .toggle-switch-slider::before{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
-    .toggle-switch input:checked + .toggle-switch-slider{ background:#0f5b99; }
-    .toggle-switch input:checked + .toggle-switch-slider::before{ transform:translateX(22px); }
-    .toggle-switch input:focus-visible + .toggle-switch-slider{ outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
     .alerta-preview{
       min-height:calc(var(--btn-h) * 0.8);
       display:flex;
@@ -266,7 +259,7 @@
             </div>
             <div class="alerta-side-toggle">
               <span class="visibility-switch-state" id="admin-alerta-visivel-text">Ativo</span>
-              <label class="toggle-switch" aria-label="Alternar visibilidade do alerta">
+              <label class="toggle-switch toggle-switch--large" aria-label="Alternar visibilidade do alerta">
                 <input id="admin-alerta-visivel-switch" type="checkbox" checked>
                 <span class="toggle-switch-slider" aria-hidden="true"></span>
               </label>

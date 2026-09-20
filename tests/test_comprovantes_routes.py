@@ -19,6 +19,7 @@ from tests.test_comprovantes_google_drive import (
     PNG,
 )
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture
@@ -62,6 +63,7 @@ def _login(client, *, user_id, user_type, access_level=None):
         sess["user_type"] = user_type
         if access_level:
             sess["access_level"] = access_level
+        stamp_auth_version(sess)
 
 
 def _student_create(env, operation="route-create"):

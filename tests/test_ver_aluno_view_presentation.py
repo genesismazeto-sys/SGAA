@@ -33,6 +33,7 @@ if BASE not in sys.path:
 
 import main
 from app import db as app_db_module
+from tests.session_support import stamp_auth_version
 
 
 PROJECT_ROOT = Path(BASE)
@@ -214,6 +215,7 @@ def _login_admin(test_client):
         sess["user_name"] = "Administrador"
         sess["access_level"] = "admin_total"
         sess["perfil"] = "Admin"
+        stamp_auth_version(sess)
 
 
 def _seed(suffix):

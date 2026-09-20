@@ -9,6 +9,7 @@ import main
 from app.views.admin import activity_version_delete as delete_view
 from tests.versioned_test_support import isolated_versioned_app_env
 from utils import messages
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -45,6 +46,7 @@ def _login(client, *, user_id=1, level="admin_total"):
         session["user_id"] = user_id
         session["user_type"] = "admin"
         session["user_name"] = f"Admin {level}"
+        stamp_auth_version(session)
 
 
 def _seed_base_with_versions(*statuses: str, numbers=None):

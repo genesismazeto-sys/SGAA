@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture(scope="module")
@@ -16,6 +17,7 @@ def client():
 def _login(client):
     with client.session_transaction() as session:
         session.update(user_id=1, user_type="admin", user_name="Administrador")
+        stamp_auth_version(session)
 
 
 def _seed(name, axis, group, total=None):

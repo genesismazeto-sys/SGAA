@@ -6,6 +6,7 @@ import uuid
 import pytest
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 HOUR_KEYS = ("horas_padrao_academica", "horas_padrao_extensao")
@@ -67,6 +68,7 @@ def preserve_hour_settings():
 def _login_admin(client) -> None:
     with client.session_transaction() as session:
         session.update(user_id=1, user_type="admin", user_name="Administrador")
+        stamp_auth_version(session)
 
 
 def _save_hour_settings(aac: int, aeu: int) -> None:

@@ -7,6 +7,7 @@ import pytest
 import main
 from app.arquivos import create_arquivo, update_arquivo
 from tests.test_arquivos_google_drive import FakeManagedStorage, PDF, PNG, _file
+from tests.session_support import ensure_student_user_id, stamp_auth_version
 
 
 @pytest.fixture()
@@ -43,10 +44,13 @@ def route_env(tmp_path):
 
 
 def _login_student(client):
+    # Was a synthetic id; the production session guard now reads the durable
+    # credential on every authenticated request, so the actor must be real.
     with client.session_transaction() as session:
-        session["user_id"] = 999999
+        session["user_id"] = ensure_student_user_id()
         session["user_type"] = "aluno"
         session["user_name"] = "Student"
+        stamp_auth_version(session)
 
 
 def _login_admin_actor(client, user_id):
@@ -54,6 +58,7 @@ def _login_admin_actor(client, user_id):
         session["user_id"] = user_id
         session["user_type"] = "admin"
         session["user_name"] = "Admin actor"
+        stamp_auth_version(session)
 
 
 def _create_google(created_ids, *, visible: int, content=PDF, name="student.pdf"):

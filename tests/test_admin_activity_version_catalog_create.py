@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import main
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 def _login_admin(client):
@@ -17,6 +18,7 @@ def _login_admin(client):
             user_type="admin",
             user_name="Administrador",
         )
+        stamp_auth_version(session)
 
 
 def test_retired_base_only_get_redirects_to_canonical_add(tmp_path):
@@ -80,6 +82,7 @@ def test_student_templates_do_not_expose_versioning_terms(tmp_path):
                 user_type="aluno",
                 user_name="Aluno Teste",
             )
+            stamp_auth_version(session)
 
         forbidden = (
             "atividade_versao_id",

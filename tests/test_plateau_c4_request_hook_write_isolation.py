@@ -79,6 +79,7 @@ from app.web.context import (
     inject_editable_message_templates,
 )
 from utils import messages as message_utils
+from tests.session_support import stamp_auth_version
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -732,6 +733,7 @@ def _login(client, user_id, level):
         session["user_type"] = "admin"
         session["user_name"] = "C4 Red Admin"
         session["access_level"] = level
+        stamp_auth_version(session)
 
 
 def _set_admin_db_level(env, level):

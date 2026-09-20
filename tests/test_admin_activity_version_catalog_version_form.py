@@ -34,6 +34,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def _count_atividade_versao(client) -> int:
@@ -294,6 +296,7 @@ def test_student_templates_do_not_expose_versioning_terms(client):
         sess["user_id"] = 9999999
         sess["user_type"] = "aluno"
         sess["user_name"] = "Aluno Teste"
+        stamp_auth_version(sess)
 
     forbidden = ["atividade_versao_id", "snapshot versionado", "diagnóstico do snapshot"]
     for path in ["/aluno/dashboard", "/aluno/minhas-requisicoes"]:

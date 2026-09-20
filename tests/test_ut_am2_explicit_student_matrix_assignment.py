@@ -20,6 +20,7 @@ if BASE not in sys.path:
 import main
 from app import db as app_db_module
 from app.prod1_schema import bootstrap_prod1_schema
+from tests.session_support import stamp_auth_version
 
 
 # --------------------------------------------------------------------------
@@ -761,6 +762,7 @@ def _login_admin(test_client):
         sess["user_name"] = "Administrador"
         sess["access_level"] = "admin_total"
         sess["perfil"] = "Admin"
+        stamp_auth_version(sess)
 
 
 def _seed_route_fixture(suffix):

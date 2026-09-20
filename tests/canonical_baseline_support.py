@@ -90,6 +90,14 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "subject/default/placeholder editor surface",
         22,
     ),
+    (
+        "Password foundation Phase 1/2: replace the former explanatory and "
+        "reset wording with default-password activation, first-access and "
+        "password-recovery messages (8 additions, 8 retirements). The panel "
+        "footer now reads the pre-existing \"Salvar\", so the longer "
+        "\"Salvar senhas padrao\" literal retires with no new key",
+        0,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -125,11 +133,10 @@ CATALOG_VISIBLE_BASELINE_DEBT = (
 PARENT_CATALOG_KEYS_SHA256 = (
     "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
 )
-# REN1: +22 keys (558 -> 580) for the request e-mail notification surface.
-# Verified additive: removing exactly REN1_REQUEST_EMAIL_KEYS from the live
-# catalog reproduces the parent commit's 558-key digest 70ee7163... bit-for-bit.
+# Password foundation is net zero on top of the REN1 580-key state: eight
+# additions against eight retired literals.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "e8693abb734d88923393a4ebb426f162a133d5693e804ec7e07449eea4613d98"
+    "9e9b13efba54632110cc64fb8a12a503069c558910dd930cbadaa9ae9a9566eb"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -255,10 +262,12 @@ CANONICAL_ROUTE_RULE_COUNT = len(
 # has to be declared here, exactly once, on top of regenerating the artifact.
 TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 
-# REN1: +2 entries (125 -> 127) for the Requisições e-mail preview/send surface.
-# No existing route identity changed; the diff is additive only.
+# REN1 added two Requisições e-mail routes; password foundation adds the
+# single-account password e-mail route and the three public password routes.
+# The default-password activation is NOT a route: the Senhas padrão panel is
+# one settings surface saved by the pre-existing senhas-default endpoint.
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "a582cc0e8d7407cf6122fcc2eb65dcba29b06cb242184971bfed3c8fcb7c4545"
+    "239bdebf670f4c4f4142fe0ce71bc9f96026e5a97d0a3fa3775c7b9ebb653303"
 )
 
 
@@ -403,13 +412,13 @@ CANONICAL_CSRF_PAGE_STATUS_COUNT = len(
 # Independent pin, same rationale as CANONICAL_ROUTE_IDENTITIES_SHA256: the
 # derived counts follow the artifact, this digest anchors the artifact.
 CANONICAL_CSRF_ROW_IDENTITIES_SHA256 = (
-    "cafdbcb780647f22f0766cf3a32d75833a51dc0f9383baa7a8c904ddae4b557f"
+    "d595981f01566cc0d98eac1a4c79a505bfb336163746b424d4ff11d5420c833e"
 )
 # Named owner partitions of the canonical row set.  Every extraction that moved
 # handlers out of ``main`` is visible here as its own term; the terms are
 # disjoint and sum to CANONICAL_CSRF_ROW_COUNT.
 CANONICAL_CSRF_OWNER_PARTITIONS: dict[str, int] = {
-    "app.views.admin.acesso": 5,
+    "app.views.admin.acesso": 6,
     "app.views.admin.alertas": 3,
     "app.views.admin.alunos_turmas_cursos": 11,
     "app.views.admin.arquivos": 3,
@@ -421,6 +430,7 @@ CANONICAL_CSRF_OWNER_PARTITIONS: dict[str, int] = {
     "app.views.admin.requisicoes": 5,
     "app.views.aluno": 5,
     "app.views.core": 2,
+    "app.views.passwords": 3,
     "main": 6,
     "presets_api": 1,
 }
@@ -460,9 +470,49 @@ RETIRED_CSRF_PAGES = (
     NORMAS_DOMAIN_RETIRED_CSRF_PAGES | MATRIX_VERSION_SURFACE_RETIRED_CSRF_PAGES
 )
 
+PASSWORD_FOUNDATION_ADDED_KEYS = frozenset(
+    {
+        "msg_68bbd4601385b8d4",
+        "msg_bf7e15c6432ad589",
+        "msg_418b33480e418db1",
+        "msg_ec5ba85c1757bfa9",
+        "msg_620ad9a7c5f8d23e",
+        "msg_2849e4dc7c405251",
+        "msg_d851da8d55ba1305",
+        "msg_5762b488d7b6e455",
+    }
+)
+
+PASSWORD_FOUNDATION_RETIRED_KEYS = frozenset(
+    {
+        "msg_2c5ce8778bb82284",
+        "msg_ccdfb7e8e0daac9b",
+        "msg_daf208a908272ba0",
+        "msg_16fa270deb9e5e19",
+        "msg_c46c3f680d905635",
+        "msg_39a1589ba92fbf99",
+        "msg_45359497a041f95e",
+        "msg_e5210e430345f987",
+    }
+)
+
+
+def catalog_keys_before_password_foundation(keys) -> set[str]:
+    return (set(keys) - set(PASSWORD_FOUNDATION_ADDED_KEYS)) | set(
+        PASSWORD_FOUNDATION_RETIRED_KEYS
+    )
+PASSWORD_FOUNDATION_CSRF_ROUTES = frozenset(
+    {
+        "/admin/acesso/<int:usuario_id>/senha-por-email",
+        "/esqueci-minha-senha",
+        "/primeiro-acesso",
+        "/redefinir-senha",
+    }
+)
+
 
 def reconcile_historical_csrf_snapshot(snapshot: dict) -> dict:
-    """Subtract the named retirement ledger from a pre-retirement era snapshot.
+    """Apply named retirements/additions to a pre-current era snapshot.
 
     Mutates and returns ``snapshot`` so the caller can then compare it row-for-row
     against the canonical one.  ``/admin/mapeamento-legado`` is deliberately left
@@ -479,6 +529,34 @@ def reconcile_historical_csrf_snapshot(snapshot: dict) -> dict:
     summary["total_mutating_routes"] -= len(MATRIX_VERSION_SURFACE_RETIRED_ROUTES)
     for status, retired in MATRIX_VERSION_SURFACE_RETIRED_STATUS_COUNTS.items():
         summary["status_counts"][status] -= retired
+    # Password foundation added genuinely new routes after all three extraction
+    # baselines. Copy only those reviewed canonical rows into the old era.
+    additions = [
+        row
+        for row in CANONICAL_CSRF_ROWS
+        if row["route"] in PASSWORD_FOUNDATION_CSRF_ROUTES
+    ]
+    snapshot["rows"].extend(dict(addition) for addition in additions)
+    snapshot["rows"].sort(
+        key=lambda row: (row["route"], row["method"], row["view_function"])
+    )
+    summary["total_mutating_routes"] += len(additions)
+    for addition in additions:
+        summary["status_counts"][addition["status"]] += 1
+    public_page = next(
+        page
+        for page in load_csrf_snapshot(CSRF_OFF_ARTIFACT)["summary"]["page_statuses"]
+        if page["path"] == "/esqueci-minha-senha"
+    )
+    if not any(
+        page["path"] == public_page["path"] for page in summary["page_statuses"]
+    ):
+        login_index = next(
+            index
+            for index, page in enumerate(summary["page_statuses"])
+            if page["path"] == "/login"
+        )
+        summary["page_statuses"].insert(login_index, dict(public_page))
     return snapshot
 
 

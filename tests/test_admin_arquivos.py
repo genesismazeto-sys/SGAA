@@ -13,6 +13,7 @@ if BASE not in sys.path:
 
 import main
 from tests.test_arquivos_google_drive import FakeManagedStorage, PDF
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -28,6 +29,7 @@ def _login_admin(client):
         sess["user_id"] = 1
         sess["user_type"] = "admin"
         sess["user_name"] = "Administrador"
+        stamp_auth_version(sess)
 
 
 def test_admin_arquivos_page_and_crud_flow(client, tmp_path):

@@ -49,6 +49,7 @@ import main
 from app import admin_access, auth
 from app.web import authz_gate
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 ADMIN_LEVELS = ("admin_total", "administrativo", "consultivo")
@@ -127,6 +128,7 @@ def _login(client, access_level: str) -> None:
         value["user_type"] = "admin"
         value["user_name"] = f"SEC1 {access_level}"
         value["access_level"] = access_level
+        stamp_auth_version(value)
 
 
 @pytest.fixture()

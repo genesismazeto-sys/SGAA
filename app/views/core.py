@@ -16,7 +16,14 @@ from app.auth import (
 )
 from app.db import get_db_connection
 from app.security.passwords import check_password, hash_password, is_legacy_password_hash
-from app.user_accounts import normalize_usuario_access_for_user_type
+from app.settings import get_default_passwords_enabled
+from app.user_accounts import (
+    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PERSONAL,
+    get_usuario_credential,
+    normalize_usuario_access_for_user_type,
+    rehash_usuario_password,
+)
 from app.web.urls import aluno_url
 from utils.messages import flash
 
@@ -67,14 +74,24 @@ def login():
         # para n\u00e3o virarem vetor de DoS / contention.
         user = conn.execute("SELECT * FROM usuarios WHERE email = ?", (email,)).fetchone()
 
-        if user and check_password(user["senha"], senha):
+        password_matches = bool(user and check_password(user["senha"], senha))
+        credential = get_usuario_credential(conn, user["id"]) if user else None
+        credential_state = credential["estado"] if credential else None
+        credential_allowed = credential_state == CREDENTIAL_STATE_PERSONAL or (
+            credential_state == CREDENTIAL_STATE_DEFAULT
+            and get_default_passwords_enabled(conn)
+        )
+
+        if user and password_matches and credential_allowed:
             # Re-hash transparente caso o hash armazenado seja do formato legado.
             try:
                 if is_legacy_password_hash(user["senha"]):
                     new_hash = hash_password(senha)
-                    conn.execute("UPDATE usuarios SET senha = ? WHERE id = ?", (new_hash, user["id"]))
+                    rehash_usuario_password(conn, user["id"], new_hash)
                     conn.commit()
+                    credential = get_usuario_credential(conn, user["id"])
             except Exception as exc:
+                conn.rollback()
                 logger.warning("Falha ao migrar hash de senha: %s", exc)
 
             # Normaliza nivel_acesso quando incompatível com o tipo (ex.: aluno
@@ -100,6 +117,7 @@ def login():
             session["user_name"] = user["nome"]
             session["access_level"] = access_level
             session["perfil"] = access_level_label(access_level)
+            session["auth_version"] = int(credential["auth_version"])
             if user_type == "aluno":
                 foto_row = conn.execute(
                     "SELECT foto_perfil FROM alunos WHERE usuario_id = ?", (user["id"],)

@@ -14,7 +14,7 @@ from app.prod1_schema import (
     Prod1SchemaError,
     _validate_prod1_v6_schema,
     canonical_prod1_object_sql,
-    validate_prod1_schema,
+    _validate_prod1_v7_schema,
 )
 
 _V7_DETAILS_JSON = (
@@ -86,7 +86,7 @@ def migrate_prod1_v6_to_v7(conn: sqlite3.Connection) -> dict[str, object]:
             (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER, SCHEMA_EPOCH, _V7_DETAILS_JSON),
         )
         conn.execute("PRAGMA user_version=7")
-        validate_prod1_schema(conn)
+        _validate_prod1_v7_schema(conn)
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v7 integrity check failed")
         if conn.execute("SELECT COUNT(*) FROM requisicao_email_eventos").fetchone()[0]:
@@ -98,7 +98,12 @@ def migrate_prod1_v6_to_v7(conn: sqlite3.Connection) -> dict[str, object]:
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
-    return validate_prod1_schema(conn)
+    _validate_prod1_v7_schema(conn)
+    return {
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 7,
+        "baseline_marker": "first_production_baseline",
+    }
 
 
 __all__ = ["migrate_prod1_v6_to_v7"]

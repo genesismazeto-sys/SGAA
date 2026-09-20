@@ -4,6 +4,7 @@ import re
 import pytest
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture(scope="module")
@@ -13,7 +14,9 @@ def client():
 
 
 def test_admin_atividades_import_preview_and_confirm(client):
-    with client.session_transaction() as session: session.update(user_id=1,user_type='admin',user_name='Administrador')
+    with client.session_transaction() as session:
+        session.update(user_id=1,user_type='admin',user_name='Administrador')
+        stamp_auth_version(session)
     name='Atividade CSV Teste Nova'
     csv='\n'.join([
         'nome;tipo_atividade;grupo_numero;grupo_descricao;tem_limitacao;tipo_limitacao;limite_horas_total;limite_horas_semestral',

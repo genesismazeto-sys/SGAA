@@ -12,6 +12,7 @@ import main
 from app.views.admin.atividades import _normalized_version_form_payload
 from app.versioning.resolver import resolver_versao_por_aluno
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -85,6 +86,7 @@ def _login_admin(client):
             user_type="admin",
             user_name="Administrador",
         )
+        stamp_auth_version(session)
 
 
 def _student(conn):
@@ -100,6 +102,7 @@ def _login_student(client, student):
             user_type="aluno",
             user_name="Aluno",
         )
+        stamp_auth_version(session)
 
 
 def _add_payload(name: str, **changes):

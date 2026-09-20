@@ -7,6 +7,7 @@ import pytest
 import main
 from app.views.admin import atividades as atividades_view
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -24,6 +25,7 @@ def _login_admin(client):
         conn.commit()
     with client.session_transaction() as session:
         session.update(user_id=1, user_type="admin", user_name="Admin")
+        stamp_auth_version(session)
 
 
 def _seed_base(name: str, versions: list[dict]) -> tuple[int, list[int]]:

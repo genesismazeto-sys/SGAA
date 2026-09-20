@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import main
+from app.user_accounts import get_usuario_auth_version
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -20,10 +21,15 @@ def versioned_env(tmp_path):
 
 
 def _login_admin(client):
+    # A real login stamps the durable auth_version; without it the
+    # credential-invalidation guard treats the session as stale.
+    with main.app.app_context():
+        auth_version = get_usuario_auth_version(main.get_db_connection(), 1)
     with client.session_transaction() as session:
         session["user_id"] = 1
         session["user_type"] = "admin"
         session["user_name"] = "Administrador"
+        session["auth_version"] = auth_version
 
 
 def _seed_detail_scenarios():

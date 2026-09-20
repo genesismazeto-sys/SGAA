@@ -123,13 +123,6 @@
       justify-content:flex-end;
     }
     .db-toggle-field span{ font-size:12.5px; font-weight:600; color:#0f172a; }
-    .toggle-switch{ position:relative; display:inline-flex; align-items:center; width:42px; height:22px; }
-    .toggle-switch input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
-    .toggle-switch-slider{ position:relative; display:block; width:42px; height:22px; border-radius:3px; background:#cbd5e1; transition:background .18s ease; }
-    .toggle-switch-slider::before{ content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:15%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.24); transition:transform .18s ease; }
-    .toggle-switch input:checked + .toggle-switch-slider{ background:#0f5b99; }
-    .toggle-switch input:checked + .toggle-switch-slider::before{ transform:translateX(20px); }
-    .toggle-switch input:focus-visible + .toggle-switch-slider{ outline:2px solid rgba(37,99,235,.35); outline-offset:2px; }
     .db-recovery-row{ display:grid; gap:12px; grid-template-columns:minmax(0, 1fr) auto; align-items:end; }
     .db-select{ width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px 10px; border:1px solid var(--border-strong); border-radius:var(--radius); font-size:12.5px; background:var(--bg); }
     .db-path{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.25; }

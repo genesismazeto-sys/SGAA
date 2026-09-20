@@ -474,7 +474,7 @@ from app.views.admin.banco_dados import (
 )
 
 
-# UT-9: o cohort "Acesso" (9 simbolos: 6 rotas e 3 helpers) passou a ser
+# UT-9: o cohort "Acesso" passou a ser
 # propriedade canonica de app/views/admin/acesso.py.  main apenas re-exporta os
 # nomes por IDENTIDADE -- nunca wrappers.
 from app.views.admin.acesso import (
@@ -485,6 +485,7 @@ from app.views.admin.acesso import (
     admin_acesso_deletar,
     admin_acesso_definir_senha,
     admin_acesso_resetar_senha,
+    admin_acesso_senha_por_email,
     admin_acesso_salvar,
     admin_acesso_salvar_senhas_default,
 )

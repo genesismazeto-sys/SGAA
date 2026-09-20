@@ -14,6 +14,7 @@ import app.views.aluno as aluno_views
 from app.versioning.snapshots import RequisicaoSnapshotError, prepare_versioned_requisicao_snapshot
 from tests.canonical_request_test_support import login_admin
 from tests.versioned_test_support import isolated_versioned_app_env
+from tests.session_support import stamp_auth_version
 
 
 @pytest.fixture()
@@ -31,6 +32,7 @@ def _student(conn):
 def _login_student(client, row):
     with client.session_transaction() as session:
         session.update(user_id=row["usuario_id"], user_type="aluno", user_name="Aluno")
+        stamp_auth_version(session)
 
 
 def _post(client, version_id, name):

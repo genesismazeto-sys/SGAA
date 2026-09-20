@@ -41,8 +41,10 @@ from app.views.admin.dashboard import bp_admin_dashboard
 from app.views.admin.meus_dados import bp_admin_meus_dados
 from app.views.admin.demo import bp_admin_demo
 from app.views import core as core_views
+from app.views import passwords as password_views
 from app.views.files import uploaded_file
 from app.views.comprovantes import bp_comprovantes
+from app.session_auth import enforce_session_auth_version
 
 
 # Singleton CSRF instance for templates / view exemptions
@@ -209,6 +211,15 @@ def create_app(
     app.config["LOGIN_MAX_ATTEMPTS"] = int(os.getenv("LOGIN_MAX_ATTEMPTS", "10"))
     app.config["LOGIN_WINDOW_SECONDS"] = int(os.getenv("LOGIN_WINDOW_SECONDS", "600"))
     app.config["LOGIN_ACCOUNT_MAX_ATTEMPTS"] = int(os.getenv("LOGIN_ACCOUNT_MAX_ATTEMPTS", "8"))
+    app.config["PASSWORD_RESET_MAX_ATTEMPTS"] = int(
+        os.getenv("PASSWORD_RESET_MAX_ATTEMPTS", "10")
+    )
+    app.config["PASSWORD_RESET_WINDOW_SECONDS"] = int(
+        os.getenv("PASSWORD_RESET_WINDOW_SECONDS", "600")
+    )
+    app.config["PASSWORD_RESET_ACCOUNT_MAX_ATTEMPTS"] = int(
+        os.getenv("PASSWORD_RESET_ACCOUNT_MAX_ATTEMPTS", "5")
+    )
 
     # Bootstrap do admin padrão somente quando o ambiente permitir.
     # Em produção, exige APP_BOOTSTRAP_ADMIN_PASSWORD definido (ou recusa-se a semear).
@@ -289,6 +300,24 @@ def create_app(
         ("/", "index", core_views.index, ["GET"]),
         ("/login", "login", core_views.login, ["GET", "POST"]),
         ("/logout", "logout", core_views.logout, ["GET", "POST"]),
+        (
+            "/esqueci-minha-senha",
+            "forgot_password",
+            password_views.forgot_password,
+            ["GET", "POST"],
+        ),
+        (
+            "/redefinir-senha",
+            "reset_password",
+            password_views.reset_password,
+            ["GET", "POST"],
+        ),
+        (
+            "/primeiro-acesso",
+            "first_access",
+            password_views.first_access,
+            ["GET", "POST"],
+        ),
     ]
     for rule, endpoint, view_func, methods in core_specs:
         if endpoint in app.view_functions:
@@ -389,6 +418,8 @@ def create_app(
             view_func=uploaded_file,
             methods=["GET"],
         )
+
+    app.before_request(enforce_session_auth_version)
 
     # ----- Logging -----
     install_oauth_query_redaction_filter()

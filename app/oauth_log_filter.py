@@ -7,7 +7,7 @@ import re
 
 
 _SENSITIVE_QUERY_VALUE = re.compile(
-    r"(?i)([?&](?:code|state|access_token|refresh_token|id_token|client_secret)=)[^&\s]+"
+    r"(?i)([?&](?:code|state|token|access_token|refresh_token|id_token|client_secret)=)[^&\s]+"
 )
 
 

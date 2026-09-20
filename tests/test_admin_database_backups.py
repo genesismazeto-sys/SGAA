@@ -14,6 +14,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.session_support import stamp_auth_version
 
 
 def _login_as_user(client, user_id, user_name, user_type="admin"):
@@ -21,6 +22,7 @@ def _login_as_user(client, user_id, user_name, user_type="admin"):
         sess["user_id"] = user_id
         sess["user_type"] = user_type
         sess["user_name"] = user_name
+        stamp_auth_version(sess)
 
 
 @pytest.fixture
