@@ -129,7 +129,7 @@ def test_reset_and_arbitrary_write_states_and_rehash_preservation():
 def test_production_password_write_sites_use_the_shared_boundary():
     expected_calls = {
         "app/db.py": "create_usuario_with_access_level",
-        "app/services/student_import_service.py": "create_usuario_with_default_access",
+        "app/services/student_import_service.py": "create_usuario_pending",
         "app/views/admin/acesso.py": "set_usuario_password_hash",
         "app/views/admin/alunos_turmas_cursos.py": "set_usuario_password_hash",
         "app/views/admin/meus_dados.py": "set_usuario_password_hash",

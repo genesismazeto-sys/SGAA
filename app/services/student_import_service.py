@@ -11,10 +11,9 @@ from app.student_import import (
 )
 from app.student_matrix import matrix_for_turma_assignment
 from app.user_accounts import (
-    create_usuario_with_default_access,
-    create_usuario_with_default_password,
+    create_usuario_pending,
     normalize_usuario_access_for_user_type,
-    prepare_default_password_hashes,
+    prepare_pending_password_hashes,
 )
 
 
@@ -150,18 +149,17 @@ def _persist_student_row(
         )
         return "updated"
 
-    if pending_password_hashes:
-        usuario = create_usuario_with_default_access(
-            conn,
-            row.aluno,
-            row.email,
-            pending_password_hashes.pop(),
-            "aluno",
-            credential_state="default",
-        )
-    else:
-        # Sem hash pré-calculado sobrando, o caminho original assume.
-        usuario = create_usuario_with_default_password(conn, row.aluno, row.email, "aluno")
+    # prod-1/v11: an imported student has no password of its own, so the
+    # account is pending -- never a usable shared default. It is completed by
+    # the first-access e-mail or an explicit "Aplicar senha padrão".
+    usuario = create_usuario_pending(
+        conn,
+        row.aluno,
+        row.email,
+        "aluno",
+        # Sem hash pré-calculado sobrando, create_usuario_pending gera um.
+        senha_hash=pending_password_hashes.pop() if pending_password_hashes else None,
+    )
     usuario_id = usuario.lastrowid
     conn.execute(
         """
@@ -211,11 +209,12 @@ def _persist_rows(
         seen_emails[email_key] = row.source_row
         seen_matriculas[row.matricula] = row.source_row
 
-    # Hash da senha padrão é o custo dominante da gravação em lote. Calculado
-    # aqui, em paralelo e fora do laço, ele deixa de somar ~280ms por aluno ao
-    # tempo em que a transação segura o lock de escrita do banco.
-    pending_password_hashes = prepare_default_password_hashes(
-        conn, "aluno", _count_rows_needing_new_usuario(conn, [row for row, _ in items])
+    # O hash (inutilizável) de cada conta pendente é o custo dominante da
+    # gravação em lote. Calculado aqui, em paralelo e fora do laço, ele deixa de
+    # somar ~280ms por aluno ao tempo em que a transação segura o lock de
+    # escrita do banco.
+    pending_password_hashes = prepare_pending_password_hashes(
+        _count_rows_needing_new_usuario(conn, [row for row, _ in items])
     )
 
     created = updated = skipped = 0

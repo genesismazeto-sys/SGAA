@@ -6,6 +6,7 @@
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <style>
     /* Toolbar: override list-cards.css chips (scoped) */
     #acesso-toolbar .input-chip{ background:transparent; border-right:none; }
@@ -25,12 +26,12 @@
     .access-count-chip{ display:inline-flex; align-items:center; justify-content:center; height:22px; padding:0 8px; border-radius:var(--radius); border:1px solid var(--border-strong); background:var(--bg); color:var(--text-secondary); font-size:11px; font-weight:500; white-space:nowrap; }
     .access-summary-card .profile-name{ display:block; font-size:13px; font-weight:600; color:var(--text-primary); }
     .access-summary-card small{ display:block; margin-top:6px; color:var(--text-tertiary); line-height:1.45; font-size:12px; }
-    .access-defaults-panel{ border:0.5px solid rgba(0,0,0,0.08); border-radius:var(--radius); overflow:hidden; margin-bottom:18px; }
-    .access-defaults-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:7px 16px; background:var(--bg-underpanel); }
+    .access-defaults-panel{ border:1px solid var(--border-strong); border-radius:var(--radius); overflow:hidden; margin-bottom:18px; background:var(--surface); }
+    .access-defaults-head{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:7px 16px; }
     .access-defaults-head h2{ margin:0; font-size:13px; font-weight:500; color:var(--text-primary); display:flex; align-items:center; gap:8px; }
     .access-defaults-head h2 i{ color:var(--text-secondary); }
-    .access-defaults-body{ padding:16px; border-top:0.5px solid rgba(0,0,0,0.08); background:var(--bg-underpanel); }
-    .access-defaults-footer{ display:flex; justify-content:flex-end; padding:11px 16px; border-top:0.5px solid rgba(0,0,0,0.08); background:var(--bg-underpanel); }
+    .access-defaults-body{ padding:16px; border-top:1px solid var(--border-strong); }
+    .access-defaults-footer{ display:flex; justify-content:flex-end; padding:11px 16px; border-top:1px solid var(--border-strong); }
     .access-defaults-grid{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:12px; }
     .access-default-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:12px; display:grid; gap:10px; align-content:space-between; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
     .access-default-card .head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -40,25 +41,30 @@
     .access-default-card input{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font-family:monospace; font-size:13px; color:var(--text-primary); background:var(--bg); }
     .access-defaults-tools{ display:flex; align-items:center; justify-content:flex-end; gap:16px; }
     .access-mail-status{ display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; white-space:nowrap; }
-    .access-defaults-toggle-form{ display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:0; }
-    .access-defaults-toggle-label{ color:var(--text-secondary); font-size:12px; white-space:nowrap; }
     .access-toolbar-actions{ display:flex; align-items:center; gap:var(--btn-gap); }
     .access-actions-shell .btn[disabled]{ opacity:.55; cursor:not-allowed; }
     .access-actions-menu .menu-item.danger{ color:#b91c1c; }
     .access-actions-menu .menu-item.warn{ color:#92400e; }
     .access-student-tag{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#64748b; }
     .access-student-tag .lucide{ width:14px; height:14px; }
-    .access-modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.52); backdrop-filter:blur(2px); display:grid; place-items:center; z-index:40; }
-    .access-modal-overlay[hidden]{ display:none !important; }
-    .access-modal-card{ width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px); overflow:hidden; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,.995), rgba(248,250,252,.975)); box-shadow:0 24px 60px rgba(15,23,42,.22); display:flex; flex-direction:column; }
-    .access-modal-card.access-confirm-card{ width:min(460px, calc(100vw - 32px)); }
-    .access-modal-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:18px 22px 14px; border-bottom:1px solid rgba(226,232,240,.9); }
-    .access-modal-header h3{ margin:0; display:flex; align-items:center; gap:8px; font-size:17px; letter-spacing:-.01em; }
-    .access-modal-header p{ margin:6px 0 0; color:#64748b; font-size:12.5px; line-height:1.45; max-width:62ch; }
-    .access-modal-header > .btn{ min-width:32px; width:32px; height:32px; padding:0; }
-    .access-modal-header > .btn .lucide{ margin:0; }
-    .access-modal-body{ padding:14px 22px 0; overflow-y:auto; background:linear-gradient(180deg, rgba(255,255,255,.6), rgba(248,250,252,.45)); }
-    .access-modal-footer{ display:flex; justify-content:flex-end; gap:8px; padding:14px 22px 18px; border-top:1px solid rgba(226,232,240,.9); background:rgba(255,255,255,.96); }
+    /* DS-5: the three dialogs on this page use the shared modal component
+       (components/modal.css). It owns the scrim, the card surface, the flex
+       column, the title row and the action row — so the former .access-modal-*
+       rules, which were a second modal component wearing override clothing
+       (own radius, own gradients, own shadow, own header alignment, own title
+       size), are gone. The DS values win even where they differ from the old
+       look. What remains is what components/modal.css itself declares to be
+       page-level: per-dialog size and padding, plus this modal's own content. */
+    .modal-card{ width:min(880px, calc(100vw - 32px)); max-height:min(88vh, 860px); }
+    .modal-card.access-confirm-card{ width:min(460px, calc(100vw - 32px)); }
+    .modal-header{ padding:10px 12px; }
+    .modal-body{ padding:12px 16px; }
+    .modal-footer{ justify-content:flex-end; padding:10px 12px; }
+    /* Content of this modal's header: a subtitle the shared component does not
+       define, and the icon-only close button. */
+    .modal-header p{ margin:4px 0 0; color:var(--text-secondary); font-size:12.5px; line-height:1.45; max-width:62ch; }
+    .modal-header > .btn{ min-width:var(--btn-h,32px); width:var(--btn-h,32px); height:var(--btn-h,32px); padding:0; }
+    .modal-header > .btn .lucide{ margin:0; }
     .access-form-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px 14px; align-items:start; }
     .access-form-field{ display:grid; gap:8px; align-content:start; }
     .access-form-field.full{ grid-column:1 / -1; }
@@ -94,31 +100,46 @@
     .access-scope-card .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
     .access-scope-card strong{ color:#0f172a; font-size:13px; }
     .access-scope-card small{ color:#64748b; font-size:12px; line-height:1.45; }
-    .access-scope-pill{ display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:18px; padding:0 10px; border-radius:999px; font-size:11px; font-weight:700; }
-    .access-scope-pill.none{ background:#e2e8f0; color:#475569; }
-    .access-scope-pill.view{ background:#dbeafe; color:#1e40af; }
-    .access-scope-pill.edit{ background:#dcfce7; color:#166534; }
-    .access-scope-pill.full{ background:#fef9c3; color:#854d0e; }
+    /* The effective-scope indicator has no page-local visual contract: it is
+       the shared .badge.status-pill primitive from modern-style.css. */
     .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:#fff; }
     .access-row-muted{ color:#64748b; font-size:13px; }
-    .access-level-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:114px; padding:6px 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; }
-    .access-level-badge.admin_total{ background:#dbeafe; color:#1d4ed8; }
-    .access-level-badge.admin{ background:#dbeafe; color:#1d4ed8; }
-    .access-level-badge.consultivo{ background:#e0f2fe; color:#0369a1; }
-    .access-level-badge.usuario{ background:#ecfccb; color:#3f6212; }
-    .access-level-badge.usuario_teste{ background:#fef3c7; color:#92400e; }
-    .access-base-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:72px; padding:6px 10px; border-radius:999px; background:#f1f5f9; color:#475569; font-size:12px; font-weight:700; }
     .access-empty{ padding:18px; text-align:center; color:#64748b; }
     .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }
     .access-actions-float .act-btn.danger{ background:#fee2e2; color:#b91c1c; }
     .access-actions-float .act-btn[disabled]{ opacity:.45; cursor:not-allowed; }
-    .imp-acesso{ --imp-list-min-width:966px; }
+    /* Six data columns. The five descriptive tracks keep their exact minima and
+       fractions -- nothing was squeezed to pay for the status column -- and they
+       own every fraction on the row, so the surplus width goes to them. The
+       status track is the shared --imp-status-col, which is a stable computed
+       length: it reserves the Acesso domain's longest supported status and
+       cannot absorb leftover space, so it sits as far right as this data layout
+       allows and does not move between pages. Alignment and width are the
+       shared `.cell.status-col` contract in components/list-cards.css; this
+       page declares neither.
+
+       The ONE value this page supplies is semantic, not a width: how many
+       characters the longest status the Acesso domain supports has.
+       app/status_presentation.py ACCESS_STATUS_TONES = Pendente /
+       Disponibilizado / Ativo / Revogado / Expirado, whose longest is
+       "Disponibilizado" -> 15. A focused test pins this number against that
+       dictionary, so adding a longer state fails rather than truncating.
+       Overrides the file-level default of 21 ("Deferida Parcialmente"), which
+       belongs to the requisições vocabulary, not this one.
+
+       --imp-list-min-width is the scroll threshold and must be a length: it
+       reuses --imp-status-col directly, so there is exactly one notion of this
+       column's width. The 966px term is the five-column threshold this list
+       already used, plus the one extra column gap the sixth track adds. */
+    .imp-acesso{ --imp-status-col-chars:15; }
+    .imp-acesso{ --imp-list-min-width:calc(966px + var(--imp-col-gap) + var(--imp-status-col)); }
     .imp-acesso{ --imp-cols:
       minmax(180px, 1.35fr)
       minmax(220px, 1.55fr)
       minmax(180px, 1.15fr)
       minmax(160px, 1.05fr)
-      minmax(160px, 1fr);
+      minmax(160px, 1fr)
+      var(--imp-status-col);
     }
     .impressoes-cards-scroll.imp-acesso{ width:100%; }
     .imp-acesso .impressoes-cards,
@@ -139,8 +160,7 @@
       .access-form-grid{ grid-template-columns:1fr; }
       .access-defaults-head{ align-items:flex-start; flex-direction:column; }
       .access-defaults-tools{ align-items:flex-start; flex-direction:column; }
-      .access-defaults-toggle-form{ flex-wrap:wrap; justify-content:flex-start; }
-      .access-modal-card{ width:min(100vw - 20px, 860px); border-radius:8px; }
+      .modal-card{ width:min(100vw - 20px, 860px); }
     }
   </style>
 {% endblock %}
@@ -193,7 +213,53 @@
 
 <section class="access-defaults-panel">
   <!-- One settings surface, one form, one Save: the five configured default
-       passwords and the activation switch are persisted by the footer action. -->
+       passwords are persisted by the footer action. Saving is configuration
+       only -- no account's credential changes until "Aplicar senha padrão" is
+       used on it.
+
+       UI-B15 — Chrome logs "Multiple forms should be contained in their own
+       form elements; break up complex forms into ones that represent a single
+       action" against this form. The rendered DOM was audited first and none
+       of the structural causes is present: the three forms on this page are
+       siblings, never nested; no closing tag is missing; no control belongs to
+       an endpoint other than its own form's; the two submit buttons that sit
+       outside their form use the HTML `form=` attribute, which is explicit
+       ownership, not an accident. This form is also genuinely ONE server
+       action -- a single POST to admin_acesso_salvar_senhas_default persists
+       all five values together -- so splitting it would break the Save the
+       panel is built around, not repair anything.
+
+       What actually trips the message is Chrome's password-manager parser:
+       five <input type="password"> with five different names and no account
+       identity cannot be mapped onto one credential form, so the heuristic
+       pass splits them. These fields are not one account's credentials; they
+       are per-profile configuration values, which is why no username field is
+       added here -- Admin / Coordenador / Consultor / Usuário / Usuário teste
+       are PROFILES, not login identities. There is no account to name and
+       inventing five would corrupt the product model to quiet a browser.
+
+       AUTOCOMPLETE, AND A CORRECTION. A first pass moved these five from
+       autocomplete="off" to "new-password", reasoning that an explicit token
+       would stop the heuristic split. The browser disproved it: the "Multiple
+       forms" line survived unchanged, and "new-password" additionally told
+       Chrome these WERE account password-change fields -- which is how this
+       form, the one form on the page with no identity and none possible,
+       started drawing the "password forms should have a username field"
+       warning as well. One wrong answer, two warnings.
+
+       They are back on autocomplete="off", which is the accurate token: these
+       are application configuration secrets, not browser-manageable user
+       credentials, and `off` is precisely "do not autofill this and do not
+       offer to manage it". The type stays `password` because the values are
+       genuinely secret and must be masked -- changing it to hide them from
+       Chrome's parser would be tricking the browser at the user's expense.
+
+       The residual "Multiple forms" line is therefore a heuristic false
+       positive on a settings surface, and is documented as one: the rendered
+       structure is valid and the test suite proves it -- sibling forms,
+       nesting depth 1, every tag closed, every control owned, one POST, one
+       Save. Do not split this form to chase it. -->
+
   <form method="post" action="{{ url_for('admin_acesso_salvar_senhas_default') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="access-defaults-head">
@@ -205,16 +271,6 @@
           {% if not mail_status.ready and mail_status.cta_url %}
             <a class="btn" href="{{ mail_status.cta_url }}">{{ mail_status.cta_label }}</a>
           {% endif %}
-        </div>
-        <div class="access-defaults-toggle-form">
-          <span class="access-defaults-toggle-label" id="default-passwords-enabled-label">Ativar senhas padrão</span>
-          {# Paired with the checkbox so an unchecked box is an explicit "0"
-             instead of an absent field -- see admin_acesso_salvar_senhas_default. #}
-          <input type="hidden" name="default_passwords_enabled" value="0">
-          <label class="toggle-switch" aria-labelledby="default-passwords-enabled-label">
-            <input id="default-passwords-enabled" name="default_passwords_enabled" type="checkbox" value="1" {% if default_passwords_enabled %}checked{% endif %}>
-            <span class="toggle-switch-slider" aria-hidden="true"></span>
-          </label>
         </div>
       </div>
     </div>
@@ -325,7 +381,7 @@
           <div class="menu-list">
             <button class="menu-item" type="button" id="access-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
             <button class="menu-item danger" type="button" id="access-action-delete" {% if not auth_can('acesso', 'full') %}hidden disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
-            <button class="menu-item warn" type="button" id="access-action-reset" {% if not default_passwords_enabled %}disabled{% endif %}><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Aplicar senha padrão") }}</span></button>
+            <button class="menu-item warn" type="button" id="access-action-reset"><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Aplicar senha padrão") }}</span></button>
             <button class="menu-item" type="button" id="access-action-new-password"><i class="lucide" data-lucide="lock-keyhole"></i><span>{{ user_message("Nova") }}</span></button>
           </div>
           <div class="menu-hint" id="access-actions-hint">{{ user_message("Selecione uma ou mais linhas para habilitar as ações.") }}</div>
@@ -377,20 +433,30 @@
   'passwordModalMultiple': user_message('A nova senha será aplicada aos {value_1} acessos selecionados.'),
   'defaultCurrentWithValue': user_message('Senha padrão atual: {value_1}'),
   'defaultCurrentMissing': user_message('Senha padrão atual não configurada.'),
-  'passwordHelpEdit': user_message('Se ficar em branco, a senha atual será mantida. A aplicação rápida usa a senha padrão de {value_1}.'),
-  'passwordHelpCreate': user_message('Se ficar em branco, o sistema aplica a senha padrão de {value_1}.'),
+  'passwordHelpEdit': user_message('Se ficar em branco, a senha atual será mantida.'),
+  'passwordHelpCreate': user_message('Se ficar em branco, o usuário deverá definir a senha pelo e-mail de primeiro acesso.'),
+  'applyDefaultLabel': user_message('Aplicar senha padrão'),
   'applyDefaultConfirm': user_message('Aplicar a senha padrão ao acesso de {value_1}?'),
   'sendEmailConfirm': user_message('Enviar {value_1} para {value_2}?')
 }|tojson }}</script>
 
 <div class="impressoes-cards-scroll imp-acesso" id="acesso-scroll-container">
   <div id="acesso-list" class="impressoes-cards" role="list">
+    {#- The final column is the access/onboarding lifecycle, NOT the academic
+        alunos.status. This table carries no academic status column, so
+        "Situação" can only be read as the situation of the acesso each row
+        is. Semantics and tone: app/access_onboarding.py and
+        app/status_presentation.py.
+        `status-col` is the shared DS status-column contract (last, rightmost,
+        centred, intrinsic width) -- it deliberately carries no `left`/`center`
+        of its own. -#}
     {{ cl.header([
       {'text':'Nome', 'class':'left'},
       {'text':'E-mail', 'class':'left'},
       {'text':'Matrícula / Turma', 'class':'left'},
       {'text':'Nível', 'class':'left'},
       {'text':'Perfil base', 'class':'left'},
+      {'text':'Situação', 'class':'status-col'},
     ]) }}
 
     {% if users and users|length %}
@@ -399,12 +465,22 @@
         {% if user.turma_label %}
           {% set student_info = student_info ~ ' • ' ~ user.turma_label %}
         {% endif %}
+        {#- Exactly one pill per row, through the shared .badge.status-pill
+            primitive. Tone comes from the single owner
+            app/status_presentation.py -- no page-local ladder, no colour. -#}
         {{ cl.row([
           {'content': user.nome ~ (' (você)' if user.is_current_user else ''), 'class':'left ellipsis', 'strong': true},
           {'content': user.email or '-', 'class':'left ellipsis'},
           {'content': student_info, 'class':'left ellipsis'},
           {'content': user.nivel_label, 'class':'left ellipsis'},
           {'content': user.tipo_label, 'class':'left ellipsis'},
+          {
+            'content': status_label('acesso', user.access_status),
+            'class':'status-col',
+            'badge': true,
+            'status_badge': true,
+            'status_tone': status_tone('acesso', user.access_status)
+          },
         ], {
           'data-user-id': user.id,
           'data-user-nome': user.nome,
@@ -417,9 +493,10 @@
           'data-user-status': user.aluno_status,
           'data-user-has-aluno': 1 if user.has_aluno else 0,
           'data-user-is-self': 1 if user.is_current_user else 0,
+          'data-user-is-root': 1 if user.is_root_admin else 0,
           'data-reset-url': url_for('admin_acesso_resetar_senha', usuario_id=user.id),
           'data-email-url': url_for('admin_acesso_senha_por_email', usuario_id=user.id),
-          'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user else ''),
+          'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user and not user.is_root_admin else ''),
           'data-level-label': user.nivel_label,
         }) }}
       {% endfor %}
@@ -429,9 +506,9 @@
   </div>
 </div>
 
-<div id="access-modal" class="access-modal-overlay" hidden>
-  <div class="access-modal-card" role="dialog" aria-modal="true" aria-labelledby="access-modal-title">
-    <div class="access-modal-header">
+<div id="access-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="access-modal-title">
+    <div class="modal-header">
       <div>
         <h3 id="access-modal-title"><i class="lucide" data-lucide="shield-plus"></i> {{ user_message("Novo acesso") }}</h3>
         <p id="access-modal-subtitle">{{ user_message("Crie usuários, ajuste o nível de acesso e aplique a senha padrão do perfil.") }}</p>
@@ -439,7 +516,7 @@
       <button class="btn" type="button" id="access-modal-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
 
-    <div class="access-modal-body">
+    <div class="modal-body">
       <form id="access-form" method="post" action="{{ url_for('admin_acesso_salvar') }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="usuario_id" id="access-user-id">
@@ -452,7 +529,14 @@
 
           <div class="access-form-field">
             <label for="access-email">E-mail</label>
-            <input id="access-email" type="email" name="email" required>
+            {# UI-B15 — this is the account's login identity, not a contact
+               field: admin_acesso_salvar stores it as usuarios.email and
+               /login authenticates on it. `username` is therefore the accurate
+               token, and it is the one the sibling password field's
+               `new-password` needs to be read as a create/change-credential
+               pair. autocomplete="off" was rejected: it would silence the
+               warning by lying about what the field is. #}
+            <input id="access-email" type="email" name="email" autocomplete="username" required>
           </div>
 
           <div class="access-form-field">
@@ -473,12 +557,12 @@
                 <svg class="pw-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>
               </button>
             </div>
-            <small id="access-password-help">{{ user_message("Se ficar em branco na criação, o sistema aplica a senha padrão do nível selecionado.") }}</small>
+            <small id="access-password-help">{{ user_message("Se ficar em branco, o usuário deverá definir a senha pelo e-mail de primeiro acesso.") }}</small>
           </div>
 
           <div class="access-form-field full">
             <label class="access-row-muted">Padrão do nível</label>
-            <div class="access-note access-default-note"><i class="lucide" data-lucide="badge-help"></i><span id="access-default-current">{{ user_message("Senha padrão atual: {value_1}").replace('{value_1}', access_defaults.administrativo) }}</span></div>
+            <div class="form-note"><i class="lucide" data-lucide="badge-help"></i><span id="access-default-current">{{ user_message("Senha padrão atual: {value_1}").replace('{value_1}', access_defaults.administrativo) }}</span></div>
           </div>
         </div>
 
@@ -505,7 +589,7 @@
                         <div>
                           <strong>{{ item.label }}</strong>
                         </div>
-                        <span class="access-scope-pill none" data-resource-effective-pill="{{ item.resource }}">Nenhum</span>
+                        <span class="badge status-pill status-neutral" data-resource-effective-pill="{{ item.resource }}" data-scope="none">Nenhum</span>
                       </div>
                       <select name="scope_{{ item.resource }}" data-resource-select="{{ item.resource }}">
                         {% for option in access_scope_options %}
@@ -550,32 +634,32 @@
       </form>
     </div>
 
-    <div class="access-modal-footer">
+    <div class="modal-footer">
       <button class="btn" type="button" id="access-modal-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="submit" form="access-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar acesso</span></button>
     </div>
   </div>
 </div>
 
-<div id="access-confirm-modal" class="access-modal-overlay" hidden>
-  <div class="access-modal-card access-confirm-card" role="dialog" aria-modal="true" aria-labelledby="access-confirm-title" aria-describedby="access-confirm-text">
-    <div class="access-modal-header">
+<div id="access-confirm-modal" class="modal-overlay" hidden>
+  <div class="modal-card access-confirm-card" role="dialog" aria-modal="true" aria-labelledby="access-confirm-title" aria-describedby="access-confirm-text">
+    <div class="modal-header">
       <div>
         <h3 id="access-confirm-title"><i class="lucide" data-lucide="circle-help"></i> Confirmar ação</h3>
         <p id="access-confirm-text"></p>
       </div>
       <button class="btn" type="button" id="access-confirm-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
-    <div class="access-modal-footer">
+    <div class="modal-footer">
       <button class="btn" type="button" id="access-confirm-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="button" id="access-confirm-submit">Confirmar</button>
     </div>
   </div>
 </div>
 
-<div id="access-password-modal" class="access-modal-overlay" hidden>
-  <div class="access-modal-card" role="dialog" aria-modal="true" aria-labelledby="access-password-modal-title">
-    <div class="access-modal-header">
+<div id="access-password-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="access-password-modal-title">
+    <div class="modal-header">
       <div>
         <h3 id="access-password-modal-title"><i class="lucide" data-lucide="lock-keyhole"></i> Nova senha</h3>
         <p id="access-password-modal-subtitle">Defina uma nova senha para os acessos selecionados.</p>
@@ -583,9 +667,47 @@
       <button class="btn" type="button" id="access-password-modal-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
 
-    <div class="access-modal-body">
+    <div class="modal-body">
       <form id="access-password-form" method="post" action="{{ url_for('admin_acesso_definir_senha') }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {#- UI-B15 — the account identity this credential belongs to, for
+            browser accessibility / password-manager machinery: Chrome asks a
+            password form to carry an "(optionally hidden) username field", and
+            without one it cannot tell whose password is being set.
+
+            FOLLOW-UP CORRECTION. The first attempt used the HTML `hidden`
+            attribute and the browser proved it insufficient -- Chrome kept
+            emitting the warning. `hidden` resolves to `display:none` in the UA
+            stylesheet, so the element is not rendered, and a field the layout
+            never produces is not a field the password manager can associate.
+            "Optionally hidden" in Chrome's message means visually hidden, not
+            removed. It is now the shared `.sr-only` primitive
+            (modern-style.css): present in the layout, zero visual footprint,
+            so the dialog's geometry is unchanged and the e-mail is still not
+            visibly repeated -- the modal already names the selection in
+            #access-password-selection-count.
+
+            `readonly` + `tabindex="-1"`: the administrator does not edit the
+            account identity here and it must not appear in the dialog's tab
+            order. `aria-hidden` is safe only because `tabindex="-1"` makes it
+            unfocusable; the selection is announced by the visible text above.
+
+            It carries NO `name`, deliberately. The value is a browser hint and
+            nothing else -- the real POST body is built by hand in the submit
+            handler below and sends `usuario_ids`. admin_acesso_definir_senha
+            reads exactly `usuario_ids` and `nova_senha` and ignores every
+            other field, so an extra name would be harmless; having none makes
+            it *impossible* for this hint to participate in a credential
+            mutation. Chrome identifies a field by its `name` or, failing that,
+            its `id`, and the `id` is present.
+
+            The value is set by openPasswordModal() from the selected row and
+            is never invented: with one row selected it is that account's
+            e-mail; a bulk selection has no single identity, so it stays empty
+            rather than naming an account whose password is only one of
+            several being replaced. -#}
+        <input id="access-password-username" class="sr-only" type="email"
+               autocomplete="username" value="" readonly tabindex="-1" aria-hidden="true">
         <div class="access-form-grid">
           <div class="access-form-field full">
             <label for="access-password-new-value">Nova senha</label>
@@ -602,7 +724,7 @@
       </form>
     </div>
 
-    <div class="access-modal-footer">
+    <div class="modal-footer">
       <button class="btn" type="button" id="access-password-modal-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="submit" form="access-password-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar senha</span></button>
     </div>
@@ -618,7 +740,6 @@
     const accessProfileDefaults = JSON.parse(document.getElementById('access-profile-defaults-data')?.textContent || '{}');
     const accessUsers = JSON.parse(document.getElementById('access-users-data')?.textContent || '{}');
     const accessMessageTemplates = JSON.parse(document.getElementById('access-message-templates')?.textContent || '{}');
-    const defaultPasswordsEnabled = {{ default_passwords_enabled|tojson }};
     const mailAvailable = {{ mail_status.ready|tojson }};
     const toolbarQuery = window.createToolbarQueryHelpers();
     window.initToolbarLiveSearch?.({ inputSelector: '#busca-acesso', rowsRootSelector: '#acesso-list' });
@@ -666,6 +787,7 @@
     const passwordModalClose = document.getElementById('access-password-modal-close');
     const passwordModalCancel = document.getElementById('access-password-modal-cancel');
     const passwordInputNewValue = document.getElementById('access-password-new-value');
+    const passwordUsername = document.getElementById('access-password-username');
     const passwordSelectionCount = document.getElementById('access-password-selection-count');
     const confirmModal = document.getElementById('access-confirm-modal');
     const confirmText = document.getElementById('access-confirm-text');
@@ -677,13 +799,6 @@
     let confirmResolver = null;
 
     const isStudentLevel = (level) => level === 'usuario' || level === 'usuario_teste';
-    const levelLabels = {
-      admin_total: 'Admin',
-      consultivo: 'Consultor',
-      administrativo: 'Coordenador',
-      usuario: 'Usuário',
-      usuario_teste: 'Usuário teste'
-    };
     const scopeLabels = {
       none: 'Nenhum',
       view: 'Leitura',
@@ -707,6 +822,14 @@
       return getSelectedRows().filter((row) => !!row.getAttribute('data-user-id'));
     }
 
+    // Same authority as the floating bar, so the bulk action can never fire a
+    // POST the backend is known to refuse.
+    function getSelectedRowsForDefaultPassword(){
+      return getSelectedRows().filter(
+        (row) => getUserPayload(row.getAttribute('data-user-id') || '')?.canApplyDefaultPassword === true
+      );
+    }
+
     function closeActionsMenu(){
       if (!actionsButton || !actionsMenu) return;
       actionsMenu.hidden = true;
@@ -718,10 +841,14 @@
       const selectedRows = getSelectedRows();
       const selectedCount = selectedRows.length;
       const selectedDeletable = getSelectedRowsWithDelete().length;
+      const selectedResettable = getSelectedRowsForDefaultPassword().length;
       const hasSelection = selectedCount > 0;
 
       actionDeleteButton.disabled = !selectedDeletable || selectedDeletable !== selectedCount;
-      actionResetButton.disabled = !hasSelection || !defaultPasswordsEnabled;
+      // Every selected row must be eligible, the rule "Excluir" already uses:
+      // a bulk action that silently skips part of the selection is worse than
+      // one that refuses to start.
+      actionResetButton.disabled = !selectedResettable || selectedResettable !== selectedCount;
       actionNewPasswordButton.disabled = !hasSelection;
       if (actionSelectAllButton){
         const label = actionSelectAllButton.querySelector('span');
@@ -756,10 +883,17 @@
       return new Promise((resolve) => { confirmResolver = resolve; });
     }
 
-    function submitPost(url){
+    function submitPost(url, fields){
       const formEl = document.createElement('form');
       formEl.method = 'POST';
       formEl.action = url;
+      Object.entries(fields || {}).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        formEl.appendChild(input);
+      });
       window.ensureFormCsrfToken?.(formEl);
       document.body.appendChild(formEl);
       formEl.submit();
@@ -796,6 +930,14 @@
       const selectedRows = getSelectedRowsForPassword();
       if (!selectedRows.length) return;
       passwordForm?.reset();
+      // UI-B15: the hidden username identity, after reset() so it is not wiped
+      // back to its empty default. Exactly one selected row means exactly one
+      // account, and only then is there an identity to declare.
+      if (passwordUsername){
+        passwordUsername.value = selectedRows.length === 1
+          ? (selectedRows[0].getAttribute('data-user-email') || '')
+          : '';
+      }
       if (passwordSelectionCount){
         passwordSelectionCount.textContent = selectedRows.length === 1
           ? accessMessageTemplates.passwordModalSingle
@@ -808,6 +950,8 @@
 
     function closePasswordModal(){
       if (passwordModal) passwordModal.hidden = true;
+      // Do not leave a closed dialog holding an account's e-mail.
+      if (passwordUsername) passwordUsername.value = '';
     }
 
     async function postResetUrls(rows){
@@ -826,14 +970,16 @@
 
     function syncDefaultHint(mode){
       const level = levelInput.value || 'administrativo';
-      const label = levelLabels[level] || 'Coordenador';
       const currentDefault = accessDefaults[level] || '';
       defaultCurrent.textContent = currentDefault
         ? window.appFormatMessage(accessMessageTemplates.defaultCurrentWithValue, { value_1: currentDefault })
         : accessMessageTemplates.defaultCurrentMissing;
+      // A blank password never falls back to the shared default: a new
+      // account is pending until its first access, and an edit keeps the
+      // current credential. The default is only ever applied explicitly.
       passwordHelp.textContent = mode === 'edit'
-        ? window.appFormatMessage(accessMessageTemplates.passwordHelpEdit, { value_1: label })
-        : window.appFormatMessage(accessMessageTemplates.passwordHelpCreate, { value_1: label });
+        ? accessMessageTemplates.passwordHelpEdit
+        : accessMessageTemplates.passwordHelpCreate;
     }
 
     function syncPolicyFields(){
@@ -856,8 +1002,10 @@
         select.disabled = student;
         if (defaultLabel) defaultLabel.textContent = scopeLabels[defaultScope] || 'Nenhum';
         if (effectivePill){
+          // The scope is an access-level value, not a status, so every card
+          // keeps the same neutral DS pill and carries the value in data-scope.
           effectivePill.textContent = scopeLabels[effectiveScope] || 'Nenhum';
-          effectivePill.className = `access-scope-pill ${effectiveScope}`;
+          effectivePill.dataset.scope = effectiveScope;
         }
         if (card) card.setAttribute('data-state', overrideScope === 'inherit' ? 'inherit' : 'custom');
         if (overrideScope !== 'inherit') overrideCount += 1;
@@ -941,6 +1089,10 @@
       enableBulkDelete: false,
       onSelectionChange: (state) => {
         selectedRows = state.selectedRows || [];
+        // UI-B15: the dialog's identity hint belongs to the selection that
+        // opened it. If the selection moves underneath it, drop the hint
+        // rather than let a stale e-mail describe a different account.
+        if (passwordUsername) passwordUsername.value = '';
         syncActionsMenu();
       }
     });
@@ -1012,9 +1164,8 @@
     });
 
     actionResetButton?.addEventListener('click', async () => {
-      if (!defaultPasswordsEnabled) return;
-      const selectedRows = getSelectedRowsForPassword();
-      if (!selectedRows.length) return;
+      const selectedRows = getSelectedRowsForDefaultPassword();
+      if (!selectedRows.length || selectedRows.length !== getSelectedRows().length) return;
       const label = selectedRows.length === 1 ? 'o acesso selecionado' : `os ${selectedRows.length} acessos selecionados`;
       if (!await confirmAction(`Aplicar a senha padrão a ${label}?`, 'Aplicar senha padrão')) return;
       closeActionsMenu();
@@ -1087,7 +1238,7 @@
       {% if auth_can('acesso', 'full') %}
       <button type="button" class="act-btn" data-action="edit" aria-label="Editar acesso" title="Editar"><i data-lucide="edit"></i></button>
       <button type="button" class="act-btn" data-action="email" aria-label="Enviar senha por e-mail" title="Enviar senha por e-mail"><i data-lucide="mail"></i></button>
-      <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Aplicar senha padrão') }}" title="{{ user_message('Aplicar senha padrão') }}" {% if not default_passwords_enabled %}disabled{% endif %}><i data-lucide="key-round"></i></button>
+      <button type="button" class="act-btn warn" data-action="reset" aria-label="{{ user_message('Aplicar senha padrão') }}" title="{{ user_message('Aplicar senha padrão') }}"><i data-lucide="key-round"></i></button>
       <button type="button" class="act-btn danger" data-action="delete" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2"></i></button>
       {% endif %}
     `;
@@ -1119,12 +1270,33 @@
       positionFor(card);
       bar.classList.add('is-visible');
       const deleteBtn = bar.querySelector('[data-action="delete"]');
-      if (deleteBtn) deleteBtn.disabled = data.isSelf;
+      if (deleteBtn){
+        deleteBtn.disabled = data.isSelf || data.isRootAdmin || !data.deleteUrl;
+      }
       const emailBtn = bar.querySelector('[data-action="email"]');
       if (emailBtn){
         emailBtn.disabled = !data.emailUrl || !mailAvailable;
         emailBtn.setAttribute('aria-label', data.emailActionLabel || 'Enviar senha por e-mail');
         emailBtn.setAttribute('title', data.emailActionLabel || 'Enviar senha por e-mail');
+      }
+      // "Aplicar senha padrão" is decided per row by the backend, never here:
+      // root protection and revoked access are already resolved in
+      // the descriptor. A refusal carries its reason, shown through the same
+      // disabled/aria-disabled/title triple the rest of the app uses.
+      const resetBtn = bar.querySelector('[data-action="reset"]');
+      if (resetBtn){
+        const allowed = !!data.canApplyDefaultPassword && !!data.resetUrl;
+        const label = accessMessageTemplates.applyDefaultLabel;
+        const reason = data.applyDefaultPasswordReason || '';
+        resetBtn.disabled = !allowed;
+        if (allowed){
+          resetBtn.removeAttribute('aria-disabled');
+        } else {
+          resetBtn.setAttribute('aria-disabled', 'true');
+        }
+        const hint = allowed || !reason ? label : `${label} — ${reason}`;
+        resetBtn.setAttribute('aria-label', hint);
+        resetBtn.setAttribute('title', hint);
       }
     }
 
@@ -1155,11 +1327,15 @@
         turmaId: card.getAttribute('data-user-turma-id') || '',
         status: card.getAttribute('data-user-status') || 'Ativo',
         isSelf: card.getAttribute('data-user-is-self') === '1',
+        isRootAdmin: card.getAttribute('data-user-is-root') === '1',
         resetUrl: card.getAttribute('data-reset-url') || '',
         emailUrl: card.getAttribute('data-email-url') || '',
         deleteUrl: card.getAttribute('data-delete-url') || '',
         accessOverrides: getUserPayload(card.getAttribute('data-user-id') || '')?.accessOverrides || {},
-        emailActionLabel: getUserPayload(card.getAttribute('data-user-id') || '')?.emailActionLabel || ''
+        emailActionLabel: getUserPayload(card.getAttribute('data-user-id') || '')?.emailActionLabel || '',
+        // Fail closed: a row with no payload offers no shared-default action.
+        canApplyDefaultPassword: getUserPayload(card.getAttribute('data-user-id') || '')?.canApplyDefaultPassword === true,
+        applyDefaultPasswordReason: getUserPayload(card.getAttribute('data-user-id') || '')?.applyDefaultPasswordReason || ''
       });
     });
     scrollWrap?.addEventListener('mouseleave', scheduleHide);
@@ -1170,42 +1346,44 @@
 
     bar.addEventListener('click', async (e) => {
       const btn = e.target.closest('button.act-btn');
-      if (!btn || !currentData) return;
+      // The action descriptor is bound at click time.  Everything below may
+      // await a confirmation modal, and the hover lifecycle (scheduleHide ->
+      // hideBar) clears `currentData` while that await is pending, so reading
+      // the live variable after an await is a null dereference by contract.
+      const target = currentData;
+      if (!btn || !target) return;
       const action = btn.getAttribute('data-action');
       if (action === 'edit'){
-        openModal('edit', currentData);
+        openModal('edit', target);
         return;
       }
       if (action === 'reset'){
-        if (!defaultPasswordsEnabled || !currentData.resetUrl) return;
+        if (!target.canApplyDefaultPassword || !target.resetUrl) return;
         const confirmed = await confirmAction(
-          window.appFormatMessage(accessMessageTemplates.applyDefaultConfirm, { value_1: currentData.nome }),
+          window.appFormatMessage(accessMessageTemplates.applyDefaultConfirm, { value_1: target.nome }),
           'Aplicar senha padrão'
         );
-        if (confirmed) submitPost(currentData.resetUrl);
+        if (confirmed) submitPost(target.resetUrl);
         return;
       }
       if (action === 'email'){
-        if (!currentData.emailUrl) return;
+        if (!target.emailUrl || !mailAvailable) return;
         const confirmed = await confirmAction(
           window.appFormatMessage(accessMessageTemplates.sendEmailConfirm, {
-            value_1: (currentData.emailActionLabel || 'instruções por e-mail').toLowerCase(),
-            value_2: currentData.email
+            value_1: (target.emailActionLabel || 'instruções por e-mail').toLowerCase(),
+            value_2: target.email
           }),
-          currentData.emailActionLabel || 'Enviar'
+          target.emailActionLabel || 'Enviar'
         );
-        if (confirmed) submitPost(currentData.emailUrl);
+        if (confirmed) submitPost(target.emailUrl);
         return;
       }
       if (action === 'delete'){
-        if (!currentData.deleteUrl || currentData.isSelf) return;
-        if (!confirm(`Excluir o acesso de ${currentData.nome}?`)) return;
-        const formEl = document.createElement('form');
-        formEl.method = 'POST';
-        formEl.action = currentData.deleteUrl;
-        window.ensureFormCsrfToken?.(formEl);
-        document.body.appendChild(formEl);
-        formEl.submit();
+        if (!target.deleteUrl || target.isSelf || target.isRootAdmin) return;
+        // "Excluir acesso" is a revocation: the login ends, the person and
+        // every historical attribution stay. One model, one confirmation.
+        if (!confirm(`Excluir o acesso de ${target.nome}?`)) return;
+        submitPost(target.deleteUrl);
       }
     });
 

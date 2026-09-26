@@ -14,6 +14,79 @@
    unrouted demo template removed in DS-3b. */
 :root{
   --imp-col-gap:12px;
+
+  /* ================= STATUS COLUMN TRACK (shared contract) =================
+     Rules at the end of this file; documented in docs/design-system/README.md
+     §2.6b.
+
+     THE TRACK IS SIZED TO THE DOMAIN, NOT TO THE DATA.
+     A status column reserves the width of the LARGEST STATUS ITS DOMAIN
+     SUPPORTS -- whether or not that status appears in the rows currently
+     rendered. Paging, filtering or searching a list must never move the
+     column, because the reservation never consults the row population.
+
+     `max-content` is therefore WRONG here and was the previous defect: it
+     fits the widest pill *present*, so the same list shifted its status
+     column between pages. `fr` is wrong for the opposite reason -- it eats
+     the row's leftover width. The track below is a plain computed length:
+     stable, and not flexible.
+
+     DERIVATION
+       --imp-status-col-chars   how many characters the domain's longest
+                                supported label has. This is the only value a
+                                list supplies, and it is semantic: it names a
+                                fact about the vocabulary, not a pixel guess.
+       1ch                      the advance of "0" in the inherited font, i.e.
+                                one character's worth of width.
+       --imp-status-col-font-scale
+                                `ch` resolves against the font-size of the box
+                                the calc() runs in -- the grid container, at
+                                --font-size-base (14px) -- but the text being
+                                reserved for is the pill's, at 11px. Without
+                                this term the column over-reserves by about a
+                                third, which is how the first attempt at a fixed
+                                width ended up TOO WIDE. The ratio is the two
+                                declared font sizes and nothing else:
+                                11px (.badge.status-pill) / 14px
+                                (--font-size-base). CSS cannot divide two
+                                lengths, so it is written unitless.
+
+                                What is left after scaling is a small, wanted
+                                margin: "0" is wider than the average lowercase
+                                glyph, so N scaled ch still exceeds N characters
+                                of real mixed-case text. That surplus is the
+                                no-clip allowance and it absorbs the semibold
+                                weight and any font fallback. It is a
+                                consequence of `ch`, not a guessed padding.
+       --imp-status-col-chrome  everything around the text, taken from the two
+                                owners rather than measured:
+                                  .badge.status-pill (modern-style.css)
+                                    padding 0 6px ............. 12px
+                                    border 1px x2 .............  2px
+                                    ::before dot 5px + gap 5px  10px
+                                  .impresso-card .cell (this file)
+                                    padding 0 2px ..............  4px
+                                                                -----
+                                                                 28px
+
+     The default is the longest label in ANY SGAA status domain
+     ("Deferida Parcialmente", requisições, 21 characters), so a list that
+     adopts the contract without declaring its own domain gets a column that is
+     too wide rather than one that silently truncates. Every adopting list
+     SHOULD declare --imp-status-col-chars for its own vocabulary;
+     tests/test_status_column_geometry_ui_b08.py pins the declared number
+     against the domain's real label set in app/status_presentation.py, so a
+     new or renamed status cannot outgrow the reservation unnoticed.
+
+     Pills never wrap regardless: `.badge.status-pill` and the shared `.cell`
+     both declare `white-space:nowrap`. */
+  --imp-status-col-chars:21;
+  --imp-status-col-chrome:28px;
+  --imp-status-col-font-scale:calc(11 / 14);
+  --imp-status-col:calc(
+    var(--imp-status-col-chars) * 1ch * var(--imp-status-col-font-scale)
+    + var(--imp-status-col-chrome)
+  );
 }
 
 /* ====== TOOLBAR + INPUT GROUP ======
@@ -582,6 +655,49 @@
 .input-group[id^="grp-ordenar"] > .input-chip:focus-visible{
   outline:2px solid var(--focus-ring-color);
   outline-offset:-2px;
+}
+
+/* =============================================================
+   SHARED STATUS COLUMN CONTRACT  (.cell.status-col)
+   -------------------------------------------------------------
+   The Design System rule for any list that carries a semantic
+   status/situação column:
+
+     * it is the LAST data column, i.e. as far right as the row's data
+       layout allows (actions are a separate contract and do not sit in
+       the grid, so they do not change this);
+     * header text and every value are CENTRED;
+     * the track is sized to its content via `--imp-status-col`
+       (intrinsic, see the token block at the top of this file) and never
+       absorbs leftover width;
+     * the descriptive columns own the flexible space.
+
+   A list opts in by giving the last header cell and the last row cell
+   `class="... status-col"` and using `var(--imp-status-col)` as its final
+   `--imp-cols` track. Nothing page-local is required, and nothing
+   page-local may re-declare the alignment or the width -- that is the
+   whole point of this block.
+
+   PLACEMENT AND SPECIFICITY, both deliberate:
+   several `.imp-*` scopes above set `.impresso-card .cell{ justify-content:
+   flex-start }` for their whole row and then re-centre individual columns
+   with `:nth-child()`. Those are (0,3,0) and (0,4,0) respectively. The
+   selector below is (0,4,0) AND sits after every one of them, so it wins
+   both on specificity against the broad rules and on source order against
+   an equally specific `:nth-child()`. That is why the status column needs
+   no `!important` anywhere and no per-list nth-child rule.
+   ============================================================= */
+.impressoes-cards .impresso-card .cell.status-col,
+.impressoes-cards .impresso-card.header .cell.status-col{
+  justify-content:center;
+  text-align:center;
+}
+/* The pill is the cell's only child and must never wrap or be clipped by the
+   ellipsis the generic `.cell` applies to descriptive text. The track is sized
+   to it, so there is nothing to truncate. */
+.impressoes-cards .impresso-card .cell.status-col > .badge.status-pill{
+  white-space:nowrap;
+  flex:0 0 auto;
 }
 
 @media print {

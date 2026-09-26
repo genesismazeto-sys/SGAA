@@ -1,3 +1,5 @@
+import secrets
+
 from app.auth import (
     DEFAULT_ACCESS_PASSWORDS,
     canonicalize_access_level,
@@ -7,15 +9,71 @@ from app.db_maintenance import ensure_usuario_access_schema
 from app.security.passwords import hash_password, hash_password_batch
 
 
+# prod-1/v11 credential states -- see app/prod1_credential_pending_ddl.py.
+#
+#   pending   no usable password credential; password login is refused by state
+#   default   an administrator explicitly applied the shared profile default
+#   personal  an individual password
+#
+# Whether an account may authenticate with a password is a property of the
+# account alone: no global setting widens or narrows it.
+CREDENTIAL_STATE_PENDING = "pending"
 CREDENTIAL_STATE_DEFAULT = "default"
 CREDENTIAL_STATE_PERSONAL = "personal"
-_CREDENTIAL_STATES = {CREDENTIAL_STATE_DEFAULT, CREDENTIAL_STATE_PERSONAL}
+_CREDENTIAL_STATES = {
+    CREDENTIAL_STATE_PENDING,
+    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PERSONAL,
+}
+#: The states whose stored hash is a credential login may verify.
+PASSWORD_LOGIN_CREDENTIAL_STATES = frozenset(
+    {CREDENTIAL_STATE_DEFAULT, CREDENTIAL_STATE_PERSONAL}
+)
 
 
 def _validate_credential_state(state: str) -> str:
     if state not in _CREDENTIAL_STATES:
         raise ValueError(f"invalid credential state: {state!r}")
     return state
+
+
+def credential_state_allows_password_login(state) -> bool:
+    """Whether login may compare a password against this account's hash."""
+    return str(state or "") in PASSWORD_LOGIN_CREDENTIAL_STATES
+
+
+def first_access_redeemable(state) -> bool:
+    """Whether a first-access link may be redeemed for an account in ``state``.
+
+    First access is onboarding: it establishes a credential that does not exist
+    yet, so only ``pending`` qualifies. A ``default`` or ``personal`` account
+    already holds one; its e-mail path is ``password_reset``. Checked at the
+    moment of redemption, so a link that outlived its account's state -- a
+    stale historical token, migrated data, a writer that forgot to invalidate
+    -- is refused rather than trusted.
+    """
+    return str(state or "") == CREDENTIAL_STATE_PENDING
+
+
+def unusable_password_hash() -> str:
+    """A well-formed hash of a secret nobody holds.
+
+    ``usuarios.senha`` is NOT NULL, so a ``pending`` account still stores a
+    hash. Login refuses ``pending`` by state before comparing anything; this
+    value is the second wall, so even a misread state could not match.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
+def prepare_pending_password_hashes(count: int) -> list[str]:
+    """``count`` unusable hashes for new ``pending`` accounts, in parallel.
+
+    For batch creation: the PBKDF2 cost leaves the write loop. One random
+    secret, never retained, with a distinct salt per hash.
+    """
+    if count <= 0:
+        return []
+    return hash_password_batch(secrets.token_urlsafe(32), count)
 
 
 def set_usuario_credential_state(conn, usuario_id: int, state: str) -> None:
@@ -34,9 +92,44 @@ def set_usuario_credential_state(conn, usuario_id: int, state: str) -> None:
 
 def get_usuario_credential(conn, usuario_id: int):
     return conn.execute(
-        "SELECT estado,auth_version FROM usuario_credenciais WHERE usuario_id=?",
+        "SELECT estado,auth_version,acesso_ativo FROM usuario_credenciais WHERE usuario_id=?",
         (int(usuario_id),),
     ).fetchone()
+
+
+def usuario_access_is_active(conn, usuario_id: int) -> bool:
+    """Whether this account is permitted to authenticate at all (prod-1/v9).
+
+    Orthogonal to ``estado``, which only records where the password came from.
+    A missing credential row is treated as inactive: an account with no
+    credential is structurally incomplete, not implicitly allowed.
+    """
+    row = conn.execute(
+        "SELECT acesso_ativo FROM usuario_credenciais WHERE usuario_id=?",
+        (int(usuario_id),),
+    ).fetchone()
+    return bool(row) and int(row[0]) == 1
+
+
+def set_usuario_access_active(conn, usuario_id: int, active: bool) -> None:
+    """Flip the durable access status, bumping auth_version when revoking.
+
+    Revocation has to end live sessions, and the session guard compares the
+    stamped ``auth_version``; reactivation deliberately does not bump, because
+    there is nothing to sign out.
+    """
+    if active:
+        conn.execute(
+            "UPDATE usuario_credenciais SET acesso_ativo=1, atualizado_em=datetime('now') "
+            "WHERE usuario_id=?",
+            (int(usuario_id),),
+        )
+        return
+    conn.execute(
+        "UPDATE usuario_credenciais SET acesso_ativo=0, "
+        "auth_version=auth_version+1, atualizado_em=datetime('now') WHERE usuario_id=?",
+        (int(usuario_id),),
+    )
 
 
 def get_usuario_auth_version(conn, usuario_id: int) -> int | None:
@@ -235,6 +328,12 @@ def create_usuario_with_default_access(
 
 
 def create_usuario_with_default_password(conn, nome: str, email: str, user_type: str):
+    """Create an account with the profile default EXPLICITLY applied (``default``).
+
+    Not the blank-password path: an account created without a password is
+    ``pending`` (``create_usuario_pending``). This exists for callers that
+    deliberately provision the shared default, such as demo seeding.
+    """
     senha_padrao = _default_password_for_user_type(conn, user_type)
     return create_usuario_with_default_access(
         conn,
@@ -246,17 +345,28 @@ def create_usuario_with_default_password(conn, nome: str, email: str, user_type:
     )
 
 
-def prepare_default_password_hashes(conn, user_type: str, count: int) -> list[str]:
-    """Hashes da senha padrão prontos para ``count`` novos usuários do tipo.
+def create_usuario_pending(
+    conn,
+    nome: str,
+    email: str,
+    user_type: str,
+    *,
+    senha_hash: str | None = None,
+):
+    """Create an account with no usable password credential (``pending``).
 
-    Serve para criação em lote: o custo do PBKDF2 sai do laço de gravação e
-    passa a rodar em paralelo antes dele. Os hashes são intercambiáveis entre
-    si (mesma senha, salts distintos), então podem ser consumidos em qualquer
-    ordem.
+    The account waits for a completed first access (-> ``personal``) or an
+    explicit "Aplicar senha padrão" (-> ``default``). ``senha_hash`` lets a
+    batch caller pass a precomputed ``prepare_pending_password_hashes`` value.
     """
-    if count <= 0:
-        return []
-    return hash_password_batch(_default_password_for_user_type(conn, user_type), count)
+    return create_usuario_with_default_access(
+        conn,
+        nome,
+        email,
+        senha_hash or unusable_password_hash(),
+        user_type,
+        credential_state=CREDENTIAL_STATE_PENDING,
+    )
 
 
 def normalize_usuario_access_for_user_type(conn, usuario_id: int | None):

@@ -7,6 +7,7 @@ main; registra apenas rotas legadas via LegacyRouteSpec.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 
 from flask import (
@@ -20,6 +21,11 @@ from flask import (
 )
 
 from app.academics import resequence_turma_aluno_matriculas_for_ids
+from app.access_default_password import (
+    default_password_eligibility,
+    default_password_eligibility_map,
+)
+from app.access_onboarding import access_status_map
 from app.admin_access import _load_admin_access_context
 from app.auth import (
     ACCESS_LEVEL_META,
@@ -42,19 +48,21 @@ from app.db_maintenance import (
 from app.security.passwords import hash_password
 from app.password_email import issue_and_send_password_email, password_email_status
 from app.password_tokens import PURPOSE_FIRST_ACCESS, PURPOSE_PASSWORD_RESET
-from app.settings import (
-    get_default_passwords_enabled,
-    save_default_passwords_enabled,
-)
 from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
+from app.root_admin import is_root_admin, resolve_root_admin_id
 from app.user_accounts import (
     CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PENDING,
     CREDENTIAL_STATE_PERSONAL,
     _access_defaults_map,
     create_usuario_with_access_level,
     get_usuario_auth_version,
+    invalidate_usuario_password_tokens,
+    set_usuario_access_active,
     set_usuario_password_hash,
     set_usuarios_password_hash,
+    unusable_password_hash,
+    usuario_access_is_active,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -67,6 +75,9 @@ from app.web.filters import (
 from app.web.pagination import get_pagination, wants_pagination
 from app.web.request import _is_ajax_request
 from utils.messages import flash
+
+
+logger = logging.getLogger(__name__)
 
 
 def _persist_user_access_overrides(conn, usuario_id: int, access_level: str, overrides: dict[str, str]) -> None:
@@ -93,6 +104,61 @@ def _parse_access_overrides_from_form(form) -> dict[str, str]:
             continue
         overrides[recurso] = normalize_permission_scope(value, "none")
     return overrides
+
+
+def _revoke_usuario_access(conn, usuario_id: int) -> None:
+    """End an account's ability to authenticate without deleting the row.
+
+    This is the domain operation behind "Excluir acesso" for any account that
+    history still references (an upload's ``uploader_user_id``, for instance).
+    The usuarios row -- and every attribution pointing at it -- survives
+    intact; what goes is the ability to log in:
+
+    * ``acesso_ativo`` becomes 0.  This is the durable fact, checked at login
+      before any password comparison can matter, so a revoked account is
+      refused even with a correct personal or applied default password;
+    * the same write bumps ``auth_version``, which the session guard reads on
+      every request, so live sessions die on their next request;
+    * outstanding first-access/reset tokens are invalidated, so a password
+      e-mail already in flight cannot hand the account back;
+    * the stored hash is replaced by an unusable random value and the state
+      becomes ``pending``, so nothing is left that could match even if the
+      status were later misread.
+
+    Reactivation is an explicit administrative act -- see
+    ``_reactivate_usuario_access``.  The caller owns the transaction.
+    """
+    set_usuario_password_hash(
+        conn,
+        usuario_id,
+        unusable_password_hash(),
+        credential_state=CREDENTIAL_STATE_PENDING,
+    )
+    invalidate_usuario_password_tokens(conn, [usuario_id])
+    set_usuario_access_active(conn, usuario_id, False)
+
+
+def _reactivate_usuario_access(conn, usuario_id: int, *, senha: str, nivel_acesso: str) -> None:
+    """Explicitly restore login capability to a previously revoked account.
+
+    Reactivation always defines the credential state outright rather than
+    inheriting whatever the revoked row happened to carry.  An explicit
+    password makes the account ``personal``; without one it is ``pending``,
+    exactly as a newly created account would be -- so the first-access e-mail
+    is the coherent way back in, and "Aplicar senha padrão" the explicit
+    alternative.
+
+    Any token issued before revocation stays invalid: this re-issues nothing.
+    """
+    if senha:
+        senha_hash = hash_password(senha)
+        credential_state = CREDENTIAL_STATE_PERSONAL
+    else:
+        senha_hash = unusable_password_hash()
+        credential_state = CREDENTIAL_STATE_PENDING
+    set_usuario_password_hash(conn, usuario_id, senha_hash, credential_state=credential_state)
+    invalidate_usuario_password_tokens(conn, [usuario_id])
+    set_usuario_access_active(conn, usuario_id, True)
 
 
 def _turma_label_by_id(conn, turma_id: int | None) -> str:
@@ -122,15 +188,21 @@ def admin_acesso():
     ensure_usuario_access_schema(conn)
     ensure_usuario_profile_schema(conn)
 
+    # Counts describe the active surface, matching the list below.
     summary_rows = conn.execute(
-        "SELECT nivel_acesso, COUNT(*) AS total FROM usuarios GROUP BY nivel_acesso"
+        """
+        SELECT u.nivel_acesso AS nivel_acesso, COUNT(*) AS total
+          FROM usuarios u
+          LEFT JOIN usuario_credenciais c ON c.usuario_id = u.id
+         WHERE COALESCE(c.acesso_ativo, 1) = 1
+         GROUP BY u.nivel_acesso
+        """
     ).fetchall()
     summary = {"admin_total": 0, "consultivo": 0, "administrativo": 0, "usuario": 0, "usuario_teste": 0}
     for row in summary_rows:
         summary[canonicalize_access_level(row["nivel_acesso"])] = row["total"]
 
     access_defaults = _access_defaults_map(conn)
-    default_passwords_enabled = get_default_passwords_enabled(conn)
     mail_status = password_email_status(conn)
     turmas = conn.execute(
         "SELECT id, COALESCE(codigo, nome) AS nome FROM turmas ORDER BY nome"
@@ -142,7 +214,11 @@ def admin_acesso():
         LEFT JOIN turmas t ON t.id = a.turma_id
         LEFT JOIN usuario_credenciais c ON c.usuario_id = u.id
     """
-    where = []
+    # A revoked access is not an ordinary access: it is history kept for
+    # attribution. The active list therefore excludes it, while the identity
+    # stays findable by the re-creation path in admin_acesso_salvar, which
+    # reuses it rather than minting a duplicate.
+    where = ["COALESCE(c.acesso_ativo, 1) = 1"]
     params = []
     if q:
         like = f"%{q}%"
@@ -206,10 +282,22 @@ def admin_acesso():
 
     rows = conn.execute(query, params_exec).fetchall()
     current_user_id = session.get("user_id")
+    root_admin_id = resolve_root_admin_id(conn)
+    # Access/onboarding lifecycle for the whole page in two queries -- never one
+    # per row. Owner: app/access_onboarding.py, which derives it from durable
+    # credential and confirmed-delivery evidence alone.
+    access_status_by_id = access_status_map(conn, [row["id"] for row in rows])
+    # Whether "Aplicar senha padrão" is offered, per row, from the single owner
+    # the endpoint also consults -- app/access_default_password.py. The action
+    # bar must never re-derive this from the level or the pill.
+    default_password_by_id = default_password_eligibility_map(
+        conn, [row["id"] for row in rows]
+    )
     users = []
     users_payload = {}
     for row in rows:
         nivel = canonicalize_access_level(row["nivel_acesso"])
+        default_password = default_password_by_id[row["id"]]
         tipo = (row["tipo"] or "admin").strip().lower()
         is_student = tipo == "aluno"
         access_context = _load_admin_access_context(conn, row["id"]) if not is_student else {
@@ -233,7 +321,12 @@ def admin_acesso():
                 "aluno_status": row["aluno_status"] if is_student else "Ativo",
                 "has_aluno": bool(row["aluno_id"]) and is_student,
                 "is_current_user": row["id"] == current_user_id,
+                "is_root_admin": row["id"] == root_admin_id,
                 "scope_summary": access_context.get("scope_groups", []),
+                # Distinct key from "aluno_status": that one is the academic
+                # Ativo/Inativo, this one is the login lifecycle. They must never
+                # be read for each other.
+                "access_status": access_status_by_id.get(row["id"], ""),
             }
         )
         users_payload[str(row["id"])] = {
@@ -247,17 +340,28 @@ def admin_acesso():
             "turmaLabel": row["turma_label"] if is_student else "",
             "status": row["aluno_status"] if is_student else "Ativo",
             "isSelf": row["id"] == current_user_id,
+            # The root administrator is the recovery path: the UI must not
+            # offer to delete, revoke or demote it.  The backend refuses
+            # regardless -- this only keeps the affordance honest.
+            "isRootAdmin": row["id"] == root_admin_id,
             "canCustomize": not is_student,
             "accessOverrides": access_context.get("overrides", {}),
             "effectiveScopes": access_context.get("effective_scopes", {}),
             "scopeGroups": access_context.get("scope_groups", []),
             "credentialState": row["credential_state"],
+            # Mirrors the Situação pill: only a pending account is still being
+            # onboarded; one holding a usable credential gets a reset link.
             "emailActionLabel": (
                 "Enviar acesso"
-                if row["credential_state"] == CREDENTIAL_STATE_DEFAULT
+                if row["credential_state"] == CREDENTIAL_STATE_PENDING
                 else "Redefinir por e-mail"
             ),
             "emailActionUrl": url_for("admin_acesso_senha_por_email", usuario_id=row["id"]),
+            # Authoritative, not a hint: the action bar renders exactly this.
+            # The reason travels with it so a disabled action can say why
+            # instead of looking broken.
+            "canApplyDefaultPassword": default_password.allowed,
+            "applyDefaultPasswordReason": default_password.reason,
         }
 
     filter_schema = [
@@ -344,7 +448,6 @@ def admin_acesso():
         "admin_acesso.html",
         summary=summary,
         access_defaults=access_defaults,
-        default_passwords_enabled=default_passwords_enabled,
         mail_status=mail_status,
         access_level_choices=access_level_choices,
         access_profile_defaults=access_profile_defaults,
@@ -384,17 +487,11 @@ def admin_acesso_salvar_senhas_default():
             """,
             (nivel, senha_padrao),
         )
-    # Same settings surface, same Save: the activation switch rides along with
-    # the configured values.  It only writes configuracoes_app -- it never
-    # rewrites a configured default or any usuarios.senha hash.
-    #
-    # The panel pairs the checkbox with a hidden "0", so a real submit always
-    # carries the field and an unchecked box is an explicit off.  A caller that
-    # omits the field entirely is only saving passwords and must not silently
-    # disable the mechanism.
-    activation = request.form.getlist("default_passwords_enabled")
-    if activation:
-        save_default_passwords_enabled(conn, "1" in activation)
+    # Configuration only.  Saving writes configuracoes_acesso and nothing else:
+    # no usuarios.senha hash and no credential state moves.  An account opts
+    # into the shared default only through "Aplicar senha padrão", which hashes
+    # the value configured at THAT moment into the account's own row -- so an
+    # edit here reaches an account only when the default is (re)applied to it.
     conn.commit()
     flash("Senhas padrão atualizadas com sucesso.", "success")
     return redirect(url_for("admin_acesso"))
@@ -426,6 +523,32 @@ def admin_acesso_salvar():
     if status_aluno not in {"Ativo", "Inativo"}:
         status_aluno = "Ativo"
 
+    # Re-creating access for somebody whose access was revoked must reuse the
+    # preserved identity, never mint a second one.  The revoked usuarios row
+    # still owns the UNIQUE e-mail and is still the uploader of record for its
+    # history, so a fresh INSERT would both collide and orphan that history.
+    # Matching on e-mail OR matrícula covers the two ways an admin identifies
+    # the same person on this screen.
+    reactivating = False
+    if not usuario_id:
+        revoked = conn.execute(
+            """
+            SELECT u.id AS id
+              FROM usuarios u
+              JOIN usuario_credenciais c ON c.usuario_id = u.id
+              LEFT JOIN alunos a ON a.usuario_id = u.id
+             WHERE c.acesso_ativo = 0
+               AND (LOWER(u.email) = LOWER(?)
+                    OR (? <> '' AND a.matricula = ?))
+             ORDER BY u.id
+             LIMIT 1
+            """,
+            (email, matricula, matricula),
+        ).fetchone()
+        if revoked:
+            usuario_id = int(revoked["id"])
+            reactivating = True
+
     dup_email = conn.execute(
         "SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND (? IS NULL OR id <> ?)",
         (email, usuario_id, usuario_id),
@@ -434,8 +557,29 @@ def admin_acesso_salvar():
         flash("Já existe um usuário com este e-mail.", "error")
         return redirect(url_for("admin_acesso"))
 
+    # The root administrator is the system's only recovery path.  Its password
+    # may be changed freely -- the break-glass credential is independent of it
+    # -- but its identity may not be moved or demoted here: the root identity
+    # is keyed to the configured address, so editing that address through this
+    # screen would silently leave the installation with no root at all.
+    if usuario_id and is_root_admin(conn, usuario_id):
+        root_row = conn.execute(
+            "SELECT email FROM usuarios WHERE id = ?", (usuario_id,)
+        ).fetchone()
+        if root_row and email != str(root_row["email"] or "").strip().lower():
+            flash(
+                "O e-mail do administrador raiz não pode ser alterado por esta tela.",
+                "error",
+            )
+            return redirect(url_for("admin_acesso"))
+        if user_type != "admin" or nivel_acesso != "admin_total":
+            flash(
+                "O administrador raiz não pode ser rebaixado: é a única via de recuperação do sistema.",
+                "error",
+            )
+            return redirect(url_for("admin_acesso"))
+
     turma_label = _turma_label_by_id(conn, turma_id)
-    defaults = _access_defaults_map(conn)
 
     try:
         if usuario_id:
@@ -443,44 +587,75 @@ def admin_acesso_salvar():
             if not usuario:
                 flash("Usuário não encontrado.", "error")
                 return redirect(url_for("admin_acesso"))
-            if senha:
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
-                    (nome, email, user_type, nivel_acesso, usuario_id),
+            conn.execute(
+                "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
+                (nome, email, user_type, nivel_acesso, usuario_id),
+            )
+            if reactivating:
+                # Reactivation states the credential outright instead of
+                # inheriting whatever the revoked row carried, and leaves every
+                # pre-revocation token invalid.
+                _reactivate_usuario_access(
+                    conn, usuario_id, senha=senha, nivel_acesso=nivel_acesso
                 )
+            elif senha:
                 set_usuario_password_hash(
                     conn,
                     usuario_id,
                     hash_password(senha),
                     credential_state=CREDENTIAL_STATE_PERSONAL,
                 )
-            else:
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
-                    (nome, email, user_type, nivel_acesso, usuario_id),
-                )
         else:
-            senha_final = senha or defaults.get(nivel_acesso, "admin123")
-            configured_default = defaults.get(nivel_acesso, "admin123")
+            # A blank password creates a "pending" account: it exists, it is
+            # listed, and it cannot authenticate until its first-access e-mail
+            # is completed (-> personal) or an administrator explicitly applies
+            # the profile default (-> default).  It never receives the shared
+            # default implicitly.
+            if senha:
+                senha_hash = hash_password(senha)
+                credential_state = CREDENTIAL_STATE_PERSONAL
+            else:
+                senha_hash = unusable_password_hash()
+                credential_state = CREDENTIAL_STATE_PENDING
             cursor = create_usuario_with_access_level(
                 conn,
                 nome,
                 email,
-                hash_password(senha_final),
+                senha_hash,
                 user_type,
                 nivel_acesso,
-                credential_state=(
-                    CREDENTIAL_STATE_DEFAULT
-                    if not senha
-                    else CREDENTIAL_STATE_PERSONAL
-                ),
+                credential_state=credential_state,
             )
             usuario_id = cursor.lastrowid
 
         aluno_existente = conn.execute("SELECT id, turma_id, matriz_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
         if user_type == "aluno":
+            if not aluno_existente:
+                # Deleting an access detaches its aluno instead of destroying
+                # it, so the academic record outlives the login and keeps its
+                # UNIQUE matrícula/e-mail. Re-creating the access must adopt
+                # that record -- otherwise the insert below collides with it
+                # and the person is stranded without a login forever.
+                detached = conn.execute(
+                    """
+                    SELECT id, turma_id, matriz_id FROM alunos
+                     WHERE usuario_id IS NULL
+                       AND (matricula = ? OR LOWER(COALESCE(email, '')) = LOWER(?))
+                     ORDER BY (matricula = ?) DESC, id
+                     LIMIT 1
+                    """,
+                    (matricula, email, matricula),
+                ).fetchone()
+                if detached:
+                    conn.execute(
+                        "UPDATE alunos SET usuario_id = ? WHERE id = ?",
+                        (usuario_id, detached["id"]),
+                    )
+                    aluno_existente = detached
+            # NULL-safe: `usuario_id <> ?` silently skips detached rows, whose
+            # matrícula is exactly the one that would collide on INSERT.
             dup_matricula = conn.execute(
-                "SELECT id FROM alunos WHERE matricula = ? AND usuario_id <> ?",
+                "SELECT id FROM alunos WHERE matricula = ? AND (usuario_id IS NULL OR usuario_id <> ?)",
                 (matricula, usuario_id),
             ).fetchone()
             if dup_matricula:
@@ -554,6 +729,9 @@ def admin_acesso_salvar():
             flash("Seu perfil foi alterado. Faça login novamente para continuar.", "success")
             return redirect(url_for("login"))
 
+    if reactivating:
+        flash("Acesso reativado e vinculado ao registro existente.", "success")
+        return redirect(url_for("admin_acesso"))
     flash("Acesso salvo com sucesso.", "success")
     return redirect(url_for("admin_acesso"))
 
@@ -562,13 +740,24 @@ def admin_acesso_salvar():
 def admin_acesso_resetar_senha(usuario_id):
     conn = get_db_connection()
     ensure_usuario_access_schema(conn)
-    if not get_default_passwords_enabled(conn):
-        flash("Ative as senhas padrão antes de aplicá-las a um acesso.", "error")
-        return redirect(url_for("admin_acesso"))
     usuario = conn.execute("SELECT id, nome, nivel_acesso FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
     if not usuario:
         flash("Usuário não encontrado.", "error")
         return redirect(url_for("admin_acesso"))
+    # The backend is authoritative regardless of what the action bar offered.
+    # Same owner, same ladder as the row descriptor: root protection and revoked
+    # access are decided in app/access_default_password.py, and the refusal
+    # carries that module's reason verbatim.
+    eligibility = default_password_eligibility(conn, usuario_id)
+    if not eligibility.allowed:
+        flash(eligibility.reason, "error")
+        return redirect(url_for("admin_acesso"))
+    # The current configured default is applied deliberately, without comparing
+    # the hash it replaces: this is an administrative credential reset, so the
+    # re-salt, the auth_version bump and the token invalidation below are the
+    # point even when the resulting plaintext is unchanged.  Valid from pending,
+    # personal and default alike; re-applying is how a default account picks up
+    # a since-edited profile value.
     defaults = _access_defaults_map(conn)
     nivel = canonicalize_access_level(usuario["nivel_acesso"])
     nova_senha = defaults.get(nivel, "admin123")
@@ -601,9 +790,22 @@ def admin_acesso_senha_por_email(usuario_id):
         flash("Usuário não encontrado.", "error")
         return redirect(url_for("admin_acesso"))
 
+    # A revoked account has no login to restore by e-mail. Sending one would
+    # hand back access that an administrator deliberately ended, so the
+    # reactivation has to come first and explicitly.
+    if not usuario_access_is_active(conn, usuario_id):
+        flash(
+            "Este acesso está revogado. Reative-o antes de enviar e-mail de senha.",
+            "error",
+        )
+        return redirect(url_for("admin_acesso"))
+
+    # First access is onboarding, and only a pending account is still being
+    # onboarded.  An account holding a usable credential -- personal, or an
+    # applied default -- is sent a reset link; both end in "personal".
     purpose = (
         PURPOSE_FIRST_ACCESS
-        if usuario["estado"] == CREDENTIAL_STATE_DEFAULT
+        if usuario["estado"] == CREDENTIAL_STATE_PENDING
         else PURPOSE_PASSWORD_RESET
     )
     outcome = issue_and_send_password_email(
@@ -682,17 +884,53 @@ def admin_acesso_deletar(usuario_id):
 
     conn = get_db_connection()
     ensure_usuario_profile_schema(conn)
-    try:
-        aluno = conn.execute("SELECT turma_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
-        conn.execute("DELETE FROM alunos WHERE usuario_id = ?", (usuario_id,))
-        conn.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
-        resequence_turma_aluno_matriculas_for_ids(conn, aluno["turma_id"] if aluno else None)
-        conn.commit()
-    except sqlite3.IntegrityError as exc:
-        conn.rollback()
-        flash(f"Não foi possível excluir o acesso: {exc}", "error")
+
+    if not conn.execute("SELECT 1 FROM usuarios WHERE id = ?", (usuario_id,)).fetchone():
+        flash("Usuário não encontrado.", "error")
         return redirect(url_for("admin_acesso"))
-    flash("Acesso excluído com sucesso.", "success")
+
+    # Neither removal nor revocation may reach the root administrator: both
+    # destroy the only path back into a locked-out installation.
+    if is_root_admin(conn, usuario_id):
+        flash(
+            "O administrador raiz não pode ser excluído nem revogado: é a única via de recuperação do sistema.",
+            "error",
+        )
+        return redirect(url_for("admin_acesso"))
+
+    # "Excluir acesso" means: remove the ability to log in. It is ONE operation
+    # -- revocation -- not "delete if the row looks disposable, revoke
+    # otherwise". A single model is what makes the outcome predictable:
+    #
+    #   * the person survives. A linked aluno keeps its matrícula, turma,
+    #     matriz, horas, requisições and history, and stays linked, because the
+    #     identity it points at is preserved rather than destroyed;
+    #   * history stays truthful. An upload's uploader_user_id still resolves
+    #     to the account that really performed it -- the custody triggers and
+    #     the RESTRICT reference are never fought;
+    #   * re-creating access later reuses this identity instead of minting a
+    #     duplicate (see admin_acesso_salvar).
+    #
+    # Physical deletion is deliberately not part of these semantics.
+    try:
+        _revoke_usuario_access(conn, usuario_id)
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        debug_code = f"ACCESS_DELETE_{usuario_id}"
+        logger.warning(
+            "event=access_revoke_failed usuario_id=%s code=%s",
+            int(usuario_id),
+            debug_code,
+        )
+        flash(
+            f"Não foi possível excluir o acesso porque há registros vinculados a ele. Código de suporte: {debug_code}",
+            "error",
+        )
+        return redirect(url_for("admin_acesso"))
+    if usuario_id == session.get("user_id"):
+        session.clear()
+    flash("Acesso revogado: o login foi encerrado e o histórico foi preservado.", "success")
     return redirect(url_for("admin_acesso"))
 
 
@@ -751,6 +989,8 @@ __all__ = [
     "LEGACY_ROUTE_SPECS",
     "_parse_access_overrides_from_form",
     "_persist_user_access_overrides",
+    "_reactivate_usuario_access",
+    "_revoke_usuario_access",
     "_turma_label_by_id",
     "admin_acesso",
     "admin_acesso_deletar",

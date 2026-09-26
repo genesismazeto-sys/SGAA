@@ -50,9 +50,9 @@ from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
 from app.user_accounts import (
-    CREDENTIAL_STATE_DEFAULT, CREDENTIAL_STATE_PERSONAL, _access_defaults_map,
+    CREDENTIAL_STATE_PERSONAL, _access_defaults_map,
     _default_password_for_user_type,
-    create_usuario_with_default_access,
+    create_usuario_pending, create_usuario_with_default_access,
     create_usuario_with_default_password,
     normalize_usuario_access_for_user_type, set_usuario_password_hash,
 )
@@ -701,20 +701,20 @@ def admin_adicionar_aluno():
         status = request.form["status"]
 
         try:
-            senha_final = senha or _default_password_for_user_type(conn, "aluno")
-            hashed_password = hash_password(senha_final)
-            cursor = create_usuario_with_default_access(
-                conn,
-                nome,
-                email,
-                hashed_password,
-                "aluno",
-                credential_state=(
-                    CREDENTIAL_STATE_DEFAULT
-                    if senha_final == _default_password_for_user_type(conn, "aluno")
-                    else CREDENTIAL_STATE_PERSONAL
-                ),
-            )
+            # prod-1/v11: a typed password is this student's own (personal);
+            # a blank one leaves the account pending until first access or an
+            # explicit "Aplicar senha padrão" in Admin > Acesso.
+            if senha:
+                cursor = create_usuario_with_default_access(
+                    conn,
+                    nome,
+                    email,
+                    hash_password(senha),
+                    "aluno",
+                    credential_state=CREDENTIAL_STATE_PERSONAL,
+                )
+            else:
+                cursor = create_usuario_pending(conn, nome, email, "aluno")
             usuario_id = cursor.lastrowid
             matriz_id = matrix_for_turma_assignment(
                 conn, current_matriz_id=None, turma_id=turma_id

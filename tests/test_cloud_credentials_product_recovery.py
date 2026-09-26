@@ -18,6 +18,7 @@ import ast
 import base64
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from app import cloud_config, cloud_credentials, machine_secrets
 from app.backup import get_drive_settings
 from app.services import token_encryption
 from app.views.admin import banco_dados as banco_dados_view
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -102,7 +104,7 @@ def admin_client():
     client = main.app.test_client()
     response = client.post(
         "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
+        data={"email": TEST_ROOT_ADMIN_EMAIL, "senha": "admin123"},
         follow_redirects=False,
     )
     assert response.status_code in (302, 303)
@@ -1048,7 +1050,13 @@ def test_reconnect_remains_a_separate_action_after_configuring(
         config_form = card.split('class="db-provider-config">', 1)[1].split(
             "</form>", 1
         )[0]
-        assert "connect" not in config_form
+        # The guard is about ENDPOINTS: no authorization route may be reachable
+        # from inside the credential form. A bare "connect" substring also hit
+        # the `gdrive_connected` / `onedrive_connected` booleans that the footer
+        # reads to decide whether "Enviar backup agora" is submittable (UI-B07),
+        # which is a rendering condition, not an action.
+        assert not re.search(r"admin_backup_\w+_connect\b", config_form)
+        assert "/connect" not in config_form
         assert "oauth_disconnect" not in config_form
         assert "cloud-folder" not in config_form
         assert "test_connection" not in config_form

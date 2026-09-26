@@ -19,7 +19,17 @@
     {% block extra_head %}{% endblock %}
     <!-- Ícones -->
     <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
-    <script src="https://unpkg.com/lucide@latest" defer></script>
+    {# UI-B15: was https://unpkg.com/lucide@latest. Two reasons to self-host,
+       neither cosmetic. (1) The CDN bundle ends in
+       `//# sourceMappingURL=lucide.min.js.map`, which DevTools resolves against
+       the script's origin -> https://unpkg.com/lucide.min.js.map, a request
+       connect-src refuses on purpose; the map is not published there anyway.
+       (2) `@latest` means the icon set could change with no commit in this
+       repo. The vendored file is the same pinned build the visual baseline
+       already renders with (tests/visual/vendor/lucide.min.js, v0.544.0), so
+       icons are unchanged. Serving it from 'self' is what let script-src drop
+       https://unpkg.com entirely -- see app/__init__.py. #}
+    <script src="{{ url_for('static', filename='vendor/lucide.min.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/ui-tooltips.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>
@@ -166,7 +176,18 @@
               href="{{ url_for('admin_banco_dados') }}"
               {% if request.endpoint and request.endpoint == 'admin_banco_dados' %}aria-current="page"{% endif %}
             >
-              <i class="lucide" data-lucide="cloud-backup" aria-hidden="true"></i>
+              {# UI-B15 follow-up: this icon used to name a `cloud`+`backup`
+                 compound that does not exist in Lucide -- the browser console
+                 proved it ("icon name ... was not found"), so the sidebar
+                 entry rendered no glyph at all. It was never a side effect of
+                 self-hosting: the name is absent from the registry, so it
+                 failed on the CDN too; serving the bundle ourselves only made
+                 the failure audible. `database-backup` exists in the pinned
+                 v0.544.0 set and is the same vocabulary /admin/banco-dados
+                 already uses for this concept (`database` for the backup
+                 action). A test now audits every icon name in the template
+                 tree against the shipped registry. #}
+              <i class="lucide" data-lucide="database-backup" aria-hidden="true"></i>
               <span>{{ user_message("Backup de dados") }}</span>
             </a>
           {% endif %}

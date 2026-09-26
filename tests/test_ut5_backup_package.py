@@ -45,6 +45,7 @@ from pathlib import Path
 import pytest
 
 from app.prod1_schema import bootstrap_prod1_schema
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -338,7 +339,7 @@ def isolated_admin_client(tmp_path):
         client = main.app.test_client()
         login_response = client.post(
             "/login",
-            data={"email": "admin@ej.edu.br", "senha": "admin123"},
+            data={"email": TEST_ROOT_ADMIN_EMAIL, "senha": "admin123"},
             follow_redirects=False,
         )
         assert login_response.status_code in (302, 303), (

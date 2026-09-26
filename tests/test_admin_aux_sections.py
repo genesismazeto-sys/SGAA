@@ -140,13 +140,20 @@ def test_admin_acesso_defaults_and_create_delete(client):
     with main.app.app_context():
         conn = main.get_db_connection()
         user = conn.execute(
-            "SELECT id, tipo, nivel_acesso, senha FROM usuarios WHERE email = ?",
+            "SELECT u.id, u.tipo, u.nivel_acesso, u.senha, c.estado FROM usuarios u"
+            " JOIN usuario_credenciais c ON c.usuario_id = u.id WHERE u.email = ?",
             (email,),
         ).fetchone()
         assert user is not None
         assert user["tipo"] == "admin"
         assert user["nivel_acesso"] == "consultivo"
-        assert main.check_password(user["senha"], senha_default)
+        # The saved profile default is configuration only: a blank password
+        # creates a pending account that does NOT hold it (prod-1/v11).
+        assert conn.execute(
+            "SELECT senha_padrao FROM configuracoes_acesso WHERE nivel_acesso = 'consultivo'"
+        ).fetchone()[0] == senha_default
+        assert user["estado"] == "pending"
+        assert not main.check_password(user["senha"], senha_default)
         user_id = user["id"]
 
     delete = client.post(f"/admin/acesso/{user_id}/deletar", follow_redirects=False)
@@ -154,8 +161,19 @@ def test_admin_acesso_defaults_and_create_delete(client):
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        removed = conn.execute("SELECT 1 FROM usuarios WHERE id = ?", (user_id,)).fetchone()
-        assert removed is None
+        # "Excluir acesso" is a revocation: the identity survives so history
+        # keeps resolving, and what ends is the ability to authenticate.
+        credential = conn.execute(
+            "SELECT acesso_ativo FROM usuario_credenciais WHERE usuario_id = ?", (user_id,)
+        ).fetchone()
+        assert credential is not None
+        assert int(credential["acesso_ativo"]) == 0
+        assert conn.execute(
+            "SELECT 1 FROM usuarios WHERE id = ?", (user_id,)
+        ).fetchone() is not None
+        # ... and it leaves the ordinary active list.
+    html = client.get("/admin/acesso").get_data(as_text=True)
+    assert email not in html
 
 
 def test_admin_acesso_page_enables_shared_row_selection(client):

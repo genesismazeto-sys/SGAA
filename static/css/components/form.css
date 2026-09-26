@@ -197,6 +197,35 @@
 .toggle-switch input:disabled{ cursor:not-allowed; }
 
 /* =============================================================
+   INLINE FORM NOTE (icon + text)
+
+   The shared contract for a short explanatory row that leads with an icon:
+   a status line under a field, a "current value" hint, a small caveat.
+   Before this existed, .access-note in admin_acesso.html was markup with no
+   rule anywhere — the icon rendered at its intrinsic size and sat on the
+   text baseline, so it read as touching and vertically misaligned.
+
+   The geometry is the same one the DS already uses for every other icon/text
+   row (centred cross-axis, one gap token, icon sized down to the text):
+   flex + align-items:center + gap, with the icon given an explicit box so it
+   cannot inherit a 24px lucide default. Consumers set their own colour.
+   ============================================================= */
+.form-note{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text-secondary);
+  font-size:12.5px;
+  line-height:1.45;
+}
+.form-note > .lucide{
+  flex:none;
+  width:16px;
+  height:16px;
+}
+.form-note > span{ min-width:0; }
+
+/* =============================================================
    TRAILING CHIP ON A PLAIN FIELD CARD
 
    The right-hand chip anatomy already existed in the DS, but every rule

@@ -16,7 +16,7 @@ from app.password_tokens import (
 from app.prod1_schema import bootstrap_prod1_schema
 from app.security.passwords import check_password, hash_password
 from app.user_accounts import (
-    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PENDING,
     CREDENTIAL_STATE_PERSONAL,
     create_usuario_with_access_level,
     set_usuario_password_hash,
@@ -50,7 +50,7 @@ def _user(conn, email: str, state: str) -> int:
 
 def test_issue_stores_only_digest_supersedes_same_purpose_and_get_is_read_only():
     conn = _connection()
-    user_id = _user(conn, "token@example.test", CREDENTIAL_STATE_DEFAULT)
+    user_id = _user(conn, "token@example.test", CREDENTIAL_STATE_PENDING)
     first = "A" * 43
     second = "B" * 43
 
@@ -78,13 +78,13 @@ def test_issue_stores_only_digest_supersedes_same_purpose_and_get_is_read_only()
 
 def test_expiry_first_access_state_and_atomic_consumption_contract():
     conn = _connection()
-    default_id = _user(conn, "default@example.test", CREDENTIAL_STATE_DEFAULT)
+    pending_id = _user(conn, "pending@example.test", CREDENTIAL_STATE_PENDING)
     personal_id = _user(conn, "personal@example.test", CREDENTIAL_STATE_PERSONAL)
 
     expired = "C" * 43
     issue_password_token(
         conn,
-        default_id,
+        pending_id,
         PURPOSE_PASSWORD_RESET,
         now=NOW,
         ttl=dt.timedelta(seconds=1),
@@ -116,14 +116,14 @@ def test_expiry_first_access_state_and_atomic_consumption_contract():
     current = "F" * 43
     issue_password_token(
         conn,
-        default_id,
+        pending_id,
         PURPOSE_PASSWORD_RESET,
         now=NOW,
         token_factory=lambda _size: sibling,
     )
     issue_password_token(
         conn,
-        default_id,
+        pending_id,
         PURPOSE_FIRST_ACCESS,
         now=NOW,
         token_factory=lambda _size: current,
@@ -137,10 +137,10 @@ def test_expiry_first_access_state_and_atomic_consumption_contract():
         hash_password("chosen-secret"),
         now=NOW,
     ) == 2
-    user = conn.execute("SELECT senha FROM usuarios WHERE id=?", (default_id,)).fetchone()
+    user = conn.execute("SELECT senha FROM usuarios WHERE id=?", (pending_id,)).fetchone()
     credential = conn.execute(
         "SELECT estado,auth_version FROM usuario_credenciais WHERE usuario_id=?",
-        (default_id,),
+        (pending_id,),
     ).fetchone()
     assert check_password(user["senha"], "chosen-secret")
     assert tuple(credential) == (CREDENTIAL_STATE_PERSONAL, 2)
@@ -171,7 +171,7 @@ def test_two_connections_race_for_one_token_and_exactly_one_wins(tmp_path):
     db_path = tmp_path / "password_token_race.db"
     setup = _file_connection(db_path)
     bootstrap_prod1_schema(setup)
-    user_id = _user(setup, "race@example.test", CREDENTIAL_STATE_DEFAULT)
+    user_id = _user(setup, "race@example.test", CREDENTIAL_STATE_PENDING)
     raw = "H" * 43
     issue_password_token(
         setup, user_id, PURPOSE_FIRST_ACCESS, now=NOW, token_factory=lambda _size: raw

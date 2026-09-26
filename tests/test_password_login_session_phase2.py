@@ -6,8 +6,9 @@ import main
 from app.auth import _clear_login_attempts
 from app.password_tokens import PURPOSE_PASSWORD_RESET, issue_password_token
 from app.security.passwords import hash_password
-from app.settings import save_default_passwords_enabled
 from app.user_accounts import (
+    CREDENTIAL_STATE_DEFAULT,
+    CREDENTIAL_STATE_PENDING,
     CREDENTIAL_STATE_PERSONAL,
     get_usuario_auth_version,
     set_usuario_credential_state,
@@ -22,36 +23,65 @@ def _admin(conn):
     ).fetchone()
 
 
-def test_login_uses_authoritative_credential_state_and_global_switch(tmp_path):
-    with isolated_versioned_app_env(tmp_path, "login-switch.db") as env:
+def _attempt(client, email: str, senha: str):
+    _clear_login_attempts()
+    client.get("/logout")
+    response = client.post(
+        "/login", data={"email": email, "senha": senha}, follow_redirects=False
+    )
+    with client.session_transaction() as session:
+        return response, session.get("user_id")
+
+
+def test_login_uses_authoritative_credential_state_only(tmp_path):
+    """prod-1/v11: the state alone decides whether the stored hash is a credential.
+
+    The same stored hash authenticates as ``default`` and as ``personal`` and is
+    refused as ``pending``; a leftover legacy switch row changes none of it.
+    """
+    with isolated_versioned_app_env(tmp_path, "login-states.db") as env:
+        client = env["client"]
         with main.app.app_context():
             conn = main.get_db_connection()
             admin = _admin(conn)
-            save_default_passwords_enabled(conn, False)
+            # A stale row of the retired setting, with the value that used to
+            # lock every default account out.
+            conn.execute(
+                "INSERT INTO configuracoes_app(chave,valor) VALUES('default_passwords_enabled','0')"
+                " ON CONFLICT(chave) DO UPDATE SET valor='0'"
+            )
             conn.commit()
-        _clear_login_attempts()
-        denied = env["client"].post(
-            "/login", data={"email": admin["email"], "senha": "admin123"}
-        )
-        assert denied.status_code == 200
-        assert "E-mail ou senha inv" in denied.get_data(as_text=True)
-        with env["client"].session_transaction() as session:
-            assert "user_id" not in session
 
-        with main.app.app_context():
-            conn = main.get_db_connection()
-            set_usuario_credential_state(conn, int(admin["id"]), CREDENTIAL_STATE_PERSONAL)
-            conn.commit()
-        _clear_login_attempts()
-        allowed = env["client"].post(
-            "/login",
-            data={"email": admin["email"], "senha": "admin123"},
-            follow_redirects=False,
-        )
-        assert allowed.status_code in (302, 303)
-        with env["client"].session_transaction() as session:
-            assert session["user_id"] == admin["id"]
+        for state, expected in (
+            (CREDENTIAL_STATE_DEFAULT, True),
+            (CREDENTIAL_STATE_PENDING, False),
+            (CREDENTIAL_STATE_PERSONAL, True),
+        ):
+            with main.app.app_context():
+                conn = main.get_db_connection()
+                set_usuario_credential_state(conn, int(admin["id"]), state)
+                conn.commit()
+            response, user_id = _attempt(client, admin["email"], "admin123")
+            if expected:
+                assert response.status_code in (302, 303), state
+                assert user_id == admin["id"], state
+            else:
+                # Generic refusal: nothing distinguishes pending from a typo.
+                assert response.status_code == 200, state
+                assert "E-mail ou senha inv" in response.get_data(as_text=True)
+                assert user_id is None, state
+        with client.session_transaction() as session:
             assert session["auth_version"] == 1
+
+
+def test_login_reads_no_global_setting():
+    source = (Path(__file__).resolve().parents[1] / "app" / "views" / "core.py").read_text(
+        encoding="utf-8"
+    )
+    login = source[source.index("def login():"): source.index("def logout():")]
+    assert "default_passwords_enabled" not in login
+    assert "app.settings" not in source
+    assert "configuracoes_app" not in login
 
 
 def test_password_change_invalidates_other_authenticated_session(tmp_path):

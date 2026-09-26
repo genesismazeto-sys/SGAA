@@ -249,7 +249,13 @@ def test_floating_delete_actions_reuse_confirmation_and_csrf_contracts():
         assert mutation in source
 
     access_source = (TEMPLATES / "admin_acesso.html").read_text(encoding="utf-8")
-    assert "if (!currentData.deleteUrl || currentData.isSelf) return;" in access_source
+    # The action bar snapshots its descriptor as `target` at click time: the
+    # hover lifecycle nulls `currentData` while a confirmation is awaited.
+    # The root administrator is excluded here as well as in the backend.
+    assert (
+        "if (!target.deleteUrl || target.isSelf || target.isRootAdmin) return;"
+        in access_source
+    )
     assert "window.ensureFormCsrfToken?.(formEl);" in access_source
 
     for template_name in ("admin_atividades.html", "admin_alunos.html", "admin_cursos.html", "admin_turmas.html", "admin_requisicoes.html"):

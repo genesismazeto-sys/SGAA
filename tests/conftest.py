@@ -33,6 +33,21 @@ os.environ.setdefault(
     "test-secret-key-for-pytest-only-do-not-use-anywhere-else-1234567890",
 )
 
+# Root administrator identity and break-glass credential are configuration.
+# Assigned (not setdefault) so a developer's .env or shell can never leak the
+# real values into a test run: main's load_dotenv never overrides a set value.
+from werkzeug.security import generate_password_hash  # noqa: E402
+
+from tests.root_admin_test_config import (  # noqa: E402
+    TEST_ROOT_ADMIN_EMAIL,
+    TEST_ROOT_MASTER_KEY,
+)
+
+os.environ["APP_BOOTSTRAP_ADMIN_EMAIL"] = TEST_ROOT_ADMIN_EMAIL
+os.environ["APP_ROOT_MASTER_KEY_HASH"] = generate_password_hash(
+    TEST_ROOT_MASTER_KEY, method="pbkdf2:sha256:600000"
+)
+
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = Path(TESTS_DIR).parent
 PROJECT_ROOT_PATH = PROJECT_ROOT

@@ -59,7 +59,7 @@ def migrate_prod1_v7_to_v8(conn: sqlite3.Connection) -> dict[str, object]:
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v7_schema,
-        validate_prod1_schema,
+        _validate_prod1_v8_schema,
     )
 
     if conn.in_transaction:
@@ -119,17 +119,27 @@ def migrate_prod1_v7_to_v8(conn: sqlite3.Connection) -> dict[str, object]:
             raise Prod1SchemaError(
                 f"prod-1/v8 foreign key violations: {violations!r}"
             )
-        validate_prod1_schema(conn)
+        _validate_prod1_v8_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
 
-    status = validate_prod1_schema(conn)
+    # v8 is no longer the head: report its own contract rather than asking
+    # validate_prod1_schema, which now describes v9.
+    _validate_prod1_v8_schema(conn)
+    tables = {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+    }
     return {
-        **status,
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 8,
         "baseline_marker": BASELINE_MARKER,
+        "table_count": len(tables),
         "credential_backfill": "current_default_match_heuristic",
     }
 

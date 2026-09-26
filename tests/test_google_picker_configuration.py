@@ -30,6 +30,7 @@ import pytest
 import main
 from app import cloud_config, cloud_credentials, machine_secrets
 from app.views.admin import banco_dados as banco_dados_view
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -86,7 +87,7 @@ def admin_client():
     client = main.app.test_client()
     response = client.post(
         "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
+        data={"email": TEST_ROOT_ADMIN_EMAIL, "senha": "admin123"},
         follow_redirects=False,
     )
     assert response.status_code in (302, 303)

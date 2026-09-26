@@ -27,7 +27,7 @@ from app.password_tokens import (
     resolve_password_token,
 )
 from app.security.passwords import hash_password
-from app.user_accounts import CREDENTIAL_STATE_DEFAULT
+from app.user_accounts import first_access_redeemable
 
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ def _render_set_password(*, purpose: str, raw_token: str, error: str = ""):
     record = resolve_password_token(conn, raw_token, purpose=purpose)
     valid = record is not None
     if valid and purpose == PURPOSE_FIRST_ACCESS:
-        valid = record.credential_state == CREDENTIAL_STATE_DEFAULT
+        valid = first_access_redeemable(record.credential_state)
     response = make_response(
         render_template(
             "set_password.html",

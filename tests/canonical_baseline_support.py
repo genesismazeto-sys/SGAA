@@ -98,6 +98,55 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "\"Salvar senhas padrao\" literal retires with no new key",
         0,
     ),
+    (
+        "AR1 Acesso post-landing repair: the Novo acesso help text now follows "
+        "the default-password switch, adding 'Se ficar em branco, o usuario "
+        "devera definir a senha pelo e-mail de primeiro acesso.' "
+        "(msg_de1ec3824a33c230) and 'Se ficar em branco, a senha atual sera "
+        "mantida.' (msg_d62f6f50edbc09ac) for the switched-off case; and "
+        "'Excluir acesso' stops deleting the academic aluno, so the raw "
+        "'Nao foi possivel excluir o acesso: <sqlite text>' retires in favour "
+        "of a safe-debug-identifier fallback, 'Nao foi possivel excluir o "
+        "acesso porque ha registros vinculados a ele. Codigo de suporte: "
+        "{value_1}' (msg_cbb52242746685c8). 3 additions, 1 retirement",
+        2,
+    ),
+    (
+        "RA1 root administrator contract: the built-in administrator ships in "
+        "'default' credential state, so switching the shared default passwords "
+        "off locked out the only account able to switch them back on. Root now "
+        "has an independent break-glass credential and may not be removed, "
+        "revoked, demoted or have its address moved through access management, "
+        "adding the three refusals (msg_b74771946e0bc5ae, msg_758fb77b13d34a92, "
+        "msg_8a6e1bc2d393f8f5), the audit-safe revocation of an account history "
+        "still references (msg_183dcf7cbb0eb4fc). The break-glass path is "
+        "deliberately invisible in the product: it is an authentication "
+        "contract, not a panel notice, so nothing announces it. "
+        "Access removal is now one model -- revocation -- so "
+        "'Acesso excluido com sucesso.' (msg_56e46c7a8f7ce61f) retires in "
+        "favour of the revocation wording, and reactivation adds "
+        "msg_c6ff9cd590dd08ee and msg_52a939022460dcce. 6 additions, "
+        "1 retirement",
+        5,
+    ),
+    (
+        "CP1 credential pending (prod-1/v11): the global 'Ativar senhas "
+        "padrao' switch retires. Default passwords become an explicit "
+        "per-account action and a blank password creates a pending account, "
+        "so the switch's refusal flash 'Ative as senhas padrao antes de "
+        "aplica-las a um acesso.' (msg_68bbd4601385b8d4) and the three "
+        "blank-password help texts that promised the shared default "
+        "(msg_6e89088d3a933113, msg_719b27dd68ea5b3e, msg_2849e4dc7c405251) "
+        "retire. 0 additions, 4 retirements",
+        -4,
+    ),
+    (
+        "UI-B19 Adicionar aluno photo label: the add-student form drops the "
+        "'Foto' row label beside the avatar, matching Meus dados, which never "
+        "carried one. Its only consumer was that label, so 'Foto' "
+        "(msg_0f5e4f087245b242) retires. 0 additions, 1 retirement",
+        -1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -133,10 +182,11 @@ CATALOG_VISIBLE_BASELINE_DEBT = (
 PARENT_CATALOG_KEYS_SHA256 = (
     "f5dc176c0e574f969f566007ad05a867dc4362b4d51787a70844775136d44265"
 )
-# Password foundation is net zero on top of the REN1 580-key state: eight
-# additions against eight retired literals.
+# Password foundation was net zero on top of the REN1 580-key state: eight
+# additions against eight retired literals.  AR1 took it to 582, RA1 to 587,
+# CP1 (four retirements, no addition) to 583, UI-B19 (one retirement) to 582.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "9e9b13efba54632110cc64fb8a12a503069c558910dd930cbadaa9ae9a9566eb"
+    "e9180f2d7a053bba61ade5900c2e10bbb0d79ba545896e9f5240686cb169c19b"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -179,6 +229,68 @@ REN1_REQUEST_EMAIL_KEYS = frozenset(
         "msg_8c65a50ebbda9d19",  # Usar este modelo como padrao...
         "msg_41210911d2e66292",  # Campos disponiveis
         "msg_b84bd6a7db10ccf6",  # Clique para inserir no conteudo.
+    }
+)
+
+# AR1 Acesso post-landing repair.  Net +3: four additions against the retired
+# raw-SQLite delete flash.  The retirement is carried separately because
+# reconstructing an earlier state has to put it back, not just take these out.
+AR1_ACCESS_REPAIR_KEYS = frozenset(
+    {
+        # Novo acesso help text for a blank password while the shared
+        # default-password mechanism is switched off.
+        "msg_de1ec3824a33c230",  # Se ficar em branco, o usuario devera definir...
+        "msg_d62f6f50edbc09ac",  # Se ficar em branco, a senha atual sera mantida.
+        # "Excluir acesso" no longer leaks the SQLite text; the only remaining
+        # failure path carries a safe support identifier.
+        "msg_cbb52242746685c8",  # ... Codigo de suporte: {value_1}
+    }
+)
+AR1_ACCESS_REPAIR_RETIRED_KEYS = frozenset(
+    {
+        "msg_e6eb77bb0d9c2744",  # Nao foi possivel excluir o acesso: {value_1}
+    }
+)
+
+# RA1 root administrator contract.  Purely additive (+6): the break-glass
+# recovery path needs the lockout refusals, the audit-safe revocation, and one
+# neutral statement that the protection exists.  The credential itself is never
+# a catalogued message because it is never rendered.
+RA1_ROOT_ADMIN_KEYS = frozenset(
+    {
+        "msg_b74771946e0bc5ae",  # O administrador raiz nao pode ser excluido nem revogado...
+        "msg_758fb77b13d34a92",  # O administrador raiz nao pode ser rebaixado...
+        "msg_8a6e1bc2d393f8f5",  # O e-mail do administrador raiz nao pode ser alterado...
+        "msg_183dcf7cbb0eb4fc",  # Acesso revogado: o login foi encerrado...
+        "msg_c6ff9cd590dd08ee",  # Acesso reativado e vinculado ao registro existente.
+        "msg_52a939022460dcce",  # Este acesso esta revogado. Reative-o antes de enviar...
+    }
+)
+RA1_ROOT_ADMIN_RETIRED_KEYS = frozenset(
+    {
+        "msg_56e46c7a8f7ce61f",  # Acesso excluido com sucesso.
+    }
+)
+
+# CP1 credential pending (prod-1/v11).  Purely a retirement (-4): the global
+# default-password switch is gone, and with it every message that referred to
+# it or promised that a blank password applies the shared default.  CP1 adds
+# no key -- the surviving help texts were already catalogued by AR1.
+CP1_CREDENTIAL_PENDING_KEYS = frozenset()
+CP1_CREDENTIAL_PENDING_RETIRED_KEYS = frozenset(
+    {
+        "msg_68bbd4601385b8d4",  # Ative as senhas padrao antes de aplica-las...
+        "msg_6e89088d3a933113",  # Se ficar em branco na criacao, o sistema aplica...
+        "msg_719b27dd68ea5b3e",  # Se ficar em branco, o sistema aplica a senha padrao de {value_1}.
+        "msg_2849e4dc7c405251",  # Se ficar em branco, a senha atual sera mantida. A aplicacao rapida...
+    }
+)
+# UI-B19 Adicionar aluno photo label.  Purely a retirement (-1): the "Foto"
+# row label on the add-student avatar was that literal's only consumer.
+UIB19_PHOTO_LABEL_KEYS = frozenset()
+UIB19_PHOTO_LABEL_RETIRED_KEYS = frozenset(
+    {
+        "msg_0f5e4f087245b242",  # Foto
     }
 )
 
@@ -500,6 +612,44 @@ PASSWORD_FOUNDATION_RETIRED_KEYS = frozenset(
 def catalog_keys_before_password_foundation(keys) -> set[str]:
     return (set(keys) - set(PASSWORD_FOUNDATION_ADDED_KEYS)) | set(
         PASSWORD_FOUNDATION_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_root_admin(keys) -> set[str]:
+    """Undo the RA1 term, which retires one key as well as adding seven."""
+    return (set(keys) - set(RA1_ROOT_ADMIN_KEYS)) | set(RA1_ROOT_ADMIN_RETIRED_KEYS)
+
+
+def catalog_keys_before_photo_label(keys) -> set[str]:
+    """Undo the UI-B19 term: put the retired "Foto" key back.
+
+    UI-B19 is the newest term, so a reconstruction walks back through this
+    first, then CP1, RA1, AR1 and the password foundation.
+    """
+    return (set(keys) - set(UIB19_PHOTO_LABEL_KEYS)) | set(
+        UIB19_PHOTO_LABEL_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_credential_pending(keys) -> set[str]:
+    """Undo the CP1 term: put its four retired keys back.
+
+    A reconstruction walks back through UI-B19 first, then this, then RA1,
+    AR1 and the password foundation.
+    """
+    return (set(keys) - set(CP1_CREDENTIAL_PENDING_KEYS)) | set(
+        CP1_CREDENTIAL_PENDING_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_access_repair(keys) -> set[str]:
+    """Undo the AR1 term. Symmetric with the password-foundation helper above.
+
+    A reconstruction walks back through CP1 and RA1 first, then this, and
+    only then through the password foundation.
+    """
+    return (set(keys) - set(AR1_ACCESS_REPAIR_KEYS)) | set(
+        AR1_ACCESS_REPAIR_RETIRED_KEYS
     )
 PASSWORD_FOUNDATION_CSRF_ROUTES = frozenset(
     {

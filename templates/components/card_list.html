@@ -18,8 +18,15 @@ use .impresso-card with .cell elements and optional per-cell classes.
   {%- for c in cells %}
     <div class="cell {{ c.class or '' }}">
       {%- if c.badge is defined and c.badge %}
-        {%- set badge_type_class = c.badge_type if c.badge_type is defined and c.badge_type else 'success' -%}
-        {%- set badge_classes = 'badge ' ~ badge_type_class -%}
+        {#- A status pill takes its colour from its DS semantic tone alone. The
+            legacy .badge.success/.warning/.danger family is a second, older
+            colour vocabulary; it is fully overridden by .badge.status-pill, so
+            defaulting a status pill to `success` only pretends to say
+            something. Callers that still pass badge_type explicitly keep it
+            verbatim -- this changes no existing markup. -#}
+        {%- set _status_pill = c.status_badge is defined and c.status_badge -%}
+        {%- set badge_type_class = c.badge_type if c.badge_type is defined and c.badge_type else ('' if _status_pill else 'success') -%}
+        {%- set badge_classes = ('badge ' ~ badge_type_class)|trim -%}
         {%- if c.status_badge is defined and c.status_badge -%}
           {%- set badge_classes = badge_classes ~ ' status-badge status-pill status-' ~ (c.status_tone if c.status_tone is defined and c.status_tone else 'neutral') -%}
         {%- endif -%}

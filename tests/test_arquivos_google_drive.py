@@ -31,6 +31,9 @@ from app.prod1_schema import (
     migrate_prod1_v5_to_v6,
     migrate_prod1_v6_to_v7,
     migrate_prod1_v7_to_v8,
+    migrate_prod1_v8_to_v9,
+    migrate_prod1_v9_to_v10,
+    migrate_prod1_v10_to_v11,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -200,7 +203,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -240,6 +243,9 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     migrate_prod1_v5_to_v6(conn)
     migrate_prod1_v6_to_v7(conn)
     migrate_prod1_v7_to_v8(conn)
+    migrate_prod1_v8_to_v9(conn)
+    migrate_prod1_v9_to_v10(conn)
+    migrate_prod1_v10_to_v11(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)
@@ -900,6 +906,13 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # Password foundation Phase 1/2 is the tenth term: eight additions for the
     # first-access and recovery surfaces against eight retired literals, for a
     # declared net zero.
+    # AR1 is the eleventh: the Acesso repair adds the two switched-off help
+    # texts and the two deletion messages, retiring the raw-SQLite delete
+    # flash, for a declared net +3.  RA1 is the twelfth: the root-administrator
+    # recovery contract (break-glass login, lockout refusals, audit-safe
+    # revocation), purely additive at +6.  CP1 is the thirteenth: the global
+    # default-password switch retires with its four messages, for -4.  UI-B19
+    # is the fourteenth: the add-student 'Foto' row label retires, for -1.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -911,7 +924,11 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         3,
         22,
         0,
-    ], "the named catalog delta ledger must stay exactly these ten terms"
+        2,
+        5,
+        -4,
+        -1,
+    ], "the named catalog delta ledger must stay exactly these fourteen terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -920,14 +937,22 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 580
+    assert governance.CANONICAL_CATALOG_COUNT == 582
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
     ) - len(
-        governance.catalog_keys_before_password_foundation(catalog)
+        governance.catalog_keys_before_password_foundation(
+            governance.catalog_keys_before_access_repair(
+                governance.catalog_keys_before_root_admin(
+                    governance.catalog_keys_before_credential_pending(
+                        governance.catalog_keys_before_photo_label(catalog)
+                    )
+                )
+            )
+        )
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)
         - set(governance.REN1_REQUEST_EMAIL_KEYS)

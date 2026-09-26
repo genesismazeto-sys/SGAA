@@ -23,6 +23,8 @@ from presets_api import bp_presets
 from app.backup_settings import bind_backup_settings_runtime_app
 from app.db import DATABASE, close_db_connection, get_db_connection
 from app.oauth_log_filter import install_oauth_query_redaction_filter
+from app.root_admin import DEFAULT_ROOT_ADMIN_EMAIL
+from app.status_presentation import status_label, status_tone
 from app.versioning.request_history import HistoricalRequestAuthorityError
 from app.views.aluno import bp_aluno
 from app.views.admin import register_legacy_blueprint
@@ -228,8 +230,11 @@ def create_app(
         app.config["BOOTSTRAP_DEFAULT_ADMIN"] = not is_production
     else:
         app.config["BOOTSTRAP_DEFAULT_ADMIN"] = _is_truthy(bootstrap_default_admin)
+    # Uma instalacao nova nunca mais cria o endereco placeholder historico: o
+    # padrao e o endereco real do administrador raiz (app/root_admin.py), que e
+    # tambem a identidade usada pela via de recuperacao.
     app.config["BOOTSTRAP_ADMIN_EMAIL"] = (
-        os.getenv("APP_BOOTSTRAP_ADMIN_EMAIL", "admin@ej.edu.br").strip().lower()
+        os.getenv("APP_BOOTSTRAP_ADMIN_EMAIL", DEFAULT_ROOT_ADMIN_EMAIL).strip().lower()
     )
     app.config["BOOTSTRAP_ADMIN_PASSWORD"] = os.getenv(
         "APP_BOOTSTRAP_ADMIN_PASSWORD", "" if is_production else "admin123"
@@ -289,6 +294,12 @@ def create_app(
         raise RuntimeError("route_url requires at least one endpoint name")
 
     app.add_template_global(route_url, name="route_url")
+
+    # Mapeamento autoritativo status de dominio -> tom semantico do Design
+    # System. Owner unico: app/status_presentation.py. Templates nao devem
+    # reimplementar a escada de status localmente.
+    app.add_template_global(status_tone, name="status_tone")
+    app.add_template_global(status_label, name="status_label")
 
     # ----- Blueprints / rotas core -----
     if register_presets_blueprint:
@@ -446,12 +457,30 @@ def create_app(
         pass
 
     # ----- Cabeçalhos de segurança -----
+    #
+    # UI-B15 — this policy is deliberately narrow, and two console messages the
+    # user reported are it working, not it failing:
+    #
+    #   * use.typekit.net fonts refused by font-src. SGAA references Adobe /
+    #     Typekit nowhere -- no @font-face, no @import, no <link>, no library.
+    #     The only font origins the app asks for are fonts.googleapis.com (the
+    #     stylesheet) and fonts.gstatic.com (the files), both already allowed.
+    #     The request therefore originates outside the application, and the
+    #     directive is correctly refusing it. Do not add typekit here.
+    #
+    #   * https://unpkg.com/lucide.min.js.map refused by connect-src. That was
+    #     DevTools following the sourceMappingURL comment at the end of the CDN
+    #     Lucide bundle. Fixed at the source instead: the bundle is now served
+    #     from 'self' without that comment, so the request no longer happens
+    #     and https://unpkg.com could be dropped from script-src below. A
+    #     source map is never a runtime dependency and never a reason to widen
+    #     connect-src.
     csp_default = (
         "default-src 'self'; "
         "img-src 'self' data: blob:; "
         "font-src 'self' data: https://fonts.gstatic.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "script-src 'self' 'unsafe-inline' https://unpkg.com https://apis.google.com https://accounts.google.com; "
+        "script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com; "
         "frame-src 'self' https://accounts.google.com https://picker.googleapis.com https://docs.google.com; "
         "connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com; "
         "frame-ancestors 'self'; "

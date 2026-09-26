@@ -14,8 +14,6 @@ from app.db import (
 from app.presentation import format_date_ptbr
 
 
-DEFAULT_PASSWORDS_ENABLED_KEY = "default_passwords_enabled"
-
 
 def _normalize_optional_iso_date(value: str, *, allow_empty: bool = False) -> str:
     raw = str(value or "").strip()
@@ -39,29 +37,6 @@ def get_app_settings(conn) -> dict[str, str]:
     for row in rows:
         settings[str(row["chave"])] = str(row["valor"])
     return settings
-
-
-def get_default_passwords_enabled(conn) -> bool:
-    row = conn.execute(
-        "SELECT valor FROM configuracoes_app WHERE chave = ?",
-        (DEFAULT_PASSWORDS_ENABLED_KEY,),
-    ).fetchone()
-    if row is None:
-        return True
-    return str(row[0]).strip() == "1"
-
-
-def save_default_passwords_enabled(conn, enabled: bool) -> None:
-    conn.execute(
-        """
-        INSERT INTO configuracoes_app(chave,valor,atualizado_em)
-        VALUES(?,?,datetime('now'))
-        ON CONFLICT(chave) DO UPDATE SET
-            valor=excluded.valor,
-            atualizado_em=excluded.atualizado_em
-        """,
-        (DEFAULT_PASSWORDS_ENABLED_KEY, "1" if enabled else "0"),
-    )
 
 
 def get_response_time_settings(conn) -> dict[str, object]:

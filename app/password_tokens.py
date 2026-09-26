@@ -6,7 +6,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from app.user_accounts import CREDENTIAL_STATE_DEFAULT, CREDENTIAL_STATE_PERSONAL
+from app.user_accounts import CREDENTIAL_STATE_PERSONAL, first_access_redeemable
 
 
 PURPOSE_FIRST_ACCESS = "first_access"
@@ -149,6 +149,35 @@ def resolve_password_token(
     )
 
 
+def mark_password_token_sent(
+    conn,
+    token_id: int,
+    *,
+    now: dt.datetime | None = None,
+) -> bool:
+    """Record that a mail provider CONFIRMED sending this token's message.
+
+    The single writer of ``senha_tokens.sent_at`` (prod-1/v10). It must be
+    called only on the confirmed-send branch: an indeterminate provider result
+    is not a send, and a definite failure is the opposite of one. That
+    restriction is the whole value of the column -- see
+    ``app.prod1_access_delivery_ddl``.
+
+    Writing is idempotent and does not resurrect a spent token: a token already
+    marked, consumed or invalidated is left alone and ``False`` is returned.
+    """
+    cursor = conn.execute(
+        """
+        UPDATE senha_tokens
+           SET sent_at=?
+         WHERE id=? AND sent_at IS NULL
+           AND consumed_at IS NULL AND invalidated_at IS NULL
+        """,
+        (_db_timestamp(_utc_now(now)), int(token_id)),
+    )
+    return cursor.rowcount == 1
+
+
 def invalidate_password_token(conn, token_id: int) -> bool:
     cursor = conn.execute(
         """
@@ -183,7 +212,15 @@ def consume_password_token_and_set_password(
         if record is None:
             conn.execute("ROLLBACK")
             return None
-        if purpose == PURPOSE_FIRST_ACCESS and record.credential_state != CREDENTIAL_STATE_DEFAULT:
+        # Defence in depth: first access only ever completes a PENDING account.
+        # The state is read inside this write transaction, so no writer can
+        # change it between the check and the password write.  Refusal is the
+        # same generic None an expired or unknown token gets -- nothing is
+        # written, nothing is consumed, and the account state does not leak.
+        # password_reset carries no such precondition.
+        if purpose == PURPOSE_FIRST_ACCESS and not first_access_redeemable(
+            record.credential_state
+        ):
             conn.execute("ROLLBACK")
             return None
 
@@ -218,6 +255,7 @@ __all__ = [
     "consume_password_token_and_set_password",
     "invalidate_password_token",
     "issue_password_token",
+    "mark_password_token_sent",
     "password_token_digest",
     "resolve_password_token",
 ]

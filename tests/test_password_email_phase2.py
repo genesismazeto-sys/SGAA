@@ -25,7 +25,11 @@ from app.password_tokens import (
 from app.prod1_schema import bootstrap_prod1_schema
 from app.security.passwords import check_password, hash_password
 from app.services.mail_service import MailTransportError
-from app.user_accounts import CREDENTIAL_STATE_PERSONAL, create_usuario_with_access_level
+from app.user_accounts import (
+    CREDENTIAL_STATE_PERSONAL,
+    create_usuario_pending,
+    create_usuario_with_access_level,
+)
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -170,11 +174,11 @@ def test_public_password_forms_require_csrf(tmp_path):
             main.app.config["WTF_CSRF_ENABLED"] = True
             with main.app.app_context():
                 conn = main.get_db_connection()
+                # First access is redeemable only on a pending account.
                 user_id = int(
-                    conn.execute(
-                        "SELECT usuario_id FROM usuario_credenciais "
-                        "WHERE estado='default' ORDER BY usuario_id LIMIT 1"
-                    ).fetchone()[0]
+                    create_usuario_pending(
+                        conn, "CSRF subject", "csrf-pending@example.test", "admin"
+                    ).lastrowid
                 )
                 first_token, _ = issue_password_token(
                     conn, user_id, PURPOSE_FIRST_ACCESS
@@ -229,13 +233,13 @@ def test_admin_single_user_email_action_chooses_purpose_from_credential_state(
     with isolated_versioned_app_env(tmp_path, "admin-password-email.db") as env:
         with main.app.app_context():
             conn = main.get_db_connection()
-            default_user = conn.execute(
-                """
-                SELECT u.id FROM usuarios u
-                JOIN usuario_credenciais c ON c.usuario_id=u.id
-                WHERE c.estado='default' ORDER BY u.id LIMIT 1
-                """
-            ).fetchone()
+            # prod-1/v11: first access is for an account still being
+            # onboarded -- pending. One holding a credential gets a reset.
+            default_user = {
+                "id": create_usuario_pending(
+                    conn, "Pending mail", "pending-mail@example.test", "admin"
+                ).lastrowid
+            }
             personal_cursor = create_usuario_with_access_level(
                 conn,
                 "Personal mail",
@@ -344,7 +348,7 @@ def test_reset_link_round_trip_against_the_issuing_runtime(tmp_path, monkeypatch
     trusted configured public base URL, then replayed against the SAME app and
     database that issued it.
     """
-    base_url = "http://127.0.0.1:5001"
+    base_url = "http://127.0.0.1:5000"
     sent = []
     monkeypatch.setattr(password_email, "password_email_status", lambda _conn: {"ready": True})
     monkeypatch.setattr(password_email, "get_public_base_url", lambda: base_url)
@@ -485,64 +489,74 @@ def test_security_links_use_the_configured_authority_not_the_request_host(tmp_pa
     assert "localhost" not in link
 
 
-def test_acceptance_base_url_override_is_opt_in_and_inert_in_production(monkeypatch):
-    """The isolated-runtime override must never touch a real deployment."""
-    import importlib
-    from app.cloud_config import get_public_base_url_setting  # noqa: F401
+def test_the_acceptance_base_url_override_is_gone_and_cannot_be_revived(monkeypatch):
+    """One port means the stored base URL is already right for both runtimes.
+
+    ``APP_ACCEPTANCE_PUBLIC_BASE_URL`` existed only to paper over an acceptance
+    runtime listening on a different port. With a single port it reconciles
+    nothing, and an env var able to silently replace the trusted link authority
+    is not kept dormant: setting it must now change nothing at all.
+    """
     from services import oauth_config
+
+    source = Path(oauth_config.__file__).read_text(encoding="utf-8")
+    assert 'os.getenv("APP_ACCEPTANCE_PUBLIC_BASE_URL")' not in source, (
+        "the retired override is being read again"
+    )
+    assert "_acceptance_base_url_override" not in source.replace("# ", ""), (
+        "the retired override function is back"
+    )
 
     monkeypatch.setattr(
         oauth_config, "get_public_base_url_setting", lambda: "http://localhost:5000"
     )
-
-    # Absent -> the configured machine-local authority wins, unchanged.
-    monkeypatch.delenv("APP_ACCEPTANCE_PUBLIC_BASE_URL", raising=False)
     monkeypatch.setenv("APP_ENV", "development")
     assert oauth_config.get_public_base_url() == "http://localhost:5000"
 
-    # Present + non-production -> the acceptance runtime stays coherent.
-    monkeypatch.setenv("APP_ACCEPTANCE_PUBLIC_BASE_URL", "http://localhost:5001")
-    assert oauth_config.get_public_base_url() == "http://localhost:5001"
-    monkeypatch.setenv("APP_ENV", "testing")
-    assert oauth_config.get_public_base_url() == "http://localhost:5001"
+    # Set to anything at all -- including a hostile value -- it is simply unread.
+    for value in ("http://localhost:5001", "http://attacker.example.net", "not-a-url"):
+        monkeypatch.setenv("APP_ACCEPTANCE_PUBLIC_BASE_URL", value)
+        assert oauth_config.get_public_base_url() == "http://localhost:5000", value
 
-    # Present + production -> ignored outright; the store remains the authority.
+    # Production is unaffected too: the store stays the sole authority.
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setattr(
         oauth_config, "get_public_base_url_setting", lambda: "https://sgaa.example.org"
     )
     assert oauth_config.get_public_base_url() == "https://sgaa.example.org"
 
-    # A non-local http override is still rejected outside production.
-    monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("APP_ACCEPTANCE_PUBLIC_BASE_URL", "http://attacker.example.net")
-    with pytest.raises(oauth_config.OAuthConfigError):
-        oauth_config.get_public_base_url()
 
-    # Malformed values are rejected, never silently ignored.
-    monkeypatch.setenv("APP_ACCEPTANCE_PUBLIC_BASE_URL", "not-a-url")
-    with pytest.raises(oauth_config.OAuthConfigError):
-        oauth_config.get_public_base_url()
-
-
-def test_acceptance_launcher_keeps_port_database_and_base_url_coherent():
-    """run.bat stays canonical; run_acceptance.bat owns the isolated tuple."""
+def test_sgaa_has_exactly_one_application_port():
+    """5000, everywhere. The isolation boundary is the DATABASE, not the port."""
     root = Path(main.__file__).resolve().parent
     canonical = (root / "run.bat").read_text(encoding="utf-8", errors="replace")
     acceptance = (root / "run_acceptance.bat").read_text(encoding="utf-8", errors="replace")
 
-    # run.bat must not learn anything about acceptance.
-    assert "APP_ACCEPTANCE_PUBLIC_BASE_URL" not in canonical
-    assert "5001" not in canonical
-    assert 'if "%APP_PORT%"=="" set "APP_PORT=5000"' in canonical
+    for name, launcher in (("run.bat", canonical), ("run_acceptance.bat", acceptance)):
+        assert "5001" not in launcher, f"{name} still knows about port 5001"
+        assert "APP_ACCEPTANCE_PUBLIC_BASE_URL" not in launcher, name
 
-    # The acceptance launcher sets all three values together...
-    assert 'set "APP_PORT=5001"' in acceptance
+    assert 'if "%APP_PORT%"=="" set "APP_PORT=5000"' in canonical
+    assert 'set "APP_PORT=5000"' in acceptance
+
+
+def test_acceptance_launcher_refuses_canonical_db_and_an_occupied_port():
+    """Neither refusal may be softened: they are what keep the two apart."""
+    root = Path(main.__file__).resolve().parent
+    acceptance = (root / "run_acceptance.bat").read_text(encoding="utf-8", errors="replace")
+
+    # Disposable database, and an explicit refusal of the canonical one.
     assert 'set "APP_DATABASE=%SGAA_ACCEPTANCE_DB%"' in acceptance
-    assert 'set "APP_ACCEPTANCE_PUBLIC_BASE_URL=http://localhost:%APP_PORT%"' in acceptance
-    # ...refuses the canonical database...
     assert 'if /i "%RESOLVED_DB%"=="%CANONICAL_DB%"' in acceptance
-    # ...and delegates every launch step instead of duplicating it.
+    refusal = acceptance.split('if /i "%RESOLVED_DB%"=="%CANONICAL_DB%"', 1)[1]
+    assert "exit /b 1" in refusal.split(")", 1)[0], "the canonical-DB refusal does not abort"
+
+    # It must decide for itself that 5000 is free -- never start a second SGAA.
+    assert "Get-NetTCPConnection -LocalPort %APP_PORT% -State Listen" in acceptance
+    port_guard = acceptance.split("Get-NetTCPConnection", 1)[1]
+    assert "exit /b 1" in port_guard, "an occupied port does not abort the launch"
+
+    # Launch steps stay owned by run.bat.
     assert 'call "%~dp0run.bat"' in acceptance
     for duplicated in ("bootstrap_sgaa_runtime.ps1", "main.py", "startup_preflight"):
         assert duplicated not in acceptance, f"{duplicated} must stay owned by run.bat"

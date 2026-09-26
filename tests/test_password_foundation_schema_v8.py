@@ -12,10 +12,12 @@ from app.prod1_schema import (
     Prod1SchemaError,
     _PROD1_V7_SIGNATURE_SHA256,
     _PROD1_V8_SIGNATURE_SHA256,
+    _validate_prod1_v8_schema,
     _physical_schema_digest,
     bootstrap_prod1_schema,
     validate_prod1_schema,
 )
+from tests.prod1_v11_support import revert_prod1_v11_to_v10
 
 
 def _connect() -> sqlite3.Connection:
@@ -29,9 +31,27 @@ def _test_hash(password: str) -> str:
     return generate_password_hash(password, method="pbkdf2:sha256:1")
 
 
+def _build_v8(conn: sqlite3.Connection) -> None:
+    """Revert the v11, v10 then v9 deltas and prove the frozen v8 shape.
+
+    The bootstrap now produces v11, so v8 -- which this suite characterises --
+    is reached by undoing the v11 table rebuild and then removing exactly the
+    one column each of v10 and v9 added.
+    """
+    bootstrap_prod1_schema(conn)
+    revert_prod1_v11_to_v10(conn)
+    conn.execute("ALTER TABLE senha_tokens DROP COLUMN sent_at")
+    conn.execute("DELETE FROM schema_migrations WHERE version=10")
+    conn.execute("ALTER TABLE usuario_credenciais DROP COLUMN acesso_ativo")
+    conn.execute("DELETE FROM schema_migrations WHERE version=9")
+    conn.execute("PRAGMA user_version=8")
+    conn.commit()
+    assert _physical_schema_digest(conn) == _PROD1_V8_SIGNATURE_SHA256
+
+
 def _build_v7(conn: sqlite3.Connection) -> None:
     """Revert only the additive v8 delta and prove the frozen v7 shape."""
-    bootstrap_prod1_schema(conn)
+    _build_v8(conn)
     conn.execute("DROP TABLE senha_tokens")
     conn.execute("DROP TABLE usuario_credenciais")
     conn.execute(
@@ -101,7 +121,8 @@ def test_v7_to_v8_migration_preserves_hashes_and_classifies_current_defaults():
 
     status = migrate_prod1_v7_to_v8(conn)
 
-    assert status["schema_version"] == SCHEMA_VERSION == 8
+    assert status["schema_version"] == 8, "the v7->v8 step yields v8"
+    assert SCHEMA_VERSION == 11, "the current head is v11"
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
     assert conn.execute(
         "SELECT name FROM schema_migrations WHERE version=8"
@@ -131,9 +152,11 @@ def test_v7_to_v8_migration_preserves_hashes_and_classifies_current_defaults():
 
 def test_v8_physical_contract_tables_columns_index_and_constraints():
     conn = _connect()
-    bootstrap_prod1_schema(conn)
+    _build_v8(conn)
     assert _physical_schema_digest(conn) == _PROD1_V8_SIGNATURE_SHA256
-    assert validate_prod1_schema(conn)["schema_version"] == 8
+    # v8 is a predecessor now: it is recognised by its own frozen contract,
+    # not by validate_prod1_schema, which describes the v9 head.
+    _validate_prod1_v8_schema(conn)
 
     tables = {
         row[0]

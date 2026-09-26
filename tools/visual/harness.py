@@ -16,9 +16,12 @@ Screenshots are only useful if the only thing that changes between two runs is
 the thing under test. This harness controls:
 
 * **Network** — every third-party request is blocked. The app pulls Inter from
-  fonts.googleapis.com and the Lucide icon set from ``unpkg.com/lucide@latest``.
-  ``@latest`` means the icon library can change without any commit in this repo,
-  so leaving it live would make the baseline rot on its own.
+  fonts.googleapis.com. Lucide used to come from ``unpkg.com/lucide@latest``,
+  where ``@latest`` meant the icon library could change without any commit in
+  this repo; since UI-B15 the app serves the pinned copy itself from
+  ``static/vendor/lucide.min.js``, so the icon set no longer rots the baseline
+  on its own and no unpkg request is made. The interception below is kept as a
+  regression net, not because anything still needs it.
 * **Fonts** — with Google Fonts blocked, ``--font-sans`` falls through to the
   next entry in its own stack. That is deterministic on one machine but *not*
   across operating systems. See "Limits".
@@ -56,6 +59,9 @@ BASELINE_DIR = PROJECT_ROOT / "tests" / "visual" / "baseline"
 VENDOR_DIR = PROJECT_ROOT / "tests" / "visual" / "vendor"
 
 VIEWPORT = {"width": 1440, "height": 900}
+# The harness seeds its own throwaway database and pins this address into the
+# environment below, so a machine-local .env can never change who it logs in as
+# (the baselines were captured with this address).
 ADMIN_EMAIL = "admin@ej.edu.br"
 ADMIN_PASSWORD = "admin123"
 # Created by tools/seed_demo_data.py
@@ -131,6 +137,7 @@ class AppServer:
             APP_CLOUD_BACKUP_DIR=str(self.runtime / "backups" / "cloud"),
             APP_LOG_DIR=str(self.runtime / "logs"),
             APP_BOOTSTRAP_DEFAULT_ADMIN="1",
+            APP_BOOTSTRAP_ADMIN_EMAIL=ADMIN_EMAIL,
             APP_BOOTSTRAP_ADMIN_PASSWORD=ADMIN_PASSWORD,
             DISABLE_CSRF="1",
             APP_SECRET_KEY="visual-regression-harness-fixed-key-0123456789abcdef",
@@ -178,10 +185,9 @@ def _install_determinism(context) -> None:
 
     def route(handler):
         url = handler.request.url
-        # The app loads lucide@latest from a CDN. "@latest" means the icon set
-        # can change with no commit in this repo, which would rot the baseline
-        # on its own. Serve a pinned, vendored copy instead so icons render
-        # exactly as in production but never drift.
+        # Dead since UI-B15: the app serves its own pinned Lucide, so no
+        # unpkg request is issued. Kept so that a regression back to the CDN
+        # fails loudly in the baseline instead of silently blocking icons.
         if "unpkg.com" in url and "lucide" in url and lucide_js is not None:
             return handler.fulfill(
                 status=200,

@@ -15,6 +15,7 @@ from app.backup import orchestrator
 from app.services import google_drive_service
 from services import oauth_config, onedrive_service
 from tools import configure_cloud_oauth
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 
 def test_machine_local_store_is_atomic_and_does_not_contain_plaintext_secret(tmp_path, monkeypatch):
@@ -780,7 +781,7 @@ def test_provider_cards_render_four_action_contract_for_google_and_onedrive(
     client = main.app.test_client()
     login_response = client.post(
         "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
+        data={"email": TEST_ROOT_ADMIN_EMAIL, "senha": "admin123"},
         follow_redirects=False,
     )
     assert login_response.status_code in (302, 303)

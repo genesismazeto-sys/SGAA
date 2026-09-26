@@ -6,6 +6,7 @@ if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
 import main
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 @pytest.fixture(scope="module")
 def client():
@@ -34,7 +35,7 @@ def test_admin_dashboard_requires_auth(client):
 
 
 def test_admin_login_and_dashboard(client):
-    r = client.post('/login', data={'email':'admin@ej.edu.br', 'senha':'admin123'}, follow_redirects=False)
+    r = client.post('/login', data={'email':TEST_ROOT_ADMIN_EMAIL, 'senha':'admin123'}, follow_redirects=False)
     assert r.status_code in (302, 303)
     # após autenticar, acessar dashboard
     r2 = client.get('/admin/dashboard')

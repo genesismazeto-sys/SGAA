@@ -22,7 +22,10 @@
     {% block extra_head %}{% endblock %}
     <!-- Ícones -->
     <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
-    <script src="https://unpkg.com/lucide@latest" defer></script>
+    {# UI-B15: self-hosted, pinned Lucide. Same asset and same reasons as
+       templates/base.html -- script-src no longer allows https://unpkg.com, so
+       this must not go back to the CDN. #}
+    <script src="{{ url_for('static', filename='vendor/lucide.min.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/ui-tooltips.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>

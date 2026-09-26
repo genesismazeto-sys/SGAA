@@ -128,7 +128,9 @@
       </section>
     </div>
   </main>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- UI-B15: self-hosted, pinned Lucide (literal path, per the no-url_for note
+       above). The CDN origin is no longer allowed by script-src. -->
+  <script src="/static/vendor/lucide.min.js"></script>
   <script>
     window.lucide?.createIcons?.();
   </script>

@@ -15,6 +15,7 @@ if BASE not in sys.path:
 
 import main
 from tests.session_support import stamp_auth_version
+from tests.root_admin_test_config import TEST_ROOT_ADMIN_EMAIL
 
 
 def _login_as_user(client, user_id, user_name, user_type="admin"):
@@ -61,7 +62,7 @@ def admin_client(tmp_path):
     client = main.app.test_client()
     login_response = client.post(
         "/login",
-        data={"email": "admin@ej.edu.br", "senha": "admin123"},
+        data={"email": TEST_ROOT_ADMIN_EMAIL, "senha": "admin123"},
         follow_redirects=False,
     )
     assert login_response.status_code in (302, 303)

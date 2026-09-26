@@ -311,7 +311,15 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
 
     # Terms appended after UT-MX3 also come off to recover MX3's parent state.
     parent_keys = (
-        governance.catalog_keys_before_password_foundation(catalog)
+        governance.catalog_keys_before_password_foundation(
+            governance.catalog_keys_before_access_repair(
+                governance.catalog_keys_before_root_admin(
+                    governance.catalog_keys_before_credential_pending(
+                        governance.catalog_keys_before_photo_label(catalog)
+                    )
+                )
+            )
+        )
         - set(NEW_STUDENT_MATRIX_KEYS)
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)
         - set(governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS)

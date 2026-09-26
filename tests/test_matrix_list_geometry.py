@@ -66,9 +66,14 @@ def test_every_scrollable_card_grid_owns_its_complete_responsive_width():
             assert scopes, f"{template.name} must give its scrollable grid an imp-* scope"
             for scope in scopes:
                 audited_scopes.add(scope)
+                # The requirement is that the scope DECLARES its threshold, not
+                # that it spells it as a literal. A calc() over the shared
+                # geometry tokens satisfies it and states the derivation --
+                # which is the only way a grid with an intrinsic track (e.g. the
+                # shared --imp-status-col) can express its threshold at all.
                 assert re.search(
                     rf"\.{re.escape(scope)}\s*\{{[^}}]*"
-                    rf"--imp-list-min-width:\s*\d+px",
+                    rf"--imp-list-min-width:\s*(?:\d+px|calc\([^;]+\))",
                     combined_sources,
                     re.DOTALL,
                 ), f"{scope} must declare the minimum width of its complete grid"

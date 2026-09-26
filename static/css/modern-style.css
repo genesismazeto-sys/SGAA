@@ -18,6 +18,23 @@ body{
   -moz-osx-font-smoothing:grayscale;
 }
 
+/* Acessibilidade: conteúdo presente no layout, invisível na tela.
+   Distinto de `hidden` / `display:none`, que removem o elemento da
+   renderização -- e, com isso, da leitura que o gerenciador de senhas do
+   navegador faz do formulário (UI-B15). Usado pelo campo de identidade do
+   diálogo de nova senha em admin_acesso.html. */
+.sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0, 0, 0, 0);
+  white-space:nowrap;
+  border:0;
+}
+
 /* Acessibilidade: skip link */
 .sr-only-focusable{ position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
 .sr-only-focusable:focus{

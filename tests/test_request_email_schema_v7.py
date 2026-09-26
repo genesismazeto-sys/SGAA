@@ -18,6 +18,7 @@ from app.prod1_schema import (
     validate_prod1_schema,
 )
 from app.prod1_notifications_v7 import migrate_prod1_v6_to_v7
+from tests.prod1_v11_support import revert_prod1_v11_to_v10
 
 
 def _fresh() -> sqlite3.Connection:
@@ -27,20 +28,20 @@ def _fresh() -> sqlite3.Connection:
     return conn
 
 
-def test_current_schema_version_is_eight():
-    assert SCHEMA_VERSION == 8
+def test_current_schema_version_is_nine():
+    assert SCHEMA_VERSION == 11
 
 
 def test_expected_tables_include_outbox():
     assert {"email_envios", "requisicao_email_eventos"} <= EXPECTED_TABLES
 
 
-def test_clean_bootstrap_is_valid_v8():
+def test_clean_bootstrap_is_valid_head():
     conn = _fresh()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 8
+    assert status["schema_version"] == SCHEMA_VERSION == 11
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
 
 
 def test_v7_marker_recorded():
@@ -61,6 +62,13 @@ def _build_v6(conn: sqlite3.Connection) -> None:
     silently drift into fabricating a shape the real gate would reject.
     """
     bootstrap_prod1_schema(conn)
+    # The bootstrap head is v11; undo its credential rebuild, then drop the
+    # later markers. v10's column lives on senha_tokens, which this helper
+    # removes wholesale below.
+    revert_prod1_v11_to_v10(conn)
+    conn.execute("DELETE FROM schema_migrations WHERE version=10")
+    conn.execute("ALTER TABLE usuario_credenciais DROP COLUMN acesso_ativo")
+    conn.execute("DELETE FROM schema_migrations WHERE version=9")
     conn.execute("DROP TABLE senha_tokens")
     conn.execute("DROP TABLE usuario_credenciais")
     conn.execute(

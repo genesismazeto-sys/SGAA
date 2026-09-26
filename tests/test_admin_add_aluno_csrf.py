@@ -322,7 +322,7 @@ def test_admin_add_aluno_requires_and_accepts_valid_csrf(
     assert aluno["status"] == "Ativo"
 
 
-def test_admin_add_aluno_blank_password_uses_default_and_allows_login(
+def test_admin_add_aluno_blank_password_is_pending_and_cannot_login(
     isolated_client_csrf,
     monkeypatch,
 ):
@@ -357,12 +357,15 @@ def test_admin_add_aluno_blank_password_uses_default_and_allows_login(
     with main.app.app_context():
         conn = main.get_db_connection()
         usuario = conn.execute(
-            "SELECT id, senha FROM usuarios WHERE email = ?",
+            "SELECT u.id, u.senha, c.estado FROM usuarios u"
+            " JOIN usuario_credenciais c ON c.usuario_id = u.id WHERE u.email = ?",
             (aluno_email,),
         ).fetchone()
         assert usuario is not None
+        # prod-1/v11: no password typed -> pending, never the shared default.
+        assert usuario["estado"] == "pending"
         senha_padrao_aluno = main._default_password_for_user_type(conn, "aluno")
-        assert main.check_password(usuario["senha"], senha_padrao_aluno)
+        assert not main.check_password(usuario["senha"], senha_padrao_aluno)
 
     with client.session_transaction() as sess:
         sess.clear()
@@ -372,8 +375,9 @@ def test_admin_add_aluno_blank_password_uses_default_and_allows_login(
         data={"email": aluno_email, "senha": senha_padrao_aluno},
         follow_redirects=False,
     )
-    assert login_response.status_code in (302, 303)
-    assert "/aluno/dashboard" in (login_response.headers.get("Location") or "")
+    assert login_response.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.get("user_id") is None
 
 
 def test_admin_editar_aluno_password_requires_and_accepts_valid_csrf(

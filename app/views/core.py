@@ -15,11 +15,10 @@ from app.auth import (
     default_access_level_for_user_type,
 )
 from app.db import get_db_connection
+from app.root_admin import is_root_admin, verify_root_master_key
 from app.security.passwords import check_password, hash_password, is_legacy_password_hash
-from app.settings import get_default_passwords_enabled
 from app.user_accounts import (
-    CREDENTIAL_STATE_DEFAULT,
-    CREDENTIAL_STATE_PERSONAL,
+    credential_state_allows_password_login,
     get_usuario_credential,
     normalize_usuario_access_for_user_type,
     rehash_usuario_password,
@@ -77,15 +76,45 @@ def login():
         password_matches = bool(user and check_password(user["senha"], senha))
         credential = get_usuario_credential(conn, user["id"]) if user else None
         credential_state = credential["estado"] if credential else None
-        credential_allowed = credential_state == CREDENTIAL_STATE_PERSONAL or (
-            credential_state == CREDENTIAL_STATE_DEFAULT
-            and get_default_passwords_enabled(conn)
+        # prod-1/v9: whether the account may authenticate at all. Durable and
+        # orthogonal to the password origin, so a revoked account is refused
+        # with a correct personal password. Checked before anything else can
+        # grant access.
+        access_active = bool(credential) and int(credential["acesso_ativo"]) == 1
+        # prod-1/v11: the credential state alone decides whether the stored
+        # hash is a credential. "personal" and an explicitly applied "default"
+        # are; "pending" never is, whatever usuarios.senha contains. No global
+        # setting takes part.
+        credential_allowed = access_active and credential_state_allows_password_login(
+            credential_state
         )
 
-        if user and password_matches and credential_allowed:
+        # Break-glass recovery for the single root administrator.  A root
+        # account without a usable credential -- "pending", for instance --
+        # would otherwise leave nobody able to administer the installation.
+        # Esta via e independente do estado da credencial, e nao existe para
+        # mais nenhuma conta.
+        #
+        # A credencial precisa existir: e a verificacao estrutural da conta, e e
+        # dela que sai o auth_version da sessao.  O ramo nao altera a resposta
+        # generica de falha, entao nao e observavel de fora.
+        # The break-glass path does not override a revoked account either: root
+        # cannot be revoked through access management, so an inactive root row
+        # means structural corruption, not an administrative decision.
+        master_key_login = bool(
+            user
+            and credential is not None
+            and access_active
+            and is_root_admin(conn, user["id"])
+            and verify_root_master_key(senha)
+        )
+
+        if user and credential is not None and (
+            master_key_login or (password_matches and credential_allowed)
+        ):
             # Re-hash transparente caso o hash armazenado seja do formato legado.
             try:
-                if is_legacy_password_hash(user["senha"]):
+                if not master_key_login and is_legacy_password_hash(user["senha"]):
                     new_hash = hash_password(senha)
                     rehash_usuario_password(conn, user["id"], new_hash)
                     conn.commit()

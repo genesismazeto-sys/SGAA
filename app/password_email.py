@@ -11,6 +11,7 @@ from app.password_tokens import (
     PURPOSE_PASSWORD_RESET,
     invalidate_password_token,
     issue_password_token,
+    mark_password_token_sent,
 )
 from app.services.mail_service import (
     MailMessage,
@@ -129,6 +130,10 @@ def issue_and_send_password_email(
         send_text_email(conn, message)
     except MailTransportError as exc:
         if exc.indeterminate:
+            # Deliberately NOT marked sent: the provider did not confirm
+            # anything. The token stays valid because the mail may well have
+            # arrived, but no durable evidence of a send is written, so no
+            # surface may later present this as delivered.
             logger.warning(
                 "event=password_mail_indeterminate purpose=%s usuario_id=%s code=%s",
                 purpose,
@@ -149,6 +154,11 @@ def issue_and_send_password_email(
         )
         return PasswordMailOutcome("failed", str(exc))
 
+    # The provider confirmed the send. This is the only branch allowed to write
+    # the durable evidence, and it is what lets Admin > Acesso say
+    # "Disponibilizado" without claiming something SGAA cannot know.
+    mark_password_token_sent(conn, token_id)
+    conn.commit()
     logger.info(
         "event=password_mail_sent purpose=%s usuario_id=%s",
         purpose,

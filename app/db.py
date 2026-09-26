@@ -24,6 +24,7 @@ from app.db_maintenance import (
     ensure_usuario_access_schema,
     ensure_usuario_profile_schema,
 )
+from app.root_admin import DEFAULT_ROOT_ADMIN_EMAIL
 from app.security.passwords import hash_password
 from app.text import ptbr_sqlite_collation
 from app.prod1_schema import validate_prod1_schema
@@ -77,7 +78,9 @@ def _app_settings_defaults() -> dict[str, str]:
         "auto_indefer_devolvida": "0",
         "horas_padrao_academica": str(DEFAULT_HORAS_ACADEMICA),
         "horas_padrao_extensao": str(DEFAULT_HORAS_EXTENSAO),
-        "default_passwords_enabled": "1",
+        # "default_passwords_enabled" is deliberately absent: prod-1/v11
+        # retired that switch and its migration deletes the stored row, so
+        # seeding it here would resurrect a setting nothing may read.
     }
 
 
@@ -130,7 +133,7 @@ def init_db():
         )
 
     admin_email = (
-        current_app.config.get("BOOTSTRAP_ADMIN_EMAIL") or "admin@ej.edu.br"
+        current_app.config.get("BOOTSTRAP_ADMIN_EMAIL") or DEFAULT_ROOT_ADMIN_EMAIL
     ).strip().lower()
     bootstrap_admin = bool(current_app.config.get("BOOTSTRAP_DEFAULT_ADMIN"))
     bootstrap_password = (
