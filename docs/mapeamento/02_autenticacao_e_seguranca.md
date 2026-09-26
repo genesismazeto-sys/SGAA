@@ -163,9 +163,14 @@ Aplicados em dois `after_request` (há sobreposição entre `main.py` e
 - `Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()`
 - `Strict-Transport-Security` (só produção)
 - **CSP** (`Content-Security-Policy`) — configurável via env, default permite
-  `'unsafe-inline'` em scripts/estilos e libera domínios Google (Picker/OAuth) e
-  `unpkg.com`. (⚠️ `'unsafe-inline'` em `script-src` enfraquece a CSP — melhoria
-  futura: nonces/hashes.)
+  `'unsafe-inline'` em scripts/estilos e libera os domínios Google
+  (Picker/OAuth) mais as origens do Google Fonts. (⚠️ `'unsafe-inline'` em
+  `script-src` enfraquece a CSP — melhoria futura: nonces/hashes.)
+  **UI-B15:** `https://unpkg.com` saiu de `script-src` — o Lucide passou a ser
+  servido de `static/vendor/lucide.min.js` (versão fixada, sem
+  `sourceMappingURL`). Nenhuma origem foi acrescentada; pedidos a
+  `use.typekit.net` e a mapas de código remotos continuam recusados de
+  propósito e não têm origem no SGAA.
 - HTML autenticado recebe `Cache-Control: no-store` (evita cache em máquinas
   compartilhadas).
 

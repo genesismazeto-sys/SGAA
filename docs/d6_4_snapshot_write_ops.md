@@ -168,6 +168,11 @@ Resultado:
 
 ## Validacao controlada no ambiente alvo - D6.4.0-ACTIVATE-TARGET-1
 
+> **Registro historico, nao e instrucao.** A porta `5001` citada nesta secao foi
+> um fallback pontual daquela sessao. O SGAA tem **uma unica porta de aplicacao:
+> `5000`**. O isolamento de aceitacao e feito pelo BANCO, nunca pela porta.
+> Nao reproduza a porta abaixo.
+
 - Hash validado: `ba5a3dfbdf43d7c904b1f7d88d234e3c8a7db307`
 
 Porta efetiva:

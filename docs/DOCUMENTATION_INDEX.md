@@ -8,6 +8,14 @@
   direct-bootstrap and atomic-replacement evidence, and explicitly defers
   production web-runtime activation to a separately authorized Phase C.
 
+## User-reported UI backlog
+
+- `docs/backlog/UI_ACCEPTANCE_BACKLOG.md` — the single canonical record of
+  user-reported UI/acceptance items: what is in acceptance, what is still
+  backlog, and what is already repaired. Exists so this work does not depend on
+  chat history or agent memory (see "Explicit rule" at the end of this index).
+  Add rows there; do not open a second backlog file.
+
 ## Authority hierarchy
 
 1. **Canonical repository state** — `git` commit/tree facts are the single source
