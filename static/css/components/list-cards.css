@@ -484,12 +484,17 @@
 /* =============================================================
    Scoped Layout Adjustments: Curso — turmas do curso (.imp-curso-turmas)
    ============================================================= */
+/* Every track used to carry a fixed pixel maximum (72/104/120/100 = 396px of
+   grid inside a `width:100% !important` card), so the columns bunched up on the
+   left and left the rest of the row empty. This was the only scope in the file
+   with no `fr` track at all -- .imp-turmas and .imp-cursos both have them.
+   Proportions follow .imp-cursos; Status is last, as on every other SGAA list. */
 .imp-curso-turmas{ --imp-list-min-width:368px; }
 .imp-curso-turmas { --imp-cols:
-  minmax(56px, 72px)    /* Nº */
-  minmax(88px, 104px)   /* Status */
-  minmax(90px, 120px)   /* Ano/Semestre */
-  minmax(80px, 100px)   /* Alunos */
+  minmax(56px, 0.7fr)   /* Nº */
+  minmax(110px, 1.2fr)  /* Ano/Semestre */
+  minmax(80px, 0.8fr)   /* Alunos */
+  minmax(90px, 0.9fr)   /* Status */
 };
 .impressoes-cards-scroll.imp-curso-turmas{ width:100%; margin-top:24px; margin-bottom:18px; }
 .imp-curso-turmas .impressoes-cards{ width:100% !important; }

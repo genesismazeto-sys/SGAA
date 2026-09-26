@@ -38,6 +38,8 @@ SCALAR_PLACEHOLDERS = (
     "requisicao.possessivo",
     "requisicao.substantivo",
     "requisicao.processamento",
+    "requisicao.frase",
+    "atividade.substantivo",
 )
 
 #: Block placeholder -- system-generated, body only, never allowed in a subject.
@@ -66,9 +68,30 @@ PLACEHOLDER_HELP = (
     ("{requisicao.substantivo}", "solicitação / solicitações."),
     ("{requisicao.processamento}", "foi processada / foram processadas."),
     (
+        "{requisicao.frase}",
+        "Frase inteira já concordada: \"Sua requisição do dia … foi processada.\" "
+        "/ \"Suas requisições do dia … foram processadas.\"",
+    ),
+    (
+        "{atividade.substantivo}",
+        "atividade acadêmica / atividades acadêmicas — para o assunto.",
+    ),
+    (
         "{requisicoes}",
         "Insere o detalhamento das requisições selecionadas para o aluno.",
     ),
+)
+
+#: Cardinality-safe copy for the outbound model.  The stored preset is
+#: administrator-owned data, so this is a starting point and a repair target --
+#: not something the renderer substitutes at send time.  Every number-bearing
+#: word is a placeholder, so no saved copy can freeze "Suas" onto a singular
+#: noun again.
+DEFAULT_SUBJECT_TEMPLATE = "Processamento de {atividade.substantivo}"
+DEFAULT_BODY_TEMPLATE = (
+    "{saudacao}, {aluno.primeironome}.\n\n"
+    "{requisicao.frase}\n"
+    "Acesse o SGAA para conferir."
 )
 
 _TOKEN_RE = re.compile(r"\{([^{}]*)\}")
@@ -181,6 +204,28 @@ def build_context(events, *, aluno_nome, aluno_matricula, moment=None) -> dict[s
         periodo = f"do dia {inicio}"
     else:
         periodo = f"de {inicio} a {fim}"
+    # ONE authoritative decision -- `many` -- governs every agreeing term below.
+    # Each event snapshots exactly one request and exactly one academic activity
+    # (`atividade_versao_id` -> `atividade_nome`), so the request count IS the
+    # processed-activity count: subject and body can never disagree.  Distinct
+    # activity *names* are deliberately not collapsed -- two requests for the
+    # same activity are still two processed items, and a deduplicated subject
+    # would contradict the body's count.
+    possessivo = "Suas" if many else "Sua"
+    processamento = "foram processadas" if many else "foi processada"
+    # Assembled here, not in the preset: an administrator gluing "Suas" to a
+    # hardcoded singular noun is exactly how "Suas requisição … foi processada"
+    # reached a student.  A blank period (no dates) must not leave a double space.
+    frase = " ".join(
+        part
+        for part in (
+            possessivo,
+            "requisições" if many else "requisição",
+            periodo,
+            processamento,
+        )
+        if part
+    )
     return {
         "saudacao": greeting_for(moment),
         "aluno.nome": str(aluno_nome or ""),
@@ -191,9 +236,13 @@ def build_context(events, *, aluno_nome, aluno_matricula, moment=None) -> dict[s
         "data.fim": fim,
         "data.periodo": periodo,
         "quantidade_requisicoes": str(len(events)),
-        "requisicao.possessivo": "Suas" if many else "Sua",
+        "requisicao.possessivo": possessivo,
         "requisicao.substantivo": "solicitações" if many else "solicitação",
-        "requisicao.processamento": "foram processadas" if many else "foi processada",
+        "requisicao.processamento": processamento,
+        "requisicao.frase": f"{frase}." if frase else "",
+        "atividade.substantivo": (
+            "atividades acadêmicas" if many else "atividade acadêmica"
+        ),
         BLOCK_PLACEHOLDER: render_request_block(events),
     }
 
@@ -231,6 +280,8 @@ def render_student_email(
 __all__ = [
     "BLOCK_PLACEHOLDER",
     "BODY_PLACEHOLDERS",
+    "DEFAULT_BODY_TEMPLATE",
+    "DEFAULT_SUBJECT_TEMPLATE",
     "PLACEHOLDER_HELP",
     "PlaceholderError",
     "SCALAR_PLACEHOLDERS",

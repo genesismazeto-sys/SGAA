@@ -28,6 +28,9 @@ static/css/
     form.css            ← shared form compositions. See form-contract.md.
     detail-header.css   ← canonical detail title/supporting text/Back layout.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
+    turma-alunos.css    ← the Turma student list ("Alunos da turma") shared by
+                          Adicionar turma and Editar turma. Component tokens
+                          on .alunos-wide resolve to --surface / --bg.
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
@@ -180,6 +183,99 @@ inherited convention — six pre-existing `:focus-visible` rules already use the
 same literal — so raising it is a colour decision for a later phase, recorded as
 F5 in §8. Modal focus containment is also still open: several dialogs declare
 `aria-modal="true"` without trapping focus.
+
+### 2.6b Status column contract
+
+For any data list/table that carries a **semantic status/situação column**
+(`.badge.status-pill`, tone from `app/status_presentation.py`):
+
+* it is the **last data column** — as far right as the row's data layout
+  allows;
+* the **header text and every value are centred**;
+* the track reserves the width of the **largest status the column's DOMAIN
+  supports**, plus the normal pill and cell padding;
+* **the width does not depend on which statuses happen to be rendered.** The
+  same dataset at different pages, filters or search states must not shift the
+  column. A list showing only `Ativo` still reserves `Disponibilizado`;
+* the track is **not flexible** and never absorbs leftover width; the
+  **descriptive columns absorb the remaining space** (they own every `fr` on the
+  row);
+* no supported pill ever wraps;
+* **actions are a separate contract.** The floating action bar is not a grid
+  column and does not change any of the above.
+
+**How to opt in.** Owner: `components/list-cards.css`.
+
+```html
+{'text':'Situação', 'class':'status-col'}          {# header #}
+{'content': …, 'class':'status-col', 'badge': true, 'status_badge': true, …}
+```
+
+```css
+.imp-<list>{ --imp-status-col-chars:15; }              /* domain's longest label */
+.imp-<list>{ --imp-cols: … var(--imp-status-col); }    /* last track */
+```
+
+#### How the width is derived
+
+```
+--imp-status-col = chars × 1ch × (pill font-size ÷ grid font-size) + chrome
+```
+
+| Term | Value | Where it comes from |
+|---|---|---|
+| `--imp-status-col-chars` | per list; `15` for Acesso | character count of the **longest label the domain supports**. The only value a list supplies, and it is semantic — a fact about the vocabulary, not a width |
+| `1ch` | — | one character's advance in the inherited font |
+| `--imp-status-col-font-scale` | `calc(11 / 14)` | `ch` resolves at the **grid box's** font-size (`--font-size-base`, 14px) but the text is the **pill's** (11px). Omitting this over-reserves by about a third. CSS cannot divide two lengths, so it is unitless |
+| `--imp-status-col-chrome` | `28px` | pill `padding 0 6px` (12) + `border 1px`×2 (2) + `::before` dot 5 + `gap` 5, plus `.cell` `padding 0 2px` (4). Read off the two owners, not measured |
+
+The residual slack is wanted, not padding: `0` is wider than the average
+lowercase glyph, so N scaled `ch` still exceeds N characters of real mixed-case
+text. Measured against the installed UI font, Acesso reserves ≈122px where the
+longest pill needs 103–109px — **13–20px of no-clip allowance**, and 28px
+narrower than the rejected `150px` it replaced.
+
+The file-level default is `21` — `Deferida Parcialmente`, the longest label in
+*any* SGAA status domain — so a list that adopts the contract without declaring
+its domain over-reserves rather than silently truncating.
+`tests/test_status_column_geometry_ui_b08.py` pins every number above against
+its real source: the declared character count against the domain's label set in
+`app/status_presentation.py`, the chrome against the pill and cell rules, and the
+font scale against the two declared font sizes. A new or renamed status that
+outgrows a column fails a test instead of clipping in a browser.
+
+#### What is forbidden
+
+* **`max-content` / `min-content` / `fit-content` / `auto`** — these size to the
+  widest pill *present*, so the column moves between pages. This was the
+  rejected first attempt.
+* **`fr` on the status track** — absorbs the row's leftover width and drags the
+  column left. This was the original defect (`minmax(150px, 0.9fr)`: flexible
+  *and* a guessed floor).
+* **a page-local width, alignment or status-column class**, inline centring,
+  spacer elements, invisible sentinel rows or hidden pills, and JavaScript
+  measurement.
+* **a second notion of this column's width.** `--imp-list-min-width` is a pixel
+  scroll threshold by construction; it reuses `var(--imp-status-col)` directly
+  rather than restating it. An earlier round carried a separate
+  `--imp-status-col-reserve:120px` beside the track — two numbers for one column
+  is how they drift apart.
+
+The shared `.cell.status-col` block owns alignment; `--imp-status-col` owns
+width. That block sits at the end of `list-cards.css` and is `(0,4,0)`, so it
+beats both the broad `.imp-* .impresso-card .cell{ justify-content:flex-start }`
+rules above it and an equally specific `:nth-child()` — which is why the contract
+needs no `!important` and no per-list `nth-child` rule.
+
+**Adopted by:** `admin_acesso.html` (`.imp-acesso`, 15 characters).
+**Audited, not yet migrated** — nine further lists carry a status pill and
+predate this contract, each still centring via per-list `nth-child` rules:
+`admin_alunos` (status pill is `left`-aligned — the one outright violation),
+`admin_cursos`, `admin_turmas`, `admin_matrizes`, `admin_detalhes_curso`,
+`admin_detalhes_turma`, `admin_requisicoes`, plus `admin_reportes` and
+`admin_catalogo_versao_detalhe`, where Status is **not** the last column. Each
+is a visible change needing its own acceptance; they were deliberately not
+mass-migrated.
 
 ### 2.7 Responsive contract
 

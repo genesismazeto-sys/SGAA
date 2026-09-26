@@ -118,7 +118,11 @@
 
     {% if matrizes and matrizes|length %}
       {% for matriz in matrizes %}
-        {% set status_lc = (matriz.status or '')|lower %}
+        {#- UI-B03: this page used to carry a *copy of the Requisições status
+            ladder* (deferida / devolvida / indeferida ...). `Vigente` matched
+            none of its branches and fell through to the neutral fallback, so
+            the effective matrix rendered identically to a Rascunho. The tone
+            now comes from the single owner, app/status_presentation.py. -#}
         {{ cl.row([
           {'content': matriz.nome or '-', 'class':'left ellipsis'},
           {'content': matriz.curso or '-', 'class':'left ellipsis'},
@@ -126,19 +130,11 @@
           {'content': ((matriz.horas_aac_obrigatorias or 0) ~ ' h'), 'class':'center'},
           {'content': ((matriz.horas_extensao_obrigatorias or 0) ~ ' h'), 'class':'center'},
           {
-            'content': matriz.status or '-',
+            'content': status_label('matriz', matriz.status),
             'class':'center',
             'badge': true,
-            'badge_type': matriz.status_badge_type,
             'status_badge': true,
-            'status_tone': (
-              'positive' if status_lc in ['ativa','ativo','deferida','deferido','concluida','concluido'] else
-              'neutral' if status_lc in ['inativa','inativo','rascunho'] else
-              'caution' if status_lc in ['pendente','em análise','em analise','deferida parcialmente','deferido parcialmente','parcialmente deferida','parcialmente deferido'] else
-              'negative' if status_lc in ['indeferida','indeferido','cancelada','cancelado','encerrada','encerrado'] else
-              'info' if status_lc in ['devolvida','devolvido'] else
-              'neutral'
-            )
+            'status_tone': status_tone('matriz', matriz.status)
           },
         ], {'data-matriz-id': matriz.id, 'data-view-url': matriz.view_url, 'data-edit-url': matriz.edit_url, 'data-delete-url': (matriz.delete_url if auth_can('matrizes', 'full') else ''), 'data-aac-url': matriz.manage_academicas_url, 'data-aea-url': matriz.manage_extensao_url}) }}
       {% endfor %}

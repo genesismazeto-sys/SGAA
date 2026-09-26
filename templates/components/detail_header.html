@@ -8,7 +8,13 @@ this component.
 {% macro detail_header(title, back_href, back_label, subtitle=None, description=None) -%}
   <header class="detail-header">
     <div class="detail-header__heading">
-      <h1 class="main-title detail-header__title">{{ title }}</h1>
+      <div class="detail-header__title-row">
+        <h1 class="main-title detail-header__title">{{ title }}</h1>
+        {#- Optional trailing content beside the title, via {% call %}. The
+            version form carries its status pill there; callers that pass no
+            body render exactly the markup they did before. -#}
+        {% if caller %}{{ caller() }}{% endif %}
+      </div>
       {% if subtitle %}<p class="detail-header__subtitle">{{ subtitle }}</p>{% endif %}
       {% if description %}<p class="detail-header__description">{{ description }}</p>{% endif %}
     </div>

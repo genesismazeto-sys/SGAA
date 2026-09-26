@@ -199,12 +199,18 @@
       font-size:12px;
       line-height:1.45;
     }
+    /* Card footer, same contract as the Configurações cards: a full-bleed
+       var(--border-strong) divider over 11px 16px of padding, pulled out to
+       the card edges through the body's 12px 16px padding. */
     .message-actions {
       display:flex;
       flex-wrap:wrap;
       gap:10px;
       align-items:center;
       justify-content:space-between;
+      margin:4px -16px -12px;
+      padding:11px 16px;
+      border-top:1px solid var(--border-strong);
     }
     .message-sources {
       display:grid;

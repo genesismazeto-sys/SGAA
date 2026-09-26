@@ -136,23 +136,12 @@
   </div>
 </form>
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/turma-alunos.css') }}">
   <style>
     .page-m30{ margin: 0 30px; }
     /* Gap padrao entre cards (ajustavel globalmente) */
     :root{ --card-gap: 2px; }
     /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B). */
-    .turma-alunos-actions .btn.secondary.small{
-      display: inline-grid;
-      place-items: center;
-      width: var(--btn-h);
-      min-width: var(--btn-h);
-      padding: 0;
-      gap: 0;
-    }
-    .turma-alunos-actions .btn.secondary.small .lucide{
-      margin: 0;
-      top: 0;
-    }
     .split-2-card-row{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--card-gap, 2px); align-items:start; }
   /* 40/60 layout for Inicio controls */
   .inicio-grid{ display:grid; grid-template-columns: 0.4fr 0.6fr; gap:8px; padding:0 10px; width:100%; }
@@ -171,115 +160,6 @@
     .form-actions .btn .lucide{ display:block; width:16px; height:16px; margin:0; flex:0 0 auto; position:relative; top: var(--btn-icon-nudge-y); }
     .form-actions .btn .btn-label{ display:block; position:relative; top: var(--btn-text-nudge-y); }
 
-    /* ================= Turma / Alunos ================= */
-    .turma-alunos-card{
-      margin-top: 16px;
-      background: var(--surface); border:1px solid var(--border-strong);
-      border-radius: var(--radius); box-shadow: var(--shadow-sm);
-      overflow: visible; /* permitir overlay do botao excluir para fora */
-    }
-    .turma-alunos-header{
-      display:grid; grid-template-columns:auto 1fr auto; align-items:center;
-      min-height: var(--btn-h); padding: 6px 8px; border-bottom:1px solid var(--border-strong);
-      background: var(--turma-alunos-header-bg);
-      border-radius: var(--radius) var(--radius) 0 0;
-      overflow: hidden;
-    }
-    .turma-alunos-title{ margin:0; text-align:center; font-size:14px; font-weight:600; color: var(--text-primary); }
-    .turma-alunos-header > button{ height: var(--btn-h); display:flex; align-items:center; justify-content:center; }
-    .turma-alunos-actions-left{ justify-self:start; }
-    .turma-alunos-actions-right{ justify-self:end; }
-    .turma-alunos-content{ padding: 8px; display:flex; flex-direction:column; gap:8px; overflow: visible; background: var(--turma-alunos-content-bg);
-      border-radius: 0 0 var(--radius) var(--radius);
-    }
-    /* Larguras sincronizadas entre header e linhas */
-    .alunos-wide{
-      --alunos-cols: 41% 34% 13% 12%;
-      --turma-alunos-header-bg: var(--bg);
-      --turma-alunos-content-bg: var(--bg);
-      --turma-aluno-row-shell-bg: #f3f4f6;
-    }
-    .turma-aluno-chip{ width:40px; height: var(--btn-h); display:grid; place-items:center; color: var(--text-secondary); font-weight:600; }
-    .turma-aluno-row.header .turma-aluno-chip{ border:1px solid var(--turma-alunos-content-bg); font-size:12px; background: var(--turma-alunos-content-bg); }
-    .turma-aluno-row.header .turma-aluno-card{ background: var(--turma-alunos-content-bg); border:1px solid var(--turma-alunos-content-bg); font-size:12px; }
-    .turma-aluno-row.header .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); border:1px solid var(--turma-alunos-content-bg); }
-
-    /* Lista de alunos: wrappers com fundo de conteudo e header com fundo dedicado */
-    .alunos-wide .turma-alunos-card,
-    .alunos-wide .turma-alunos-content{ background: var(--turma-alunos-content-bg); }
-
-    .alunos-wide .turma-aluno-row.header,
-    .alunos-wide .turma-aluno-row-header{ background: var(--turma-alunos-content-bg); }
-
-    /* Por seguranca, aplica fundo de conteudo nos wrappers internos */
-    .alunos-wide .turma-alunos-content .turma-aluno-card,
-    .alunos-wide .turma-alunos-content .turma-aluno-chip,
-    .alunos-wide .turma-alunos-content .turma-alunos-table-header,
-    .alunos-wide .turma-alunos-content .turma-alunos-table-header-inner,
-    .alunos-wide .turma-aluno-row,
-    .alunos-wide .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); }
-
-    .alunos-wide .turma-aluno-row.header .turma-aluno-card,
-    .alunos-wide .turma-aluno-row.header .turma-aluno-chip{ background: var(--turma-alunos-content-bg); border-color: var(--turma-alunos-content-bg); }
-
-    /* Linhas de dados permanecem brancas */
-    .alunos-wide .turma-aluno-row:not(.header),
-    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-card,
-    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-chip,
-    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-row-inner{ background: var(--turma-alunos-content-bg); }
-    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-row-shell{ background: var(--turma-aluno-row-shell-bg); }
-
-    /* Garante cards das LINHAS sempre brancos */
-    .alunos-wide .turma-aluno-row:not(.header) .turma-aluno-card{ background: var(--surface) !important; }
-
-    /* Remove contorno do header — shell fica invisível, mesmo layout do shell de dados */
-    .alunos-wide .turma-aluno-row-header,
-    .alunos-wide .turma-aluno-row.header{ border:0 !important; outline:0; box-shadow:none !important; }
-    .turma-aluno-row.header .turma-aluno-row-shell{
-      border-color: var(--turma-alunos-content-bg);
-      background: var(--turma-alunos-content-bg);
-      box-shadow: none;
-      overflow: visible;
-    }
-
-  .turma-alunos-table-rows{ display:flex; flex-direction:column; gap:4px; overflow: visible; }
-    .turma-aluno-row{ position:relative; min-height: var(--btn-h); overflow:visible; }
-    .turma-aluno-row-shell{
-      display:grid; grid-template-columns:40px 1fr; align-items:center;
-      min-height: var(--btn-h); border:1px solid var(--border-strong);
-      border-radius: var(--radius); background: var(--turma-aluno-row-shell-bg); overflow:hidden;
-      transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
-    }
-    .turma-aluno-row:hover .turma-aluno-row-shell{ border-color: var(--brand); }
-    .turma-aluno-row.header:hover .turma-aluno-row-shell{ border-color: var(--turma-alunos-content-bg); cursor: default; }
-    /* Mantem apenas o contorno azul no container, nao nos cards internos */
-    .turma-aluno-row:hover .turma-aluno-card,
-    .turma-aluno-row:hover .turma-aluno-chip{ border-color: var(--border-strong); }
-    .turma-aluno-row.selected .turma-aluno-row-shell{
-      border-color: var(--brand);
-    }
-    .turma-aluno-row-inner{ display:grid; grid-template-columns: var(--alunos-cols); column-gap: var(--btn-gap, 8px); padding: 4px 8px; align-items:center; }
-    .turma-aluno-row-actions{ position:absolute; top:50%; right:-40px; transform:translateY(-50%); display:flex; align-items:center; justify-content:center; }
-    .turma-aluno-remove{ width:32px; height:var(--btn-h); min-width:32px; min-height:var(--btn-h); border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); display:none; place-items:center; color:var(--danger, #b91c1c); }
-    .turma-aluno-row.selected .turma-aluno-remove{ display:grid; }
-    #btn-remover-aluno{ color: var(--danger, #b91c1c); }
-    #btn-remover-aluno[disabled]{ opacity: .35; cursor: not-allowed; pointer-events: none; }
-    .turma-aluno-card{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); min-height: var(--btn-h); display:flex; align-items:center; justify-content:center; padding: 0 8px; overflow:hidden; }
-    /* Status: badge + arrow (select nativo compacto) */
-    .status-cell{ position:relative; display:block; width:100%; text-align:center; }
-    .status-cell [data-status-badge]{ display:inline-flex; }
-    .status-arrow{
-      height:22px; min-height:22px; width:24px; min-width:24px;
-      border:1px solid var(--border-strong); background:var(--surface); border-radius:6px;
-      padding:0; cursor:pointer; line-height:1;
-      color: transparent; font-size:0; text-indent: -9999px; overflow:hidden;
-      -webkit-appearance: menulist; -moz-appearance: menulist; appearance: menulist;
-      position:absolute; top:50%; right:0; transform:translateY(-50%);
-    }
-    .turma-aluno-card input,
-    .turma-aluno-card select{
-      width:100%; border:0; background:transparent; outline:0; text-align:center; font-size:12px; min-height: var(--btn-h); font-family: inherit; color: var(--text-primary);
-    }
   </style>
 {% endblock %}
 

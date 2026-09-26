@@ -261,7 +261,10 @@ def test_templates_with_style_blocks_does_not_grow():
 # This is the metric the consolidation phases actually move: line counts barely
 # budge when duplicated rules are written as one-liners, but this number falls
 # every time a shared family gets a real owner.
-MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 536  # F-5B: 541 -> 536
+# UI-B21: 536 -> 308. The Turma student list moved out of admin_adicionar_turma
+# and admin_editar_turma into components/turma-alunos.css; the ceiling is reset
+# to the measured count so the gain cannot be spent silently.
+MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 308  # F-5B: 541 -> 536; UI-B21: -> 308
 
 
 def test_cross_template_duplication_does_not_grow():

@@ -270,8 +270,12 @@ def test_version_form_header_is_lightweight_and_has_no_delete_action(client):
 
     html = client.get(_editar_url(seed["base_id"], v2)).get_data(as_text=True)
 
-    assert '<div class="version-form-heading">' in html
-    assert '<h1 class="main-title">Ver versão v2</h1>' in html
+    # The heading is the shared .detail-header component now, not a local
+    # .version-form-heading copy of it; the status pill still sits beside the
+    # title, in the component's optional title-row slot.
+    assert '<div class="version-form-heading">' not in html
+    assert 'class="detail-header"' in html
+    assert '<h1 class="main-title detail-header__title">Ver versão v2</h1>' in html
     assert (
         'class="badge status-badge status-pill status-negative">Descontinuada</span>'
         in html

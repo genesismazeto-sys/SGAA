@@ -235,7 +235,9 @@
       if (!btn || !currentCursoId) return;
       const action = btn.getAttribute('data-action');
       if (action === 'view'){
-        window.navigateWithReturnTo("{{ url_for('admin_visualizar_curso', curso_id=0) }}".replace('/0', '/' + currentCursoId));
+        // Ver = the edit form with the edit taken away, the same { view: 1 }
+        // idiom Alunos, Atividades and the turma detail already use.
+        window.navigateWithReturnTo("{{ url_for('admin_editar_curso', curso_id=0) }}".replace('/0', '/' + currentCursoId), { view: 1 });
       } else if (action === 'edit'){
         window.navigateWithReturnTo("{{ url_for('admin_editar_curso', curso_id=0) }}".replace('/0', '/' + currentCursoId));
       } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){

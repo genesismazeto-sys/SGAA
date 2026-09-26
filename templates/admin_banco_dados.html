@@ -166,25 +166,23 @@
        how the action row is justified. */
     .db-card .db-actions > form{ width:auto; }
     .db-card form > .db-note{ margin-top:10px; max-width:96ch; }
+    /* Card footer. Same contract as the Configurações cards and the Acesso
+       "Senhas padrão" panel: a full-bleed 1px var(--border-strong) divider
+       over 11px 16px of padding, pulled out to the card edges through the
+       card's own 16px padding. */
     .db-card form > .db-actions{
       justify-content:flex-end;
-      padding-top:10px;
-      border-top:1px solid #edf2f7;
+      margin:16px -16px -16px;
+      padding:11px 16px;
+      border-top:1px solid var(--border-strong);
     }
+    /* Destinos: the settings footer closes its form mid-card and the provider
+       separator follows it. The footer stops at the form's edge there and the
+       separator line sits flush under it, so the two dividers never stack. */
+    .db-card > form:has(+ .db-drive-sep) > .db-actions{ margin-bottom:0; }
+    .db-card > form + .db-drive-sep{ margin-top:0; }
     .db-card > .db-note + .db-actions,
     .db-card > p + .db-actions{ margin-top:12px; }
-    /* A lead paragraph and the single action it describes share one row: the
-       text takes the free width, the button keeps its natural width on the
-       right edge, and there is no empty band between them. */
-    .db-card-lead{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      flex-wrap:wrap;
-      gap:16px;
-    }
-    .db-card-lead > p{ flex:1 1 320px; min-width:0; margin:0; }
-    .db-card-lead > .db-actions{ flex:0 0 auto; margin-top:0; }
     /* ── Card/section header bar (matches Configurações style) ── */
     .db-card-head {
       display:flex; align-items:center; justify-content:space-between;
@@ -205,7 +203,14 @@
     .db-drive-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
     .db-drive-grid.is-google-only { grid-template-columns:minmax(0, 1fr); }
     .db-provider-card{
-      display:grid;
+      /* Flex column, NOT grid. The outer .db-drive-grid stretches both cards to
+         the taller one's height; as a grid this card's rows were all auto-sized,
+         so the default align-content:stretch split that surplus EQUALLY between
+         every section and OneDrive's head/meta/actions/config each drifted down
+         relative to Google's. A flex column sizes children to their content and
+         top-aligns them, so the surplus is left over instead of shared out. */
+      display:flex;
+      flex-direction:column;
       gap:14px;
       padding:16px;
       border:1px solid var(--border-strong);
@@ -311,7 +316,10 @@
     /* Inline action link for the mail-authorization row; matches the card's
        existing secondary text scale instead of introducing a new control. */
     .db-mail-cta{ margin-left:6px; font-size:12.5px; font-weight:600; color:#b45309; }
-    .db-provider-line.is-warning{ color:#92400e; }
+    /* One warning colour for the card, whether the state is expressed as a
+       metadata row or as a note. */
+    .db-provider-line.is-warning,
+    .db-provider-note.is-warning{ color:#92400e; }
     .db-provider-line span{
       min-width:0;
       overflow-wrap:anywhere;
@@ -328,15 +336,11 @@
       gap:10px;
       align-content:start;
     }
-    .db-provider-primary,
     .db-provider-secondary{
       display:grid;
       gap:8px;
-    }
-    .db-provider-secondary{
       grid-template-columns:repeat(2, minmax(0, 1fr));
     }
-    .db-provider-primary form,
     .db-provider-secondary form{
       margin:0;
       width:100%;
@@ -347,40 +351,37 @@
       justify-content:center;
       padding:0 12px;
     }
-    .db-provider-primary .btn{
-      min-height:var(--db-control-h);
-      height:var(--db-control-h);
-      font-size:12.5px;
-    }
-    .db-provider-primary .btn.primary[disabled],
-    .db-provider-primary .btn.primary[aria-disabled="true"]{
-      background:#c7d9f0;
-      border-color:#c7d9f0;
-      color:rgba(255,255,255,.95);
-      cursor:not-allowed;
-    }
     .db-provider-secondary .btn[disabled],
-    .db-provider-secondary .btn[aria-disabled="true"]{
+    .db-provider-secondary .btn[aria-disabled="true"],
+    .db-provider-footer-actions .btn[disabled],
+    .db-provider-footer-actions .btn[aria-disabled="true"]{
       cursor:not-allowed;
       opacity:.72;
     }
     .db-provider-secondary .btn .lucide,
-    .db-provider-primary .btn .lucide,
-    .db-provider-secondary .btn .db-provider-icon,
-    .db-provider-primary .btn .db-provider-icon{
+    .db-provider-secondary .btn .db-provider-icon{
       margin-right:6px;
     }
+    /* Control-only <form>: the footer's backup action POSTs to the provider's
+       upload endpoint, not to the credential form it is laid out inside, and
+       forms cannot nest. It holds the method/action/CSRF and nothing visible,
+       so it is not a layout participant. */
+    .db-provider-post-target{ display:none; }
     .db-provider-icon{
       width:16px;
       height:16px;
       flex:0 0 auto;
     }
-    /* Provider configuration: a continuation of the card, not a card inside it. */
+    /* Provider configuration: a continuation of the card, not a card inside it.
+       This is the one block allowed to absorb the card's spare height, so the
+       blank space lands after the last configuration field. */
     .db-provider-config{
       margin:0;
-      display:grid;
+      display:flex;
+      flex-direction:column;
       gap:10px;
       min-width:0;
+      flex:1 1 auto;
     }
     .db-provider-config .db-field input{ width:100%; }
     .db-provider-config-footer{
@@ -389,8 +390,17 @@
       justify-content:space-between;
       gap:12px;
       flex-wrap:wrap;
-      padding-top:14px;
-      border-top:1px solid #e2e8f0;
+      /* Card footer contract (see .db-card form > .db-actions): full-bleed
+         var(--border-strong) divider, 11px 16px padding, reaching the card
+         edges through the provider card's 16px padding. */
+      margin:0 -16px -16px;
+      padding:11px 16px;
+      border-top:1px solid var(--border-strong);
+      /* Holds the divider, toggle and Salvar at the bottom of the card, so the
+         shorter provider's spare height sits between its last field and this
+         footer instead of anywhere above it. No spacer element, no fixed
+         height: the same idiom as the button's margin-left below. */
+      margin-top:auto;
     }
     .db-provider-config-toggle{
       display:flex;
@@ -407,8 +417,15 @@
     .db-provider-config-footer .btn{
       flex:0 0 auto;
       width:auto;
-      /* Holds the button against the right edge both on the shared row and on
-         its own line once the footer wraps, which space-between cannot do. */
+    }
+    .db-provider-footer-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      /* Holds the action group against the right edge both on the shared row
+         and on its own line once the footer wraps, which space-between cannot
+         do. Same idiom as the footer's own margin-top:auto -- no spacer. */
       margin-left:auto;
     }
     .db-provider-toggle-label{
@@ -564,6 +581,7 @@
     @media (max-width: 520px){
       .db-provider-secondary{ grid-template-columns:1fr; }
       .db-provider-config-footer{ flex-direction:column; align-items:stretch; }
+      .db-provider-footer-actions{ flex-direction:column; align-items:stretch; margin-left:0; }
       .db-provider-config-footer .btn{ width:100%; justify-content:center; }
     }
   </style>
@@ -740,6 +758,36 @@
     #}
     {% set auto_backup_toggle_editable = false %}
     {% set auto_backup_toggle_title = 'Disponível quando o backup automático for ativado.' %}
+    {#
+      UI-B07. "Enviar backup agora" was rejected inside the card body, so it
+      moved to the footer beside Salvar. It still POSTs to the provider's own
+      upload endpoint -- not to the credential form the footer belongs to -- and
+      HTML forms cannot nest, so the POST target is emitted once per card as a
+      control-only form and the footer button binds to it with `form=`. Method,
+      action, CSRF, icon, label and the connected/disconnected disabled states
+      are exactly what the body action carried; only the position changed.
+
+      One definition, two call sites: the action cannot drift between providers
+      and cannot be duplicated within a card.
+    #}
+    {% macro provider_backup_now_target(form_id, connected, action_url) %}
+      {%- if connected %}
+      <form id="{{ form_id }}" class="db-provider-post-target" method="post" action="{{ action_url }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      {%- endif %}
+    {% endmacro %}
+    {% macro provider_backup_now_button(form_id, connected, enabled_title, disabled_title) %}
+      {%- if connected %}
+        <button type="submit" form="{{ form_id }}" class="btn" title="{{ enabled_title }}">
+          <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+        </button>
+      {%- else %}
+        <button type="button" class="btn" disabled aria-disabled="true" title="{{ disabled_title }}">
+          <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
+        </button>
+      {%- endif %}
+    {% endmacro %}
     <div class="db-drive-grid{% if not onedrive_ui_enabled %} is-google-only{% endif %}">
       {# Google Drive #}
       <section class="db-provider-card">
@@ -789,40 +837,39 @@
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
-          {% if google_picker_configured %}
-            <div class="db-provider-line is-muted">
-              <span>Seleção de pasta: {{ 'configuração segura desta máquina' if google_picker_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' }}</span>
-            </div>
-          {% elif gdrive_connected %}
-            <div class="db-provider-line is-warning" data-google-picker-missing>
-              <span>Seleção de pasta indisponível: informe a Chave de API do Google Picker e o ID do aplicativo abaixo.</span>
-            </div>
-          {% endif %}
         </div>
+        {#
+          UI-B07. A "Seleção de pasta: configuração segura desta máquina" row
+          used to sit here and it was the reason this card reached the common
+          actions one line later than OneDrive.
 
+          It was removed because it was custody information about credentials
+          that live in the SAME machine-store record as client_id and
+          client_secret (app.cloud_config._stored_provider("google") reads one
+          dict), so it restated, verbatim, the custody sentence rendered one row
+          above it. Where the folder actually points is the folder row; whether
+          it can be changed is the "Selecionar pasta" action. Neither needed a
+          third line, and OneDrive never had an equivalent to render.
+
+          The genuinely provider-specific part is the FAILURE, not the success:
+          OneDrive browses folders over Graph with the OAuth token it already
+          holds (/admin/backup/cloud-folders/onedrive), so it has no second
+          credential that can go missing, while the Google Picker needs an API
+          key and an App ID of its own. That is an actionable problem state, so
+          it renders in the state-driven note region both cards already share
+          with "Último upload"/"Falha" -- never as a common metadata row.
+        #}
         {% if drive_settings.gdrive_last_upload_error %}
           <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.gdrive_last_upload_error[:120] }}</p>
         {% elif gdrive_last_upload_label %}
           <p class="db-provider-note"><strong>Último upload:</strong> {{ gdrive_last_upload_label }}</p>
         {% endif %}
+        {% if gdrive_connected and not google_picker_configured %}
+          <p class="db-provider-note is-warning" data-google-picker-missing>Seleção de pasta indisponível: informe a Chave de API do Google Picker e o ID do aplicativo abaixo.</p>
+        {% endif %}
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-primary">
-              {% if gdrive_connected %}
-                <form method="post" action="{{ url_for('admin_backup_google_upload') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn primary" title="Enviar backup para Google Drive">
-                    <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
-                  </button>
-                </form>
-              {% else %}
-                <button type="button" class="btn primary" disabled aria-disabled="true" title="Conecte o Google Drive para enviar backups">
-                  <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
-                </button>
-              {% endif %}
-            </div>
-
             <div class="db-provider-secondary">
               {% if gdrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
@@ -875,6 +922,8 @@
             </div>
           </div>
 
+          {{ provider_backup_now_target('gdrive-backup-now', gdrive_connected, url_for('admin_backup_google_upload')) }}
+
           {% if not cloud_store_unavailable %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -921,11 +970,22 @@
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>
-                <button type="submit" class="btn primary">
-                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
-                </button>
+                <div class="db-provider-footer-actions">
+                  {{ provider_backup_now_button('gdrive-backup-now', gdrive_connected, 'Enviar backup para Google Drive', 'Conecte o Google Drive para enviar backups') }}
+                  <button type="submit" class="btn primary">
+                    <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
+                  </button>
+                </div>
               </div>
             </form>
+          {% else %}
+            {# Machine store unreadable: no credential form, so the footer stands
+               alone and still carries the card's backup action. #}
+            <div class="db-provider-config-footer">
+              <div class="db-provider-footer-actions">
+                {{ provider_backup_now_button('gdrive-backup-now', gdrive_connected, 'Enviar backup para Google Drive', 'Conecte o Google Drive para enviar backups') }}
+              </div>
+            </div>
           {% endif %}
         {% endif %}
 
@@ -1019,21 +1079,6 @@
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-primary">
-              {% if onedrive_connected %}
-                <form method="post" action="{{ url_for('admin_backup_onedrive_upload') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn primary" title="Enviar backup para OneDrive">
-                    <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
-                  </button>
-                </form>
-              {% else %}
-                <button type="button" class="btn primary" disabled aria-disabled="true" title="Conecte o OneDrive para enviar backups">
-                  <i class="lucide" data-lucide="upload-cloud"></i>Enviar backup agora
-                </button>
-              {% endif %}
-            </div>
-
             <div class="db-provider-secondary">
               <button type="button" class="btn" disabled aria-disabled="true" title="OneDrive não está configurado">
                 <i class="lucide" data-lucide="circle-check"></i>Testar conexão
@@ -1082,6 +1127,8 @@
             </div>
           </div>
 
+          {{ provider_backup_now_target('onedrive-backup-now', onedrive_connected, url_for('admin_backup_onedrive_upload')) }}
+
           {% if not cloud_store_unavailable %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1118,11 +1165,22 @@
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>
-                <button type="submit" class="btn primary">
-                  <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
-                </button>
+                <div class="db-provider-footer-actions">
+                  {{ provider_backup_now_button('onedrive-backup-now', onedrive_connected, 'Enviar backup para OneDrive', 'Conecte o OneDrive para enviar backups') }}
+                  <button type="submit" class="btn primary">
+                    <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
+                  </button>
+                </div>
               </div>
             </form>
+          {% else %}
+            {# Machine store unreadable: no credential form, so the footer stands
+               alone and still carries the card's backup action. #}
+            <div class="db-provider-config-footer">
+              <div class="db-provider-footer-actions">
+                {{ provider_backup_now_button('onedrive-backup-now', onedrive_connected, 'Enviar backup para OneDrive', 'Conecte o OneDrive para enviar backups') }}
+              </div>
+            </div>
           {% endif %}
         {% endif %}
 
@@ -1178,19 +1236,14 @@
     <div class="db-card-head">
       <span class="db-section-label">Operações</span>
     </div>
-    <div class="db-card-lead">
-      <p>Use o backup manual para criar um snapshot imediato e atualizar a cópia em nuvem. Antes de restaurar, o sistema salva automaticamente uma cópia de segurança da base atual.</p>
-      {% if auth_can('banco_dados', 'edit') %}
-        <div class="db-actions">
-          <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn primary">
-              <i class="lucide" data-lucide="database"></i>Gerar backup agora
-            </button>
-          </form>
-        </div>
-      {% endif %}
-    </div>
+    {#
+      UI-B07. "Gerar backup agora" used to sit on this explanatory row, pinned
+      right by `.db-card-lead`. The action belongs at the bottom of the whole
+      Operações surface, so the paragraph is now plain body copy and the button
+      moved to the card footer below. `.db-card-lead` had exactly one consumer
+      -- this row -- so the wrapper and its three rules went with it.
+    #}
+    <p>Use o backup manual para criar um snapshot imediato e atualizar a cópia em nuvem. Antes de restaurar, o sistema salva automaticamente uma cópia de segurança da base atual.</p>
 
     <div class="db-subsection">
       <h3 class="db-subsection-title">Recuperar banco de dados</h3>
@@ -1253,6 +1306,24 @@
         <p class="db-note" style="margin-top:8px;">Seu perfil não possui permissão total para recuperar o banco.</p>
       {% endif %}
     </div>
+
+    {#
+      Card footer. Same structure the "Destinos de backup" and "Política de
+      retenção" cards on this page already use and that was accepted there:
+      a `.db-actions` row as the last child of a card form, which
+      `.db-card form > .db-actions` right-aligns over a top divider. No new
+      class, no backup-specific footer style.
+    #}
+    {% if auth_can('banco_dados', 'edit') %}
+      <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="db-actions">
+          <button type="submit" class="btn primary">
+            <i class="lucide" data-lucide="database"></i>Gerar backup agora
+          </button>
+        </div>
+      </form>
+    {% endif %}
   </article>
 
   {# ────────── Política de retenção ────────── #}

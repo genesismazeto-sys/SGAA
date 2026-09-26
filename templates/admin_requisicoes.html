@@ -812,23 +812,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
   {% else %}
     {% set _de_iso = '' %}
   {% endif %}
+        {#- Tom semantico e rotulo vem do owner unico app/status_presentation.py.
+            Nao reintroduzir uma escada de status local aqui: a copia que existia
+            nesta pagina e a de aluno_minhas_requisicoes.html ja haviam divergido. -#}
         {% set status_lc = (r.status or '')|lower %}
-        {% set status_cell = {}
-           %}
+        {% set status_cell = {
+             'content': status_label('requisicao', r.status),
+             'badge': true,
+             'status_badge': true,
+             'status_tone': status_tone('requisicao', r.status)
+           } %}
         {% if status_lc in ['pendente','aguardando','pending'] %}
-          {% set status_cell = {'content':'Pendente','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'caution','title':'Processar requisição'} %}
-        {% elif status_lc in ['deferido','deferida','aprovado','aprovada','approved'] %}
-          {% set status_cell = {'content':'Deferida','badge':true,'badge_type':'success','status_badge':true,'status_tone':'positive'} %}
-        {% elif status_lc in ['deferida parcialmente','deferido parcialmente','parcialmente deferida','partially approved'] %}
-          {% set status_cell = {'content':'Deferida Parcialmente','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'caution'} %}
-        {% elif status_lc in ['indeferido','indeferida','rejeitada','rejeitado'] %}
-          {% set status_cell = {'content':'Indeferida','badge':true,'badge_type':'danger','status_badge':true,'status_tone':'negative'} %}
-        {% elif status_lc in ['devolvida','devolvido'] %}
-          {% set status_cell = {'content':'Devolvida','badge':true,'badge_type':'warning','status_badge':true,'status_tone':'info'} %}
-        {% elif status_lc in ['encerrada','encerrado','closed'] %}
-          {% set status_cell = {'content':'Encerrada','badge':true,'badge_type':'danger','status_badge':true,'status_tone':'negative'} %}
-        {% else %}
-          {% set status_cell = {'content': (r.status or '-'), 'badge': true, 'status_badge': true, 'status_tone': 'neutral'} %}
+          {% set status_cell = dict(status_cell, title='Processar requisição') %}
         {% endif %}
         {% if r.data_solicitacao %}
           {% if r.data_solicitacao.strftime is not undefined %}
@@ -1277,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <label class="row-label">Escopo</label>
             <div class="field-card">
               <div class="field-chip"><i class="lucide" data-lucide="network"></i></div>
-              <div class="control" id="m_scope_hint" style="display:flex; align-items:center; color: var(--text-secondary);">Selecione um aluno para carregar a matriz efetiva da turma.</div>
+              <input class="control" id="m_scope_hint" type="text" readonly aria-readonly="true" aria-label="Escopo" value="Selecione um aluno para carregar a matriz efetiva da turma.">
             </div>
           </div>
 
@@ -1437,6 +1432,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     .field-card.split-2.compact-left .control:first-of-type{ min-width: 70px; }
     .row-2col{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--btn-gap, 8px); }
     #m_comprovantes_container{ display:grid; row-gap: 12px; }
+    /* Empty (no existing comprovantes), the container was still a 0px grid
+       item of .form-cards-narrow, so Observação sat two row-gaps (24px) below
+       Comprovantes instead of one. Out of the grid while empty. */
+    #m_comprovantes_container:empty{ display:none; }
     .field-card.file-card{ position:relative; cursor:pointer; display:grid; grid-template-columns: 40px 1fr auto; align-items:center; column-gap: var(--list-col-gap, 6px); }
     .field-card.file-card:focus-within{ outline:none; }
     .field-card.file-card .file-input{ display:none; }
@@ -1514,8 +1513,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     function setScopeHint(text, tone='muted'){
       if (!scopeHint) return;
-      scopeHint.textContent = text;
-      scopeHint.style.color = tone === 'error' ? 'var(--danger, #b91c1c)' : 'var(--text-secondary)';
+      // Escopo is a computed, never-editable value, so it uses the DS read-only
+      // control instead of a bare <div> with an inline colour. The error tone
+      // goes through the DS invalid contract for the same reason.
+      scopeHint.value = text;
+      if (tone === 'error') scopeHint.setAttribute('aria-invalid', 'true');
+      else scopeHint.removeAttribute('aria-invalid');
     }
 
     function buildGruposPorTipo(){
@@ -1660,7 +1663,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <label class="row-label">Comprovantes</label>
               <div class="field-card">
                 <div class="field-chip"><i class="lucide" data-lucide="file-x"></i></div>
-                <div class="control" style="display:flex; align-items:center; color: var(--text-secondary);">Nenhum comprovante enviado</div>
+                <input class="control" type="text" readonly aria-readonly="true" aria-label="Comprovantes" value="Nenhum comprovante enviado">
               </div>
             </div>`;
           window.lucide?.createIcons?.();
@@ -1812,11 +1815,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
           if (isCreate || isEdit){
             if (el.tagName === 'INPUT' && !isFile) el.readOnly = false;
             el.disabled = false;
-            if (isEdit && el === alunoSel) el.disabled = true;
+            el.removeAttribute('aria-readonly');
+            if (isEdit && el === alunoSel){
+              // Still not editable, still the same read-only presentation.
+              el.disabled = true;
+              el.setAttribute('aria-readonly', 'true');
+            }
             return;
           }
+          // Every field here represents ONE state: "shown, not editable".
+          // <input> can say that natively; <select>, <textarea> and the file
+          // control cannot, so they are disabled instead. aria-readonly is what
+          // tells the design system the disabling means read-only and not "not
+          // applicable" — without it the two halves of the same form collect two
+          // different treatments. The native state itself is unchanged.
           if (el.tagName === 'INPUT' && !isFile) el.readOnly = true;
           if (isFile || el.tagName !== 'INPUT') el.disabled = true;
+          el.setAttribute('aria-readonly', 'true');
         });
         form.querySelectorAll('#m_comprovantes_container .chip-right').forEach(chip=>{
           chip.style.pointerEvents = (isCreate || isEdit) ? '' : 'none';
@@ -2148,10 +2163,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (alunoSel && data.aluno_id != null){ alunoSel.value = String(data.aluno_id); }
         if (scopeHint){
           if (data.matriz_scope?.label){
-            scopeHint.textContent = `Turma ${data.turma_label || 'Sem turma'}: ${data.matriz_scope.label}`;
+            scopeHint.value = `Turma ${data.turma_label || 'Sem turma'}: ${data.matriz_scope.label}`;
           } else {
-            scopeHint.textContent = `Turma ${data.turma_label || 'Sem turma'}: sem matriz vinculada.`;
+            scopeHint.value = `Turma ${data.turma_label || 'Sem turma'}: sem matriz vinculada.`;
           }
+          scopeHint.removeAttribute('aria-invalid');
         }
         if (titleEl){
           titleEl.innerHTML = mode === 'edit'
@@ -2191,7 +2207,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const jEl = document.getElementById('m_justificativa');
             const dEl = document.getElementById('m_just_detalhamento');
             if (selRow) selRow.hidden = true; // só mostra quando ação exigir
-            if (jRow) { jRow.hidden = true; if (jEl){ jEl.value = ''; jEl.readOnly = false; jEl.disabled = false; } }
+            if (jRow) { jRow.hidden = true; if (jEl){ jEl.value = ''; jEl.readOnly = false; jEl.disabled = false; jEl.removeAttribute('aria-readonly'); } }
             if (dRow) { dRow.hidden = true; if (dEl){ dEl.value = ''; dEl.disabled = true; } }
             // carrega presets e popula select
             if (typeof window.__loadJustPresetsOnce === 'function') await window.__loadJustPresetsOnce();
@@ -2299,10 +2315,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if (typeof window.__loadJustPresetsOnce === 'function') window.__loadJustPresetsOnce();
       if (typeof window.__populateJustSelect === 'function') window.__populateJustSelect();
       if (justSelectRow) justSelectRow.hidden = false;
-      if (justSel) justSel.disabled = false;
-      if (justRow){ justRow.hidden = false; if (justEl) justEl.disabled = false; }
+      // These three become genuinely editable inside a form that is otherwise
+      // read-only, so they must drop the read-only marker with it.
+      if (justSel){ justSel.disabled = false; justSel.removeAttribute('aria-readonly'); }
+      if (justRow){ justRow.hidden = false; if (justEl){ justEl.disabled = false; justEl.removeAttribute('aria-readonly'); } }
       if (act === 'deferir_parte'){
-        if (horasRow){ horasRow.hidden = false; if (horasEl){ horasEl.disabled = false; horasEl.readOnly = false; } }
+        if (horasRow){ horasRow.hidden = false; if (horasEl){ horasEl.disabled = false; horasEl.readOnly = false; horasEl.removeAttribute('aria-readonly'); } }
         horasEl?.focus();
       } else {
         if (horasRow) horasRow.hidden = true;

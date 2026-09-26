@@ -28,6 +28,39 @@
    ============================================================= */
 
 /* =============================================================
+   READ-ONLY REGION WRAPPER  —  .form-fieldset
+
+   A <fieldset> is the only element that can mark a whole region
+   non-editable in one place (`disabled` is inherited by its controls), which
+   is why the read-only surfaces use it. But the browser's default fieldset
+   brings a border, padding and margin of its own, and it is not a grid — so
+   wrapping .form-row children in one paints a box around the form AND drops
+   the row spacing, because the rows stop being what the layout expects.
+
+   These four lines existed only inside the <style> blocks of the two
+   templates that got there first (admin_editar_atividade.html,
+   admin_catalogo_versao_form.html), byte-identical in both. A third consumer
+   (admin_editar_curso.html) copied the CLASS without the CSS and rendered
+   exactly that defect. Per README §2.3, a rule shared by two or more pages
+   belongs in a stylesheet with a named owner; this is that owner.
+
+   Values are the existing ones, unchanged, and both page-local copies were
+   deleted once this owner existed — so this is the ONLY declaration of
+   `.form-fieldset` in the system. Identical declarations moving from a page
+   <style> block (which loads after this file) to this file cannot change what
+   those two pages render: no other rule anywhere matches the selector, so
+   neither order nor specificity has anything to resolve against.
+
+   Only the geometry reset is hoisted. Their companion
+   `.form-fieldset[disabled]{opacity:1}` deliberately stays page-local: UI-B10
+   made `fieldset[disabled]` WITHOUT `aria-readonly` mean "not applicable",
+   and `test_a_plain_disabled_fieldset_still_means_not_applicable` forbids any
+   rule in this file from keying on the bare disabled fieldset. This reset
+   keys on the class alone and says nothing about editability.
+   ============================================================= */
+.form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
+
+/* =============================================================
    FORM WIDTH CONTRACT  (F-5B / F-5C, from measured real renders)
 
    Widths are named in foundation/tokens.css. .form-cards-narrow carries
@@ -318,8 +351,24 @@
 }
 
 /* Disabled — "not applicable". A composed card is fully disabled only when
-   none of its controls remains interactive. */
-.field-card:has(.control:disabled):not(:has(.control:not(:disabled))){
+   none of its controls remains interactive.
+
+   Two :not()s defer to the read-only blocks below, for the two levels at
+   which a surface can declare read-only intent:
+
+     :not(:has(.control:disabled[aria-readonly="true"]))
+        the control declares it itself. See DISABLED-BUT-READ-ONLY.
+
+     :not(:where(fieldset[disabled][aria-readonly="true"] *))
+        an ancestor fieldset declares it for the whole region. See
+        READ-ONLY REGION.
+
+   Either way the control is disabled as an implementation device, not
+   because it is inapplicable, so it must not collect the "not applicable"
+   paint. The region guard is wrapped in :where() so it contributes NO
+   specificity: these two rules keep the exact (0,8,0) they had, and the only
+   thing that changes is which elements they reach. */
+.field-card:not(:where(fieldset[disabled][aria-readonly="true"] *)):has(.control:disabled):not(:has(.control:not(:disabled))):not(:has(.control:disabled[aria-readonly="true"])){
   background:var(--field-disabled-bg);
   border-color:var(--field-disabled-border);
   box-shadow:none;
@@ -328,7 +377,7 @@
   color:var(--text-tertiary);
   cursor:not-allowed;
 }
-.field-card:has(.control:disabled):not(:has(.control:not(:disabled))) .field-chip{
+.field-card:not(:where(fieldset[disabled][aria-readonly="true"] *)):has(.control:disabled):not(:has(.control:not(:disabled))):not(:has(.control:disabled[aria-readonly="true"])) .field-chip{
   color:var(--border-strong);
   border-right-color:var(--field-disabled-border);
 }
@@ -348,6 +397,78 @@
 .field-card .control[readonly]{
   color:var(--text-secondary);
   background:transparent;
+}
+
+/* DISABLED-BUT-READ-ONLY — the same state, expressed through the only native
+   attribute available.
+
+   <select>, <textarea> and file inputs have no `readonly`. A surface that must
+   present one as "shown, not editable" has no choice but to disable it, and
+   templates already declare what that disabling means by pairing it with the
+   marker the read-only contract uses everywhere else:
+
+       <select class="control" disabled aria-readonly="true">
+
+   Nothing here read that pairing, so those controls collected the "not
+   applicable" paint — tertiary text, dead border, no shadow, greyed chip —
+   while <input readonly> siblings on the SAME surface collected the read-only
+   paint. One state, two treatments; that is the reported defect.
+
+   Semantics are deliberately untouched: the control stays disabled, stays
+   unfocusable and stays out of the submission. Only the paint moves, and only
+   for controls that explicitly declare read-only intent. A disabled control
+   WITHOUT the marker still means "not applicable" and still looks it. */
+.field-card:has(.control:disabled[aria-readonly="true"]):not(:has(.control:not([readonly]):not(:disabled))){
+  background:var(--field-readonly-bg);
+}
+.field-card .control:disabled[aria-readonly="true"]{
+  color:var(--text-secondary);
+  /* WebKit/Blink paint a disabled control's text through -webkit-text-fill-color
+     and ignore `color`; without this the token above never reaches the glyphs. */
+  -webkit-text-fill-color:var(--text-secondary);
+  cursor:default;
+}
+
+/* READ-ONLY REGION — the same declaration, made at the fieldset.
+
+   A "view mode" page does not disable its controls one by one; it wraps the
+   whole form in the element HTML provides for exactly that:
+
+       <fieldset disabled aria-readonly="true">
+
+   `disabled` on a fieldset is inherited: every descendant control matches
+   :disabled without carrying the attribute, and therefore without carrying a
+   marker of its own. So the control-level block above never matched a single
+   control on those pages, and the entire form collected the "not applicable"
+   paint instead — a dead --field-disabled-border, no card shadow, a
+   --border-strong chip and --text-tertiary glyphs — while the SAME semantic
+   state on Ver Aluno / Ver Requisição resolved to --field-readonly-bg and
+   --text-secondary. One state, two treatments; that is the reported defect,
+   one level up from the one DISABLED-BUT-READ-ONLY repaired.
+
+   The pairing is what carries the meaning, not `disabled` alone:
+   `fieldset[disabled]` on its own still means "not applicable" and still
+   looks it. Adding aria-readonly="true" is the author saying "this region is
+   a view", and inside a view there is no second, darker kind of
+   non-editability to distinguish — the data itself says whether a field
+   applies ("Nenhuma", "Sem sugestão", "NA", an empty value).
+
+   Nothing here restates the base card. The guard above removes the disabled
+   paint, so border, shadow and chip fall back to the untouched .field-card /
+   .field-chip primitives — which is precisely what an accepted read-only card
+   on Ver Aluno renders. Only the two declarations that are genuinely
+   read-only-specific are stated, and both reuse the tokens that surface
+   already uses.
+
+   Semantics are untouched: the fieldset stays disabled, its controls stay
+   unfocusable and stay out of the submission. */
+fieldset[disabled][aria-readonly="true"] .field-card:has(.control:disabled):not(:has(.control:not([readonly]):not(:disabled))){
+  background:var(--field-readonly-bg);
+}
+fieldset[disabled][aria-readonly="true"] .field-card .control:disabled{
+  color:var(--text-secondary);
+  -webkit-text-fill-color:var(--text-secondary);
+  cursor:default;
 }
 
 /* Responsive labels — the first breakpoint .row-label has ever had.

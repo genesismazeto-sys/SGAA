@@ -34,8 +34,12 @@ def test_composed_field_cards_keep_mode_selectors_interactive():
     assert ".field-card:has(.control:disabled){" not in css
     assert ".field-card:has(.control:disabled) .control{" not in css
     assert ".field-card .control:disabled{" in css
+    # The "fully disabled only when nothing inside is still interactive" guard.
+    # UI-B10 inserted a zero-specificity region guard between `.field-card` and
+    # `:has()`, so the fragment that carries this contract is matched without
+    # the class prefix. See tests/test_ver_versao_readonly_presentation.py.
     assert css.count(
-        ".field-card:has(.control:disabled):not(:has(.control:not(:disabled)))"
+        ":has(.control:disabled):not(:has(.control:not(:disabled)))"
     ) == 2
 
     for template in (add_form, version_form):

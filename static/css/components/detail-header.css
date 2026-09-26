@@ -18,6 +18,15 @@
 }
 
 .detail-header__heading{ min-width:0; }
+/* Title plus whatever a caller puts beside it (a status pill, today). Wraps
+   rather than pushing the Back action, which owns the opposite column. */
+.detail-header__title-row{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+  min-width:0;
+}
 .detail-header__title{ margin:0; overflow-wrap:anywhere; }
 .detail-header__subtitle{
   margin:6px 0 0;

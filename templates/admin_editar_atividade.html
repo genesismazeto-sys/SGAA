@@ -4,7 +4,6 @@
 
 {% block extra_head %}
   <style>
-    .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
     .form-fieldset[disabled]{ opacity:1; }
     /* Largura: .form-cards-narrow--wide, em components/form.css (F-5B). */
     .form-cards-narrow .row-label{
@@ -13,6 +12,10 @@
     }
     .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap: var(--list-col-gap, 2px); }
     .is-off-chunk{ opacity:.55; pointer-events:none; }
+    /* See the same note on admin_catalogo_versao_form.html: the "off chunk"
+       dimming is an editing affordance, so inside the read-only region it only
+       made one half of a compound card lighter than the other. */
+    .form-fieldset[disabled][aria-readonly="true"] .is-off-chunk{ opacity:1; }
   </style>
 {% endblock %}
 

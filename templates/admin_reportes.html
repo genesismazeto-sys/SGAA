@@ -146,13 +146,13 @@
         <div class="menu-hint" id="reportes-actions-hint">Selecione uma ou mais linhas para habilitar as ações.</div>
       </div>
     </div>
+    {% if can_reportes_edit %}
+      <button class="btn primary btn--raised" type="button" id="btn-novo-reporte">
+        <i class="lucide" data-lucide="plus"></i>
+        <span class="btn-label">Novo reporte</span>
+      </button>
+    {% endif %}
   </div>
-  {% if can_reportes_edit %}
-    <button class="btn primary btn--raised" type="button" id="btn-novo-reporte">
-      <i class="lucide" data-lucide="plus"></i>
-      <span class="btn-label">Novo reporte</span>
-    </button>
-  {% endif %}
 </div>
 
 {{ paginate('admin_reportes') }}

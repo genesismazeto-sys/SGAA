@@ -1,50 +1,67 @@
 <!-- templates/admin_editar_curso.html -->
+{% from 'components/detail_header.html' import detail_header %}
 {% extends "base.html" %}
-{% block title %}Editar Curso{% endblock %}
+{#- Same read-only switch admin_editar_atividade.html uses: "Ver" is this form
+    with the edit taken away, never a second page. -#}
+{% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{% block title %}{{ 'Ver Curso' if readonly else 'Editar Curso' }}{% endblock %}
 {% block content %}
-<h1 class="main-title">Editar Curso</h1>
+{{ detail_header(
+  ('Ver Curso' if readonly else 'Editar Curso'),
+  (request.args.get('return_to') or url_for('admin_cursos')),
+  'Cursos'
+) }}
 
 <form method="POST">
   <div class="form-cards-narrow">
-    <div class="form-row">
-      <label class="row-label">Nome</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
-        <input class="control" type="text" name="nome" value="{{ curso.nome }}" required>
+    {#- disabled + aria-readonly is the pairing components/form.css keys its
+        READ-ONLY REGION contract on: the field cards take --field-readonly-bg
+        instead of the "not applicable" disabled paint. -#}
+    <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
+      <div class="form-row">
+        <label class="row-label">Nome</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
+          <input class="control" type="text" name="nome" value="{{ curso.nome }}" required>
+        </div>
       </div>
-    </div>
 
-    <div class="form-row">
-      <label class="row-label">Código</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="barcode"></i></div>
-        <input class="control" type="text" name="codigo" value="{{ curso.codigo }}" maxlength="20" required>
+      <div class="form-row">
+        <label class="row-label">Código</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="barcode"></i></div>
+          <input class="control" type="text" name="codigo" value="{{ curso.codigo }}" maxlength="20" required>
+        </div>
       </div>
-    </div>
 
-    <div class="form-row">
-      <label class="row-label">Duração (períodos)</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="clock-3"></i></div>
-        <input class="control" type="number" name="duracao_periodos" min="1" value="{{ curso.duracao_periodos }}" required>
+      <div class="form-row">
+        <label class="row-label">Duração (períodos)</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="clock-3"></i></div>
+          <input class="control" type="number" name="duracao_periodos" min="1" value="{{ curso.duracao_periodos }}" required>
+        </div>
       </div>
-    </div>
 
-    <div class="form-row">
-      <label class="row-label">Status</label>
-      <div class="field-card">
-        <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
-        <select class="control" name="status">
-          <option value="ativo" {{ 'selected' if curso.status=='ativo' else '' }}>Ativo</option>
-          <option value="inativo" {{ 'selected' if curso.status=='inativo' else '' }}>Inativo</option>
-        </select>
+      <div class="form-row">
+        <label class="row-label">Status</label>
+        <div class="field-card">
+          <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
+          <select class="control" name="status">
+            <option value="ativo" {{ 'selected' if curso.status=='ativo' else '' }}>Ativo</option>
+            <option value="inativo" {{ 'selected' if curso.status=='inativo' else '' }}>Inativo</option>
+          </select>
+        </div>
       </div>
-    </div>
+    </fieldset>
 
-    <div class="form-actions">
-      <a class="btn" href="{{ url_for('admin_cursos') }}">Cancelar</a>
-      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
-    </div>
+    {#- No footer in view mode: the page-level Back action lives in the header.
+        Same shape as admin_catalogo_versao_form.html after UI-A01. -#}
+    {% if not readonly %}
+      <div class="form-actions center">
+        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_cursos') }}">Cancelar</a>
+        <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
+      </div>
+    {% endif %}
   </div>
 </form>
 {% endblock %}

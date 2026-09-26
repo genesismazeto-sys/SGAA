@@ -300,19 +300,28 @@
           <div class="cell center">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div>
           <!-- Status (badges) -->
           <div class="cell center">
+            {#- The tone is the shared DS mapping (app/status_presentation.py);
+                this page must not decide it locally again. It used to, and the
+                copy had no `Deferida Parcialmente` branch at all, so a partial
+                approval reached the student as an unstyled neutral pill.
+                The labels stay behind user_message() because they are
+                administrator-editable catalog entries. -#}
             {% set st = (r.status or '')|lower %}
+            {% set tone = status_tone('requisicao', r.status) %}
             {% if st in ['pendente','aguardando','pending'] %}
-              <span class="badge status-badge status-pill warning status-caution">{{ user_message("Pendente") }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Pendente") }}</span>
             {% elif st in ['deferido','deferida','aprovado','aprovada','approved'] %}
-              <span class="badge status-badge status-pill success status-positive">{{ user_message("Deferida") }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Deferida") }}</span>
+            {% elif st in ['deferida parcialmente','deferido parcialmente','parcialmente deferida','parcialmente deferido','partially approved'] %}
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ status_label('requisicao', r.status) }}</span>
             {% elif st in ['indeferido','indeferida','rejeitada','rejeitado'] %}
-              <span class="badge status-badge status-pill danger status-negative">{{ user_message("Indeferida") }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Indeferida") }}</span>
             {% elif st in ['devolvida','devolvido'] %}
-              <span class="badge status-badge status-pill warning status-info">{{ user_message("Devolvida") }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Devolvida") }}</span>
             {% elif st in ['encerrada','encerrado','closed'] %}
-              <span class="badge status-badge status-pill danger status-negative">{{ user_message("Encerrada") }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Encerrada") }}</span>
             {% else %}
-              <span class="badge status-badge status-pill status-neutral">{{ r.status or '-' }}</span>
+              <span class="badge status-badge status-pill status-{{ tone }}">{{ r.status or '-' }}</span>
             {% endif %}
           </div>
         </div>

@@ -1,15 +1,24 @@
 {% extends "base.html" %}
+{% from 'components/detail_header.html' import detail_header %}
 {% block title %}{{ form_title }} — {{ base.nome_conceito }}{% endblock %}
 
 {% block extra_head %}
 <style>
-  .form-fieldset{ border:0; margin:0; padding:0; min-width:0; display:grid; row-gap:12px; }
   .form-fieldset[disabled]{ opacity:1; }
   .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
   .field-card.split-2{ display:grid; grid-template-columns:40px 1fr 40px 1fr; column-gap:var(--list-col-gap, 2px); }
   .is-off-chunk{ opacity:.55; pointer-events:none; }
-  .version-form-heading{ display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:24px; }
-  .version-form-heading .main-title{ margin:0; }
+  /* "Off chunk" dims the half of a compound card that is waiting on the other
+     half — the hours input while Limitação is "Nenhuma", the Grupo pair for
+     Extensão. That is an EDITING affordance. In the read-only view the form is
+     not waiting on anything, and the dimming left one half of those cards
+     lighter than the other, which is the same one-state-two-treatments defect
+     the read-only region contract exists to end. No information is lost: the
+     value itself already reads "Nenhuma" / "Sem sugestão" / "NA".
+     pointer-events:none is deliberately kept. */
+  .form-fieldset[disabled][aria-readonly="true"] .is-off-chunk{ opacity:1; }
+  /* The page heading is the shared detail-header component now; this page's
+     own copy of it is retired. */
   .versao-switcher{
     display:flex; align-items:center; gap:10px; margin:0 0 24px; padding:0 0 14px;
     border-bottom:1px solid var(--border);
@@ -37,12 +46,18 @@
   'negative' if current_status in ['descontinuada', 'substituida'] else
   'neutral'
 ) %}
-<div class="version-form-heading">
-  <h1 class="main-title">{{ form_title }}</h1>
+{#- Same canonical header the activity-detail page uses: title on the left,
+    page-level Back action on the right. The Back label names the destination,
+    which is this version's parent activity. -#}
+{% call detail_header(
+  form_title,
+  url_for('admin_catalogo_versao_detalhe', base_id=base.id),
+  base.nome_conceito
+) %}
   {% if current_version %}
     <span class="badge status-badge status-pill status-{{ current_status_tone }}">{{ current_version.status_label }}</span>
   {% endif %}
-</div>
+{% endcall %}
 
 {% if is_clone_create and versao_anterior_label and versao_anterior_label != 'Sem versão anterior' and next_num %}
 <p style="margin-bottom:10px; color:var(--text-secondary);">
@@ -170,16 +185,16 @@
       </div>
     </fieldset>
 
-    <div class="form-actions center">
-      {% if readonly %}
-        <a class="btn" href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">Voltar</span></a>
-      {% else %}
+    {#- Read-only mode has no form action left: navigation moved to the header
+        Back action, so no centred footer button remains. -#}
+    {% if not readonly %}
+      <div class="form-actions center">
         <a class="btn" href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}">Cancelar</a>
         <button type="submit" class="btn primary" id="btn-salvar-versao" {% if form_snapshot_json %}disabled{% endif %}>
           <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span>
         </button>
-      {% endif %}
-    </div>
+      </div>
+    {% endif %}
   </div>
   <script id="grupos-por-tipo-json" type="application/json">{{ (grupos_por_tipo or {}) | tojson | safe }}</script>
 </form>

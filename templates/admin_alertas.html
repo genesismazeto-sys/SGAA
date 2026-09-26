@@ -313,7 +313,7 @@
             <span class="alerta-row-label">Visualizacao</span>
             <div class="alerta-preview" id="alerta-preview" data-default-border-color="{{ alerta_color_options[0].border }}" style="background: {{ alerta_color_options[0].bg }}; border-color: {{ alerta_color_options[0].border }};">
               <i class="lucide" data-lucide="bell-ring" aria-hidden="true"></i>
-              <span id="alerta-preview-text">Digite o titulo do alerta</span>
+              <span id="alerta-preview-text">Digite a mensagem do alerta</span>
             </div>
           </div>
         </div>
@@ -548,12 +548,8 @@
     }
 
     function updatePreview(){
-      const titulo = (tituloInput.value || '').trim();
       const message = (mensagemInput.value || '').trim();
-      const previewParts = [];
-      if (titulo) previewParts.push(titulo);
-      if (message) previewParts.push(message);
-      previewText.textContent = previewParts.join(' - ') || 'Digite o titulo do alerta';
+      previewText.textContent = message || 'Digite a mensagem do alerta';
       preview.style.background = bgHidden.value;
       preview.style.borderColor = borderHidden.value;
     }
@@ -751,7 +747,6 @@
       });
     });
 
-    tituloInput?.addEventListener('input', updatePreview);
     mensagemInput?.addEventListener('input', updatePreview);
     mensagemInput?.addEventListener('input', autoGrowTextarea);
     visivelSwitch?.addEventListener('change', () => setVisibility(visivelSwitch.checked ? '1' : '0'));
