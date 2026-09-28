@@ -62,10 +62,16 @@
     {% if r.status == 'Pendente' %}
       <form method="post" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:8px; max-width:520px;">
         <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
-        <label>
+        <div>
           <div class="help">Adicionar comprovantes</div>
-          <input class="input" type="file" name="comprovantes_files" multiple />
-        </label>
+          <div class="field-card file-card" data-upload-card>
+            <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
+            <input class="file-input" type="file" name="comprovantes_files" multiple aria-label="Adicionar comprovantes" data-file-list="comprovantes-list">
+            <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+            <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+          </div>
+          <ul class="file-list" id="comprovantes-list" aria-label="Comprovantes selecionados" hidden></ul>
+        </div>
         <label>
           <div class="help">Observação</div>
           <textarea class="input" rows="3" name="observacao">{{ r.observacao or '' }}</textarea>
@@ -86,5 +92,6 @@
 </div>
 {% endblock %}
 {% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/comprovantes-picker.js', v=static_asset_version) }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',()=>{ if(window.lucide) lucide.createIcons(); });</script>
 {% endblock %}

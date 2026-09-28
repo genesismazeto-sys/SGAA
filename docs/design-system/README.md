@@ -307,6 +307,21 @@ a stated reason (the Banco de dados retention grid and its already-conditional
 logs/history tables, the per-eixo diagnostic table, the CSV import preview, and
 the unrendered `admin_turma_form.html`).
 
+### 2.6d Field guidance and file list (UI-B23)
+
+* **Field guidance** — `.form-note.form-note--guide` (`components/form.css`), a
+  `.form-note` variant for guidance the user must read while filling a field.
+  Visible whenever the field is editable — never behind hover, a tooltip or an
+  icon click; information, not validation (accent tone, never
+  `--field-invalid-*`). It is the grid item right after its `.form-row` (inside
+  the row it would re-centre the absolute `.row-label`) and the control names it
+  with `aria-describedby`. Used by Nome do evento / Data do evento.
+* **File list** — `.file-list` / `.file-list-item` / `.file-list-remove`, one
+  compact row per attachment under an upload `.file-card`: icon, readable name
+  (a link when stored), and a real remove button named for its file. Behaviour
+  (append, dedupe, remove, stored-file removal marks) is
+  `static/js/comprovantes-picker.js`, enabled by `data-file-list` on the input.
+
 ### 2.7 Responsive contract
 
 Delivered by DS-7 and the F-5/F-6 phases. The governing idea is that a rule

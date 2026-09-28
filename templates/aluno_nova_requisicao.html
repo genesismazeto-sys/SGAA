@@ -146,9 +146,12 @@
           <label class="row-label">Nome do evento</label>
           <div class="field-card">
             <div class="field-chip"><i class="lucide" data-lucide="type"></i></div>
-            <input class="control" type="text" name="nome_evento" placeholder="Nome do evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %} value="{{ (init.nome_evento if init and init.nome_evento is not none else '') }}">
+            <input class="control" type="text" name="nome_evento" placeholder="Nome do evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% else %}aria-describedby="nome-evento-orientacao"{% endif %} value="{{ (init.nome_evento if init and init.nome_evento is not none else '') }}">
           </div>
         </div>
+        {% if page_mode != 'view_readonly' %}
+        <div class="form-note form-note--guide" id="nome-evento-orientacao"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Informe o nome exatamente como consta no comprovante — não o nome genérico da atividade no regulamento. Ex.: em uma palestra, informe o título da palestra; em horas de voo, o curso ao qual as horas se referem. Divergências podem resultar em indeferimento sumário.</span></div>
+        {% endif %}
 
         <!-- Solicitadas (h)/Data do evento (lado a lado, compactos) -->
         <div class="form-row row-2col" style="--form-label-w: 280px;">
@@ -162,24 +165,40 @@
           <div>
             <div class="field-card is-compact date-center" id="card-data">
               <div class="field-chip"><i class="lucide" data-lucide="calendar"></i></div>
-              <input class="control" type="date" name="data_evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %} value="{{ (init.data_evento if init and init.data_evento else '') }}">
+              <input class="control" type="date" name="data_evento" required {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% else %}aria-describedby="data-evento-orientacao"{% endif %} value="{{ (init.data_evento if init and init.data_evento else '') }}">
             </div>
           </div>
         </div>
+        {% if page_mode != 'view_readonly' %}
+        <div class="form-note form-note--guide" id="data-evento-orientacao"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Informe a data em que a atividade ocorreu, conforme o comprovante — não a data da solicitação. Em atividades continuadas, informe a data da última atividade realizada.</span></div>
+        {% endif %}
 
   {% if page_mode != 'view_readonly' %}
   <div class="form-row">
     <label class="row-label">Comprovantes</label>
     <div class="field-card file-card" data-upload-card>
       <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
-      <input class="file-input" id="comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes">
+      <input class="file-input" id="comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes" data-file-list="comprovantes-list">
       <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
       <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
     </div>
   </div>
+  {#- UI-B23: stored comprovantes (links) and newly selected files share one
+      list under the card; each row has its own remove button. Removing a
+      stored one only marks it (remover_comprovantes) until the form is sent. -#}
+  <ul class="file-list" id="comprovantes-list" aria-label="Comprovantes"{% if not (anexos and anexos|length) %} hidden{% endif %}>
+    {% for ax in anexos or [] %}
+    {% set ax_name = ax.original_filename or (ax.filename or '').split('/')[-1] %}
+    <li class="file-list-item" data-existing-id="{{ ax.id }}">
+      <i class="lucide" data-lucide="file-text" aria-hidden="true"></i>
+      <a class="file-list-name" href="{{ url_for('comprovantes.open_comprovante', attachment_id=ax.id) }}" target="_blank" rel="noopener">{{ ax_name }}</a>
+      <button type="button" class="file-list-remove" aria-label="Remover comprovante {{ ax_name }}"><i class="lucide" data-lucide="x" aria-hidden="true"></i></button>
+    </li>
+    {% endfor %}
+  </ul>
   {% endif %}
 
-  {% if anexos and anexos|length %}
+  {% if page_mode == 'view_readonly' and anexos and anexos|length %}
   <div class="attachments-list">
   {% for ax in anexos %}
     <div class="form-row">
@@ -217,6 +236,7 @@
 </form>
 {% endblock %}
 {% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/comprovantes-picker.js', v=static_asset_version) }}" defer></script>
 <!-- Inicialização do modo edição somente leitura -->
 <script id="init-form-json" type="application/json">{{ (init or {}) | tojson | safe }}</script>
 <meta id="readonly-flag" data-readonly="{{ '1' if page_mode=='view_readonly' else '0' }}">
@@ -336,41 +356,6 @@
       horasInput.value = selected?.getAttribute('data-default-hours') || '';
     }
 
-    function bindUploadCards(){
-      document.querySelectorAll('[data-upload-card]').forEach(card=>{
-        if (card.dataset.boundUploadCard === '1') return;
-        card.dataset.boundUploadCard = '1';
-        const input = card.querySelector('input[type="file"]');
-        const nameEl = card.querySelector('[data-file-name]');
-        const chipRight = card.querySelector('.chip-right');
-        function openPicker(){ if (input) input.click(); }
-        function updateName(){
-          const files = Array.from((input && input.files) || []);
-          if (files.length === 1){
-            nameEl.textContent = files[0].name;
-            nameEl.setAttribute('title', files[0].name);
-            card.classList.add('has-file');
-          } else if (files.length > 1){
-            const summary = `${files.length} arquivos selecionados`;
-            nameEl.textContent = summary;
-            nameEl.setAttribute('title', files.map(file => file.name).join('\n'));
-            card.classList.add('has-file');
-          } else {
-            nameEl.textContent = 'Nenhum arquivo selecionado';
-            nameEl.removeAttribute('title');
-            card.classList.remove('has-file');
-          }
-        }
-        card.addEventListener('click', (e)=>{
-          const tag = e.target && e.target.tagName;
-          if (tag !== 'INPUT') openPicker();
-        });
-        chipRight?.addEventListener('click', (e)=>{ e.stopPropagation(); openPicker(); });
-        input?.addEventListener('change', updateName);
-        updateName();
-      });
-    }
-
     // Init básico (sem valores do modo edição)
     populateNumeros();
     loadDescFromSelected();
@@ -403,11 +388,8 @@
         if (horasEl && init.horas_solicitadas!=null) horasEl.value = init.horas_solicitadas;
         if (dataEl && init.data_evento) dataEl.value = init.data_evento;
         if (obsEl && init.observacao!=null) obsEl.value = init.observacao;
-        try{ bindUploadCards(); }catch(_e){}
       }
     }catch(_e){}
-
-    bindUploadCards();
 
     // Bind (somente se não for modo leitura)
     if (!isRO){

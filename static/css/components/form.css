@@ -259,6 +259,92 @@
 .form-note > span{ min-width:0; }
 
 /* =============================================================
+   FIELD GUIDANCE  —  .form-note.form-note--guide  (UI-B23)
+
+   The .form-note variant for preventive guidance a student must read while
+   filling a field ("Nome do evento", "Data do evento"). It is visible
+   whenever the field is editable -- never behind hover, a tooltip or an icon
+   the student has to find -- and it is information, not a validation
+   state: the accent tone, never --field-invalid-*.
+
+   It is the grid item right after its .form-row (inside the row it would
+   re-centre the absolutely positioned .row-label), pulled up half the
+   12px form row-gap so it reads as that field's and not the next one's.
+   The control names it with aria-describedby.
+   ============================================================= */
+.form-note.form-note--guide{
+  align-items:flex-start;
+  padding:8px 10px;
+  border:1px solid var(--border-strong);
+  border-left:3px solid var(--accent-blue);
+  border-radius:var(--radius);
+  background:var(--field-hover-bg);
+  color:var(--text-primary);
+}
+.form-note.form-note--guide > .lucide{ margin-top:1px; color:var(--accent-blue); }
+
+/* =============================================================
+   FILE LIST  —  .file-list  (UI-B23)
+
+   The attachments of an upload .file-card, listed right under it: one
+   compact row per file -- icon, the readable filename (a link when the file
+   is already stored), and, while the form is editable, a real remove button
+   named for its file. No per-file card, no metadata. In a form grid it is
+   the item after the card's .form-row, pulled up like the guide above;
+   directly after a bare .file-card it keeps a small gap.
+   Behaviour: static/js/comprovantes-picker.js.
+   ============================================================= */
+.file-list{
+  display:grid;
+  row-gap:4px;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.form-cards-narrow > .form-note--guide,
+.form-cards-narrow > .file-list{ margin-top:-6px; }
+.field-card.file-card + .file-list{ margin-top:6px; }
+.file-list[hidden]{ display:none; }
+.file-list-item{
+  display:grid;
+  grid-template-columns:auto minmax(0, 1fr) auto;
+  align-items:center;
+  column-gap:8px;
+  min-height:28px;
+  padding:0 2px 0 10px;
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius);
+  background:var(--surface);
+  font-size:var(--font-size-small);
+  color:var(--text-primary);
+}
+.file-list-item > .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
+.file-list-name{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  color:inherit;
+  text-decoration:none;
+}
+a.file-list-name:hover{ color:var(--accent-blue); text-decoration:underline; }
+.file-list-remove{
+  display:grid;
+  place-items:center;
+  width:24px;
+  height:24px;
+  padding:0;
+  border:0;
+  border-radius:var(--radius);
+  background:transparent;
+  color:var(--text-secondary);
+  cursor:pointer;
+}
+.file-list-remove:hover{ background:var(--field-chip-hover-bg); color:var(--text-primary); }
+.file-list-remove:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:1px; }
+.file-list-remove .lucide{ width:14px; height:14px; }
+
+/* =============================================================
    TRAILING CHIP ON A PLAIN FIELD CARD
 
    The right-hand chip anatomy already existed in the DS, but every rule

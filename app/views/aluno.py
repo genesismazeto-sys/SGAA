@@ -32,8 +32,10 @@ from app.comprovantes import (
     find_completed_request_retry,
     new_comprovante_operation_id,
     prepare_comprovante_batch,
+    remove_comprovantes,
     resolve_google_storage,
     upload_comprovantes,
+    validate_comprovante_removal,
 )
 from app.db_maintenance import (
     ensure_admin_arquivos_table,
@@ -1898,7 +1900,12 @@ def aluno_requisicao_detalhe(req_id: int):
         )
         arquivos = request.files.getlist("comprovantes_files") or []
         labels = request.form.getlist("comprovantes_labels") or []
+        # UI-B23: only explicitly submitted ids are removed -- an omitted list
+        # keeps every stored comprovante. They are checked before any write and
+        # removed only after the edit itself succeeded.
+        remover_ids = request.form.getlist("remover_comprovantes")
         try:
+            validate_comprovante_removal(conn, request_id=req_id, attachment_ids=remover_ids)
             batch = prepare_comprovante_batch(
                 arquivos,
                 labels=labels,
@@ -1908,6 +1915,7 @@ def aluno_requisicao_detalhe(req_id: int):
                 ),
                 max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
             )
+            storage = None
             if batch:
                 storage = resolve_google_storage(conn)
                 upload_comprovantes(
@@ -1922,6 +1930,16 @@ def aluno_requisicao_detalhe(req_id: int):
                 conn.execute(sql, tuple(params))
                 conn.commit()
             flash("Requisição atualizada.", "success")
+            try:
+                remove_comprovantes(
+                    conn,
+                    request_id=req_id,
+                    attachment_ids=remover_ids,
+                    actor_user_id=int(session["user_id"]),
+                    storage=storage,
+                )
+            except ComprovanteError as exc:
+                flash(exc.user_message, "error")
         except ComprovanteError as exc:
             conn.rollback()
             flash(exc.user_message, "error")

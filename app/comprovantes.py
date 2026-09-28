@@ -94,7 +94,11 @@ def prepare_comprovante_batch(
     batch_key: str | None = None,
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
 ) -> list[PreparedComprovante]:
-    """Read and validate the complete selected batch before any provider call."""
+    """Read and validate the complete selected batch before any provider call.
+
+    One invalid file refuses the whole batch (nothing is stored), and the
+    message names that file.
+    """
     selected = [item for item in (files or []) if item and getattr(item, "filename", "")]
     if not selected:
         return []
@@ -112,7 +116,8 @@ def prepare_comprovante_batch(
         expected_mime = MIME_BY_EXTENSION.get(extension)
         if not expected_mime:
             raise ComprovanteError(
-                "Envie somente arquivos PDF, PNG ou JPEG.", code="UNSUPPORTED_FILE_TYPE"
+                f"{original}: envie somente arquivos PDF, PNG ou JPEG.",
+                code="UNSUPPORTED_FILE_TYPE",
             )
         stream = getattr(file_storage, "stream", file_storage)
         content = stream.read(int(max_file_bytes) + 1)
@@ -122,17 +127,17 @@ def prepare_comprovante_batch(
             pass
         if len(content) > int(max_file_bytes):
             raise ComprovanteError(
-                "Um dos comprovantes excede o limite técnico de 16 MiB.",
+                f"{original} excede o limite técnico de 16 MiB.",
                 code="FILE_TOO_LARGE",
             )
         actual_mime = detect_supported_mime(content)
         if actual_mime is None:
             raise ComprovanteError(
-                "Um dos comprovantes está vazio ou malformado.", code="MALFORMED_FILE"
+                f"{original} está vazio ou malformado.", code="MALFORMED_FILE"
             )
         if actual_mime != expected_mime:
             raise ComprovanteError(
-                "A extensão de um comprovante não corresponde ao conteúdo do arquivo.",
+                f"A extensão de {original} não corresponde ao conteúdo do arquivo.",
                 code="MIME_MISMATCH",
             )
         digest = hashlib.sha256(content).hexdigest()
@@ -732,6 +737,120 @@ def delete_request_with_comprovantes(
     )
 
 
+def _removal_rows(conn, request_id: int, attachment_ids) -> list:
+    """Resolve an explicit removal list to this request's visible attachments.
+
+    Refuses the whole list -- before anything is written -- when any id is not
+    an integer or is not a current (active / legacy_active) attachment of this
+    request, so a crafted id can never reach another request's comprovante.
+    """
+    wanted: list[int] = []
+    for raw in attachment_ids or []:
+        text = str(raw or "").strip()
+        if not text.isdigit():
+            raise ComprovanteError("Comprovante não encontrado nesta requisição.", code="ATTACHMENT_NOT_FOUND")
+        if int(text) not in wanted:
+            wanted.append(int(text))
+    rows = []
+    for attachment_id in wanted:
+        row = conn.execute(
+            """SELECT * FROM requisicao_arquivos
+                WHERE id=? AND requisicao_id=? AND storage_status IN ('active','legacy_active')""",
+            (attachment_id, int(request_id)),
+        ).fetchone()
+        if not row:
+            raise ComprovanteError("Comprovante não encontrado nesta requisição.", code="ATTACHMENT_NOT_FOUND")
+        rows.append(row)
+    return rows
+
+
+def validate_comprovante_removal(conn, *, request_id: int, attachment_ids) -> None:
+    """Read-only preflight for remove_comprovantes (UI-B23): refuse before any write."""
+    _removal_rows(conn, request_id, attachment_ids)
+
+
+def remove_comprovantes(
+    conn,
+    *,
+    request_id: int,
+    attachment_ids,
+    actor_user_id: int,
+    storage: ComprovanteStorage | None = None,
+) -> list[int]:
+    """Remove exactly the explicitly named attachments of one request (UI-B23).
+
+    An empty or omitted list removes nothing. Every id must be a current
+    attachment of this request and the actor must be allowed to change its
+    comprovantes, or nothing changes. Custody follows request deletion:
+    a Google comprovante is trashed remotely (reversible) and its row kept as
+    'trashed'; a legacy local row is deleted and its file removed. A remote
+    failure restores every row touched by this call.
+    """
+    if not [raw for raw in (attachment_ids or []) if str(raw or "").strip()]:
+        return []
+    _authorize_comprovante_upload(conn, int(request_id), int(actor_user_id))
+    rows = _removal_rows(conn, request_id, attachment_ids)
+    google_ids = [int(row["id"]) for row in rows if row["provider"] == "google"]
+    legacy_rows = [row for row in rows if row["provider"] == "local_legacy"]
+    delete_rows = []
+    if google_ids:
+        if storage is None:
+            try:
+                storage = resolve_google_storage(conn)
+            except StorageError as exc:
+                raise ComprovanteError(
+                    "Não foi possível acessar o Google Drive; os comprovantes foram mantidos.",
+                    code=getattr(exc, "code", "STORAGE_UNAVAILABLE"),
+                ) from exc
+        placeholders = ",".join("?" for _ in google_ids)
+        conn.execute(
+            f"""UPDATE requisicao_arquivos
+                   SET delete_previous_status=storage_status,delete_started_at=?,
+                       storage_status='deletion_pending',failure_code=NULL
+                 WHERE id IN ({placeholders})""",
+            (_utc_now(), *google_ids),
+        )
+        conn.commit()
+        delete_rows = conn.execute(
+            f"SELECT * FROM requisicao_arquivos WHERE id IN ({placeholders}) ORDER BY id",
+            google_ids,
+        ).fetchall()
+    try:
+        for row in delete_rows:
+            storage.trash(str(row["remote_file_id"]))  # type: ignore[union-attr]
+            conn.execute(
+                "UPDATE requisicao_arquivos SET storage_status='trashed',failure_code=NULL WHERE id=?",
+                (int(row["id"]),),
+            )
+            conn.commit()
+        for row in legacy_rows:
+            conn.execute("DELETE FROM requisicao_arquivos WHERE id=?", (int(row["id"]),))
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        restore_failed = (
+            _restore_delete_intent(conn, storage, delete_rows) if storage and delete_rows else set()
+        )
+        try:
+            _mark_remote_reconciliation(conn, restore_failed, "REMOTE_RESTORE_FAILED")
+        except Exception:
+            conn.rollback()
+        handle_storage_authorization_failure(conn, exc)
+        raise ComprovanteError(
+            "Não foi possível remover os comprovantes; eles foram mantidos.",
+            code=getattr(exc, "code", "REMOTE_TRASH_FAILED"),
+            reconciliation_required=bool(restore_failed),
+        ) from exc
+    _remove_legacy_files(
+        legacy_rows,
+        (
+            current_app.config.get("DOCUMENTOS_ALUNOS_FOLDER"),
+            current_app.config.get("UPLOAD_FOLDER"),
+        ),
+    )
+    return [int(row["id"]) for row in rows]
+
+
 __all__ = [
     "ComprovanteError",
     "PreparedComprovante",
@@ -743,6 +862,8 @@ __all__ = [
     "handle_storage_authorization_failure",
     "new_comprovante_operation_id",
     "prepare_comprovante_batch",
+    "remove_comprovantes",
     "resolve_google_storage",
     "upload_comprovantes",
+    "validate_comprovante_removal",
 ]
