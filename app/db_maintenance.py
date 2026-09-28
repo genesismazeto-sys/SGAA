@@ -475,6 +475,9 @@ def apply_retention_policy(
 
     Each policy window: {period_hours, interval_hours, slots}.
     Snapshots with reason == "manual-backup" are never included in the delete list.
+    Neither is a "pre-restore-safety" snapshot -- the undo point of a database
+    restore (UI-C18) -- although it still occupies its bucket exactly as before,
+    so every other snapshot is kept or thinned as it always was.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -524,7 +527,7 @@ def apply_retention_policy(
         mp = snap.get("manifest_path") or ""
         if not mp:
             continue
-        if snap.get("reason") == "manual-backup":
+        if snap.get("reason") in ("manual-backup", "pre-restore-safety"):
             continue
         if mp not in kept:
             to_delete.append(mp)

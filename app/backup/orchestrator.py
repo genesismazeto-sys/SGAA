@@ -41,6 +41,7 @@ from app.backup_settings import (
 )
 from app.db_maintenance import (
     apply_retention_policy,
+    create_database_snapshot,
     delete_database_snapshot,
     get_schema_status,
     list_database_backups,
@@ -145,8 +146,25 @@ def _run_retention_cleanup(conn=None) -> dict:
         retention_settings = get_retention_policy(conn)
         policy = _build_retention_policy_windows(retention_settings)
         locations = _database_backup_locations(settings)
-        all_snapshots = list_database_backups(locations)
-        to_delete = apply_retention_policy(all_snapshots, policy)
+        # Each location keeps its own series under the same policy -- as remote
+        # retention does per provider -- so the local snapshot and the cloud
+        # folder copy taken by one backup never compete for a single slot.
+        # ``created_at`` has one-second resolution and the policy's sort is
+        # stable, so snapshots are handed over newest-first by file name
+        # (which carries microseconds): a same-second tie keeps the newest.
+        to_delete: list[str] = []
+        for label, root in locations.items():
+            snapshots = sorted(
+                list_database_backups({label: root}),
+                key=lambda snap: (
+                    str(snap.get("created_at") or ""),
+                    os.path.basename(str(snap.get("manifest_path") or "")),
+                ),
+                reverse=True,
+            )
+            for mp in apply_retention_policy(snapshots, policy):
+                if mp not in to_delete:
+                    to_delete.append(mp)
         deleted: list[str] = []
         errors: list[str] = []
         for mp in to_delete:
@@ -218,8 +236,73 @@ def _save_drive_config(conn, updates: dict[str, str]) -> None:
         )
 
 
-def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
-    """Upload snapshot to enabled cloud drive providers, then apply remote retention."""
+# ===================== Resultado por destino =====================
+#
+# Cada destino de um backup (pasta em nuvem, Google Drive, OneDrive, servidor
+# externo) relata o próprio desfecho de forma independente. Os estados são
+# técnicos -- o texto para o usuário é escolhido pela view, que é quem detém o
+# catálogo de mensagens.
+
+OUTCOME_SUCCESS = "success"
+OUTCOME_NOT_CONFIGURED = "skipped_not_configured"
+OUTCOME_NOT_ENABLED = "skipped_not_enabled"
+OUTCOME_UNCHANGED = "unchanged"
+OUTCOME_DEFERRED = "deferred"
+OUTCOME_FAILED = "failed"
+
+DRIVE_PROVIDERS = ("google", "onedrive")
+
+
+def _destination_outcome(status: str, reason: str = "") -> dict[str, str]:
+    return {"status": status, "reason": reason}
+
+
+def _cloud_folder_outcome(sync_result: dict | None) -> dict[str, str]:
+    """Traduz o resultado de ``maybe_sync_database_to_cloud`` para um desfecho.
+
+    Só a pasta em nuvem tem semântica de "sem alterações" (assinatura do banco)
+    e de adiamento (intervalo mínimo) -- e ambas só valem sem ``force``.
+    """
+    result = sync_result or {}
+    reason = str(result.get("reason") or "")
+    if not result.get("skipped"):
+        if result.get("ok"):
+            return _destination_outcome(OUTCOME_SUCCESS)
+        return _destination_outcome(OUTCOME_FAILED, reason)
+    if reason == "cloud_backup_disabled":
+        return _destination_outcome(OUTCOME_NOT_CONFIGURED, reason)
+    if reason == "unchanged":
+        return _destination_outcome(OUTCOME_UNCHANGED, reason)
+    return _destination_outcome(OUTCOME_DEFERRED, reason)
+
+
+def _provider_failure_outcome(exc: Exception) -> dict[str, str]:
+    debug_code = str(getattr(exc, "debug_code", "") or "")
+    if debug_code == "APPLICATION_CREDENTIALS_MISSING":
+        return _destination_outcome(OUTCOME_NOT_CONFIGURED, debug_code)
+    return _destination_outcome(OUTCOME_FAILED, debug_code or type(exc).__name__)
+
+
+def _external_backup_outcome(external_result: dict | None) -> dict[str, str]:
+    result = external_result or {}
+    reason = str(result.get("reason") or "")
+    if result.get("ok") and not result.get("skipped"):
+        return _destination_outcome(OUTCOME_SUCCESS)
+    if result.get("error"):
+        return _destination_outcome(OUTCOME_FAILED, reason)
+    if reason == "external_disabled":
+        return _destination_outcome(OUTCOME_NOT_ENABLED, reason)
+    return _destination_outcome(OUTCOME_NOT_CONFIGURED, reason)
+
+
+def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> dict[str, dict[str, str]]:
+    """Upload snapshot to enabled cloud drive providers, then apply remote retention.
+
+    Each provider is attempted independently and reports its own outcome:
+    a failure in one never prevents or rewrites the other. Remote retention
+    runs only for a provider whose upload succeeded, against that provider.
+    """
+    outcomes: dict[str, dict[str, str]] = {}
     temp_conn = None
     if conn is None:
         temp_conn = sqlite3.connect(_app_db.DATABASE)
@@ -230,10 +313,11 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
         retention_settings = get_retention_policy(conn)
         policy = _build_retention_policy_windows(retention_settings)
 
-        for provider in ("google", "onedrive"):
+        for provider in DRIVE_PROVIDERS:
             prefix = "gdrive" if provider == "google" else "onedrive"
             enabled = str(drive_settings.get(f"{prefix}_enabled") or "0") in {"1", "true"}
             if not enabled:
+                outcomes[provider] = _destination_outcome(OUTCOME_NOT_ENABLED)
                 continue
 
             dest_folder = drive_settings.get(f"{prefix}_dest_folder") or "Backups/sistema"
@@ -246,6 +330,9 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
                     _cd.google_upload(token, snapshot_path, dest_folder)
                 else:
                     _cd.onedrive_upload(token, snapshot_path, dest_folder)
+                # The provider holds the file from here on; later bookkeeping
+                # cannot turn this into a failed upload.
+                outcomes[provider] = _destination_outcome(OUTCOME_SUCCESS)
 
                 now_iso = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                 _save_drive_config(conn, {
@@ -264,7 +351,15 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
                     logger.warning("Retenção remota [%s] falhou: %s", provider, exc)
 
             except Exception as exc:
+                if outcomes.get(provider, {}).get("status") == OUTCOME_SUCCESS:
+                    logger.warning(
+                        "Drive upload [%s] concluído, mas o registro local falhou: %s",
+                        provider,
+                        exc,
+                    )
+                    continue
                 logger.warning("Drive upload [%s] falhou: %s", provider, exc)
+                outcomes[provider] = _provider_failure_outcome(exc)
                 try:
                     _save_drive_config(conn, {f"{prefix}_last_upload_error": str(exc)[:200]})
                     conn.commit()
@@ -273,6 +368,7 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> None:
     finally:
         if temp_conn is not None:
             temp_conn.close()
+    return outcomes
 
 
 # ===================== Snapshot: nuvem e servidor externo =====================
@@ -328,37 +424,92 @@ def _maybe_sync_database_snapshot(force: bool = False, conn=None):
 # ===================== Ciclo composto canônico =====================
 
 
+def _distribute_snapshot(snapshot_path: str, *, force: bool, conn=None) -> dict:
+    """Envia um snapshot local já criado a cada destino, de forma independente.
+
+    Ordem: pasta em nuvem, Google Drive, OneDrive e, só depois de todos os
+    envios, a retenção local. Nenhum destino é pré-requisito de outro: a pasta
+    em nuvem ausente, adiada ou com falha não impede os provedores, e a falha
+    de um provedor não impede nem reescreve o outro.
+
+    Retorna ``outcomes`` (um desfecho por destino) mais os resultados brutos da
+    pasta em nuvem e da retenção.
+    """
+    outcomes: dict[str, dict[str, str]] = {}
+
+    sync_result = None
+    try:
+        sync_result = _maybe_sync_database_snapshot(force=force, conn=conn)
+        outcomes["cloud_folder"] = _cloud_folder_outcome(sync_result)
+    except Exception as exc:
+        logger.warning("Cópia para a pasta em nuvem falhou: %s", exc)
+        outcomes["cloud_folder"] = _destination_outcome(OUTCOME_FAILED, type(exc).__name__)
+
+    try:
+        outcomes.update(_maybe_upload_to_drives(snapshot_path, conn=conn) or {})
+    except Exception as exc:
+        logger.warning("Upload para drives falhou: %s", exc)
+        for provider in DRIVE_PROVIDERS:
+            outcomes.setdefault(
+                provider, _destination_outcome(OUTCOME_FAILED, type(exc).__name__)
+            )
+
+    retention_result = None
+    try:
+        retention_result = _run_retention_cleanup(conn=conn)
+    except Exception as exc:
+        logger.warning("Falha ao aplicar política de retenção após backup: %s", exc)
+
+    return {
+        "outcomes": outcomes,
+        "sync": sync_result,
+        "retention": retention_result,
+    }
+
+
 def run_backup_cycle(*, force: bool = False, conn=None) -> dict:
     """Ciclo automático canônico de backup (não-request).
 
     Precondição explícita: **application context ativo** (nenhum request
-    context é necessário nem usado). Compõe os primitivos canônicos na mesma
-    ordem do antigo hook pós-resposta que a UT-5 removeu:
+    context é necessário nem usado).
 
-        1. sincroniza o snapshot em nuvem;
-        2. se a sincronização foi bem-sucedida e **não** foi pulada,
-           aplica a política de retenção local e depois envia o snapshot
-           recém-criado para os drives habilitados.
+        1. cria o snapshot local -- o único pré-requisito, porque é o artefato
+           que os destinos recebem; uma falha aqui propaga para quem chama;
+        2. distribui esse snapshot com :func:`_distribute_snapshot`: pasta em
+           nuvem (se configurada), Google Drive e OneDrive (cada um só se o seu
+           "Incluir no backup automático" estiver ligado), cada destino de
+           forma independente, e então a retenção local.
 
-    O upload ao servidor externo **não** faz parte deste ciclo: continua sendo
-    um primitivo composto pela rota manual de "Banco de Dados".
-
-    Retorna um resultado estruturado suficiente para relatar o ciclo, sem
-    engolir exceções (nenhum try/except abrangente aqui: quem chama decide).
+    ``force`` vale só para a pasta em nuvem, o único destino com semântica de
+    "sem alterações"/intervalo mínimo. O upload ao servidor externo **não** faz
+    parte deste ciclo: continua sendo um primitivo composto pela rota manual de
+    "Banco de Dados".
     """
-    sync_result = _maybe_sync_database_snapshot(force=force, conn=conn)
-
-    retention_result = None
-    drive_upload_source_path = None
-    if sync_result.get("ok") and not sync_result.get("skipped"):
-        retention_result = _run_retention_cleanup(conn=conn)
-        database_path = (sync_result.get("snapshot") or {}).get("database_path") or ""
-        if database_path:
-            _maybe_upload_to_drives(database_path, conn=conn)
-            drive_upload_source_path = database_path
+    temp_conn = None
+    if conn is None:
+        temp_conn = sqlite3.connect(_app_db.DATABASE)
+        temp_conn.row_factory = sqlite3.Row
+        conn = temp_conn
+    try:
+        settings = _get_runtime_backup_settings(conn)
+        snapshot = create_database_snapshot(
+            _app_db.DATABASE,
+            settings.get("local_backup_dir") or current_app.config.get("LOCAL_BACKUP_DIR"),
+            schema_status=get_schema_status(conn),
+            reason="auto-backup",
+            origin="local",
+            logger=logger,
+        )
+        database_path = str(snapshot["database_path"])
+        distribution = _distribute_snapshot(database_path, force=force, conn=conn)
+    finally:
+        if temp_conn is not None:
+            temp_conn.close()
 
     return {
-        "sync": sync_result,
-        "retention": retention_result,
-        "drive_upload_source_path": drive_upload_source_path,
+        "snapshot": snapshot,
+        "outcomes": distribution["outcomes"],
+        "sync": distribution["sync"],
+        "retention": distribution["retention"],
+        "drive_upload_source_path": database_path,
     }

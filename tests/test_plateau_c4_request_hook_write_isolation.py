@@ -1198,6 +1198,7 @@ def test_criterion_four_audited_hook_set_equals_live_registration():
         ("enforce_admin_access_control", "app.web.authz_gate"),
         ("inject_admin_access_helpers", "app.web.context"),
         ("inject_editable_message_templates", "app.web.context"),
+        ("forbidden", "app.web.errors"),
         ("not_found", "app.web.errors"),
         ("internal_error", "app.web.errors"),
         ("handle_large_upload", "app.web.errors"),

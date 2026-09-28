@@ -415,11 +415,11 @@ def test_ano_semestre_renders_real_data_not_an_em_dash(populated):
 
 
 # ==========================================================================
-# E. Presentation-only: routes, context and edit behaviour unchanged
+# E. Course detail stays intact; UI-C04 gives Ver its own view-authority route
 # ==========================================================================
 
 
-def test_route_surface_and_view_context_are_untouched(client, populated):
+def test_detail_route_context_stays_intact_and_visualizar_uses_shared_form(client, populated):
     source = COURSE_VIEW.read_text(encoding="utf-8")
     assert (
         'return render_template("admin_detalhes_curso.html", curso=curso, turmas=turmas)'
@@ -427,11 +427,14 @@ def test_route_surface_and_view_context_are_untouched(client, populated):
     ), "the handler's render context changed; UI-B05 is presentation-only"
 
     _login_admin(client)
-    redirected = client.get(
+    viewed = client.get(
         f"/admin/cursos/{populated['id']}/visualizar", follow_redirects=False
     )
-    assert redirected.status_code in (301, 302, 303, 307, 308)
-    assert redirected.headers["Location"].endswith(f"/admin/cursos/{populated['id']}")
+    assert viewed.status_code == 200
+    html = viewed.get_data(as_text=True)
+    assert "Ver Curso" in html
+    assert 'disabled aria-readonly="true"' in html
+    assert 'type="submit"' not in html
 
     missing = client.get("/admin/cursos/999999", follow_redirects=False)
     assert missing.status_code == 302
@@ -528,7 +531,7 @@ def curso_forms(client):
     curso_id = _seed_curso(codigo, "Curso UI-B05 Form", duracao_periodos=7)
     pages = {}
     for mode, url in (
-        ("view", f"/admin/cursos/{curso_id}/editar?view=1"),
+        ("view", f"/admin/cursos/{curso_id}/visualizar"),
         ("edit", f"/admin/cursos/{curso_id}/editar"),
     ):
         response = client.get(url)
@@ -634,15 +637,8 @@ def test_edit_mode_centres_salvar_and_cancelar(curso_forms):
 def test_the_list_ver_action_opens_the_form_in_view_mode():
     listing = (ROOT / "templates" / "admin_cursos.html").read_text(encoding="utf-8")
     view_branch = listing[listing.index("if (action === 'view')"): listing.index("action === 'edit'")]
-    assert "admin_editar_curso" in view_branch, (
-        "Ver still points at the old course-detail redirect"
-    )
-    assert "{ view: 1 }" in view_branch
-    assert "admin_visualizar_curso" not in view_branch
-
-    # The same idiom the surfaces that were never reported already use.
-    for name in ("admin_alunos", "admin_atividades", "admin_detalhes_turma"):
-        assert "{ view: 1 }" in (ROOT / "templates" / f"{name}.html").read_text(encoding="utf-8"), name
+    assert "admin_visualizar_curso" in view_branch
+    assert "admin_editar_curso" not in view_branch
 
 
 def test_view_mode_does_not_change_the_edit_handler(client, curso_forms):

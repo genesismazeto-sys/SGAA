@@ -44,6 +44,7 @@ from app.cloud_config import (
 )
 from app.auth import admin_required
 from app.backup import orchestrator as _backup_orchestrator
+from app.backup.lock import BackupCycleBusy, backup_cycle_lock
 from app.backup import (
     _RETENTION_WINDOWS_META,
     _database_backup_locations,
@@ -522,6 +523,13 @@ def _build_database_admin_context(conn):
         google_app_id = str(google_picker_config["app_id"])
         google_picker_configured = bool(google_picker_config["configured"])
 
+    # UI-C13: effective, not merely configured -- the scheduled task must
+    # exist, be enabled, point at this installation and cover this database.
+    # Imported here so `python -m app.backup.task_scheduler` is not already
+    # loaded by the app package when runpy executes it.
+    from app.backup import task_scheduler as _task_scheduler
+
+    automatic_backup_status = _task_scheduler.automatic_backup_status(settings, app_db.DATABASE)
     return {
         "schema_status": schema_status,
         "backups": backups,
@@ -582,6 +590,9 @@ def _build_database_admin_context(conn):
         "google_oauth_callback_uri": oauth_context["google_oauth_callback_uri"],
         "onedrive_oauth_callback_uri": oauth_context["onedrive_oauth_callback_uri"],
         "oauth_config_error": oauth_context["oauth_config_error"],
+        # UI-C13: effective, not merely configured -- the scheduled task must
+        # exist, be enabled, point at this installation and cover this database.
+        "automatic_backup_status": automatic_backup_status,
     }
 
 @admin_required
@@ -1668,46 +1679,67 @@ def admin_banco_dados_backup():
     conn = get_db_connection()
     context = _build_database_admin_context(conn)
     settings = context["backup_settings"]
-    local_snapshot = create_database_snapshot(
-        app_db.DATABASE,
-        settings["local_backup_dir"],
-        schema_status=context["schema_status"],
-        reason="manual-backup",
-        origin="local",
-        logger=logger,
-        extra_metadata={"requested_by": session.get("user_id")},
-    )
-    cloud_result = _backup_orchestrator._maybe_sync_database_snapshot(force=True, conn=conn)
+    # UI-C13: one backup cycle at a time -- the scheduled run, another manual
+    # request or a restore would race the snapshot series, retention and uploads.
     try:
-        external_result = _backup_orchestrator._upload_snapshot_if_external_enabled(local_snapshot, settings)
-    except RuntimeError as exc:
-        logger.warning("Falha ao enviar snapshot para servidor externo: %s", exc)
-        external_result = {"ok": False, "skipped": False, "reason": "external_error", "error": str(exc)}
+        with backup_cycle_lock(context["local_backup_dir"]):
+            local_snapshot = create_database_snapshot(
+                app_db.DATABASE,
+                settings["local_backup_dir"],
+                schema_status=context["schema_status"],
+                reason="manual-backup",
+                origin="local",
+                logger=logger,
+                extra_metadata={"requested_by": session.get("user_id")},
+            )
+            logger.info(
+                "Backup manual solicitado pelo admin %s em %s",
+                session.get("user_id"),
+                local_snapshot["database_path"],
+            )
+            # UI-C11: every destination runs independently and reports its own outcome;
+            # the message is chosen only after all of them (and retention) finished.
+            distribution = _backup_orchestrator._distribute_snapshot(
+                local_snapshot["database_path"], force=True, conn=conn
+            )
+            try:
+                external_result = _backup_orchestrator._upload_snapshot_if_external_enabled(local_snapshot, settings)
+            except RuntimeError as exc:
+                logger.warning("Falha ao enviar snapshot para servidor externo: %s", exc)
+                external_result = {"ok": False, "skipped": False, "reason": "external_error", "error": str(exc)}
+            outcomes = dict(distribution["outcomes"])
+            outcomes["external"] = _backup_orchestrator._external_backup_outcome(external_result)
+    except BackupCycleBusy:
+        flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
+        return redirect(url_for("admin_banco_dados"))
 
-    if external_result.get("ok") and not external_result.get("skipped"):
-        flash("Backup local, snapshot em nuvem e cópia externa enviados com sucesso.", "success")
-    elif external_result.get("error"):
-        flash(f"Backup local criado, mas o envio ao servidor externo falhou: {external_result['error']}", "warning")
-    elif cloud_result.get("skipped"):
-        flash(
-            "Backup local criado. A sincronização em nuvem foi adiada ou não detectou mudanças.",
-            "info",
-        )
-    else:
-        flash("Backup local e snapshot em nuvem criados com sucesso.", "success")
-    logger.info(
-        "Backup manual solicitado pelo admin %s em %s",
-        session.get("user_id"),
-        local_snapshot["database_path"],
+    destination_labels = (
+        ("cloud_folder", "pasta em nuvem"),
+        ("google", "Google Drive"),
+        ("onedrive", "OneDrive"),
+        ("external", "servidor externo"),
     )
-    try:
-        _backup_orchestrator._run_retention_cleanup(conn=conn)
-    except Exception as exc:
-        logger.warning("Falha ao aplicar política de retenção após backup: %s", exc)
-    try:
-        _backup_orchestrator._maybe_upload_to_drives(local_snapshot["database_path"], conn=conn)
-    except Exception as exc:
-        logger.warning("Falha no upload para drives após backup: %s", exc)
+    by_status = {
+        status: [
+            label
+            for key, label in destination_labels
+            if (outcomes.get(key) or {}).get("status") == status
+        ]
+        for status in (_backup_orchestrator.OUTCOME_SUCCESS, _backup_orchestrator.OUTCOME_FAILED)
+    }
+    sent_labels = by_status[_backup_orchestrator.OUTCOME_SUCCESS]
+    failed_labels = by_status[_backup_orchestrator.OUTCOME_FAILED]
+    sent = " e ".join(filter(None, (", ".join(sent_labels[:-1]), "".join(sent_labels[-1:]))))
+    failed = " e ".join(filter(None, (", ".join(failed_labels[:-1]), "".join(failed_labels[-1:]))))
+
+    if sent and not failed:
+        flash(f"Backup local criado e enviado para {sent}.", "success")
+    elif sent:
+        flash(f"Backup local criado e enviado para {sent}, mas o envio falhou para {failed}.", "warning")
+    elif failed:
+        flash(f"Backup local criado, mas o envio falhou para {failed}.", "warning")
+    else:
+        flash("Backup local criado. Nenhum destino em nuvem está configurado para receber backups.", "info")
     return redirect(url_for("admin_banco_dados"))
 
 @admin_required
@@ -1775,30 +1807,55 @@ def _restore_database_from_source(
     if source_upload_name:
         extra_metadata["source_upload_name"] = source_upload_name
 
-    create_database_snapshot(
-        app_db.DATABASE,
-        runtime_settings.get("local_backup_dir") or current_app.config["LOCAL_BACKUP_DIR"],
-        schema_status=_get_current_schema_status_for_restore(),
-        reason="pre-restore-safety",
-        origin="local",
-        logger=logger,
-        extra_metadata=extra_metadata,
-    )
-    restore_database_snapshot(source_database_path, app_db.DATABASE, logger=logger)
+    # UI-C13: a restore is a backup cycle too (safety snapshot, replacement,
+    # distribution, retention); it never overlaps the scheduled or a manual one.
+    with backup_cycle_lock(runtime_settings.get("local_backup_dir") or current_app.config["LOCAL_BACKUP_DIR"]):
+        create_database_snapshot(
+            app_db.DATABASE,
+            runtime_settings.get("local_backup_dir") or current_app.config["LOCAL_BACKUP_DIR"],
+            schema_status=_get_current_schema_status_for_restore(),
+            reason="pre-restore-safety",
+            origin="local",
+            logger=logger,
+            extra_metadata=extra_metadata,
+        )
+        restore_database_snapshot(source_database_path, app_db.DATABASE, logger=logger)
 
-    conn = get_db_connection()
-    init_db()
-    sync_result = _backup_orchestrator._maybe_sync_database_snapshot(force=True, conn=conn)
-    try:
-        _backup_orchestrator._run_retention_cleanup(conn=conn)
-    except Exception as exc:
-        logger.warning("Falha ao aplicar política de retenção após restauração: %s", exc)
-    try:
-        db_path = (sync_result.get("snapshot") or {}).get("database_path") or ""
-        if db_path:
-            _backup_orchestrator._maybe_upload_to_drives(db_path, conn=conn)
-    except Exception as exc:
-        logger.warning("Falha no upload para drives após restauração: %s", exc)
+        conn = get_db_connection()
+        init_db()
+        # UI-C18: the restored database reaches every destination independently
+        # through the shared distribution step (pasta em nuvem, Google Drive,
+        # OneDrive, then local retention) -- providers no longer depend on the
+        # legacy folder. Their artifact is a snapshot in a private work dir, never
+        # in the local backup series, so retention cannot trade the pre-restore
+        # safety snapshot for it. A distribution failure never undoes the restore.
+        distribution_dir = tempfile.mkdtemp(prefix="sgaa-restore-distribution-")
+        try:
+            # No schema_status argument: the snapshot helper reads it from the
+            # file, and _get_current_schema_status_for_restore() would close the
+            # request connection the distribution still needs.
+            restored_snapshot = create_database_snapshot(
+                app_db.DATABASE,
+                distribution_dir,
+                reason="post-restore",
+                origin="local",
+                logger=logger,
+                extra_metadata=extra_metadata,
+            )
+            distribution = _backup_orchestrator._distribute_snapshot(
+                str(restored_snapshot["database_path"]), force=True, conn=conn
+            )
+            logger.info(
+                "Distribuição após restauração: %s",
+                ", ".join(
+                    f"{destination}={(outcome or {}).get('status')}"
+                    for destination, outcome in distribution["outcomes"].items()
+                ),
+            )
+        except Exception as exc:
+            logger.warning("Falha na distribuição após restauração: %s", exc)
+        finally:
+            cleanup_backup_artifacts({"work_dir": distribution_dir})
 
 @admin_required
 def admin_banco_dados_restaurar():
@@ -1825,11 +1882,15 @@ def admin_banco_dados_restaurar():
         flash(f"Não foi possível restaurar o backup selecionado: {exc}", "error")
         return redirect(url_for("admin_banco_dados"))
 
-    _restore_database_from_source(
-        snapshot_path,
-        source_manifest_path=manifest_path,
-        source_kind="snapshot",
-    )
+    try:
+        _restore_database_from_source(
+            snapshot_path,
+            source_manifest_path=manifest_path,
+            source_kind="snapshot",
+        )
+    except BackupCycleBusy:
+        flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
+        return redirect(url_for("admin_banco_dados"))
     flash(
         "Banco restaurado com sucesso. Um snapshot de segurança da base anterior foi salvo localmente.",
         "success",
@@ -1856,6 +1917,9 @@ def admin_banco_dados_restaurar_upload():
             source_upload_name=str(backup_file.filename or upload_name),
             source_kind=str(restore_artifacts.get("source_kind") or "upload"),
         )
+    except BackupCycleBusy:
+        flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
+        return redirect(url_for("admin_banco_dados"))
     except (BackupServiceError, OSError, sqlite3.Error, ValueError) as exc:
         flash(f"Não foi possível restaurar o arquivo enviado: {exc}", "error")
         return redirect(url_for("admin_banco_dados"))

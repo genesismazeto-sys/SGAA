@@ -147,6 +147,39 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "(msg_0f5e4f087245b242) retires. 0 additions, 1 retirement",
         -1,
     ),
+    (
+        "UI-C11 generic backup result: 'Gerar backup agora' now reports what "
+        "each destination actually did, chosen after every destination ran. "
+        "The four messages derived from the legacy cloud-folder step and the "
+        "external server retire (msg_105c4ae861021017, msg_1bb7ef4e5c693133, "
+        "msg_1ff373775142b425, msg_77240145e0360a30) and four outcome "
+        "messages replace them (msg_d38deca35db1fd8f, msg_72ba9927dc4d5f3f, "
+        "msg_566f9e72ea83ffb1, msg_752326243d3e237b). 4 additions, "
+        "4 retirements",
+        0,
+    ),
+    (
+        "UI-C14 error pages: abort(403) now renders the shared SGAA error "
+        "page instead of Werkzeug's bare page, and its minimal fallback "
+        "'<h1>403</h1><p>Acesso negado.</p>' (msg_1b65f4fa7e047f1e) joins "
+        "the 404/500 fallbacks. 1 addition, 0 retirements",
+        1,
+    ),
+    (
+        "UI-C06 Aluno header: Ver/Editar Aluno adopt the shared detail header, "
+        "whose Back names its destination (Alunos or the Turma), so the generic "
+        "bottom 'Voltar' (msg_6da1db5a662b3279) -- its only consumer -- retires. "
+        "0 additions, 1 retirement",
+        -1,
+    ),
+    (
+        "UI-C13 automatic backup: backup cycles are mutually exclusive, so the "
+        "manual backup and both restore routes refuse -- instead of racing -- "
+        "while another cycle holds the lock: 'Outro backup est\u00e1 em andamento. "
+        "Aguarde a conclus\u00e3o e tente novamente.' (msg_4bbcc2ab19e4add9). "
+        "1 addition, 0 retirements",
+        1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -185,8 +218,11 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # Password foundation was net zero on top of the REN1 580-key state: eight
 # additions against eight retired literals.  AR1 took it to 582, RA1 to 587,
 # CP1 (four retirements, no addition) to 583, UI-B19 (one retirement) to 582.
+# UI-C11 swaps four backup-result messages for four, so it stays at 582;
+# UI-C14 adds the 403 fallback, to 583; UI-C06 retires "Voltar", to 582;
+# UI-C13 adds the backup-lock busy message, to 583.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "e9180f2d7a053bba61ade5900c2e10bbb0d79ba545896e9f5240686cb169c19b"
+    "d8e5a54ece79fbd080e36c87b88ffea9cbc9fb614da29acaf473191cb733ac7c"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -293,6 +329,49 @@ UIB19_PHOTO_LABEL_RETIRED_KEYS = frozenset(
         "msg_0f5e4f087245b242",  # Foto
     }
 )
+# UI-C11 generic backup result.  Net zero (+4/-4): the route's feedback is now
+# chosen from every destination's real outcome instead of the legacy
+# cloud-folder step alone.
+UIC11_BACKUP_RESULT_KEYS = frozenset(
+    {
+        "msg_d38deca35db1fd8f",  # Backup local criado e enviado para {value_1}.
+        "msg_72ba9927dc4d5f3f",  # ... enviado para {value_1}, mas o envio falhou para {value_2}.
+        "msg_566f9e72ea83ffb1",  # Backup local criado, mas o envio falhou para {value_1}.
+        "msg_752326243d3e237b",  # Backup local criado. Nenhum destino em nuvem esta configurado...
+    }
+)
+UIC11_BACKUP_RESULT_RETIRED_KEYS = frozenset(
+    {
+        "msg_105c4ae861021017",  # Backup local, snapshot em nuvem e copia externa enviados...
+        "msg_1bb7ef4e5c693133",  # Backup local criado, mas o envio ao servidor externo falhou: ...
+        "msg_1ff373775142b425",  # Backup local criado. A sincronizacao em nuvem foi adiada...
+        "msg_77240145e0360a30",  # Backup local e snapshot em nuvem criados com sucesso.
+    }
+)
+# UI-C14 error pages.  Purely additive (+1): the 403 handler's minimal
+# fallback, symmetric with the existing 404/500 fallbacks.
+UIC14_ERROR_PAGES_KEYS = frozenset(
+    {
+        "msg_1b65f4fa7e047f1e",  # <h1>403</h1><p>Acesso negado.</p>
+    }
+)
+UIC14_ERROR_PAGES_RETIRED_KEYS = frozenset()
+# UI-C06 Aluno header.  Purely a retirement (-1): the bottom "Voltar" of Ver
+# Aluno was that literal's only consumer; the header Back replaces it.
+UIC06_ALUNO_HEADER_KEYS = frozenset()
+UIC06_ALUNO_HEADER_RETIRED_KEYS = frozenset(
+    {
+        "msg_6da1db5a662b3279",  # Voltar
+    }
+)
+# UI-C13 automatic backup.  Purely additive (+1): one refusal shared by the
+# manual backup and both restore routes while another cycle holds the lock.
+UIC13_BACKUP_LOCK_KEYS = frozenset(
+    {
+        "msg_4bbcc2ab19e4add9",  # Outro backup esta em andamento. Aguarde a conclusao...
+    }
+)
+UIC13_BACKUP_LOCK_RETIRED_KEYS = frozenset()
 
 
 def catalog_keys_digest(keys) -> str:
@@ -379,7 +458,7 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # The default-password activation is NOT a route: the Senhas padrão panel is
 # one settings surface saved by the pre-existing senhas-default endpoint.
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "239bdebf670f4c4f4142fe0ce71bc9f96026e5a97d0a3fa3775c7b9ebb653303"
+    "2c847292d7681b92693459d9872dc7bfbb31ffa149ce7417844af53674a7a85a"
 )
 
 
@@ -620,11 +699,56 @@ def catalog_keys_before_root_admin(keys) -> set[str]:
     return (set(keys) - set(RA1_ROOT_ADMIN_KEYS)) | set(RA1_ROOT_ADMIN_RETIRED_KEYS)
 
 
+def catalog_keys_before_backup_lock(keys) -> set[str]:
+    """Undo the UI-C13 term: drop the backup-lock busy key.
+
+    UI-C13 is the newest term, so a reconstruction walks back through this
+    first, then UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the password
+    foundation.
+    """
+    return (set(keys) - set(UIC13_BACKUP_LOCK_KEYS)) | set(
+        UIC13_BACKUP_LOCK_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_aluno_header(keys) -> set[str]:
+    """Undo the UI-C06 term: put the retired "Voltar" key back.
+
+    A reconstruction walks back through UI-C13 first, then this, then UI-C14,
+    UI-C11, UI-B19, CP1, RA1, AR1 and the password foundation.
+    """
+    return (set(keys) - set(UIC06_ALUNO_HEADER_KEYS)) | set(
+        UIC06_ALUNO_HEADER_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_error_pages(keys) -> set[str]:
+    """Undo the UI-C14 term: drop the 403 fallback key.
+
+    A reconstruction walks back through UI-C06 first, then this, then UI-C11,
+    UI-B19, CP1, RA1, AR1 and the password foundation.
+    """
+    return (set(keys) - set(UIC14_ERROR_PAGES_KEYS)) | set(
+        UIC14_ERROR_PAGES_RETIRED_KEYS
+    )
+
+
+def catalog_keys_before_backup_result(keys) -> set[str]:
+    """Undo the UI-C11 term: drop its four outcome keys, restore the four retired.
+
+    A reconstruction walks back through UI-C14 first, then this, then UI-B19,
+    CP1, RA1, AR1 and the password foundation.
+    """
+    return (set(keys) - set(UIC11_BACKUP_RESULT_KEYS)) | set(
+        UIC11_BACKUP_RESULT_RETIRED_KEYS
+    )
+
+
 def catalog_keys_before_photo_label(keys) -> set[str]:
     """Undo the UI-B19 term: put the retired "Foto" key back.
 
-    UI-B19 is the newest term, so a reconstruction walks back through this
-    first, then CP1, RA1, AR1 and the password foundation.
+    A reconstruction walks back through UI-C11 first, then this, then CP1,
+    RA1, AR1 and the password foundation.
     """
     return (set(keys) - set(UIB19_PHOTO_LABEL_KEYS)) | set(
         UIB19_PHOTO_LABEL_RETIRED_KEYS

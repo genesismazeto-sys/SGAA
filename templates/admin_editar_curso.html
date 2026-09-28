@@ -3,7 +3,7 @@
 {% extends "base.html" %}
 {#- Same read-only switch admin_editar_atividade.html uses: "Ver" is this form
     with the edit taken away, never a second page. -#}
-{% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{% set readonly = (force_readonly|default(false) or request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
 {% block title %}{{ 'Ver Curso' if readonly else 'Editar Curso' }}{% endblock %}
 {% block content %}
 {{ detail_header(

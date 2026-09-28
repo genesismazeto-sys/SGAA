@@ -724,9 +724,11 @@ def profile_digest(level: str, profiles=None) -> str:
 # REN1 added two (requisicoes, edit) entries. Password foundation adds the
 # (acesso, full) single-account e-mail mutation entry; the default-password
 # activation rides on the pre-existing senhas-default requirement rather than
-# owning a second endpoint. No pre-existing requirement changed.
+# owning a second endpoint. UI-C04 adds two GET-only view-authority routes for
+# Aluno and exact activity-version consultation; no existing requirement is
+# weakened.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "a7c9914a7cbc771839b4e1ed1a937f61d1273cbdaae9642c6a1d2cd950dbebaf"
+    "e3e81124231ada18b552fb0d4c7ca8ea31579d37ab93d8de5bf7c034d239bb65"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -744,7 +746,7 @@ CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
     "2ff35e4bd550f5b65cb384a459979314773619bbf11b8598134085c72be345b7"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
-    "597a1a54994a3f75e8dd1359e00b6e704eb7135af30751c2481fecc13fc4387a"
+    "630959fb02f2828ff93f57a08b441d1aa2d0a2b429a52bc35d1e300b10a1017a"
 )
 # Password foundation adds the expected denials for the non-full Acesso
 # profiles on the single-account password e-mail endpoint. The default-password

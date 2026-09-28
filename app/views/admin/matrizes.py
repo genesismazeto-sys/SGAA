@@ -320,7 +320,7 @@ def admin_matrizes():
             "horas_extensao_obrigatorias": row["horas_extensao_obrigatorias"] or 0,
             "status": _matriz_status_label(row["status"]),
             "status_badge_type": _matriz_status_badge_type(row["status"]),
-            "view_url": url_for("admin_editar_matriz", matriz_id=row["id"], tab="dados"),
+            "view_url": url_for("admin_editar_matriz", matriz_id=row["id"], tab="dados", view=1),
             "edit_url": url_for("admin_editar_matriz", matriz_id=row["id"], tab="dados"),
             "delete_url": url_for("admin_excluir_matriz", matriz_id=row["id"]),
             "manage_academicas_url": url_for("admin_editar_matriz", matriz_id=row["id"], tab="aac"),
@@ -562,7 +562,13 @@ def _render_matriz_form(
     matriz=None,
     active_tab: str = "dados",
     readonly: bool = False,
+    view_mode: bool = False,
 ):
+    # Ver (UI-C01) is this same form with the edit taken away. `readonly` as
+    # passed in means "the account may not edit"; view mode forces the same
+    # lock for accounts that may, without claiming their access is limited.
+    access_readonly = readonly
+    readonly = readonly or view_mode
     cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
     matriz_id = matriz["id"] if matriz else None
     horas_defaults = get_horas_settings(conn) if not matriz_id else None
@@ -583,6 +589,9 @@ def _render_matriz_form(
         academicas_count, extensao_count = _matriz_counts(conn, matriz_id)
         if active_tab in {"aac", "aea"}:
             transfer_available, transfer_selected, transfer_groups = _matriz_transfer_lists(conn, matriz_id, active_tab)
+
+    # Tabs keep the reader inside Ver instead of dropping them into Editar.
+    view_args = {"view": 1} if view_mode else {}
 
     card_version_menu_data = {}
     if matriz_id and active_tab in {"aac", "aea"} and not interaction_locked:
@@ -614,8 +623,9 @@ def _render_matriz_form(
         activity_tabs_enabled=activity_tabs_enabled,
         academicas_count=academicas_count,
         extensao_count=extensao_count,
-        manage_academicas_url=url_for("admin_editar_matriz", matriz_id=matriz_id, tab="aac") if matriz_id else "",
-        manage_extensao_url=url_for("admin_editar_matriz", matriz_id=matriz_id, tab="aea") if matriz_id else "",
+        dados_url=url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados", **view_args) if matriz_id else "",
+        manage_academicas_url=url_for("admin_editar_matriz", matriz_id=matriz_id, tab="aac", **view_args) if matriz_id else "",
+        manage_extensao_url=url_for("admin_editar_matriz", matriz_id=matriz_id, tab="aea", **view_args) if matriz_id else "",
         transfer_meta=_matriz_transfer_meta(active_tab),
         transfer_available=transfer_available,
         transfer_selected=transfer_selected,
@@ -624,6 +634,8 @@ def _render_matriz_form(
         is_academically_frozen=is_academically_frozen,
         interaction_locked=interaction_locked,
         readonly=readonly,
+        access_readonly=access_readonly,
+        view_mode=view_mode,
     )
 
 
@@ -802,6 +814,9 @@ def admin_editar_matriz(matriz_id: int):
 
     auth_context = _get_current_admin_access_context()
     readonly = not _admin_can("matrizes", "edit", auth_context)
+    view_mode = (request.args.get("view") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
     active_tab = (request.values.get("tab") or request.values.get("active_tab") or "dados").strip().lower()
     if active_tab not in {"dados", "aac", "aea"}:
@@ -875,7 +890,9 @@ def admin_editar_matriz(matriz_id: int):
         return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab=active_tab))
 
     matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id = ?", (matriz_id,)).fetchone()
-    return _render_matriz_form(conn, matriz=matriz, active_tab=active_tab, readonly=readonly)
+    return _render_matriz_form(
+        conn, matriz=matriz, active_tab=active_tab, readonly=readonly, view_mode=view_mode
+    )
 
 
 # ===================== Rota Admin: Criar nova versão de atividade via card da matriz (D7.5D) =====================

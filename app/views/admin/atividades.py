@@ -676,7 +676,17 @@ def admin_atividades():
         },
     ]
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
-    return render_template("admin_atividades.html", atividades=atividades, tipo_atual=tipo_filtro, grupos_por_tipo=grupos_por_tipo, docs_por_atividade=docs_por_atividade, page=page, per_page=per_page, total=total, total_pages=total_pages, filter_schema=filter_schema)
+    return render_template(
+        "admin_atividades.html", atividades=atividades, tipo_atual=tipo_filtro, grupos_por_tipo=grupos_por_tipo,
+        docs_por_atividade=docs_por_atividade, page=page, per_page=per_page, total=total, total_pages=total_pages,
+        filter_schema=filter_schema,
+        # UI-C08: the row's Editar is offered only for a version the canonical
+        # freeze policy lets be edited in place (an unreferenced draft).
+        editable_version_ids=frozenset(
+            a["id"] for a in atividades
+            if a["base_id"] and can_activity_version_be_mutated_in_place(conn, a["id"])
+        ),
+    )
 
 
 @admin_required
@@ -1093,6 +1103,11 @@ def admin_catalogo_versao_detalhe(base_id: int):
         substituicao_candidatas=substituicao_candidatas,
         transicoes_historico=transicoes_historico,
         nova_versao_url=nova_versao_url,
+        # UI-C08: "Editar" is offered only where the canonical freeze policy
+        # allows an in-place edit; every other version is read through Ver.
+        editable_version_ids=frozenset(
+            v["id"] for v in versoes if can_activity_version_be_mutated_in_place(conn, v["id"])
+        ),
     )
 
 
@@ -1369,7 +1384,12 @@ def _get_versoes_para_switcher(conn, base_id: int) -> list[dict]:
 
 
 @admin_required
-def admin_catalogo_editar_versao(base_id: int, versao_id: int):
+def admin_catalogo_editar_versao(
+    base_id: int,
+    versao_id: int,
+    *,
+    force_readonly: bool = False,
+):
     """Edit/view one exact version through the same eight-field R4 form."""
     conn = get_db_connection()
     base = get_atividade_base(conn, base_id)
@@ -1399,7 +1419,7 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
     # Modo explícito somente-leitura (?view=1), consistente com as convenções
     # SGAA existentes (admin_editar_atividade usa o mesmo parâmetro).  Força
     # leitura mesmo para rascunhos editáveis e nunca expõe ação de salvar.
-    view_mode = (request.args.get("view") or "").strip().lower() in {
+    view_mode = force_readonly or (request.args.get("view") or "").strip().lower() in {
         "1", "true", "yes", "on",
     }
     readonly = view_mode or not can_activity_version_be_mutated_in_place(conn, versao_id)
@@ -1464,6 +1484,13 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             form_title=form_title,
             submit_label=submit_label,
             readonly=readonly or force_readonly,
+            # UI-C08: a version that cannot be edited in place is Ver, whatever
+            # URL reached it -- no save target, switcher in Ver mode.
+            view_mode=readonly or force_readonly,
+            editable_version_ids=frozenset(
+                v["id"] for v in (versao_switcher or [])
+                if can_activity_version_be_mutated_in_place(conn, v["id"])
+            ),
             versao_switcher=versao_switcher,
             versao_atual_id=versao_atual_id,
             nova_versao_url=nova_versao_url,
@@ -1606,6 +1633,15 @@ def admin_catalogo_editar_versao(base_id: int, versao_id: int):
             return _render(f"Erro ao atualizar versão: {exc}")
 
     return _render_form(None, initial_values)
+
+
+@admin_required
+def admin_catalogo_visualizar_versao(base_id: int, versao_id: int):
+    return admin_catalogo_editar_versao.__wrapped__(
+        base_id,
+        versao_id,
+        force_readonly=True,
+    )
 
 
 @admin_required
@@ -1990,6 +2026,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ('GET', 'POST'),
         ),
         LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/visualizar',
+            'admin_catalogo_visualizar_versao',
+            admin_catalogo_visualizar_versao,
+            ('GET',),
+        ),
+        LegacyRouteSpec(
             '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/ativar',
             'admin_catalogo_ativar_versao',
             admin_catalogo_ativar_versao,
@@ -2055,6 +2097,7 @@ __all__ = [
     'admin_catalogo_nova_base',
     'admin_catalogo_nova_versao',
     'admin_catalogo_editar_versao',
+    'admin_catalogo_visualizar_versao',
     'admin_catalogo_ativar_versao',
     'admin_catalogo_inativar_versao',
     'admin_catalogo_descontinuar_versao',

@@ -246,9 +246,8 @@
       if (!btn || !currentUid) return;
       const action = btn.getAttribute('data-action');
       if (action === 'view'){
-        // Abre a página em modo leitura (view=1)
-        const base = "{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid);
-        window.navigateWithReturnTo(base, { view: 1 });
+        const base = "{{ url_for('admin_visualizar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid);
+        window.navigateWithReturnTo(base);
       } else if (action === 'edit'){
         window.navigateWithReturnTo("{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid));
       } else if (action === 'delete' && currentCard?.getAttribute('data-delete-url')){

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+{#
+  UI-C14. Single owner of the SGAA error pages (400, 403, 404, 500).
+
+  Every surface here is an existing Design System owner, not a clone:
+  - page + card: the shared public-page shell `.login-page` / `.login-card`
+    (modern-style.css), the same one login, forgot and set-password use;
+  - code: `.badge.status-pill.status-negative`, the semantic status pill;
+  - title / copy: `.login-title` / `.login-subtitle`;
+  - explanatory panel: `.flash.flash-info`, the shared bordered info notice;
+  - actions: `.btn.primary` / `.btn`, icon size and spacing from `.btn .lucide`.
+  The `request-error-*` classes are hooks for the few layout rules below,
+  which only arrange those owners and carry no colour of their own.
+
+  Error pages use literal paths (no url_for) so they render with the fewest
+  possible dependencies -- the 500 page must still work when the app is not
+  healthy. Keep the stylesheet order in sync with
+  templates/components/design_system_css.html.
+#}
+{%- set error_home = '/aluno/dashboard' if session.get('user_type') == 'aluno'
+                     else ('/admin/dashboard' if session.get('user_type') == 'admin' else '/') -%}
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block page_title %}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/foundation/tokens.css" />
+  <link rel="stylesheet" href="/static/css/modern-style.css" />
+  <style>
+    .request-error-status { margin-bottom: 16px; }
+    .request-error-note { margin-bottom: 24px; text-align: left; }
+    .request-error-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main class="login-page request-error-page" role="main">
+    <section class="login-card request-error-card" aria-labelledby="request-error-title">
+      <span class="badge status-pill status-negative request-error-status">Erro {% block error_code %}{% endblock %}</span>
+      <h1 id="request-error-title" class="login-title request-error-title">{% block error_title %}{% endblock %}</h1>
+      <p class="login-subtitle request-error-copy">{% block error_message %}{% endblock %}</p>
+      {% block error_note %}{% endblock %}
+      <div class="request-error-actions">
+        {% block error_actions %}
+        <a class="btn primary" href="{{ error_home }}">
+          <i class="lucide" data-lucide="home" aria-hidden="true"></i><span class="btn-label">Ir para o início</span>
+        </a>
+        {% endblock %}
+      </div>
+    </section>
+  </main>
+  <!-- UI-B15: self-hosted, pinned Lucide (literal path, per the note above).
+       The CDN origin is no longer allowed by script-src. -->
+  <script src="/static/vendor/lucide.min.js"></script>
+  <script>
+    window.lucide?.createIcons?.();
+  </script>
+</body>
+</html>

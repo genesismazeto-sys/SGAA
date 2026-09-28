@@ -1,4 +1,5 @@
 {% import 'components/card_list.html' as cl %}
+{% from 'components/detail_header.html' import detail_header %}
 {% extends "base.html" %}
 {% block title %}Detalhes da Turma{% endblock %}
 
@@ -28,18 +29,6 @@
     #turma-detalhes-toolbar .input-chip{ background:transparent; border-right:none; }
     #turma-detalhes-toolbar .filters .lucide{ width:16px; height:16px; color:var(--text-tertiary); }
 
-    .turma-topbar{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      flex-wrap:wrap;
-      margin-bottom:18px;
-    }
-    .turma-topbar .main-title{ margin:0; }
-    .turma-topbar-spacer{
-      flex:1 1 auto;
-      min-width:0;
-    }
     .turma-header-strip{
       display:block;
       margin-bottom:18px;
@@ -156,9 +145,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="turma-topbar">
-  <h1 class="main-title">Turma</h1>
-
+{#- UI-C06. The shared detail header owns the title and the page-level Back;
+    the turma picker stays beside the title through the header's trailing slot.
+    Back names its destination, the Turmas list. -#}
+{% call detail_header('Turma', url_for('admin_turmas'), 'Turmas') %}
   <div class="turma-select-shell" title="Escolher outra turma cadastrada">
     <select id="turma-global-select" aria-label="Escolher outra turma cadastrada">
       {% for turma_option in all_turmas %}
@@ -169,14 +159,7 @@
     </select>
     <i class="lucide" data-lucide="chevron-down" aria-hidden="true"></i>
   </div>
-
-  <div class="turma-topbar-spacer" aria-hidden="true"></div>
-
-  <a class="btn" href="{{ url_for('admin_turmas') }}">
-    <i class="lucide" data-lucide="arrow-left"></i>
-    <span class="btn-label">Voltar</span>
-  </a>
-</div>
+{% endcall %}
 
 <div class="turma-header-strip">
   <div class="turma-meta-cards">
@@ -360,7 +343,7 @@
         }) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum aluno vinculado a esta turma.</div>
+      <div class="table-empty">Nenhum aluno vinculado a esta turma.</div>
     {% endif %}
   </div>
 </div>
@@ -508,8 +491,8 @@
       if (!btn || !currentUid) return;
       const action = btn.getAttribute('data-action');
       if (action === 'view'){
-        const base = "{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid);
-        window.navigateWithReturnTo(base, { view: 1 });
+        const base = "{{ url_for('admin_visualizar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid);
+        window.navigateWithReturnTo(base);
       } else if (action === 'edit'){
         window.navigateWithReturnTo("{{ url_for('admin_editar_aluno', usuario_id=0) }}".replace('/0', '/' + currentUid));
       } else if (action === 'delete'){
@@ -524,12 +507,10 @@
       }
     });
 
-    document.addEventListener('click', (e) => {
-      if (sortFieldBtn && sortMenu && !sortMenu.hidden && !e.target.closest('#sort-menu') && !e.target.closest('#sort-field')) closePopover(sortFieldBtn, sortMenu);
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && sortFieldBtn && sortMenu && !sortMenu.hidden) closePopover(sortFieldBtn, sortMenu);
-    });
+    // UI-C16: the sort menu's outside-click and Escape closing are owned by
+    // initToolbarSortMenu() above; the page-local copies referenced that
+    // function's private button/menu variables and threw a ReferenceError on
+    // every click and keypress.
 
     if (window.lucide) lucide.createIcons();
   })();

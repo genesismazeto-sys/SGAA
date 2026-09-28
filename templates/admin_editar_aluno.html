@@ -1,7 +1,8 @@
 <!-- templates/admin_editar_aluno.html -->
 {% extends "base.html" %}
 {% from 'components/icons.html' import school_icon %}
-{% set readonly = (request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
+{% from 'components/detail_header.html' import detail_header %}
+{% set readonly = (force_readonly|default(false) or request.args.get('view') in ['1','true','yes'] or request.args.get('mode') == 'view') %}
 {#
   Ver Aluno e uma tela de consulta, nao um formulario desligado. `disabled`
   comunica "nao se aplica" e o DS o pinta como tal (texto terciario, borda
@@ -27,7 +28,17 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="main-title">{{ user_message('Ver Aluno') if readonly else user_message('Editar Aluno') }}</h1>
+{#- UI-C06. The shared detail header owns the title and the page-level Back.
+    Back returns where the user came from: both the Alunos list and the Turma
+    roster open this page with `return_to`, so the label names that
+    destination -- the Turma when it came from a roster, Alunos otherwise. -#}
+{% set back_href = request.args.get('return_to') or url_for('admin_alunos') %}
+{% set back_label = user_message('Turma') if (request.args.get('return_to') or '').startswith('/admin/turma/') else user_message('Alunos') %}
+{{ detail_header(
+  (user_message('Ver Aluno') if readonly else user_message('Editar Aluno')),
+  back_href,
+  back_label
+) }}
 
 <form method="POST">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -152,14 +163,14 @@
       </div>
     </div>
 
+    {#- No footer in Ver: the page-level Back lives in the header (as on Curso).
+        Editar keeps its form contract: Cancelar + Salvar. -#}
+    {% if not readonly %}
     <div class="form-actions center">
-      {% if readonly %}
-        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_alunos') }}"><i class="lucide" data-lucide="arrow-left"></i><span class="btn-label">{{ user_message("Voltar") }}</span></a>
-      {% else %}
-        <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_alunos') }}">{{ user_message("Cancelar") }}</a>
-        <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
-      {% endif %}
+      <a class="btn" href="{{ back_href }}">{{ user_message("Cancelar") }}</a>
+      <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
     </div>
+    {% endif %}
   </div>
 </form>
 {% endblock %}

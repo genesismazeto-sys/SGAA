@@ -65,24 +65,33 @@
 </p>
 {% endif %}
 
+{#- UI-C05. Permission and state are separate dimensions: `can_edit_atividades`
+    gates every WRITE affordance (Nova versão, the save target), while the
+    version state keeps deciding what an editor may change (UI-C08). `view_mode`
+    is the explicit Ver mode -- /visualizar or ?view=1 -- as opposed to an
+    Editar page that is read-only only because of the version's state. -#}
+{% set can_edit_atividades = auth_can('atividades', 'edit') %}
 {% if versao_switcher %}
 <div class="versao-switcher" role="navigation" aria-label="Alternar entre versões da atividade">
   <label class="vs-label" for="versao-switcher">Versão</label>
   <select id="versao-switcher" class="control" aria-label="Selecionar versão da atividade">
     {% for v in versao_switcher %}
-      <option value="{{ v.id }}" {% if v.id == versao_atual_id %}selected{% endif %}>
+      <option value="{{ v.id }}" data-editable="{{ '1' if v.id in (editable_version_ids|default([])) else '0' }}" {% if v.id == versao_atual_id %}selected{% endif %}>
         v{{ v.numero_versao }}
       </option>
     {% endfor %}
   </select>
+  {% if can_edit_atividades %}
   <div class="vs-actions">
     <a class="btn" href="{{ nova_versao_url }}"><i class="lucide" data-lucide="plus"></i><span class="btn-label">Nova versão</span></a>
   </div>
+  {% endif %}
 </div>
 {% endif %}
 
-<form action="{{ form_action }}" method="post" autocomplete="off">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{#- Ver carries no mutation target: no action, no method, no CSRF token. -#}
+<form {% if not view_mode %}action="{{ form_action }}" method="post" {% endif %}autocomplete="off">
+  {% if not view_mode %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
   <div class="form-cards-narrow form-cards-narrow--wide">
     <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
       <div class="form-row" data-visible-field="tipo">
@@ -210,9 +219,15 @@ document.addEventListener('DOMContentLoaded', function(){
   if (window.lucide) lucide.createIcons();
   const switcher = document.getElementById('versao-switcher');
   if (switcher){
-    const baseUrl = "{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=0) }}";
+    // UI-C05: switching versions keeps the current mode -- Ver stays on
+    // /visualizar, Editar stays on /editar (whose state rules still apply).
+    const baseUrl = "{{ url_for('admin_catalogo_visualizar_versao' if view_mode else 'admin_catalogo_editar_versao', base_id=base.id, versao_id=0) }}";
+    // UI-C08: from Editar, a version that cannot be edited in place opens in Ver.
+    const viewUrl = "{{ url_for('admin_catalogo_visualizar_versao', base_id=base.id, versao_id=0) }}";
     switcher.addEventListener('change', function(){
-      window.location.href = baseUrl.replace('/versoes/0/editar', '/versoes/' + switcher.value + '/editar');
+      const option = switcher.selectedOptions[0];
+      const target = option && option.dataset.editable === '0' ? viewUrl : baseUrl;
+      window.location.href = target.replace('/versoes/0/', '/versoes/' + switcher.value + '/');
     });
   }
 

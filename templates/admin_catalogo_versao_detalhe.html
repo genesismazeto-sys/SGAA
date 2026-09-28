@@ -69,6 +69,11 @@
 {% endblock %}
 
 {% block content %}
+{#- UI-C05. `can_edit_atividades` gates every WRITE affordance on this hub
+    (Criar versão, Editar, the lifecycle forms, substitution). The version
+    state keeps deciding which of them an editor sees. A view-only user gets
+    the read actions only -- nothing hidden or disabled is left in the DOM. -#}
+{% set can_edit_atividades = auth_can('atividades', 'edit') %}
 <div class="version-detail-page">
   {{ detail_header(
     base.nome_conceito,
@@ -84,10 +89,12 @@
         <h2 class="version-section-title" id="versions-title">Versões</h2>
         <p class="version-section-description">Informações, uso em Matrizes e ações disponíveis.</p>
       </div>
+      {% if can_edit_atividades %}
       <a href="{{ nova_versao_url }}" class="btn primary btn-nova-alinhado">
         <i class="lucide" data-lucide="plus" aria-hidden="true"></i>
         <span class="btn-label">Criar versão</span>
       </a>
+      {% endif %}
     </div>
 
     {% if versoes and versoes|length %}
@@ -130,7 +137,9 @@
                  data-version-id="{{ v.id }}"
                  data-version-status="{{ status_key }}"
                  data-version-label="v{{ v.numero_versao if v.numero_versao else '?' }}"
-                 data-version-url="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"
+                 data-version-view-url="{{ url_for('admin_catalogo_visualizar_versao', base_id=base.id, versao_id=v.id) }}"
+                 data-version-editable="{{ '1' if v.id in editable_version_ids else '0' }}"
+                 {% if can_edit_atividades and v.id in editable_version_ids %}data-version-edit-url="{{ url_for('admin_catalogo_editar_versao', base_id=base.id, versao_id=v.id) }}"{% endif %}
                  data-has-substitution="{{ '1' if substituicao_options else '0' }}">
               <div class="cell"><span class="version-identifier">v{{ v.numero_versao if v.numero_versao else '?' }}</span></div>
               <div class="cell" title="{{ tipo_label }}">{{ tipo_label }}</div>
@@ -162,6 +171,7 @@
                 </span>
               </div>
             </div>
+            {% if can_edit_atividades %}
             {% if status_key == 'rascunho' %}
               <form hidden class="vc-activate-form" data-version-id="{{ v.id }}" method="post"
                     action="{{ url_for('admin_catalogo_ativar_versao', base_id=base.id, versao_id=v.id) }}"
@@ -201,6 +211,7 @@
                   <option value="{{ candidato.id }}">v{{ candidato.numero_versao if candidato.numero_versao else '?' }} · {{ candidato_tipo }}</option>
                 {% endfor %}
               </select>
+            {% endif %}
             {% endif %}
           {% endfor %}
         </div>
@@ -287,6 +298,7 @@
     {% endif %}
   </section>
 
+  {% if can_edit_atividades %}
   <div id="version-substitute-modal" class="modal-overlay" hidden>
     <div class="modal-card version-substitute-card" role="dialog" aria-modal="true" aria-labelledby="version-substitute-title">
       <div class="modal-header">
@@ -305,10 +317,13 @@
       </form>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+{#- Blocks do not share `set` variables: the same single permission check. -#}
+{% set can_edit_atividades = auth_can('atividades', 'edit') %}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const scrollWrap = document.querySelector('.imp-version-detail');
@@ -326,13 +341,16 @@
     bar.setAttribute('role', 'toolbar');
     bar.innerHTML = `
       <button type="button" class="act-btn vc-view-btn" data-action="view" aria-label="Ver versão" title="Ver versão"><i data-lucide="eye"></i></button>
+      {% if can_edit_atividades %}
       <button type="button" class="act-btn vc-edit-btn" data-action="edit" aria-label="Editar versão" title="Editar versão"><i data-lucide="edit"></i></button>
       <button type="button" class="act-btn vc-activate-btn" data-action="activate" aria-label="Ativar versão" title="Ativar versão"><i data-lucide="check"></i></button>
       <button type="button" class="act-btn vc-inativar-btn" data-action="suspend" aria-label="Inativar versão" title="Inativar versão"><i data-lucide="pause-circle"></i></button>
       <button type="button" class="act-btn vc-substituir-btn" data-action="substitute" aria-label="Substituir versão" title="Substituir versão"><i data-lucide="replace"></i></button>
       <button type="button" class="act-btn vc-descontinuar-btn" data-action="discontinue" aria-label="Descontinuar versão" title="Descontinuar versão"><i data-lucide="x-circle"></i></button>
       <button type="button" class="act-btn vc-delete-btn" data-action="delete" aria-label="Excluir versão" title="Excluir versão"><i data-lucide="trash-2"></i></button>
+      {% endif %}
     `;
+    const canEdit = {{ 'true' if can_edit_atividades else 'false' }};
 
     const modal = document.getElementById('version-substitute-modal');
     const modalForm = document.getElementById('version-substitute-dialog-form');
@@ -341,7 +359,7 @@
     let hideTimer = null;
 
     const button = (action) => bar.querySelector(`[data-action="${action}"]`);
-    const setVisible = (action, visible) => { button(action).hidden = !visible; };
+    const setVisible = (action, visible) => { const b = button(action); if (b) b.hidden = !visible; };
     const currentVersionId = () => currentCard?.dataset.versionId || '';
 
     const positionFor = (card) => {
@@ -358,14 +376,17 @@
       const status = currentCard?.dataset.versionStatus || '';
       const isDraft = status === 'rascunho';
       const isActive = status === 'ativa';
-      setVisible('view', !isDraft);
-      setVisible('edit', isDraft);
+      // UI-C08: Editar follows real mutability (an unreferenced draft), not
+      // the status alone; a locked version -- drafts included -- is read in Ver.
+      const isEditable = currentCard?.dataset.versionEditable === '1';
+      setVisible('view', !isEditable || !canEdit);
+      setVisible('edit', isEditable);
       setVisible('activate', isDraft);
       setVisible('suspend', isActive);
       setVisible('substitute', isActive);
       setVisible('discontinue', isActive);
       setVisible('delete', rows.length > 1);
-      button('substitute').disabled = currentCard?.dataset.hasSubstitution !== '1';
+      if (button('substitute')) button('substitute').disabled = currentCard?.dataset.hasSubstitution !== '1';
       bar.setAttribute('aria-label', `Ações da ${currentCard?.dataset.versionLabel || 'versão'}`);
     };
 
@@ -414,7 +435,8 @@
       const target = event.target.closest('.act-btn');
       if (!target || target.disabled || !currentCard) return;
       const action = target.dataset.action;
-      if (action === 'view' || action === 'edit') window.location.href = currentCard.dataset.versionUrl;
+      if (action === 'view') window.location.href = currentCard.dataset.versionViewUrl;
+      if (action === 'edit') window.location.href = currentCard.dataset.versionEditUrl;
       if (action === 'activate') actionForm('vc-activate-form')?.requestSubmit();
       if (action === 'suspend') actionForm('vc-inativar-form')?.requestSubmit();
       if (action === 'discontinue') actionForm('vc-descontinuar-form')?.requestSubmit();
@@ -422,6 +444,7 @@
       if (action === 'substitute') openSubstitution();
     });
 
+    if (canEdit && modal) {
     modalForm.addEventListener('submit', (event) => {
       event.preventDefault();
       if (!modalSelect.value) return;
@@ -435,6 +458,7 @@
     document.getElementById('version-substitute-cancel').addEventListener('click', closeModal);
     modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeModal(); });
+    }
     window.lucide?.createIcons?.();
   });
 </script>

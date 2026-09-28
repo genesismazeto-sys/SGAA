@@ -11,7 +11,7 @@ Contract covered here (GREEN targets):
   1. canonical module/blueprint/spec tuple: ``app.views.admin.alunos_turmas_cursos``,
      ``bp_admin_alunos_turmas_cursos`` (blueprint name
      ``admin_alunos_turmas_cursos_blueprint``) and immutable ``LEGACY_ROUTE_SPECS``;
-  2. exact route cohort: 17 endpoints / 24 rule-method pairs, no extra;
+  2. exact route cohort: 18 endpoints / 25 rule-method pairs, no extra;
   3. exact 10 private helpers (no 11th); ``periodo_corrente`` stays main-local
      and is never aliased into the module;
   4. ``@admin_required`` preserved on every handler; no ``@bp.route``, namespace
@@ -19,7 +19,7 @@ Contract covered here (GREEN targets):
      ``sys.modules`` bridge;
   5. factory default registration and explicit opt-out removing exactly B6;
      independent app isolation; endpoint/rule collision atomicity;
-  6. ``main`` identity re-exports for all 27 moved symbols with zero local
+  6. ``main`` identity re-exports for all 28 moved symbols with zero local
      bodies/decorators; direct consumption of the accepted neutral owners
      ``app.academics`` (3), ``app.user_accounts`` (5), ``app.web.request`` (1);
      zero app-to-main edge;
@@ -33,7 +33,7 @@ Contract covered here (GREEN targets):
      ``_build_admin_dashboard_turma_cards`` still resolves/calls it; the exact
      three moved handlers carry no ``periodo_corrente`` reference and no
      template in ``templates/**`` contains the token;
-  9. RBAC exact VIEW 6 / EDIT 13 / FULL 5 for all 24 pairs;
+  9. RBAC exact VIEW 7 / EDIT 13 / FULL 5 for all 25 pairs;
  10. route inventory and message catalog stay identical to the canonical
       baselines owned by ``tests/canonical_baseline_support.py`` (UT-BR2-ABC
       retired this module's private copies of those two global scalars) and the
@@ -131,6 +131,13 @@ AJAX_DELETE_FEEDBACK_BODY_CHANGES = {
     "admin_deletar_turma",
 }
 
+UI_C04_BODY_CHANGES = {
+    "admin_editar_curso",
+    "admin_visualizar_curso",
+    "admin_editar_aluno",
+}
+UI_C04_NEW_HANDLERS = {"admin_visualizar_aluno"}
+
 STUDENT_IMPORT_BASELINE_COMMIT = "1796c1e17b7cbd53148631f08b897f53c98590aa"
 STUDENT_IMPORT_HANDLER_NAMES = {
     "admin_adicionar_turma",
@@ -158,6 +165,7 @@ ROUTE_MATRIX = (
     ("/admin/alunos", "admin_alunos", ("GET",)),
     ("/admin/adicionar_aluno", "admin_adicionar_aluno", ("GET", "POST")),
     ("/admin/editar_aluno/<int:usuario_id>", "admin_editar_aluno", ("GET", "POST")),
+    ("/admin/visualizar_aluno/<int:usuario_id>", "admin_visualizar_aluno", ("GET",)),
     ("/admin/deletar_aluno/<int:usuario_id>", "admin_deletar_aluno", ("POST",)),
     ("/admin/alterar_status_alunos", "admin_alterar_status_alunos", ("POST",)),
     ("/admin/turmas", "admin_turmas", ("GET",)),
@@ -209,6 +217,7 @@ RBAC_MATRIX = {
     "admin_alunos": ("alunos", "view"),
     "admin_adicionar_aluno": ("alunos", "edit"),
     "admin_editar_aluno": ("alunos", "edit"),
+    "admin_visualizar_aluno": ("alunos", "view"),
     "admin_deletar_aluno": ("alunos", "full"),
     "admin_alterar_status_alunos": ("alunos", "edit"),
     "admin_turmas": ("turmas", "view"),
@@ -218,7 +227,7 @@ RBAC_MATRIX = {
     "admin_detalhes_turma": ("turmas", "view"),
     "admin_turmas_importar": ("turmas", "full"),
 }
-RBAC_SCOPE_COUNTS = {"view": 6, "edit": 13, "full": 5}
+RBAC_SCOPE_COUNTS = {"view": 7, "edit": 13, "full": 5}
 
 CSRF_MUTATING_PAIRS = {
     "/admin/cursos/adicionar": "admin_adicionar_curso",
@@ -1039,7 +1048,7 @@ def test_canonical_owner_module_blueprint_and_spec_triple():
     assert blueprint.name == BLUEPRINT_NAME
     specs = module.LEGACY_ROUTE_SPECS
     assert isinstance(specs, tuple)
-    assert len(specs) == 17
+    assert len(specs) == 18
     assert tuple((spec.rule, spec.endpoint, spec.methods) for spec in specs) == ROUTE_MATRIX
     with pytest.raises((AttributeError, TypeError)):
         specs[0].endpoint = "changed"
@@ -1107,14 +1116,14 @@ print(json.dumps({"main_imported": False, "filesystem_delta": [], "database_crea
     }
 
 
-def test_route_specs_exactly_17_endpoints_and_24_pairs_with_no_extra():
+def test_route_specs_exactly_18_endpoints_and_25_pairs_with_no_extra():
     module = _canonical_module()
     specs = module.LEGACY_ROUTE_SPECS
-    assert len(specs) == 17
-    assert len({spec.endpoint for spec in specs}) == 17
+    assert len(specs) == 18
+    assert len({spec.endpoint for spec in specs}) == 18
     pairs = {(spec.rule, method) for spec in specs for method in spec.methods}
-    assert len(pairs) == 24
-    assert sum(len(spec.methods) for spec in specs) == 24
+    assert len(pairs) == 25
+    assert sum(len(spec.methods) for spec in specs) == 25
     assert {spec.endpoint for spec in specs} == set(ROUTE_NAMES)
     assert not (set(ROUTE_NAMES) & EXCLUDED_ENDPOINTS)
     assert all(rule.startswith("/admin/") for rule, _, _ in ROUTE_MATRIX)
@@ -1187,7 +1196,7 @@ def test_two_independent_factory_apps_each_register_each_route_once():
 
     assert _route_tuples(first) == set(ROUTE_MATRIX)
     assert _route_tuples(second) == set(ROUTE_MATRIX)
-    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 17
+    assert len(_live_moved_rules(first)) == len(_live_moved_rules(second)) == 18
     assert first is not second
 
 
@@ -1197,7 +1206,7 @@ def test_duplicate_blueprint_registration_fails_explicitly():
 
     with pytest.raises(LegacyRouteRegistrationError, match="already registered"):
         register_legacy_blueprint(app, getattr(module, BLUEPRINT_VAR))
-    assert len(_live_moved_rules(app)) == 17
+    assert len(_live_moved_rules(app)) == 18
 
 
 @pytest.mark.parametrize("collision_kind", ["endpoint", "rule_method"])
@@ -1229,12 +1238,12 @@ def test_no_namespaced_endpoint_alias_or_duplicate_rule_exists():
     app = _factory()
     moved = _live_moved_rules(app)
 
-    assert len(moved) == 17
+    assert len(moved) == 18
     assert not any(
         rule.endpoint.startswith(f"{BLUEPRINT_NAME}.") for rule in app.url_map.iter_rules()
     )
     assert not any("." in rule.endpoint for rule in moved)
-    assert len({rule.rule for rule in moved}) == 17
+    assert len({rule.rule for rule in moved}) == 18
     for expected_rule, expected_endpoint, expected_methods in ROUTE_MATRIX:
         matches = [
             rule
@@ -1264,13 +1273,13 @@ def test_legacy_url_for_and_request_endpoint_behavior():
 # ---------------------------------------------------------------------------
 
 
-def test_rbac_requirements_remain_exact_for_all_24_pairs():
+def test_rbac_requirements_remain_exact_for_all_25_pairs():
     for _, endpoint, methods in ROUTE_MATRIX:
         for method in methods:
             assert get_admin_permission_requirement(endpoint, method) == RBAC_MATRIX[endpoint]
 
 
-def test_rbac_scope_counts_remain_exact_view6_edit13_full5():
+def test_rbac_scope_counts_remain_exact_view7_edit13_full5():
     from collections import Counter
 
     counts: Counter = Counter()
@@ -1291,8 +1300,8 @@ def test_main_compatibility_exports_are_identity_imports_and_app_uses_canonical_
     import main
 
     module = _canonical_module()
-    assert len(MOVED_SYMBOLS) == 27
-    assert len(set(MOVED_SYMBOLS)) == 27
+    assert len(MOVED_SYMBOLS) == 28
+    assert len(set(MOVED_SYMBOLS)) == 28
     for name in MOVED_SYMBOLS:
         assert getattr(main, name) is getattr(module, name)
     for name in ROUTE_NAMES:
@@ -1445,6 +1454,9 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         filename=str(module.__file__),
     )
     for name in MOVED_SYMBOLS:
+        if name in UI_C04_NEW_HANDLERS:
+            assert _function_body_dump(module_tree, name) is not None
+            continue
         baseline_body = _function_body_dump(baseline_tree, name)
         module_body = _function_body_dump(module_tree, name)
         assert baseline_body is not None, f"baseline main.py has no function {name}"
@@ -1465,7 +1477,7 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         elif name in AJAX_DELETE_FEEDBACK_BODY_CHANGES:
             # Declared bounded change; see AJAX-DELETE-FEEDBACK-1 above.
             continue
-        elif name not in FC08_BODY_CHANGES:
+        elif name not in FC08_BODY_CHANGES and name not in UI_C04_BODY_CHANGES:
             assert module_body == baseline_body, f"moved body differs from baseline for {name}"
 
 

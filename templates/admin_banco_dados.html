@@ -408,12 +408,6 @@
       gap:10px;
       min-width:0;
     }
-    .db-provider-config-toggle.is-disabled .db-provider-toggle-label{
-      color:#64748b;
-    }
-    .db-provider-config-toggle.is-disabled .toggle-switch{
-      opacity:.68;
-    }
     .db-provider-config-footer .btn{
       flex:0 0 auto;
       width:auto;
@@ -636,9 +630,6 @@
             <span class="badge status-pill status-neutral">Desconectado</span>
           {% endif %}
         </div>
-        {% if gdrive_last_upload_label %}
-          <div><strong>Último upload Google Drive:</strong> {{ gdrive_last_upload_label }}</div>
-        {% endif %}
         {% if onedrive_ui_enabled %}
           <div>
             <strong>OneDrive:</strong>
@@ -669,9 +660,6 @@
               {% endif %}
             </div>
           {% endif %}
-          {% if onedrive_last_upload_label %}
-            <div><strong>Último upload OneDrive:</strong> {{ onedrive_last_upload_label }}</div>
-          {% endif %}
         {% endif %}
       </div>
     </article>
@@ -686,6 +674,15 @@
         <span class="db-chip {% if gdrive_connected %}is-active{% endif %}">Google Drive</span>
         {% if onedrive_ui_enabled %}
           <span class="db-chip {% if onedrive_connected %}is-active{% endif %}">OneDrive</span>
+        {% endif %}
+        {#- UI-C13: the EFFECTIVE automatic-backup state (task installed, enabled,
+            current, this user's account, this database) -- never merely
+            configured. Same chip owner as the destinations beside it: blue
+            `.is-active` when active, the neutral chip otherwise. -#}
+        {% if (automatic_backup_status or {}).active %}
+          <span class="db-chip is-active" role="status" data-automatic-backup-status="active">Backup automático</span>
+        {% else %}
+          <span class="db-chip" role="status" data-automatic-backup-status="inactive">Backup automático</span>
         {% endif %}
       </div>
     </div>
@@ -750,14 +747,14 @@
 
     <div class="db-drive-sep"></div>
     {#
-      Single declaration of whether the per-provider "Incluir no backup automático"
-      switch is editable yet. It gates both the `disabled` attribute and the
-      `<prefix>_enabled_submitted` marker, so the card save only ever writes the
-      flag when the card could actually change it -- an unchanged, non-editable
-      switch is preserved rather than reset to 0.
+      UI-C10. "Incluir no backup automático" and "Enviar backup agora" are two
+      independent concepts. The switch only decides whether the provider takes
+      part in the automatic cycle (`orchestrator._maybe_upload_to_drives` reads
+      `<prefix>_enabled`); the manual button depends solely on the provider being
+      connected. The card always carries the `<prefix>_enabled_submitted` marker
+      beside the switch, so a card save writes the flag it represents, while a
+      POST without the marker still preserves it.
     #}
-    {% set auto_backup_toggle_editable = false %}
-    {% set auto_backup_toggle_title = 'Disponível quando o backup automático for ativado.' %}
     {#
       UI-B07. "Enviar backup agora" was rejected inside the card body, so it
       moved to the footer beside Salvar. It still POSTs to the provider's own
@@ -930,9 +927,7 @@
               <input type="hidden" name="provider" value="google">
               <input type="hidden" name="action" value="save_credentials">
               <input type="hidden" name="gdrive_dest_folder" value="{{ google_folder_label or drive_settings.gdrive_dest_folder or 'Backups/sistema' }}">
-              {% if auto_backup_toggle_editable %}
-                <input type="hidden" name="gdrive_enabled_submitted" value="1">
-              {% endif %}
+              <input type="hidden" name="gdrive_enabled_submitted" value="1">
 
               <div class="db-field">
                 <label for="google_app_public_base_url">APP_PUBLIC_BASE_URL</label>
@@ -963,10 +958,10 @@
               </div>
 
               <div class="db-provider-config-footer">
-                <div class="db-provider-config-toggle{% if not auto_backup_toggle_editable %} is-disabled{% endif %}">
-                  <span class="db-provider-toggle-label" title="{{ auto_backup_toggle_title }}">Incluir no backup automático</span>
-                  <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático" title="{{ auto_backup_toggle_title }}">
-                    <input type="checkbox" name="gdrive_enabled" value="1" {% if drive_settings.gdrive_enabled == '1' %}checked{% endif %} {% if not auto_backup_toggle_editable %}disabled aria-disabled="true"{% endif %} title="{{ auto_backup_toggle_title }}">
+                <div class="db-provider-config-toggle">
+                  <span class="db-provider-toggle-label">Incluir no backup automático</span>
+                  <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático">
+                    <input type="checkbox" name="gdrive_enabled" value="1" {% if drive_settings.gdrive_enabled == '1' %}checked{% endif %}>
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>
@@ -1135,9 +1130,7 @@
               <input type="hidden" name="provider" value="onedrive">
               <input type="hidden" name="action" value="save_credentials">
               <input type="hidden" name="onedrive_dest_folder" value="{{ onedrive_folder_label or drive_settings.onedrive_dest_folder or 'SGAA - Backups' }}">
-              {% if auto_backup_toggle_editable %}
-                <input type="hidden" name="onedrive_enabled_submitted" value="1">
-              {% endif %}
+              <input type="hidden" name="onedrive_enabled_submitted" value="1">
 
               <div class="db-field">
                 <label for="onedrive_app_public_base_url">APP_PUBLIC_BASE_URL</label>
@@ -1158,10 +1151,10 @@
               </div>
 
               <div class="db-provider-config-footer">
-                <div class="db-provider-config-toggle{% if not auto_backup_toggle_editable %} is-disabled{% endif %}">
-                  <span class="db-provider-toggle-label" title="{{ auto_backup_toggle_title }}">Incluir no backup automático</span>
-                  <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático" title="{{ auto_backup_toggle_title }}">
-                    <input type="checkbox" name="onedrive_enabled" value="1" {% if drive_settings.onedrive_enabled == '1' %}checked{% endif %} {% if not auto_backup_toggle_editable %}disabled aria-disabled="true"{% endif %} title="{{ auto_backup_toggle_title }}">
+                <div class="db-provider-config-toggle">
+                  <span class="db-provider-toggle-label">Incluir no backup automático</span>
+                  <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático">
+                    <input type="checkbox" name="onedrive_enabled" value="1" {% if drive_settings.onedrive_enabled == '1' %}checked{% endif %}>
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>

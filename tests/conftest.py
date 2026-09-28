@@ -66,6 +66,21 @@ _CANONICAL_SCOPES: list[tuple[str, bool]] = [
 # there while this manifest is evaluated.  It is intentionally excluded from
 # project/runtime custody; every real runtime scope above remains protected.
 
+# Known external writer, not pytest: the installed UI-C13 Windows scheduled
+# task ("SGAA - Backup automatico") appends to <repo>/logs/backup-automatico.log
+# every five minutes and rotates it (app.backup.automatic.configure_run_log:
+# RotatingFileHandler, backupCount=3), independently of any test run -- pytest
+# itself logs under PYTEST_RUNTIME_ROOT.  Only that file family is left out of
+# the byte comparison; its identity (name -> inode) is still recorded, and the
+# logs/ directory's own mtime is forgiven only when that identity changed (the
+# task created or rotated its file).  Every other entry -- app.log, any new file
+# or directory -- is compared exactly as before.
+_EXTERNAL_WRITER_FILES: dict[str, frozenset[str]] = {
+    "logs": frozenset(
+        ["backup-automatico.log"] + [f"backup-automatico.log.{n}" for n in range(1, 4)]
+    ),
+}
+
 
 def _compute_manifest(root):
     root = Path(root)
@@ -84,6 +99,8 @@ def _compute_manifest(root):
             entry["sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
         elif target.is_dir():
             entry["type"] = "dir"
+            external = _EXTERNAL_WRITER_FILES.get(scope_path, frozenset())
+            identity: dict[str, int] = {}
             children: dict[str, dict] = {}
             for dirpath, dirnames, filenames in sorted(os.walk(str(target))):
                 for dn in sorted(dirnames):
@@ -94,6 +111,9 @@ def _compute_manifest(root):
                 for fn in sorted(filenames):
                     fpath = os.path.join(dirpath, fn)
                     rel = os.path.relpath(fpath, str(target)).replace(os.sep, "/")
+                    if rel in external:
+                        identity[rel] = os.stat(fpath).st_ino
+                        continue
                     f_st = os.stat(fpath)
                     with open(fpath, "rb") as fh_c:
                         data = fh_c.read()
@@ -104,6 +124,8 @@ def _compute_manifest(root):
                         "sha256": hashlib.sha256(data).hexdigest(),
                     }
             entry["children"] = children
+            if external:
+                entry["external_writer"] = identity
         manifest[scope_path] = entry
     return manifest
 
@@ -111,15 +133,43 @@ def _compute_manifest(root):
 _CANONICAL_BASELINE = _compute_manifest(PROJECT_ROOT)
 
 
+def _custody_view(manifest, rotated_scopes):
+    """The manifest as compared: external-writer identity is evidence, not state."""
+    view = {}
+    for scope, entry in manifest.items():
+        entry = {k: v for k, v in entry.items() if k != "external_writer"}
+        if scope in rotated_scopes:
+            entry.pop("mtime_ns", None)
+            # The writer's first run may create the directory itself; one that
+            # holds nothing but the writer's own files counts as absent.
+            if entry.get("type") == "dir" and not entry.get("children"):
+                entry = {"exists": False}
+        view[scope] = entry
+    return view
+
+
+def _custody_differences(before_manifest, after_manifest):
+    """Scopes whose custody changed between two manifests, as report lines."""
+    rotated = {
+        scope
+        for scope in _EXTERNAL_WRITER_FILES
+        if (before_manifest.get(scope) or {}).get("external_writer")
+        != (after_manifest.get(scope) or {}).get("external_writer")
+    }
+    before_view = _custody_view(before_manifest, rotated)
+    after_view = _custody_view(after_manifest, rotated)
+    diffs = []
+    for key in sorted(before_view):
+        before = before_view[key]
+        after = after_view.get(key)
+        if before != after:
+            diffs.append(f"  {key}:\n    before={before}\n    after ={after}")
+    return diffs
+
+
 def assert_canonical_root_unchanged():
-    current = _compute_manifest(PROJECT_ROOT)
-    if current != _CANONICAL_BASELINE:
-        diffs = []
-        for key in sorted(_CANONICAL_BASELINE):
-            before = _CANONICAL_BASELINE[key]
-            after = current.get(key)
-            if before != after:
-                diffs.append(f"  {key}:\n    before={before}\n    after ={after}")
+    diffs = _custody_differences(_CANONICAL_BASELINE, _compute_manifest(PROJECT_ROOT))
+    if diffs:
         raise AssertionError(
             "Project root changed during test execution:\n" + "\n".join(diffs)
         )

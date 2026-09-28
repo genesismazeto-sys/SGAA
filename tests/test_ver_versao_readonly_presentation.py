@@ -361,7 +361,10 @@ class _FormParser(HTMLParser):
 
 
 def _parse(html: str) -> _FormParser:
-    start = html.index('<form action=')
+    # UI-C05: Ver's form carries no action (no mutation target), so the version
+    # form is located by its own autocomplete marker, not by an action attribute.
+    start = html.index('autocomplete="off">', html.index('<form'))
+    start = html.rindex('<form', 0, start)
     parser = _FormParser()
     parser.feed(html[start : html.index("</form>", start)])
     return parser

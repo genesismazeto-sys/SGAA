@@ -407,7 +407,7 @@ def admin_adicionar_curso():
 
 
 @admin_required
-def admin_editar_curso(curso_id):
+def admin_editar_curso(curso_id, *, force_readonly=False):
     conn = get_db_connection()
     curso = conn.execute("SELECT * FROM cursos WHERE id=?", (curso_id,)).fetchone()
     if not curso:
@@ -459,7 +459,11 @@ def admin_editar_curso(curso_id):
             else:
                 flash(f"Erro ao atualizar curso: {e}", "error")
 
-    return render_template("admin_editar_curso.html", curso=curso)
+    return render_template(
+        "admin_editar_curso.html",
+        curso=curso,
+        force_readonly=force_readonly,
+    )
 
 
 @admin_required
@@ -485,7 +489,7 @@ def admin_detalhes_curso(curso_id):
 
 @admin_required
 def admin_visualizar_curso(curso_id):
-    return redirect(url_for("admin_detalhes_curso", curso_id=curso_id))
+    return admin_editar_curso.__wrapped__(curso_id, force_readonly=True)
 
 
 def _safe_return_to_target(default_endpoint: str, **values) -> str:
@@ -755,7 +759,7 @@ def admin_adicionar_aluno():
 
 
 @admin_required
-def admin_editar_aluno(usuario_id):
+def admin_editar_aluno(usuario_id, *, force_readonly=False):
     conn = get_db_connection()
     aluno = conn.execute("""
       SELECT u.id as usuario_id, u.nome, u.email, a.matricula, a.turma_id, a.matriz_id, a.status\x20
@@ -878,7 +882,13 @@ def admin_editar_aluno(usuario_id):
         matrizes=matrizes,
         matriz_atual=matriz_atual,
         matriz_governada_por_turma=matriz_governada_por_turma,
+        force_readonly=force_readonly,
     )
+
+
+@admin_required
+def admin_visualizar_aluno(usuario_id):
+    return admin_editar_aluno.__wrapped__(usuario_id, force_readonly=True)
 
 
 @admin_required
@@ -1531,6 +1541,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("GET", "POST"),
         ),
         LegacyRouteSpec(
+            "/admin/visualizar_aluno/<int:usuario_id>",
+            "admin_visualizar_aluno",
+            admin_visualizar_aluno,
+            ("GET",),
+        ),
+        LegacyRouteSpec(
             "/admin/deletar_aluno/<int:usuario_id>",
             "admin_deletar_aluno",
             admin_deletar_aluno,
@@ -1593,6 +1609,7 @@ __all__ = [
     "admin_editar_aluno",
     "admin_editar_curso",
     "admin_editar_turma",
+    "admin_visualizar_aluno",
     "admin_turmas",
     "admin_turmas_importar",
     "admin_visualizar_curso",

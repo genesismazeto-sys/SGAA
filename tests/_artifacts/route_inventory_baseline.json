@@ -410,6 +410,13 @@
       "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/substituir"
     },
     {
+      "endpoint": "admin_catalogo_visualizar_versao",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/visualizar"
+    },
+    {
       "endpoint": "admin_catalogo_nova_base",
       "methods": [
         "GET",
@@ -763,6 +770,13 @@
         "POST"
       ],
       "rule": "/admin/turmas/importar"
+    },
+    {
+      "endpoint": "admin_visualizar_aluno",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/visualizar_aluno/<int:usuario_id>"
     },
     {
       "endpoint": "aluno.aluno_arquivos",

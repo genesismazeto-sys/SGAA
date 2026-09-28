@@ -110,19 +110,18 @@ def test_detalhes_curso_renders_summary_and_turmas(client):
     assert "CDR-001-T1" in html or "1" in html
 
 
-def test_visualizar_curso_redirects_then_renders(client):
+def test_visualizar_curso_renders_shared_readonly_form(client):
     curso_id = _seed_curso("Curso Visualizar RED", "CDR-002", duracao_periodos=8, status="ativo")
     _seed_turma(curso_id, "CDR-002-T1", numero=1, status="Ativa", qtd_alunos=0)
 
     _login_admin(client)
-    redirect_response = client.get(f"/admin/cursos/{curso_id}/visualizar", follow_redirects=False)
-    assert redirect_response.status_code in (301, 302, 303, 307, 308)
-    assert redirect_response.headers["Location"].endswith(f"/admin/cursos/{curso_id}")
-
-    response = client.get(f"/admin/cursos/{curso_id}/visualizar", follow_redirects=True)
+    response = client.get(f"/admin/cursos/{curso_id}/visualizar")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Curso Visualizar RED" in html
+    assert "Ver Curso" in html
+    assert 'disabled aria-readonly="true"' in html
+    assert 'type="submit"' not in html
 
 
 def test_detalhes_curso_invalid_id_redirects_to_list(client):

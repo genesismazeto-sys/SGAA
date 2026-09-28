@@ -315,7 +315,15 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
             governance.catalog_keys_before_access_repair(
                 governance.catalog_keys_before_root_admin(
                     governance.catalog_keys_before_credential_pending(
-                        governance.catalog_keys_before_photo_label(catalog)
+                        governance.catalog_keys_before_photo_label(
+                            governance.catalog_keys_before_backup_result(
+                                governance.catalog_keys_before_error_pages(
+                                    governance.catalog_keys_before_aluno_header(
+                                        governance.catalog_keys_before_backup_lock(catalog)
+                                    )
+                                )
+                            )
+                        )
                     )
                 )
             )

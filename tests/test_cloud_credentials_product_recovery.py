@@ -582,7 +582,7 @@ def test_card_save_with_an_invalid_address_writes_nothing(machine_store, admin_c
 def test_card_save_preserves_the_non_editable_automatic_backup_flag(
     machine_store, admin_client
 ):
-    """The switch is not editable yet, so a card save must not reset it to 0."""
+    """A save that does not declare the switch (no marker) must not reset it to 0."""
     _set_drive_settings({"gdrive_enabled": "1", "gdrive_dest_folder": "Backups/preservado"})
 
     _post(admin_client, _google_card_payload(gdrive_dest_folder="Backups/preservado"))

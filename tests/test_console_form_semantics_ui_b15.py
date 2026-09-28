@@ -60,12 +60,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ACESSO_TEMPLATE = PROJECT_ROOT / "templates" / "admin_acesso.html"
 BASE_TEMPLATE = PROJECT_ROOT / "templates" / "base.html"
 BASE_ALUNO_TEMPLATE = PROJECT_ROOT / "templates" / "base_aluno.html"
-ERROR_400_TEMPLATE = PROJECT_ROOT / "templates" / "400.html"
+# UI-C14: the error pages (400/403/404/500) share one owner, which hosts the
+# icon library; the per-code templates only fill its blocks.
+ERROR_PAGE_TEMPLATE = PROJECT_ROOT / "templates" / "error_page.html"
 VENDORED_LUCIDE = PROJECT_ROOT / "static" / "vendor" / "lucide.min.js"
 PINNED_LUCIDE = PROJECT_ROOT / "tests" / "visual" / "vendor" / "lucide.min.js"
 
 #: Every template that loads the icon library.
-ICON_HOST_TEMPLATES = (BASE_TEMPLATE, BASE_ALUNO_TEMPLATE, ERROR_400_TEMPLATE)
+ICON_HOST_TEMPLATES = (BASE_TEMPLATE, BASE_ALUNO_TEMPLATE, ERROR_PAGE_TEMPLATE)
 
 #: The only two external font origins SGAA is allowed to depend on: the Google
 #: Fonts stylesheet and the files it points at. Anything else on this page is
@@ -346,7 +348,7 @@ def test_cloud_backup_is_gone_and_its_replacement_is_real():
     assert "CloudBackup" not in registry, "still not a Lucide icon"
     assert "DatabaseBackup" in registry
 
-    for template in (BASE_TEMPLATE, BASE_ALUNO_TEMPLATE, ERROR_400_TEMPLATE):
+    for template in (BASE_TEMPLATE, BASE_ALUNO_TEMPLATE, ERROR_PAGE_TEMPLATE):
         text = template.read_text(encoding="utf-8")
         assert 'data-lucide="cloud-backup"' not in text, template.name
 

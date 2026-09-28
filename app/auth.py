@@ -455,7 +455,7 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     }:
         return _permission("atividades", "full")
 
-    if endpoint == "admin_alunos":
+    if endpoint in {"admin_alunos", "admin_visualizar_aluno"}:
         return _permission("alunos", "view")
     if endpoint in {"admin_adicionar_aluno", "admin_editar_aluno", "admin_alterar_status_alunos"}:
         return _permission("alunos", "edit")
@@ -482,7 +482,10 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     # Accepted diagnosis: docs/refactor/REF_0C_A_RBAC_POLICY_MATRIX_DIAGNOSIS.md (HEAD f977fd6).
     # R22-R24 (admin_diagnostico_*) are intentionally EXCLUDED pending decision D4 and must
     # remain unmapped (return None) until their diagnostic access policy is approved.
-    if endpoint == "admin_catalogo_versao_detalhe":  # R2  GET  /admin/catalogo-versoes/<base_id>
+    if endpoint in {
+        "admin_catalogo_versao_detalhe",      # R2 GET /admin/catalogo-versoes/<base_id>
+        "admin_catalogo_visualizar_versao",   # GET .../versoes/<versao_id>/visualizar
+    }:
         return _permission("atividades", "view")
     if endpoint in {
         "admin_catalogo_nova_base",        # R5/R6   GET+POST /admin/catalogo-versoes/nova-base

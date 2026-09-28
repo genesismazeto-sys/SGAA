@@ -1,11 +1,13 @@
+{% from 'components/detail_header.html' import detail_header %}
 {% extends "base.html" %}
-{% block title %}{{ matriz_title }}{% endblock %}
+{#- UI-C01: "Ver" is this form with the edit taken away, never a second page --
+    the same switch admin_editar_curso.html and admin_editar_atividade.html
+    use. `readonly` covers both ?view=1 and an account without edit rights. -#}
+{% set page_title = 'Ver matriz de atividades' if (readonly and matriz_id) else matriz_title %}
+{% block title %}{{ page_title }}{% endblock %}
 
 {% block extra_head %}
   <style>
-    .matriz-page-head{
-      margin: 0 0 0;
-    }
     .matriz-tabs{
       width: 100%;
       max-width: none;
@@ -305,14 +307,6 @@
       margin: 0;
       font-size: 13px;
     }
-    .matriz-transfer-form.is-readonly .matriz-transfer-item input[type="checkbox"]{
-      pointer-events: none;
-      opacity: .55;
-    }
-    .matriz-transfer-form.is-readonly .matriz-transfer-btn{
-      visibility: hidden;
-      pointer-events: none;
-    }
     .matriz-modal-overlay{
       position:fixed;
       inset:0;
@@ -487,14 +481,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="matriz-page-head">
-  <h1 class="main-title">{{ matriz_title }}</h1>
-</div>
+{{ detail_header(page_title, back_url, 'Matrizes') }}
 
 <div class="matriz-tabs" role="tablist" aria-label="Seções da matriz">
   <a
     class="matriz-tab {{ 'active' if active_tab == 'dados' else '' }}"
-    href="{{ url_for('admin_editar_matriz', matriz_id=matriz_id, tab='dados') if matriz_id else url_for('admin_adicionar_matriz') }}"
+    href="{{ dados_url if matriz_id else url_for('admin_adicionar_matriz') }}"
     role="tab"
     aria-selected="{{ 'true' if active_tab == 'dados' else 'false' }}"
   >
@@ -544,16 +536,25 @@
 </div>
 
 {% set composition_locked = readonly or is_academically_frozen %}
+{#- UI-C08. An assigned Matrix stays in Editar -- Nome and Descrição are real
+    edits -- but its six academically frozen fields are read-only through the
+    shared contract: the selects are `disabled aria-readonly` (their existing
+    hidden mirrors carry the unchanged value), the date/number inputs are
+    `readonly aria-readonly` (read-only inputs still submit). -#}
+{% set field_frozen = is_academically_frozen and not readonly %}
 {% if active_tab == 'dados' %}
 <form method="POST">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="form-cards-narrow form-cards-narrow--wide">
     <input type="hidden" name="active_tab" value="dados">
+    {#- disabled + aria-readonly is the pairing components/form.css keys its
+        READ-ONLY REGION contract on (--field-readonly-bg). -#}
+    <fieldset class="form-fieldset" {% if readonly %}disabled aria-readonly="true"{% endif %}>
     <div class="form-row">
       <label class="row-label">Curso</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
-        <select class="control" name="curso_id" required {% if readonly %}disabled aria-readonly="true"{% elif is_academically_frozen %}aria-readonly="true" tabindex="-1"{% endif %}>
+        <select class="control" name="curso_id" required {% if field_frozen %}disabled aria-readonly="true"{% endif %}>
           <option value="">Selecione um curso</option>
           {% for curso in cursos %}
             <option value="{{ curso.id }}" {{ 'selected' if (matriz.curso_id|string) == (curso.id|string) else '' }}>
@@ -561,7 +562,7 @@
             </option>
           {% endfor %}
         </select>
-        {% if is_academically_frozen and not readonly %}<input type="hidden" name="curso_id" value="{{ matriz.curso_id }}">{% endif %}
+        {% if field_frozen %}<input type="hidden" name="curso_id" value="{{ matriz.curso_id }}">{% endif %}
       </div>
     </div>
 
@@ -569,7 +570,7 @@
       <label class="row-label">Nome da matriz</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="layout-template"></i></div>
-        <input class="control" type="text" name="nome" value="{{ matriz.nome if matriz else '' }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="text" name="nome" value="{{ matriz.nome if matriz else '' }}" required>
       </div>
     </div>
 
@@ -577,12 +578,12 @@
       <label class="row-label">Status</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="toggle-left"></i></div>
-        <select class="control" name="status" required {% if readonly %}disabled aria-readonly="true"{% elif is_academically_frozen %}aria-readonly="true" tabindex="-1"{% endif %}>
+        <select class="control" name="status" required {% if field_frozen %}disabled aria-readonly="true"{% endif %}>
           <option value="rascunho" {{ 'selected' if not matriz or matriz.status == 'rascunho' else '' }}>Rascunho</option>
           <option value="vigente" {{ 'selected' if matriz and matriz.status == 'vigente' else '' }}>Vigente</option>
           <option value="encerrada" {{ 'selected' if matriz and matriz.status == 'encerrada' else '' }}>Encerrada</option>
         </select>
-        {% if is_academically_frozen and not readonly %}<input type="hidden" name="status" value="{{ matriz.status }}">{% endif %}
+        {% if field_frozen %}<input type="hidden" name="status" value="{{ matriz.status }}">{% endif %}
       </div>
     </div>
 
@@ -590,7 +591,7 @@
       <label class="row-label">Início de vigência</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="calendar-days"></i></div>
-        <input class="control" type="date" name="data_inicio_vigencia" value="{{ matriz.data_inicio_vigencia or '' if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="date" name="data_inicio_vigencia" value="{{ matriz.data_inicio_vigencia or '' if matriz else '' }}" {% if field_frozen %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -598,7 +599,7 @@
       <label class="row-label">Fim de vigência</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="calendar-range"></i></div>
-        <input class="control" type="date" name="data_fim_vigencia" value="{{ matriz.data_fim_vigencia or '' if matriz else '' }}" {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="date" name="data_fim_vigencia" value="{{ matriz.data_fim_vigencia or '' if matriz else '' }}" {% if field_frozen %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -606,7 +607,7 @@
       <label class="row-label">Horas AAC obrigatórias</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="graduation-cap"></i></div>
-        <input class="control" type="number" name="horas_aac_obrigatorias" min="0" value="{{ matriz.horas_aac_obrigatorias if matriz else horas_defaults.horas_padrao_academica }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="number" name="horas_aac_obrigatorias" min="0" value="{{ matriz.horas_aac_obrigatorias if matriz else horas_defaults.horas_padrao_academica }}" required {% if field_frozen %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -614,7 +615,7 @@
       <label class="row-label">Horas AEU obrigatórias</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="book-open-check"></i></div>
-        <input class="control" type="number" name="horas_extensao_obrigatorias" min="0" value="{{ matriz.horas_extensao_obrigatorias if matriz else horas_defaults.horas_padrao_extensao }}" required {% if readonly %}readonly aria-readonly="true"{% endif %}>
+        <input class="control" type="number" name="horas_extensao_obrigatorias" min="0" value="{{ matriz.horas_extensao_obrigatorias if matriz else horas_defaults.horas_padrao_extensao }}" required {% if field_frozen %}readonly aria-readonly="true"{% endif %}>
       </div>
     </div>
 
@@ -622,27 +623,30 @@
       <label class="row-label">Descrição</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="sticky-note"></i></div>
-        <textarea class="control" name="descricao" rows="1" placeholder="Descrição opcional" data-auto-grow {% if readonly %}readonly aria-readonly="true"{% endif %}>{{ matriz.descricao if matriz else '' }}</textarea>
+        <textarea class="control" name="descricao" rows="1" placeholder="Descrição opcional" data-auto-grow>{{ matriz.descricao if matriz else '' }}</textarea>
       </div>
     </div>
+    </fieldset>
 
+    {#- No footer in Ver: the page-level Back action lives in the header. -#}
+    {% if not readonly %}
     <div class="form-actions center">
       <a class="btn" href="{{ back_url }}">{{ cancel_label }}</a>
-      {% if not readonly %}
-        <button class="btn primary" type="submit" {% if not cursos %}disabled{% endif %}><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>
-      {% endif %}
+      <button class="btn primary" type="submit" {% if not cursos %}disabled{% endif %}><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span></button>
     </div>
+    {% endif %}
   </div>
 </form>
 {% else %}
 <section class="matriz-tab-panel" aria-labelledby="matriz-transfer-heading">
-  <p class="matriz-tab-help">{{ transfer_meta.help_text }}</p>
+  {#- The help text instructs selection, which Ver does not offer. -#}
+  {% if not composition_locked %}<p class="matriz-tab-help">{{ transfer_meta.help_text }}</p>{% endif %}
 
   {% if is_academically_frozen %}
     <div class="flash flash-info matriz-tab-notice" role="status">
       Esta Matriz está vinculada a uma Turma e sua composição está disponível somente para consulta.
     </div>
-  {% elif readonly %}
+  {% elif access_readonly %}
     <div class="flash flash-info matriz-tab-notice" role="status">
       Seu acesso a esta Matriz é somente para consulta.
     </div>
@@ -722,7 +726,7 @@
         </div>
       </section>
 
-      <div class="matriz-transfer-controls" aria-label="Mover atividades entre as listas">
+      <div class="matriz-transfer-controls" {% if not composition_locked %}aria-label="Mover atividades entre as listas"{% endif %}>
         {% if not composition_locked %}
           <button class="matriz-transfer-btn" type="button" data-move=">" aria-label="Adicionar selecionadas"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevron-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 6l6 6l-6 6" /></svg></button>
           <button class="matriz-transfer-btn" type="button" data-move=">>" aria-label="Adicionar todas visíveis"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-chevrons-right"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M7 7l5 5l-5 5" /><path d="M13 7l5 5l-5 5" /></svg></button>
@@ -804,12 +808,16 @@
       </div>
     {% endif %}
 
+  {#- No footer when the composition cannot change (Ver, or an assigned
+      Matrix): the header Back owns navigation (UI-C01/C06/C08). -#}
+  {% if not composition_locked %}
   <div class="form-actions center">
-      <a class="btn" href="{{ back_url or url_for('admin_matrizes') }}">{{ 'Voltar' if composition_locked else 'Cancelar' }}</a>
+      <a class="btn" href="{{ back_url or url_for('admin_matrizes') }}">Cancelar</a>
       {% if not composition_locked %}
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       {% endif %}
     </div>
+  {% endif %}
   {% if composition_locked %}</div>{% else %}</form>{% endif %}
 
   {% if not composition_locked and card_version_menu_data is defined and card_version_menu_data %}

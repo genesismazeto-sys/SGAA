@@ -310,7 +310,7 @@
 
     {% if atividades and atividades|length %}
       {% for a in atividades %}
-  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-search-text="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}">
+  <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-search-text="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}" data-editable="{{ '1' if a.id in editable_version_ids else '0' }}">
           <div class="cell left ellipsis">{{ a.tipo_atividade }}</div>
           <div class="cell left ellipsis">{{ a.nome }}</div>
           <div class="cell center ellipsis" title="{{ a.grupo }}">
@@ -915,6 +915,10 @@
 
       function syncVersionActionState(){
         const hasBase = !!(currentBaseId);
+        // UI-C08: "Editar" only for a version that can really be edited in
+        // place; a locked version is read through Ver (the versions hub).
+        const editBtn = bar.querySelector('[data-action="edit"]');
+        if (editBtn) editBtn.hidden = hasBase && currentCard?.getAttribute('data-editable') !== '1';
         const noBaseTitle = 'Esta atividade não possui atividade-base mapeada';
         if (novaVersaoBtn){ novaVersaoBtn.disabled = !hasBase; novaVersaoBtn.title = hasBase ? 'Criar nova versão' : noBaseTitle; }
         if (verVersoesBtn){ verVersoesBtn.disabled = !hasBase; verVersoesBtn.title = hasBase ? 'Ver versões' : noBaseTitle; }

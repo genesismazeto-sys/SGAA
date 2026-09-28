@@ -53,6 +53,7 @@ from tests.versioned_test_support import isolated_versioned_app_env
 HIGH_CONFIDENCE_POLICIES = {
     # atividades/view (R1 retired)
     ("admin_catalogo_versao_detalhe", "GET"): ("atividades", "view"),
+    ("admin_catalogo_visualizar_versao", "GET"): ("atividades", "view"),
     # atividades/edit (R5-R16)
     ("admin_catalogo_nova_base", "GET"): ("atividades", "edit"),
     ("admin_catalogo_nova_base", "POST"): ("atividades", "edit"),
@@ -75,7 +76,7 @@ HIGH_CONFIDENCE_POLICIES = {
 
 
 def test_high_confidence_policy_count_matches_current_surface():
-    assert len(HIGH_CONFIDENCE_POLICIES) == 13
+    assert len(HIGH_CONFIDENCE_POLICIES) == 14
 
 
 @pytest.mark.parametrize(

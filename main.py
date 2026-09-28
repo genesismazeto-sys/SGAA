@@ -146,6 +146,7 @@ from app.web.context import (
     inject_editable_message_templates,
 )
 from app.web.errors import (
+    forbidden,
     handle_large_upload,
     internal_error,
     not_found,
@@ -316,6 +317,7 @@ from app.views.admin.atividades import (
     admin_catalogo_ativar_versao,
     admin_catalogo_descontinuar_versao,
     admin_catalogo_editar_versao,
+    admin_catalogo_visualizar_versao,
     admin_catalogo_inativar_versao,
     admin_catalogo_nova_base,
     admin_catalogo_nova_versao,
@@ -403,6 +405,7 @@ from app.views.admin.alunos_turmas_cursos import (
     admin_editar_aluno,
     admin_editar_curso,
     admin_editar_turma,
+    admin_visualizar_aluno,
     admin_turmas,
     admin_turmas_importar,
     admin_visualizar_curso,
@@ -694,6 +697,7 @@ favicon = app.view_functions["favicon"]
 app.before_request(enforce_admin_access_control)
 app.context_processor(inject_admin_access_helpers)
 app.context_processor(inject_editable_message_templates)
+app.register_error_handler(403, forbidden)
 app.register_error_handler(404, not_found)
 app.register_error_handler(500, internal_error)
 app.register_error_handler(RequestEntityTooLarge, handle_large_upload)

@@ -1,5 +1,5 @@
 # coding: utf-8
-"""Canonical owner of the shared Flask error handlers (404 / 500 / 413).
+"""Canonical owner of the shared Flask error handlers (403 / 404 / 500 / 413).
 
 UT-3 moved ``not_found``, ``internal_error`` and ``handle_large_upload`` out of
 ``main.py``.  ``main`` registers them against the composed app; this module
@@ -15,6 +15,14 @@ from utils.messages import flash
 # Deliberately the "main" logger, not __name__: the 500 traceback stream is
 # configured once in main.py and must keep landing on that exact channel.
 logger = logging.getLogger("main")
+
+
+def forbidden(e):
+    # UI-C14: abort(403) used to fall through to Werkzeug's bare English page.
+    try:
+        return render_template("403.html"), 403
+    except Exception:
+        return ("<h1>403</h1><p>Acesso negado.</p>", 403)
 
 
 def not_found(e):

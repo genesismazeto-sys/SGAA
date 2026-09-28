@@ -500,7 +500,9 @@ def test_view_mode_offers_only_navigation(client, request, fixture):
     assert 'type="submit"' not in html
     assert "Salvar" not in html
     assert "Cancelar" not in html
-    assert "Voltar" in html
+    # UI-C06: the only navigation is the shared header's Back, which names its
+    # destination; the generic bottom "Voltar" is gone.
+    assert 'class="btn detail-header__back"' in html
 
 
 # ==========================================================================
