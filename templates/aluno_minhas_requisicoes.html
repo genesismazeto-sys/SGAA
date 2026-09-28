@@ -75,7 +75,7 @@
     /* Toolbar: override list-cards.css chips (scoped) */
 
     /* Active chips (filtro/ordenação) e coluna ordenada */
-    .input-chip.active, #grp-ordenar #sort-field.active{ background:#e0f2fe !important; color:#0369a1 !important; }
+    .input-chip.active, #grp-ordenar #sort-field.active{ background:#e0f2fe !important; color:var(--accent-blue) !important; }
   /* Destaque de coluna ordenada removido (sem barra colorida) */
   .imp-areq .impresso-card.header .cell.sorted{ background:#f1f5f9; font-weight:500; }
     /* Popovers: raio padrão nos botões */
@@ -330,7 +330,7 @@
           <!-- Contrato: id = pedido-actions-float; botões com data-action -->
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">{{ user_message("Nenhuma requisição encontrada.") }}</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">{{ user_message("Nenhuma requisição encontrada.") }}</div>
     {% endif %}
 
   </div>

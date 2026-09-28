@@ -125,7 +125,7 @@
         ], {'data-curso-id': c.id, 'data-curso-nome': c.nome or '', 'data-delete-url': (url_for('admin_deletar_curso', curso_id=c.id) if auth_can('cursos', 'full') else '')}) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum curso cadastrado.</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum curso cadastrado.</div>
     {% endif %}
 
   </div>

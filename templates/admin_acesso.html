@@ -33,7 +33,7 @@
     .access-defaults-body{ padding:16px; border-top:1px solid var(--border-strong); }
     .access-defaults-footer{ display:flex; justify-content:flex-end; padding:11px 16px; border-top:1px solid var(--border-strong); }
     .access-defaults-grid{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:12px; }
-    .access-default-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:12px; display:grid; gap:10px; align-content:space-between; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-default-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); padding:12px; display:grid; gap:10px; align-content:space-between; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
     .access-default-card .head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .access-default-card .head strong{ font-size:13px; color:var(--text-primary); }
     .access-default-card .head i{ color:var(--accent-blue); }
@@ -88,21 +88,21 @@
     .access-policy-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .access-policy-head h4{ margin:0; font-size:15px; color:#0f172a; }
     .access-policy-head p{ margin:6px 0 0; color:#64748b; font-size:12px; line-height:1.5; }
-    .access-policy-summary{ min-width:118px; border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:10px 12px; text-align:right; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-policy-summary{ min-width:118px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); padding:10px 12px; text-align:right; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
     .access-policy-summary strong{ display:block; color:#0f172a; font-size:22px; line-height:1; }
     .access-policy-summary span{ display:block; margin-top:4px; color:#64748b; font-size:12px; }
     .access-policy-groups{ display:grid; gap:14px; }
     .access-policy-group{ display:grid; gap:10px; }
     .access-policy-group-title{ display:flex; align-items:center; gap:8px; color:#0f172a; font-size:13px; font-weight:700; }
     .access-policy-grid{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
-    .access-scope-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:#fff; padding:12px; display:grid; gap:10px; transition:border-color .18s ease, box-shadow .18s ease; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
+    .access-scope-card{ border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); padding:12px; display:grid; gap:10px; transition:border-color .18s ease, box-shadow .18s ease; box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06); }
     .access-scope-card[data-state='custom']{ border-color:rgba(14,116,144,.5); box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(14,116,144,.1); }
     .access-scope-card .head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
     .access-scope-card strong{ color:#0f172a; font-size:13px; }
     .access-scope-card small{ color:#64748b; font-size:12px; line-height:1.45; }
     /* The effective-scope indicator has no page-local visual contract: it is
        the shared .badge.status-pill primitive from modern-style.css. */
-    .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:#fff; }
+    .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:var(--field-bg); }
     .access-row-muted{ color:#64748b; font-size:13px; }
     .access-empty{ padding:18px; text-align:center; color:#64748b; }
     .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }

@@ -27,7 +27,7 @@
       display:inline-flex; align-items:center; justify-content:center;
       height: 18px; min-width: 18px; padding: 0 6px; box-sizing: border-box;
       font-size: 11px; line-height: 1; white-space: nowrap; vertical-align: middle;
-      border: 1px solid var(--border-strong); border-radius: 999px;
+      border: 1px solid var(--border-strong); border-radius: var(--pill-radius);
       background: var(--surface); color: var(--text-secondary);
     }
     .req-atividade-stack{
@@ -366,7 +366,7 @@
 #req-presets-modal .presets-col-right .presets-field-block{ margin-bottom:14px; }
 #req-presets-modal .presets-col-right .presets-field-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
 #req-presets-modal .presets-col-right input.control,
-#req-presets-modal .presets-col-right textarea.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:#fff; font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; width:100%; }
+#req-presets-modal .presets-col-right textarea.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--field-bg); font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; width:100%; }
 #req-presets-modal .presets-col-right input.control:hover,
 #req-presets-modal .presets-col-right textarea.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
 #req-presets-modal .presets-col-right input.control:focus,
@@ -577,7 +577,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       listBox.appendChild(div);
     });
     if (!arr.length) {
-      listBox.innerHTML = `<div style="padding:8px; color:#6b7280;">${reqMessageTemplates.emptyPresetList}</div>`;
+      listBox.innerHTML = `<div style="padding:8px; color:var(--text-secondary);">${reqMessageTemplates.emptyPresetList}</div>`;
       renderContent();
       updatePresetsSaveState();
       return;
@@ -911,7 +911,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma requisição encontrada.</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma requisição encontrada.</div>
     {% endif %}
 
   </div>

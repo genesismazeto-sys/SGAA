@@ -154,7 +154,7 @@
         ], {'data-arquivo-id': arquivo.id, 'data-arquivo-titulo': arquivo.titulo or '', 'data-delete-url': (url_for('admin_deletar_arquivo', arquivo_id=arquivo.id) if can_arquivos_full else '')}) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum arquivo cadastrado.</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum arquivo cadastrado.</div>
     {% endif %}
   </div>
 </div>

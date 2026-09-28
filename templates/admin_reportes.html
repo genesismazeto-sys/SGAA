@@ -643,8 +643,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   bar.setAttribute('role','toolbar');
   bar.setAttribute('aria-label','Ações do reporte selecionado');
   bar.innerHTML = `
-    ${canReportesFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir reporte" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
     <button type="button" class="act-btn" data-action="view" aria-label="Ver reporte" title="Ver"><i data-lucide="eye"></i></button>
+    ${canReportesFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir reporte" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
   `;
   window.lucide?.createIcons?.();
 

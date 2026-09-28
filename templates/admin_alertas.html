@@ -243,7 +243,7 @@
       </div>
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhum alerta cadastrado.</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum alerta cadastrado.</div>
     {% endif %}
   </div>
 </div>
@@ -661,9 +661,9 @@
     bar.setAttribute('role','toolbar');
     bar.setAttribute('aria-label','Acoes do alerta selecionado');
     bar.innerHTML = `
-      ${canAlertasEdit ? '<button type="button" class="act-btn" data-action="toggle" aria-label="Alternar alerta" title="Alternar"><i data-lucide="power"></i></button>' : ''}
       <button type="button" class="act-btn" data-action="view" aria-label="Ver alerta" title="Ver"><i data-lucide="eye"></i></button>
       ${canAlertasEdit ? '<button type="button" class="act-btn" data-action="edit" aria-label="Editar alerta" title="Editar"><i data-lucide="edit"></i></button>' : ''}
+      ${canAlertasEdit ? '<button type="button" class="act-btn" data-action="toggle" aria-label="Alternar alerta" title="Alternar"><i data-lucide="power"></i></button>' : ''}
       ${canAlertasFull ? '<button type="button" class="act-btn" data-action="delete" aria-label="Excluir alerta" title="Excluir"><i data-lucide="trash-2"></i></button>' : ''}
     `;
     window.lucide?.createIcons?.();

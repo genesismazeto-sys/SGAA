@@ -7,7 +7,7 @@
     .db-admin-grid{ display:grid; gap:16px; }
     .db-admin-top{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); align-items:stretch; }
     .db-card{
-      background:#fff;
+      background:var(--surface);
       border:1px solid var(--border-strong);
       border-radius:var(--radius);
       box-shadow:var(--shadow-sm);
@@ -42,7 +42,7 @@
     .db-table th:last-child,
     .db-table td:last-child{ text-align:center; }
     .db-note{ font-size:12.5px; color:#475569; }
-    .db-badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px; background:#e2e8f0; color:#0f172a; font-size:12px; line-height:1; white-space:nowrap; flex-wrap:nowrap; }
+    .db-badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:var(--pill-radius); background:#e2e8f0; color:#0f172a; font-size:12px; line-height:1; white-space:nowrap; flex-wrap:nowrap; }
     .db-badge.cloud{ background:#eff6ff; border-color:transparent; color:var(--accent-blue); font-weight:500; }
     .db-badge.local{ background:#ecfdf3; border-color:transparent; color:#047857; font-weight:500; }
     .db-origin-pill{
@@ -50,7 +50,7 @@
       align-items:center;
       gap:6px;
       padding:3px 10px;
-      border-radius:999px;
+      border-radius:var(--pill-radius);
       font-size:12px;
       font-weight:500;
       line-height:1.4;
@@ -215,7 +215,7 @@
       padding:16px;
       border:1px solid var(--border-strong);
       border-radius:var(--radius);
-      background:#fff;
+      background:var(--surface);
       box-shadow:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
       min-width:0;
     }
@@ -252,7 +252,7 @@
       min-height:24px;
       padding:0 8px;
       border:1px solid var(--status-pill-border, #d9dde2);
-      border-radius:999px;
+      border-radius:var(--pill-radius);
       background:var(--status-pill-bg, #f4f5f6);
       color:var(--status-pill-text, #48505a);
       font-size:12.5px;
@@ -453,7 +453,7 @@
       display:grid;
       grid-template-rows:auto auto minmax(0, 1fr) auto;
       gap:10px;
-      background:#fff;
+      background:var(--surface);
       border:1px solid #d9e2ee;
       border-radius:var(--radius);
       box-shadow:0 20px 48px rgba(15, 23, 42, .28);
@@ -500,7 +500,7 @@
       gap:10px;
       border:1px solid #e2e8f0;
       border-radius:var(--radius);
-      background:#fff;
+      background:var(--surface);
       color:#0f172a;
       padding:9px 10px;
       margin:0 0 8px;

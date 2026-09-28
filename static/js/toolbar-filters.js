@@ -837,7 +837,7 @@
       emptyState.className = 'toolbar-live-search-empty';
       emptyState.style.padding = '1rem';
       emptyState.style.textAlign = 'center';
-      emptyState.style.color = '#6b7280';
+      emptyState.style.color = 'var(--text-secondary)';
       emptyState.hidden = true;
       rowsRoot.appendChild(emptyState);
     }

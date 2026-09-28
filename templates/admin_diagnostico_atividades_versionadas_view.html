@@ -5,7 +5,7 @@
   <style>
     .diag-wrap{ display:grid; gap:16px; }
     .diag-card{
-      background:#fff;
+      background:var(--surface);
       border:1px solid var(--border-strong);
       border-radius:var(--radius);
       box-shadow:var(--shadow-sm);
@@ -33,7 +33,7 @@
       align-items:center;
       gap:6px;
       padding:4px 8px;
-      border-radius:999px;
+      border-radius:var(--pill-radius);
       font-size:12px;
       font-weight:600;
       background:#eff6ff;
@@ -100,7 +100,7 @@
       align-items:center;
       gap:6px;
       padding:4px 8px;
-      border-radius:999px;
+      border-radius:var(--pill-radius);
       font-size:12px;
       border:1px solid #dbeafe;
       background:#f8fafc;
@@ -145,7 +145,7 @@
     .diag-pill{
       display:inline-flex;
       align-items:center;
-      border-radius:999px;
+      border-radius:var(--pill-radius);
       padding:3px 8px;
       font-size:11px;
       font-weight:600;

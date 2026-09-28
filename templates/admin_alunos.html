@@ -130,7 +130,7 @@
         ], attrs={'data-usuario-id': a.usuario_id or a.id, 'data-aluno-nome': a.nome, 'data-delete-url': (url_for('admin_deletar_aluno', usuario_id=a.usuario_id or a.id) if auth_can('alunos', 'full') else '')}) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">{{ user_message("Nenhum aluno encontrado.") }}</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">{{ user_message("Nenhum aluno encontrado.") }}</div>
     {% endif %}
 
   </div>

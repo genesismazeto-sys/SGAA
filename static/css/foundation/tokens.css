@@ -40,6 +40,12 @@
 
   /* EspaÃ§amento & tamanho */
   --radius:4px;
+  /* Semantic pills and badges (.badge, .status-pill and the page-local
+     status-label families). Deliberately its own token, separate from the
+     field/card corner above: the pill corner is its own DS decision
+     (DS-PILL-RADIUS). Circles (dots, avatars), switches and icon buttons
+     never consume it. */
+  --pill-radius:4px;
   --shadow-sm:0 1px 3px rgba(0,0,0,.10);
   --shadow-md:0 8px 20px rgba(0,0,0,.05);
 

@@ -1,5 +1,4 @@
 {% from 'components/pagination.html' import paginate %}
-{% from 'components/icons.html' import school_icon %}
 {% import 'components/card_list.html' as cl %}
 {% extends "base.html" %}
 {% block title %}Turmas (Admin){% endblock %}
@@ -33,8 +32,8 @@
     .import-help-head p{ margin:4px 0 0; font-size:13px; color:var(--text-secondary); }
     .import-help-block{ display:grid; gap:6px; }
     .import-help-label{ font-size:12px; font-weight:600; color:var(--text-secondary); }
-    .import-help-code{ margin:0; padding:12px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:#fff; color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
-    .import-help-note{ padding:12px 14px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:#fff; color:var(--text-secondary); font-size:13px; line-height:1.5; }
+    .import-help-code{ margin:0; padding:12px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:var(--surface); color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+    .import-help-note{ padding:12px 14px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:var(--surface); color:var(--text-secondary); font-size:13px; line-height:1.5; }
     .modal-card.import-modal-card .modal-footer{ flex-wrap:wrap; }
     @media (max-width: 768px){
       #importar-turmas-modal{ padding:10px; }
@@ -186,7 +185,7 @@
         ], attrs={'data-turma-id': t.id, 'data-delete-url': (url_for('admin_deletar_turma', turma_id=t.id) if auth_can('turmas', 'full') else '')}) }}
       {% endfor %}
     {% else %}
-      <div style="padding: 1rem; text-align:center; color:#6b7280;">Nenhuma turma cadastrada.</div>
+      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma turma cadastrada.</div>
     {% endif %}
   </div>
 </div>
@@ -308,7 +307,8 @@
         bar.setAttribute('role','toolbar');
         bar.setAttribute('aria-label','Ações da turma selecionada');
         bar.innerHTML = `
-          <button type=\"button\" class=\"act-btn\" data-action=\"alunos\" aria-label=\"Alunos da turma\" title=\"Alunos\">{{ school_icon() }}</button>
+          {#- Left to right: Eye (primary read/detail action) first, Editar, Excluir last. -#}
+          <button type=\"button\" class=\"act-btn\" data-action=\"alunos\" aria-label=\"Alunos da turma\" title=\"Alunos\"><i data-lucide=\"eye\"></i></button>
            {% if auth_can('turmas', 'edit') %}<button type=\"button\" class=\"act-btn\" data-action=\"edit\" aria-label=\"Editar turma\" title=\"Editar\"><i data-lucide=\"edit\"></i></button>{% endif %}
           {% if auth_can('turmas', 'full') %}<button type=\"button\" class=\"act-btn\" data-action=\"delete\" aria-label=\"Excluir turma\" title=\"Excluir\"><i data-lucide=\"trash-2\"></i></button>{% endif %}
         `;

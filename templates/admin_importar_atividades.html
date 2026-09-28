@@ -40,7 +40,7 @@
       padding:12px;
       border:1px solid rgba(15, 23, 42, .08);
       border-radius:12px;
-      background:#fff;
+      background:var(--surface);
       color:#0f172a;
       font-family:ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size:12px;
@@ -52,7 +52,7 @@
     .preview-summary{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:18px; }
     .preview-stat{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:14px; background:var(--surface); }
     .preview-stat strong{ display:block; font-size:22px; line-height:1; margin-top:6px; }
-    .status-chip{ display:inline-flex; align-items:center; justify-content:center; min-width:92px; height:28px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:600; }
+    .status-chip{ display:inline-flex; align-items:center; justify-content:center; min-width:92px; height:28px; padding:0 10px; border-radius:var(--pill-radius); font-size:12px; font-weight:600; }
     .status-chip.create{ background:#EAF3DE; color:#27500A; }
     .status-chip.update{ background:#eff6ff; color:#1d4ed8; }
     .status-chip.ignore{ background:#f8fafc; color:#475569; }
