@@ -109,7 +109,16 @@ def test_login_shows_sgaa_and_a_self_service_recovery_cta(env):
     assert html.count('class="login-forgot-link"') == 1
     # Accepted auth shell untouched.
     assert '<main class="login-page">' in html and '<div class="login-card">' in html
-    assert "Faculdade de Tecnologia em Aviação Civil" in html
+
+
+def test_login_institutional_name_is_exact_ui_b22(env):
+    # UI-B22: the login subtitle carries the "EJ - " institutional prefix.
+    client, _sent = env
+    html = client.get("/login").get_data(as_text=True)
+
+    subtitles = re.findall(r'<p class="login-subtitle">(.*?)</p>', html, re.S)
+    assert subtitles == ["EJ - Faculdade de Tecnologia em Aviação Civil"]
+    assert '<h1 class="login-title">SGAA</h1>' in html
 
 
 def test_recovery_route_is_anonymous(env):
