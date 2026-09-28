@@ -500,7 +500,6 @@
 .imp-curso-turmas .impressoes-cards{ width:100% !important; }
 .imp-curso-turmas .impresso-card{ width:100% !important; max-width:100% !important; }
 .imp-curso-turmas .badge.status-badge{ line-height:1; }
-.imp-curso-turmas-empty{ padding:1rem; text-align:center; color:var(--text-secondary); }
 
 /* =============================================================
   Scoped Layout Adjustments: Arquivos (.imp-arquivos)

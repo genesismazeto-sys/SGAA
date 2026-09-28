@@ -315,6 +315,7 @@
 
 <div class="impressoes-cards-scroll imp-turma-detalhe" id="turma-detalhes-scroll-container">
   <div id="turma-detalhes-list" class="impressoes-cards" role="list">
+    {% call cl.collection(alunos, "Nenhum aluno vinculado a esta turma.") %}
     {{ cl.header([
       {'text':'nº','class':'center'},
       {'text':'Nome','class':'left'},
@@ -325,7 +326,6 @@
       {'text':'Status','class':'center'}
     ]) }}
 
-    {% if alunos and alunos|length %}
       {% for aluno in alunos %}
         {% set is_active = ((aluno.status or '') == 'Ativo') %}
         {{ cl.row([
@@ -342,9 +342,7 @@
           'data-delete-url': (url_for('admin_deletar_aluno', usuario_id=aluno.usuario_id, return_to=request.path) if auth_can('alunos', 'full') else '')
         }) }}
       {% endfor %}
-    {% else %}
-      <div class="table-empty">Nenhum aluno vinculado a esta turma.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 {% endblock %}

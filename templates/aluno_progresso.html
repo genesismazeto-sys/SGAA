@@ -1,4 +1,5 @@
 {% extends "base_aluno.html" %}
+{% import 'components/card_list.html' as cl %}
 {% block title %}Progresso do aluno{% endblock %}
 
 {% block extra_head %}
@@ -125,6 +126,7 @@
       </div>
 
     </div>
+    {% call cl.collection(atividades_exibidas, "Nenhuma atividade disponivel nesta secao.") %}
     <div class="progresso-table-shell">
       <table class="table-progresso">
         <thead>
@@ -160,14 +162,11 @@
             {% endfor %}
             <td class="{{ 'progresso-limitado' if atividade.total_limitado else '' }}">{{ atividade.total_fmt }}</td>
           </tr>
-          {% else %}
-          <tr>
-            <td colspan="{{ 4 + (semestres|length) }}" class="table-empty">Nenhuma atividade disponivel nesta secao.</td>
-          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% endcall %}
   </section>
   </div>
   <div class="cfg-card-footer">

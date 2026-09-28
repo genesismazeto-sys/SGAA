@@ -784,6 +784,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 <div class="impressoes-cards-scroll imp-req" id="requisicoes-scroll-container">
   <div id="requisicoes-list" class="impressoes-cards" role="list">
 
+    {% call cl.collection(requisicoes, "Nenhuma requisição encontrada.") %}
     <!-- Header -->
     {{ cl.header([
       {'text': '#', 'class': 'center'},
@@ -798,7 +799,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
       {'text': user_message('Status'), 'class': 'center'}
     ]) }}
 
-    {% if requisicoes and requisicoes|length %}
     {% for r in requisicoes %}
   {# Helpers to ISO date for data attributes #}
   {% set _de = r.data_evento %}
@@ -910,9 +910,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           'data-delete-url': (url_for('admin_excluir_requisicao', req_id=r.id) if can_requisicoes_full else '')
         }) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma requisição encontrada.</div>
-    {% endif %}
+    {% endcall %}
 
   </div>
 </div>

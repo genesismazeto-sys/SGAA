@@ -1,5 +1,6 @@
 {% from 'components/pagination.html' import paginate %}
 {% extends "base_aluno.html" %}
+{% import 'components/card_list.html' as cl %}
 {% block title %}{{ user_message("Requisições") }}{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
@@ -208,6 +209,7 @@
 <!-- Lista de Requisições do Aluno no padrão admin (cards + header sticky) -->
 <div class="impressoes-cards-scroll imp-areq">
   <div id="minhas-requisicoes-list" class="impressoes-cards" role="list">
+    {% call cl.collection(requisicoes, user_message("Nenhuma requisição encontrada.")) %}
     <!-- Header (mesmas colunas das linhas) -->
     <div class="impresso-card header" role="presentation">
       <div class="cell center">#</div>
@@ -221,7 +223,6 @@
       <div class="cell center {% if request.args.get('sort') == 'status' %}sorted{% endif %}">{{ user_message("Status") }}</div>
     </div>
 
-    {% if requisicoes and requisicoes|length %}
       {% for r in requisicoes %}
         {% set _de = r.data_evento %}
         {% if _de %}
@@ -329,9 +330,7 @@
           <!-- Reuso do padrão admin: será criada dinamicamente via JS quando o mouse passar sobre uma linha -->
           <!-- Contrato: id = pedido-actions-float; botões com data-action -->
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">{{ user_message("Nenhuma requisição encontrada.") }}</div>
-    {% endif %}
+    {% endcall %}
 
   </div>
 </div>

@@ -107,6 +107,7 @@
 
 <div class="impressoes-cards-scroll imp-matrizes" id="matrizes-scroll-container">
   <div id="matrizes-list" class="impressoes-cards" role="list">
+    {% call cl.collection(matrizes, "Nenhuma matriz cadastrada.") %}
     {{ cl.header([
       {'text':'Nome','class':'left'},
       {'text':'Curso','class':'left'},
@@ -116,7 +117,6 @@
       {'text':'Status','class':'center'},
     ]) }}
 
-    {% if matrizes and matrizes|length %}
       {% for matriz in matrizes %}
         {#- UI-B03: this page used to carry a *copy of the Requisições status
             ladder* (deferida / devolvida / indeferida ...). `Vigente` matched
@@ -138,9 +138,7 @@
           },
         ], {'data-matriz-id': matriz.id, 'data-view-url': matriz.view_url, 'data-edit-url': matriz.edit_url, 'data-delete-url': (matriz.delete_url if auth_can('matrizes', 'full') else ''), 'data-aac-url': matriz.manage_academicas_url, 'data-aea-url': matriz.manage_extensao_url}) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma matriz cadastrada.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 {% endblock %}

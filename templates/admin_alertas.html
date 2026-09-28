@@ -1,5 +1,6 @@
 {% from 'components/pagination.html' import paginate %}
 {% extends "base.html" %}
+{% import 'components/card_list.html' as cl %}
 {% block title %}Alertas{% endblock %}
 
 {% block extra_head %}
@@ -219,13 +220,13 @@
 
 <div class="impressoes-cards-scroll imp-alertas" id="alertas-scroll-container">
   <div id="alertas-list" class="impressoes-cards" role="list">
+    {% call cl.collection(alertas, "Nenhum alerta cadastrado.") %}
     <div class="impresso-card header" role="presentation">
       <div class="cell left">Nome do alerta</div>
       <div class="cell center">Cor</div>
       <div class="cell center">Status</div>
     </div>
 
-    {% if alertas and alertas|length %}
       {% for alerta in alertas %}
       <div class="impresso-card" role="listitem" tabindex="0"
         data-alerta-id="{{ alerta.id }}"
@@ -242,9 +243,7 @@
         </div>
       </div>
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum alerta cadastrado.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 

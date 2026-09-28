@@ -3,6 +3,18 @@ Reusable card list macros for the "impresso"-style grids.
 Keeps exact markup: wrapper uses caller-defined classes, header and rows
 use .impresso-card with .cell elements and optional per-cell classes.
 #}
+{#- DS-EMPTY-TABLE-STATE: the one owner of an ordinary list/table's empty state.
+    With rows it renders the caller (column-header row + rows, grid or <table>);
+    with zero rows it renders only the surface's own empty-state message --
+    never a header row above it and never a fake colspan row. -#}
+{% macro collection(rows, empty_message) -%}
+  {%- if rows and rows|length -%}
+    {{ caller() }}
+  {%- else -%}
+    <div class="table-empty">{{ empty_message }}</div>
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro header(cells, extra_classes='') -%}
   <div class="impresso-card header {{ extra_classes }}" role="presentation">
   {%- for c in cells %}

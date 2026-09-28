@@ -3,7 +3,10 @@
   Inputs:
     - cols: list of { key, label }
     - rows: iterable of dict/objects
+  Zero rows renders only the empty-state message (DS-EMPTY-TABLE-STATE).
 #}
+{% import 'components/card_list.html' as cl %}
+{% call cl.collection(rows, "Nenhum item encontrado.") %}
 <table class="table{% if table_class %} {{ table_class }}{% endif %}" style="width:100%;">
   <thead>
     <tr>
@@ -13,7 +16,6 @@
     </tr>
   </thead>
   <tbody>
-    {% if rows and rows|length %}
       {% for r in rows %}
         <tr>
           {% for c in cols %}
@@ -22,10 +24,6 @@
           {% endfor %}
         </tr>
       {% endfor %}
-    {% else %}
-      <tr>
-        <td colspan="{{ cols|length }}">Nenhum item encontrado.</td>
-      </tr>
-    {% endif %}
   </tbody>
 </table>
+{% endcall %}

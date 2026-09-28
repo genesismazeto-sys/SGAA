@@ -40,6 +40,7 @@
 
 <div class="impressoes-cards-scroll imp-curso-turmas" id="curso-turmas-scroll-container">
   <div id="curso-turmas-list" class="impressoes-cards" role="list">
+    {% call cl.collection(turmas, "Nenhuma turma cadastrada.") %}
     {{ cl.header([
       {'text':'Nº','class':'center'},
       {'text':'Ano/Semestre','class':'center'},
@@ -47,7 +48,6 @@
       {'text':'Status','class':'center'},
     ]) }}
 
-    {% if turmas and turmas|length %}
       {% for t in turmas %}
         {% set turma_active = (t.status == 'Ativa') %}
         {# Ano/Semestre uses the same expression as the Turmas list
@@ -61,9 +61,7 @@
           {'content': (t.status or '—'), 'class':'center', 'badge': true, 'badge_type': ('success' if turma_active else 'danger'), 'status_badge': true, 'status_tone': ('positive' if turma_active else 'neutral')},
         ]) }}
       {% endfor %}
-    {% else %}
-      <div class="imp-curso-turmas-empty">Nenhuma turma cadastrada.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 {% endblock %}

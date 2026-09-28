@@ -87,6 +87,7 @@
 
 <div class="impressoes-cards-scroll imp-arquivos" id="aluno-arquivos-scroll-container">
   <div id="aluno-arquivos-list" class="impressoes-cards" role="list">
+    {% call cl.collection(arquivos, "Nenhum arquivo disponível.") %}
     {{ cl.header([
       {'text':'Título', 'class':'left'},
       {'text':'Tipo de arquivo', 'class':'center'},
@@ -94,7 +95,6 @@
       {'text':'Data de upload', 'class':'center'}
     ]) }}
 
-    {% if arquivos and arquivos|length %}
       {% for arquivo in arquivos %}
         {% set source_name = (arquivo.original_filename or arquivo.filename or '') %}
         {% set file_ext = source_name.rsplit('.', 1)[1]|upper if source_name and '.' in source_name else '-' %}
@@ -109,9 +109,7 @@
           'data-arquivo-titulo': arquivo.titulo or ''
         }) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum arquivo disponível.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 {% endblock %}

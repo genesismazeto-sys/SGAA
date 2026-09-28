@@ -1,3 +1,5 @@
+{% import 'components/card_list.html' as cl %}
+{% call cl.collection(atividades, "Nenhuma atividade encontrada.") %}
 <table class="table">
   <thead>
     <tr>
@@ -30,8 +32,7 @@
         </form>
       </td>
     </tr>
-  {% else %}
-    <tr><td colspan="7">Nenhuma atividade encontrada.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+{% endcall %}

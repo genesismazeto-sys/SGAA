@@ -188,6 +188,7 @@
 
 <div class="impressoes-cards-scroll imp-reportes" id="reportes-scroll-container">
   <div id="reportes-list" class="impressoes-cards" role="list">
+    {% call cl.collection(reportes, "Nenhum reporte encontrado com os filtros atuais.") %}
     {{ cl.header([
       {'text':'#',          'class':'center'},
       {'text':'Aluno',      'class':'left'},
@@ -198,7 +199,6 @@
       {'text':'Data',       'class':'center'}
     ]) }}
 
-    {% if reportes %}
       {% for reporte in reportes %}
         {% set status_lc = (reporte.status or '')|lower %}
         <div class="impresso-card" role="listitem" tabindex="0" data-reporte-idx="{{ loop.index0 }}" data-reporte-id="{{ reporte.id }}" data-delete-url="{{ url_for('admin_reportes_deletar', reporte_id=reporte.id) if can_reportes_full else '' }}">
@@ -219,9 +219,7 @@
           <div class="cell center">{{ reporte.criado_em_fmt or '—' }}</div>
         </div>
       {% endfor %}
-    {% else %}
-      <div style="padding:1.25rem; text-align:center; color:var(--text-secondary);">Nenhum reporte encontrado com os filtros atuais.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 

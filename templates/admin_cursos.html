@@ -101,6 +101,7 @@
 <div class="impressoes-cards-scroll imp-cursos" id="cursos-scroll-container">
   <div id="cursos-list" class="impressoes-cards" role="list">
 
+    {% call cl.collection(cursos, "Nenhum curso cadastrado.") %}
     {{ cl.header([
       {'text':'Código','class':'left'},
       {'text':'Nome','class':'left'},
@@ -110,7 +111,6 @@
       {'text':'Status','class':'center'},
     ]) }}
 
-    {% if cursos and cursos|length %}
       {% for c in cursos %}
         {% set s = (c.status or '') %}
         {% set status_text = 'Ativo' if (s|string|lower) in ['ativo','at','1','true'] else 'Inativo' %}
@@ -124,9 +124,7 @@
           {'content': ( 'Ativo' if is_active else 'Inativo' ), 'class':'center', 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' )},
         ], {'data-curso-id': c.id, 'data-curso-nome': c.nome or '', 'data-delete-url': (url_for('admin_deletar_curso', curso_id=c.id) if auth_can('cursos', 'full') else '')}) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhum curso cadastrado.</div>
-    {% endif %}
+    {% endcall %}
 
   </div>
 </div>

@@ -104,7 +104,6 @@
        the shared .badge.status-pill primitive from modern-style.css. */
     .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:var(--field-bg); }
     .access-row-muted{ color:#64748b; font-size:13px; }
-    .access-empty{ padding:18px; text-align:center; color:#64748b; }
     .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }
     .access-actions-float .act-btn.danger{ background:#fee2e2; color:#b91c1c; }
     .access-actions-float .act-btn[disabled]{ opacity:.45; cursor:not-allowed; }
@@ -442,6 +441,7 @@
 
 <div class="impressoes-cards-scroll imp-acesso" id="acesso-scroll-container">
   <div id="acesso-list" class="impressoes-cards" role="list">
+    {% call cl.collection(users, "Nenhum acesso encontrado.") %}
     {#- The final column is the access/onboarding lifecycle, NOT the academic
         alunos.status. This table carries no academic status column, so
         "Situação" can only be read as the situation of the acesso each row
@@ -459,7 +459,6 @@
       {'text':'Situação', 'class':'status-col'},
     ]) }}
 
-    {% if users and users|length %}
       {% for user in users %}
         {% set student_info = user.matricula if user.matricula else '-' %}
         {% if user.turma_label %}
@@ -500,9 +499,7 @@
           'data-level-label': user.nivel_label,
         }) }}
       {% endfor %}
-    {% else %}
-      <div class="access-empty">Nenhum acesso encontrado.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 

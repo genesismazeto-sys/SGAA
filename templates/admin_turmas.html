@@ -158,6 +158,7 @@
 
 <div class="impressoes-cards-scroll imp-turmas" id="turmas-scroll-container">
   <div id="turmas-list" class="impressoes-cards" role="list">
+    {% call cl.collection(turmas, "Nenhuma turma cadastrada.") %}
     {{ cl.header([
       {'text':'Código','class':'left'},
       {'text':'Curso','class':'left'},
@@ -169,7 +170,6 @@
       {'text':'Status','class':'center'}
     ]) }}
 
-    {% if turmas and turmas|length %}
       {% for t in turmas %}
         {% set is_active = (t.status == 'Ativa') %}
         {% set matriz_label = t.matriz_nome or '—' %}
@@ -184,9 +184,7 @@
           {'class':'center','content': ( 'Ativa' if is_active else 'Inativa' ), 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' ) }
         ], attrs={'data-turma-id': t.id, 'data-delete-url': (url_for('admin_deletar_turma', turma_id=t.id) if auth_can('turmas', 'full') else '')}) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma turma cadastrada.</div>
-    {% endif %}
+    {% endcall %}
   </div>
 </div>
 

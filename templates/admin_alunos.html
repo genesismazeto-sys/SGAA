@@ -107,6 +107,7 @@
 <div class="impressoes-cards-scroll imp-alunos" id="alunos-scroll-container">
   <div id="alunos-list" class="impressoes-cards" role="list">
 
+    {% call cl.collection(alunos, user_message("Nenhum aluno encontrado.")) %}
     {{ cl.header([
       {'text': user_message('Nome'),'class':'left'},
       {'text': user_message('E-mail'),'class':'left'},
@@ -116,7 +117,6 @@
       {'text': user_message('Status'),'class':'left'},
     ]) }}
 
-    {% if alunos and alunos|length %}
       {% for a in alunos %}
         {% set status_html = ( 'Ativo' if a.status == 'Ativo' else 'Inativo' ) %}
         {% set is_active = (a.status == 'Ativo') %}
@@ -129,9 +129,7 @@
           {'content': ( 'Ativo' if is_active else 'Inativo' ), 'class':'left', 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' )},
         ], attrs={'data-usuario-id': a.usuario_id or a.id, 'data-aluno-nome': a.nome, 'data-delete-url': (url_for('admin_deletar_aluno', usuario_id=a.usuario_id or a.id) if auth_can('alunos', 'full') else '')}) }}
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">{{ user_message("Nenhum aluno encontrado.") }}</div>
-    {% endif %}
+    {% endcall %}
 
   </div>
 </div>

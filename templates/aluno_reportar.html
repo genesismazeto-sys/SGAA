@@ -1,4 +1,5 @@
 {% extends base_template|default("base_aluno.html") %}
+{% import 'components/card_list.html' as cl %}
 {% block title %}Reportar{% endblock %}
 
 {% block extra_head %}
@@ -252,6 +253,7 @@
     <div class="impressoes-cards-scroll imp-rpt-aluno">
       <div id="meus-reportes-list" class="impressoes-cards" role="list">
 
+        {% call cl.collection(reportes, "Nenhum reporte enviado ainda.") %}
         <div class="impresso-card header" role="presentation">
           <div class="cell center">#</div>
           <div class="cell center">Data</div>
@@ -260,7 +262,6 @@
           <div class="cell center">Status</div>
         </div>
 
-        {% if reportes %}
           {% for reporte in reportes %}
             {% set status_lc = (reporte.status or '')|lower %}
             <div class="impresso-card" role="listitem" tabindex="0" data-reporte-idx="{{ loop.index0 }}">
@@ -279,9 +280,7 @@
               </div>
             </div>
           {% endfor %}
-        {% else %}
-          <div style="padding:1.25rem; text-align:center; color:var(--text-secondary);">Nenhum reporte enviado ainda.</div>
-        {% endif %}
+        {% endcall %}
 
       </div>
     </div>

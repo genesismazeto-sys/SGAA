@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import 'components/card_list.html' as cl %}
 {% block title %}Atividades (Admin){% endblock %}
 
 {% block extra_head %}
@@ -299,6 +300,7 @@
 <div class="impressoes-cards-scroll imp-atividades" id="atividades-scroll-container">
   <div id="atividades-list" class="impressoes-cards" role="list">
 
+    {% call cl.collection(atividades, "Nenhuma atividade encontrada.") %}
     <!-- Header -->
   <div class="impresso-card header" role="presentation">
       <div class="cell left">Tipo</div>
@@ -308,7 +310,6 @@
       <div class="cell center">Limitações</div>
     </div>
 
-    {% if atividades and atividades|length %}
       {% for a in atividades %}
   <div class="impresso-card" role="listitem" tabindex="0" data-atividade-id="{{ a.id }}" data-atividade-nome="{{ a.nome }}" data-search-text="{{ a.nome }}" data-delete-url="{{ url_for('admin_deletar_atividade', atividade_id=a.id) if auth_can('atividades', 'full') else '' }}" data-base-id="{{ a.base_id or '' }}" data-editable="{{ '1' if a.id in editable_version_ids else '0' }}">
           <div class="cell left ellipsis">{{ a.tipo_atividade }}</div>
@@ -334,9 +335,7 @@
           </div>
         </div>
       {% endfor %}
-    {% else %}
-      <div style="padding: 1rem; text-align:center; color:var(--text-secondary);">Nenhuma atividade encontrada.</div>
-    {% endif %}
+    {% endcall %}
 
   </div>
 </div>

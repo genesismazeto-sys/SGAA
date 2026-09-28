@@ -123,7 +123,9 @@ def test_activity_list_template_and_grid_have_the_same_five_columns():
     )
 
     list_markup = template.split('id="atividades-list"', 1)[1].split("{% endfor %}", 1)[0]
-    header = list_markup.split("{% if atividades", 1)[0]
+    # DS-EMPTY-TABLE-STATE: the header now sits inside cl.collection, directly
+    # above the row loop (no separate {% if atividades %} any more).
+    header = list_markup.split("{% for a in atividades %}", 1)[0]
     row = list_markup.split("{% for a in atividades %}", 1)[1]
     grid = re.search(r"\.imp-atividades\s*\{\s*--imp-cols:(.*?)\s*};", css, re.DOTALL)
 

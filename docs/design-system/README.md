@@ -277,6 +277,36 @@ predate this contract, each still centring via per-list `nth-child` rules:
 is a visible change needing its own acceptance; they were deliberately not
 mass-migrated.
 
+### 2.6c Empty table/list contract (DS-EMPTY-TABLE-STATE)
+
+For every ordinary data list/table (`impresso-card` grids and `<table>` lists):
+
+* **rows** → the column-header row and the rows;
+* **zero rows** → **only** the surface's own empty-state message — no header
+  row, no column labels floating above it, never a fake
+  `<tr><td colspan>` row. Each surface keeps its established wording
+  ("Nenhum reporte enviado ainda.", "Nenhuma turma cadastrada.", …).
+
+**Owner:** `templates/components/card_list.html` `collection(rows, message)`.
+The caller puts its header and rows inside the call; the macro renders them only
+when rows exist, otherwise `<div class="table-empty">message</div>` — the shared
+`.table-empty` class in `modern-style.css` (centred, `--text-secondary`).
+`components/list_table.html` applies it to its own `<table>`.
+
+```jinja
+{% call cl.collection(alunos, "Nenhum aluno encontrado.") %}
+  {{ cl.header([...]) }}
+  {% for a in alunos %}{{ cl.row([...]) }}{% endfor %}
+{% endcall %}
+```
+
+The list container (`id="…-list"`, bound by page JS) stays outside the call.
+**Guard:** `tests/test_ds_empty_table_state.py` — every header row and `<thead>`
+in `templates/` must sit inside `cl.collection`, except four pinned tables with
+a stated reason (the Banco de dados retention grid and its already-conditional
+logs/history tables, the per-eixo diagnostic table, the CSV import preview, and
+the unrendered `admin_turma_form.html`).
+
 ### 2.7 Responsive contract
 
 Delivered by DS-7 and the F-5/F-6 phases. The governing idea is that a rule

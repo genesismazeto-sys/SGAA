@@ -97,7 +97,7 @@
       {% endif %}
     </div>
 
-    {% if versoes and versoes|length %}
+    {% call cl.collection(versoes, "Nenhuma versão cadastrada.") %}
       <div class="impressoes-cards-scroll imp-version-detail" aria-label="Versões da atividade">
         <div class="impressoes-cards" role="list">
           {{ cl.header([
@@ -216,9 +216,7 @@
           {% endfor %}
         </div>
       </div>
-    {% else %}
-      <div class="table-empty">Nenhuma versão cadastrada.</div>
-    {% endif %}
+    {% endcall %}
   </section>
 
   <section class="version-section" aria-labelledby="history-title">
@@ -229,7 +227,7 @@
       </div>
     </div>
 
-    {% if transicoes_historico and transicoes_historico|length %}
+    {% call cl.collection(transicoes_historico, "Nenhuma transição registrada.") %}
       <div class="transition-table-wrap">
         <table class="table transition-table">
           <thead>
@@ -293,9 +291,7 @@
           </tbody>
         </table>
       </div>
-    {% else %}
-      <div class="table-empty">Nenhuma transição registrada.</div>
-    {% endif %}
+    {% endcall %}
   </section>
 
   {% if can_edit_atividades %}
