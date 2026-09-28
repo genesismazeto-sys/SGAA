@@ -1251,7 +1251,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       <button class="btn" id="req-modal-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
-      <form id="req-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_nova_requisicao') if can_requisicoes_edit else '#' }}">
+      {#- UI-C03: no action is rendered. Only Criar/Editar assign one (with
+          edit_target_id naming the request the form was filled for); every
+          other mode and every close removes it again. -#}
+      <form id="req-form" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="edit_target_id" id="m_edit_target_id" value="">
         <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-cards-narrow form-cards-narrow--gutter-wide">
@@ -1722,13 +1726,48 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function openModal(){ if (!modal) return; modal.hidden = false; document.body.style.overflow='hidden'; window.lucide?.createIcons?.(); }
-    function setSaveButton(label, action){
+    const editTargetInput = document.getElementById('m_edit_target_id');
+    function setSaveButton(label, action, targetId=''){
       if (!createSubmit || !form) return;
       createSubmit.innerHTML = `${SAVE_ICON_SVG} ${label}`;
       form.action = action;
+      if (editTargetInput) editTargetInput.value = targetId ? String(targetId) : '';
       window.lucide?.createIcons?.();
     }
-    function closeModal(){ if (!modal) return; modal.hidden = true; document.body.style.overflow=''; setAllowedActivities([], '', []); }
+    // UI-C03: only Criar and Editar own a mutation target. Everywhere else the
+    // form has no action, no target and no submit button -- a disabled default
+    // button is what stops Enter from submitting implicitly; hiding it does not.
+    function clearWritableTarget(){
+      if (form) form.removeAttribute('action');
+      if (editTargetInput) editTargetInput.value = '';
+      if (createSubmit){ createSubmit.hidden = true; createSubmit.disabled = true; }
+    }
+    function isWritableMode(){
+      const mode = modal?.getAttribute('data-mode');
+      return (mode === 'create' || mode === 'edit') && !!form?.getAttribute('action');
+    }
+    // Defence in depth; the structural guarantee is clearWritableTarget().
+    form.addEventListener('submit', (e)=>{
+      if (isWritableMode()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+    function closeModal(){
+      if (!modal) return;
+      modal.hidden = true;
+      document.body.style.overflow='';
+      setAllowedActivities([], '', []);
+      clearWritableTarget();
+      form.querySelectorAll('input[type="file"]').forEach(input=>{
+        if (!input.value) return;
+        input.value = '';
+        input.dispatchEvent(new Event('change'));
+      });
+      modal.removeAttribute('data-mode');
+      delete modal.dataset.reqId;
+      delete modal.dataset.reqStatus;
+    }
+    clearWritableTarget();
 
     window.__openReqModal = openModal;
     window.__renderAnexos = renderAnexos;
@@ -1767,7 +1806,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }catch(_e){ /* noop */ }
     };
     // Expõe setSaveButton para uso do segundo bloco de script
-    window.__setSaveButton = function(label, action){ setSaveButton(label, action); };
+    window.__setSaveButton = function(label, action, targetId){ setSaveButton(label, action, targetId); };
 
     // Única fonte de verdade para visibilidade do rodapé do modal.
     // statusHint: string com o status da requisição (ex.: 'Pendente', 'Deferida').
@@ -1792,18 +1831,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
         setFooterRowVisibility(processRow, false);
         setFooterRowVisibility(postRow, false);
         setFooterRowVisibility(secondaryRow, true);
-        if (createSubmit) createSubmit.hidden = false;
+        const targetMatches = !isEdit || (!!editTargetInput?.value && editTargetInput.value === String(overlay.dataset.reqId || ''));
+        if (form?.getAttribute('action') && targetMatches){
+          if (createSubmit){ createSubmit.hidden = false; createSubmit.disabled = false; }
+        } else {
+          clearWritableTarget();
+        }
       } else if (effectiveMode === 'process') {
         // Processar pendente → ações primárias; já processado → ações secundárias
         setFooterRowVisibility(processRow,   isPending);
         setFooterRowVisibility(postRow,      !isPending);
         setFooterRowVisibility(secondaryRow, true);   // botão Voltar sempre disponível
-        if (createSubmit) createSubmit.hidden = true;
+        clearWritableTarget();
       } else {
         // Visualizar: rodapé ocultado via CSS [data-mode="view"] .modal-footer { display:none }
         setFooterRowVisibility(processRow, false);
         setFooterRowVisibility(postRow, false);
         setFooterRowVisibility(secondaryRow, false);
+        clearWritableTarget();
       }
 
       // ── Editabilidade dos campos ─────────────────────────────────────────────
@@ -1832,10 +1877,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
           if (el.tagName === 'INPUT' && !isFile) el.readOnly = true;
           if (isFile || el.tagName !== 'INPUT') el.disabled = true;
           el.setAttribute('aria-readonly', 'true');
-        });
-        form.querySelectorAll('#m_comprovantes_container .chip-right').forEach(chip=>{
-          chip.style.pointerEvents = (isCreate || isEdit) ? '' : 'none';
-          chip.style.opacity = (isCreate || isEdit) ? 1 : 0.6;
         });
       }
       overlay.setAttribute('data-mode', effectiveMode);
@@ -1872,7 +1913,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       setFooterRowVisibility(processRow, isPending);
       setFooterRowVisibility(postRow, !isPending);
       setFooterRowVisibility(secondaryRow, true);
-      if (createSubmit) createSubmit.hidden = true;
+      clearWritableTarget();
     };
 
     window.__openAdminNewReqModal = async function(initialAlunoId=''){
@@ -1898,7 +1939,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     };
     window.__openAdminEditReqModal = async function(reqId){
       if (!canRequisicoesEdit || !reqId) return;
-      setSaveButton('Atualizar', `/admin/requisicoes/${reqId}/editar`);
+      setSaveButton('Atualizar', `/admin/requisicoes/${reqId}/editar`, reqId);
       await loadAlunoScope(alunoSel.value);
     };
 
@@ -2194,7 +2235,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         if (typeof window.__openReqModal === 'function'){
           if (mode === 'edit'){
-            window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`);
+            window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`, targetId);
           }
           setModalMode(mode, overlay?.dataset?.reqStatus || 'Pendente');
           window.__openReqModal();

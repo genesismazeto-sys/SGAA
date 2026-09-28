@@ -96,7 +96,16 @@
     }
     .alerta-pick-btn:hover{ background:var(--bg); color:var(--text-primary); }
     .alerta-pick-btn .lucide{ width:14px; height:14px; margin:0; }
-    .modal-card.is-readonly .alerta-pick-btn{ pointer-events:none; opacity:.5; }
+    /* UI-C07. The colour inputs are not .field-card/.control, so they cannot
+       inherit form.css's read-only contract by structure. They state it with
+       the SAME shared tokens (--field-readonly-bg, --text-secondary): a readonly
+       hex field reads as read-only, not as a dimmed control. The pipette is a
+       mutation-only affordance, so Ver omits it instead of fading it. */
+    .alerta-color-input-group:has(.alerta-color-hex[readonly]){ background:var(--field-readonly-bg); }
+    .alerta-color-hex[readonly]{ color:var(--text-secondary); cursor:default; }
+    .alerta-pick-btn[hidden]{ display:none; }
+    .palette-swatch:disabled{ cursor:default; }
+    .palette-swatch:disabled:hover{ transform:none; box-shadow:none; }
     .visibility-switch-state{ min-width:0; color:var(--text-primary); font-size:var(--font-size-small); font-weight:600; text-align:left; white-space:nowrap; }
     .alerta-preview{
       min-height:calc(var(--btn-h) * 0.8);
@@ -113,9 +122,8 @@
     .alerta-preview span{ display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; }
     #admin-alerta-save[hidden],
     .modal-card.is-readonly #admin-alerta-save{ display:none !important; }
-    .modal-card.is-readonly .control,
-    .modal-card.is-readonly textarea.control{ background:#f8fafc; color:var(--text-secondary); }
-    .modal-card.is-readonly .swatch-option{ cursor:default; }
+    /* Título and Mensagem take the shared read-only paint from form.css
+       (.field-card:has(.control[readonly]) -> --field-readonly-bg). */
     @media (max-width: 860px){
       .modal-card{ width:min(100vw - 16px, 980px); }
       .alerta-form-row,
@@ -382,6 +390,7 @@
     const cancelBtn = document.getElementById('admin-alerta-cancelar');
     const saveBtn = document.getElementById('admin-alerta-save');
     const form = document.getElementById('admin-alerta-form');
+    const saveAction = form?.getAttribute('action') || '';
     const titleText = document.getElementById('admin-alerta-modal-title-text');
     const hiddenId = document.getElementById('admin-alerta-id');
     const tituloInput = document.getElementById('admin-alerta-titulo');
@@ -520,12 +529,23 @@
       modalMode = mode === 'view' ? 'view' : 'edit';
       const isReadonly = modalMode === 'view';
       modalCard?.classList.toggle('is-readonly', isReadonly);
-      tituloInput.readOnly = isReadonly;
-      mensagemInput.readOnly = isReadonly;
-      if (bgHexInput) bgHexInput.readOnly = isReadonly;
-      if (borderHexInput) borderHexInput.readOnly = isReadonly;
-      if (openBgPickerBtn) openBgPickerBtn.disabled = isReadonly;
-      if (openBorderPickerBtn) openBorderPickerBtn.disabled = isReadonly;
+      // UI-C07: read-only intent is declared the way the DS contract reads it
+      // (readonly + aria-readonly), and Ver carries no writable target.
+      [tituloInput, mensagemInput, bgHexInput, borderHexInput].forEach((field) => {
+        if (!field) return;
+        field.readOnly = isReadonly;
+        if (isReadonly) field.setAttribute('aria-readonly', 'true');
+        else field.removeAttribute('aria-readonly');
+      });
+      [openBgPickerBtn, openBorderPickerBtn].forEach((button) => {
+        if (!button) return;
+        button.disabled = isReadonly;
+        button.hidden = isReadonly;
+      });
+      if (form){
+        if (isReadonly) form.removeAttribute('action');
+        else form.setAttribute('action', saveAction);
+      }
       visivelSwitch.disabled = isReadonly;
       swatchButtons.forEach((button) => { button.disabled = isReadonly; });
       if (saveBtn){ saveBtn.hidden = isReadonly; saveBtn.disabled = isReadonly; }

@@ -1873,8 +1873,14 @@ def aluno_requisicao_detalhe(req_id: int):
             elif "-" in s:
                 data_evento_norm = s.split(" ")[0][:10]
 
-        set_parts = ["observacao = ?"]
-        params: list[Any] = [observacao]
+        # UI-C09 (student sibling): an omitted `observacao` keeps the stored
+        # one; only a submitted field is written (submitted empty clears it).
+        if "observacao" in request.form:
+            set_parts = ["observacao = ?"]
+            params: list[Any] = [observacao]
+        else:
+            set_parts = ["observacao = observacao"]
+            params = []
         if nome_evento is not None:
             set_parts.append("nome_evento = ?")
             params.append(nome_evento)

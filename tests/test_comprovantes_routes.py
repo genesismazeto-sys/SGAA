@@ -264,6 +264,7 @@ def test_admin_create_and_edit_use_google_and_existing_rbac(comprovante_env):
     edit = comprovante_env["client"].post(
         f"/admin/requisicoes/{request_id}/editar",
         data={
+            "edit_target_id": str(request_id),
             "nome_evento": "Admin cloud request",
             "data_evento": "2026-09-06",
             "horas_solicitadas": "2",

@@ -819,6 +819,13 @@ def admin_editar_requisicao(req_id):
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
 
+    # UI-C03: the edit form names the request it was filled for. A POST whose
+    # URL and payload disagree came from a stale form, never from an edit of
+    # this request, so nothing in it may be written here.
+    if (request.form.get("edit_target_id") or "").strip() != str(req_id):
+        flash("Falha ao atualizar requisição.", "error")
+        return redirect(url_for("admin_requisicoes"))
+
     redirect_kwargs = {"open_edit": "1", "req_id": req_id}
 
     if (requisicao["status"] or "") != "Pendente":
@@ -878,14 +885,18 @@ def admin_editar_requisicao(req_id):
         flash("Atividade não encontrada.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    params = [nome_evento, horas_solicitadas, data_evento, observacao]
+    params = [nome_evento, horas_solicitadas, data_evento]
     sql = """
         UPDATE requisicoes
            SET nome_evento = ?,
                horas_solicitadas = ?,
-               data_evento = ?,
-               observacao = ?
+               data_evento = ?
     """
+    # UI-C09: an omitted `observacao` keeps the stored one; only a submitted
+    # field is written (submitted empty -> NULL, the explicit clear).
+    if "observacao" in request.form:
+        sql += ", observacao = ?"
+        params.append(observacao)
     sql += " WHERE id = ?"
     params.append(req_id)
     arquivos = request.files.getlist("comprovantes_files") or []
@@ -1235,11 +1246,16 @@ def admin_processar_requisicao(req_id):
         set_parts = [
             "status = ?",
             "horas_deferidas = ?",
-            "observacao = ?",
             "data_processamento = ?",
             "admin_id = ?",
         ]
-        params = [status, horas_deferidas, observacao, data_processamento, admin_id]
+        params = [status, horas_deferidas, data_processamento, admin_id]
+        # UI-C20: a status-only action (the modal's Deferir, Encerrar, Reabrir)
+        # omits `observacao` and keeps the stored one; only a submitted field is
+        # written (submitted empty clears it, as the full-page form allows).
+        if "observacao" in request.form:
+            set_parts.append("observacao = ?")
+            params.append(observacao)
         current_status = str(requisicao["status"] or "").strip()
         if status == "Pendente":
             set_parts.extend([
