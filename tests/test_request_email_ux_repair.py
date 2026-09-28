@@ -547,22 +547,24 @@ def test_expected_configurable_template_renders():
 
 
 def test_new_placeholders_are_valid_and_unknown_still_rejected():
-    for token in ("{requisicao.possessivo}", "{requisicao.substantivo}",
-                  "{requisicao.processamento}", "{data.periodo}"):
+    # UI-B12 (decision B): the grammatical fragments left the authoring
+    # vocabulary; {data.periodo} and the whole-sentence {requisicao.frase} stay.
+    for token in ("{data.periodo}", "{requisicao.frase}"):
         validate_template(f"texto {token}")
+    for token in ("{requisicao.possessivo}", "{requisicao.substantivo}",
+                  "{requisicao.processamento}"):
+        with pytest.raises(PlaceholderError):
+            validate_template(f"texto {token}")
     with pytest.raises(PlaceholderError):
         validate_template("{requisicao.inexistente}")
 
 
 def test_new_placeholders_are_scalar_and_subject_safe():
-    validate_template("{requisicao.substantivo} {data.periodo}", allow_block=False)
+    validate_template("{atividade.substantivo} {data.periodo}", allow_block=False)
 
 
 def test_new_placeholders_documented_in_help():
     tokens = {name for name, _help in PLACEHOLDER_HELP}
-    assert {"{requisicao.possessivo}", "{requisicao.substantivo}",
-            "{requisicao.processamento}", "{data.periodo}"} <= tokens
-    help_by_token = dict(PLACEHOLDER_HELP)
-    assert help_by_token["{requisicao.possessivo}"] == "Sua / Suas conforme a quantidade de requisições."
-    assert help_by_token["{requisicao.substantivo}"] == "solicitação / solicitações."
-    assert help_by_token["{requisicao.processamento}"] == "foi processada / foram processadas."
+    assert {"{data.periodo}", "{requisicao.frase}", "{atividade.substantivo}"} <= tokens
+    assert not {"{requisicao.possessivo}", "{requisicao.substantivo}",
+                "{requisicao.processamento}"} & tokens

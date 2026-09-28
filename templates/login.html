@@ -12,7 +12,7 @@
     <main class="login-page">
       <div class="login-card">
         <img src="{{ url_for('static', filename='images/ej_logo_dark.jpg') }}" alt="Logo" width="100" />
-        <h1 class="login-title">Sistema de Atividades Complementares</h1>
+        <h1 class="login-title">SGAA</h1>
         <p class="login-subtitle">Faculdade de Tecnologia em Aviação Civil</p>
         <form method="POST" action="{{ url_for('login') }}" class="login-form">
           <label for="email">E-mail</label>
@@ -43,8 +43,10 @@
 
           <button type="submit">Entrar</button>
         </form>
+        {#- UI-C17: access problems go to the existing self-service recovery
+            (/esqueci-minha-senha), not to a mailbox. -#}
         <p class="login-footer">
-          Em caso de problemas de acesso, entre em contato pelo email <a href="mailto:atividadescomplementares@ej.com.br">atividadescomplementares@ej.com.br</a>
+          Problemas de acesso? <a href="{{ url_for('forgot_password') }}">Recuperar senha</a>
         </p>
       </div>
     </main>

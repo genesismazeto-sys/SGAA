@@ -35,11 +35,21 @@ SCALAR_PLACEHOLDERS = (
     "data.fim",
     "data.periodo",
     "quantidade_requisicoes",
+    "requisicao.frase",
+    "atividade.substantivo",
+)
+
+#: UI-B12 (decision B): the number-agreeing *fragments* left the authoring
+#: vocabulary.  Each is correct alone, but a preset has to glue literal words
+#: around them ("Suas {requisicao.substantivo}"), which is how broken agreement
+#: reaches a student; ``{requisicao.frase}`` owns the whole sentence instead.
+#: They are never offered and never accepted in new or edited text, and stay
+#: render-only so a stored model that predates the retirement still sends
+#: exactly as it did.
+RETIRED_PLACEHOLDERS = (
     "requisicao.possessivo",
     "requisicao.substantivo",
     "requisicao.processamento",
-    "requisicao.frase",
-    "atividade.substantivo",
 )
 
 #: Block placeholder -- system-generated, body only, never allowed in a subject.
@@ -61,12 +71,6 @@ PLACEHOLDER_HELP = (
         "datas diferentes.",
     ),
     ("{quantidade_requisicoes}", "Quantidade de requisições incluídas no e-mail."),
-    (
-        "{requisicao.possessivo}",
-        "Sua / Suas conforme a quantidade de requisições.",
-    ),
-    ("{requisicao.substantivo}", "solicitação / solicitações."),
-    ("{requisicao.processamento}", "foi processada / foram processadas."),
     (
         "{requisicao.frase}",
         "Frase inteira já concordada: \"Sua requisição do dia … foi processada.\" "
@@ -144,13 +148,24 @@ def _format_hours(value) -> str:
     return text.replace(".", ",")
 
 
-def validate_template(text: str, *, allow_block: bool = True) -> None:
-    """Reject unknown placeholders; reject ``{requisicoes}`` in subjects."""
+def validate_template(text: str, *, allow_block: bool = True, allow_retired: bool = False) -> None:
+    """Reject unknown placeholders; reject ``{requisicoes}`` in subjects.
+
+    Retired fragments are rejected unless ``allow_retired`` -- which only the
+    renderer and the unchanged-stored-model path of the preset save pass.
+    """
     allowed = set(BODY_PLACEHOLDERS) if allow_block else set(SCALAR_PLACEHOLDERS)
     for token in _TOKEN_RE.findall(str(text or "")):
         name = token.strip()
         if name in allowed:
             continue
+        if name in RETIRED_PLACEHOLDERS:
+            if allow_retired:
+                continue
+            raise PlaceholderError(
+                f"{{{name}}} foi descontinuado: use {{requisicao.frase}}, "
+                "que já monta a frase inteira no singular ou no plural."
+            )
         if name == BLOCK_PLACEHOLDER and not allow_block:
             raise PlaceholderError(
                 "{requisicoes} não pode ser usado no assunto do e-mail."
@@ -249,8 +264,9 @@ def build_context(events, *, aluno_nome, aluno_matricula, moment=None) -> dict[s
 
 def render_template(text: str, context: dict[str, str], *, allow_block: bool = True) -> str:
     """Single-pass token substitution over a closed vocabulary."""
-    validate_template(text, allow_block=allow_block)
+    validate_template(text, allow_block=allow_block, allow_retired=True)
     allowed = set(BODY_PLACEHOLDERS) if allow_block else set(SCALAR_PLACEHOLDERS)
+    allowed.update(RETIRED_PLACEHOLDERS)
 
     def _replace(match: re.Match) -> str:
         name = match.group(1).strip()
@@ -284,6 +300,7 @@ __all__ = [
     "DEFAULT_SUBJECT_TEMPLATE",
     "PLACEHOLDER_HELP",
     "PlaceholderError",
+    "RETIRED_PLACEHOLDERS",
     "SCALAR_PLACEHOLDERS",
     "build_context",
     "first_name",

@@ -66,7 +66,7 @@ def _is_safe_string(value, max_len: int = MAX_STRING_LEN) -> bool:
     return isinstance(value, str) and len(value) <= max_len
 
 
-def _sanitize_preset_item(item, kind: str, *, tipo: str = "respostas"):
+def _sanitize_preset_item(item, kind: str, *, tipo: str = "respostas", stored_emails=None):
     if not isinstance(item, dict):
         raise ValueError(f"{kind} inválido.")
 
@@ -99,9 +99,14 @@ def _sanitize_preset_item(item, kind: str, *, tipo: str = "respostas"):
     assunto = item.get("assunto", "")
     if not _is_safe_string(assunto, max_len=MAX_TITLE_LEN):
         raise ValueError(f"{kind} inválido.")
+    # UI-B12: the editor saves every model at once, so a stored model that
+    # predates the fragment retirement travels back untouched; only that exact
+    # stored subject/body may still carry a retired fragment.  New or edited
+    # text never can.
+    unchanged = (stored_emails or {}).get(preset_id) == (assunto, texto)
     try:
-        validate_template(assunto, allow_block=False)
-        validate_template(texto, allow_block=True)
+        validate_template(assunto, allow_block=False, allow_retired=unchanged)
+        validate_template(texto, allow_block=True, allow_retired=unchanged)
     except PlaceholderError as exc:
         raise ValueError(str(exc)) from exc
 
@@ -110,7 +115,7 @@ def _sanitize_preset_item(item, kind: str, *, tipo: str = "respostas"):
     return sanitized
 
 
-def _sanitize_presets(payload):
+def _sanitize_presets(payload, stored_emails=None):
     if not isinstance(payload, dict):
         raise ValueError("Payload precisa ser um objeto JSON.")
     out = {"respostas": [], "emails": []}
@@ -128,7 +133,7 @@ def _sanitize_presets(payload):
         seen_ids["respostas"].add(sanitized["id"])
         out["respostas"].append(sanitized)
     for item in emails:
-        sanitized = _sanitize_preset_item(item, "Modelo de e-mail", tipo="emails")
+        sanitized = _sanitize_preset_item(item, "Modelo de e-mail", tipo="emails", stored_emails=stored_emails)
         if sanitized["id"] in seen_ids["emails"]:
             raise ValueError("Modelo de e-mail inválido.")
         seen_ids["emails"].add(sanitized["id"])
@@ -179,7 +184,15 @@ def _load_legacy_presets_file():
     if not os.path.exists(PRESETS_PATH):
         return {"respostas": [], "emails": []}
     with open(PRESETS_PATH, 'r', encoding='utf-8') as f:
-        return _sanitize_presets(json.load(f))
+        legacy = json.load(f)
+    # Migrating stored models is not authoring: they keep what they already say.
+    emails = legacy.get("emails") if isinstance(legacy, dict) else None
+    stored_emails = {
+        item.get("id"): (item.get("assunto", ""), item.get("texto", ""))
+        for item in (emails if isinstance(emails, list) else [])
+        if isinstance(item, dict)
+    }
+    return _sanitize_presets(legacy, stored_emails=stored_emails)
 
 
 def _replace_presets_in_db(conn, data):
@@ -297,7 +310,14 @@ def get_default_email_preset(conn):
 
 def save_presets(data):
     conn = _get_db_connection()
-    sanitized = _sanitize_presets(data)
+    ensure_presets_schema(conn)
+    stored_emails = {
+        int(row["preset_id"]): (str(row["assunto"] or ""), str(row["texto"] or ""))
+        for row in conn.execute(
+            f"SELECT preset_id, assunto, texto FROM {PRESETS_TABLE} WHERE tipo='emails'"
+        )
+    }
+    sanitized = _sanitize_presets(data, stored_emails=stored_emails)
     _replace_presets_in_db(conn, sanitized)
     conn.commit()
     return sanitized
