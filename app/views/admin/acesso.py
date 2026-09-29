@@ -20,7 +20,6 @@ from flask import (
     url_for,
 )
 
-from app.academics import resequence_turma_aluno_matriculas_for_ids
 from app.access_default_password import (
     default_password_eligibility,
     default_password_eligibility_map,
@@ -700,15 +699,8 @@ def admin_acesso_salvar():
                 "UPDATE alunos SET nome = ?, email = ? WHERE usuario_id = ?",
                 (nome, email, usuario_id),
             )
-
-        if user_type == "aluno":
-            resequence_turma_aluno_matriculas_for_ids(
-                conn,
-                aluno_existente["turma_id"] if aluno_existente else None,
-                turma_id,
-            )
-        elif aluno_existente:
-            resequence_turma_aluno_matriculas_for_ids(conn, aluno_existente["turma_id"])
+        # The matrícula typed here is the one that stays: saving or moving one
+        # student never renumbers the rosters of the Turmas involved.
 
         _persist_user_access_overrides(conn, usuario_id, nivel_acesso, access_overrides if user_type == "admin" else {})
 

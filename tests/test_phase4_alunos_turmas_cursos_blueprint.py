@@ -131,6 +131,14 @@ AJAX_DELETE_FEEDBACK_BODY_CHANGES = {
     "admin_deletar_turma",
 }
 
+# TURMA-MATRICULA-PRESERVATION: deleting a student no longer resequences the
+# remaining roster, so the handler drops that call and the turma_id lookup that
+# only fed it. Delete, not-found and rollback behavior are unchanged; see
+# tests/test_turma_matricula_preservation.py.
+MATRICULA_PRESERVATION_BODY_CHANGES = {
+    "admin_deletar_aluno",
+}
+
 UI_C04_BODY_CHANGES = {
     "admin_editar_curso",
     "admin_visualizar_curso",
@@ -705,6 +713,36 @@ def _drop_render_template_kwarg(tree: ast.Module, name: str, kwarg: str) -> str:
     return None
 
 
+_RETIRED_DELETE_RESEQUENCE = (
+    'aluno = conn.execute("SELECT turma_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()',
+    'resequence_turma_aluno_matriculas_for_ids(conn, aluno["turma_id"] if aluno else None)',
+)
+
+
+def _drop_matricula_resequence(tree: ast.Module, name: str) -> str | None:
+    """TURMA-MATRICULA-PRESERVATION: baseline handler body minus exactly the
+    roster resequence and the turma_id lookup that only fed it."""
+    retired = {
+        ast.dump(statement)
+        for source in _RETIRED_DELETE_RESEQUENCE
+        for statement in _parsed_statements(source)
+    }
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            cloned = deepcopy(node)
+            removed = 0
+            for inner in ast.walk(cloned):
+                body = getattr(inner, "body", None)
+                if isinstance(body, list):
+                    kept = [stmt for stmt in body if ast.dump(stmt) not in retired]
+                    removed += len(body) - len(kept)
+                    inner.body = kept
+            assert removed == len(retired), f"baseline resequence anchor for {name}"
+            wrapped = ast.Module(body=list(cloned.body), type_ignores=[])
+            return ast.dump(wrapped, include_attributes=False)
+    return None
+
+
 def _baseline_main_source() -> str:
     result = subprocess.run(
         ["git", "show", f"{BASELINE_COMMIT}:main.py"],
@@ -824,11 +862,29 @@ def _student_import_guard_errors(
                 errors.append(f"{name}: matrix rejection exact no-write body")
             candidate_reject.body = deepcopy(baseline_reject.body)
 
+        # TURMA-MATRICULA-PRESERVATION: the baseline ended every roster save
+        # with an unconditional resequence (efa5450 narrowed it to saves
+        # without an imported file), rewriting institutional matrículas as
+        # "<código>.NNN". The authorized delta RETIRES exactly that baseline
+        # statement: an ordinary Turma save must never mutate an existing
+        # student's matrícula, so no resequence call may remain in the body.
+        retired_index = 8 if mode == "add" else 12
+        if not _ast_sequence_equal(
+            baseline_try.body[retired_index : retired_index + 1],
+            _parsed_statements(
+                "resequence_turma_aluno_matriculas_for_ids(conn, turma_id)"
+            ),
+        ):
+            errors.append(f"{name}: baseline resequence anchor")
+        if "resequence_turma_aluno_matriculas" in ast.unparse(candidate_try):
+            errors.append(f"{name}: matrícula resequence retired")
+        del baseline_try.body[retired_index]
+
         if mode == "add":
             expected_service = _parsed_statements(
                 """
 imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
-form_sync = sync_turma_form_students(
+sync_turma_form_students(
     conn,
     turma_id,
     request.form.getlist("aluno_nome[]"),
@@ -838,13 +894,11 @@ form_sync = sync_turma_form_students(
     request.form.getlist("aluno_importado[]"),
     imported_rows=imported_rows,
 )
-if not form_sync.has_imported_rows:
-    resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
 """
             )
-            if not _ast_sequence_equal(candidate_try.body[2:5], expected_service):
+            if not _ast_sequence_equal(candidate_try.body[2:4], expected_service):
                 errors.append(f"{name}: parser/service call structure")
-            candidate_try.body[2:5] = deepcopy(baseline_try.body[2:9])
+            candidate_try.body[2:4] = deepcopy(baseline_try.body[2:8])
         else:
             expected_service = _parsed_statements(
                 """
@@ -862,19 +916,8 @@ form_sync = sync_turma_form_students(
 posted_mats = set(form_sync.matriculas)
 """
             )
-            expected_resequence = _parsed_statements(
-                """
-if not form_sync.has_imported_rows:
-    resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
-"""
-            )
             if not _ast_sequence_equal(candidate_try.body[1:4], expected_service):
                 errors.append(f"{name}: parser/service call structure")
-            if not _ast_sequence_equal(
-                candidate_try.body[8:9], expected_resequence
-            ):
-                errors.append(f"{name}: imported-row resequence boundary")
-            candidate_try.body[8:9] = deepcopy(baseline_try.body[12:13])
             candidate_try.body[1:4] = deepcopy(baseline_try.body[1:8])
 
         if len(candidate_try.handlers) != 1 or len(baseline_try.handlers) != 1:
@@ -1395,6 +1438,31 @@ def test_student_import_guard_rejects_unrelated_handler_mutation():
     )
 
 
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "resequence_turma_aluno_matriculas_for_ids(conn, turma_id)",
+        "if not imported_rows:\n    resequence_turma_aluno_matriculas_for_ids(conn, turma_id)",
+    ),
+)
+@pytest.mark.parametrize("name", ("admin_adicionar_turma", "admin_editar_turma"))
+def test_student_import_guard_rejects_reintroduced_matricula_resequence(name, statement):
+    """An ordinary Turma save must not mutate existing matrícula identity."""
+    candidate_tree = _tree(MODULE_PATH)
+    post = _request_method_block(_function_node(candidate_tree, name), "POST")
+    candidate_try = post.body[21]
+    commit_index = next(
+        index
+        for index, stmt in enumerate(candidate_try.body)
+        if ast.unparse(stmt) == "conn.commit()"
+    )
+    candidate_try.body[commit_index:commit_index] = _parsed_statements(statement)
+
+    assert f"{name}: matrícula resequence retired" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
 def test_student_import_guard_rejects_reverting_the_hardened_matrix_read():
     """UT-TM1: going back to the coercive read is not an authorized delta."""
     candidate_tree = _tree(MODULE_PATH)
@@ -1477,6 +1545,12 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         elif name in AJAX_DELETE_FEEDBACK_BODY_CHANGES:
             # Declared bounded change; see AJAX-DELETE-FEEDBACK-1 above.
             continue
+        elif name in MATRICULA_PRESERVATION_BODY_CHANGES:
+            expected = _drop_matricula_resequence(baseline_tree, name)
+            assert expected == module_body, (
+                f"moved body differs from baseline beyond the retired "
+                f"matrícula resequence for {name}"
+            )
         elif name not in FC08_BODY_CHANGES and name not in UI_C04_BODY_CHANGES:
             assert module_body == baseline_body, f"moved body differs from baseline for {name}"
 

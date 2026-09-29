@@ -725,7 +725,8 @@ def admin_adicionar_aluno():
             )
             conn.execute("INSERT INTO alunos (usuario_id, nome, matricula, email, turma_id, matriz_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
                          (usuario_id, nome, matricula, email, turma_id, matriz_id, status))
-            resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
+            # Matrícula é identidade: o novo aluno fica com a que foi digitada
+            # e ninguém da turma é renumerado por causa dele.
             conn.commit()
             flash("Aluno adicionado com sucesso.", "success")
             return redirect(_safe_return_to_target("admin_alunos"))
@@ -823,9 +824,8 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
             # A matrícula submetida neste formulário é a do administrador e fica
             # como está: renumerar logo em seguida contradiria o campo que ele
             # acabou de preencher e faria uma simples troca de turma renomear o
-            # aluno. Resequenciamento continua sendo operação de turma
-            # (salvar turma, importar turma), não efeito colateral de editar um
-            # aluno.
+            # aluno. Nenhum fluxo renumera matrículas: elas são identidade, não
+            # posição no roster da turma.
             conn.commit()
             flash("Aluno atualizado com sucesso.", "success")
             return redirect(url_for("admin_alunos"))
@@ -895,12 +895,11 @@ def admin_visualizar_aluno(usuario_id):
 def admin_deletar_aluno(usuario_id):
     conn = get_db_connection()
     try:
-        aluno = conn.execute("SELECT turma_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
         deleted_aluno = conn.execute("DELETE FROM alunos WHERE usuario_id = ?", (usuario_id,))
         deleted_usuario = conn.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
         if deleted_aluno.rowcount == 0 and deleted_usuario.rowcount == 0:
             raise LookupError("Aluno não encontrado para exclusão.")
-        resequence_turma_aluno_matriculas_for_ids(conn, aluno["turma_id"] if aluno else None)
+        # Os colegas de turma mantêm suas matrículas: a vaga não é "fechada".
         conn.commit()
         if _is_ajax_request():
             return jsonify({"ok": True, "deleted": usuario_id})
@@ -1149,7 +1148,9 @@ def admin_adicionar_turma():
             turma_id = cur.lastrowid
             imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
 
-            form_sync = sync_turma_form_students(
+            # Cada aluno fica com a matrícula digitada ou importada; a turma
+            # nunca as reescreve como número de linha.
+            sync_turma_form_students(
                 conn,
                 turma_id,
                 request.form.getlist("aluno_nome[]"),
@@ -1159,8 +1160,6 @@ def admin_adicionar_turma():
                 request.form.getlist("aluno_importado[]"),
                 imported_rows=imported_rows,
             )
-            if not form_sync.has_imported_rows:
-                resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
 
             conn.commit()
             flash("Turma criada com sucesso.", "success")
@@ -1269,9 +1268,8 @@ def admin_editar_turma(turma_id):
             for m in to_unlink:
                 conn.execute("UPDATE alunos SET turma_id = NULL WHERE matricula = ?", (m,))
 
-            if not form_sync.has_imported_rows:
-                resequence_turma_aluno_matriculas_for_ids(conn, turma_id)
-
+            # Matrícula é identidade, não posição no roster: salvar a turma
+            # nunca renumera quem já está nela.
             conn.commit()
             flash("Turma atualizada com sucesso.", "success")
             return redirect(url_for("admin_turmas"))
