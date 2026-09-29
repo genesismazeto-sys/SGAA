@@ -53,7 +53,7 @@ from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL, _access_defaults_map,
     _default_password_for_user_type,
     create_usuario_pending, create_usuario_with_default_access,
-    create_usuario_with_default_password,
+    create_usuario_with_default_password, InvalidEmailError, require_valid_email,
     normalize_usuario_access_for_user_type, set_usuario_password_hash,
 )
 from app.web.filters import (
@@ -705,6 +705,7 @@ def admin_adicionar_aluno():
         status = request.form["status"]
 
         try:
+            require_valid_email(email)
             # prod-1/v11: a typed password is this student's own (personal);
             # a blank one leaves the account pending until first access or an
             # explicit "Aplicar senha padrão" in Admin > Acesso.
@@ -737,7 +738,7 @@ def admin_adicionar_aluno():
                 flash("Erro: Já existe um aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao adicionar aluno: {e}", "error")
-        except StudentMatrixError as e:
+        except (InvalidEmailError, StudentMatrixError) as e:
             conn.rollback()
             flash(str(e), "error")
         except Exception as e:
@@ -785,6 +786,7 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
         matriz_bruta = request.form.get("matriz_id")
 
         try:
+            require_valid_email(email)
             # Valor não vazio e inválido é requisição malformada, nunca uma limpeza.
             matriz_escolhida = (
                 parse_submitted_matriz_id(matriz_bruta) if matriz_submetida else None
@@ -837,7 +839,7 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
                 flash("Erro: Já existe outro aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao atualizar aluno: {e}", "error")
-        except StudentMatrixError as e:
+        except (InvalidEmailError, StudentMatrixError) as e:
             conn.rollback()
             flash(str(e), "error")
         except Exception as e:

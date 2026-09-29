@@ -137,10 +137,15 @@ def _normalize_data_rows(
         ]
         if missing:
             raise StudentImportError(f"Linha {row_number}: campo(s) obrigatório(s) ausente(s): {', '.join(missing)}.")
-        # A mesma regra de todo envio de e-mail do SGAA: o endereço importado é
-        # o que recebe o primeiro acesso.
-        if from_file and not is_valid_email(email):
-            raise StudentImportError(f"Linha {row_number}: e-mail inválido.")
+        # A mesma regra de todo envio de e-mail do SGAA: o endereço gravado é o
+        # que recebe o primeiro acesso. Vale também para a linha digitada no
+        # formulário da Turma, que um POST direto entrega sem a validação do
+        # navegador; nela o nome identifica o aluno, porque a página de erro
+        # recarrega o roster salvo e a numeração da tela muda.
+        if not is_valid_email(email):
+            if from_file:
+                raise StudentImportError(f"Linha {row_number}: e-mail inválido.")
+            raise StudentImportError(f"Linha {row_number} ({aluno}): e-mail inválido.")
 
         email_key = email.casefold()
         if email_key in seen_emails:

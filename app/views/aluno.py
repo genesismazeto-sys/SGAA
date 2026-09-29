@@ -63,7 +63,9 @@ from app.requisition_policy import can_student_delete_requisition, can_student_e
 from app.security.passwords import hash_password
 from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL,
+    InvalidEmailError,
     get_usuario_auth_version,
+    require_valid_email,
     set_usuario_password_hash,
 )
 from app.db import get_db_connection
@@ -915,6 +917,7 @@ def aluno_meus_dados():
                 flash("Turma selecionada inv\u00e1lida; mantida a anterior.", "warning")
 
         try:
+            require_valid_email(email)
             if senha:
                 hashed_password = hash_password(senha)
                 conn.execute(
@@ -977,7 +980,7 @@ def aluno_meus_dados():
                 flash("Erro: Já existe outro aluno com esta matrícula.", "error")
             else:
                 flash(f"Erro ao atualizar dados: {exc}", "error")
-        except StudentMatrixError as exc:
+        except (InvalidEmailError, StudentMatrixError) as exc:
             conn.rollback()
             flash(str(exc), "error")
         except Exception as exc:

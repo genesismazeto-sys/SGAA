@@ -26,7 +26,9 @@ from app.security.passwords import hash_password
 from app.uploads import save_upload
 from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL,
+    InvalidEmailError,
     get_usuario_auth_version,
+    require_valid_email,
     set_usuario_password_hash,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -53,6 +55,7 @@ def admin_meus_dados():
         senha = request.form.get("senha")
 
         try:
+            require_valid_email(email)
             if senha:
                 hashed_password = hash_password(senha)
                 conn.execute(
@@ -105,6 +108,8 @@ def admin_meus_dados():
                 flash("Erro: Já existe outro usuário com este e-mail.", "error")
             else:
                 flash(f"Erro ao atualizar dados: {exc}", "error")
+        except InvalidEmailError as exc:
+            flash(str(exc), "error")
         except Exception as exc:
             flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
 

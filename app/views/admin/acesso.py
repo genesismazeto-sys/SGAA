@@ -53,10 +53,12 @@ from app.user_accounts import (
     CREDENTIAL_STATE_DEFAULT,
     CREDENTIAL_STATE_PENDING,
     CREDENTIAL_STATE_PERSONAL,
+    InvalidEmailError,
     _access_defaults_map,
     create_usuario_with_access_level,
     get_usuario_auth_version,
     invalidate_usuario_password_tokens,
+    require_valid_email,
     set_usuario_access_active,
     set_usuario_password_hash,
     set_usuarios_password_hash,
@@ -515,6 +517,11 @@ def admin_acesso_salvar():
 
     if not nome or not email:
         flash("Nome e e-mail são obrigatórios.", "error")
+        return redirect(url_for("admin_acesso"))
+    try:
+        require_valid_email(email)
+    except InvalidEmailError as exc:
+        flash(str(exc), "error")
         return redirect(url_for("admin_acesso"))
     if user_type == "aluno" and not matricula:
         flash("Matrícula é obrigatória para perfis de aluno.", "error")

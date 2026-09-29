@@ -184,6 +184,24 @@ def invalidate_usuario_password_tokens(
     return int(cursor.rowcount)
 
 
+class InvalidEmailError(ValueError):
+    """A typed e-mail that fails the SGAA's one e-mail rule."""
+
+
+def require_valid_email(email) -> None:
+    """Refuse an address before any write, whatever the browser allowed.
+
+    The rule is ``is_valid_email`` -- the one file imports and every outbound
+    mail use -- because this address is the one that receives first-access and
+    password-reset links. The value is not rewritten: a valid e-mail is stored
+    exactly as submitted, as before.
+    """
+    from app.services.mail_service import is_valid_email
+
+    if not is_valid_email(email):
+        raise InvalidEmailError("E-mail inválido.")
+
+
 def create_usuario_with_access_level(
     conn,
     nome: str,
