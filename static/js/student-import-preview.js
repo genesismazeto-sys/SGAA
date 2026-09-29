@@ -8,6 +8,7 @@
     new Set(['matricula']),
   ];
   const HEADER_NAMES = new Set(HEADER_ALIASES.flatMap((aliases) => [...aliases]));
+  const COLUMN_LABELS = ['Aluno', 'E-mail', 'Matricula'];
 
   function normalizeHeader(value) {
     return String(value ?? '')
@@ -18,16 +19,24 @@
       .toLowerCase();
   }
 
-  function isHeader(row) {
+  // Espelha _header_name do servidor: uma fórmula nunca é nome de coluna,
+  // qualquer que seja o valor calculado.
+  function headerName(row, column, expressions) {
+    return expressions.has(column) ? '' : normalizeHeader(row[column]);
+  }
+
+  function isHeader(row, expressions) {
     return (row || []).length === 3 && HEADER_ALIASES.every(
-      (aliases, index) => aliases.has(normalizeHeader(row[index]))
+      (aliases, index) => aliases.has(headerName(row, index, expressions))
     );
   }
 
   // Espelha _looks_like_header do servidor: dois ou mais nomes de coluna numa
   // linha são um cabeçalho fora da ordem, nunca um aluno.
-  function looksLikeHeader(row) {
-    return (row || []).filter((value) => HEADER_NAMES.has(normalizeHeader(value))).length >= 2;
+  function looksLikeHeader(row, expressions) {
+    return (row || []).filter(
+      (_, column) => HEADER_NAMES.has(headerName(row, column, expressions))
+    ).length >= 2;
   }
 
   // Espelha is_valid_email (app/services/mail_service.py), a regra de todo envio
@@ -39,24 +48,32 @@
     return Boolean(candidate) && candidate.length <= 254 && EMAIL_RE.test(candidate);
   }
 
-  function normalizeRows(rows) {
+  // expressionsByRow: índice da linha -> colunas com fórmula ou valor de erro.
+  function normalizeRows(rows, expressionsByRow = new Map()) {
     const nonEmpty = (rows || [])
-      .map((row, index) => ({ values: row || [], sourceRow: index + 1 }))
-      .filter(({ values }) => values.some((value) => String(value ?? '').trim()));
+      .map((row, index) => ({
+        values: row || [],
+        sourceRow: index + 1,
+        expressions: expressionsByRow.get(index) || new Set(),
+      }))
+      // Como no servidor, uma fórmula conta como conteúdo mesmo com cache vazio.
+      .filter(({ values, expressions }) => (
+        expressions.size > 0 || values.some((value) => String(value ?? '').trim())
+      ));
     if (!nonEmpty.length) throw new Error('Arquivo vazio.');
 
     const parsed = [];
     const seenEmails = new Map();
     const seenMatriculas = new Map();
-    const firstDataIndex = isHeader(nonEmpty[0].values) ? 1 : 0;
-    if (!firstDataIndex && looksLikeHeader(nonEmpty[0].values)) {
+    const firstDataIndex = isHeader(nonEmpty[0].values, nonEmpty[0].expressions) ? 1 : 0;
+    if (!firstDataIndex && looksLikeHeader(nonEmpty[0].values, nonEmpty[0].expressions)) {
       throw new Error(
         `Linha ${nonEmpty[0].sourceRow}: o cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula.`
       );
     }
     for (let index = firstDataIndex; index < nonEmpty.length; index += 1) {
-      const { values: row, sourceRow } = nonEmpty[index];
-      if (index > 0 && looksLikeHeader(row)) {
+      const { values: row, sourceRow, expressions } = nonEmpty[index];
+      if (index > 0 && looksLikeHeader(row, expressions)) {
         throw new Error(
           `Linha ${sourceRow}: cabeçalho repetido no meio do arquivo; o cabeçalho só é aceito na primeira linha.`
         );
@@ -64,6 +81,12 @@
       if (row.length > 3) {
         throw new Error(
           `Linha ${sourceRow}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula.`
+        );
+      }
+      const expressionColumn = [0, 1, 2].find((column) => expressions.has(column));
+      if (expressionColumn !== undefined) {
+        throw new Error(
+          `Linha ${sourceRow}: fórmula ou valor de erro na coluna ${COLUMN_LABELS[expressionColumn]}; a importação aceita apenas valores digitados.`
         );
       }
       const values = [0, 1, 2].map((column) => String(row[column] ?? '').trim());
@@ -103,6 +126,25 @@
     return global.XLSX.read(text, { type: 'string', raw: true });
   }
 
+  // Como o servidor, recusa a célula pelo tipo, nunca pelo valor calculado. Uma
+  // segunda leitura com sheetStubs mantém a fórmula salva sem valor em cache,
+  // que a leitura dos valores descarta; os valores seguem da leitura normal.
+  function expressionCells(buffer, extension, sheet) {
+    const found = new Map();
+    if (extension === 'csv' || !sheet['!ref']) return found;
+    const workbook = global.XLSX.read(new Uint8Array(buffer), { type: 'array', sheetStubs: true });
+    const stubs = workbook.Sheets[workbook.SheetNames[0]] || {};
+    const firstColumn = global.XLSX.utils.decode_range(sheet['!ref']).s.c;
+    Object.keys(stubs).forEach((address) => {
+      const cell = stubs[address];
+      if (address[0] === '!' || !cell || !(cell.f || cell.t === 'e')) return;
+      const { r, c } = global.XLSX.utils.decode_cell(address);
+      if (!found.has(r)) found.set(r, new Set());
+      found.get(r).add(c - firstColumn);
+    });
+    return found;
+  }
+
   function read(file) {
     if (!global.XLSX) return Promise.reject(new Error('Leitor de planilhas não carregado.'));
     const extension = String(file?.name || '').split('.').pop().toLowerCase();
@@ -120,7 +162,7 @@
         defval: '',
         range: 0,
       });
-      return normalizeRows(rows);
+      return normalizeRows(rows, expressionCells(buffer, extension, sheet));
     });
   }
 

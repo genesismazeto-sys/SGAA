@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import re
+import struct
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import chain
@@ -23,6 +24,10 @@ _HEADER_ALIASES = (
     {"matricula"},
 )
 _HEADER_NAMES = frozenset().union(*_HEADER_ALIASES)
+# Fórmula e valor de erro de planilha nunca são dado de aluno: a importação é
+# de dados, não um motor de cálculo. A célula é recusada pelo tipo que o leitor
+# informa, sem avaliar a fórmula nem usar o valor calculado em cache.
+_SPREADSHEET_EXPRESSION_KINDS = frozenset({"formula", "error"})
 
 
 class StudentImportError(ValueError):
@@ -72,8 +77,6 @@ def _cell_text(cell: _Cell, *, identifier: bool = False) -> str:
         or isinstance(value, (dt.date, dt.datetime, dt.time))
     ):
         raise StudentImportError("A matrícula não pode ser uma data ou hora.")
-    if identifier and cell.kind in {"error", "formula"}:
-        raise StudentImportError("A matrícula não pode conter fórmula ou valor de erro.")
     if identifier and cell.kind == "boolean":
         raise StudentImportError("A matrícula não pode ser um valor booleano.")
     if identifier and isinstance(value, (bytes, bytearray, list, tuple, dict, set)):
@@ -85,14 +88,24 @@ def _cell_text(cell: _Cell, *, identifier: bool = False) -> str:
     return str(value).strip()
 
 
+def _is_expression(cell: _Cell) -> bool:
+    return cell.kind in _SPREADSHEET_EXPRESSION_KINDS
+
+
 def _row_has_content(cells: list[_Cell]) -> bool:
-    return any(_cell_text(cell) for cell in cells)
+    # Uma fórmula conta como conteúdo mesmo quando o resultado em cache é vazio.
+    return any(_is_expression(cell) or _cell_text(cell) for cell in cells)
+
+
+def _header_name(cell: _Cell) -> str:
+    # Uma fórmula nunca é nome de coluna, qualquer que seja o valor calculado.
+    return "" if _is_expression(cell) else normalize_header(_cell_text(cell))
 
 
 def _is_header(cells: list[_Cell]) -> bool:
     if len(cells) != 3:
         return False
-    header = tuple(normalize_header(_cell_text(cell)) for cell in cells[:3])
+    header = tuple(_header_name(cell) for cell in cells[:3])
     return all(value in aliases for value, aliases in zip(header, _HEADER_ALIASES))
 
 
@@ -100,7 +113,7 @@ def _looks_like_header(cells: list[_Cell]) -> bool:
     # Dois ou mais nomes de coluna numa linha nunca são um aluno real: é um
     # cabeçalho fora da ordem (ex.: Matricula, Aluno, E-mail), que lido como
     # dados trocaria as colunas de posição.
-    return sum(normalize_header(_cell_text(cell)) in _HEADER_NAMES for cell in cells) >= 2
+    return sum(_header_name(cell) in _HEADER_NAMES for cell in cells) >= 2
 
 
 def _normalize_data_rows(
@@ -126,6 +139,11 @@ def _normalize_data_rows(
             raise StudentImportError(
                 f"Linha {row_number}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula."
             )
+        for label, cell in zip(CANONICAL_STUDENT_IMPORT_HEADERS, cells):
+            if _is_expression(cell):
+                raise StudentImportError(
+                    f"Linha {row_number}: fórmula ou valor de erro na coluna {label}; a importação aceita apenas valores digitados."
+                )
 
         aluno = _cell_text(cells[0]) if len(cells) > 0 else ""
         email = _cell_text(cells[1]) if len(cells) > 1 else ""
@@ -224,6 +242,39 @@ def _xlsx_rows(path: Path) -> Iterable[tuple[int, list[_Cell]]]:
     return rows
 
 
+_XLS_FORMULA_OPCODES = frozenset({0x0006, 0x0206, 0x0406})
+_XLS_BOF_OPCODES = frozenset({0x0009, 0x0209, 0x0409, 0x0809})
+_XLS_EOF_OPCODE = 0x000A
+
+
+def _xls_formula_cells(workbook, sheet_index: int) -> frozenset[tuple[int, int]]:
+    """(linha, coluna) de cada registro FORMULA da planilha, base 0.
+
+    O xlrd guarda só o resultado em cache de uma fórmula, tipado como um valor
+    comum; o tipo da célula está no registro BIFF. Varre o mesmo stream que o
+    xlrd já leu, a partir do BOF da planilha até o EOF correspondente (um
+    gráfico embutido abre e fecha o próprio par BOF/EOF).
+    """
+    stream = workbook.mem
+    position = workbook._sh_abs_posn[sheet_index]
+    end = workbook.base + workbook.stream_len
+    depth = 0
+    cells = set()
+    while position + 4 <= end:
+        opcode, length = struct.unpack_from("<HH", stream, position)
+        body = position + 4
+        if opcode in _XLS_BOF_OPCODES:
+            depth += 1
+        elif opcode == _XLS_EOF_OPCODE:
+            depth -= 1
+            if depth <= 0:
+                break
+        elif depth == 1 and opcode in _XLS_FORMULA_OPCODES:
+            cells.add(struct.unpack_from("<HH", stream, body))
+        position = body + length
+    return frozenset(cells)
+
+
 def _xls_rows(path: Path) -> Iterable[tuple[int, list[_Cell]]]:
     try:
         import xlrd
@@ -239,6 +290,10 @@ def _xls_rows(path: Path) -> Iterable[tuple[int, list[_Cell]]]:
         if workbook.nsheets == 0:
             return rows
         sheet = workbook.sheet_by_index(0)
+        try:
+            formula_cells = _xls_formula_cells(workbook, 0)
+        except struct.error as exc:
+            raise StudentImportError("A planilha XLS está malformada e não pôde ser lida.") from exc
         for row_index in range(sheet.nrows):
             cells: list[_Cell] = []
             for column_index in range(sheet.ncols):
@@ -259,7 +314,9 @@ def _xls_rows(path: Path) -> Iterable[tuple[int, list[_Cell]]]:
                     _Cell(
                         source_cell.value,
                         number_format,
-                        kinds.get(source_cell.ctype, "unknown"),
+                        "formula"
+                        if (row_index, column_index) in formula_cells
+                        else kinds.get(source_cell.ctype, "unknown"),
                     )
                 )
             rows.append((row_index + 1, cells))
