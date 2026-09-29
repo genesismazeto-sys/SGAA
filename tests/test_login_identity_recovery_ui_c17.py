@@ -121,6 +121,26 @@ def test_login_institutional_name_is_exact_ui_b22(env):
     assert '<h1 class="login-title">SGAA</h1>' in html
 
 
+def test_login_email_copy_states_no_institutional_rule_ui_b24(env):
+    # UI-B24: students log in with any registered e-mail; the field must not
+    # claim an institutional address is required.
+    client, _sent = env
+    html = client.get("/login").get_data(as_text=True)
+
+    email_input = re.search(r'<input type="email" id="email" name="email"[^>]*>', html)
+    assert email_input, "the login e-mail field is gone"
+    assert 'placeholder="Entre com seu e-mail"' in email_input.group(0)
+    assert "Entre com seu e-mail" in html
+    lowered = html.lower()
+    assert "email institucional" not in lowered and "e-mail institucional" not in lowered
+    # Branding and the recovery CTAs are untouched.
+    assert '<h1 class="login-title">SGAA</h1>' in html
+    assert '<p class="login-subtitle">EJ - Faculdade de Tecnologia em Aviação Civil</p>' in html
+    assert '<a class="login-forgot-link" href="/esqueci-minha-senha">Esqueceu sua senha?</a>' in html
+    assert '<a href="/esqueci-minha-senha">Recuperar senha</a>' in html
+    assert '<label for="email">E-mail</label>' in html
+
+
 def test_recovery_route_is_anonymous(env):
     client, _sent = env
     with client.session_transaction() as session:
