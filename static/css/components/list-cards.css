@@ -128,21 +128,21 @@
   box-shadow:0 0 0 1px var(--field-focus-ring);
 }
 .input-group:has(> input, > select):hover .input-chip{
-  background:var(--field-chip-hover-bg, #f1f5f9);
+  background:var(--field-chip-hover-bg);
   border-right-color:var(--field-hover-border);
 }
 .input-group:has(> input, > select):focus-within .input-chip{
-  background:var(--field-chip-focus-bg, #f1f5f9);
+  background:var(--field-chip-focus-bg);
   border-right-color:var(--field-focus-border);
 }
 .toolbar .filters .input-group[id^="grp-busca"]:hover .input-chip,
 .toolbar .filters .input-group[id*="grp-busca-"]:hover .input-chip{
-  background:var(--field-chip-hover-bg, #f1f5f9);
+  background:var(--field-chip-hover-bg);
   border-right-color:var(--field-hover-border);
 }
 .toolbar .filters .input-group[id^="grp-busca"]:focus-within .input-chip,
 .toolbar .filters .input-group[id*="grp-busca-"]:focus-within .input-chip{
-  background:var(--field-chip-focus-bg, #f1f5f9);
+  background:var(--field-chip-focus-bg);
   border-right-color:var(--field-focus-border);
 }
 .input-chip{
@@ -205,8 +205,8 @@
 .filter-text-input:focus,
 .filter-range-input:focus{
   outline:none;
-  border-color:var(--field-focus-border, #0369a1);
-  box-shadow:0 0 0 1px var(--field-focus-ring, rgba(3,105,161,.2));
+  border-color:var(--field-focus-border);
+  box-shadow:0 0 0 1px var(--field-focus-ring);
 }
 .filter-range-label{
   font-size:12px;
@@ -310,10 +310,10 @@
 
 /* Estados */
 .impresso-card.selected{
-  border-color:var(--accent-blue, #0369a1);
+  border-color:var(--accent-blue);
   border-width:1px;
-  background-color:var(--surface, #fff);
-  box-shadow:0 0 0 1px var(--field-focus-ring, rgba(3,105,161,.22));
+  background-color:var(--surface);
+  box-shadow:0 0 0 1px var(--field-focus-ring);
 }
 .impresso-card:hover:not(.selected){
   background:#f8fafc;
@@ -452,8 +452,8 @@
   minmax(72px, 0.85fr)  /* Status */
 };
 .imp-cursos .badge.status-badge{ display:inline-flex; align-items:center; justify-content:center; border-radius:var(--pill-radius); height:18px; min-width:18px; padding:0 6px; font-size:11px; font-weight:500; line-height:1; }
-.imp-cursos .badge.status-pill.status-positive{ color:#1f5a3c !important; background-color:#e9f5e7 !important; border-color:#b9d7b5 !important; }
-.imp-cursos .badge.status-pill.status-negative{ color:#8d2431 !important; background-color:#f9e3e6 !important; border-color:#e3b0b8 !important; }
+.imp-cursos .badge.status-pill.status-positive{ color:var(--status-pill-text) !important; background-color:var(--status-pill-bg) !important; border-color:var(--status-pill-border) !important; }
+.imp-cursos .badge.status-pill.status-negative{ color:var(--status-pill-text) !important; background-color:var(--status-pill-bg) !important; border-color:var(--status-pill-border) !important; }
 .imp-cursos .cell.left{ justify-content:flex-start; text-align:left; }
 .impressoes-cards-scroll.imp-cursos{ width:100%; }
 .imp-cursos .impressoes-cards{ width:100% !important; }
