@@ -202,6 +202,38 @@ def require_valid_email(email) -> None:
         raise InvalidEmailError("E-mail inválido.")
 
 
+def _email_identity(email) -> str:
+    return str(email or "").strip().casefold()
+
+
+def set_usuario_email(conn, usuario_id: int, email: str) -> bool:
+    """The one writer of an account's address (``usuarios.email``).
+
+    First-access and password-reset links are mailed to this address and bound
+    only to ``usuario_id``; the address is never stored with them. A link that
+    already sits in the previous mailbox would otherwise keep granting access
+    to an account that moved away from it, so a real change invalidates every
+    outstanding link of the account -- the existing revocation a password
+    change applies. The UPDATE runs first: a UNIQUE conflict raises before any
+    link is touched, and a caller's rollback undoes both.
+
+    Nothing else moves. The password hash, ``estado``, ``acesso_ativo`` and
+    ``auth_version`` stay put, so live sessions continue (an address is not a
+    credential -- see ``migrate_root_admin_email``) and no new link is issued.
+    The comparison is case- and whitespace-insensitive, like every SGAA e-mail
+    identity lookup: rewriting the same mailbox does not kill the link sitting
+    in it. Returns whether the address changed.
+    """
+    row = conn.execute("SELECT email FROM usuarios WHERE id=?", (int(usuario_id),)).fetchone()
+    if row is None:
+        raise ValueError(f"usuario not found for e-mail write: {usuario_id}")
+    conn.execute("UPDATE usuarios SET email=? WHERE id=?", (email, int(usuario_id)))
+    changed = _email_identity(row[0]) != _email_identity(email)
+    if changed:
+        invalidate_usuario_password_tokens(conn, [int(usuario_id)])
+    return changed
+
+
 def create_usuario_with_access_level(
     conn,
     nome: str,

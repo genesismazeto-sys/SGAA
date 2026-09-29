@@ -14,6 +14,7 @@ from app.user_accounts import (
     create_usuario_pending,
     normalize_usuario_access_for_user_type,
     prepare_pending_password_hashes,
+    set_usuario_email,
 )
 
 
@@ -135,9 +136,10 @@ def _persist_student_row(
             current_turma_id=existing["turma_id"],
         )
         conn.execute(
-            "UPDATE usuarios SET nome=?, email=? WHERE id=?",
-            (row.aluno, row.email, linked_user["id"]),
+            "UPDATE usuarios SET nome=? WHERE id=?",
+            (row.aluno, linked_user["id"]),
         )
+        set_usuario_email(conn, linked_user["id"], row.email)
         normalize_usuario_access_for_user_type(conn, linked_user["id"])
         conn.execute(
             """

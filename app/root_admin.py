@@ -156,7 +156,8 @@ def migrate_root_admin_email(conn, *, target_email: str | None = None) -> dict[s
     overrides, and every historical FK pointing at the account -- is preserved.
     The account is never deleted and recreated, and ``auth_version`` is left
     alone: changing an address is not a credential change and must not sign
-    existing sessions out.
+    existing sessions out. Like every address change, it retires the links
+    already mailed to the previous address (``set_usuario_email``).
 
     Raises ``RootAdminEmailCollision`` when the target address belongs to a
     different account.  That is a decision for a human: silently reassigning
@@ -183,7 +184,9 @@ def migrate_root_admin_email(conn, *, target_email: str | None = None) -> dict[s
     if holder:
         raise RootAdminEmailCollision(holder[0], holder[1], holder[2])
 
-    conn.execute("UPDATE usuarios SET email = ? WHERE id = ?", (target, root_id))
+    from app.user_accounts import set_usuario_email
+
+    set_usuario_email(conn, root_id, target)
     # An admin row may also carry an alunos mirror from historical data; keep
     # the two addresses consistent without touching anything else.
     conn.execute(

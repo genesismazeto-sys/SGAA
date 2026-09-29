@@ -29,6 +29,7 @@ from app.user_accounts import (
     InvalidEmailError,
     get_usuario_auth_version,
     require_valid_email,
+    set_usuario_email,
     set_usuario_password_hash,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -56,22 +57,15 @@ def admin_meus_dados():
 
         try:
             require_valid_email(email)
-            if senha:
-                hashed_password = hash_password(senha)
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
-                    (nome, email, usuario_id),
-                )
+            hashed_password = hash_password(senha) if senha else None
+            conn.execute("UPDATE usuarios SET nome = ? WHERE id = ?", (nome, usuario_id))
+            set_usuario_email(conn, usuario_id, email)
+            if hashed_password:
                 set_usuario_password_hash(
                     conn,
                     usuario_id,
                     hashed_password,
                     credential_state=CREDENTIAL_STATE_PERSONAL,
-                )
-            else:
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
-                    (nome, email, usuario_id),
                 )
 
             session["user_name"] = nome

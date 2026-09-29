@@ -60,6 +60,7 @@ from app.user_accounts import (
     invalidate_usuario_password_tokens,
     require_valid_email,
     set_usuario_access_active,
+    set_usuario_email,
     set_usuario_password_hash,
     set_usuarios_password_hash,
     unusable_password_hash,
@@ -594,9 +595,10 @@ def admin_acesso_salvar():
                 flash("Usuário não encontrado.", "error")
                 return redirect(url_for("admin_acesso"))
             conn.execute(
-                "UPDATE usuarios SET nome = ?, email = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
-                (nome, email, user_type, nivel_acesso, usuario_id),
+                "UPDATE usuarios SET nome = ?, tipo = ?, nivel_acesso = ? WHERE id = ?",
+                (nome, user_type, nivel_acesso, usuario_id),
             )
+            set_usuario_email(conn, usuario_id, email)
             if reactivating:
                 # Reactivation states the credential outright instead of
                 # inheriting whatever the revoked row carried, and leaves every

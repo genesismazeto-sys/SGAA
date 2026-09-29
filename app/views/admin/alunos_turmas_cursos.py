@@ -54,7 +54,7 @@ from app.user_accounts import (
     _default_password_for_user_type,
     create_usuario_pending, create_usuario_with_default_access,
     create_usuario_with_default_password, InvalidEmailError, require_valid_email,
-    normalize_usuario_access_for_user_type, set_usuario_password_hash,
+    normalize_usuario_access_for_user_type, set_usuario_email, set_usuario_password_hash,
 )
 from app.web.filters import (
     append_conditions_sql,
@@ -791,20 +791,16 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
             matriz_escolhida = (
                 parse_submitted_matriz_id(matriz_bruta) if matriz_submetida else None
             )
-            if senha:
-                hashed_password = hash_password(senha)
-                conn.execute(
-                    "UPDATE usuarios SET nome = ?, email = ? WHERE id = ?",
-                    (nome, email, usuario_id),
-                )
+            hashed_password = hash_password(senha) if senha else None
+            conn.execute("UPDATE usuarios SET nome = ? WHERE id = ?", (nome, usuario_id))
+            set_usuario_email(conn, usuario_id, email)
+            if hashed_password:
                 set_usuario_password_hash(
                     conn,
                     usuario_id,
                     hashed_password,
                     credential_state=CREDENTIAL_STATE_PERSONAL,
                 )
-            else:
-                conn.execute("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?", (nome, email, usuario_id))
             if turma_id is not None:
                 # Aluno com turma é governado pela matriz da turma. Não existe
                 # override individual para ele, então nada submetido aqui pode
