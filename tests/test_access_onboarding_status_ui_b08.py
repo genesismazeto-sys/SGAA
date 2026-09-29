@@ -745,4 +745,4 @@ def test_canonical_database_is_never_written_by_this_suite():
         probe.close()
     # The canonical database is not migrated to v11 by this front.
     # Canonical was migrated to v11 on 2026-09-24 (authorised, UI-CP1).
-    assert version in (9, 10, 11)
+    assert version in (9, 10, 11, 12)

@@ -17,8 +17,12 @@ from app.prod1_password_foundation_ddl import (
 )
 from app.prod1_credential_pending_ddl import USUARIO_CREDENCIAIS_V11_TABLE_SQL
 from app.prod1_access_delivery_ddl import SENHA_TOKENS_V10_TABLE_SQL
+from app.prod1_extension_hours_ddl import (
+    CURSOS_V12_TABLE_SQL,
+    MATRIZES_ATIVIDADES_V12_TABLE_SQL,
+)
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
@@ -30,7 +34,8 @@ PASSWORD_FOUNDATION_MARKER = "password_foundation"
 ACCESS_STATUS_MARKER = "access_status"
 ACCESS_DELIVERY_MARKER = "access_delivery"
 CREDENTIAL_PENDING_MARKER = "credential_pending"
-LATEST_MIGRATION_MARKER = CREDENTIAL_PENDING_MARKER
+EXTENSION_HOURS_DEFAULT_MARKER = "extension_hours_default"
+LATEST_MIGRATION_MARKER = EXTENSION_HOURS_DEFAULT_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -114,24 +119,8 @@ CREATE TABLE mensagens_editaveis (
  chave TEXT PRIMARY KEY, texto TEXT NOT NULL,
  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE cursos (
- id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, codigo TEXT NOT NULL UNIQUE,
- duracao_periodos INTEGER NOT NULL CHECK(duracao_periodos>0),
- total_horas_aac INTEGER NOT NULL DEFAULT 160 CHECK(total_horas_aac>=0),
- total_horas_aeu INTEGER NOT NULL DEFAULT 80 CHECK(total_horas_aeu>=0),
- periodo TEXT NOT NULL DEFAULT 'diurno',
- status TEXT NOT NULL DEFAULT 'ativo' CHECK(status IN ('ativo','inativo'))
-);
-CREATE TABLE matrizes_atividades (
- id INTEGER PRIMARY KEY AUTOINCREMENT, curso_id INTEGER NOT NULL, nome TEXT NOT NULL,
- descricao TEXT,
- status TEXT NOT NULL DEFAULT 'rascunho' CHECK(status IN ('rascunho','vigente','encerrada','ativa','inativa')),
- data_inicio_vigencia TEXT, data_fim_vigencia TEXT,
- horas_aac_obrigatorias INTEGER NOT NULL DEFAULT 160 CHECK(horas_aac_obrigatorias>=0),
- horas_extensao_obrigatorias INTEGER NOT NULL DEFAULT 80 CHECK(horas_extensao_obrigatorias>=0),
- created_at TEXT NOT NULL DEFAULT (datetime('now')),
- FOREIGN KEY(curso_id) REFERENCES cursos(id) ON DELETE RESTRICT
-);
+__CURSOS_V12_TABLE__;
+__MATRIZES_ATIVIDADES_V12_TABLE__;
 CREATE TABLE turmas (
  id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE, turno TEXT,
  status TEXT NOT NULL DEFAULT 'Ativa' CHECK(status IN ('Ativa','Inativa')),
@@ -318,7 +307,9 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(10,'access_delivery','prod-1','{"schema_epoch":"prod-1","access_delivery":"senha_tokens.sent_at","backfill":"none_no_durable_send_evidence_predates_v10"}');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(11,'credential_pending','prod-1','{"schema_epoch":"prod-1","credential_state":"pending|default|personal","legacy_backfill":"authentication_preserving","retired_setting":"default_passwords_enabled"}');
-PRAGMA user_version=11;
+INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
+VALUES(12,'extension_hours_default','prod-1','{"schema_epoch":"prod-1","extension_hours_default":160,"columns":["cursos.total_horas_aeu","matrizes_atividades.horas_extensao_obrigatorias"],"backfill":"none_stored_values_kept"}');
+PRAGMA user_version=12;
 """.replace(
     "__CONFIGURACOES_PRESETS_TABLE__", CONFIGURACOES_PRESETS_TABLE_SQL
 ).replace(
@@ -333,6 +324,10 @@ PRAGMA user_version=11;
     "__ARQUIVOS_V5_SCHEMA_OBJECTS__", ARQUIVOS_V5_SCHEMA_OBJECTS_SQL
 ).replace(
     "__PASSWORD_FOUNDATION_V8_SCHEMA_OBJECTS__", _PASSWORD_FOUNDATION_HEAD_SQL
+).replace(
+    "__CURSOS_V12_TABLE__", CURSOS_V12_TABLE_SQL
+).replace(
+    "__MATRIZES_ATIVIDADES_V12_TABLE__", MATRIZES_ATIVIDADES_V12_TABLE_SQL
 )
 
 
@@ -461,6 +456,7 @@ _PROD1_V8_SIGNATURE_SHA256 = "a2e91848fa577ddf98c3c0fee4d8d292cf8e6385db2bb46e8f
 _PROD1_V9_SIGNATURE_SHA256 = "05e327387c1bf09a0020b331fc6453362a319c1e9484bc35a3b600a6b4e06b02"
 _PROD1_V10_SIGNATURE_SHA256 = "a6f0e818c60aa3f3834694f2b326fa7e5b1c89c40cb346328923eba2080828c5"
 _PROD1_V11_SIGNATURE_SHA256 = "15cb8e68b915f99b6fb687596cd3b7f4158fb7901403fd55ece7abddd5d0bff5"
+_PROD1_V12_SIGNATURE_SHA256 = "4aa56698a58bdf29b7bd0580afbd49f55ae060e1c3a2d94aaf7d59e7accda85c"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -680,6 +676,31 @@ def _validate_prod1_v10_schema(conn: sqlite3.Connection) -> None:
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1/v10 foreign key violations: {violations!r}")
+
+
+def _validate_prod1_v11_schema(conn: sqlite3.Connection) -> None:
+    """Recognize the frozen prod-1/v11 predecessor exactly."""
+    if _user_version(conn) != 11:
+        raise Prod1SchemaError("prod-1/v11 user_version mismatch")
+    if _marker(conn) != [
+        (1, BASELINE_MARKER, SCHEMA_EPOCH),
+        (2, NORMA_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (3, MATRIX_VERSION_REMOVAL_MARKER, SCHEMA_EPOCH),
+        (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (5, ARQUIVOS_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH),
+        (6, STUDENT_MATRIX_AUTHORITY_MARKER, SCHEMA_EPOCH),
+        (7, REQUEST_EMAIL_NOTIFICATIONS_MARKER, SCHEMA_EPOCH),
+        (8, PASSWORD_FOUNDATION_MARKER, SCHEMA_EPOCH),
+        (9, ACCESS_STATUS_MARKER, SCHEMA_EPOCH),
+        (10, ACCESS_DELIVERY_MARKER, SCHEMA_EPOCH),
+        (11, CREDENTIAL_PENDING_MARKER, SCHEMA_EPOCH),
+    ]:
+        raise Prod1SchemaError("prod-1/v11 migration marker mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V11_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v11 physical schema contract mismatch")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise Prod1SchemaError(f"prod-1/v11 foreign key violations: {violations!r}")
 
 
 _ATIVIDADE_VERSAO_V2_SQL = """
@@ -964,6 +985,11 @@ def migrate_prod1_v10_to_v11(conn: sqlite3.Connection) -> dict[str, object]:
     return migrate(conn)
 
 
+def migrate_prod1_v11_to_v12(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.prod1_extension_hours_v12 import migrate_prod1_v11_to_v12 as migrate
+    return migrate(conn)
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
@@ -981,6 +1007,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (9, ACCESS_STATUS_MARKER, SCHEMA_EPOCH),
         (10, ACCESS_DELIVERY_MARKER, SCHEMA_EPOCH),
         (11, CREDENTIAL_PENDING_MARKER, SCHEMA_EPOCH),
+        (12, EXTENSION_HOURS_DEFAULT_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -992,8 +1019,8 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     expected_signature = _expected_physical_schema_signature()
     if actual_signature != expected_signature:
         raise Prod1SchemaError("prod-1 physical schema contract mismatch")
-    if _physical_schema_digest(conn) != _PROD1_V11_SIGNATURE_SHA256:
-        raise Prod1SchemaError("prod-1/v11 physical schema digest mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V12_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v12 physical schema digest mismatch")
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1 foreign key violations: {violations!r}")
@@ -1013,7 +1040,8 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 2:
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
@@ -1023,7 +1051,8 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 3:
             migrate_prod1_v3_to_v4(conn)
             migrate_prod1_v4_to_v5(conn)
@@ -1032,7 +1061,8 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 4:
             migrate_prod1_v4_to_v5(conn)
             migrate_prod1_v5_to_v6(conn)
@@ -1040,34 +1070,43 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 5:
             migrate_prod1_v5_to_v6(conn)
             migrate_prod1_v6_to_v7(conn)
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 6:
             migrate_prod1_v6_to_v7(conn)
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 7:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 8:
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 9:
             migrate_prod1_v9_to_v10(conn)
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
         if _user_version(conn) == 10:
-            return migrate_prod1_v10_to_v11(conn)
+            migrate_prod1_v10_to_v11(conn)
+            return migrate_prod1_v11_to_v12(conn)
+        if _user_version(conn) == 11:
+            return migrate_prod1_v11_to_v12(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

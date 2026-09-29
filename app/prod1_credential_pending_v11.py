@@ -190,7 +190,7 @@ def migrate_prod1_v10_to_v11(conn: sqlite3.Connection) -> dict[str, object]:
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v10_schema,
-        validate_prod1_schema,
+        _validate_prod1_v11_schema,
     )
 
     if conn.in_transaction:
@@ -268,7 +268,7 @@ def migrate_prod1_v10_to_v11(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v11 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v11_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
@@ -277,7 +277,8 @@ def migrate_prod1_v10_to_v11(conn: sqlite3.Connection) -> dict[str, object]:
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v11_schema(conn)
+    status = {"schema_epoch": SCHEMA_EPOCH, "schema_version": 11}
     counts: dict[str, int] = {}
     for outcome in outcomes.values():
         counts[outcome] = counts.get(outcome, 0) + 1

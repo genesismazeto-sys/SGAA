@@ -71,6 +71,7 @@ from app.user_accounts import (
     get_usuario_auth_version,
 )
 from tests.prod1_v11_support import revert_prod1_v11_to_v10
+from tests.prod1_v12_support import revert_prod1_v12_to_v11
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -133,18 +134,21 @@ def _rows(conn, sql: str) -> list[tuple]:
 # =========================================================================== #
 
 
-def test_head_is_v11_and_registered_last():
-    assert SCHEMA_VERSION == 11
-    assert db_maintenance.SCHEMA_MIGRATIONS[-1][:2] == (11, CREDENTIAL_PENDING_MARKER)
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 11
+def test_v11_is_registered_just_before_the_v12_head():
+    assert SCHEMA_VERSION == 12
+    assert db_maintenance.SCHEMA_MIGRATIONS[10][:2] == (11, CREDENTIAL_PENDING_MARKER)
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 12
 
 
-def test_fresh_bootstrap_is_the_frozen_v11_shape():
+def test_fresh_bootstrap_keeps_the_v11_credential_shape():
     conn = _connect()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 11
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
-    assert _physical_schema_digest(conn) == _PROD1_V11_SIGNATURE_SHA256
+    assert status["schema_version"] == 12
+    # v12 only changes two hour DEFAULTs; without them the head is v11 exactly.
+    shape = _connect()
+    bootstrap_prod1_schema(shape)
+    revert_prod1_v12_to_v11(shape)
+    assert _physical_schema_digest(shape) == _PROD1_V11_SIGNATURE_SHA256
     sql = conn.execute(
         "SELECT sql FROM sqlite_master WHERE name='usuario_credenciais'"
     ).fetchone()[0]
@@ -198,7 +202,7 @@ def test_v10_is_recognised_as_the_predecessor():
 
 def test_v11_migration_refuses_a_database_that_is_not_v10():
     conn = _connect()
-    bootstrap_prod1_schema(conn)  # already v11
+    bootstrap_prod1_schema(conn)  # already past v10
     before = list(conn.iterdump())
     with pytest.raises(Prod1SchemaError):
         migrate_prod1_v10_to_v11(conn)
@@ -215,6 +219,7 @@ def test_migrated_v11_is_digest_identical_to_a_fresh_bootstrap():
 
     fresh = _connect()
     bootstrap_prod1_schema(fresh)
+    revert_prod1_v12_to_v11(fresh)
     assert _physical_schema_digest(migrated) == _physical_schema_digest(fresh)
     assert _physical_schema_digest(migrated) == _PROD1_V11_SIGNATURE_SHA256
     assert migrated.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -225,8 +230,8 @@ def test_bootstrap_chains_a_v10_database_to_the_head():
     conn = _connect()
     _build_v10(conn)
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 11
-    assert [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] == list(range(1, 12))
+    assert status["schema_version"] == 12
+    assert [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] == list(range(1, 13))
 
 
 # =========================================================================== #
@@ -957,5 +962,6 @@ def test_canonical_database_is_not_migrated_by_this_suite():
     finally:
         probe.close()
     # The v10 -> v11 migration of canonical was authorised and performed on
-    # 2026-09-24; this suite itself must never be what migrates it.
-    assert version in (10, 11), "canonical is at an unexpected version"
+    # 2026-09-24; this suite itself must never be what migrates it. v12 is
+    # applied by the next launch after UI-B33.
+    assert version in (10, 11, 12), "canonical is at an unexpected version"

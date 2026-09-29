@@ -19,6 +19,7 @@ from app.prod1_schema import (
     ACCESS_DELIVERY_MARKER,
     ACCESS_STATUS_MARKER,
     CREDENTIAL_PENDING_MARKER,
+    EXTENSION_HOURS_DEFAULT_MARKER,
     PASSWORD_FOUNDATION_MARKER,
     COMPROVANTES_GOOGLE_DRIVE_MARKER,
     MATRIX_VERSION_REMOVAL_MARKER,
@@ -239,7 +240,7 @@ def test_fresh_bootstrap_is_v5_without_matrix_version_fields(tmp_path):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 11
+    assert result["schema_version"] == 12
     assert REMOVED_MATRIX_FIELDS.isdisjoint(_matrix_columns(conn))
     markers = conn.execute("SELECT version,name FROM schema_migrations ORDER BY version").fetchall()
     assert [tuple(row) for row in markers] == [
@@ -254,6 +255,7 @@ def test_fresh_bootstrap_is_v5_without_matrix_version_fields(tmp_path):
         (9, ACCESS_STATUS_MARKER),
         (10, ACCESS_DELIVERY_MARKER),
         (11, CREDENTIAL_PENDING_MARKER),
+        (12, EXTENSION_HOURS_DEFAULT_MARKER),
     ]
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -266,9 +268,9 @@ def test_second_bootstrap_on_v5_is_idempotent(tmp_path):
     conn.execute("PRAGMA foreign_keys=ON")
     first = bootstrap_prod1_schema(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 11
-    assert validate_prod1_schema(conn)["schema_version"] == 11
-    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 11
+    assert first["schema_version"] == second["schema_version"] == 12
+    assert validate_prod1_schema(conn)["schema_version"] == 12
+    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 12
     conn.close()
 
 
@@ -303,8 +305,8 @@ def test_canonical_populated_v2_migrates_to_v5(tmp_path):
     ]
 
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 11
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert result["schema_version"] == 12
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
     assert REMOVED_MATRIX_FIELDS.isdisjoint(_matrix_columns(conn))
     assert _markers(conn) == [
         (1, "first_production_baseline", "prod-1"),
@@ -318,6 +320,7 @@ def test_canonical_populated_v2_migrates_to_v5(tmp_path):
         (9, ACCESS_STATUS_MARKER, "prod-1"),
         (10, ACCESS_DELIVERY_MARKER, "prod-1"),
         (11, CREDENTIAL_PENDING_MARKER, "prod-1"),
+        (12, EXTENSION_HOURS_DEFAULT_MARKER, "prod-1"),
     ]
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -354,7 +357,7 @@ def test_canonical_populated_v2_migrates_to_v5(tmp_path):
     assert read.rule.matriz_id_efetiva == ids["m1"]
 
     second = bootstrap_prod1_schema(conn)
-    assert second["schema_version"] == 11
+    assert second["schema_version"] == 12
     conn.close()
 
 

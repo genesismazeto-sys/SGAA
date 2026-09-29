@@ -16,6 +16,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_access_status_ddl import USUARIO_CREDENCIAIS_V9_TABLE_SQL
+from tests.prod1_v12_support import revert_prod1_v12_to_v11
 
 LEGACY_SETTING = "default_passwords_enabled"
 
@@ -31,7 +32,12 @@ def revert_prod1_v11_to_v10(
     an account without a usable credential. ``restore_setting`` re-inserts the
     retired ``default_passwords_enabled`` row as ``(valor, atualizado_em)``.
     No hash is touched: the v11 migration never rewrites one.
+
+    Handed the bootstrapped head (v12), it reverts v12 first, so every
+    predecessor builder keeps a single "revert from the head" call.
     """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 12:
+        revert_prod1_v12_to_v11(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
     foreign_keys = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
     conn.commit()

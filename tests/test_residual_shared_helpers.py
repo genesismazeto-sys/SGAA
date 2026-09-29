@@ -118,7 +118,7 @@ def test_requisition_policy_status_and_fourteen_day_boundary(monkeypatch):
 
 def test_academic_defaults_and_turma_code_contract():
     assert academics.DEFAULT_CURSO_TOTAL_HORAS_AAC == 160
-    assert academics.DEFAULT_CURSO_TOTAL_HORAS_AEU == 80
+    assert academics.DEFAULT_CURSO_TOTAL_HORAS_AEU == 160
     assert academics.gerar_codigo_turma("ADS", 1) == "ADS-T01"
     assert academics.gerar_codigo_turma("ADS", "09") == "ADS-T09"
     assert academics.gerar_codigo_turma("ADS", 100) == "ADS-T100"

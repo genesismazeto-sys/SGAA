@@ -277,7 +277,7 @@ def test_canonical_database_is_never_written_by_this_suite():
     finally:
         probe.close()
     # Canonical was migrated to v11 on 2026-09-24 (authorised, UI-CP1).
-    assert version in (8, 9, 10, 11), f"canonical database is at an unexpected version {version}"
+    assert version in (8, 9, 10, 11, 12), f"canonical database is at an unexpected version {version}"
 
 
 # ------------------------------------------ ROOT E-MAIL COLLISION RESOLUTION

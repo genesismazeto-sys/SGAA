@@ -29,7 +29,7 @@ def _fresh() -> sqlite3.Connection:
 
 
 def test_current_schema_version_is_nine():
-    assert SCHEMA_VERSION == 11
+    assert SCHEMA_VERSION == 12
 
 
 def test_expected_tables_include_outbox():
@@ -39,9 +39,9 @@ def test_expected_tables_include_outbox():
 def test_clean_bootstrap_is_valid_head():
     conn = _fresh()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == SCHEMA_VERSION == 11
+    assert status["schema_version"] == SCHEMA_VERSION == 12
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
 
 
 def test_v7_marker_recorded():
