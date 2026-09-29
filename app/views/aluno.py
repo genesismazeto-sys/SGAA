@@ -1665,9 +1665,14 @@ def _submitted_request_init(form, *, keep_activity: bool = True) -> dict[str, An
 @aluno_required
 def aluno_nova_requisicao():
     conn = get_db_connection()
-    tipo_filtro = request.args.get("tipo", "Acadêmica Complementar")
+    # UI-B28: the page lists every activity of the student's matrix -- both
+    # types -- and its Tipo select filters them client-side. ?tipo= (which
+    # nothing links to) only preselects the Tipo; it used to drop every
+    # Extensão activity from the page, so none could ever be requested.
+    tipo_param = request.args.get("tipo", AAC_ACTIVITY_TYPE)
+    tipo_inicial = tipo_param if tipo_param in (AAC_ACTIVITY_TYPE, EXT_ACTIVITY_TYPE) else AAC_ACTIVITY_TYPE
     usuario_id = session["user_id"]
-    aluno_scope, _, atividades = _list_atividades_for_usuario(conn, usuario_id, tipo_filtro)
+    aluno_scope, _, atividades = _list_atividades_for_usuario(conn, usuario_id, "Todas")
     if not aluno_scope:
         flash("Dados do aluno não encontrados.", "error")
         return redirect(url_for("login"))
@@ -1681,14 +1686,22 @@ def aluno_nova_requisicao():
         data_evento = request.form["data_evento"]
         horas_solicitadas = float(request.form["horas_solicitadas"])
         observacao = request.form.get("observacao")
+        # The activity is the type authority. A submitted Tipo that contradicts
+        # it (a crafted cross-type POST) is refused like a missing activity.
+        tipo_enviado = (request.form.get("tipo_atividade") or "").strip()
+        tipo_da_atividade = next(
+            (atividade["tipo_atividade"] for atividade in atividades if atividade["id"] == versao_id),
+            None,
+        )
+        tipo_divergente = bool(tipo_enviado and tipo_da_atividade and tipo_enviado != tipo_da_atividade)
 
-        if not versao_id:
+        if not versao_id or tipo_divergente:
             flash("Selecione uma atividade válida.", "error")
             return render_template(
                 "aluno_nova_requisicao.html",
                 atividades=atividades,
-                tipo_atual=tipo_filtro,
-                init=_submitted_request_init(request.form),
+                tipo_atual=tipo_inicial,
+                init=_submitted_request_init(request.form, keep_activity=not tipo_divergente),
                 comprovantes_operation_id=new_comprovante_operation_id(),
             )
         if not _is_activity_allowed_for_usuario(conn, usuario_id, versao_id):
@@ -1696,7 +1709,7 @@ def aluno_nova_requisicao():
             return render_template(
                 "aluno_nova_requisicao.html",
                 atividades=atividades,
-                tipo_atual=tipo_filtro,
+                tipo_atual=tipo_inicial,
                 init=_submitted_request_init(request.form, keep_activity=False),
                 comprovantes_operation_id=new_comprovante_operation_id(),
             )
@@ -1794,7 +1807,7 @@ def aluno_nova_requisicao():
     return render_template(
         "aluno_nova_requisicao.html",
         atividades=atividades,
-        tipo_atual=tipo_filtro,
+        tipo_atual=tipo_inicial,
         init=_submitted_request_init(request.form) if request.method == "POST" else None,
         comprovantes_operation_id=new_comprovante_operation_id(),
     )
