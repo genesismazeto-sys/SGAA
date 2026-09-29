@@ -1635,6 +1635,31 @@ def aluno_minhas_requisicoes():
     )
 
 
+def _submitted_request_init(form, *, keep_activity: bool = True) -> dict[str, Any]:
+    """UI-B27: the redisplayable values of a rejected Nova requisição POST.
+
+    Only what the student typed or chose goes back into the same form (the
+    template escapes it; its JSON prefill uses tojson): nothing server-derived,
+    a date only in ISO form, the activity only as an id -- and not at all when
+    the matrix check refused it. Browsers never let a page restore local file
+    selections, so the comprovantes list starts empty again.
+    """
+    tipo = (form.get("tipo_atividade") or "").strip()
+    grupo = (form.get("grupo") or "").strip()
+    versao_raw = (form.get("atividade_versao_id") or "").strip()
+    data_evento = (form.get("data_evento") or "").strip()
+    return {
+        "tipo_atividade": tipo if tipo in (AAC_ACTIVITY_TYPE, EXT_ACTIVITY_TYPE) else None,
+        "grupo": grupo,
+        "grupo_num": grupo.split(" - ")[0].strip() if " - " in grupo else grupo,
+        "atividade_versao_id": int(versao_raw) if keep_activity and versao_raw.isdigit() else None,
+        "nome_evento": form.get("nome_evento") or "",
+        "horas_solicitadas": (form.get("horas_solicitadas") or "").strip(),
+        "data_evento": data_evento if re.fullmatch(r"\d{4}-\d{2}-\d{2}", data_evento) else "",
+        "observacao": form.get("observacao") or "",
+    }
+
+
 @bp_aluno.route("/aluno/nova-requisicao", methods=["GET", "POST"])
 @bp_aluno.route("/aluno/nova_requisicao", methods=["GET", "POST"])
 @aluno_required
@@ -1663,6 +1688,7 @@ def aluno_nova_requisicao():
                 "aluno_nova_requisicao.html",
                 atividades=atividades,
                 tipo_atual=tipo_filtro,
+                init=_submitted_request_init(request.form),
                 comprovantes_operation_id=new_comprovante_operation_id(),
             )
         if not _is_activity_allowed_for_usuario(conn, usuario_id, versao_id):
@@ -1671,6 +1697,7 @@ def aluno_nova_requisicao():
                 "aluno_nova_requisicao.html",
                 atividades=atividades,
                 tipo_atual=tipo_filtro,
+                init=_submitted_request_init(request.form, keep_activity=False),
                 comprovantes_operation_id=new_comprovante_operation_id(),
             )
 
@@ -1768,6 +1795,7 @@ def aluno_nova_requisicao():
         "aluno_nova_requisicao.html",
         atividades=atividades,
         tipo_atual=tipo_filtro,
+        init=_submitted_request_init(request.form) if request.method == "POST" else None,
         comprovantes_operation_id=new_comprovante_operation_id(),
     )
 
