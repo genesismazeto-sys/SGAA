@@ -30,6 +30,15 @@
     return (row || []).filter((value) => HEADER_NAMES.has(normalizeHeader(value))).length >= 2;
   }
 
+  // Espelha is_valid_email (app/services/mail_service.py), a regra de todo envio
+  // de e-mail do SGAA. O \s do Python também cobre \x1c-\x1f e \x85.
+  const EMAIL_RE = /^[^@\s\x1c-\x1f\x85]+@[^@\s\x1c-\x1f\x85.]+(\.[^@\s\x1c-\x1f\x85.]+)+$/;
+
+  function isValidEmail(value) {
+    const candidate = String(value ?? '').trim();
+    return Boolean(candidate) && candidate.length <= 254 && EMAIL_RE.test(candidate);
+  }
+
   function normalizeRows(rows) {
     const nonEmpty = (rows || [])
       .map((row, index) => ({ values: row || [], sourceRow: index + 1 }))
@@ -47,6 +56,11 @@
     }
     for (let index = firstDataIndex; index < nonEmpty.length; index += 1) {
       const { values: row, sourceRow } = nonEmpty[index];
+      if (index > 0 && looksLikeHeader(row)) {
+        throw new Error(
+          `Linha ${sourceRow}: cabeçalho repetido no meio do arquivo; o cabeçalho só é aceito na primeira linha.`
+        );
+      }
       if (row.length > 3) {
         throw new Error(
           `Linha ${sourceRow}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula.`
@@ -55,6 +69,9 @@
       const values = [0, 1, 2].map((column) => String(row[column] ?? '').trim());
       if (values.some((value) => !value)) {
         throw new Error(`Linha ${sourceRow}: Aluno, E-mail e Matricula são obrigatórios.`);
+      }
+      if (!isValidEmail(values[1])) {
+        throw new Error(`Linha ${sourceRow}: e-mail inválido.`);
       }
       const emailKey = values[1].toLowerCase();
       if (seenEmails.has(emailKey)) {

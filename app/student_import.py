@@ -11,6 +11,7 @@ from typing import Iterable
 
 import openpyxl
 
+from app.services.mail_service import is_valid_email
 from app.text import normalize_header
 
 
@@ -106,6 +107,7 @@ def _normalize_data_rows(
     rows: Iterable[tuple[int, list[_Cell]]],
     *,
     allow_empty: bool = False,
+    from_file: bool = False,
 ) -> list[StudentImportRow]:
     normalized: list[StudentImportRow] = []
     seen_emails: dict[str, int] = {}
@@ -114,6 +116,12 @@ def _normalize_data_rows(
     for row_number, cells in rows:
         if not _row_has_content(cells):
             continue
+        # Cabeçalho só na primeira linha: repetido adiante é arquivo
+        # concatenado ou malformado, nunca um aluno chamado "Aluno".
+        if from_file and _looks_like_header(cells):
+            raise StudentImportError(
+                f"Linha {row_number}: cabeçalho repetido no meio do arquivo; o cabeçalho só é aceito na primeira linha."
+            )
         if len(cells) > 3:
             raise StudentImportError(
                 f"Linha {row_number}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula."
@@ -129,6 +137,10 @@ def _normalize_data_rows(
         ]
         if missing:
             raise StudentImportError(f"Linha {row_number}: campo(s) obrigatório(s) ausente(s): {', '.join(missing)}.")
+        # A mesma regra de todo envio de e-mail do SGAA: o endereço importado é
+        # o que recebe o primeiro acesso.
+        if from_file and not is_valid_email(email):
+            raise StudentImportError(f"Linha {row_number}: e-mail inválido.")
 
         email_key = email.casefold()
         if email_key in seen_emails:
@@ -154,12 +166,12 @@ def _normalize_rows(rows: Iterable[tuple[int, list[_Cell]]]) -> list[StudentImpo
         if not _row_has_content(cells):
             continue
         if _is_header(cells):
-            return _normalize_data_rows(iterator)
+            return _normalize_data_rows(iterator, from_file=True)
         if _looks_like_header(cells):
             raise StudentImportError(
                 f"Linha {row_number}: o cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula."
             )
-        return _normalize_data_rows(chain([(row_number, cells)], iterator))
+        return _normalize_data_rows(chain([(row_number, cells)], iterator), from_file=True)
     raise StudentImportError("O arquivo está vazio.")
 
 
