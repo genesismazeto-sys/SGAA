@@ -135,6 +135,15 @@ def verify_root_master_key(password: str) -> bool:
     return check_password(configured_hash, str(password))
 
 
+class RootAdminEmailLocked(Exception):
+    """A profile screen was asked to move the root administrator's address.
+
+    Root identity IS that address, so saving another one from "Meus dados"
+    would leave the installation with no root. ``migrate_root_admin_email`` is
+    the only supported way to move it.
+    """
+
+
 class RootAdminEmailCollision(Exception):
     """The target root address is already held by another account."""
 
@@ -198,6 +207,7 @@ def migrate_root_admin_email(conn, *, target_email: str | None = None) -> dict[s
 __all__ = [
     "DEFAULT_ROOT_ADMIN_EMAIL",
     "RootAdminEmailCollision",
+    "RootAdminEmailLocked",
     "migrate_root_admin_email",
     "LEGACY_ROOT_ADMIN_EMAIL",
     "is_root_admin",

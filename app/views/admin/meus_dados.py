@@ -22,6 +22,7 @@ from flask import (
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_usuario_profile_schema
+from app.root_admin import RootAdminEmailLocked, is_root_admin
 from app.security.passwords import hash_password
 from app.uploads import save_upload
 from app.user_accounts import (
@@ -50,6 +51,11 @@ def admin_meus_dados():
         flash("Usuário não encontrado.", "error")
         return redirect(url_for("admin_dashboard"))
 
+    # Root identity is keyed to the root's address (app/root_admin.py), so this
+    # screen shows it read-only and never writes it; it moves only through
+    # migrate_root_admin_email.
+    email_locked = is_root_admin(conn, usuario_id)
+
     if request.method == "POST":
         nome = request.form["nome"]
         email = request.form["email"]
@@ -57,9 +63,12 @@ def admin_meus_dados():
 
         try:
             require_valid_email(email)
+            if email_locked and email.strip().casefold() != str(profile["email"] or "").strip().casefold():
+                raise RootAdminEmailLocked()
             hashed_password = hash_password(senha) if senha else None
             conn.execute("UPDATE usuarios SET nome = ? WHERE id = ?", (nome, usuario_id))
-            set_usuario_email(conn, usuario_id, email)
+            if not email_locked:
+                set_usuario_email(conn, usuario_id, email)
             if hashed_password:
                 set_usuario_password_hash(
                     conn,
@@ -104,6 +113,8 @@ def admin_meus_dados():
                 flash(f"Erro ao atualizar dados: {exc}", "error")
         except InvalidEmailError as exc:
             flash(str(exc), "error")
+        except RootAdminEmailLocked:
+            flash("O e-mail do administrador raiz não pode ser alterado por esta tela.", "error")
         except Exception as exc:
             flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
 
@@ -112,6 +123,7 @@ def admin_meus_dados():
         base_template="base.html",
         profile=profile,
         show_student_fields=False,
+        email_readonly=email_locked,
         cancel_url=url_for("admin_dashboard"),
         turmas=[],
     )
