@@ -304,32 +304,26 @@ def test_student_lists_follow_the_contract_in_both_states(env):
     assert 'id="btn-aluno-req-actions"' in client.get("/aluno/requisicoes").get_data(as_text=True)
 
 
-def _recent_blocks(html: str) -> list[str]:
-    return re.findall(r'<div class="content-block-header">Requisições Recentes[^<]*</div>(.*?)</section>', html, re.S)
+LIST_TABLE = (
+    "{% set cols = [{'key': 'id', 'label': '#'}, {'key': 'nome', 'label': 'Nome'}] %}"
+    "{% include 'components/list_table.html' %}"
+)
 
 
-def test_dashboard_recent_tables_zero_and_populated(env):
-    # components/list_table.html owns the contract for its callers. (The
-    # dashboard's Recentes blocks still set cols_acad/cols_ext while the
-    # component reads `cols` -- a dormant baseline defect recorded as a
-    # residual; with rows the output is exactly what it was before.)
-    client = _as_student(env)
-    blocks = _recent_blocks(client.get("/aluno/dashboard").get_data(as_text=True))
-    assert len(blocks) == 2
-    for block in blocks:
-        _assert_empty_state(block, "Nenhum item encontrado.", "recentes vazio")
+@pytest.mark.parametrize("rows", [[], None])
+def test_list_table_component_with_zero_rows_shows_only_its_message(rows):
+    # components/list_table.html applies the contract itself. (Its only page
+    # consumer, the aluno Painel "Requisições Recentes" blocks, was removed by
+    # UI-B29; the component is kept as a DS table.)
+    html = _render(LIST_TABLE, rows=rows)
+    _assert_empty_state(html, "Nenhum item encontrado.", "list_table vazio")
 
-    with client.session_transaction() as session:
-        session.clear()
-    login_admin(client)
-    _populate(env)
-    client = _as_student(env)
-    blocks = _recent_blocks(client.get("/aluno/dashboard").get_data(as_text=True))
-    with_rows = [block for block in blocks if "<table" in block]
-    assert len(with_rows) == 1, "the request's own type renders its table; the other stays empty"
-    assert "Nenhum item encontrado." not in with_rows[0]
-    other = [block for block in blocks if "<table" not in block]
-    _assert_empty_state(other[0], "Nenhum item encontrado.", "recentes outro tipo")
+
+def test_list_table_component_with_rows_renders_header_and_rows():
+    html = _render(LIST_TABLE, rows=[{"id": 7, "nome": "Linha"}])
+    assert re.findall(r"<th>([^<]*)</th>", html) == ["#", "Nome"]
+    assert "<td>7</td>" in html and "<td>Linha</td>" in html
+    assert "table-empty" not in html and "Nenhum item encontrado." not in html
 
 
 def test_progresso_section_without_activities_shows_only_its_message(env):

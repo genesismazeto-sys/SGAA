@@ -741,23 +741,6 @@ def aluno_dashboard():
         elif row["tipo_atividade"] == EXT_ACTIVITY_TYPE:
             limitacoes_ext.append(item)
 
-    requisicoes_recentes_acad = []
-    requisicoes_recentes_ext = []
-    for req in requisicoes[:8]:
-        item = {
-            "id": req["id"],
-            "atividade_nome": req["atividade_nome"],
-            "data_evento_fmt": format_date_ptbr(req["data_evento"]),
-            "horas_solicitadas": _format_hours_number(req["horas_solicitadas"]),
-            "horas_deferidas_fmt": _format_hours_number(req["horas_aprovadas"]),
-            "status": req["status"],
-        }
-        if req["tipo_atividade"] == AAC_ACTIVITY_TYPE:
-            requisicoes_recentes_acad.append(item)
-        elif req["tipo_atividade"] == EXT_ACTIVITY_TYPE:
-            requisicoes_recentes_ext.append(item)
-
-    requisicoes_recentes = requisicoes[:8]
     alertas_ativos = list(list_active_admin_alertas(conn))
     update_alert = get_student_request_update_alert(conn, aluno_info["id"])
     if update_alert:
@@ -769,7 +752,6 @@ def aluno_dashboard():
         "aluno_dashboard.html",
         aluno=aluno_info,
         requisicoes=requisicoes,
-        requisicoes_recentes=requisicoes_recentes,
         horas_por_tipo=horas_por_tipo,
         horas_por_grupo=horas_por_grupo,
         limites_por_grupo=limites_por_grupo,
@@ -805,8 +787,6 @@ def aluno_dashboard():
         periodicidades_por_grupo=periodicidades_por_grupo,
         limitacoes_acad=limitacoes_acad,
         limitacoes_ext=limitacoes_ext,
-        requisicoes_recentes_acad=requisicoes_recentes_acad,
-        requisicoes_recentes_ext=requisicoes_recentes_ext,
         alertas_ativos=alertas_ativos,
     )
 

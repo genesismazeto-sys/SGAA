@@ -46,21 +46,6 @@
       color:#b45309;
       box-shadow:0 4px 12px rgba(217,119,6,.16);
     }
-    /* Centraliza colunas 3 (Data), 4 (Horas sol.) e 5 (Deferidas) nas tabelas de recentes */
-    .recentes-table th:nth-child(3), .recentes-table td:nth-child(3),
-    .recentes-table th:nth-child(4), .recentes-table td:nth-child(4),
-    .recentes-table th:nth-child(5), .recentes-table td:nth-child(5){
-      text-align: center;
-    }
-    .recentes-table{
-      table-layout:fixed;
-    }
-    .recentes-table th:nth-child(1), .recentes-table td:nth-child(1){ width:52px; }
-    .recentes-table th:nth-child(3), .recentes-table td:nth-child(3){ width:104px; }
-    .recentes-table th:nth-child(4), .recentes-table td:nth-child(4){ width:124px; }
-    .recentes-table th:nth-child(5), .recentes-table td:nth-child(5){ width:118px; }
-    .recentes-table th:nth-child(6), .recentes-table td:nth-child(6){ width:112px; }
-    .recentes-table th:nth-child(2), .recentes-table td:nth-child(2){ min-width:0; }
     .aluno-alertas-stack{ display:grid; gap:8px; margin:0 0 16px; }
     .aluno-alerta-card{
       min-height:calc(var(--btn-h) * 0.8);
@@ -505,44 +490,6 @@
       {% endif %}
     </div>
   </section>
-  {# Requisições Recentes divididas em duas colunas: esquerda (Acadêmicas) e direita (Extensão) #}
-  <!-- Requisições Recentes - Acadêmicas (Esquerda) -->
-  <section class="content-block">
-    <div class="content-block-header">Requisições Recentes - Acadêmicas Complementares</div>
-    <div class="content-block-body" style="width:100%;">
-      {%- set cols_acad = [
-        {'key':'id','label':'#'},
-        {'key':'atividade_nome','label':'Atividade','class':'ellipsis'},
-        {'key':'data_evento_fmt','label':'Data'},
-        {'key':'horas_solicitadas','label':'Solicitadas (h)'},
-        {'key':'horas_deferidas_fmt','label':'Deferidas (h)'},
-        {'key':'status','label':'Status'}
-      ] -%}
-      {%- set table_class = 'recentes-table' -%}
-      {%- set rows = requisicoes_recentes_acad or [] -%}
-      {% include 'components/list_table.html' with context %}
-    </div>
-  </section>
-
-  <!-- Requisições Recentes - Extensão (Direita) -->
-  <section class="content-block">
-    <div class="content-block-header">Requisições Recentes - Extensão Universitária</div>
-    <div class="content-block-body" style="width:100%;">
-      {%- set cols_ext = [
-        {'key':'id','label':'#'},
-        {'key':'atividade_nome','label':'Atividade','class':'ellipsis'},
-        {'key':'data_evento_fmt','label':'Data'},
-        {'key':'horas_solicitadas','label':'Solicitadas (h)'},
-        {'key':'horas_deferidas_fmt','label':'Deferidas (h)'},
-        {'key':'status','label':'Status'}
-      ] -%}
-      {%- set table_class = 'recentes-table' -%}
-      {%- set rows = requisicoes_recentes_ext or [] -%}
-      {% include 'components/list_table.html' with context %}
-    </div>
-  </section>
-
-  
 </div>
 
 {% endblock %}
