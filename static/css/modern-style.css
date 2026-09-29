@@ -1173,7 +1173,23 @@ form label{ white-space:nowrap; }
   grid-template-columns:40px 1fr auto;
   align-items:center; column-gap:var(--list-col-gap, 6px);
 }
-.field-card.file-card .file-input{ display:none; }
+/* UI-B26: the real <input type="file"> is the card's one keyboard target. It
+   is visually hidden but stays focusable -- never display:none, which took it
+   out of the tab order and left "Anexar" (a div) reachable by mouse only.
+   Tab lands on it, Enter/Space open the picker natively, and the card shows
+   the standard .field-card:focus-within ring. Mouse clicks on the card keep
+   going through each page's picker script. */
+.field-card.file-card .file-input{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0, 0, 0, 0);
+  white-space:nowrap;
+  border:0;
+}
 .field-card.file-card > .field-chip{ height:var(--btn-h); min-height:var(--btn-h); }
 .field-card.file-card .file-name.control{
   display:flex; align-items:center; min-height:var(--btn-h);

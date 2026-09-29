@@ -154,7 +154,6 @@
 .import-modal-form .field-card.file-card .chip-right{ align-items:center; background:var(--surface-2,#f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; color:#000; cursor:pointer; display:inline-flex; gap:6px; height:24px; padding:0 10px 0 8px; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .chip-right .lucide{ color:#000; height:16px; width:16px; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }  /* was duplicated in 2 templates */
-.import-modal-form .field-card.file-card .file-input{ display:none; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .file-name{ align-items:center; color:var(--text-secondary); display:flex; min-height:var(--btn-h); overflow:hidden; padding-right:0; text-overflow:ellipsis; white-space:nowrap; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card.has-file .file-name{ color:var(--text-primary); }  /* was duplicated in 2 templates */
 .import-modal-grid{ box-sizing:border-box; display:grid; gap:12px; max-width:100%; min-width:0; }  /* was duplicated in 2 templates */

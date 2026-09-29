@@ -183,7 +183,7 @@
             <label class="row-label">Arquivo</label>
             <div class="field-card file-card" data-file-card>
               <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
-              <input class="file-input" id="admin-arquivo-input" name="arquivo" type="file" accept=".pdf,.png,.jpg,.jpeg" {% if not edit_arquivo %}required{% endif %}>
+              <input class="file-input" id="admin-arquivo-input" name="arquivo" type="file" accept=".pdf,.png,.jpg,.jpeg" aria-label="Arquivo" {% if not edit_arquivo %}required{% endif %}>
               <div class="control file-name" data-file-name>{% if edit_arquivo %}{{ edit_arquivo.original_filename }}{% else %}Nenhum arquivo selecionado{% endif %}</div>
               <div class="field-chip chip-right" title="{{ 'Substituir arquivo' if edit_arquivo else 'Anexar arquivo' }}"><i class="lucide" data-lucide="paperclip"></i><span>{{ 'Substituir' if edit_arquivo else 'Anexar' }}</span></div>
             </div>
