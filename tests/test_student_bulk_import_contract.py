@@ -172,7 +172,30 @@ def test_obsolete_order_is_rejected_without_positional_corruption():
 
     assert response.status_code == 302
     assert _student_by_matricula("OLD.001") is None
+    assert _student_by_matricula("E-mail") is None
+    assert _student_by_matricula("obsolete.order@example.com") is None
+    with main.app.app_context():
+        roster = app_db.get_db_connection().execute(
+            "SELECT COUNT(*) FROM alunos WHERE turma_id=?", (turma_id,)
+        ).fetchone()[0]
+    assert roster == 0
     assert any(category == "error" and "Aluno, E-mail, Matricula" in message for category, message in flashes)
+
+
+def test_unrecognized_first_row_is_data_instead_of_a_guessed_header(tmp_path):
+    path = tmp_path / "not-a-header.csv"
+    path.write_text(
+        "Aluno,real.student@example.com,REAL.001\n"
+        "Second Student,second.student@example.com,REAL.002\n",
+        encoding="utf-8",
+    )
+
+    rows = target.parse_student_import(path)
+
+    assert [(row.aluno, row.email, row.matricula, row.source_row) for row in rows] == [
+        ("Aluno", "real.student@example.com", "REAL.001", 1),
+        ("Second Student", "second.student@example.com", "REAL.002", 2),
+    ]
 
 
 @pytest.mark.parametrize("filename", ["malformed.xlsx", "malformed.xls"])
@@ -248,7 +271,9 @@ def test_ui_advertises_only_the_canonical_three_column_contract():
     ).read_text(encoding="utf-8")
 
     assert "Importar Alunos (CSV/XLSX/XLS)" in combined
-    assert "Aluno, E-mail, Matricula" in combined
+    assert "Aluno, E-mail, Matrícula" in combined
+    assert combined.lower().count("cabeçalho opcional") >= 5
+    assert "primeira linha deve ser o cabeçalho" not in combined.lower()
     assert 'accept=".csv,.xlsx,.xls"' in combined
     assert "matricula,nome,email" not in combined.lower()
     assert combined.count("StudentImportPreview.read") == 2

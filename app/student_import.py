@@ -5,6 +5,7 @@ import datetime as dt
 import re
 from dataclasses import dataclass
 from decimal import Decimal
+from itertools import chain
 from pathlib import Path
 from typing import Iterable
 
@@ -20,6 +21,7 @@ _HEADER_ALIASES = (
     {"e-mail", "email"},
     {"matricula"},
 )
+_HEADER_NAMES = frozenset().union(*_HEADER_ALIASES)
 
 
 class StudentImportError(ValueError):
@@ -86,16 +88,18 @@ def _row_has_content(cells: list[_Cell]) -> bool:
     return any(_cell_text(cell) for cell in cells)
 
 
-def _validate_header(cells: list[_Cell], row_number: int) -> None:
+def _is_header(cells: list[_Cell]) -> bool:
     if len(cells) != 3:
-        raise StudentImportError(
-            f"Linha {row_number}: o arquivo deve ter exatamente as colunas Aluno, E-mail, Matricula."
-        )
+        return False
     header = tuple(normalize_header(_cell_text(cell)) for cell in cells[:3])
-    if len(header) != 3 or any(value not in aliases for value, aliases in zip(header, _HEADER_ALIASES)):
-        raise StudentImportError(
-            "O cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula."
-        )
+    return all(value in aliases for value, aliases in zip(header, _HEADER_ALIASES))
+
+
+def _looks_like_header(cells: list[_Cell]) -> bool:
+    # Dois ou mais nomes de coluna numa linha nunca são um aluno real: é um
+    # cabeçalho fora da ordem (ex.: Matricula, Aluno, E-mail), que lido como
+    # dados trocaria as colunas de posição.
+    return sum(normalize_header(_cell_text(cell)) in _HEADER_NAMES for cell in cells) >= 2
 
 
 def _normalize_data_rows(
@@ -112,7 +116,7 @@ def _normalize_data_rows(
             continue
         if len(cells) > 3:
             raise StudentImportError(
-                f"Linha {row_number}: colunas extras não são permitidas; use Aluno, E-mail, Matricula."
+                f"Linha {row_number}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula."
             )
 
         aluno = _cell_text(cells[0]) if len(cells) > 0 else ""
@@ -149,8 +153,13 @@ def _normalize_rows(rows: Iterable[tuple[int, list[_Cell]]]) -> list[StudentImpo
     for row_number, cells in iterator:
         if not _row_has_content(cells):
             continue
-        _validate_header(cells, row_number)
-        return _normalize_data_rows(iterator)
+        if _is_header(cells):
+            return _normalize_data_rows(iterator)
+        if _looks_like_header(cells):
+            raise StudentImportError(
+                f"Linha {row_number}: o cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula."
+            )
+        return _normalize_data_rows(chain([(row_number, cells)], iterator))
     raise StudentImportError("O arquivo está vazio.")
 
 

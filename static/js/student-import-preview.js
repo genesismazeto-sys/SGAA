@@ -2,56 +2,88 @@
   'use strict';
 
   const SUPPORTED_EXTENSIONS = ['csv', 'xlsx', 'xls'];
+  const HEADER_ALIASES = [
+    new Set(['aluno', 'nome']),
+    new Set(['e-mail', 'email']),
+    new Set(['matricula']),
+  ];
+  const HEADER_NAMES = new Set(HEADER_ALIASES.flatMap((aliases) => [...aliases]));
 
   function normalizeHeader(value) {
-    return String(value || '')
+    return String(value ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .trim()
+      .replace(/\s+/g, ' ')
       .toLowerCase();
   }
 
-  function normalizeRows(rows) {
-    const nonEmpty = (rows || []).filter((row) =>
-      (row || []).some((value) => String(value ?? '').trim())
+  function isHeader(row) {
+    return (row || []).length === 3 && HEADER_ALIASES.every(
+      (aliases, index) => aliases.has(normalizeHeader(row[index]))
     );
-    if (!nonEmpty.length) throw new Error('Arquivo vazio.');
+  }
 
-    const header = (nonEmpty[0] || []).map(normalizeHeader);
-    const validHeader =
-      (header[0] === 'aluno' || header[0] === 'nome') &&
-      (header[1] === 'e-mail' || header[1] === 'email') &&
-      header[2] === 'matricula' &&
-      header.length === 3;
-    if (!validHeader) {
-      throw new Error('O cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula.');
-    }
+  // Espelha _looks_like_header do servidor: dois ou mais nomes de coluna numa
+  // linha são um cabeçalho fora da ordem, nunca um aluno.
+  function looksLikeHeader(row) {
+    return (row || []).filter((value) => HEADER_NAMES.has(normalizeHeader(value))).length >= 2;
+  }
+
+  function normalizeRows(rows) {
+    const nonEmpty = (rows || [])
+      .map((row, index) => ({ values: row || [], sourceRow: index + 1 }))
+      .filter(({ values }) => values.some((value) => String(value ?? '').trim()));
+    if (!nonEmpty.length) throw new Error('Arquivo vazio.');
 
     const parsed = [];
     const seenEmails = new Map();
     const seenMatriculas = new Map();
-    for (let index = 1; index < nonEmpty.length; index += 1) {
-      const row = nonEmpty[index] || [];
+    const firstDataIndex = isHeader(nonEmpty[0].values) ? 1 : 0;
+    if (!firstDataIndex && looksLikeHeader(nonEmpty[0].values)) {
+      throw new Error(
+        `Linha ${nonEmpty[0].sourceRow}: o cabeçalho deve seguir exatamente esta ordem: Aluno, E-mail, Matricula.`
+      );
+    }
+    for (let index = firstDataIndex; index < nonEmpty.length; index += 1) {
+      const { values: row, sourceRow } = nonEmpty[index];
       if (row.length > 3) {
-        throw new Error(`Linha ${index + 1}: colunas extras não são permitidas.`);
+        throw new Error(
+          `Linha ${sourceRow}: a linha deve ter exatamente 3 colunas: Aluno, E-mail, Matricula.`
+        );
       }
       const values = [0, 1, 2].map((column) => String(row[column] ?? '').trim());
       if (values.some((value) => !value)) {
-        throw new Error(`Linha ${index + 1}: Aluno, E-mail e Matricula são obrigatórios.`);
+        throw new Error(`Linha ${sourceRow}: Aluno, E-mail e Matricula são obrigatórios.`);
       }
       const emailKey = values[1].toLowerCase();
       if (seenEmails.has(emailKey)) {
-        throw new Error(`Linha ${index + 1}: E-mail duplicado no arquivo.`);
+        throw new Error(`Linha ${sourceRow}: E-mail duplicado no arquivo.`);
       }
       if (seenMatriculas.has(values[2])) {
-        throw new Error(`Linha ${index + 1}: Matricula duplicada no arquivo.`);
+        throw new Error(`Linha ${sourceRow}: Matricula duplicada no arquivo.`);
       }
-      seenEmails.set(emailKey, index + 1);
-      seenMatriculas.set(values[2], index + 1);
+      seenEmails.set(emailKey, sourceRow);
+      seenMatriculas.set(values[2], sourceRow);
       parsed.push({ aluno: values[0], email: values[1], matricula: values[2] });
     }
     if (!parsed.length) throw new Error('O arquivo não contém nenhum aluno para importar.');
     return parsed;
+  }
+
+  function readWorkbook(buffer, extension) {
+    if (extension !== 'csv') {
+      return global.XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    }
+    // Como o servidor: CSV só em UTF-8, e cada célula permanece texto (sem
+    // converter matrícula em número nem perder zeros à esquerda).
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch (_) {
+      throw new Error('O CSV deve estar codificado em UTF-8.');
+    }
+    return global.XLSX.read(text, { type: 'string', raw: true });
   }
 
   function read(file) {
@@ -62,13 +94,14 @@
     }
 
     return file.arrayBuffer().then((buffer) => {
-      const workbook = global.XLSX.read(new Uint8Array(buffer), { type: 'array' });
+      const workbook = readWorkbook(buffer, extension);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error('Arquivo vazio.');
       const rows = global.XLSX.utils.sheet_to_json(sheet, {
         header: 1,
         raw: false,
         defval: '',
+        range: 0,
       });
       return normalizeRows(rows);
     });
