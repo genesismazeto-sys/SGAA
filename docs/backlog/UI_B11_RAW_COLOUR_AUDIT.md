@@ -1,7 +1,102 @@
 # UI-B11 — Raw-colour / tokenization audit
 
-**Status:** AUDIT_COMPLETE — CATEGORY_A_REDUCED / TOKENIZATION_QUEUE_REMAINS (2026-09-28, second extended batch).
-The original audit changed no colour; the category-A pass below converted **39** exact duplicates (498 → **459**).
+**Status:** SAFE_COHORT_COMPLETE — REMAINDER_NEEDS_SEMANTIC_TOKEN_DECISIONS (2026-09-29).
+No safe category-A replacement remains. What is left is component-local, content colour, proven-dead code parked with
+its owner's decision, or needs a new semantic token or a visual convergence decision. Every group is listed below.
+History: the 2026-09-28 audit changed no colour. The first category-A pass converted 39 sites (498 → 459). The
+2026-09-29 cohort converted 28 more (458 → **430**) with no visual change.
+
+## Re-audit and second category-A cohort (2026-09-29)
+
+**Scope** is the same as the guard `tests/test_b11_category_a_tokenization.py`: `static/css/**` minus `tokens.css`
+(comments stripped), `static/js/**`, template `<style>` blocks and `style=""`. The 2026-09-28 pass left 459. HEAD
+`009a79a` measured 458, because one literal left with intervening work. Scanner and classifier:
+`SGAA_backups/ui_b11_tokenization_20260929/tools/{scan,classify}.py`. The per-occurrence inventories
+(`inventory_{before,after}.json`) record owner, line, selector, property and declaration.
+
+**Scheme (2026-09-29 brief).** It differs from the 2026-09-28 letters:
+- **A** SAFE_TOKEN_REPLACEMENT: an existing token is the exact intended equivalent, by value *and* role.
+- **B** COMPONENT_LOCAL_BUT_VALID.
+- **C** NEEDS_SEMANTIC_TOKEN_DECISION: no existing token expresses the role, or converging would change the colour.
+  This merges the old C and old E.
+- **D** EXTERNAL/CONTENT colour.
+- **E** DEAD/UNUSED, proven only.
+
+| | A | B | C | D | E | total |
+|---|---|---|---|---|---|---|
+| before (HEAD `009a79a`) | 28 | 30 | 389 | 7 | 4 | 458 |
+| after | **0** | 30 | 389 | 7 | 4 | **430** |
+
+### Cohort A: what changed (28 occurrences, 6 files)
+
+| Group | Token / owner | Sites | Why it is an exact equivalent |
+|---|---|---|---|
+| surface-layer white fills (11) | `--surface` | `modern-style.css`: `.sr-only-focusable:focus`, `.sidebar-link:hover`, `.sidebar-link.active…`, `.sidebar-link.active:hover`, `#avatar-box`, `.icon-btn.danger`. `admin_banco_dados.html`: `.db-folder-btn-close`. `admin_atividades.html`: `#grp-add`, `#grp-del:hover`. `admin_requisicoes.html`: `#preset-add`, `#preset-del:hover` | Each element is drawn as a button/card surface: white plus `--border-strong`, often `--shadow-sm`. `.btn`, `.icon-btn` and `.btn.danger` already own that fill as `var(--surface)`, and `.icon-btn.danger` only restated its base |
+| computed field card (1) | `--field-readonly-bg` | `modern-style.css` `.field-card.is-off` (Turma "Fim (calculado)") | The card is shown but not editable, which is the read-only role. The value is identical (`#f1f5f9`) |
+| Cursos status pills (6) | the shared status-pill properties `--status-pill-text/-bg/-border` | `list-cards.css` `.imp-cursos .badge.status-pill.status-{positive,negative}` | The rules restated the shared palette byte-for-byte on the element that defines those properties. `!important` is kept |
+| inert fallbacks (10) | the token already named | `list-cards.css` `var(--field-chip-hover-bg/-focus-bg, #f1f5f9)` ×4, `var(--field-focus-border, #0369a1)`, `var(--field-focus-ring, rgba(…,.2))`, `var(--field-focus-ring, rgba(…,.22))`, `var(--accent-blue, #0369a1)`, `var(--surface, #fff)`. `aluno_requisicao_detalhe.html` `var(--btn-primary, #0369a1)` | Every consumer extends `base.html`/`base_aluno.html`, whose `design_system_css()` loads `tokens.css` first, so these fallbacks never render. Two had already drifted: `.2` against the token's `.22`, and `#0369a1` against `--btn-primary` `#003366` |
+
+**Visual check** (disposable runtime: fresh seeded temp DB, test client served to headless Chromium, no port, canonical
+untouched). Eight pages were probed before and after: Dashboard (sidebar, skip link), Nova Turma (`is-off`), Adicionar
+Aluno (avatar, `.icon-btn.danger`), Cursos (real pills), Alunos (chips, filter inputs, selected card), Atividades and
+Requisições (mini-toolbars), and Banco de dados (folder close button). The probe compared **45 element states**
+(default plus forced `:hover` / `:focus` / `:focus-within` / `:focus-visible`) and found **0 differences** in computed
+colours, borders, shadows, outlines or opacity. 7 of 8 full-page screenshots are pixel-identical. The Banco de dados
+difference is only the disposable runtime's temp path (`pytest-3408` vs `pytest-3409`). **No intended or perceptible
+visual change.**
+
+**Guard.** `tests/test_b11_category_a_tokenization.py`:
+- The ratchet ceiling moves 459 → **430**.
+- The new sites are pinned.
+- One DS invariant is added: *no colour fallback on a token that `tokens.css` always defines*. Such a fallback never
+  renders and drifts silently, as two already had.
+- Fallbacks on tokens that `tokens.css` does *not* define are what actually render, so they stay allowed.
+
+### What remains, and why (430)
+
+| Cat. | Group | Count | Values (top) | Owners (top) | Why no safe replacement / next step |
+|---|---|---|---|---|---|
+| B | status-pill shared owner palette | 24 | `#d9dde2`, `#f4f5f6`, `#48505a`, `#7b8794` … | modern-style.css 24 | The authoritative owner of the status palette: component properties plus the default. Promoting it to `tokens.css` is optional |
+| B | `@media print` table palette | 4 | `#ccc`, `#f5f5f5`, `#333`, `#ddd` | list-cards.css | Paper output only |
+| B | toggle-switch component token | 1 | `#0f5b99` | form.css | Component-local token definition |
+| B | Alertas colour-dot hairline | 1 | `rgba(0,0,0,.12)` | admin_alertas.html | Must stay visible over any user-chosen colour |
+| D | aluno dashboard `.days-bar` ramp | 6 | `#2ecc71`, `#27ae60`, `#f1c40f` … | aluno_dashboard.html | Data-visualisation threshold ramp |
+| D | Alertas "border-only" swatch | 1 | `#fff` | admin_alertas.html | The user's alert colour "white", not UI `--surface` |
+| E | Banco de dados provider `.db-badge` fallbacks | 4 | `#d9dde2`, `#f4f5f6`, `#48505a`, `#7b8794` | admin_banco_dados.html | Proven dead: `.local`, `.warning` and `:not(.local):not(.warning)` always define `--status-pill-*`. They are parked with the status-palette decision below, which rewrites this block anyway |
+| C | info / identifier / selected-row family | 54 | `#eff6ff`, `#1d4ed8`, `#bfdbfe`, `#1e3a8a` … | modern-style 10, admin_atividades 10, diagnóstico 8 … | No `--info-*` family. The status-pill *info* palette has different values |
+| C | danger family | 43 | `#b91c1c`, `#dc2626`, `#fef2f2`, `#ef4444` … | modern-style 14, admin_requisicoes 9, admin_banco_dados 4 … | `--field-invalid-*` has the same values but is field-scoped. A `--danger-text/-bg/-border` family is needed |
+| C | shadows / overlays / tinted states | 42 | `rgba(15,23,42,.04/.06)`, `rgba(0,0,0,.25)`, `rgba(2,6,23,.45)` … | admin_acesso 9, modern-style 7, admin_dashboard 5 … | `--shadow-sm/-md` differ. `--shadow-card`, `--backdrop` and tint tokens are needed |
+| C | zinc neutral scale | 42 | `#71717a`, `#e4e4e7`, `#f4f4f5`, `#a1a1aa` … | admin_requisicoes 26, admin_atividades 14 … | A parallel neutral scale (the presets / grupos modals and mini-toolbars). Converging onto the slate/gray tokens is a visual change and needs the user's decision |
+| C | subtle surfaces / hover fills | 39 | `#f8fafc`, `#f1f5f9`, `#fbfdff`, `#f3f4f6` … | modern-style 8, list-cards 5, admin_atividades 3 … | `--field-hover-bg`, `--bg` and `--field-readonly-bg` have the same values but other roles. A `--surface-subtle` / `--hover-bg` token is needed (`.btn:hover`, menu/filter hovers, table headers) |
+| C | warning family | 30 | `#92400e`, `#b45309`, `#f59e0b`, `#fef3c7` … | modern-style 6, admin_dashboard 6, aluno_dashboard 6 … | No `--warning-*` family |
+| C | strong ink / dark fills | 30 | `#0f172a`, `#1e293b`, `#111827` | admin_banco_dados 12, admin_acesso 7 … | `--text-primary` is `#1f2937`, so converging changes the colour (user decision) |
+| C | slate muted text | 28 | `#475569`, `#64748b`, `#94a3b8`, `#334155` | admin_banco_dados 11, admin_acesso 7, diagnóstico 6 … | `--text-secondary` is `#6b7280`, so converging changes the colour (user decision) |
+| C | dividers / hairlines | 16 | `#e2e8f0`, `rgba(15,23,42,.08)` … | admin_banco_dados 6 … | `--field-disabled-border` has the same value but is field-scoped. A `--divider` token is needed |
+| C | success family | 15 | `#047857`, `#27500a`, `#eaf3de`, `#ecfdf3` … | modern-style 6, admin_banco_dados 4 … | No `--success-*` family |
+| C | Banco de dados status palette re-declared | 12 | `#e9f5e7`, `#b9d7b5`, `#1f5a3c` … | admin_banco_dados.html | It restates the shared status-pill palette, but that palette is class-scoped and the badge geometry differs (24px / 12.5px / 6px dot vs 18px / 11px / 5px). Either promote global `--status-*` tokens, now shared by three owners (status-pill, `.db-badge`, formerly `.imp-cursos`), or adopt the shared classes, which is a visual change |
+| C | aluno_dashboard legacy inline styles | 12 | `#666`, `#222`, `#111`, `#eee` | aluno_dashboard.html | Restyling them with DS classes is a visual change |
+| C | text on brand/dark fills | 10 | `#fff` | modern-style 6 … | No `--text-on-brand` token |
+| C | phantom tokens | 6 | `#f2f2f2`, `#b91c1c`, `#f8fafc` | turma-alunos 2, actions-float 1, form 1 … | `var(--danger, …)`, `var(--surface-alt, …)` and `var(--surface-2, …)` name tokens that were never defined, so the literal is what renders. They resolve when the danger / subtle-surface tokens exist |
+| C | file-card chip ink | 6 | `#000` | form.css 2, modern-style 2, aluno_nova_requisicao 2 | Deliberately pure black ("manter cor preta"). `--text-primary` differs |
+| C | white in a gradient ramp / selected-row badge | 3 | `#fff` | modern-style, admin_mensagens, admin_atividades | Tokenizing one stop splits the ramp from its `#f8fafc` end (subtle-surface). The selected-row badge belongs to the info family |
+| C | Alertas selected-swatch outline | 1 | `#0f5b99` | admin_alertas.html | Same value as form.css-local `--toggle-switch-active`. It needs one shared `--control-selected` token |
+
+**Outside the ratchet scope (12, not counted above).** Template `<script>` blocks:
+- `admin_requisicoes.html`'s JS-injected stylesheet (10) → C. It holds the Deferir / Parcial / Indeferir decision-button
+  palette `#5C9A7F` / `#9C7132` / `#B8534C` with their 5 % tints, plus the `--surface-2` phantom fallback and chip ink.
+  The block itself has no owner yet.
+- The Alertas default user colour `#e3eefd` ×2 → D (content default).
+
+**Observation, not colour (not touched).** `.field-card.is-off` still carries `opacity:.55`. That conflicts with the
+accepted "no opacity hacks / shared read-only treatment" contract. Converging it onto the shared read-only treatment is
+a visual change and a separate decision.
+
+**Suggested order for the remainder.**
+1. Value-preserving new semantic tokens: `--danger-*`, `--warning-*`, `--success-*`, `--info-*`,
+   `--surface-subtle`/`--hover-bg`, `--divider`, `--shadow-card`/`--backdrop`, `--text-on-brand`, `--control-selected`,
+   and the global `--status-*` palette. Each is zero-visual if adopted at current values. Each is a token-design decision.
+2. User visual decisions: the zinc scale, strong ink vs `--text-primary`, slate text vs `--text-secondary`, and the
+   aluno_dashboard inline styles.
 
 ## Scope and method
 
@@ -39,7 +134,9 @@ scanner scope (CSS minus `tokens.css`, JS, template `<style>` and `style=""`), w
 | `.btn.primary:hover` (2 of 2) | `--btn-primary-strong` | `modern-style.css` background + border |
 | focus outlines (2 of 2) | `--focus-ring-color` | `admin_dashboard.html`, `aluno_dashboard.html` alert-card `:focus-visible` |
 
-**Remaining A — 13 (not zero-risk, left for a later decision):**
+**Remaining A — 13 (not zero-risk, left for a later decision):** *Superseded 2026-09-29.* The `.db-badge` palette
+is now C (status-palette decision) plus 4 proven-dead fallbacks (E). The unpinned `modern-style.css` surface was
+resolved per site: the skip link and `#avatar-box` became `--surface`, and the gradient stop stays C. See the re-audit above.
 - Banco de Dados `.db-badge` status palette (12): the values equal the shared `.status-pill` palette, but those are
   class-scoped custom properties, not global tokens, and the badge geometry differs (24px / 12.5px / 6px dot vs 18px / 11px / 5px).
   Adopting the shared classes is a markup and visual change.
