@@ -3,6 +3,8 @@ import logging
 import os
 import secrets
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -57,6 +59,8 @@ PROJECT_ROOT_PATH = PROJECT_ROOT
 
 _CANONICAL_SCOPES: list[tuple[str, bool]] = [
     ("database.db", True),
+    ("database.db-wal", True),
+    ("database.db-shm", True),
     ("uploads", False),
     ("documentos_alunos", False),
     ("backups", False),
@@ -65,6 +69,58 @@ _CANONICAL_SCOPES: list[tuple[str, bool]] = [
 # Pytest owns .pytest_cache and may hold active, unreadable temporary files
 # there while this manifest is evaluated.  It is intentionally excluded from
 # project/runtime custody; every real runtime scope above remains protected.
+
+# SQLite sidecars of the canonical database.  They appear and disappear around
+# ordinary opens -- a read-only open can leave a zero-length -wal and a -shm
+# behind, and a read-write open that writes nothing deletes both on clean
+# close -- so their *presence* is not evidence of a mutation.  Only committed
+# frames in the WAL are; a WAL that holds them is an uncheckpointed canonical
+# write and is never tolerated (see _wal_has_committed_frames).  The -shm file
+# is a coordination index that stores no database content of its own, so its
+# bytes are never compared; it can never hide what the WAL comparison catches.
+_WAL_SCOPE = "database.db-wal"
+_SHM_SCOPE = "database.db-shm"
+_WAL_HEADER_BYTES = 32
+_WAL_FRAME_HEADER_BYTES = 24
+_WAL_MAGICS = (0x377F0682, 0x377F0683)
+
+
+def _wal_has_committed_frames(wal_path) -> bool:
+    """True when the WAL file holds at least one committed frame.
+
+    The ``database size after commit`` field of a frame header is non-zero
+    exactly on commit frames, so a WAL with only a header (<= 32 bytes) or
+    only uncommitted frames carries no logical database change.  Anything
+    unreadable or not shaped like a WAL is treated as suspicious, never as
+    benign.
+    """
+    try:
+        size = os.path.getsize(wal_path)
+        if size <= _WAL_HEADER_BYTES:
+            return False
+        with open(wal_path, "rb") as handle:
+            header = handle.read(_WAL_HEADER_BYTES)
+            if len(header) < _WAL_HEADER_BYTES:
+                return False
+            magic = int.from_bytes(header[0:4], "big")
+            if magic not in _WAL_MAGICS:
+                return True
+            page_size = int.from_bytes(header[8:12], "big")
+            if page_size == 1:
+                page_size = 65536
+            if page_size < 512 or page_size > 65536:
+                return True
+            offset = _WAL_HEADER_BYTES
+            while offset + _WAL_FRAME_HEADER_BYTES <= size:
+                handle.seek(offset)
+                frame_header = handle.read(_WAL_FRAME_HEADER_BYTES)
+                committed_size = int.from_bytes(frame_header[4:8], "big")
+                if committed_size != 0:
+                    return True
+                offset += _WAL_FRAME_HEADER_BYTES + page_size
+            return False
+    except OSError:
+        return True
 
 # Known external writer, not pytest: the installed UI-C13 Windows scheduled
 # task ("SGAA - Backup automatico") appends to <repo>/logs/backup-automatico.log
@@ -97,6 +153,8 @@ def _compute_manifest(root):
             entry["type"] = "file"
             entry["size"] = st.st_size
             entry["sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
+            if scope_path == _WAL_SCOPE:
+                entry["committed_write"] = _wal_has_committed_frames(target)
         elif target.is_dir():
             entry["type"] = "dir"
             external = _EXTERNAL_WRITER_FILES.get(scope_path, frozenset())
@@ -148,6 +206,26 @@ def _custody_view(manifest, rotated_scopes):
     return view
 
 
+def _sidecar_difference_is_benign(scope, after):
+    """True when this sidecar delta cannot hide a canonical write.
+
+    - ``-shm`` is a coordination index; it stores no database content.  A WAL
+      that does hold content is compared -- and failed -- on its own scope.
+    - ``-wal`` is benign when it is gone (any committed frame would have
+      changed ``database.db``, compared separately) or when it holds no
+      committed frame.  A WAL with committed frames is an uncheckpointed
+      canonical write and is never benign.
+    """
+    if scope == _SHM_SCOPE:
+        return True
+    if scope == _WAL_SCOPE:
+        if not after.get("exists"):
+            return True
+        if not after.get("committed_write"):
+            return True
+    return False
+
+
 def _custody_differences(before_manifest, after_manifest):
     """Scopes whose custody changed between two manifests, as report lines."""
     rotated = {
@@ -162,17 +240,160 @@ def _custody_differences(before_manifest, after_manifest):
     for key in sorted(before_view):
         before = before_view[key]
         after = after_view.get(key)
-        if before != after:
-            diffs.append(f"  {key}:\n    before={before}\n    after ={after}")
+        if before == after:
+            continue
+        if _sidecar_difference_is_benign(key, after or {}):
+            continue
+        report = f"  {key}:\n    before={before}\n    after ={after}"
+        if key == _WAL_SCOPE and (after or {}).get("committed_write"):
+            report += (
+                "\n    -> uncheckpointed canonical write: the WAL holds committed"
+                " frames; a read-only open leaves at most a zero-length WAL."
+            )
+        diffs.append(report)
     return diffs
 
 
-def assert_canonical_root_unchanged():
-    diffs = _custody_differences(_CANONICAL_BASELINE, _compute_manifest(PROJECT_ROOT))
-    if diffs:
-        raise AssertionError(
-            "Project root changed during test execution:\n" + "\n".join(diffs)
+# ---- External-writer diagnosis (actionable custody failures) --------------
+#
+# The canonical runtime and its launcher own logs/app.log and database.db; the
+# automatic backup scheduler (Windows task) owns only its run log, which is
+# the single narrow exemption.  When a failure happens, name the writer class
+# and the required pre-suite state instead of only printing a diff.
+
+_OPERATIONAL_WRITERS = (
+    (
+        "app.backup.sync",
+        "automatic backup scheduler (run-log family is the only exempt path;"
+        " canonical database access is read-only)",
+    ),
+    (
+        "app.startup_preflight",
+        "startup preflight (writes logs/app.log through the runtime logger)",
+    ),
+    ("main.py", "canonical SGAA runtime (writes logs/app.log and database.db)"),
+    ("run_acceptance.bat", "acceptance runtime launcher (uses its own APP_DATABASE)"),
+    ("run.bat", "canonical SGAA launcher"),
+)
+
+_RUNTIME_PORT = 5000
+
+
+def _runtime_port_active(port=_RUNTIME_PORT, timeout=0.25):
+    """True when something is listening on SGAA's single application port."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _probe_operational_processes():
+    """(pid, command line) for live processes; Windows-only, failure path only."""
+    if os.name != "nt":
+        return []
+    script = (
+        "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+        "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine } | "
+        "ForEach-Object { $_.ProcessId.ToString() + \"`t\" + ($_.CommandLine -replace '\\s+', ' ') }"
+    )
+    try:
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ],
+            capture_output=True,
+            timeout=20,
         )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    processes = []
+    for raw in completed.stdout.decode("utf-8", errors="replace").splitlines():
+        pid, _, cmdline = raw.partition("\t")
+        pid = pid.strip()
+        cmdline = cmdline.strip()
+        if pid and cmdline:
+            processes.append((pid, cmdline))
+    return processes
+
+
+def _describe_operational_processes(processes):
+    described = []
+    for pid, cmdline in processes:
+        for token, label in _OPERATIONAL_WRITERS:
+            if token in cmdline:
+                described.append(f"  pid {pid}: {label}")
+                described.append(f"    {cmdline}")
+                break
+    return described
+
+
+def _custody_failure_message(before_manifest, after_manifest, *, process_probe=None, port_probe=None):
+    """The full, actionable teardown report; empty string when custody holds."""
+    diffs = _custody_differences(before_manifest, after_manifest)
+    if not diffs:
+        return ""
+    scopes = {line.split(":", 1)[0].strip() for line in diffs}
+    lines = ["Project root changed during test execution:", *diffs]
+    lines.append("")
+    lines.append("External writer diagnosis:")
+    if "logs" in scopes:
+        lines.append(
+            "  logs/app.log and its rotations are written by the canonical SGAA"
+            " runtime (run.bat / python main.py) and by its startup preflight;"
+            " pytest routes every APP_* path, including APP_LOG_DIR, into its own"
+            " temporary runtime root, so a test can never be the writer."
+        )
+        lines.append(
+            "  The automatic backup scheduler may run during pytest; only its"
+            " run-log family (backup-automatico.log and rotations) is exempt,"
+            " accepted by file identity rather than broad *.log matching."
+        )
+    if scopes & {"database.db", _WAL_SCOPE, _SHM_SCOPE}:
+        lines.append(
+            "  Canonical business data changed. A pytest run must never tolerate"
+            " this; the exemption above cannot hide it and is not extended here."
+        )
+    if _WAL_SCOPE in scopes:
+        lines.append(
+            "  A database.db-wal with committed frames is an uncheckpointed"
+            " canonical write, not a transient sidecar."
+        )
+    lines.append(
+        "  Supported full-suite state: stop the canonical SGAA runtime before"
+        " `python -m pytest -q`; the automatic backup scheduler may stay enabled."
+    )
+    report_port = port_probe or _runtime_port_active
+    lines.append(
+        "  Port 5000 now: "
+        + ("LISTENING (a runtime appears active)" if report_port() else "free")
+        + "."
+    )
+    report_processes = process_probe or _probe_operational_processes
+    active = _describe_operational_processes(report_processes())
+    if active:
+        lines.append("  Operational processes detected now:")
+        lines.extend(active)
+    else:
+        lines.append(
+            "  No operational writer process detected now; one was active during"
+            " the run and has exited. Inspect the tail of logs/app.log and the"
+            " automatic backup task history."
+        )
+    return "\n".join(lines)
+
+
+def assert_canonical_root_unchanged():
+    message = _custody_failure_message(
+        _CANONICAL_BASELINE, _compute_manifest(PROJECT_ROOT)
+    )
+    if message:
+        raise AssertionError(message)
 
 
 # ---- Ownership-proved runtime root cleanup ----
@@ -315,6 +536,16 @@ def _bootstrap_session_database():
 def pytest_configure(config):
     """Route pytest's own cache under the session-owned runtime root."""
     config._inicache["cache_dir"] = str(PYTEST_RUNTIME_ROOT / ".pytest_cache")
+    if _runtime_port_active():
+        config.issue_config_time_warning(
+            UserWarning(
+                "Port 5000 is LISTENING: the canonical SGAA runtime appears"
+                " active. The supported full-suite state requires it stopped"
+                " before `python -m pytest -q` (it writes logs/app.log and"
+                " database.db); the automatic backup scheduler may stay enabled."
+            ),
+            stacklevel=1,
+        )
 
 
 @pytest.hookimpl(trylast=True)

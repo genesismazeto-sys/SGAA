@@ -1,4 +1,5 @@
 import argparse
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,17 @@ SMOKE_COMMANDS = [
     ["tools/smoke_test_rbac_permissions.py"],
 ]
 
+RUNTIME_PORT = 5000
+
+
+def _runtime_port_active(port: int = RUNTIME_PORT, timeout: float = 0.5) -> bool:
+    """True when something is listening on SGAA's single application port."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
 
 def _run_step(label: str, args: list[str], cwd: Path) -> int:
     print(f"\n=== {label} ===")
@@ -31,7 +43,12 @@ def _run_step(label: str, args: list[str], cwd: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run release 1.0 checks in sequence (release tests + smokes + optional full pytest)."
+        description=(
+            "Run release 1.0 checks in sequence (release tests + smokes + optional"
+            " full pytest). The full-suite state requires the canonical SGAA runtime"
+            " stopped (it writes logs/app.log and database.db); the automatic backup"
+            " scheduler may stay enabled. pytest runs on its own isolated database."
+        )
     )
     parser.add_argument(
         "--with-full-pytest",
@@ -54,9 +71,25 @@ def main() -> int:
             failures.append(f"smoke_{idx}")
 
     if args.with_full_pytest:
-        full_cmd = [py, "-m", "pytest", "-q"]
-        if _run_step("Full pytest suite", full_cmd, repo_root) != 0:
-            failures.append("full_pytest")
+        if _runtime_port_active():
+            print("\n=== Full pytest suite REFUSED (custody entry contract) ===")
+            print(
+                f"Port {RUNTIME_PORT} is listening: the canonical SGAA runtime appears"
+                " active. Stop it (run.bat / run_acceptance.bat) before the full suite."
+            )
+            print(
+                "Why: the runtime writes logs/app.log and database.db while pytest runs;"
+                " the full-suite custody gate reports those as external-writer failures."
+            )
+            print(
+                "The automatic backup scheduler may stay enabled: only its run-log"
+                " family is exempt and its database access is read-only."
+            )
+            failures.append("full_pytest_entry_contract")
+        else:
+            full_cmd = [py, "-m", "pytest", "-q"]
+            if _run_step("Full pytest suite", full_cmd, repo_root) != 0:
+                failures.append("full_pytest")
 
     print("\n=== Summary ===")
     if failures:
