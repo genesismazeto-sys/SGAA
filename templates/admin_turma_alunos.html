@@ -11,10 +11,10 @@
     <!-- Importação em lote: upload e POST automáticos -->
     <form id="form-importar-turma" method="post" action="{{ url_for('admin_turmas_importar') }}" enctype="multipart/form-data" style="display:inline;">
       <input type="hidden" name="turma_id" value="{{ turma.id }}">
-      <label for="csv2" class="btn">
-  <i class="lucide" data-lucide="file-up"></i> Importar CSV/XLSX/XLS — Aluno, E-mail, Matrícula; cabeçalho opcional
-        <input id="csv2" name="csv_arquivo" type="file" accept=".csv,.xlsx,.xls" style="display:none">
-      </label>
+      <input id="csv2" name="csv_arquivo" type="file" accept=".csv,.xlsx,.xls" hidden>
+      <button type="button" id="btn-importar-csv" class="btn">
+        <i class="lucide" data-lucide="file-up"></i> Importar CSV/XLSX/XLS — Aluno, E-mail, Matrícula; cabeçalho opcional
+      </button>
     </form>
   </div>
 </div>
@@ -31,6 +31,8 @@
       if (window.lucide) lucide.createIcons();
       const file = document.getElementById('csv2');
       const form = document.getElementById('form-importar-turma');
+      const trigger = document.getElementById('btn-importar-csv');
+      trigger?.addEventListener('click', () => file?.click());
       file?.addEventListener('change', () => { if (file.files && file.files.length) form?.submit(); });
     });
   </script>

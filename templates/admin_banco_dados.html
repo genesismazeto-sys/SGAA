@@ -98,12 +98,6 @@
       height:var(--db-control-h);
       font-size:12.5px;
     }
-    .db-field .field-card.file-card.has-file{ cursor:default; }
-    .db-field .field-card.file-card.has-file .chip-right{
-      opacity:.5;
-      cursor:default;
-      pointer-events:none;
-    }
     .db-field small{ color:#64748b; line-height:1.35; font-size:11.5px; }
     .db-inline-settings{
       grid-column:1 / -1;
@@ -2293,17 +2287,15 @@
               nameEl.textContent = file.name;
               nameEl.setAttribute("title", file.name);
               card.classList.add("has-file");
-              chip && chip.setAttribute("aria-disabled", "true");
               return;
             }
             nameEl.textContent = "Nenhum arquivo selecionado";
             nameEl.removeAttribute("title");
             card.classList.remove("has-file");
-            chip && chip.removeAttribute("aria-disabled");
           }
 
           function openPicker() {
-            if (!input || card.classList.contains("has-file")) return;
+            if (!input) return;
             input.click();
           }
 
