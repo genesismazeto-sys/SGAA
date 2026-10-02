@@ -1,7 +1,8 @@
 # UI-C13 — Automatic backup: scheduler architecture (implemented)
 
-**Status:** IMPLEMENTED — PENDING SCHEDULER INSTALLATION ACCEPTANCE (2026-09-28). The mechanism is built and tested; the
-real scheduled task has **not** been registered on this machine (the batch did not authorize installation).
+**Status:** IMPLEMENTED — **INSTALLED AND ACTIVE 2026-09-28 11:14**; PENDING VISUAL CONFIRMATION ONLY (reconciled
+2026-10-02). The mechanism is built and tested and the real scheduled task is registered and active (see §7 and the
+UI-C13 row in `UI_ACCEPTANCE_BACKLOG.md`); the only remaining item is the user's visual check of the header chip.
 
 > **Correction to the 2026-09-28 overnight audit.** That audit said "no authoritative frequency exists" and asked the
 > user for a cadence and a time of day. That was wrong: the SGAA already owns the cadence. It is the existing
@@ -118,10 +119,13 @@ Commands:
 Otherwise it reports one of `not_installed`, `disabled`, `stale`, `wrong_account`, `other_database`, `config_invalid` or
 `unsupported_platform`.
 
-The Banco de dados title shows **"Backup automático ativo"** only when the status is active. It reuses the same
-rectangular blue activity chip as the Google Drive / OneDrive chips (`.db-chip.is-active`), per the user's reference, so
-no new colour is introduced. Its tooltip gives the 5-minute wake, the SGAA interval and the last automatic backup, all
-from existing data. There is no invented next-run time.
+**Superseded by the user's visual correction of 2026-09-28 (this is the accepted placement):** the indicator lives at
+the right side of the **"Destinos e sincronização" card header**, closing the destination chip group (Pasta
+sincronizada, Google Drive, OneDrive, then the automatic-backup state) on the same `.db-chip` owner — blue `.is-active`
+"Backup automático ativo" when the effective resolver says active, neutral "Backup automático inativo" otherwise (it
+never disappears). No new colour is introduced. The earlier title chip, the scheduler tooltip and the
+"Último upload Google Drive" / "Último upload OneDrive" lines of the "Destinos em nuvem e externos" card were removed;
+the 5-minute wake/interval/last-run data is not shown in the UI. There is no invented next-run time.
 
 Two situations deliberately show nothing:
 - **Acceptance runtime:** it always shows nothing, because the task covers the canonical database.
@@ -129,8 +133,11 @@ Two situations deliberately show nothing:
 
 ## 7. Pending
 
-1. **Real installation** (not authorized in this batch): `python -m app.backup.task_scheduler install` as the user, then
-   `status`.
+1. **Visual confirmation only (reconciled 2026-10-02).** The real task was installed and activated on 2026-09-28 11:14
+   (`python -m app.backup.task_scheduler install` → `status` active → `reconcile` no-op, exactly one task
+   `SGAA - Backup automatico`; one on-demand run exited 0 and the next wake skipped as unchanged). The backlog's UI-C13
+   row carries the full evidence. What remains is the user's visual check of the automatic-backup chip on the canonical
+   `/admin/banco-dados` runtime. No implementation work is pending.
 2. Resolved: `apply_retention_policy` never deletes the **newest** `pre-restore-safety` snapshot (the undo point of the
    most recent restore, UI-C18/UI-C21); older safety snapshots follow the same GFS windows as any automatic snapshot.
    `manual-backup` snapshots remain fully exempt.

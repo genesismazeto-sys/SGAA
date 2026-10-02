@@ -1,10 +1,11 @@
 # UI-B11 — Raw-colour / tokenization audit
 
-**Status:** THIRD_COHORT_COMPLETE — NO_VISUAL_CHANGE_CONSOLIDATION_EXHAUSTED (2026-10-02).
+**Status:** TECHNICALLY COMPLETE — CLOSED FOR THE AUTHORIZED NO-VISUAL-CHANGE TOKENIZATION SCOPE (2026-10-02).
 The third cohort created the missing semantic token families at their exact rendered values and converted every
 unambiguous C1 / safe-C4 occurrence (430 → **291**). No safe no-visual-change replacement remains: what is left is
 component-local (B), content/chart (D), legitimate local semantics (C3), or a visual-convergence decision (C2). Every
-group is listed below, with the third-cohort record first.
+group is listed below, with the third-cohort record first. **This is not unfinished technical cleanup:** the remainder
+is intentional, non-blocking, and must not be pursued without a future explicit visual-design decision.
 History: the 2026-09-28 audit changed no colour. The first category-A pass converted 39 sites (498 → 459). The
 2026-09-29 cohort converted 28 more (458 → **430**) with no visual change. The 2026-10-02 cohort converted 139 more
 with no visual change and split the former category C into C1/C2/C3/C4.

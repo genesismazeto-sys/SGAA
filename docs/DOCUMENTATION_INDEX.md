@@ -15,6 +15,13 @@
   backlog, and what is already repaired. Exists so this work does not depend on
   chat history or agent memory (see "Explicit rule" at the end of this index).
   Add rows there; do not open a second backlog file.
+  **Status 2026-10-02:** core technical backlog reconciled — **0
+  implementation-pending items**; 28 visual confirmations and one closed
+  non-actionable finding remain. The project enters the operational-readiness
+  phase: (1) prove automatic backups and cloud storage; (2) reconcile/import
+  the official deferred-hours spreadsheet; (3) select the free production
+  hosting architecture; (4) final security audit; (5) production go-live
+  (recorded only; none started).
 
 ## Authority hierarchy
 
