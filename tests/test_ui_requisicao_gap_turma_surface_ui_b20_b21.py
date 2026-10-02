@@ -86,12 +86,13 @@ def test_turma_component_tokens_resolve_to_global_tokens():
     tokens = _read("static/css/foundation/tokens.css")
     assert re.search(r"--surface:#ffffff;", tokens)
     assert re.search(r"--bg:#f3f4f6;", tokens)
-    # The component decides no colour of its own: the only literal left is the
-    # fallback of the (undefined) --danger token, untouched by this change.
+    # The component decides no colour of its own: UI-B11 resolved the former
+    # `var(--danger, #b91c1c)` fallbacks onto the global --danger-text token.
     code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     literals = re.findall(r"#[0-9a-fA-F]{3,8}(?![0-9a-zA-Z])|rgba?\(|hsla?\(", code)
-    assert literals == ["#b91c1c", "#b91c1c"], literals
-    assert code.count("var(--danger, #b91c1c)") == 2
+    assert literals == [], literals
+    assert code.count("var(--danger-text)") == 2
+    assert "--danger-text:#b91c1c" in tokens.replace(" ", "")
 
 
 def test_turma_card_surfaces_come_from_the_component_tokens():

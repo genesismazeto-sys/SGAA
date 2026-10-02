@@ -314,7 +314,7 @@
       display:grid;
       place-items:center;
       padding:16px;
-      background: rgba(2, 6, 23, .45);
+      background: var(--backdrop);
     }
     .matriz-modal-overlay[hidden]{ display:none !important; }
     .matriz-modal-card{
@@ -325,7 +325,7 @@
       background:var(--surface);
       color:var(--text-primary);
       border-radius:var(--radius);
-      box-shadow:0 10px 30px rgba(2, 6, 23, .25);
+      box-shadow:var(--shadow-modal);
     }
     .matriz-modal-header{
       display:flex;
@@ -391,7 +391,7 @@
       padding:0 12px;
       border:1px solid var(--border-strong);
       border-radius:var(--radius);
-      background:#f8fafc;
+      background:var(--surface-subtle);
       color:var(--text-primary);
       font-size:13px;
     }

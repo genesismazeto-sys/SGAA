@@ -261,7 +261,7 @@
    display:inline-grid venceria o hidden nativo e sobraria uma bolha vazia. */
 .pedido-actions-float .act-count{
   display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 6px;
-  margin-right:2px; border-radius:999px; background:#2563eb; color:#fff;
+  margin-right:2px; border-radius:999px; background:#2563eb; color:var(--text-on-brand);
   font-size:12px; font-weight:600;
 }
 .pedido-actions-float .act-count[hidden]{ display:none; }
@@ -271,10 +271,10 @@
 .req-email-summary{ font-size:15px; font-weight:600; margin-bottom:4px; }
 .req-email-template{ font-size:12px; color:#71717a; margin-bottom:10px; }
 .req-email-warnings{
-  border:1px solid #fecaca; background:#fef2f2; color:#b91c1c;
+  border:1px solid var(--danger-border); background:var(--danger-bg); color:var(--danger-text);
   border-radius:8px; padding:8px 10px; font-size:12px; margin-bottom:10px;
 }
-.req-email-cta{ font-weight:600; color:#b91c1c; text-decoration:underline; }
+.req-email-cta{ font-weight:600; color:var(--danger-text); text-decoration:underline; }
 .req-email-recipients-head{ font-size:12px; font-weight:600; color:#52525b; margin-bottom:4px; }
 .req-email-recipients{ max-height:180px; overflow:auto; border:1px solid #e4e4e7; border-radius:8px; }
 .req-email-recipient{
@@ -282,7 +282,7 @@
   padding:6px 10px; font-size:13px; border-bottom:1px solid #f4f4f5;
 }
 .req-email-recipient:last-child{ border-bottom:none; }
-.req-email-recipient.is-blocked{ background:#fef2f2; color:#b91c1c; }
+.req-email-recipient.is-blocked{ background:var(--danger-bg); color:var(--danger-text); }
 .req-email-recipient .r-mail{ color:#71717a; font-size:12px; }
 .req-email-recipient .r-qtd{ font-variant-numeric:tabular-nums; color:#71717a; }
 .req-email-recipient.is-unresolved{ background:#fffbeb; }
@@ -322,7 +322,7 @@
   padding:3px 9px; font-size:11px; font-family:ui-monospace,monospace;
   color:#3f3f46; cursor:pointer;
 }
-.presets-ph:hover{ background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.presets-ph:hover{ background:var(--info-bg); border-color:var(--info-border); color:var(--info-text); }
 
 /* Estilos do modal de Pré-ajustes (escopo local) */
 #req-presets-modal .modal-card{ width:min(900px, calc(100vw - 32px)); }
@@ -347,14 +347,14 @@
 #req-presets-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
 #req-presets-modal .actions-mini #preset-add{ background:var(--surface); border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
 #req-presets-modal .actions-mini #preset-del{ color:#a1a1aa; }
-#req-presets-modal .actions-mini #preset-del:hover{ color:#b91c1c; background:var(--surface); border:0.5px solid #e4e4e7 !important; }
-#req-presets-modal .actions-mini #preset-del.is-active .lucide{ color:#b91c1c; }
+#req-presets-modal .actions-mini #preset-del:hover{ color:var(--danger-text); background:var(--surface); border:0.5px solid #e4e4e7 !important; }
+#req-presets-modal .actions-mini #preset-del.is-active .lucide{ color:var(--danger-text); }
 #req-presets-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
 /* List */
 #req-presets-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
 #req-presets-modal .menu-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; font-weight:500; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
-#req-presets-modal .menu-item:hover{ background:#f8fafc; border-color:#e4e4e7; }
-#req-presets-modal .menu-item.is-selected{ background:#eff6ff; border-color:#bfdbfe; }
+#req-presets-modal .menu-item:hover{ background:var(--hover-bg); border-color:#e4e4e7; }
+#req-presets-modal .menu-item.is-selected{ background:var(--info-bg); border-color:var(--info-border); }
 /* Split body */
 #req-presets-modal .modal-body.presets-body-split{ display:grid; grid-template-columns:200px 1fr; gap:0; padding:18px 24px; flex:1; min-height:0; }
 .presets-col-left{ display:flex; flex-direction:column; min-width:0; overflow:hidden; }
@@ -1442,7 +1442,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     .field-card.file-card:focus-within{ outline:none; }
     .field-card.file-card > .field-chip{ height: var(--btn-h); min-height: var(--btn-h); }
     .field-card.file-card .file-name.control{ display:flex; align-items:center; min-height: var(--btn-h); padding-right: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background: var(--surface-2, #f2f2f2); border: none; border-left: 1px solid var(--border-strong); border-radius: 0; cursor:pointer; color: #000; }
+  .field-card.file-card .chip-right{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px; background: var(--field-chip-bg); border: none; border-left: 1px solid var(--border-strong); border-radius: 0; cursor:pointer; color: #000; }
   .field-card.file-card .chip-right .lucide{ width:16px; height:16px; color:#000; }
   /* manter cor preta mesmo com arquivo anexado */
   .field-card.file-card.has-file .chip-right{ color:#000; }

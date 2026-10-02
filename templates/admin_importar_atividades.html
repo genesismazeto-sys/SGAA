@@ -38,7 +38,7 @@
     .import-help-code{
       margin:0;
       padding:12px;
-      border:1px solid rgba(15, 23, 42, .08);
+      border:1px solid var(--divider-soft);
       border-radius:12px;
       background:var(--surface);
       color:#0f172a;
@@ -54,10 +54,10 @@
     .preview-stat strong{ display:block; font-size:22px; line-height:1; margin-top:6px; }
     .status-chip{ display:inline-flex; align-items:center; justify-content:center; min-width:92px; height:28px; padding:0 10px; border-radius:var(--pill-radius); font-size:12px; font-weight:600; }
     .status-chip.create{ background:#EAF3DE; color:#27500A; }
-    .status-chip.update{ background:#eff6ff; color:#1d4ed8; }
-    .status-chip.ignore{ background:#f8fafc; color:#475569; }
+    .status-chip.update{ background:var(--info-bg); color:var(--info-text); }
+    .status-chip.ignore{ background:var(--surface-subtle); color:#475569; }
     .status-chip.error{ background:#FCEBEB; color:#791F1F; }
-    .preview-errors{ color:#b91c1c; font-size:13px; }
+    .preview-errors{ color:var(--danger-text); font-size:13px; }
     .preview-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
     .preview-actions form{ margin:0; }
     .preview-card{ padding:0; overflow:hidden; margin-top:6px; }

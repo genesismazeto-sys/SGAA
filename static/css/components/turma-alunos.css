@@ -126,9 +126,9 @@
 }
 .turma-aluno-row-inner{ display:grid; grid-template-columns: var(--alunos-cols); column-gap: var(--btn-gap, 8px); padding: 4px 8px; align-items:center; }
 .turma-aluno-row-actions{ position:absolute; top:50%; right:-40px; transform:translateY(-50%); display:flex; align-items:center; justify-content:center; }
-.turma-aluno-remove{ width:32px; height:var(--btn-h); min-width:32px; min-height:var(--btn-h); border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); display:none; place-items:center; color:var(--danger, #b91c1c); }
+.turma-aluno-remove{ width:32px; height:var(--btn-h); min-width:32px; min-height:var(--btn-h); border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); display:none; place-items:center; color:var(--danger-text); }
 .turma-aluno-row.selected .turma-aluno-remove{ display:grid; }
-#btn-remover-aluno{ color: var(--danger, #b91c1c); }
+#btn-remover-aluno{ color: var(--danger-text); }
 #btn-remover-aluno[disabled]{ opacity: .35; cursor: not-allowed; pointer-events: none; }
 .turma-aluno-card{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); min-height: var(--btn-h); display:flex; align-items:center; justify-content:center; padding: 0 8px; overflow:hidden; }
 /* Status: badge + arrow (select nativo compacto) */

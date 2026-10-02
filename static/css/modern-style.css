@@ -309,7 +309,7 @@ body{
   top:var(--btn-text-nudge-y);
 }
 .btn:hover{ background:#f3f4f6; }
-.btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); }
+.btn.primary{ background:var(--brand); color:var(--text-on-brand); border-color:var(--brand); }
 .btn.primary:hover{ background:var(--btn-primary-strong); border-color:var(--btn-primary-strong); }
 
 /* Raised primary — explicit variant.
@@ -329,7 +329,7 @@ body{
   transition:background .15s, color .15s, border-color .15s, box-shadow .15s;
 }
 .btn.primary.btn--raised:hover{ box-shadow:0 6px 16px rgba(0,51,102,.18); }
-.btn.danger{ color:#b91c1c; border:1px solid #ef4444; background:var(--surface); }
+.btn.danger{ color:var(--danger-text); border:1px solid #ef4444; background:var(--surface); }
 .btn.danger:hover{ background:#fee2e2; }
 
 /* Disabled — canonical Design System state for any .btn. Owned here with the
@@ -388,13 +388,13 @@ body{
 
 /* BotÃµes Adicionar: qualquer .btn com Ã­cone plus/plus-circle */
 .btn:has(.lucide[data-lucide="plus"], .lucide[data-lucide="plus-circle"], .lucide.lucide-plus, .lucide.lucide-plus-circle){
-  background:var(--add-blue); color:#fff; border-color:var(--add-blue);
+  background:var(--add-blue); color:var(--text-on-brand); border-color:var(--add-blue);
 }
 .btn:has(.lucide[data-lucide="plus"], .lucide[data-lucide="plus-circle"], .lucide.lucide-plus, .lucide.lucide-plus-circle):hover{
   background:var(--add-blue-hover); border-color:var(--add-blue-hover);
 }
 .btn:has(.btn-icon-plus){
-  background:var(--add-blue); color:#fff; border-color:var(--add-blue);
+  background:var(--add-blue); color:var(--text-on-brand); border-color:var(--add-blue);
 }
 .btn:has(.btn-icon-plus):hover{
   background:var(--add-blue-hover); border-color:var(--add-blue-hover);
@@ -402,7 +402,7 @@ body{
 
 /* BotÃµes Salvar dentro de forms */
 form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save){
-  background:var(--add-blue); color:#fff; border-color:var(--add-blue); font-weight:400;
+  background:var(--add-blue); color:var(--text-on-brand); border-color:var(--add-blue); font-weight:400;
 }
 form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save):hover{
   background:var(--add-blue-hover); border-color:var(--add-blue-hover);
@@ -417,7 +417,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .lucide.lucide-trash,
 .lucide.lucide-trash-2,
 .lucide.lucide-x-circle,
-.lucide.lucide-minus{ color:#b91c1c; }
+.lucide.lucide-minus{ color:var(--danger-text); }
 
 /* ===== Tabela / inputs / badges ===== */
 .lucide{ width:16px; height:16px; stroke-width:1.75px; }
@@ -516,34 +516,34 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   background:var(--status-pill-dot, #7b8794);
 }
 .badge.status-pill.status-positive{
-  --status-pill-bg:#e9f5e7;
-  --status-pill-border:#b9d7b5;
-  --status-pill-text:#1f5a3c;
-  --status-pill-dot:#3e835a;
+  --status-pill-bg:var(--status-positive-bg);
+  --status-pill-border:var(--status-positive-border);
+  --status-pill-text:var(--status-positive-text);
+  --status-pill-dot:var(--status-positive-dot);
 }
 .badge.status-pill.status-neutral{
-  --status-pill-bg:#eef1f4;
-  --status-pill-border:#c4ced8;
-  --status-pill-text:#3a4755;
-  --status-pill-dot:#667585;
+  --status-pill-bg:var(--status-neutral-bg);
+  --status-pill-border:var(--status-neutral-border);
+  --status-pill-text:var(--status-neutral-text);
+  --status-pill-dot:var(--status-neutral-dot);
 }
 .badge.status-pill.status-caution{
-  --status-pill-bg:#faeed5;
-  --status-pill-border:#e3c17b;
-  --status-pill-text:#7b4b12;
-  --status-pill-dot:#c5801f;
+  --status-pill-bg:var(--status-caution-bg);
+  --status-pill-border:var(--status-caution-border);
+  --status-pill-text:var(--status-caution-text);
+  --status-pill-dot:var(--status-caution-dot);
 }
 .badge.status-pill.status-negative{
-  --status-pill-bg:#f9e3e6;
-  --status-pill-border:#e3b0b8;
-  --status-pill-text:#8d2431;
-  --status-pill-dot:#cb4859;
+  --status-pill-bg:var(--status-negative-bg);
+  --status-pill-border:var(--status-negative-border);
+  --status-pill-text:var(--status-negative-text);
+  --status-pill-dot:var(--status-negative-dot);
 }
 .badge.status-pill.status-info{
-  --status-pill-bg:#e4eff9;
-  --status-pill-border:#b5d0e7;
-  --status-pill-text:#1d5a83;
-  --status-pill-dot:#3e7fb0;
+  --status-pill-bg:var(--status-info-bg);
+  --status-pill-border:var(--status-info-border);
+  --status-pill-text:var(--status-info-text);
+  --status-pill-dot:var(--status-info-dot);
 }
 
 .badge-grupo{
@@ -708,7 +708,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   padding:0 10px;
   border:1px solid var(--border-strong);
   border-radius:4px;
-  background:#f8fafc;
+  background:var(--surface-subtle);
   color:var(--text-secondary);
   font-size:12px;
   font-weight:600;
@@ -743,7 +743,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   position:sticky;
   top:0;
   z-index:1;
-  background:#f8fafc;
+  background:var(--surface-subtle);
   color:var(--text-secondary);
   font-weight:600;
 }
@@ -769,7 +769,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 }
 
 .table-progresso tbody tr:hover{
-  background:#f8fafc;
+  background:var(--hover-bg);
 }
 
 .table-progresso tbody tr:last-child td{
@@ -781,8 +781,8 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 }
 
 .table-progresso td.progresso-limitado{
-  background:#fef2f2;
-  color:#b91c1c;
+  background:var(--danger-bg);
+  color:var(--danger-text);
   font-weight:700;
 }
 
@@ -855,11 +855,11 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .login-form label{ font-size:14px; font-weight:500; }
 .login-form input{ padding:8px 10px; font-size:var(--font-size-base); border-radius:var(--radius); border:1px solid var(--border-strong); }
 .login-feedback{ margin:-4px 0 0; font-size:12px; line-height:1.35; text-align:left; }
-.login-feedback-error{ color:#b91c1c; }
+.login-feedback-error{ color:var(--danger-text); }
 .login-feedback-success{ color:#047857; }
-.login-feedback-info{ color:#1d4ed8; }
+.login-feedback-info{ color:var(--info-text); }
 .login-feedback-warning{ color:#92400e; }
-.login-form button[type="submit"]{ margin-top:10px; padding:8px 10px; font-size:var(--font-size-base); font-weight:400; color:#fff; background:var(--brand); border:none; border-radius:var(--radius); cursor:pointer; }
+.login-form button[type="submit"]{ margin-top:10px; padding:8px 10px; font-size:var(--font-size-base); font-weight:400; color:var(--text-on-brand); background:var(--brand); border:none; border-radius:var(--radius); cursor:pointer; }
 .login-form-meta{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   width:100%; margin-top:2px; font-size:13px;
@@ -1199,7 +1199,7 @@ form label{ white-space:nowrap; }
 .field-card.file-card.has-file .file-name.control{ color:var(--text-primary); }
 .field-card.file-card .chip-right{
   display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px 0 8px;
-  background:var(--surface-2, #f2f2f2);
+  background:var(--field-chip-bg);
   border:none; border-left:1px solid var(--border-strong);
   border-radius:0; cursor:pointer; color:#000;
 }
@@ -1235,8 +1235,8 @@ form label{ white-space:nowrap; }
   border-radius:8px; border:1px solid var(--border-strong);
   background:var(--surface); color:var(--text-primary); box-shadow:var(--shadow-sm); cursor:pointer; padding:0;
 }
-.icon-btn.primary{ background:var(--brand); border-color:var(--brand); color:#fff; }
-.icon-btn.danger{ color:#b91c1c; border-color:#ef4444; background:var(--surface); }
+.icon-btn.primary{ background:var(--brand); border-color:var(--brand); color:var(--text-on-brand); }
+.icon-btn.danger{ color:var(--danger-text); border-color:#ef4444; background:var(--surface); }
 
 /* Reportes */
 .report-form-hint{ color:var(--text-secondary); font-size:12px; line-height:1.5; }

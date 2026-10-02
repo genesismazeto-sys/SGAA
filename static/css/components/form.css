@@ -151,7 +151,7 @@
 .field-card.split-2.compact-left{ grid-template-columns:40px 90px 40px 1fr; }  /* was duplicated in 4 templates */
 .import-modal-form{ box-sizing:border-box; display:flex; flex:1 1 auto; flex-direction:column; max-width:100%; min-height:0; min-width:0; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card{ align-items:center; column-gap:var(--list-col-gap,6px); cursor:pointer; display:grid; grid-template-columns:40px 1fr auto; position:relative; }  /* was duplicated in 2 templates */
-.import-modal-form .field-card.file-card .chip-right{ align-items:center; background:var(--surface-2,#f2f2f2); border:none; border-left:1px solid var(--border-strong); border-radius:0; color:#000; cursor:pointer; display:inline-flex; gap:6px; height:24px; padding:0 10px 0 8px; }  /* was duplicated in 2 templates */
+.import-modal-form .field-card.file-card .chip-right{ align-items:center; background:var(--field-chip-bg); border:none; border-left:1px solid var(--border-strong); border-radius:0; color:#000; cursor:pointer; display:inline-flex; gap:6px; height:24px; padding:0 10px 0 8px; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .chip-right .lucide{ color:#000; height:16px; width:16px; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .chip-right span{ margin-left:0; padding-right:4px; }  /* was duplicated in 2 templates */
 .import-modal-form .field-card.file-card .file-name{ align-items:center; color:var(--text-secondary); display:flex; min-height:var(--btn-h); overflow:hidden; padding-right:0; text-overflow:ellipsis; white-space:nowrap; }  /* was duplicated in 2 templates */
@@ -173,7 +173,7 @@
   --toggle-switch-height:22px;
   --toggle-switch-knob-offset:2px;
   --toggle-switch-knob-travel:20px;
-  --toggle-switch-active:#0f5b99;
+  --toggle-switch-active:var(--control-selected);
   position:relative;
   display:inline-flex;
   align-items:center;

@@ -48,6 +48,10 @@
   --pill-radius:4px;
   --shadow-sm:0 1px 3px rgba(0,0,0,.10);
   --shadow-md:0 8px 20px rgba(0,0,0,.05);
+  /* Elevação e scrim compartilhados (UI-B11) — valor integral preservado. */
+  --shadow-card:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+  --shadow-modal:0 10px 30px rgba(2,6,23,.25);
+  --backdrop:rgba(2,6,23,.45);
 
   /* BotÃµes */
   --btn-h:32px;
@@ -82,6 +86,51 @@
   --field-disabled-bg:#f3f4f6;
   --field-disabled-border:#e2e8f0;
   --field-readonly-bg:#f1f5f9;
+
+  /* Cores semânticas compartilhadas (UI-B11)
+     Cada valor abaixo é o literal exato que o consumidor já renderizava.
+     Promover a posse não altera nenhum resultado computado. */
+  --surface-subtle:#f8fafc;
+  --hover-bg:#f8fafc;
+  --field-chip-bg:#f2f2f2;
+  --divider:#e2e8f0;
+  --divider-soft:rgba(15,23,42,.08);
+  --text-on-brand:#ffffff;
+  --control-selected:#0f5b99;
+
+  /* Info */
+  --info-bg:#eff6ff;
+  --info-text:#1d4ed8;
+  --info-border:#bfdbfe;
+
+  /* Danger — família genérica destrutiva/erro. A validação de campo mantém
+     os tokens --field-invalid-* próprios. */
+  --danger-text:#b91c1c;
+  --danger-bg:#fef2f2;
+  --danger-border:#fecaca;
+
+  /* Paleta de status compartilhada — promovida das cópias .badge.status-pill
+     e .db-badge. Os valores não mudam. */
+  --status-positive-bg:#e9f5e7;
+  --status-positive-border:#b9d7b5;
+  --status-positive-text:#1f5a3c;
+  --status-positive-dot:#3e835a;
+  --status-neutral-bg:#eef1f4;
+  --status-neutral-border:#c4ced8;
+  --status-neutral-text:#3a4755;
+  --status-neutral-dot:#667585;
+  --status-caution-bg:#faeed5;
+  --status-caution-border:#e3c17b;
+  --status-caution-text:#7b4b12;
+  --status-caution-dot:#c5801f;
+  --status-negative-bg:#f9e3e6;
+  --status-negative-border:#e3b0b8;
+  --status-negative-text:#8d2431;
+  --status-negative-dot:#cb4859;
+  --status-info-bg:#e4eff9;
+  --status-info-border:#b5d0e7;
+  --status-info-text:#1d5a83;
+  --status-info-dot:#3e7fb0;
 
   /* Listas (compartilhado) */
   --list-col-gap:2px;

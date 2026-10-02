@@ -34,7 +34,7 @@
     <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>
     <style>
-      .toast{ position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: #111827; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.25); z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+      .toast{ position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: #111827; color: var(--text-on-brand); padding: 8px 12px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.25); z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
       .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
       .toast.error{ background: #991b1b; }
       .toast.success{ background: #065f46; }

@@ -41,7 +41,7 @@
     #filter-btn.is-active i.lucide{ color:#0C447C; }
 
     /* Filter count badge */
-    .filter-count-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:14px; padding:1px 6px; margin-left:6px; border-radius:var(--pill-radius); background:#185FA5; color:#fff; font-size:9px; font-weight:600; line-height:1; }
+    .filter-count-badge{ display:inline-flex; align-items:center; justify-content:center; min-width:14px; padding:1px 6px; margin-left:6px; border-radius:var(--pill-radius); background:#185FA5; color:var(--text-on-brand); font-size:9px; font-weight:600; line-height:1; }
 
     .modal-card{ width: min(900px, calc(100vw - 32px)); max-height: min(80vh, 780px); }
     .modal-header{ padding: 10px 12px; border-bottom:0; }
@@ -78,15 +78,15 @@
     #grupos-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
     #grupos-modal .actions-mini #grp-add{ background:var(--surface); border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
     #grupos-modal .actions-mini #grp-del{ color:#a1a1aa; }
-    #grupos-modal .actions-mini #grp-del:hover{ color:#b91c1c; background:var(--surface); border:0.5px solid #e4e4e7 !important; }
-    #grupos-modal .actions-mini #grp-del.is-active .lucide{ color:#b91c1c; }
+    #grupos-modal .actions-mini #grp-del:hover{ color:var(--danger-text); background:var(--surface); border:0.5px solid #e4e4e7 !important; }
+    #grupos-modal .actions-mini #grp-del.is-active .lucide{ color:var(--danger-text); }
     #grupos-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
     #grupos-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
     #grupos-modal .menu-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
-    #grupos-modal .menu-item:hover{ background:#f8fafc; border-color:#e4e4e7; }
-    #grupos-modal .menu-item.is-selected{ background:#eff6ff; border-color:#bfdbfe; }
+    #grupos-modal .menu-item:hover{ background:var(--hover-bg); border-color:#e4e4e7; }
+    #grupos-modal .menu-item.is-selected{ background:var(--info-bg); border-color:var(--info-border); }
     #grupos-modal .menu-item.is-selected .menu-item-num{ font-weight:500; color:#1e3a8a; }
-    #grupos-modal .menu-item.is-selected .badge{ background:#fff; border-color:#bfdbfe; color:#1e40af; }
+    #grupos-modal .menu-item.is-selected .badge{ background:#fff; border-color:var(--info-border); color:#1e40af; }
     #grupos-modal .presets-col-right input.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--field-bg); font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; height:var(--btn-h); width:100%; }
     #grupos-modal .presets-col-right input.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
     #grupos-modal .presets-col-right input.control:focus{ background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
@@ -111,7 +111,7 @@
   .import-help-head p{ margin:4px 0 0; font-size:13px; color:var(--text-secondary); }
   .import-help-block{ display:grid; gap:6px; }
   .import-help-label{ font-size:12px; font-weight:600; color:var(--text-secondary); }
-  .import-help-code{ margin:0; padding:12px; border:1px solid rgba(15, 23, 42, .08); border-radius:12px; background:var(--surface); color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+  .import-help-code{ margin:0; padding:12px; border:1px solid var(--divider-soft); border-radius:12px; background:var(--surface); color:#0f172a; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
   .modal-card.import-modal-card .modal-footer{ flex-wrap:wrap; }
   @media (max-width: 768px){
     #importar-atividades-modal{ padding:10px; }

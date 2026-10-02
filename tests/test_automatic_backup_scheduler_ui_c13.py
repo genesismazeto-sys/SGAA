@@ -450,7 +450,9 @@ def test_16_indicator_reuses_the_destination_chip_owner_and_adds_no_colour():
     # E: no local style, no new colour, no second chip owner; the shared rules are the pre-UI-C13 ones.
     assert "style=" not in group
     assert template.count(".db-chip {") == 1 and template.count(".db-chip.is-active {") == 1
-    assert ".db-chip.is-active { background:#eff6ff; border-color:transparent; color:var(--accent-blue); font-weight:500; }" in template
+    # UI-B11: the shared chip owner now paints its one colour through the global
+    # --info-bg token (same value); no new colour and no second chip owner.
+    assert ".db-chip.is-active { background:var(--info-bg); border-color:transparent; color:var(--accent-blue); font-weight:500; }" in template
     assert "db-title-row" not in template
     assert "header-status" not in (PROJECT_ROOT / "static" / "css" / "modern-style.css").read_text(encoding="utf-8")
 

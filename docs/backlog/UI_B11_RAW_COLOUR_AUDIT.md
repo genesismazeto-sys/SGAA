@@ -1,10 +1,13 @@
 # UI-B11 — Raw-colour / tokenization audit
 
-**Status:** SAFE_COHORT_COMPLETE — REMAINDER_NEEDS_SEMANTIC_TOKEN_DECISIONS (2026-09-29).
-No safe category-A replacement remains. What is left is component-local, content colour, proven-dead code parked with
-its owner's decision, or needs a new semantic token or a visual convergence decision. Every group is listed below.
+**Status:** THIRD_COHORT_COMPLETE — NO_VISUAL_CHANGE_CONSOLIDATION_EXHAUSTED (2026-10-02).
+The third cohort created the missing semantic token families at their exact rendered values and converted every
+unambiguous C1 / safe-C4 occurrence (430 → **291**). No safe no-visual-change replacement remains: what is left is
+component-local (B), content/chart (D), legitimate local semantics (C3), or a visual-convergence decision (C2). Every
+group is listed below, with the third-cohort record first.
 History: the 2026-09-28 audit changed no colour. The first category-A pass converted 39 sites (498 → 459). The
-2026-09-29 cohort converted 28 more (458 → **430**) with no visual change.
+2026-09-29 cohort converted 28 more (458 → **430**) with no visual change. The 2026-10-02 cohort converted 139 more
+with no visual change and split the former category C into C1/C2/C3/C4.
 
 ## Re-audit and second category-A cohort (2026-09-29)
 
@@ -91,12 +94,117 @@ visual change.**
 accepted "no opacity hacks / shared read-only treatment" contract. Converging it onto the shared read-only treatment is
 a visual change and a separate decision.
 
-**Suggested order for the remainder.**
-1. Value-preserving new semantic tokens: `--danger-*`, `--warning-*`, `--success-*`, `--info-*`,
+**Suggested order for the remainder.** *Item 1 was executed by the third cohort below; only item 2 is still open.*
+1. ~~Value-preserving new semantic tokens: `--danger-*`, `--warning-*`, `--success-*`, `--info-*`,
    `--surface-subtle`/`--hover-bg`, `--divider`, `--shadow-card`/`--backdrop`, `--text-on-brand`, `--control-selected`,
-   and the global `--status-*` palette. Each is zero-visual if adopted at current values. Each is a token-design decision.
-2. User visual decisions: the zinc scale, strong ink vs `--text-primary`, slate text vs `--text-secondary`, and the
-   aluno_dashboard inline styles.
+   and the global `--status-*` palette.~~ Implemented 2026-10-02 exactly as listed, at current values. `--warning-*` and
+   `--success-*` were **not** created: their occurrences use competing values for the same role, so they are C2.
+2. User visual decisions remain: the zinc scale, strong ink vs `--text-primary`, slate text vs `--text-secondary`,
+   the warning/success/danger/info variants, and the aluno_dashboard inline styles.
+
+## Third cohort — missing semantic tokens (2026-10-02)
+
+**Scope** is unchanged (`tests/test_b11_category_a_tokenization.py`). HEAD `77618c0` measured **430**. The 389 former
+C occurrences were re-split into **C1** token-missing visual-exact · **C2** visual decision required · **C3** local
+semantic value · **C4** undefined token reference. Only C1 and the safe C4 references were implemented. Every token
+carries the literal that already rendered, so no computed colour changes.
+
+| | C1 | C2 | C3 | C4 | total C |
+|---|---|---|---|---|---|
+| before | 108 | 243 | 32 | 6 | 389 |
+| after | **0** | 243 | 32 | **0** | 275 |
+
+Cohort result: **430 → 291** raw occurrences (139 converted or removed: C1 108, safe C4 6, B status/toggle 21, E 4).
+
+### Tokens created (`foundation/tokens.css`, exact values)
+
+| Token | Value | Ownership / role |
+|---|---|---|
+| `--surface-subtle` | `#f8fafc` | subtle fills (table headers, chips, panels) |
+| `--hover-bg` | `#f8fafc` | hover fills (menu/filter/row/chip hovers) |
+| `--field-chip-bg` | `#f2f2f2` | resting file-card trailing chip; also resolves `var(--surface-2, …)` |
+| `--divider` | `#e2e8f0` | solid hairline dividers |
+| `--divider-soft` | `rgba(15,23,42,.08)` | soft divider (import-help borders) |
+| `--text-on-brand` | `#ffffff` | white ink on brand/dark fills |
+| `--control-selected` | `#0f5b99` | selected swatch outline + toggle switch (form.css's component token now aliases it) |
+| `--info-bg` / `--info-text` / `--info-border` | `#eff6ff` / `#1d4ed8` / `#bfdbfe` | informational surface / text / border |
+| `--danger-text` / `--danger-bg` / `--danger-border` | `#b91c1c` / `#fef2f2` / `#fecaca` | generic destructive/error; field validation keeps its own `--field-invalid-*` |
+| `--shadow-card` | `0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06)` | repeated card elevation (4 consumers) |
+| `--shadow-modal` | `0 10px 30px rgba(2,6,23,.25)` | modal card elevation (2 consumers) |
+| `--backdrop` | `rgba(2,6,23,.45)` | modal scrim (2 consumers) |
+| `--status-{positive,neutral,caution,negative,info}-{bg,border,text,dot}` | 20 values | shared status palette, promoted from the byte-identical `.badge.status-pill` and `.db-badge` copies |
+
+Safe C4 resolutions: `var(--danger, #b91c1c)` ×2 → `var(--danger-text)`;
+`var(--surface-alt, #f8fafc)` ×1 → `var(--hover-bg)`; `var(--surface-2, #f2f2f2)` ×4 → `var(--field-chip-bg)`.
+
+### Replacements
+
+All of `#b91c1c` (20), `#eff6ff` (12), `#fef2f2` (4), `#1d4ed8` (4), `#bfdbfe` (4), `#fecaca` (2),
+`#f2f2f2` (3 in scope + 1 in the Requisições script), `rgba(15,23,42,.08)` (4), `#0f5b99` (2) and the 20 status-palette
+values are now token-only; 26 files changed. `modern-style.css` 90 → 53, `admin_banco_dados.html` 69 → 42,
+`admin_requisicoes.html` 51 → 36, `admin_acesso.html` 34 → 24, `admin_atividades.html` 34 → 26.
+
+**Dead E removed (4).** The `.db-provider-head .db-badge` fallbacks `#d9dde2`, `#f4f5f6`, `#48505a`, `#7b8794`
+never render: every provider badge carries `.local`, `.warning`, or matches `:not(.local):not(.warning)`. The
+declarations stay; only the dead fallbacks go. The `.badge.status-pill` base fallbacks stay — they are live for
+`status-pill status-warning` and promoting the default is a separate semantic decision.
+
+**Template-script colours (12).** The JS-injected `.chip-right` background now consumes `--field-chip-bg`. The
+Deferir/Parcial/Indeferir decision palette (`#5C9A7F` / `#9C7132` / `#B8534C` with their 5 % tints) and the `#000`
+chip ink stay literal: single-consumer component palette, and tokenizing them would be a JS styling decision. The
+Alertas default user colour `#e3eefd` ×2 stays content.
+
+### Visual proof
+
+Disposable runtime (fresh seeded temp DB, test client, no port, canonical untouched). A baseline worktree at
+`77618c0` and the working tree were probed with the same script: 78 page/state fingerprints (26 pages × default /
+forced `:hover` / forced `:focus`), each recording computed colour, borders, outline, shadow, background-image and
+opacity for every element, plus 26 full screenshots, with transitions and animations disabled. **BEFORE vs AFTER:
+0 differences across all 78 fingerprints and 0 differing pixels in all 26 screenshots (channel tolerance 1).**
+No intended or perceptible visual change.
+
+### What remains (291)
+
+| Cat. | Group | Count | Why it is not a safe C1 |
+|---|---|---|---|
+| B | `@media print` palette | 4 | paper output only |
+| B | status-pill default fallback | 4 | live for `status-pill status-warning`; promoting the default is a semantic decision |
+| B | Alertas colour-dot hairline | 1 | must stay visible over any user colour |
+| D | aluno_dashboard `.days-bar` ramp | 6 | data-visualisation threshold ramp |
+| D | Alertas border-only swatch | 1 | user colour "white", not UI `--surface` |
+| C2 | zinc neutral scale | 39 | choose between the parallel zinc values and the slate/gray tokens |
+| C2 | warning family | 30 | competing values (`#92400e` vs `#b45309`, three bg/border pairs) |
+| C2 | strong ink / dark fills | 28 | `#0f172a` vs `--text-primary` `#1f2937` would change colour |
+| C2 | slate muted text | 28 | `#475569` etc. vs `--text-secondary` `#6b7280` would change colour |
+| C2 | one-off chrome rgba | 27 | unique shadow/overlay/tint values; one token per site is not shared ownership |
+| C2 | danger competing variants | 19 | `#dc2626`, `#ef4444`, `#fee2e2`, `#991b1b` … — pick one destructive scale |
+| C2 | subtle-surface competing variants | 18 | `#f1f5f9`, `#fbfdff`, `#fafafa`, `#f3f4f6`, `#eef4f8` |
+| C2 | info competing variants | 17 | `#2563eb`, `#1e3a8a`, `#0c447c`, `#155e75` … |
+| C2 | success family | 13 | competing values |
+| C2 | aluno_dashboard legacy inline styles | 12 | restyling is a visual change |
+| C2 | gradient ramp stops / selected-row badge | 8 | tokenizing one stop splits the ramp from its owner |
+| C3 | file-card chip ink | 6 | deliberate pure black ("manter cor preta") |
+| C3 | identifier chip palette | 6 | `.badge-grupo` / `.version-identifier` component values |
+| C3 | tooltip chrome | 4 | `.ui-tooltip` component values |
+| C3 | Atividades filter active state | 4 | `#filter-btn.is-active` component state |
+| C3 | db-origin-pill palette | 4 | component data palette |
+| C3 | access custom-scope teal | 3 | component state accent |
+| C3 | db-badge neutral base | 2 | component base fill |
+| C3 | access student panel tint | 2 | component local tint |
+| C3 | Requisições outline-primary hover | 1 | component-local |
+| C2 | folder chrome one-offs | 4 | `#d9e2ee`, `#bdd4ee`, `#f8fbff`, `#d6dce6` |
+| **total** | | **291** | |
+
+No C1 and no safe C4 occurrence remains. What is left is B component-local, D content/chart, C3 legitimate
+component-local semantics, and C2 visual-convergence decisions. **UI-B11 is technically complete for
+NO-VISUAL-CHANGE consolidation**; the remaining C2 is a design decision, not tokenization debt.
+
+**Guard.** `tests/test_b11_category_a_tokenization.py`:
+- ratchet 430 → **291**;
+- every fully tokenized value is pinned to its owner and forbidden elsewhere;
+- the status palette's single owner, the info/danger/subtle/divider/hover/on-brand/control consumers, the
+  whole-value elevation tokens and the removed dead fallbacks are pinned;
+- phantom `var(--danger,`, `var(--surface-alt,`, `var(--surface-2,` are forbidden.
 
 ## Scope and method
 
