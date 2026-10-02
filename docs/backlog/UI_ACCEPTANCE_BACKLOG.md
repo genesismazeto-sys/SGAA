@@ -79,6 +79,20 @@ and agent handoff notes are not substitutes for repository canon.
 > one-off UI-B01 repair script `tools/repair_email_preset_cardinality.py` remains local and
 > unversioned, by decision.
 
+> **Closure record (2026-10-02).** The one-off UI-B01 repair script
+> `tools/repair_email_preset_cardinality.py` (SHA-256
+> `34795ed89b57accb6dbb4f8788bf212c8a5a95b432d1b30dfa2474f761b687ff`,
+> 3 729 bytes) was dispositioned `OBSOLETE_ONE_OFF` and deleted from the working
+> tree; it was never tracked, so no commit deletes it. The stored-data repair it
+> performed ran on 2026-09-21 and is recorded in §UI-B01; the cardinality
+> invariant is now owned by `app.request_email_render.build_context`, the UI-B12
+> fragment retirement (`RETIRED_PLACEHOLDERS` plus the save-time rejection in
+> `presets_api`) and `tests/test_request_email_cardinality_ui_b01.py` /
+> `tests/test_email_preset_fragment_retirement_ui_b12.py`. Its heuristic rewrite
+> also contradicts the current store-verbatim contract
+> (`test_administrator_free_text_is_stored_verbatim`), so it must not survive as
+> executable tooling. No product code, schema or database was touched.
+
 Acceptance runtime convention: `http://localhost:5000`. SGAA has one
 application port. An isolated acceptance run swaps the **database**, never the port, and
 the canonical runtime must be stopped first — `run_acceptance.bat` refuses to
@@ -279,7 +293,8 @@ Stored-data repair: `tools/repair_email_preset_cardinality.py` (dry run by
 default, `--apply` to write, idempotent) rewrote the model to
 `DEFAULT_SUBJECT_TEMPLATE` / `DEFAULT_BODY_TEMPLATE`. Backup taken as
 `database.pre-ui-b01-email-cardinality-20260921-003113.db`. Adding placeholders
-alone would not have repaired copy that was already saved.
+alone would not have repaired copy that was already saved. The one-off script was
+deleted on 2026-10-02 as `OBSOLETE_ONE_OFF` (closure record above).
 
 Same-flow audit (§6 scope only, nothing outside this flow): `render_request_block`
 emits per-event singular labels — correct by construction. `dispatch.summarize`
