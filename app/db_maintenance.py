@@ -469,6 +469,25 @@ def maybe_sync_database_to_cloud(
         return {"ok": True, "skipped": False, "snapshot": snapshot}
 
 
+def _newest_manifest_of_reason(snapshots: list[dict], reason: str) -> str:
+    """Manifest of the most recent snapshot of ``reason`` (``created_at``, then file name)."""
+    candidates = [
+        snap
+        for snap in snapshots
+        if snap.get("reason") == reason and snap.get("manifest_path")
+    ]
+    if not candidates:
+        return ""
+    newest = max(
+        candidates,
+        key=lambda snap: (
+            str(snap.get("created_at") or ""),
+            os.path.basename(str(snap.get("manifest_path") or "")),
+        ),
+    )
+    return str(newest.get("manifest_path") or "")
+
+
 def apply_retention_policy(
     snapshots: list[dict],
     policy: list[dict],
@@ -477,9 +496,12 @@ def apply_retention_policy(
 
     Each policy window: {period_hours, interval_hours, slots}.
     Snapshots with reason == "manual-backup" are never included in the delete list.
-    Neither is a "pre-restore-safety" snapshot -- the undo point of a database
-    restore (UI-C18) -- although it still occupies its bucket exactly as before,
-    so every other snapshot is kept or thinned as it always was.
+    The newest "pre-restore-safety" snapshot -- the undo point of the most recent
+    database restore (UI-C18) -- is never included either, even when it falls
+    outside every window or loses its bucket. Any other "pre-restore-safety"
+    snapshot (UI-C21) is bounded by the same GFS windows as every automatic one:
+    it still occupies its bucket exactly as before, so snapshots of every other
+    reason are kept or thinned as they always were.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -525,11 +547,12 @@ def apply_retention_policy(
                 kept.add(mp)
 
     to_delete: list[str] = []
+    pinned_safety = _newest_manifest_of_reason(parsed, "pre-restore-safety")
     for snap in parsed:
         mp = snap.get("manifest_path") or ""
         if not mp:
             continue
-        if snap.get("reason") in ("manual-backup", "pre-restore-safety"):
+        if snap.get("reason") == "manual-backup" or mp == pinned_safety:
             continue
         if mp not in kept:
             to_delete.append(mp)

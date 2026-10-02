@@ -1,4 +1,4 @@
-"""UI-C18 residual: normal retention never removes a restore's undo point.
+"""UI-C18 residual: normal retention never removes the current restore's undo point.
 
 A database restore first writes a ``pre-restore-safety`` snapshot into the local
 series. ``apply_retention_policy`` exempted only ``manual-backup``, and keeps
@@ -7,7 +7,8 @@ after a restore (same 2 h bucket) deleted the undo point.
 
 Contract now (``app.db_maintenance.apply_retention_policy``):
 
-* a ``pre-restore-safety`` snapshot is never in the delete list;
+* the newest ``pre-restore-safety`` snapshot is never in the delete list
+  (UI-C18; bounded by UI-C21 to exactly this one, see the UI-C21 file);
 * it still occupies its bucket exactly as before, so every other snapshot is
   kept or thinned exactly as the previous policy decided (proven against a
   verbatim copy of the previous algorithm);
@@ -23,6 +24,7 @@ from __future__ import annotations
 import datetime
 import itertools
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -100,7 +102,7 @@ def test_safety_snapshot_survives_later_automatic_snapshots_in_its_bucket():
     assert sorted(deleted) == sorted([later[0]["manifest_path"], later[1]["manifest_path"]])
 
 
-def test_safety_snapshot_is_never_deleted_even_outside_every_window():
+def test_newest_safety_snapshot_is_never_deleted_even_outside_every_window():
     ancient = _snap(datetime.timedelta(days=500), "pre-restore-safety", "ancient-safety")
     auto = _snap(datetime.timedelta(days=500), "auto-backup", "ancient-auto")
     assert apply_retention_policy([ancient, auto], DEFAULT_POLICY) == [auto["manifest_path"]]
@@ -134,7 +136,8 @@ AGES = [datetime.timedelta(minutes=m) for m in (1, 50, 130, 300)] + [
 
 @pytest.mark.parametrize("safety_positions", [(), (0,), (1,), (2, 5), (3, 7)])
 @pytest.mark.parametrize("policy", [DEFAULT_POLICY, [{"period_hours": 24, "interval_hours": 2, "slots": 1}]])
-def test_every_other_snapshot_is_decided_exactly_as_before(safety_positions, policy):
+def test_only_the_newest_safety_is_pinned(safety_positions, policy):
+    """UI-C21: ordinary snapshots keep the previous decision; only the newest safety is pinned."""
     reasons = ["auto-backup", "manual-backup", "auto-sync", "post-restore"]
     for combo in itertools.islice(itertools.product(reasons, repeat=len(AGES)), 0, None, 257):
         snaps = [
@@ -143,9 +146,20 @@ def test_every_other_snapshot_is_decided_exactly_as_before(safety_positions, pol
         ]
         now_deleted = apply_retention_policy(snaps, policy)
         before = _previous_policy(snaps, policy)
-        safety_paths = {s["manifest_path"] for s in snaps if s["reason"] == "pre-restore-safety"}
-        assert not safety_paths & set(now_deleted), combo
-        assert now_deleted == [p for p in before if p not in safety_paths], (combo, safety_positions)
+        safeties = [s for s in snaps if s["reason"] == "pre-restore-safety"]
+        pinned = max(
+            safeties,
+            key=lambda s: (s["created_at"], os.path.basename(s["manifest_path"])),
+            default=None,
+        )
+        pinned_path = pinned["manifest_path"] if pinned else None
+        assert pinned_path not in now_deleted, combo
+        assert now_deleted == [p for p in before if p != pinned_path], (combo, safety_positions)
+        non_safety = {s["manifest_path"] for s in snaps if s["reason"] != "pre-restore-safety"}
+        assert [p for p in now_deleted if p in non_safety] == [p for p in before if p in non_safety], (
+            combo,
+            safety_positions,
+        )
 
 
 # ------------------------------------------------ end-to-end: restore -> scheduled cycle

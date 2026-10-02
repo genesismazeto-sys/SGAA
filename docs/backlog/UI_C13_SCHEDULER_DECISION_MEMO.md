@@ -131,7 +131,8 @@ Two situations deliberately show nothing:
 
 1. **Real installation** (not authorized in this batch): `python -m app.backup.task_scheduler install` as the user, then
    `status`.
-2. The UI-C18 note still applies: a scheduled `auto-backup` snapshot can prune a same-bucket `pre-restore-safety` snapshot
-   under GFS retention. Only `manual-backup` snapshots are exempt.
+2. Resolved: `apply_retention_policy` never deletes the **newest** `pre-restore-safety` snapshot (the undo point of the
+   most recent restore, UI-C18/UI-C21); older safety snapshots follow the same GFS windows as any automatic snapshot.
+   `manual-backup` snapshots remain fully exempt.
 3. If the database has not changed, a wake does not retry a destination that failed on the last backup. That is the
    historical semantics; the next change retries it.
