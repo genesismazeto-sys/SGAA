@@ -180,6 +180,18 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "1 addition, 0 retirements",
         1,
     ),
+    (
+        "AVD1 activity version delete: being another version's predecessor "
+        "no longer blocks a delete -- the lineage is re-anchored and the "
+        "survivors renumbered v1..vN in the same transaction -- and the "
+        "refusal names the real Requisi\u00e7\u00e3o/Matriz dependency. The "
+        "predecessor refusal (msg_1dab9e6df404e2b3) and the two generic "
+        "'vinculada a Matriz/Requisi\u00e7\u00e3o' refusals (msg_a4823b394cdedd6b, "
+        "msg_b45a4f716181b610) retire in favour of 'N\u00e3o \u00e9 poss\u00edvel "
+        "excluir esta vers\u00e3o porque ela \u00e9 utilizada {value_1}.' "
+        "(msg_caa55d22991ae66f). 1 addition, 3 retirements",
+        -2,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -220,9 +232,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # CP1 (four retirements, no addition) to 583, UI-B19 (one retirement) to 582.
 # UI-C11 swaps four backup-result messages for four, so it stays at 582;
 # UI-C14 adds the 403 fallback, to 583; UI-C06 retires "Voltar", to 582;
-# UI-C13 adds the backup-lock busy message, to 583.
+# UI-C13 adds the backup-lock busy message, to 583; AVD1 swaps three version-
+# delete refusals for one that names the real dependency, to 581.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "d8e5a54ece79fbd080e36c87b88ffea9cbc9fb614da29acaf473191cb733ac7c"
+    "8d9787453384e9e21d733b08bfada404652d76f6bfc4663929ff0c711b79e9db"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -372,6 +385,21 @@ UIC13_BACKUP_LOCK_KEYS = frozenset(
     }
 )
 UIC13_BACKUP_LOCK_RETIRED_KEYS = frozenset()
+# AVD1 activity version delete.  Net -2 (+1/-3): one refusal naming the real
+# Requisição/Matriz dependency replaces the predecessor refusal and the two
+# generic "vinculada a" refusals.
+AVD1_VERSION_DELETE_KEYS = frozenset(
+    {
+        "msg_caa55d22991ae66f",  # Nao e possivel excluir esta versao porque ela e utilizada {value_1}.
+    }
+)
+AVD1_VERSION_DELETE_RETIRED_KEYS = frozenset(
+    {
+        "msg_1dab9e6df404e2b3",  # ...versao utilizada como versao anterior por outra versao.
+        "msg_a4823b394cdedd6b",  # ...versao vinculada a Matriz.
+        "msg_b45a4f716181b610",  # ...versao vinculada a Requisicao.
+    }
+)
 
 
 def catalog_keys_digest(keys) -> str:
@@ -699,12 +727,23 @@ def catalog_keys_before_root_admin(keys) -> set[str]:
     return (set(keys) - set(RA1_ROOT_ADMIN_KEYS)) | set(RA1_ROOT_ADMIN_RETIRED_KEYS)
 
 
+def catalog_keys_before_version_delete(keys) -> set[str]:
+    """Undo the AVD1 term: drop the dependency refusal, restore the three retired.
+
+    AVD1 is the newest term, so a reconstruction walks back through this
+    first, then UI-C13, UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the
+    password foundation.
+    """
+    return (set(keys) - set(AVD1_VERSION_DELETE_KEYS)) | set(
+        AVD1_VERSION_DELETE_RETIRED_KEYS
+    )
+
+
 def catalog_keys_before_backup_lock(keys) -> set[str]:
     """Undo the UI-C13 term: drop the backup-lock busy key.
 
-    UI-C13 is the newest term, so a reconstruction walks back through this
-    first, then UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the password
-    foundation.
+    A reconstruction walks back through AVD1 first, then this, then UI-C06,
+    UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the password foundation.
     """
     return (set(keys) - set(UIC13_BACKUP_LOCK_KEYS)) | set(
         UIC13_BACKUP_LOCK_RETIRED_KEYS

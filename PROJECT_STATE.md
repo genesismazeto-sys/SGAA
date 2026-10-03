@@ -39,7 +39,16 @@ status-independent and is blocked only for a sole version, Matrix use,
 Requisição use, or a surviving version's `versao_anterior_id` dependency.
 Lifecycle transition rows that reference the deleted version are removed in
 the same transaction; no lineage repair, automatic status change, cascade of
-operational use, or renumbering is performed. `/admin/atividades` retains
+operational use, or renumbering is performed.
+**Superseded by AVD1 (2026-10-03):** being another version's predecessor no
+longer blocks. `app.activity_catalog.delete_activity_version` re-anchors every
+successor to the deleted version's own predecessor (NULL for the first),
+removes its transition rows, deletes it and renumbers the base's survivors
+v1..vN in their existing order, all in one `BEGIN IMMEDIATE` transaction
+(rollback on any failure), so the next version is vN+1. Survivor ids,
+Requisições, snapshots and Matriz links are never written. Only real use
+blocks — a Requisição or a Matriz selecting that exact version — and the
+refusal names it ("… utilizada pela requisição 2."). `/admin/atividades` retains
 `atividade_base` cardinality, uses the highest `numero_versao` for
 version-owned summary fields, and applies filters, sorting, pagination, and
 counts to the same base-granular projection.
@@ -59,6 +68,48 @@ HTTPS `APP_PUBLIC_BASE_URL`, externally provisioned `APP_SECRET_KEY` and
 `TOKEN_ENCRYPTION_KEY`, binding/proxy decisions, production `create_app`
 preflight, web startup/smoke, and manual admin creation. No production web
 runtime was started in Phase A/B.
+
+## Activity version consolidation + canonical limitations — CLOSED / LANDED (2026-10-03)
+
+`consolidate_equivalent_activity_versions` folds a duplicate version that
+computes the same rule (axis, group number, `ch_por_evento`,
+`limite_semestre`, `limite_total`) into the surviving version: every Matriz
+selecting the removed version is repointed, Requisições remain immutable (a
+version used by a Requisição is refused), and the delete path re-anchors and
+renumbers. Conferências is the landed case: only V5 = v1 remains, both
+matrices 01.2025 and 01.2026 select it, V54 is gone, req1/req3 keep their
+frozen snapshots, and the catalog group label is
+`1 - Atividades fora da Universidade`.
+
+The student dashboard "Limitações" panel no longer aggregates by group.
+`app/versioning/request_limits.py` is the single per-activity authority:
+numerator = approved requests of the same activity + axis + frozen rule;
+denominator = that rule's own limit; a semester limit uses the event's
+`data_evento` semester; an activity without a limit never renders; overflow
+keeps the real numerator (the existing JS clamps only the bar). The dashboard
+shows the current semester; admin deferment uses the processed request's event
+semester and never counts another activity, another rule version or the
+request under processing. "5 - Atividades especiais (semestral) 170/20" is
+eliminated.
+
+Canonical catalog corrections (backup
+`database.pre-limits-normative-20261003-175748.db`, SHA-256
+`f07da959e3ad798a61370458bf44a186114b73808d48f5ff3da28ee3abc58b54`): AE-rev1
+`av106`/`av107` gained `limite_semestre=40`. `av108`/`av109`/`av110` keep
+`ch_por_evento=NULL`: "Tempo declarado OU 20/10 h/evento" is a conditional
+fallback the schema cannot represent as a fixed suggested value; the fallback
+text stays in both observations. The intermediate fixed-ch attempt was
+reverted (backup `database.pre-limits-aeu-ch-revert-20261003-190304.db`,
+SHA-256 `d8cbba1f9e727006441502f1b07bc1145f22fc6bf36f5ba6ed29060a61819e24`).
+Declared request hours are never rewritten.
+
+Tests: `tests/test_activity_version_consolidation.py`,
+`tests/test_atividade_limits_canonical.py` (19 tests) and
+`tests/test_aeu_declared_hours_fallback.py` (6 tests). Final full suite:
+3662 passed / 136 skipped / 0 failed. Canonical database: 33 Requisições
+(id 2 remains the user's intentional deletion), matrices 01.2025 = 29 AAC /
+0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
+`foreign_key_check` empty, contiguous `numero_versao` per base.
 
 ## Historical UT live-summary record
 

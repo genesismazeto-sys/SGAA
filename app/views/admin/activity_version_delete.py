@@ -7,7 +7,7 @@ from flask import redirect, url_for
 
 from app.activity_catalog import (
     ActivityVersionDeleteBlocked,
-    assert_activity_version_can_be_safely_deleted,
+    delete_activity_version,
     get_atividade_base,
 )
 from app.auth import admin_required
@@ -18,13 +18,10 @@ from utils.messages import flash
 def _flash_delete_block(exc: ActivityVersionDeleteBlocked) -> None:
     if exc.code == "wrong_base_or_version":
         flash("Versão não encontrada para esta atividade-base.", "error")
-    elif exc.code == "matrix_reference":
-        flash("Não é possível excluir: versão vinculada a Matriz.", "error")
-    elif exc.code == "request_reference":
-        flash("Não é possível excluir: versão vinculada a Requisição.", "error")
-    elif exc.code == "successor_reference":
+    elif exc.code == "in_use":
+        dependencias = exc.describe_dependencies()
         flash(
-            "Não é possível excluir: versão utilizada como versão anterior por outra versão.",
+            f"Não é possível excluir esta versão porque ela é utilizada {dependencias}.",
             "error",
         )
     elif exc.code == "sole_version":
@@ -35,28 +32,13 @@ def _flash_delete_block(exc: ActivityVersionDeleteBlocked) -> None:
 
 @admin_required
 def admin_catalogo_excluir_versao(base_id: int, versao_id: int):
-    """Hard-delete one exact, transactionally revalidated disposable version."""
+    """Hard-delete one version atomically, re-anchoring and renumbering survivors."""
     conn = get_db_connection()
     redirect_endpoint = "admin_catalogo_versao_detalhe"
     redirect_values = {"base_id": base_id}
     try:
         conn.execute("BEGIN IMMEDIATE")
-        assert_activity_version_can_be_safely_deleted(
-            conn,
-            base_id=base_id,
-            versao_id=versao_id,
-        )
-        conn.execute(
-            "DELETE FROM atividade_transicao "
-            "WHERE from_atividade_versao_id = ? OR to_atividade_versao_id = ?",
-            (versao_id, versao_id),
-        )
-        deleted = conn.execute(
-            "DELETE FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",
-            (versao_id, base_id),
-        )
-        if deleted.rowcount != 1:
-            raise sqlite3.IntegrityError("exact version delete lost its target")
+        delete_activity_version(conn, base_id=base_id, versao_id=versao_id)
         conn.commit()
         flash("Versão excluída definitivamente com sucesso.", "success")
     except ActivityVersionDeleteBlocked as exc:

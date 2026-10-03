@@ -57,6 +57,12 @@ from app.versioning.request_history import (
     read_historical_request,
     read_request_presentation,
 )
+from app.versioning.request_limits import (
+    build_atividade_rule_summary,
+    parse_event_date,
+    semester_label_for_date,
+    semester_sort_key,
+)
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
@@ -293,28 +299,15 @@ def _is_activity_allowed_for_usuario(
 
 
 def _parse_iso_date(value: Any) -> datetime.date | None:
-    raw = str(value or "").strip()
-    if not raw:
-        return None
-    candidate = raw[:10]
-    try:
-        return datetime.datetime.strptime(candidate, "%Y-%m-%d").date()
-    except ValueError:
-        return None
+    return parse_event_date(value)
 
 
 def _get_semestre(data: datetime.date) -> str:
-    ano = data.year
-    semestre = 1 if data.month <= 6 else 2
-    return f"{ano}/{semestre}"
+    return semester_label_for_date(data)
 
 
 def _semestre_sort_key(label: str) -> tuple[int, int]:
-    ano_raw, _, semestre_raw = str(label or "").partition("/")
-    try:
-        return int(ano_raw), int(semestre_raw)
-    except ValueError:
-        return (9999, 9)
+    return semester_sort_key(label)
 
 
 def _extract_grupo_numero(grupo: str | None) -> int | None:
@@ -605,6 +598,7 @@ def aluno_dashboard():
     ).fetchall()
 
     requisicoes = []
+    historico_aprovado = []
     for row in requisicoes_rows:
         item = {key: row[key] for key in row.keys()}
         history = read_request_presentation(row, conn=conn)
@@ -613,38 +607,21 @@ def aluno_dashboard():
         item["grupo"] = history.grupo
         item["horas_aprovadas"] = history.approved_hours
         requisicoes.append(item)
+        if history.status in APPROVED_STATUSES:
+            historico_aprovado.append(history)
 
     approved = [
         req for req in requisicoes if req["status"] in APPROVED_STATUSES
     ]
     totals_by_type = {}
-    totals_by_group = {}
     for req in approved:
         totals_by_type[req["tipo_atividade"]] = (
             totals_by_type.get(req["tipo_atividade"], 0.0) + req["horas_aprovadas"]
-        )
-        group_key = (req["grupo"], req["tipo_atividade"])
-        totals_by_group[group_key] = (
-            totals_by_group.get(group_key, 0.0) + req["horas_aprovadas"]
         )
     horas_por_tipo = [
         {"tipo_atividade": key, "total_horas": value}
         for key, value in totals_by_type.items()
     ]
-    horas_por_grupo = [
-        {"grupo": key[0], "tipo_atividade": key[1], "total_horas": value}
-        for key, value in totals_by_group.items()
-    ]
-
-    atividades_matriz = (
-        list_exact_matrix_activity_catalogue(conn, matriz_aluno["id"])
-        if matriz_aluno
-        else []
-    )
-    limites_por_grupo = {
-        row["grupo"]: row["limite_horas"]
-        for row in atividades_matriz
-    }
 
     total_horas_academicas = sum(
         req["horas_aprovadas"]
@@ -713,35 +690,32 @@ def aluno_dashboard():
         key=lambda item: item["dias_restantes"],
     )
 
-    periodicidades_por_grupo = {}
-    try:
-        for row in atividades_matriz:
-            if row["tipo_limitacao"] == "semestral":
-                periodicidades_por_grupo[row["grupo"]] = "semestral"
-    except Exception:
-        pass
-
+    # Canonical limitation authority: one line per Activity rule, never per
+    # group. Semester lines count only the current semester's approved hours;
+    # total lines count the whole history of that exact frozen rule.
+    resumo_limites = build_atividade_rule_summary(
+        historico_aprovado,
+        semester_label=_get_semestre(hoje),
+    )
     limitacoes_acad = []
     limitacoes_ext = []
-    for row in horas_por_grupo or []:
-        limite = limites_por_grupo.get(row["grupo"])
-        total_horas = float(row["total_horas"] or 0)
-        if not limite or limite <= 0 or total_horas <= 0:
-            continue
-        pct = int((total_horas * 100) // limite) if limite > 0 else 0
+    for linha in resumo_limites:
         item = {
-            "grupo": row["grupo"],
-            "tipo_atividade": row["tipo_atividade"],
-            "consumido": total_horas,
-            "limite": limite,
-            "consumido_fmt": _format_hours_number(total_horas),
-            "limite_fmt": _format_hours_number(limite),
-            "periodicidade": periodicidades_por_grupo.get(row["grupo"]),
-            "pct": min(100, pct),
+            "atividade_base_id": linha.atividade_base_id,
+            "nome": linha.nome,
+            "eixo": linha.eixo,
+            "tipo_atividade": linha.tipo_atividade,
+            "grupo": linha.grupo,
+            "consumido": linha.consumido,
+            "limite": linha.limite,
+            "consumido_fmt": _format_hours_number(linha.consumido),
+            "limite_fmt": _format_hours_number(linha.limite),
+            "periodicidade": linha.periodicidade,
+            "pct": linha.pct,
         }
-        if row["tipo_atividade"] == AAC_ACTIVITY_TYPE:
+        if linha.tipo_atividade == AAC_ACTIVITY_TYPE:
             limitacoes_acad.append(item)
-        elif row["tipo_atividade"] == EXT_ACTIVITY_TYPE:
+        elif linha.tipo_atividade == EXT_ACTIVITY_TYPE:
             limitacoes_ext.append(item)
 
     alertas_ativos = list(list_active_admin_alertas(conn))
@@ -756,8 +730,6 @@ def aluno_dashboard():
         aluno=aluno_info,
         requisicoes=requisicoes,
         horas_por_tipo=horas_por_tipo,
-        horas_por_grupo=horas_por_grupo,
-        limites_por_grupo=limites_por_grupo,
         total_horas_academicas=total_horas_academicas,
         total_horas_extensao=total_horas_extensao,
         total_horas_academicas_fmt=_format_hours_number(total_horas_academicas),
@@ -787,7 +759,6 @@ def aluno_dashboard():
         pend_pct=pend_pct,
         corrigiveis_acad=corrigiveis_acad,
         corrigiveis_ext=corrigiveis_ext,
-        periodicidades_por_grupo=periodicidades_por_grupo,
         limitacoes_acad=limitacoes_acad,
         limitacoes_ext=limitacoes_ext,
         alertas_ativos=alertas_ativos,

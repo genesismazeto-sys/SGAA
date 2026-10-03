@@ -51,9 +51,15 @@ from app.uploads import _allowed, save_upload
 from app.versioning.request_history import (
     HistoricalRequestAuthorityError,
     filter_historical_request_rows,
+    list_approved_request_history,
     list_exact_matrix_activity_catalogue,
     read_request_activity_option,
     read_request_presentation,
+)
+from app.versioning.request_limits import (
+    approved_hours_for_activity_rule,
+    parse_event_date,
+    semester_label_for_date,
 )
 from app.versioning.snapshots import (
     _build_admin_requisicao_snapshot_diagnostic,
@@ -1086,7 +1092,7 @@ def admin_processar_requisicao(req_id):
     ensure_turmas_matriz_schema(conn)
     ensure_matriz_atividade_links_table(conn)
     snapshot_display_enabled = is_versioned_requisicao_snapshot_display_enabled()
-    requisicao = conn.execute("""
+    requisicao_row = conn.execute("""
         SELECT r.*, al.nome as aluno_nome,
                al.id AS aluno_rel_id, al.turma_id AS aluno_turma_id,
                t.id AS turma_rel_id,
@@ -1097,11 +1103,26 @@ def admin_processar_requisicao(req_id):
         WHERE r.id = ?
     """, (req_id,)).fetchone()
 
-    if not requisicao:
+    if not requisicao_row:
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
 
+    requisicao = dict(requisicao_row)
     snapshot_processing = read_requisicao_snapshot_for_processing(requisicao)
+    requisicao["tem_limitacao"] = False
+    if (
+        snapshot_processing.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
+        and snapshot_processing.rule is not None
+    ):
+        frozen_rule = snapshot_processing.rule
+        requisicao["tem_limitacao"] = (
+            frozen_rule.limite_total is not None or frozen_rule.limite_semestre is not None
+        )
+        requisicao["tipo_limitacao"] = (
+            "semestral" if frozen_rule.limite_semestre is not None else "total"
+        )
+        requisicao["limite_horas_semestral"] = frozen_rule.limite_semestre
+        requisicao["limite_horas_total"] = frozen_rule.limite_total
     snapshot_diag = _build_admin_requisicao_snapshot_diagnostic(requisicao)
     anexos = conn.execute(
         """SELECT id,label,filename,original_filename,provider,criado_em
@@ -1181,47 +1202,50 @@ def admin_processar_requisicao(req_id):
             total_limit = snapshot_rule.limite_total
             semester_limit = snapshot_rule.limite_semestre
 
+            # Canonical limitation authority, shared with the student
+            # dashboard: only approved requests of this exact frozen rule
+            # (activity + axis + limits) participate; the request being
+            # processed is never counted twice; a semester limit uses the
+            # semester of this request's event, not the wall-clock semester.
+            try:
+                historico_aprovado = list_approved_request_history(
+                    conn, aluno_id=requisicao["aluno_id"]
+                )
+            except HistoricalRequestAuthorityError:
+                flash(RequisicaoSnapshotError.user_message, "error")
+                return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+
             if total_limit is not None:
-                horas_ja_deferidas = conn.execute("""
-                    SELECT COALESCE(SUM(
-                        CASE\x20
-                            WHEN status = 'Deferida' THEN horas_solicitadas
-                            WHEN status = 'Deferida Parcialmente' THEN horas_deferidas
-                            ELSE 0
-                        END
-                    ), 0) as total
-                    FROM requisicoes\x20
-                    WHERE aluno_id = ?
-                      AND json_extract(regra_snapshot_json,'$.atividade_base_id') = ?
-                      AND status IN ('Deferida', 'Deferida Parcialmente')
-                """, (requisicao["aluno_id"], snapshot_rule.atividade_base_id)).fetchone()[0]
+                horas_ja_deferidas = approved_hours_for_activity_rule(
+                    historico_aprovado,
+                    atividade_base_id=snapshot_rule.atividade_base_id,
+                    eixo=snapshot_rule.eixo,
+                    limite_semestre=snapshot_rule.limite_semestre,
+                    limite_total=snapshot_rule.limite_total,
+                    exclude_request_id=req_id,
+                )
 
                 if horas_ja_deferidas + horas_a_deferir > total_limit:
                     flash(f"Erro: O aluno já possui {horas_ja_deferidas}h nesta atividade. Limite total: {total_limit}h. Máximo a deferir agora: {total_limit - horas_ja_deferidas}h.", "error")
                     return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
             if semester_limit is not None:
-                ano_atual = datetime.datetime.now().year
-                semestre_atual = 1 if datetime.datetime.now().month <= 6 else 2
+                semestre_evento = semester_label_for_date(
+                    parse_event_date(requisicao["data_evento"])
+                )
+                if semestre_evento is None:
+                    flash("Informe uma data válida para o evento.", "error")
+                    return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
-                horas_ja_deferidas_semestre = conn.execute("""
-                    SELECT COALESCE(SUM(
-                        CASE\x20
-                            WHEN status = 'Deferida' THEN horas_solicitadas
-                            WHEN status = 'Deferida Parcialmente' THEN horas_deferidas
-                            ELSE 0
-                        END
-                    ), 0) as total
-                    FROM requisicoes\x20
-                    WHERE aluno_id = ?
-                      AND json_extract(regra_snapshot_json,'$.atividade_base_id') = ?
-                      AND status IN ('Deferida', 'Deferida Parcialmente')
-                    AND strftime('%Y', data_evento) = ?\x20
-                    AND (
-                        (? = 1 AND strftime('%m', data_evento) BETWEEN '01' AND '06') OR
-                        (? = 2 AND strftime('%m', data_evento) BETWEEN '07' AND '12')
-                    )
-                """, (requisicao["aluno_id"], snapshot_rule.atividade_base_id, str(ano_atual), semestre_atual, semestre_atual)).fetchone()[0]
+                horas_ja_deferidas_semestre = approved_hours_for_activity_rule(
+                    historico_aprovado,
+                    atividade_base_id=snapshot_rule.atividade_base_id,
+                    eixo=snapshot_rule.eixo,
+                    limite_semestre=snapshot_rule.limite_semestre,
+                    limite_total=snapshot_rule.limite_total,
+                    semester_label=semestre_evento,
+                    exclude_request_id=req_id,
+                )
 
                 if horas_ja_deferidas_semestre + horas_a_deferir > semester_limit:
                     flash(f"Erro: Já possui {horas_ja_deferidas_semestre}h neste semestre. Limite semestral: {semester_limit}h. Máximo agora: {semester_limit - horas_ja_deferidas_semestre}h.", "error")

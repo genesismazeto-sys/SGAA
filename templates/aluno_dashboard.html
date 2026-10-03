@@ -446,7 +446,7 @@
           {% for item in limitacoes_acad %}
             <div class="dashboard-limit-row">
               <div class="dashboard-limit-copy">
-                <span class="dashboard-limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="dashboard-limit-name">{{ item.nome }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
                 <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
               </div>
               <div class="dashboard-limit-meter">
@@ -473,7 +473,7 @@
           {% for item in limitacoes_ext %}
             <div class="dashboard-limit-row">
               <div class="dashboard-limit-copy">
-                <span class="dashboard-limit-name">{{ item.grupo }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="dashboard-limit-name">{{ item.nome }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
                 <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
               </div>
               <div class="dashboard-limit-meter">

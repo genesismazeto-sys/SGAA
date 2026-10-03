@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
 from app.presentation import format_date_ptbr
@@ -14,13 +15,60 @@ ACTIVITY_VERSION_SEMANTIC_FIELDS = frozenset({
     "versao_anterior_id",
 })
 
+# Longer reference lists are summarised ("e outras N") in the refusal text.
+_DELETE_DEPENDENCY_LIST_LIMIT = 5
+
 
 class ActivityVersionDeleteBlocked(ValueError):
-    def __init__(self, code: str, *, count: int = 0, reference_label: str = ""):
+    """A version delete refused for a concrete reason.
+
+    ``in_use`` carries the exact Requisições and Matrizes that still read the
+    version, so the refusal can name them.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        request_ids: tuple[int, ...] = (),
+        matrix_names: tuple[str, ...] = (),
+    ):
         super().__init__(code)
         self.code = code
-        self.count = count
-        self.reference_label = reference_label
+        self.request_ids = tuple(request_ids)
+        self.matrix_names = tuple(matrix_names)
+
+    def describe_dependencies(self) -> str:
+        return describe_activity_version_dependencies(
+            self.request_ids, self.matrix_names
+        )
+
+
+def _join_ptbr(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} e {items[-1]}"
+
+
+def _dependency_clause(singular: str, plural: str, labels) -> str:
+    labels = [str(label) for label in labels]
+    if len(labels) == 1:
+        return f"pela {singular} {labels[0]}"
+    shown = labels[:_DELETE_DEPENDENCY_LIST_LIMIT]
+    hidden = len(labels) - len(shown)
+    if hidden:
+        shown.append(f"outras {hidden}")
+    return f"pelas {plural} {_join_ptbr(shown)}"
+
+
+def describe_activity_version_dependencies(request_ids, matrix_names) -> str:
+    """Name the business records, e.g. 'pela requisição 2 e pela matriz 01.2025'."""
+    clauses = []
+    if request_ids:
+        clauses.append(_dependency_clause("requisição", "requisições", request_ids))
+    if matrix_names:
+        clauses.append(_dependency_clause("matriz", "matrizes", matrix_names))
+    return " e ".join(clauses)
 
 
 def parse_documentos_json(raw) -> list[str]:
@@ -291,16 +339,41 @@ def get_atividade_versao_usage_counts(conn, versao_id: int) -> dict:
     }
 
 
+def get_activity_version_business_references(
+    conn, versao_id: int
+) -> tuple[tuple[int, ...], tuple[str, ...]]:
+    """Return the Requisição ids and Matriz names that read this exact version."""
+    request_ids = tuple(
+        int(row[0])
+        for row in conn.execute(
+            "SELECT id FROM requisicoes WHERE atividade_versao_id = ? ORDER BY id",
+            (versao_id,),
+        )
+    )
+    matrix_names = tuple(
+        str(row[0])
+        for row in conn.execute(
+            "SELECT matriz.nome FROM matriz_atividade_versao_item item "
+            "JOIN matrizes_atividades matriz ON matriz.id = item.matriz_id "
+            "WHERE item.atividade_versao_id = ? ORDER BY matriz.nome, matriz.id",
+            (versao_id,),
+        )
+    )
+    return request_ids, matrix_names
+
+
 def assert_activity_version_can_be_safely_deleted(
     conn,
     *,
     base_id: int,
     versao_id: int,
 ):
-    """Return the exact disposable version or raise a concrete safe reason.
+    """Return the exact deletable version or raise the concrete blocking reason.
 
-    The caller must own the write transaction. This helper performs every
-    delete-eligibility read without mutating or repairing related records.
+    Only real business use blocks a delete: a Requisição (immutable history) or
+    a Matriz that selects this exact version. Being another version's
+    predecessor does not; ``delete_activity_version`` re-anchors that lineage.
+    Read-only; the caller must own the write transaction.
     """
     version = conn.execute(
         "SELECT * FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",
@@ -317,20 +390,129 @@ def assert_activity_version_can_be_safely_deleted(
     if int(surviving_count) < 1:
         raise ActivityVersionDeleteBlocked("sole_version")
 
-    usage = get_atividade_versao_usage_counts(conn, versao_id)
-    reference_checks = (
-        ("matriz_atividade_versao_item", "matrix_reference"),
-        ("requisicoes", "request_reference"),
-        ("atividade_versao_sucessora", "successor_reference"),
+    request_ids, matrix_names = get_activity_version_business_references(
+        conn, versao_id
     )
-    for usage_key, block_code in reference_checks:
-        count = int(usage[usage_key])
-        if count:
-            raise ActivityVersionDeleteBlocked(
-                block_code,
-                count=count,
-            )
+    if request_ids or matrix_names:
+        raise ActivityVersionDeleteBlocked(
+            "in_use", request_ids=request_ids, matrix_names=matrix_names
+        )
     return version
+
+
+def renumber_activity_versions(conn, base_id: int) -> None:
+    """Compact one base's ``numero_versao`` to the contiguous v1..vN sequence.
+
+    The existing (creation) order is kept: rows are taken by
+    ``numero_versao, id`` and only gaps close. Ascending assignment cannot
+    collide with UNIQUE(atividade_base_id, numero_versao): each target is at
+    most the row's current number, lower targets already belong to earlier
+    rows and later rows hold strictly larger numbers.
+    """
+    rows = conn.execute(
+        "SELECT id, numero_versao FROM atividade_versao "
+        "WHERE atividade_base_id = ? ORDER BY numero_versao, id",
+        (base_id,),
+    ).fetchall()
+    for position, (version_id, numero_versao) in enumerate(rows, start=1):
+        if int(numero_versao) != position:
+            conn.execute(
+                "UPDATE atividade_versao SET numero_versao = ? WHERE id = ?",
+                (position, version_id),
+            )
+
+
+def delete_activity_version(conn, *, base_id: int, versao_id: int) -> None:
+    """Hard-delete one version, keeping its base's lineage and numbering canonical.
+
+    Inside the caller's transaction: successors are re-anchored to the deleted
+    version's own predecessor (NULL when it was the first), its lifecycle
+    transition rows are removed, the row is deleted and the survivors are
+    renumbered v1..vN, so the next created version is vN+1. Survivor ids,
+    Requisições, their snapshots and Matriz links are never written. On any
+    error the caller must roll the whole transaction back.
+    """
+    version = assert_activity_version_can_be_safely_deleted(
+        conn, base_id=base_id, versao_id=versao_id
+    )
+    conn.execute(
+        "UPDATE atividade_versao SET versao_anterior_id = ? "
+        "WHERE versao_anterior_id = ?",
+        (version["versao_anterior_id"], versao_id),
+    )
+    conn.execute(
+        "DELETE FROM atividade_transicao "
+        "WHERE from_atividade_versao_id = ? OR to_atividade_versao_id = ?",
+        (versao_id, versao_id),
+    )
+    deleted = conn.execute(
+        "DELETE FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",
+        (versao_id, base_id),
+    )
+    if deleted.rowcount != 1:
+        raise sqlite3.IntegrityError("exact version delete lost its target")
+    renumber_activity_versions(conn, base_id)
+
+
+# Fields that compute a version's rule. Free text (observações, documentos)
+# is guidance whose equivalence the operator asserts before consolidating.
+_CONSOLIDATION_RULE_FIELDS = ("eixo", "ch_por_evento", "limite_semestre", "limite_total")
+
+
+def _grupo_number(grupo) -> str:
+    return str(grupo or "").split("-", 1)[0].strip()
+
+
+def consolidate_equivalent_activity_versions(
+    conn, *, base_id: int, keep_versao_id: int, remove_versao_id: int
+) -> None:
+    """Fold a duplicate version of the same rule into the surviving version.
+
+    Both versions must belong to ``base_id`` and compute the same rule (axis,
+    group number, hours, limits). Every Matriz selecting ``remove`` is
+    repointed to ``keep`` -- assigned Matrizes included, since the rule they
+    apply does not change -- and ``remove`` is then deleted through
+    ``delete_activity_version`` (lineage re-anchored, survivors renumbered).
+    Requisições are immutable history, so ``remove`` must have none; ``keep``,
+    its Requisições and their snapshots are never written. The caller owns
+    the transaction and rolls it back on any error.
+    """
+    if int(keep_versao_id) == int(remove_versao_id):
+        raise ValueError("A versão mantida e a removida devem ser diferentes.")
+    keep, remove = (
+        conn.execute(
+            "SELECT * FROM atividade_versao WHERE id = ? AND atividade_base_id = ?",
+            (versao_id, base_id),
+        ).fetchone()
+        for versao_id in (keep_versao_id, remove_versao_id)
+    )
+    if keep is None or remove is None:
+        raise ValueError("Versão não encontrada para esta atividade-base.")
+    differing = [
+        field for field in _CONSOLIDATION_RULE_FIELDS if keep[field] != remove[field]
+    ]
+    if _grupo_number(keep["grupo"]) != _grupo_number(remove["grupo"]):
+        differing.append("grupo")
+    if differing:
+        raise ValueError(
+            f"As versões não têm a mesma regra: {', '.join(differing)}."
+        )
+    request_ids, matrix_names = get_activity_version_business_references(
+        conn, remove_versao_id
+    )
+    if request_ids:
+        raise ValueError(
+            "A versão removida é utilizada "
+            f"{describe_activity_version_dependencies(request_ids, ())}."
+        )
+    if matrix_names and keep["status"] != "ativa":
+        raise ValueError("A versão mantida deve estar ativa para ser selecionada por Matriz.")
+    conn.execute(
+        "UPDATE matriz_atividade_versao_item SET atividade_versao_id = ? "
+        "WHERE atividade_versao_id = ? AND atividade_base_id = ?",
+        (keep_versao_id, remove_versao_id, base_id),
+    )
+    delete_activity_version(conn, base_id=base_id, versao_id=remove_versao_id)
 
 
 def can_activity_version_be_mutated_in_place(conn, versao_id: int) -> bool:
@@ -541,7 +723,12 @@ __all__ = [
     'get_next_numero_versao',
     'get_atividade_versao_by_id',
     'get_atividade_versao_usage_counts',
+    'describe_activity_version_dependencies',
+    'get_activity_version_business_references',
     'assert_activity_version_can_be_safely_deleted',
+    'renumber_activity_versions',
+    'delete_activity_version',
+    'consolidate_equivalent_activity_versions',
     'can_activity_version_be_mutated_in_place',
     'apply_activity_version_semantic_changes',
     'apply_latest_activity_version_semantic_changes',

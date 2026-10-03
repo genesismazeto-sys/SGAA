@@ -319,7 +319,9 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
                             governance.catalog_keys_before_backup_result(
                                 governance.catalog_keys_before_error_pages(
                                     governance.catalog_keys_before_aluno_header(
-                                        governance.catalog_keys_before_backup_lock(catalog)
+                                        governance.catalog_keys_before_backup_lock(
+                                            governance.catalog_keys_before_version_delete(catalog)
+                                        )
                                     )
                                 )
                             )
