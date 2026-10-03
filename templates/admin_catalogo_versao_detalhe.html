@@ -41,6 +41,9 @@
     .version-value-muted{ color:var(--text-secondary); }
     .version-usage{ display:inline-flex; align-items:center; gap:5px; color:var(--text-secondary); font-size:12px; }
     .version-usage .lucide{ width:13px; height:13px; }
+    .version-lineage{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+    .version-lineage-chain{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+    .version-lineage-arrow{ color:var(--text-secondary); }
     .version-substitute-card{ width:min(480px, calc(100vw - 32px)); max-height:calc(100vh - 32px); }
     .version-substitute-card .modal-header{ padding:16px 18px 8px; }
     .version-substitute-card .modal-body{ padding:12px 18px 18px; }
@@ -216,6 +219,28 @@
           {% endfor %}
         </div>
       </div>
+    {% endcall %}
+  </section>
+
+  <section class="version-section" aria-labelledby="lineage-title">
+    <div class="version-section-header">
+      <div>
+        <h2 class="version-section-title" id="lineage-title">Linhagem de versões</h2>
+        <p class="version-section-description">Sequência de predecessoras registrada entre as versões desta atividade.</p>
+      </div>
+    </div>
+
+    {% call cl.collection(lineage_chains, "Nenhuma linhagem registrada.") %}
+      <ul class="version-lineage" aria-label="Linhagem de versões">
+        {% for chain in lineage_chains %}
+          <li class="version-lineage-chain">
+            {% for v in chain %}
+              <span class="version-identifier" title="Versão v{{ v.numero_versao }}">v{{ v.numero_versao }}</span>
+              {% if not loop.last %}<span class="version-lineage-arrow" aria-hidden="true">&rarr;</span>{% endif %}
+            {% endfor %}
+          </li>
+        {% endfor %}
+      </ul>
     {% endcall %}
   </section>
 

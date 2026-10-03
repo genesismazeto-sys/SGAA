@@ -1043,6 +1043,39 @@ def admin_grupos_excluir():
         return jsonify({'ok': False, 'error': 'erro_interno'}), 500
 
 
+def _build_version_lineage(versoes) -> list[list]:
+    """Chain each base's versions through versao_anterior_id, ascending."""
+    by_id = {int(v["id"]): v for v in versoes}
+
+    def ordered(items):
+        return sorted(items, key=lambda v: (int(v["numero_versao"]), int(v["id"])))
+
+    children: dict[int, list] = {}
+    roots = []
+    for v in versoes:
+        previous = v["versao_anterior_id"]
+        if previous is not None and int(previous) in by_id:
+            children.setdefault(int(previous), []).append(v)
+        else:
+            roots.append(v)
+    chains: list[list] = []
+    visited: set[int] = set()
+    for root in ordered(roots):
+        chain = []
+        current = root
+        while current is not None and int(current["id"]) not in visited:
+            visited.add(int(current["id"]))
+            chain.append(current)
+            successors = ordered(children.get(int(current["id"]), []))
+            current = successors[0] if successors else None
+        chains.append(chain)
+    for v in ordered(versoes):
+        if int(v["id"]) not in visited:
+            visited.add(int(v["id"]))
+            chains.append([v])
+    return chains
+
+
 @admin_required
 def admin_catalogo_versao_detalhe(base_id: int):
     """
@@ -1100,6 +1133,7 @@ def admin_catalogo_versao_detalhe(base_id: int):
         "admin_catalogo_versao_detalhe.html",
         base=base,
         versoes=versoes,
+        lineage_chains=_build_version_lineage(versoes),
         substituicao_candidatas=substituicao_candidatas,
         transicoes_historico=transicoes_historico,
         nova_versao_url=nova_versao_url,
