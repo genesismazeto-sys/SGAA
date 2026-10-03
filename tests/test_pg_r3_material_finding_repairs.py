@@ -363,7 +363,7 @@ def test_f3_snapshot_display_is_snapshot_first_even_when_catalogue_differs():
     }
 
 
-def test_f3_student_list_and_detail_do_not_leak_mutated_catalogue_values(versioned_env):
+def test_f3_student_list_and_detail_use_current_base_name_and_frozen_rules(versioned_env):
     client = versioned_env["client"]
     login_admin(client)
     _, request_row = create_admin_request(client, "R3 snapshot presentation", version_id=29)
@@ -372,7 +372,7 @@ def test_f3_student_list_and_detail_do_not_leak_mutated_catalogue_values(version
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
-            "UPDATE atividade_base SET nome_conceito='LIVE NAME LEAK' WHERE id=?",
+            "UPDATE atividade_base SET nome_conceito='Current canonical activity label' WHERE id=?",
             (frozen["atividade_base_id"],),
         )
         conn.execute(
@@ -387,10 +387,15 @@ def test_f3_student_list_and_detail_do_not_leak_mutated_catalogue_values(version
     for page in pages:
         html = page.get_data(as_text=True)
         assert page.status_code == 200
-        assert frozen["nome_exibivel"] in html
+        # Operational labels follow the linked base; request-time rules stay frozen.
+        assert "Current canonical activity label" in html
         assert frozen["grupo"] in html
-        assert "LIVE NAME LEAK" not in html
         assert "LIVE-GROUP" not in html
+    with main.app.app_context():
+        persisted = main.get_db_connection().execute(
+            "SELECT * FROM requisicoes WHERE id=?", (request_row["id"],)
+        ).fetchone()
+        assert dict(persisted) == request_row
 
 
 def test_f4_progress_merges_current_and_history_for_same_exact_version(versioned_env):

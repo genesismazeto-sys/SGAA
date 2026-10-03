@@ -63,7 +63,7 @@ def test_historical_filters_use_frozen_identity(env):
         conn = main.get_db_connection()
         rows = conn.execute("SELECT * FROM requisicoes WHERE status='Deferida'").fetchall()
         history = read_historical_request(rows[0])
-        selected = filter_historical_request_rows(rows, grupo_filters=[history.grupo], query=history.nome)
+        selected = filter_historical_request_rows(rows, conn=conn, grupo_filters=[history.grupo], query=history.nome)
     assert len(selected) == 1
 
 

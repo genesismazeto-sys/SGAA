@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
@@ -77,15 +77,28 @@ def read_historical_request(row) -> HistoricalRequestRead:
     )
 
 
-def read_request_presentation(row) -> HistoricalRequestRead:
-    return read_historical_request(row)
+def read_request_presentation(row, *, conn) -> HistoricalRequestRead:
+    """Use the linked base label while retaining every frozen rule field."""
+    history = read_historical_request(row)
+    linked = conn.execute(
+        """SELECT base.nome_conceito
+             FROM atividade_versao version
+             JOIN atividade_base base ON base.id=version.atividade_base_id
+            WHERE version.id=? AND base.id=?""",
+        (history.atividade_versao_id, history.atividade_base_id),
+    ).fetchone()
+    if linked is None or not str(linked["nome_conceito"] or "").strip():
+        raise HistoricalRequestAuthorityError(
+            history.request_id, "linked_activity_base_unavailable"
+        )
+    return replace(history, nome=linked["nome_conceito"])
 
 
-def filter_historical_request_rows(rows: Iterable[object], *, tipo_filters=(), grupo_filters=(), atividade_filters=(), query="", extra_search_values: Callable[[object], Iterable[object]] | None=None):
+def filter_historical_request_rows(rows: Iterable[object], *, conn, tipo_filters=(), grupo_filters=(), atividade_filters=(), query="", extra_search_values: Callable[[object], Iterable[object]] | None=None):
     tipos, grupos, atividades = ({str(v).strip() for v in values if str(v).strip()} for values in (tipo_filters, grupo_filters, atividade_filters))
     needle, selected = str(query or "").strip().casefold(), []
     for row in rows:
-        history = read_request_presentation(row)
+        history = read_request_presentation(row, conn=conn)
         if tipos and history.tipo_atividade not in tipos: continue
         if grupos and history.grupo not in grupos: continue
         if atividades and history.nome not in atividades: continue

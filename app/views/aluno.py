@@ -435,7 +435,7 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
         (aluno_id,),
     ).fetchall()
     for raw_row in historical_rows:
-        row = read_request_presentation(raw_row)
+        row = read_request_presentation(raw_row, conn=conn)
         key = _version_progress_identity(
             row.atividade_versao_id,
             ("unversioned-history", row.request_id),
@@ -607,7 +607,7 @@ def aluno_dashboard():
     requisicoes = []
     for row in requisicoes_rows:
         item = {key: row[key] for key in row.keys()}
-        history = read_request_presentation(row)
+        history = read_request_presentation(row, conn=conn)
         item["atividade_nome"] = history.nome
         item["tipo_atividade"] = history.tipo_atividade
         item["grupo"] = history.grupo
@@ -1444,6 +1444,7 @@ def aluno_minhas_requisicoes():
     rows = conn.execute(query, params).fetchall()
     selected_rows = filter_historical_request_rows(
         rows,
+        conn=conn,
         tipo_filters=tipo_filters,
         grupo_filters=grupo_filters,
         atividade_filters=atividade_filters,
@@ -1499,7 +1500,7 @@ def aluno_minhas_requisicoes():
         (aluno_id,),
     ).fetchall()
 
-    filter_history = [read_request_presentation(row) for row in filter_rows]
+    filter_history = [read_request_presentation(row, conn=conn) for row in filter_rows]
     tipos_disponiveis = sorted({row.tipo_atividade for row in filter_history if row.tipo_atividade})
     grupos_disponiveis = sorted({row.grupo for row in filter_history if row.grupo})
     atividades_disponiveis = sorted({row.nome for row in filter_history if row.nome})
@@ -1997,7 +1998,7 @@ def aluno_requisicao_detalhe(req_id: int):
         regra_snapshot_json=row["regra_snapshot_json"] if "regra_snapshot_json" in row.keys() else None,
         versao_row=versao_row,
     )
-    history = read_request_presentation(row)
+    history = read_request_presentation(row, conn=conn)
 
     detalhe = {
         "id": row["id"],

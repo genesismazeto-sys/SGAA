@@ -437,6 +437,7 @@ def admin_requisicoes():
     requisicoes_rows = conn.execute(query, params).fetchall()
     selected_rows = filter_historical_request_rows(
         requisicoes_rows,
+        conn=conn,
         tipo_filters=tipo_filters,
         grupo_filters=grupo_filters,
         atividade_filters=atividade_filters,
@@ -531,7 +532,7 @@ def admin_requisicoes():
         SELECT r.* FROM requisicoes r
         """
     ).fetchall()
-    history_filters = [read_request_presentation(row) for row in history_filter_rows]
+    history_filters = [read_request_presentation(row, conn=conn) for row in history_filter_rows]
     tipos_filtro = [
         {"tipo_atividade": value}
         for value in sorted({row.tipo_atividade for row in history_filters})
@@ -959,7 +960,7 @@ def admin_detalhes_requisicao(req_id):
         flash("Requisição não encontrada.", "error")
         return redirect(url_for("admin_requisicoes"))
     item = {key: requisicao[key] for key in requisicao.keys()}
-    item["AtividadeNome"] = read_request_presentation(requisicao).nome
+    item["AtividadeNome"] = read_request_presentation(requisicao, conn=conn).nome
     anexos = conn.execute(
         """SELECT id,label,filename,original_filename,provider,criado_em
              FROM requisicao_arquivos
@@ -1019,7 +1020,7 @@ def admin_api_requisicao(req_id):
                 "activities": [],
             }
         ), 409
-    history = read_request_presentation(r)
+    history = read_request_presentation(r, conn=conn)
     data["atividade_nome"] = history.nome
     data["grupo"] = history.grupo
     data["tipo_atividade"] = history.tipo_atividade
