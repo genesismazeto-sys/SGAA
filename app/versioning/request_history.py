@@ -94,6 +94,29 @@ def read_request_presentation(row, *, conn) -> HistoricalRequestRead:
     return replace(history, nome=linked["nome_conceito"])
 
 
+def read_request_activity_option(row, *, conn):
+    """Project the immutable recorded activity, independent of current selections."""
+    history = read_request_presentation(row, conn=conn)
+    snapshot = read_requisicao_snapshot_for_processing(row)
+    rule = snapshot.rule
+    assert rule is not None and snapshot.payload is not None
+    return {
+        "id": history.atividade_versao_id,
+        "atividade_versao_id": history.atividade_versao_id,
+        "atividade_base_id": history.atividade_base_id,
+        "nome": history.nome,
+        "tipo_atividade": history.tipo_atividade,
+        "grupo": history.grupo,
+        "ch_por_evento": rule.ch_por_evento,
+        "limite_horas_total": history.limite_total,
+        "limite_horas_semestral": history.limite_semestre,
+        "documentos_json": snapshot.payload["documentos_json"],
+        "tem_limitacao": history.limite_total is not None or history.limite_semestre is not None,
+        "tipo_limitacao": "semestral" if history.limite_semestre is not None else "total",
+        "limite_horas": history.limite_semestre if history.limite_semestre is not None else history.limite_total,
+    }
+
+
 def filter_historical_request_rows(rows: Iterable[object], *, conn, tipo_filters=(), grupo_filters=(), atividade_filters=(), query="", extra_search_values: Callable[[object], Iterable[object]] | None=None):
     tipos, grupos, atividades = ({str(v).strip() for v in values if str(v).strip()} for values in (tipo_filters, grupo_filters, atividade_filters))
     needle, selected = str(query or "").strip().casefold(), []
@@ -147,4 +170,4 @@ def list_exact_matrix_activity_catalogue(conn, matriz_id: int):
     return result
 
 
-__all__=["AAC_ACTIVITY_TYPE","AEU_ACTIVITY_TYPE","APPROVED_STATUSES","HistoricalRequestAuthorityError","HistoricalRequestRead","filter_historical_request_rows","list_approved_request_history","list_exact_matrix_activity_catalogue","read_historical_request","read_request_presentation"]
+__all__=["AAC_ACTIVITY_TYPE","AEU_ACTIVITY_TYPE","APPROVED_STATUSES","HistoricalRequestAuthorityError","HistoricalRequestRead","filter_historical_request_rows","list_approved_request_history","list_exact_matrix_activity_catalogue","read_historical_request","read_request_presentation","read_request_activity_option"]

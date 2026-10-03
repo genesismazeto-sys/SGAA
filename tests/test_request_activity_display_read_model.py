@@ -10,6 +10,7 @@ import pytest
 from app.versioning.request_history import (
     HistoricalRequestAuthorityError,
     read_historical_request,
+    read_request_activity_option,
     read_request_presentation,
 )
 from app.versioning.snapshots import read_requisicao_snapshot_for_processing
@@ -82,6 +83,17 @@ def test_linked_display_name_wins_without_any_write_or_rule_substitution(linked_
     assert displayed.grupo == "5 - Historical group"
     assert displayed.limite_semestre == 20 and displayed.limite_total == 40
     assert displayed.approved_hours == 40
+    option = read_request_activity_option(row, conn=conn)
+    assert option["id"] == option["atividade_versao_id"] == 7
+    assert option["atividade_base_id"] == 5
+    assert option["nome"] == name
+    assert option["tipo_atividade"] == "Acadêmica Complementar"
+    assert option["grupo"] == "5 - Historical group"
+    assert option["ch_por_evento"] == 4
+    assert option["limite_horas_total"] == 40
+    assert option["limite_horas_semestral"] == option["limite_horas"] == 20
+    assert option["tipo_limitacao"] == "semestral" and option["tem_limitacao"] is True
+    assert option["documentos_json"] == '["Original required evidence"]'
     assert read_requisicao_snapshot_for_processing(row).payload == json.loads(
         before_row["regra_snapshot_json"]
     )

@@ -49,8 +49,10 @@ from app.storage.contracts import StorageError
 from app.text import normalize_header
 from app.uploads import _allowed, save_upload
 from app.versioning.request_history import (
+    HistoricalRequestAuthorityError,
     filter_historical_request_rows,
     list_exact_matrix_activity_catalogue,
+    read_request_activity_option,
     read_request_presentation,
 )
 from app.versioning.snapshots import (
@@ -1020,39 +1022,27 @@ def admin_api_requisicao(req_id):
                 "activities": [],
             }
         ), 409
-    history = read_request_presentation(r, conn=conn)
-    data["atividade_nome"] = history.nome
-    data["grupo"] = history.grupo
-    data["tipo_atividade"] = history.tipo_atividade
-    if snapshot.authority is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT:
-        rule = snapshot.rule
-        matriz = conn.execute(
-            "SELECT * FROM matrizes_atividades WHERE id = ?",
-            (rule.matriz_id_efetiva,),
-        ).fetchone()
-        activities = (
-            list_exact_matrix_activity_catalogue(conn, rule.matriz_id_efetiva)
-            if matriz
-            else []
-        )
-        coherent = any(
-            activity.get("atividade_versao_id") == rule.atividade_versao_id
-            for activity in activities
-        )
-        if not coherent:
-            return jsonify(
-                {
-                    "error": "historical-authority-unavailable",
-                    "activity_authority": "invalid",
-                    "allowed_activity_ids": [],
-                    "activities": [],
-                }
-            ), 409
-        allowed_activity_ids = {activity["atividade_versao_id"] for activity in activities}
-        data["activities"] = activities
-        data["activity_authority"] = "historical_snapshot"
-        data["current_activity_allowed"] = True
-    data["allowed_activity_ids"] = sorted(allowed_activity_ids)
+    try:
+        activity = read_request_activity_option(r, conn=conn)
+    except HistoricalRequestAuthorityError:
+        return jsonify({
+            "error": "historical-authority-unavailable",
+            "activity_authority": "invalid",
+            "allowed_activity_ids": [],
+            "activities": [],
+        }), 409
+    rule = snapshot.rule
+    matriz = conn.execute(
+        "SELECT * FROM matrizes_atividades WHERE id = ?",
+        (rule.matriz_id_efetiva,),
+    ).fetchone()
+    data["atividade_nome"] = activity["nome"]
+    data["grupo"] = activity["grupo"]
+    data["tipo_atividade"] = activity["tipo_atividade"]
+    data["activities"] = [activity]
+    data["activity_authority"] = "historical_snapshot"
+    data["current_activity_allowed"] = True
+    data["allowed_activity_ids"] = [activity["atividade_versao_id"]]
     data["matriz_scope"] = (
         {"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None
     )
