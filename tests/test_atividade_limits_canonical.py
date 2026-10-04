@@ -11,6 +11,7 @@ authority.
 from __future__ import annotations
 
 import datetime
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -323,10 +324,92 @@ def test_dashboard_renders_one_line_per_activity_rule(env):
     assert "45/40" in section
     assert "Participação em eventos técnico-científicos (semestral)" in section
     assert "10/20" in section
-    assert "Visitas técnicas ou culturais (total)" in section
+    assert "Visitas técnicas ou culturais (total no curso)" in section
     assert "30/100" in section
     assert MATRIX1_GROUP not in section
     assert "data-pct=\"112\"" in section
+
+
+def _reference_label(today=None):
+    today = today or datetime.date.today()
+    return f"{1 if today.month <= 6 else 2}S/{today.year}"
+
+
+def _limit_rows(section):
+    return dict(
+        re.findall(
+            r'dashboard-limit-name">([^<]+)</span>\s*<span class="progress-meta-value">([^<]+)</span>',
+            section,
+        )
+    )
+
+
+def test_dashboard_titles_name_the_dynamic_reference_semester(env):
+    client = env["client"]
+    student = _student_in_matrix1()
+    _login_student(client, student["usuario_id"])
+    html = client.get("/aluno/dashboard").get_data(as_text=True)
+
+    ref = _reference_label()
+    assert f"Limitações - Acadêmicas Complementares (ref. {ref})</div>" in html
+    assert f"Limitações - Extensão Universitária (ref. {ref})</div>" in html
+
+
+def test_title_reference_is_the_semester_the_calculation_uses(env, monkeypatch):
+    from app.views import aluno as aluno_view
+
+    client = env["client"]
+    student = _student_in_matrix1()
+    past = _other_past_semester_date()
+    in_past = _create_request(client, student["aluno_id"], 3, "REF past", past, 10)
+    _approve_direct(in_past["id"])
+    current = _create_request(client, student["aluno_id"], 3, "REF now", _current_semester_date(), 5)
+    _approve_direct(current["id"])
+    past_date = datetime.date.fromisoformat(past)
+    past_semester = f"{past_date.year}/{1 if past_date.month <= 6 else 2}"
+    # Pin the calculation's reference to the past semester: the title follows it
+    # and the semester line counts only that semester's hours.
+    monkeypatch.setattr(aluno_view, "_get_semestre", lambda _date: past_semester)
+
+    _login_student(client, student["usuario_id"])
+    html = client.get("/aluno/dashboard").get_data(as_text=True)
+
+    heading = f"Limitações - Acadêmicas Complementares (ref. {_reference_label(past_date)})"
+    assert _limit_rows(_limits_section(html, heading)) == {
+        "Participação em eventos técnico-científicos (semestral)": "10/20",
+    }
+
+
+def test_semester_line_uses_only_the_reference_semester_and_total_line_the_whole_course(env):
+    client = env["client"]
+    student = _student_in_matrix1()
+    today, past = _current_semester_date(), _other_past_semester_date()
+    for version_id, nome, data, horas in (
+        (3, "SEM past", past, 15), (3, "SEM now", today, 5),
+        (2, "TOT past", past, 40), (2, "TOT now", today, 30),
+    ):
+        _approve_direct(_create_request(client, student["aluno_id"], version_id, nome, data, horas)["id"])
+
+    _login_student(client, student["usuario_id"])
+    html = client.get("/aluno/dashboard").get_data(as_text=True)
+    section = _limits_section(html, "Limitações - Acadêmicas Complementares")
+
+    assert _limit_rows(section) == {
+        "Participação em eventos técnico-científicos (semestral)": "5/20",
+        "Visitas técnicas ou culturais (total no curso)": "70/100",
+    }
+
+
+def test_empty_limitation_blocks_use_the_neutral_text(env):
+    client = env["client"]
+    student = _student_in_matrix1()
+    _login_student(client, student["usuario_id"])
+    html = client.get("/aluno/dashboard").get_data(as_text=True)
+
+    for kind in ("Acadêmicas Complementares", "Extensão Universitária"):
+        section = _limits_section(html, f"Limitações - {kind}")
+        assert "Nenhuma atividade com limitação aplicável neste momento." in section
+    assert "Nenhuma solicitação de atividades com limitação." not in html
 
 
 def test_dashboard_group5_170h_regression_has_no_aggregate_line(env):

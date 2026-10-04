@@ -58,6 +58,8 @@ from app.versioning.request_history import (
     read_request_presentation,
 )
 from app.versioning.request_limits import (
+    SEMESTRAL,
+    TOTAL,
     build_atividade_rule_summary,
     parse_event_date,
     semester_label_for_date,
@@ -300,6 +302,16 @@ def _parse_iso_date(value: Any) -> datetime.date | None:
 
 def _get_semestre(data: datetime.date) -> str:
     return semester_label_for_date(data)
+
+
+def _format_semestre_referencia(label: str | None) -> str:
+    """Present a ``YYYY/N`` semester as ``NS/YYYY`` (e.g. 2026/2 -> 2S/2026)."""
+    ano, _, semestre = str(label or "").partition("/")
+    return f"{semestre}S/{ano}" if ano and semestre else ""
+
+
+# How each limitation line's period reads on the student dashboard.
+_PERIODICIDADE_LABELS = {SEMESTRAL: "semestral", TOTAL: "total no curso"}
 
 
 def _semestre_sort_key(label: str) -> tuple[int, int]:
@@ -689,9 +701,10 @@ def aluno_dashboard():
     # Canonical limitation authority: one line per Activity rule, never per
     # group. Semester lines count only the current semester's approved hours;
     # total lines count the whole history of that exact frozen rule.
+    semestre_referencia = _get_semestre(hoje)
     resumo_limites = build_atividade_rule_summary(
         historico_aprovado,
-        semester_label=_get_semestre(hoje),
+        semester_label=semestre_referencia,
     )
     limitacoes_acad = []
     limitacoes_ext = []
@@ -707,6 +720,7 @@ def aluno_dashboard():
             "consumido_fmt": _format_hours_number(linha.consumido),
             "limite_fmt": _format_hours_number(linha.limite),
             "periodicidade": linha.periodicidade,
+            "periodicidade_label": _PERIODICIDADE_LABELS[linha.periodicidade],
             "pct": linha.pct,
         }
         if linha.tipo_atividade == AAC_ACTIVITY_TYPE:
@@ -757,6 +771,7 @@ def aluno_dashboard():
         corrigiveis_ext=corrigiveis_ext,
         limitacoes_acad=limitacoes_acad,
         limitacoes_ext=limitacoes_ext,
+        semestre_referencia_label=_format_semestre_referencia(semestre_referencia),
         alertas_ativos=alertas_ativos,
     )
 

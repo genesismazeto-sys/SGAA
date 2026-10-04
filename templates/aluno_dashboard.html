@@ -439,14 +439,14 @@
 
   <!-- Limitações - Acadêmicas Complementares -->
   <section class="content-block">
-    <div class="content-block-header">Limitações - Acadêmicas Complementares</div>
+    <div class="content-block-header">Limitações - Acadêmicas Complementares{% if semestre_referencia_label %} (ref. {{ semestre_referencia_label }}){% endif %}</div>
     <div class="content-block-body" style="width:100%;">
       {% if limitacoes_acad %}
         <div class="dashboard-limit-list">
           {% for item in limitacoes_acad %}
             <div class="dashboard-limit-row">
               <div class="dashboard-limit-copy">
-                <span class="dashboard-limit-name">{{ item.nome }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="dashboard-limit-name">{{ item.nome }} ({{ item.periodicidade_label }})</span>
                 <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
               </div>
               <div class="dashboard-limit-meter">
@@ -459,21 +459,21 @@
           {% endfor %}
         </div>
       {% else %}
-        <div class="dashboard-limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+        <div class="dashboard-limit-empty">Nenhuma atividade com limitação aplicável neste momento.</div>
       {% endif %}
     </div>
   </section>
 
   <!-- Limitações - Extensão Universitária -->
   <section class="content-block">
-    <div class="content-block-header">Limitações - Extensão Universitária</div>
+    <div class="content-block-header">Limitações - Extensão Universitária{% if semestre_referencia_label %} (ref. {{ semestre_referencia_label }}){% endif %}</div>
     <div class="content-block-body" style="width:100%;">
       {% if limitacoes_ext %}
         <div class="dashboard-limit-list">
           {% for item in limitacoes_ext %}
             <div class="dashboard-limit-row">
               <div class="dashboard-limit-copy">
-                <span class="dashboard-limit-name">{{ item.nome }}{% if item.periodicidade %} ({{ item.periodicidade }}){% endif %}</span>
+                <span class="dashboard-limit-name">{{ item.nome }} ({{ item.periodicidade_label }})</span>
                 <span class="progress-meta-value">{{ item.consumido_fmt }}/{{ item.limite_fmt }}</span>
               </div>
               <div class="dashboard-limit-meter">
@@ -486,7 +486,7 @@
           {% endfor %}
         </div>
       {% else %}
-        <div class="dashboard-limit-empty">Nenhuma solicitação de atividades com limitação.</div>
+        <div class="dashboard-limit-empty">Nenhuma atividade com limitação aplicável neste momento.</div>
       {% endif %}
     </div>
   </section>
