@@ -6,6 +6,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
+from app.db import connection_in_transaction
 from app.user_accounts import CREDENTIAL_STATE_PERSONAL, first_access_redeemable
 
 
@@ -205,7 +206,7 @@ def consume_password_token_and_set_password(
     valid.  Hashing is intentionally performed by the caller before the write
     transaction so PBKDF2 never holds the SQLite write lock.
     """
-    if conn.in_transaction:
+    if connection_in_transaction(conn):
         raise PasswordTokenError("password token consumption requires a clean transaction")
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -240,7 +241,7 @@ def consume_password_token_and_set_password(
         conn.execute("COMMIT")
         return auth_version
     except Exception:
-        if conn.in_transaction:
+        if connection_in_transaction(conn):
             conn.execute("ROLLBACK")
         raise
 

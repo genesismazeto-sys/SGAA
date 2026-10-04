@@ -8,8 +8,6 @@ LegacyRouteSpec.
 
 from __future__ import annotations
 
-import sqlite3
-
 from flask import (
     Blueprint,
     redirect,
@@ -20,7 +18,12 @@ from flask import (
 )
 
 from app.auth import admin_required
-from app.db import get_db_connection
+from app.db import (
+    get_db_connection,
+    integrity_constraint_name,
+    is_integrity_error,
+    is_unique_violation,
+)
 from app.db_maintenance import ensure_usuario_profile_schema
 from app.root_admin import RootAdminEmailLocked, is_root_admin
 from app.security.passwords import hash_password
@@ -106,17 +109,19 @@ def admin_meus_dados():
                 session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
             flash("Seus dados foram atualizados com sucesso.", "success")
             return redirect(url_for("admin_meus_dados"))
-        except sqlite3.IntegrityError as exc:
-            if "UNIQUE constraint failed: usuarios.email" in str(exc):
-                flash("Erro: Já existe outro usuário com este e-mail.", "error")
-            else:
-                flash(f"Erro ao atualizar dados: {exc}", "error")
         except InvalidEmailError as exc:
             flash(str(exc), "error")
         except RootAdminEmailLocked:
             flash("O e-mail do administrador raiz não pode ser alterado por esta tela.", "error")
         except Exception as exc:
-            flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
+            if is_integrity_error(exc):
+                conn.rollback()
+                if is_unique_violation(exc) and integrity_constraint_name(exc) == "usuarios.email":
+                    flash("Erro: Já existe outro usuário com este e-mail.", "error")
+                else:
+                    flash(f"Erro ao atualizar dados: {exc}", "error")
+            else:
+                flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
 
     return render_template(
         "aluno_meus_dados.html",

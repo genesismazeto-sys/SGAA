@@ -8,7 +8,6 @@ main; registra apenas rotas legadas via LegacyRouteSpec.
 from __future__ import annotations
 
 import logging
-import sqlite3
 
 from flask import (
     Blueprint,
@@ -39,7 +38,7 @@ from app.auth import (
     normalize_permission_scope,
     permission_scope_label,
 )
-from app.db import get_db_connection
+from app.db import get_db_connection, is_integrity_error
 from app.db_maintenance import (
     ensure_usuario_access_schema,
     ensure_usuario_profile_schema,
@@ -638,7 +637,7 @@ def admin_acesso_salvar():
                 nivel_acesso,
                 credential_state=credential_state,
             )
-            usuario_id = cursor.lastrowid
+            usuario_id = cursor.usuario_id
 
         aluno_existente = conn.execute("SELECT id, turma_id, matriz_id FROM alunos WHERE usuario_id = ?", (usuario_id,)).fetchone()
         if user_type == "aluno":
@@ -718,7 +717,9 @@ def admin_acesso_salvar():
         _persist_user_access_overrides(conn, usuario_id, nivel_acesso, access_overrides if user_type == "admin" else {})
 
         conn.commit()
-    except (sqlite3.IntegrityError, StudentMatrixError) as exc:
+    except Exception as exc:
+        if not is_integrity_error(exc) and not isinstance(exc, StudentMatrixError):
+            raise
         conn.rollback()
         flash(f"Falha ao salvar acesso: {exc}", "error")
         return redirect(url_for("admin_acesso"))
@@ -920,7 +921,9 @@ def admin_acesso_deletar(usuario_id):
     try:
         _revoke_usuario_access(conn, usuario_id)
         conn.commit()
-    except sqlite3.IntegrityError:
+    except Exception as exc:
+        if not is_integrity_error(exc):
+            raise
         conn.rollback()
         debug_code = f"ACCESS_DELETE_{usuario_id}"
         logger.warning(

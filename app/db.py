@@ -275,6 +275,8 @@ def _psycopg_error_types():
 
 def classify_database_error(exc):
     """Map an engine exception to the neutral class, or ``None`` if unknown."""
+    if isinstance(exc, DatabaseAdapterError):
+        return exc
     if isinstance(exc, sqlite3.IntegrityError):
         return DatabaseIntegrityError(
             str(exc),

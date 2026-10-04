@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 
+from app.db import DatabaseIntegrityError
 from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
 from app.presentation import format_date_ptbr
 from app.text import normalize_header
@@ -450,7 +450,7 @@ def delete_activity_version(conn, *, base_id: int, versao_id: int) -> None:
         (versao_id, base_id),
     )
     if deleted.rowcount != 1:
-        raise sqlite3.IntegrityError("exact version delete lost its target")
+        raise DatabaseIntegrityError("exact version delete lost its target")
     renumber_activity_versions(conn, base_id)
 
 

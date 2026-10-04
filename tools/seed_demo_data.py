@@ -74,7 +74,7 @@ def seed():
                 cur = create_usuario_with_default_password(
                     conn, nome, email, "aluno"
                 )
-                user_id = cur.lastrowid
+                user_id = cur.usuario_id
 
             # Escolhe uma turma para o aluno (distribui ciclicamente)
             turma_id = None

@@ -5,12 +5,12 @@ import hashlib
 import mimetypes
 import os
 import secrets
-import sqlite3
 from dataclasses import dataclass
 
 from flask import current_app
 from werkzeug.utils import secure_filename
 
+from app.db import classify_database_error
 from app.file_validation import MIME_BY_EXTENSION, detect_supported_mime
 from app.storage.contracts import (
     ManagedObjectStorage,
@@ -231,7 +231,9 @@ def create_arquivo(
         )
         conn.commit()
         _raise_storage(exc)
-    except sqlite3.Error as exc:
+    except Exception as exc:
+        if classify_database_error(exc) is None:
+            raise
         conn.rollback()
         conn.execute(
             "UPDATE admin_arquivos SET storage_status='reconciliation_required',failure_code='ACTIVATION_DB_PENDING' WHERE id=?",
@@ -429,7 +431,9 @@ def _promote_replacement(
             ),
         )
         conn.commit()
-    except sqlite3.Error as exc:
+    except Exception as exc:
+        if classify_database_error(exc) is None:
+            raise
         conn.rollback()
         conn.execute(
             "UPDATE admin_arquivos SET failure_code='REPLACEMENT_ACTIVATION_PENDING' WHERE id=?",
@@ -627,7 +631,9 @@ def delete_arquivo(conn, arquivo_id: int, *, upload_root: str) -> None:
     try:
         conn.execute("DELETE FROM admin_arquivos WHERE id=?", (int(arquivo_id),))
         conn.commit()
-    except sqlite3.Error as exc:
+    except Exception as exc:
+        if classify_database_error(exc) is None:
+            raise
         conn.rollback()
         conn.execute(
             "UPDATE admin_arquivos SET failure_code='DELETE_DB_PENDING' WHERE id=?",

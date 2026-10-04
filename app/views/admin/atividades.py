@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import secrets
-import sqlite3
 
 from flask import (
     Blueprint,
@@ -40,7 +39,13 @@ from app.activity_catalog import (
     rename_current_activity_group_versions,
 )
 from app.auth import admin_required
-from app.db import get_db_connection
+from app.db import (
+    DatabaseIntegrityError,
+    get_db_connection,
+    integrity_constraint_name,
+    is_integrity_error,
+    is_unique_violation,
+)
 from app.db_maintenance import (
     ensure_atividade_versioning_schema,
     ensure_matriz_atividade_links_table,
@@ -811,18 +816,18 @@ def admin_adicionar_atividade():
             conn.commit()
             flash("Atividade adicionada com sucesso.", "success")
             return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
-        except sqlite3.IntegrityError as e:
+        except Exception as e:
             conn.rollback()
-            msg = str(e).lower()
-            if 'not null constraint failed' in msg and 'atividade_versao.grupo' in msg:
-                flash("Erro: selecione um número de grupo válido.", "error")
-            elif 'unique' in msg and 'nome' in msg:
-                flash("Erro: Atividade com este nome já existe.", "error")
+            if is_integrity_error(e):
+                constraint = integrity_constraint_name(e) or ""
+                if not is_unique_violation(e) and constraint == "atividade_versao.grupo":
+                    flash("Erro: selecione um número de grupo válido.", "error")
+                elif is_unique_violation(e) and "nome" in constraint:
+                    flash("Erro: Atividade com este nome já existe.", "error")
+                else:
+                    flash(f"Erro de integridade: {e}", "error")
             else:
-                flash(f"Erro de integridade: {e}", "error")
-        except Exception as exc:
-            conn.rollback()
-            flash(f"Erro ao adicionar atividade: {exc}", "error")
+                flash(f"Erro ao adicionar atividade: {e}", "error")
         return _render()
 
     return _render()
@@ -877,14 +882,14 @@ def admin_deletar_atividade(atividade_id):
             conn.execute("DELETE FROM atividade_base WHERE id=?", (atividade['atividade_base_id'],))
         conn.commit()
         flash("Atividade deletada com sucesso.", "success")
-    except sqlite3.IntegrityError:
+    except Exception as exc:
         conn.rollback()
-        logging.exception("Erro de integridade ao deletar atividade %s", atividade_id)
-        flash("Não foi possível excluir a atividade porque ela possui vínculos em uso no sistema.", "error")
-    except Exception:
-        conn.rollback()
-        logging.exception("Erro inesperado ao deletar atividade %s", atividade_id)
-        flash("Erro interno ao deletar atividade.", "error")
+        if is_integrity_error(exc):
+            logging.exception("Erro de integridade ao deletar atividade %s", atividade_id)
+            flash("Não foi possível excluir a atividade porque ela possui vínculos em uso no sistema.", "error")
+        else:
+            logging.exception("Erro inesperado ao deletar atividade %s", atividade_id)
+            flash("Erro interno ao deletar atividade.", "error")
     return redirect(url_for("admin_atividades"))
 
 
@@ -950,10 +955,12 @@ def admin_atividades_importar_confirmar():
                         expected_axis=axis,
                     )
                 except ValueError as exc:
-                    raise sqlite3.IntegrityError(str(exc)) from exc
+                    raise DatabaseIntegrityError(str(exc)) from exc
                 updated += 1
         conn.commit()
-    except sqlite3.IntegrityError as exc:
+    except Exception as exc:
+        if not is_integrity_error(exc):
+            raise
         conn.rollback()
         flash(f"Falha ao confirmar importação: {exc}", "error")
         _delete_atividades_import_preview(preview_key)

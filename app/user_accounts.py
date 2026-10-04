@@ -234,6 +234,28 @@ def set_usuario_email(conn, usuario_id: int, email: str) -> bool:
     return changed
 
 
+class UsuarioInsertResult:
+    """Engine-neutral inserted-id result of ``create_usuario_with_access_level``.
+
+    The id comes from the ``INSERT ... RETURNING id`` row and is available on
+    both engines; the historical cursor attribute name is kept for existing
+    callers.
+    """
+
+    __slots__ = ("_usuario_id",)
+
+    def __init__(self, usuario_id: int):
+        self._usuario_id = int(usuario_id)
+
+    @property
+    def usuario_id(self) -> int:
+        return self._usuario_id
+
+    @property
+    def lastrowid(self) -> int:
+        return self._usuario_id
+
+
 def create_usuario_with_access_level(
     conn,
     nome: str,
@@ -250,8 +272,9 @@ def create_usuario_with_access_level(
         " VALUES (?, ?, ?, ?, ?) RETURNING id",
         (nome, email, senha_hash, user_type, access_level),
     )
-    set_usuario_credential_state(conn, int(cursor.fetchone()[0]), credential_state)
-    return cursor
+    usuario_id = int(cursor.fetchone()[0])
+    set_usuario_credential_state(conn, usuario_id, credential_state)
+    return UsuarioInsertResult(usuario_id)
 
 
 def set_usuarios_password_hash(

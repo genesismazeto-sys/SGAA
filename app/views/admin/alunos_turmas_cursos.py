@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import sqlite3
 import traceback
 from datetime import date
 from urllib.parse import urlsplit
@@ -30,6 +29,9 @@ from app.db import (
     ensure_turmas_matriz_schema,
     ensure_usuario_access_schema,
     get_db_connection,
+    integrity_constraint_name,
+    is_integrity_error,
+    is_unique_violation,
 )
 from app.db_maintenance import ensure_matrizes_atividades_table
 from app.matrix_scope import _matriz_option_label, get_effective_matriz_for_turma
@@ -396,8 +398,11 @@ def admin_adicionar_curso():
             conn.commit()
             flash("Curso criado com sucesso.", "success")
             return redirect(url_for("admin_cursos"))
-        except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed: cursos.codigo" in str(e):
+        except Exception as e:
+            if not is_integrity_error(e):
+                raise
+            conn.rollback()
+            if is_unique_violation(e) and integrity_constraint_name(e) == "cursos.codigo":
                 flash("Já existe um curso com este código.", "error")
             else:
                 flash(f"Erro ao criar curso: {e}", "error")
@@ -447,7 +452,9 @@ def admin_editar_curso(curso_id, *, force_readonly=False):
                     conn.execute(f"SAVEPOINT {savepoint}")
                     try:
                         conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (novo, t["id"]))
-                    except sqlite3.IntegrityError:
+                    except Exception as exc:
+                        if not is_integrity_error(exc):
+                            raise
                         # evitar colisão improvável
                         conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
                         conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (f"{novo}-{t['id']}", t["id"]))
@@ -455,8 +462,11 @@ def admin_editar_curso(curso_id, *, force_readonly=False):
             conn.commit()
             flash("Curso atualizado com sucesso.", "success")
             return redirect(url_for("admin_cursos"))
-        except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed: cursos.codigo" in str(e):
+        except Exception as e:
+            if not is_integrity_error(e):
+                raise
+            conn.rollback()
+            if is_unique_violation(e) and integrity_constraint_name(e) == "cursos.codigo":
                 flash("Já existe um curso com este código.", "error")
             else:
                 flash(f"Erro ao atualizar curso: {e}", "error")
@@ -722,7 +732,7 @@ def admin_adicionar_aluno():
                 )
             else:
                 cursor = create_usuario_pending(conn, nome, email, "aluno")
-            usuario_id = cursor.lastrowid
+            usuario_id = cursor.usuario_id
             matriz_id = matrix_for_turma_assignment(
                 conn, current_matriz_id=None, turma_id=turma_id
             )
@@ -733,19 +743,21 @@ def admin_adicionar_aluno():
             conn.commit()
             flash("Aluno adicionado com sucesso.", "success")
             return redirect(_safe_return_to_target("admin_alunos"))
-        except sqlite3.IntegrityError as e:
-            if "UNIQUE constraint failed: usuarios.email" in str(e):
-                flash("Erro: Já existe um usuário com este e-mail.", "error")
-            elif "UNIQUE constraint failed: alunos.matricula" in str(e):
-                flash("Erro: Já existe um aluno com esta matrícula.", "error")
-            else:
-                flash(f"Erro ao adicionar aluno: {e}", "error")
         except (InvalidEmailError, StudentMatrixError) as e:
             conn.rollback()
             flash(str(e), "error")
         except Exception as e:
-            conn.rollback()
-            flash(f"Erro inesperado ao adicionar aluno: {e}", "error")
+            if is_integrity_error(e):
+                conn.rollback()
+                if is_unique_violation(e) and integrity_constraint_name(e) == "usuarios.email":
+                    flash("Erro: Já existe um usuário com este e-mail.", "error")
+                elif is_unique_violation(e) and integrity_constraint_name(e) == "alunos.matricula":
+                    flash("Erro: Já existe um aluno com esta matrícula.", "error")
+                else:
+                    flash(f"Erro ao adicionar aluno: {e}", "error")
+            else:
+                conn.rollback()
+                flash(f"Erro inesperado ao adicionar aluno: {e}", "error")
 
     # Compat: templates antigos esperam (id, nome). Exibo código como "nome".
     turmas = conn.execute("""
@@ -829,20 +841,20 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
             conn.commit()
             flash("Aluno atualizado com sucesso.", "success")
             return redirect(url_for("admin_alunos"))
-        except sqlite3.IntegrityError as e:
-            conn.rollback()
-            if "UNIQUE constraint failed: usuarios.email" in str(e):
-                flash("Erro: Já existe outro usuário com este e-mail.", "error")
-            elif "UNIQUE constraint failed: alunos.matricula" in str(e):
-                flash("Erro: Já existe outro aluno com esta matrícula.", "error")
-            else:
-                flash(f"Erro ao atualizar aluno: {e}", "error")
         except (InvalidEmailError, StudentMatrixError) as e:
             conn.rollback()
             flash(str(e), "error")
         except Exception as e:
             conn.rollback()
-            flash(f"Erro inesperado ao atualizar aluno: {e}", "error")
+            if is_integrity_error(e):
+                if is_unique_violation(e) and integrity_constraint_name(e) == "usuarios.email":
+                    flash("Erro: Já existe outro usuário com este e-mail.", "error")
+                elif is_unique_violation(e) and integrity_constraint_name(e) == "alunos.matricula":
+                    flash("Erro: Já existe outro aluno com esta matrícula.", "error")
+                else:
+                    flash(f"Erro ao atualizar aluno: {e}", "error")
+            else:
+                flash(f"Erro inesperado ao atualizar aluno: {e}", "error")
 
     turmas = conn.execute("""
         SELECT t.id, COALESCE(t.codigo, t.nome) AS nome
@@ -1167,7 +1179,9 @@ def admin_adicionar_turma():
             conn.commit()
             flash("Turma criada com sucesso.", "success")
             return redirect(url_for("admin_turmas"))
-        except (sqlite3.IntegrityError, ValueError) as e:
+        except Exception as e:
+            if not (is_integrity_error(e) or isinstance(e, ValueError)):
+                raise
             conn.rollback()
             flash(f"Erro ao criar turma: {e}", "error")
         finally:
@@ -1276,7 +1290,9 @@ def admin_editar_turma(turma_id):
             conn.commit()
             flash("Turma atualizada com sucesso.", "success")
             return redirect(url_for("admin_turmas"))
-        except (sqlite3.IntegrityError, ValueError) as e:
+        except Exception as e:
+            if not (is_integrity_error(e) or isinstance(e, ValueError)):
+                raise
             conn.rollback()
             flash(f"Erro ao atualizar turma: {e}", "error")
         finally:

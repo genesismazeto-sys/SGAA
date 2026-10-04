@@ -5,7 +5,6 @@ import io
 import json
 import os
 import re
-import sqlite3
 from typing import Any
 
 from flask import (
@@ -77,7 +76,12 @@ from app.user_accounts import (
     set_usuario_email,
     set_usuario_password_hash,
 )
-from app.db import get_db_connection
+from app.db import (
+    get_db_connection,
+    integrity_constraint_name,
+    is_integrity_error,
+    is_unique_violation,
+)
 from app.student_documents import (
     save_student_document,
 )
@@ -947,20 +951,20 @@ def aluno_meus_dados():
                 session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
             flash("Seus dados foram atualizados com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
-        except sqlite3.IntegrityError as exc:
-            conn.rollback()
-            if "UNIQUE constraint failed: usuarios.email" in str(exc):
-                flash("Erro: Já existe outro usuário com este e-mail.", "error")
-            elif "UNIQUE constraint failed: alunos.matricula" in str(exc):
-                flash("Erro: Já existe outro aluno com esta matrícula.", "error")
-            else:
-                flash(f"Erro ao atualizar dados: {exc}", "error")
         except (InvalidEmailError, StudentMatrixError) as exc:
             conn.rollback()
             flash(str(exc), "error")
         except Exception as exc:
             conn.rollback()
-            flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
+            if is_integrity_error(exc):
+                if is_unique_violation(exc) and integrity_constraint_name(exc) == "usuarios.email":
+                    flash("Erro: Já existe outro usuário com este e-mail.", "error")
+                elif is_unique_violation(exc) and integrity_constraint_name(exc) == "alunos.matricula":
+                    flash("Erro: Já existe outro aluno com esta matrícula.", "error")
+                else:
+                    flash(f"Erro ao atualizar dados: {exc}", "error")
+            else:
+                flash(f"Erro inesperado ao atualizar dados: {exc}", "error")
 
     turmas = conn.execute(
         """

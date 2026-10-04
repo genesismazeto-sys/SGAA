@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+from app.db import is_integrity_error
 from app.student_import import (
     StudentImportError,
     StudentImportRow,
@@ -162,7 +162,7 @@ def _persist_student_row(
         # Sem hash pré-calculado sobrando, create_usuario_pending gera um.
         senha_hash=pending_password_hashes.pop() if pending_password_hashes else None,
     )
-    usuario_id = usuario.lastrowid
+    usuario_id = usuario.usuario_id
     conn.execute(
         """
         INSERT INTO alunos (usuario_id,nome,email,matricula,turma_id,matriz_id,status)
@@ -234,12 +234,14 @@ def _persist_rows(
             updated += outcome == "updated"
         except StudentImportError:
             raise
-        except sqlite3.IntegrityError as exc:
+        except ValueError as exc:
+            raise StudentImportError(f"Linha {row.source_row}: {exc}") from exc
+        except Exception as exc:
+            if not is_integrity_error(exc):
+                raise
             raise StudentImportError(
                 f"Linha {row.source_row}: matrícula ou e-mail em conflito com um cadastro existente."
             ) from exc
-        except ValueError as exc:
-            raise StudentImportError(f"Linha {row.source_row}: {exc}") from exc
     return StudentImportResult(created=created, updated=updated, skipped=skipped)
 
 

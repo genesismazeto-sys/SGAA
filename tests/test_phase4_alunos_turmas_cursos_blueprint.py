@@ -158,6 +158,14 @@ UI_C04_NEW_HANDLERS = {"admin_visualizar_aluno"}
 # tests/test_human_text_order_and_search.py proves the behavior.
 HUMAN_TEXT_BODY_CHANGES = {"admin_cursos"}
 
+# PG-READINESS-UNIT-3: admin_adicionar_curso replaced its SQLite-only
+# ``except sqlite3.IntegrityError`` catch with the engine-neutral classifier
+# (``is_integrity_error`` / ``is_unique_violation`` /
+# ``integrity_constraint_name``) and rolls the failed PostgreSQL transaction
+# back before resolving the flash. The normalization helper maps exactly that
+# handler back to the baseline shape, so any other mutation still fails.
+PG_UNIT3_BODY_CHANGES = {"admin_adicionar_curso"}
+
 # HUMAN-TEXT-ORDER in the student-import handlers (admin_adicionar_turma,
 # admin_editar_turma): the active-Curso <select> statement, before and after.
 BASELINE_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()"""
@@ -787,6 +795,59 @@ def _restore_human_text_fragments(tree: ast.Module, name: str) -> str | None:
     return None
 
 
+_UNIT3_INTEGRITY_GUARD = "if not is_integrity_error(e):\n    raise"
+_UNIT3_CURSO_UNIQUE_CONDITION = (
+    'is_unique_violation(e) and integrity_constraint_name(e) == "cursos.codigo"'
+)
+_BASELINE_CURSO_UNIQUE_CONDITION = (
+    '"UNIQUE constraint failed: cursos.codigo" in str(e)'
+)
+
+
+def _restore_unit3_engine_neutral_curso_handler(tree: ast.Module, name: str) -> str | None:
+    """PG-READINESS-UNIT-3: map the engine-neutral integrity handler of
+    ``admin_adicionar_curso`` back to its SQLite-only baseline spelling."""
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            cloned = deepcopy(node)
+            restored = 0
+            for handler in [
+                inner for inner in ast.walk(cloned) if isinstance(inner, ast.ExceptHandler)
+            ]:
+                if not (
+                    isinstance(handler.type, ast.Name)
+                    and handler.type.id == "Exception"
+                    and len(handler.body) == 3
+                ):
+                    continue
+                guard, rollback, branch = handler.body
+                if not _ast_sequence_equal(
+                    [guard], _parsed_statements(_UNIT3_INTEGRITY_GUARD)
+                ):
+                    continue
+                if not _ast_sequence_equal(
+                    [rollback], _parsed_statements("conn.rollback()")
+                ):
+                    continue
+                if not isinstance(branch, ast.If):
+                    continue
+                if ast.dump(branch.test, include_attributes=False) != ast.dump(
+                    ast.parse(_UNIT3_CURSO_UNIQUE_CONDITION, mode="eval").body,
+                    include_attributes=False,
+                ):
+                    continue
+                branch.test = ast.parse(
+                    _BASELINE_CURSO_UNIQUE_CONDITION, mode="eval"
+                ).body
+                handler.type = ast.parse("sqlite3.IntegrityError").body[0].value
+                handler.body = [branch]
+                restored += 1
+            assert restored == 1, f"engine-neutral integrity handler for {name}: {restored}"
+            wrapped = ast.Module(body=list(cloned.body), type_ignores=[])
+            return ast.dump(wrapped, include_attributes=False)
+    return None
+
+
 def _baseline_main_source() -> str:
     result = subprocess.run(
         ["git", "show", f"{BASELINE_COMMIT}:main.py"],
@@ -991,11 +1052,22 @@ posted_mats = set(form_sync.matriculas)
             expected_handler = _parsed_statements("conn.rollback()") + deepcopy(
                 baseline_try.handlers[0].body
             )
-            if not _ast_sequence_equal(
-                candidate_try.handlers[0].body, expected_handler
+            candidate_handler = candidate_try.handlers[0]
+            unit3_guard = _parsed_statements(
+                "if not (is_integrity_error(e) or isinstance(e, ValueError)):\n    raise"
+            )
+            neutralized = (
+                isinstance(candidate_handler.type, ast.Name)
+                and candidate_handler.type.id == "Exception"
+                and len(candidate_handler.body) >= 1
+                and _ast_sequence_equal(candidate_handler.body[:1], unit3_guard)
+            )
+            if not neutralized or not _ast_sequence_equal(
+                candidate_handler.body[1:], expected_handler
             ):
                 errors.append(f"{name}: rollback boundary")
-            candidate_try.handlers[0].body = deepcopy(baseline_try.handlers[0].body)
+            candidate_handler.type = deepcopy(baseline_try.handlers[0].type)
+            candidate_handler.body = deepcopy(baseline_try.handlers[0].body)
 
         if not _ast_sequence_equal(
             candidate_try.finalbody,
@@ -1655,6 +1727,14 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
             assert expected == module_body, (
                 f"moved body differs from baseline beyond the retired "
                 f"matrícula resequence for {name}"
+            )
+        elif name in PG_UNIT3_BODY_CHANGES:
+            expected = _function_body_dump(baseline_tree, name)
+            assert (
+                _restore_unit3_engine_neutral_curso_handler(module_tree, name) == expected
+            ), (
+                f"moved body differs from baseline beyond the engine-neutral "
+                f"integrity handler for {name}"
             )
         elif name not in FC08_BODY_CHANGES and name not in UI_C04_BODY_CHANGES:
             assert module_body == baseline_body, f"moved body differs from baseline for {name}"

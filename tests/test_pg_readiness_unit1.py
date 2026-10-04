@@ -40,16 +40,11 @@ from tests.versioned_test_support import isolated_versioned_app_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: The only remaining ``lastrowid`` reads after this unit: the three production
-#: call sites and one tool call site that consume the cursor returned by
-#: ``create_usuario_with_access_level``.  That helper is pinned by the test
-#: suite to return a cursor, so its public contract cannot change here.
-RETAINED_LASTROWID_READS = {
-    "app/services/student_import_service.py": 1,
-    "app/views/admin/acesso.py": 1,
-    "app/views/admin/alunos_turmas_cursos.py": 1,
-    "tools/seed_demo_data.py": 1,
-}
+#: Unit 3 replaced the cursor-return contract of ``create_usuario_*`` with an
+#: explicit inserted-id result built from ``INSERT ... RETURNING id``; the only
+#: production ``lastrowid`` reference left is that result's compatibility
+#: property in ``app/user_accounts.py``.
+RETAINED_LASTROWID_READS = {"app/user_accounts.py": 1}
 
 
 @pytest.fixture(scope="module")
@@ -465,7 +460,7 @@ def test_restore_schema_status_fallback_closes_its_connection(monkeypatch):
                 connection.close()
 
 
-def test_lastrowid_remains_only_at_cursor_mediated_call_sites():
+def test_lastrowid_is_confined_to_the_engine_neutral_result_contract():
     found = {}
     for base in ("app", "tools"):
         for path in (REPO_ROOT / base).rglob("*.py"):

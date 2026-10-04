@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 import re
-import sqlite3
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
@@ -12,7 +11,7 @@ from app.activity_catalog import (
 )
 from app.admin_access import _admin_can, _get_current_admin_access_context
 from app.auth import admin_required
-from app.db import get_db_connection
+from app.db import get_db_connection, is_integrity_error
 from app.db_maintenance import (
     ensure_atividade_versioning_schema,
     ensure_matriz_atividade_links_table,
@@ -874,7 +873,9 @@ def admin_editar_matriz(matriz_id: int):
                     ),
                 )
                 conn.commit()
-            except sqlite3.IntegrityError:
+            except Exception as exc:
+                if not is_integrity_error(exc):
+                    raise
                 conn.rollback()
                 flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_INVALID_PARAMS], "error")
                 return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
@@ -981,12 +982,12 @@ def admin_matriz_nova_versao_card(matriz_id: int, atividade_id: int):
     except AcademicGraphFrozenError:
         conn.rollback()
         flash(_MATRIZ_ERROR_TEXT[_MATRIZ_ERR_FROZEN], "error")
-    except sqlite3.IntegrityError as exc:
-        conn.rollback()
-        flash(f"Erro de integridade ao escolher versão: {exc}", "error")
     except Exception as exc:
         conn.rollback()
-        flash(f"Erro ao escolher versão: {exc}", "error")
+        if is_integrity_error(exc):
+            flash(f"Erro de integridade ao escolher versão: {exc}", "error")
+        else:
+            flash(f"Erro ao escolher versão: {exc}", "error")
 
     return _redirect_matrix()
 

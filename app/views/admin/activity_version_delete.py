@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 
 from flask import redirect, url_for
 
@@ -11,7 +10,7 @@ from app.activity_catalog import (
     get_atividade_base,
 )
 from app.auth import admin_required
-from app.db import get_db_connection
+from app.db import get_db_connection, is_integrity_error
 from utils.messages import flash
 
 
@@ -47,16 +46,16 @@ def admin_catalogo_excluir_versao(base_id: int, versao_id: int):
             redirect_endpoint = "admin_atividades"
             redirect_values = {}
         _flash_delete_block(exc)
-    except sqlite3.IntegrityError:
+    except Exception as exc:
         conn.rollback()
-        flash(
-            "A versão não foi excluída porque uma referência protegida ainda existe.",
-            "error",
-        )
-    except Exception:
-        conn.rollback()
-        logging.exception("Erro ao excluir versão de atividade")
-        flash("Erro seguro ao excluir versão; nenhuma alteração foi aplicada.", "error")
+        if is_integrity_error(exc):
+            flash(
+                "A versão não foi excluída porque uma referência protegida ainda existe.",
+                "error",
+            )
+        else:
+            logging.exception("Erro ao excluir versão de atividade")
+            flash("Erro seguro ao excluir versão; nenhuma alteração foi aplicada.", "error")
     return redirect(url_for(redirect_endpoint, **redirect_values))
 
 
