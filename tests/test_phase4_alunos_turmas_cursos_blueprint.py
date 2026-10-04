@@ -108,6 +108,10 @@ R1_KW_DELETIONS = {
 # byte-identical to the historical extraction baseline.
 # REMOVE-MATRIX-VERSION-METADATA-1: _matrizes_by_curso no longer selects the
 # removed matrizes_atividades.versao column.
+# SEMESTER-DISPLAY-NORMALIZATION-1: _periodo_label_for_turma_row now renders
+# the turma period through the canonical app.presentation.format_semester_label
+# authority (``1S/2025`` instead of ``1S-2025``); internal ano/semestre values
+# are untouched. See tests/test_semester_display_normalization.py.
 FC08_BODY_CHANGES = {
     "admin_alunos",
     "admin_adicionar_aluno",
@@ -119,6 +123,7 @@ FC08_BODY_CHANGES = {
     "_resolve_turma_matriz_id",
     "_build_admin_dashboard_turma_cards",
     "_matrizes_by_curso",
+    "_periodo_label_for_turma_row",
 }
 # AJAX-DELETE-FEEDBACK-1: deleting from the listing is a ``fetch()`` that
 # follows the 302 to the listing and reads 200 OK, so the "alunos vinculados"

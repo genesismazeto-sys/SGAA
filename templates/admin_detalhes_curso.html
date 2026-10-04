@@ -56,7 +56,7 @@
            ano_inicio -- so every row rendered the em dash. #}
         {{ cl.row([
           {'content': t.numero or '—', 'class':'center'},
-          {'content': ((t.semestre_inicio ~ 'S-' ~ t.ano_inicio) if (t.semestre_inicio and t.ano_inicio) else '—'), 'class':'center'},
+          {'content': (((t.ano_inicio|semestre_label(t.semestre_inicio)) or '—') if (t.semestre_inicio and t.ano_inicio) else '—'), 'class':'center'},
           {'content': (t.qtd_alunos or 0)|string, 'class':'center'},
           {'content': (t.status or '—'), 'class':'center', 'badge': true, 'badge_type': ('success' if turma_active else 'danger'), 'status_badge': true, 'status_tone': ('positive' if turma_active else 'neutral')},
         ]) }}

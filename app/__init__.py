@@ -23,6 +23,7 @@ from presets_api import bp_presets
 from app.backup_settings import bind_backup_settings_runtime_app
 from app.db import DATABASE, close_db_connection, get_db_connection
 from app.oauth_log_filter import install_oauth_query_redaction_filter
+from app.presentation import format_semester_label
 from app.root_admin import DEFAULT_ROOT_ADMIN_EMAIL
 from app.status_presentation import status_label, status_tone
 from app.versioning.request_history import HistoricalRequestAuthorityError
@@ -300,6 +301,7 @@ def create_app(
     # reimplementar a escada de status localmente.
     app.add_template_global(status_tone, name="status_tone")
     app.add_template_global(status_label, name="status_label")
+    app.add_template_filter(format_semester_label, name="semestre_label")
 
     # ----- Blueprints / rotas core -----
     if register_presets_blueprint:

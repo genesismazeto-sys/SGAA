@@ -65,7 +65,7 @@ from app.versioning.request_limits import (
     semester_label_for_date,
     semester_sort_key,
 )
-from app.presentation import format_date_ptbr
+from app.presentation import format_date_ptbr, format_semester_label
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
 from app.security.passwords import hash_password
@@ -306,8 +306,7 @@ def _get_semestre(data: datetime.date) -> str:
 
 def _format_semestre_referencia(label: str | None) -> str:
     """Present a ``YYYY/N`` semester as ``NS/YYYY`` (e.g. 2026/2 -> 2S/2026)."""
-    ano, _, semestre = str(label or "").partition("/")
-    return f"{semestre}S/{ano}" if ano and semestre else ""
+    return format_semester_label(label)
 
 
 # How each limitation line's period reads on the student dashboard.

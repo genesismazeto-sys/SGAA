@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.presentation import format_semester_label
 from app.student_matrix import get_effective_matrix_for_student
 
 
@@ -18,12 +19,8 @@ def _versioning_matriz_option_label(row) -> str:
 
 
 def _versioning_periodo_label_for_turma_row(turma) -> str:
-    inicio = None
-    fim = None
-    if turma["semestre_inicio"] and turma["ano_inicio"]:
-        inicio = f"{turma['semestre_inicio']}S-{turma['ano_inicio']}"
-    if turma["semestre_fim"] and turma["ano_fim"]:
-        fim = f"{turma['semestre_fim']}S-{turma['ano_fim']}"
+    inicio = format_semester_label(turma["ano_inicio"], turma["semestre_inicio"])
+    fim = format_semester_label(turma["ano_fim"], turma["semestre_fim"])
     if inicio and fim:
         return f"{inicio} a {fim}"
     return inicio or fim or "-"

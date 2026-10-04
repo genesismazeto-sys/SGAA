@@ -33,6 +33,7 @@ from app.db import (
 )
 from app.db_maintenance import ensure_matrizes_atividades_table
 from app.matrix_scope import _matriz_option_label, get_effective_matriz_for_turma
+from app.presentation import format_semester_label
 from app.security.passwords import hash_password
 from app.services.student_import_service import (
     import_students_into_turma,
@@ -191,12 +192,8 @@ def _resolve_turma_matriz_id(conn, curso_id: int | None, posted_matriz_id: str |
 
 
 def _periodo_label_for_turma_row(turma) -> str:
-    inicio = None
-    fim = None
-    if turma["semestre_inicio"] and turma["ano_inicio"]:
-        inicio = f"{turma['semestre_inicio']}S-{turma['ano_inicio']}"
-    if turma["semestre_fim"] and turma["ano_fim"]:
-        fim = f"{turma['semestre_fim']}S-{turma['ano_fim']}"
+    inicio = format_semester_label(turma["ano_inicio"], turma["semestre_inicio"])
+    fim = format_semester_label(turma["ano_fim"], turma["semestre_fim"])
     if inicio and fim:
         return f"{inicio} a {fim}"
     if inicio:

@@ -276,7 +276,7 @@
     const cursoSel = document.querySelector('select[name="curso_id"]');
     const getDuracao = () => { const opt = cursoSel?.selectedOptions?.[0]; const d = parseInt(opt?.getAttribute('data-duracao')||'8', 10); return isNaN(d) ? 8 : d; };
 
-    const recompute = () => { const y0 = parseInt(anoI?.value||'0',10); const s0 = parseInt(semI?.value||'1',10); const dur = getDuracao(); if (!y0 || !s0){ if(out) out.textContent = '-'; if(anoF) anoF.value=''; if(semF) semF.value=''; return; } const total = (y0*2 + (s0-1)) + (dur-1); const yEnd = Math.floor(total/2); const sEnd = (total % 2) + 1; if (out) out.textContent = `${sEnd}S-${yEnd}`; if (anoF) anoF.value = yEnd; if (semF) semF.value = sEnd; };
+    const recompute = () => { const y0 = parseInt(anoI?.value||'0',10); const s0 = parseInt(semI?.value||'1',10); const dur = getDuracao(); if (!y0 || !s0){ if(out) out.textContent = '-'; if(anoF) anoF.value=''; if(semF) semF.value=''; return; } const total = (y0*2 + (s0-1)) + (dur-1); const yEnd = Math.floor(total/2); const sEnd = (total % 2) + 1; if (out) out.textContent = `${sEnd}S/${yEnd}`; if (anoF) anoF.value = yEnd; if (semF) semF.value = sEnd; };
 
     const populateMatrizes = (preferredId = '') => {
       if (!matrizSel) return;

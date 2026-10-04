@@ -135,7 +135,7 @@
             <th>Grupo</th>
             <th>Limite</th>
             {% for semestre in semestres %}
-            <th>{{ semestre }}</th>
+            <th>{{ semestre|semestre_label }}</th>
             {% endfor %}
             <th>Total</th>
           </tr>

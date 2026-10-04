@@ -193,7 +193,7 @@
       const total = (y0*2 + (s0-1)) + (dur-1);
       const yEnd = Math.floor(total/2);
       const sEnd = (total % 2) + 1;
-    if (out) out.textContent = `${sEnd}S-${yEnd}`;
+    if (out) out.textContent = `${sEnd}S/${yEnd}`;
       if (anoF) anoF.value = yEnd;
       if (semF) semF.value = sEnd;
     };

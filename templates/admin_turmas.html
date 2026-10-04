@@ -178,8 +178,8 @@
           {'class':'left ellipsis','content': (t.curso_nome or '—') },
           {'class':'left ellipsis','content': matriz_label },
           {'class':'center','content': (t.numero or '—') },
-          {'class':'center','content': ((t.semestre_inicio ~ 'S-' ~ t.ano_inicio) if (t.semestre_inicio and t.ano_inicio) else '—') },
-          {'class':'center','content': ((t.semestre_fim ~ 'S-' ~ t.ano_fim) if (t.semestre_fim and t.ano_fim) else '—') },
+          {'class':'center','content': (((t.ano_inicio|semestre_label(t.semestre_inicio)) or '—') if (t.semestre_inicio and t.ano_inicio) else '—') },
+          {'class':'center','content': (((t.ano_fim|semestre_label(t.semestre_fim)) or '—') if (t.semestre_fim and t.ano_fim) else '—') },
           {'class':'center','content': (t.qtd_alunos or 0) },
           {'class':'center','content': ( 'Ativa' if is_active else 'Inativa' ), 'badge': true, 'badge_type': ( 'success' if is_active else 'danger' ), 'status_badge': true, 'status_tone': ( 'positive' if is_active else 'neutral' ) }
         ], attrs={'data-turma-id': t.id, 'data-delete-url': (url_for('admin_deletar_turma', turma_id=t.id) if auth_can('turmas', 'full') else '')}) }}

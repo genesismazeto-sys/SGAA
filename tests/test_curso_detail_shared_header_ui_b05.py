@@ -395,7 +395,7 @@ def test_ano_semestre_renders_real_data_not_an_em_dash(populated):
     for card in cards:
         cells = re.findall(r'<div class="cell center">(.*?)</div>', card, re.S)
         periodo = " ".join(re.sub(r"<[^>]+>", " ", cells[1]).split())
-        assert re.fullmatch(r"\dS-\d{4}", periodo), f"Ano/Semestre is {periodo!r}"
+        assert re.fullmatch(r"\dS/\d{4}", periodo), f"Ano/Semestre is {periodo!r}"
 
     template = COURSE_DETAIL.read_text(encoding="utf-8")
     assert "t.semestre_inicio" in template and "t.ano_inicio" in template
