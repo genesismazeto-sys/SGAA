@@ -107,6 +107,7 @@ def record_final_decision_event(
              horas_solicitadas, horas_deferidas, justificativa, atividade_nome,
              nome_evento, data_solicitacao, decidido_em, estado)
         VALUES (?,?,?,?,?,?,?,?,?,?,?, 'pending')
+        RETURNING id
         """,
         (
             requisicao_id,
@@ -122,7 +123,7 @@ def record_final_decision_event(
             decided_at or row["data_processamento"] or _now(),
         ),
     )
-    return int(cursor.lastrowid)
+    return int(cursor.fetchone()[0])
 
 
 def pending_request_ids(

@@ -246,10 +246,11 @@ def create_usuario_with_access_level(
 ):
     ensure_usuario_access_schema(conn)
     cursor = conn.execute(
-        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso)"
+        " VALUES (?, ?, ?, ?, ?) RETURNING id",
         (nome, email, senha_hash, user_type, access_level),
     )
-    set_usuario_credential_state(conn, int(cursor.lastrowid), credential_state)
+    set_usuario_credential_state(conn, int(cursor.fetchone()[0]), credential_state)
     return cursor
 
 

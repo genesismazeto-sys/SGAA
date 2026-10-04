@@ -637,10 +637,11 @@ def admin_atividades():
     grupos_por_tipo = build_grupos_por_tipo_from_db(conn)
     grupos_filtro = conn.execute(
         """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(grupo), ''), '') AS grupo
+        SELECT COALESCE(NULLIF(TRIM(grupo), ''), '') AS grupo
           FROM (""" + _canonical_activity_rows_sql() + """) canonical_activity
          WHERE COALESCE(NULLIF(TRIM(grupo), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(grupo, '')) ASC
+         GROUP BY COALESCE(NULLIF(TRIM(grupo), ''), '')
+      ORDER BY MIN(LOWER(COALESCE(grupo, ''))) ASC
         """
     ).fetchall()
     filter_schema = [

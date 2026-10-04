@@ -443,11 +443,15 @@ def admin_editar_curso(curso_id, *, force_readonly=False):
                 turmas = conn.execute("SELECT id, numero FROM turmas WHERE curso_id=?", (curso_id,)).fetchall()
                 for t in turmas:
                     novo = gerar_codigo_turma(codigo_novo, t["numero"])
+                    savepoint = f"sgaa_turma_codigo_{t['id']}"
+                    conn.execute(f"SAVEPOINT {savepoint}")
                     try:
                         conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (novo, t["id"]))
                     except sqlite3.IntegrityError:
                         # evitar colisão improvável
+                        conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
                         conn.execute("UPDATE turmas SET codigo=? WHERE id=?", (f"{novo}-{t['id']}", t["id"]))
+                    conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             conn.commit()
             flash("Curso atualizado com sucesso.", "success")
             return redirect(url_for("admin_cursos"))
@@ -999,7 +1003,9 @@ def admin_turmas():
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
     having_sql = (" HAVING " + " AND ".join(having)) if having else ""
-    grouped_sql = base_from + where_sql + " GROUP BY t.id" + having_sql
+    grouped_sql = base_from + where_sql + (
+        " GROUP BY t.id, c.nome, c.codigo, c.duracao_periodos, tm.nome, tm.status"
+    ) + having_sql
     query = select_cols + grouped_sql + f" ORDER BY {order_sql} {direction}, t.id ASC"
     count_sql = "SELECT COUNT(*) FROM (SELECT t.id" + grouped_sql + ") turmas_filtradas"
     total = conn.execute(count_sql, params + having_params).fetchone()[0]
@@ -1138,10 +1144,11 @@ def admin_adicionar_turma():
                 """
                 INSERT INTO turmas (nome, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 (codigo, turno, status, numero, curso_id, matriz_id, ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)
             )
-            turma_id = cur.lastrowid
+            turma_id = cur.fetchone()[0]
             imported_rows, import_path = _parse_turma_form_import_upload(turma_id)
 
             # Cada aluno fica com a matrícula digitada ou importada; a turma

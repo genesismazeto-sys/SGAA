@@ -1786,9 +1786,12 @@ def _get_current_schema_status_for_restore() -> dict[str, object]:
         g.pop("db", None)
         return current_schema_status
 
-    with sqlite3.connect(app_db.DATABASE) as temp_conn:
+    temp_conn = sqlite3.connect(app_db.DATABASE)
+    try:
         temp_conn.row_factory = sqlite3.Row
         return get_schema_status(temp_conn)
+    finally:
+        temp_conn.close()
 
 def _restore_database_from_source(
     source_database_path: str,

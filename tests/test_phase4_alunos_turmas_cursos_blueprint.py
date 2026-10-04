@@ -943,6 +943,27 @@ sync_turma_form_students(
             if not _ast_sequence_equal(candidate_try.body[2:4], expected_service):
                 errors.append(f"{name}: parser/service call structure")
             candidate_try.body[2:4] = deepcopy(baseline_try.body[2:8])
+
+            # UNIT-1-PG-READINESS: the authorized delta converts the turmas
+            # INSERT from cursor.lastrowid to INSERT ... RETURNING id in
+            # admin_adicionar_turma only.  The candidate SQL must equal the
+            # baseline SQL plus exactly the appended RETURNING clause, and the
+            # id read must be the exact fetchone()[0] equivalent; the baseline
+            # statements are then taken back so every remaining statement is
+            # still proven identical to the clean HEAD baseline.
+            if name == "admin_adicionar_turma":
+                expected_insert = deepcopy(baseline_try.body[0])
+                expected_insert.value.args[0].value += "RETURNING id\n                "
+                if not _ast_sequence_equal(
+                    candidate_try.body[0:1], [expected_insert]
+                ):
+                    errors.append(f"{name}: turmas RETURNING id delta")
+                if not _ast_sequence_equal(
+                    candidate_try.body[1:2],
+                    _parsed_statements("turma_id = cur.fetchone()[0]"),
+                ):
+                    errors.append(f"{name}: turmas RETURNING id read")
+                candidate_try.body[0:2] = deepcopy(baseline_try.body[0:2])
         else:
             expected_service = _parsed_statements(
                 """

@@ -503,13 +503,16 @@ def admin_requisicoes():
         requisicoes.append(item)
     # Carregar atividades e documentos obrigatórios (para reuso do form do aluno no modal admin)
     atividades = conn.execute(
-        """SELECT DISTINCT v.id, v.id AS atividade_versao_id, b.nome_conceito AS nome,
-                  CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
-                  v.grupo, v.documentos_json
-             FROM matriz_atividade_versao_item mi
-             JOIN atividade_versao v ON v.id=mi.atividade_versao_id
-             JOIN atividade_base b ON b.id=mi.atividade_base_id
-         ORDER BY tipo_atividade,v.grupo,b.nome_conceito COLLATE PTBR_NOACCENT,v.id"""
+        """SELECT *
+             FROM (
+                  SELECT DISTINCT v.id, v.id AS atividade_versao_id, b.nome_conceito AS nome,
+                                  CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
+                                  v.grupo, v.documentos_json
+                    FROM matriz_atividade_versao_item mi
+                    JOIN atividade_versao v ON v.id=mi.atividade_versao_id
+                    JOIN atividade_base b ON b.id=mi.atividade_base_id
+             ) AS atividade_versao_opcoes
+         ORDER BY tipo_atividade,grupo,nome COLLATE PTBR_NOACCENT,id"""
     ).fetchall()
     alunos_opcoes = _list_admin_requisicao_alunos(conn)
     docs_por_atividade = {}
@@ -527,21 +530,25 @@ def admin_requisicoes():
         pass
     alunos_filtro = conn.execute(
         """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(a.nome), ''), '') AS aluno_nome
-          FROM requisicoes r
-          LEFT JOIN alunos a ON r.aluno_id = a.id
-         WHERE COALESCE(NULLIF(TRIM(a.nome), ''), '') <> ''
+        SELECT aluno_nome
+          FROM (
+                SELECT DISTINCT COALESCE(NULLIF(TRIM(a.nome), ''), '') AS aluno_nome
+                  FROM requisicoes r
+                  LEFT JOIN alunos a ON r.aluno_id = a.id
+                 WHERE COALESCE(NULLIF(TRIM(a.nome), ''), '') <> ''
+          ) AS aluno_nome_opcoes
       ORDER BY aluno_nome COLLATE PTBR_NOACCENT ASC, aluno_nome ASC
         """
     ).fetchall()
     turmas_filtro = conn.execute(
         """
-        SELECT DISTINCT COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '') AS turma_codigo
+        SELECT COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '') AS turma_codigo
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
           LEFT JOIN turmas t ON t.id = a.turma_id
          WHERE COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(t.codigo, t.nome, '')) ASC
+         GROUP BY COALESCE(NULLIF(TRIM(COALESCE(t.codigo, t.nome)), ''), '')
+      ORDER BY MIN(LOWER(COALESCE(t.codigo, t.nome, ''))) ASC
         """
     ).fetchall()
     history_filter_rows = conn.execute(
@@ -771,6 +778,7 @@ def admin_nova_requisicao():
              horas_solicitadas, nome_evento, status, observacao,
              regra_snapshot_json, turma_id_snapshot, turma_codigo_snapshot)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 aluno_id,
@@ -786,7 +794,7 @@ def admin_nova_requisicao():
                 turma_snapshot.turma_codigo,
             ),
         )
-        req_id = cur.lastrowid
+        req_id = cur.fetchone()[0]
         if batch:
             upload_comprovantes(
                 conn,

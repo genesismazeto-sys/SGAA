@@ -91,6 +91,7 @@ def issue_password_token(
         INSERT INTO senha_tokens(
             usuario_id,purpose,token_hash,created_at,expires_at
         ) VALUES(?,?,?,?,?)
+        RETURNING id
         """,
         (
             int(usuario_id),
@@ -100,7 +101,7 @@ def issue_password_token(
             _db_timestamp(expires),
         ),
     )
-    return raw_token, int(cursor.lastrowid)
+    return raw_token, int(cursor.fetchone()[0])
 
 
 def resolve_password_token(

@@ -783,6 +783,7 @@ def admin_adicionar_matriz():
                 horas_extensao_obrigatorias,
                 descricao
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
             """,
             (
                 payload["curso_id"],
@@ -795,9 +796,10 @@ def admin_adicionar_matriz():
                 payload["descricao"],
             ),
         )
+        matriz_id = int(cursor.fetchone()[0])
         conn.commit()
         flash("Matriz criada com sucesso.", "success")
-        return redirect(url_for("admin_editar_matriz", matriz_id=cursor.lastrowid, tab="dados"))
+        return redirect(url_for("admin_editar_matriz", matriz_id=matriz_id, tab="dados"))
 
     return _render_matriz_form(conn)
 

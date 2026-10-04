@@ -1708,6 +1708,7 @@ def aluno_nova_requisicao():
                  horas_solicitadas, nome_evento, status, observacao,
                  regra_snapshot_json, turma_id_snapshot, turma_codigo_snapshot)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 (
                     aluno_id,
@@ -1723,7 +1724,7 @@ def aluno_nova_requisicao():
                     turma_snapshot.turma_codigo,
                 ),
             )
-            req_id = cur.lastrowid
+            req_id = cur.fetchone()[0]
             if batch:
                 upload_comprovantes(
                     conn,

@@ -40,20 +40,30 @@ requires them to disappear is wrong): ``proximo_numero_turma``,
 
 MOVE-DO-NOT-CHANGE fingerprint: the RED pins the canonical implementation of
 ``validar_integridade_versionamento_atividades`` to the normalized AST
-fingerprint of the HEAD baseline.  BASELINE_FP_SHA was computed at RED R1
-from ``git show HEAD:main.py`` (entry HEAD ``d217c40f…``) as:
+fingerprint of its baseline.  BASELINE_FP_SHA was originally computed at RED
+R1 from ``git show HEAD:main.py`` (entry HEAD ``d217c40f…``) as:
 
   sha256(ast.unparse(FunctionDef of validar_integridade_versionamento_atividades
   parsed from the HEAD main.py blob, with decorator_list cleared))
 
-Recompute for verification:
-  git show HEAD:main.py | python -c "<parse; unparse; sha256>"
-Expected: ``c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d``.
+Unit 1 (PostgreSQL-readiness) moved this pin once, deliberately and by
+explicit authorization.  The ONLY authorized delta is the SQL text: the
+HAVING clause no longer references SELECT output aliases (rejected by
+PostgreSQL) and repeats the two ``SUM(CASE ...)`` expressions instead.  The
+observed post-delta fingerprint is
+``b055a2150b6e128a17411ff74914c3ec4bcc7a3dd0c6a0af179b5712245c86b4``
+(the pre-delta value was
+``c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d``).
+
+Recompute for verification from the current target module:
+  sha256(ast.unparse(FunctionDef of validar_integridade_versionamento_atividades
+  parsed from app/versioning/integrity.py, with decorator_list cleared))
 
 Allowed differences for the target implementation: module location;
-future/type imports if necessary; the main compatibility re-export.  NO SQL
-change, NO message change, NO exception change, NO return-value change, NO
-``raise_on_error`` semantic change.
+future/type imports if necessary; the main compatibility re-export; and the
+single authorized Unit 1 SQL-only rewrite above.  NO message change, NO
+exception change, NO return-value change, NO ``raise_on_error`` semantic
+change, NO other SQL change.
 
 This file contains exactly 15 collected tests:
 - ``test_red_a``..``test_red_g`` (7) are FUTURE ARCHITECTURAL CONTRACT
@@ -111,10 +121,12 @@ ALUNO_VIEW_PATH = PROJECT_ROOT / "app" / "views" / "aluno.py"
 ATC_VIEW_PATH = PROJECT_ROOT / "app" / "views" / "admin" / "alunos_turmas_cursos.py"
 BUSINESS_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
-# Baseline normalized AST fingerprint (SHA-256 of ast.unparse of the
-# FunctionDef with decorators cleared) of the HEAD main.py implementation of
-# validar_integridade_versionamento_atividades — see module docstring.
-BASELINE_FP_SHA = "c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d"
+# Normalized AST fingerprint (SHA-256 of ast.unparse of the FunctionDef with
+# decorators cleared).  Moved once from the HEAD main.py value
+# c6ad435ba8a5ccd970c67e5e8f8e6fb17b1cc83fa63be366b4518410bb2a235d to the
+# Unit 1 PostgreSQL-readiness value below: the only authorized delta is the
+# SQL-only HAVING rewrite — see module docstring.
+BASELINE_FP_SHA = "b055a2150b6e128a17411ff74914c3ec4bcc7a3dd0c6a0af179b5712245c86b4"
 
 GROUP_A_NAMES = (
     "_coerce_aluno_snapshot_scalar",
@@ -278,7 +290,8 @@ def test_red_c_move_do_not_change_fingerprint():
     fingerprint = _function_fingerprint_sha(source, VERSIONING_FUNC_NAME)
     assert fingerprint == BASELINE_FP_SHA, (
         "validar_integridade_versionamento_atividades must match the frozen "
-        "HEAD baseline AST fingerprint (MOVE, DO NOT CHANGE): expected "
+        "Unit 1 baseline AST fingerprint (MOVE, DO NOT CHANGE except the "
+        "authorized SQL-only PostgreSQL-readiness rewrite): expected "
         f"{BASELINE_FP_SHA}, got {fingerprint}"
     )
 

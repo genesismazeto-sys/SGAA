@@ -181,14 +181,15 @@ def create_arquivo(
                    titulo,descricao,filename,original_filename,visivel,provider,
                    mime_type,size_bytes,sha256,uploaded_at,uploader_user_id,
                    operation_key,storage_status)
-               VALUES (?,?,?,?,?,'google',?,?,?,?,?,?,'pending')""",
+               VALUES (?,?,?,?,?,'google',?,?,?,?,?,?,'pending')
+               RETURNING id""",
             (
                 titulo, str(descricao or "").strip() or None, item.stored_filename,
                 item.original_filename, _visibility(visivel), item.mime_type, item.size,
                 item.sha256, item.uploaded_at, int(uploader_user_id), operation,
             ),
         )
-        arquivo_id = int(cursor.lastrowid)
+        arquivo_id = int(cursor.fetchone()[0])
     conn.commit()
     upload_started = False
     try:

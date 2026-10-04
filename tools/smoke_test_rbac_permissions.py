@@ -99,10 +99,11 @@ def _setup_environment(temp_root: str, test_db: str) -> None:
 
 def _create_admin_user(main_module, conn, name: str, email: str, access_level: str) -> int:
     cursor = conn.execute(
-        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO usuarios (nome, email, senha, tipo, nivel_acesso)"
+        " VALUES (?, ?, ?, ?, ?) RETURNING id",
         (name, email, main_module.hash_password("x"), "admin", access_level),
     )
-    return int(cursor.lastrowid)
+    return int(cursor.fetchone()[0])
 
 
 def run() -> int:
@@ -149,16 +150,18 @@ def run() -> int:
         )
 
         cursor = conn.execute(
-            "INSERT INTO admin_alertas (titulo, mensagem, bg_color, border_color, visivel) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO admin_alertas (titulo, mensagem, bg_color, border_color, visivel)"
+            " VALUES (?, ?, ?, ?, ?) RETURNING id",
             ("Alerta RBAC 1", "Mensagem RBAC 1", "#e3eefd", "#b6cff5", 1),
         )
-        alerta_toggle_id = int(cursor.lastrowid)
+        alerta_toggle_id = int(cursor.fetchone()[0])
 
         cursor = conn.execute(
-            "INSERT INTO admin_alertas (titulo, mensagem, bg_color, border_color, visivel) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO admin_alertas (titulo, mensagem, bg_color, border_color, visivel)"
+            " VALUES (?, ?, ?, ?, ?) RETURNING id",
             ("Alerta RBAC 2", "Mensagem RBAC 2", "#e3eefd", "#b6cff5", 1),
         )
-        alerta_delete_id = int(cursor.lastrowid)
+        alerta_delete_id = int(cursor.fetchone()[0])
 
         upload_relpath = "rbac_uploads/documento_rbac.pdf"
         upload_abspath = os.path.join(uploads_dir, upload_relpath)

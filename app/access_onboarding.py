@@ -186,7 +186,7 @@ def access_status_map(conn, usuario_ids) -> dict[int, str]:
     deliveries = {
         int(row["usuario_id"]): row
         for row in conn.execute(
-            f"SELECT * FROM ({_LATEST_CONFIRMED_FIRST_ACCESS_SQL})"
+            f"SELECT * FROM ({_LATEST_CONFIRMED_FIRST_ACCESS_SQL}) AS latest_confirmed"
             f" WHERE usuario_id IN ({placeholders})",
             ids,
         ).fetchall()

@@ -177,13 +177,14 @@ def _isolated_presets_app(tmp_path, monkeypatch):
     """Bind the runtime database to a private prod-1 database under `tmp_path`.
 
     `configuracoes_presets` is a prod-1 physical-contract table.  The legacy
-    migration scenario drops it so that `presets_api.ensure_presets_schema`
-    re-creates it, and then rewrites its rows from the legacy JSON file.
-    Running that against the shared pytest session database would mutate a
-    contract table out from under every later test reaching `validate_prod1_schema`
-    (e.g. any request through `ensure_turmas_matriz_schema`) would fail.  The
-    scenario therefore owns its own database; `monkeypatch` guarantees every
-    rebinding is restored even if the body raises.
+    migration scenario empties it so that the request-time DML migration
+    rewrites its rows from the legacy JSON file; requests never create or
+    mutate schema.  Running that against the shared pytest session database
+    would mutate a contract table out from under every later test reaching
+    `validate_prod1_schema` (e.g. any request through
+    `ensure_turmas_matriz_schema`), so the scenario owns its own database;
+    `monkeypatch` guarantees every rebinding is restored even if the body
+    raises.
     """
     isolated_database = tmp_path / "presets_isolated.db"
     monkeypatch.setenv("APP_DATABASE", str(isolated_database))
@@ -204,7 +205,7 @@ def _isolated_presets_app(tmp_path, monkeypatch):
 
 
 def _run_legacy_presets_migration(tmp_path, monkeypatch):
-    """Drive GET /admin/api/presets with no presets table on a private database."""
+    """Drive GET /admin/api/presets with an empty presets table on a private database."""
     presets_path = tmp_path / "presets_data.json"
     presets_path.write_text(
         json.dumps(LEGACY_PRESETS_PAYLOAD, ensure_ascii=False), encoding="utf-8"
@@ -214,7 +215,7 @@ def _run_legacy_presets_migration(tmp_path, monkeypatch):
     with _isolated_presets_app(tmp_path, monkeypatch) as (client, database_path):
         conn = sqlite3.connect(database_path)
         try:
-            conn.execute(f"DROP TABLE IF EXISTS {presets_api.PRESETS_TABLE}")
+            conn.execute(f"DELETE FROM {presets_api.PRESETS_TABLE}")
             conn.commit()
         finally:
             conn.close()
@@ -251,9 +252,9 @@ def test_presets_get_migrates_legacy_json_to_database(tmp_path, monkeypatch):
 def test_legacy_presets_migration_leaves_session_database_prod1_clean(tmp_path, monkeypatch):
     """The presets legacy migration must not leak prod-1 schema drift.
 
-    Historical defect: this scenario dropped `configuracoes_presets` on the
-    shared pytest session database and let the request re-create it, which made
-    every later `validate_prod1_schema` consumer raise
+    Historical defect: a presets migration scenario running against the shared
+    pytest session database could leave the prod-1 contract table rewritten,
+    which made every later `validate_prod1_schema` consumer raise
     `prod-1 physical schema contract mismatch`.  The guard is order-independent
     -- it runs the scenario itself and then re-validates the session database.
     """

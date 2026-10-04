@@ -1,8 +1,6 @@
 # coding: utf-8
 import os
 import json
-import sys
-import sqlite3
 from flask import Blueprint, request, jsonify, session, g
 
 PRESETS_PATH = os.path.join(os.path.dirname(__file__), 'presets_data.json')
@@ -15,26 +13,10 @@ MAX_TITLE_LEN = 200
 bp_presets = Blueprint('presets', __name__)
 
 
-def _resolve_database_path():
-    main = sys.modules.get("main")
-    if main is not None:
-        database = getattr(main, "DATABASE", None)
-        if database:
-            return database
-    return os.getenv("APP_DATABASE", os.path.join(os.path.dirname(__file__), 'database.db'))
-
-
 def _get_db_connection():
-    if 'db' not in g:
-        g.db = sqlite3.connect(_resolve_database_path())
-        g.db.row_factory = sqlite3.Row
-        try:
-            g.db.execute("PRAGMA foreign_keys = ON")
-            g.db.execute("PRAGMA journal_mode = WAL")
-            g.db.execute("PRAGMA synchronous = NORMAL")
-        except Exception:
-            pass
-    return g.db
+    from app.db import get_db_connection
+
+    return get_db_connection()
 
 
 def _require_admin():
@@ -196,7 +178,6 @@ def _load_legacy_presets_file():
 
 
 def _replace_presets_in_db(conn, data):
-    ensure_presets_schema(conn)
     conn.execute(f"DELETE FROM {PRESETS_TABLE}")
     for tipo in ("respostas", "emails"):
         for item in data.get(tipo, []):
@@ -218,7 +199,6 @@ def _replace_presets_in_db(conn, data):
 
 
 def _migrate_legacy_presets_if_needed(conn):
-    ensure_presets_schema(conn)
     has_rows = conn.execute(f"SELECT 1 FROM {PRESETS_TABLE} LIMIT 1").fetchone()
     if has_rows:
         return False
@@ -232,7 +212,6 @@ def _migrate_legacy_presets_if_needed(conn):
 
 def load_presets():
     conn = _get_db_connection()
-    ensure_presets_schema(conn)
     _migrate_legacy_presets_if_needed(conn)
 
     out = {"respostas": [], "emails": []}
@@ -310,7 +289,6 @@ def get_default_email_preset(conn):
 
 def save_presets(data):
     conn = _get_db_connection()
-    ensure_presets_schema(conn)
     stored_emails = {
         int(row["preset_id"]): (str(row["assunto"] or ""), str(row["texto"] or ""))
         for row in conn.execute(

@@ -115,6 +115,10 @@ def init_db():
     ensure_app_settings_schema(conn)
     ensure_backup_settings_schema(conn)
 
+    from presets_api import ensure_presets_schema
+
+    ensure_presets_schema(conn)
+
     existe_curso = conn.execute("SELECT 1 FROM cursos LIMIT 1").fetchone()
     if not existe_curso:
         conn.execute(

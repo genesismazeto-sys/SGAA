@@ -453,14 +453,15 @@ def upload_comprovantes(
                     """INSERT INTO requisicao_arquivos (
                            requisicao_id,label,filename,provider,original_filename,mime_type,
                            size_bytes,sha256,uploader_user_id,operation_key,storage_status)
-                       VALUES (?,?,?,'google',?,?,?,?,?,?,'pending')""",
+                       VALUES (?,?,?,'google',?,?,?,?,?,?,'pending')
+                       RETURNING id""",
                     (
                         int(request_id), item.label, stored_name, item.original_filename,
                         item.mime_type, item.size, item.sha256, int(uploader_user_id),
                         item.operation_key,
                     ),
                 )
-                attachment_id = int(cursor.lastrowid)
+                attachment_id = int(cursor.fetchone()[0])
             pending.append((attachment_id, item, stored_name))
         conn.commit()
     except Exception:

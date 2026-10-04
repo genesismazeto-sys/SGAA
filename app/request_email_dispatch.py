@@ -211,6 +211,7 @@ def dispatch(
                     (aluno_id,destinatario,preset_id,preset_titulo,assunto,corpo,
                      status,tentativas,idempotency_key)
                 VALUES (?,?,?,?,?,?, 'sending', 1, ?)
+                RETURNING id
                 """,
                 (
                     entry["aluno_id"],
@@ -222,7 +223,7 @@ def dispatch(
                     key,
                 ),
             )
-            envio_id = int(cursor.lastrowid)
+            envio_id = int(cursor.fetchone()[0])
         else:
             envio_id = int(existing["id"])
             # Retry re-sends the persisted snapshot, not a re-render.

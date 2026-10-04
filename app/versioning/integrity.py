@@ -78,8 +78,8 @@ def validar_integridade_versionamento_atividades(conn, *, raise_on_error: bool =
               FROM atividade_versao av
               JOIN atividade_base ab ON ab.id = av.atividade_base_id
              GROUP BY av.atividade_base_id, ab.nome_conceito
-            HAVING total_aac_ativas > 0
-               AND total_aeu_ativas > 0
+            HAVING SUM(CASE WHEN av.status = 'ativa' AND av.eixo = 'AAC' THEN 1 ELSE 0 END) > 0
+               AND SUM(CASE WHEN av.status = 'ativa' AND av.eixo = 'AEU' THEN 1 ELSE 0 END) > 0
             """
         ).fetchall()
         for row in mixed_axis_bases:
