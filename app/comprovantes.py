@@ -414,6 +414,15 @@ def upload_comprovantes(
         return completed
     storage = storage or resolve_google_storage(conn)
     request_row, snapshot_payload, turma_id, turma_code = _request_context(conn, request_id)
+    # File names carry the linked version's canonical name and number; the
+    # frozen snapshot ordinal is history and never labels new files.
+    linked_activity = conn.execute(
+        """SELECT base.nome_conceito, version.numero_versao
+             FROM atividade_versao version
+             JOIN atividade_base base ON base.id=version.atividade_base_id
+            WHERE version.id=?""",
+        (int(request_row["atividade_versao_id"]),),
+    ).fetchone()
     pending: list[tuple[int, PreparedComprovante, str]] = []
     try:
         for item in batch:
@@ -437,7 +446,9 @@ def upload_comprovantes(
                     ),
                 )
             else:
-                stored_name = stored_filename(request_id, snapshot_payload, item)
+                stored_name = stored_filename(
+                    request_id, linked_activity[0], linked_activity[1], item
+                )
                 cursor = conn.execute(
                     """INSERT INTO requisicao_arquivos (
                            requisicao_id,label,filename,provider,original_filename,mime_type,

@@ -288,10 +288,11 @@
           <!-- Atividade (sem link) -->
           <div class="cell left ellipsis">
             <span class="aluno-activity-name">{{ r.atividade_nome }}</span>
-            {% if r.snapshot and r.snapshot.snapshot_versionado_presente %}
-              {% set snap = r.snapshot %}
-              {% set vn_text = ('v' ~ snap.snapshot_vn) if snap.snapshot_vn else 'Versão' %}
-              {% set tooltip_text = 'Versão da atividade registrada: ' ~ vn_text %}
+            {% if r.atividade_versao_numero %}
+              {#- Operational version: the exact linked atividade_versao. The
+                  frozen snapshot ordinal is history, shown only in the detail. -#}
+              {% set vn_text = 'v' ~ r.atividade_versao_numero %}
+              {% set tooltip_text = 'Versão da atividade: ' ~ vn_text %}
               <span class="version-identifier aluno-snapshot-chip" title="{{ tooltip_text }}" aria-label="{{ tooltip_text }}">{{ vn_text }}</span>
             {% endif %}
           </div>

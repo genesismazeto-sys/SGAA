@@ -180,6 +180,8 @@ def _build_aluno_requisicao_snapshot_display(
         ):
             display[key] = _coerce_aluno_snapshot_scalar(parsed.get(target))
 
+        # Frozen ordinal: historical only ("Versão da atividade registrada").
+        # The operational version is the linked atividade_versao.numero_versao.
         payload_vn = parsed.get("atividade_versao_numero")
         if payload_vn is not None:
             try:
@@ -190,13 +192,6 @@ def _build_aluno_requisicao_snapshot_display(
     # Current catalogue data is only a corruption/legacy-display fallback. A
     # valid persisted snapshot always wins for historical presentation.
     if versao_row is not None:
-        if display["snapshot_vn"] is None:
-            numero_versao = versao_row["numero_versao"] if "numero_versao" in versao_row.keys() else None
-            if numero_versao is not None:
-                try:
-                    display["snapshot_vn"] = int(numero_versao)
-                except (TypeError, ValueError):
-                    pass
         for key, source in (
             ("snapshot_eixo", "eixo"),
             ("snapshot_grupo", "grupo"),
@@ -1454,6 +1449,7 @@ def aluno_minhas_requisicoes():
                 "horas_deferidas": r["horas_deferidas"],
                 "status": r["status"],
                 "atividade_nome": history.nome,
+                "atividade_versao_numero": r["av_numero_versao"],
                 "tipo_atividade": history.tipo_atividade,
                 "grupo": history.grupo,
                 "snapshot": snapshot_display,

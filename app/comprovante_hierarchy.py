@@ -23,9 +23,10 @@ def _filename_component(value: object, fallback: str) -> str:
     return (cleaned or fallback)[:80]
 
 
-def stored_filename(request_id: int, snapshot_payload: dict, item) -> str:
-    activity = _filename_component(snapshot_payload.get("nome_exibivel"), "Atividade")
-    version = int(snapshot_payload["atividade_versao_numero"])
+def stored_filename(request_id: int, activity_name: str, version_number: int, item) -> str:
+    """Name a new upload by the request's linked (canonical) activity version."""
+    activity = _filename_component(activity_name, "Atividade")
+    version = int(version_number)
     timestamp = item.uploaded_at.replace("T", "_").replace(":", "-").removesuffix("Z")
     suffix = hashlib.sha256(item.operation_key.encode("utf-8")).hexdigest()[:8]
     return (

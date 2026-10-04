@@ -350,6 +350,26 @@ def test_file_size_and_malicious_name_contract():
     assert len(bounded.operation_key.encode("ascii")) <= 124
 
 
+def test_upload_file_name_uses_the_linked_canonical_version_not_the_snapshot():
+    conn = _database()
+    # Catalogue normalised after the request: canonical v1 / "Conferências
+    # Acadêmicas", while the frozen snapshot still records v2 / "Conferências".
+    conn.execute("UPDATE atividade_versao SET numero_versao=1 WHERE id=1")
+    conn.execute("UPDATE atividade_base SET nome_conceito='Conferências Acadêmicas' WHERE id=1")
+    conn.commit()
+    frozen = conn.execute("SELECT regra_snapshot_json FROM requisicoes WHERE id=1").fetchone()[0]
+
+    rows = upload_comprovantes(
+        conn, request_id=1, uploader_user_id=1, batch=_batch(), storage=FakeStorage()
+    )
+
+    assert rows[0]["filename"].startswith("REQ-000001__Conferencias-Academicas__v1__")
+    request = conn.execute(
+        "SELECT atividade_versao_id, regra_snapshot_json FROM requisicoes WHERE id=1"
+    ).fetchone()
+    assert tuple(request) == (1, frozen)
+
+
 def test_upload_persists_full_custody_and_uses_snapshot_hierarchy():
     conn = _database()
     storage = FakeStorage()
