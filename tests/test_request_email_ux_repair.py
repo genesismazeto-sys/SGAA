@@ -393,11 +393,13 @@ def test_details_semantics_preserved():
 
 def test_grid_has_ten_columns_with_email_between_atividade_and_status():
     block = LIST_CSS.split(".imp-req { --imp-cols:")[1].split("};")[0]
-    lines = [l for l in block.splitlines() if "minmax" in l]
+    lines = [l for l in block.splitlines() if "minmax" in l or "var(--imp-status-col)" in l]
     assert len(lines) == 10, lines
     assert "Atividade" in lines[7]
     assert "E-mail" in lines[8]
-    assert "Status" in lines[9]
+    # Status is the last track, sized by the shared DS status-column contract
+    # so "Deferida Parcialmente" never clips (it did at the old 120px floor).
+    assert "Status" in lines[9] and "var(--imp-status-col)" in lines[9]
 
 
 def test_email_column_is_narrow_and_fixed_width():
@@ -407,7 +409,9 @@ def test_email_column_is_narrow_and_fixed_width():
 
 
 def test_list_min_width_accounts_for_new_column():
-    assert "--imp-list-min-width:1212px" in LIST_CSS
+    # 1212px with the old 120px status floor: the other nine tracks keep their
+    # 1092px and the status track is the shared token, stated once.
+    assert ".imp-req{ --imp-list-min-width:calc(1092px + var(--imp-status-col)); }" in LIST_CSS
 
 
 def test_header_has_blank_label_for_email_column():

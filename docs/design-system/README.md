@@ -229,6 +229,13 @@ For any data list/table that carries a **semantic status/situação column**
 | `--imp-status-col-font-scale` | `calc(11 / 14)` | `ch` resolves at the **grid box's** font-size (`--font-size-base`, 14px) but the text is the **pill's** (11px). Omitting this over-reserves by about a third. CSS cannot divide two lengths, so it is unitless |
 | `--imp-status-col-chrome` | `28px` | pill `padding 0 6px` (12) + `border 1px`×2 (2) + `::before` dot 5 + `gap` 5, plus `.cell` `padding 0 2px` (4). Read off the two owners, not measured |
 
+`--imp-status-col` is declared on `.impressoes-cards-scroll` — the element
+every `.imp-<list>` scope sits on — not on `:root`. A custom property
+substitutes its `var()` references where it is declared and descendants
+inherit the result, so a `:root` declaration froze every list at the default
+21 characters and a list's own `--imp-status-col-chars` was silently ignored
+(measured: Acesso, Reportes and Versões all rendered the 21-character track).
+
 The residual slack is wanted, not padding: `0` is wider than the average
 lowercase glyph, so N scaled `ch` still exceeds N characters of real mixed-case
 text. Measured against the installed UI font, Acesso reserves ≈122px where the
@@ -267,14 +274,24 @@ beats both the broad `.imp-* .impresso-card .cell{ justify-content:flex-start }`
 rules above it and an equally specific `:nth-child()` — which is why the contract
 needs no `!important` and no per-list `nth-child` rule.
 
-**Adopted by:** `admin_acesso.html` (`.imp-acesso`, 15 characters).
-**Audited, not yet migrated** — nine further lists carry a status pill and
-predate this contract, each still centring via per-list `nth-child` rules:
-`admin_alunos` (status pill is `left`-aligned — the one outright violation),
-`admin_cursos`, `admin_turmas`, `admin_matrizes`, `admin_detalhes_curso`,
-`admin_detalhes_turma`, `admin_requisicoes`, plus `admin_reportes` and
-`admin_catalogo_versao_detalhe`, where Status is **not** the last column. Each
-is a visible change needing its own acceptance; they were deliberately not
+**Adopted by:** `admin_acesso.html` (`.imp-acesso`, 15 characters),
+`admin_requisicoes.html` (`.imp-req`, 21 — `Deferida Parcialmente`, which the
+old `minmax(120px, 160px)` track clipped below 1920px), `admin_reportes.html`
+(`.imp-reportes`, 10 — `Em análise`) and `admin_catalogo_versao_detalhe.html`
+(`.imp-version-detail`, 13 — `Descontinuada`). The last two had Status before
+`Data` / `Matrizes`; it is now the last column.
+
+**Status is always the last column** of any table that has one. The
+Banco de dados provider-log `<table>`s (`Data · Provedor · Arquivo · Tamanho ·
+Erro · Status`) follow the same rule; their auto-layout + `white-space:nowrap`
+last cell already fits the pill.
+
+**Audited, not yet migrated** — six further lists carry a status pill, already
+have it as the last column and fit their domain's longest label at 1280, 1440
+and 1920px (measured), but still centre via per-list `nth-child` rules:
+`admin_alunos` (status pill is `left`-aligned), `admin_cursos`, `admin_turmas`,
+`admin_matrizes`, `admin_detalhes_curso`, `admin_detalhes_turma`. Each is a
+visible change needing its own acceptance; they were deliberately not
 mass-migrated.
 
 ### 2.6c Empty table/list contract (DS-EMPTY-TABLE-STATE)
@@ -292,6 +309,12 @@ The caller puts its header and rows inside the call; the macro renders them only
 when rows exist, otherwise `<div class="table-empty">message</div>` — the shared
 `.table-empty` class in `modern-style.css` (centred, `--text-secondary`).
 `components/list_table.html` applies it to its own `<table>`.
+
+**Client-side search** (`initToolbarLiveSearch` in `static/js/toolbar-filters.js`)
+honours the same contract: when the typed query leaves zero visible rows, the
+column-header row is hidden with them and only the shared `.table-empty`
+message ("Nenhum resultado encontrado.") shows; clearing the query brings both
+back.
 
 ```jinja
 {% call cl.collection(alunos, "Nenhum aluno encontrado.") %}

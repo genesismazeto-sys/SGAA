@@ -26,7 +26,7 @@ from app.db_maintenance import (
 )
 from app.root_admin import DEFAULT_ROOT_ADMIN_EMAIL
 from app.security.passwords import hash_password
-from app.text import ptbr_sqlite_collation
+from app.text import register_human_text_sql
 from app.prod1_schema import validate_prod1_schema
 from app.user_accounts import (
     CREDENTIAL_STATE_DEFAULT,
@@ -53,7 +53,7 @@ def get_db_connection():
         g.db = sqlite3.connect(DATABASE, timeout=30.0)
         g.db.row_factory = sqlite3.Row
         try:
-            g.db.create_collation("PTBR_NOACCENT", ptbr_sqlite_collation)
+            register_human_text_sql(g.db)
         except Exception:
             pass
         try:

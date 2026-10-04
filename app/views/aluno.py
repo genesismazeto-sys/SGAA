@@ -81,6 +81,7 @@ from app.student_documents import (
 )
 from app.storage.contracts import StorageError
 from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
+from app.text import human_text_contains, human_text_key, ptbr_text_sort_key
 from app.web.filters import (
     get_date_range_query,
     get_multi_query_values,
@@ -274,7 +275,7 @@ def _list_atividades_for_usuario(
         key=lambda atividade: (
             str(atividade.get("tipo_atividade") or ""),
             str(atividade.get("grupo") or ""),
-            str(atividade.get("nome") or ""),
+            ptbr_text_sort_key(atividade.get("nome")),
         )
     )
     return aluno_scope, matriz, atividades
@@ -387,7 +388,7 @@ def _build_progress_activity(row) -> dict[str, Any]:
         "total_limitado": False,
         "_tipo_ordem": 0 if row["tipo_atividade"] == AAC_ACTIVITY_TYPE else 1,
         "_grupo_ordem": grupo_numero if grupo_numero is not None else 9999,
-        "_nome_ordem": str(row["nome"] or "").casefold(),
+        "_nome_ordem": human_text_key(row["nome"]),
     }
 
 
@@ -1028,8 +1029,8 @@ def aluno_arquivos():
         arquivos = [
             arquivo
             for arquivo in arquivos
-            if q_norm in str(arquivo.get("titulo") or "").casefold()
-            or q_norm in str(arquivo.get("descricao") or "").casefold()
+            if human_text_contains(arquivo.get("titulo"), q)
+            or human_text_contains(arquivo.get("descricao"), q)
             or q_norm in str(arquivo.get("original_filename") or "").casefold()
         ]
 
@@ -1042,19 +1043,17 @@ def aluno_arquivos():
         ]
 
     if titulo_filter:
-        filtro = titulo_filter.casefold()
         arquivos = [
             arquivo
             for arquivo in arquivos
-            if filtro in str(arquivo.get("titulo") or "").casefold()
+            if human_text_contains(arquivo.get("titulo"), titulo_filter)
         ]
 
     if descricao_filter:
-        filtro = descricao_filter.casefold()
         arquivos = [
             arquivo
             for arquivo in arquivos
-            if filtro in str(arquivo.get("descricao") or "").casefold()
+            if human_text_contains(arquivo.get("descricao"), descricao_filter)
         ]
 
     if data_upload_min or data_upload_max:
@@ -1069,8 +1068,8 @@ def aluno_arquivos():
         arquivos = filtrados
 
     sort_map = {
-        "titulo": lambda arquivo: str(arquivo.get("titulo") or "").casefold(),
-        "descricao": lambda arquivo: str(arquivo.get("descricao") or "").casefold(),
+        "titulo": lambda arquivo: ptbr_text_sort_key(arquivo.get("titulo")),
+        "descricao": lambda arquivo: ptbr_text_sort_key(arquivo.get("descricao")),
         "data_upload": lambda arquivo: str(arquivo.get("criado_em") or ""),
         "tipo": lambda arquivo: str(arquivo.get("tipo") or "").casefold(),
     }
@@ -1424,7 +1423,7 @@ def aluno_minhas_requisicoes():
     historical_sort = historical_sort_fields.get(sort)
     if historical_sort:
         selected_rows.sort(
-            key=lambda item: str(getattr(item[1], historical_sort) or "").casefold(),
+            key=lambda item: ptbr_text_sort_key(getattr(item[1], historical_sort)),
             reverse=dir_sql == "DESC",
         )
     total = len(selected_rows)
@@ -1472,9 +1471,9 @@ def aluno_minhas_requisicoes():
     ).fetchall()
 
     filter_history = [read_request_presentation(row, conn=conn) for row in filter_rows]
-    tipos_disponiveis = sorted({row.tipo_atividade for row in filter_history if row.tipo_atividade})
-    grupos_disponiveis = sorted({row.grupo for row in filter_history if row.grupo})
-    atividades_disponiveis = sorted({row.nome for row in filter_history if row.nome})
+    tipos_disponiveis = sorted({row.tipo_atividade for row in filter_history if row.tipo_atividade}, key=ptbr_text_sort_key)
+    grupos_disponiveis = sorted({row.grupo for row in filter_history if row.grupo}, key=ptbr_text_sort_key)
+    atividades_disponiveis = sorted({row.nome for row in filter_history if row.nome}, key=ptbr_text_sort_key)
     status_disponiveis = sorted(
         {row.status for row in filter_history if row.status},
         key=lambda value: [

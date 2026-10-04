@@ -8,9 +8,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
   <style>
-    /* Column layout: #, Aluno, Matrícula, Categoria, Título, Status, Data */
-    .imp-reportes{ --imp-list-min-width:774px; }
-    .imp-reportes{ --imp-cols: 44px minmax(130px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) minmax(150px, 3fr) minmax(90px, 1fr) minmax(90px, 1fr); }
+    /* Column layout: #, Aluno, Matrícula, Categoria, Título, Data, Status.
+       Status is last through the shared DS status-column contract
+       (components/list-cards.css); its track reserves the domain's longest
+       label, "Em análise" (10 characters). */
+    .imp-reportes{ --imp-status-col-chars:10; }
+    .imp-reportes{ --imp-list-min-width:calc(684px + var(--imp-status-col)); }
+    .imp-reportes{ --imp-cols: 44px minmax(130px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) minmax(150px, 3fr) minmax(90px, 1fr) var(--imp-status-col); }
     .imp-reportes .impressoes-cards,
     .imp-reportes .impresso-card{ width:100% !important; max-width:100% !important; }
     .imp-reportes .impresso-card .cell:nth-child(2),
@@ -21,12 +25,10 @@
     .imp-reportes .impresso-card .cell:nth-child(3),
     .imp-reportes .impresso-card .cell:nth-child(4),
     .imp-reportes .impresso-card .cell:nth-child(6),
-    .imp-reportes .impresso-card .cell:nth-child(7),
     .imp-reportes .impresso-card.header .cell:nth-child(1),
     .imp-reportes .impresso-card.header .cell:nth-child(3),
     .imp-reportes .impresso-card.header .cell:nth-child(4),
-    .imp-reportes .impresso-card.header .cell:nth-child(6),
-    .imp-reportes .impresso-card.header .cell:nth-child(7){ justify-content:center; text-align:center; }
+    .imp-reportes .impresso-card.header .cell:nth-child(6){ justify-content:center; text-align:center; }
     .imp-reportes .impresso-card:not(.header){ cursor:pointer; }
     /* Toolbar: override list-cards.css chips (scoped) */
     #reportes-toolbar .input-chip{ background:transparent; border-right:none; }
@@ -195,8 +197,8 @@
       {'text':'Matrícula',  'class':'center'},
       {'text':'Categoria',  'class':'center'},
       {'text':'Título',     'class':'left'},
-      {'text':'Status',     'class':'center'},
-      {'text':'Data',       'class':'center'}
+      {'text':'Data',       'class':'center'},
+      {'text':'Status',     'class':'status-col'}
     ]) }}
 
       {% for reporte in reportes %}
@@ -207,7 +209,8 @@
           <div class="cell center">{{ reporte.matricula or '—' }}</div>
           <div class="cell center">{{ reporte.categoria or '—' }}</div>
           <div class="cell left ellipsis">{{ reporte.titulo or '—' }}</div>
-          <div class="cell center">
+          <div class="cell center">{{ reporte.criado_em_fmt or '—' }}</div>
+          <div class="cell status-col">
             <span class="badge status-badge status-pill {{ reporte.status_badge_type }} {{
               'status-positive' if status_lc in ['resolvido','resolvida','concluido','concluida'] else
               'status-caution' if status_lc in ['em análise','em analise','pendente'] else
@@ -216,7 +219,6 @@
               'status-neutral'
             }}">{{ reporte.status }}</span>
           </div>
-          <div class="cell center">{{ reporte.criado_em_fmt or '—' }}</div>
         </div>
       {% endfor %}
     {% endcall %}

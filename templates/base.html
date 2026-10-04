@@ -19,6 +19,7 @@
     {% block extra_head %}{% endblock %}
     <!-- Ícones -->
     <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/human-text.js', v=static_asset_version) }}"></script>
     {# UI-B15: was https://unpkg.com/lucide@latest. Two reasons to self-host,
        neither cosmetic. (1) The CDN bundle ends in
        `//# sourceMappingURL=lucide.min.js.map`, which DevTools resolves against

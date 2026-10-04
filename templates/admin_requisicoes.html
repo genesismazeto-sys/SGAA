@@ -796,7 +796,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       {'text': user_message('Grupo'), 'class': 'center'},
       {'text': user_message('Atividade'), 'class': 'left'},
       {'text': '', 'class': 'center req-email-cell'},
-      {'text': user_message('Status'), 'class': 'center'}
+      {'text': user_message('Status'), 'class': 'status-col'}
     ]) }}
 
     {% for r in requisicoes %}
@@ -817,6 +817,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             nesta pagina e a de aluno_minhas_requisicoes.html ja haviam divergido. -#}
         {% set status_lc = (r.status or '')|lower %}
         {% set status_cell = {
+             'class': 'status-col',
              'content': status_label('requisicao', r.status),
              'badge': true,
              'status_badge': true,

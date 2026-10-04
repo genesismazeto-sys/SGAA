@@ -20,15 +20,19 @@
     }
     .version-section-title{ margin:0; color:var(--text-primary); font-size:16px; font-weight:600; }
     .version-section-description{ margin:3px 0 0; color:var(--text-secondary); font-size:12px; }
+    /* Status is the last column through the shared DS status-column contract
+       (components/list-cards.css): its track reserves the domain's longest
+       label, "Descontinuada" (13 characters). */
     .imp-version-detail{
-      --imp-list-min-width:850px;
+      --imp-status-col-chars:13;
+      --imp-list-min-width:calc(738px + var(--imp-status-col));
       --imp-cols:
         minmax(64px, 76px)
         minmax(174px, 1.25fr)
         minmax(142px, 1fr)
         minmax(142px, 1fr)
-        minmax(112px, 126px)
-        minmax(88px, 102px);
+        minmax(88px, 102px)
+        var(--imp-status-col);
       width:100%;
     }
     .imp-version-detail .impressoes-cards{ width:100%; }
@@ -36,8 +40,7 @@
     .imp-version-detail .impresso-card[role="listitem"]{ cursor:default; }
     .imp-version-detail .impresso-card .cell{ justify-content:flex-start; text-align:left; }
     .imp-version-detail .impresso-card .cell:first-child,
-    .imp-version-detail .impresso-card .cell:nth-child(5),
-    .imp-version-detail .impresso-card .cell:nth-child(6){ justify-content:center; text-align:center; }
+    .imp-version-detail .impresso-card .cell:nth-child(5){ justify-content:center; text-align:center; }
     .version-value-muted{ color:var(--text-secondary); }
     .version-usage{ display:inline-flex; align-items:center; gap:5px; color:var(--text-secondary); font-size:12px; }
     .version-usage .lucide{ width:13px; height:13px; }
@@ -108,8 +111,8 @@
             {'text':'Tipo','class':'left'},
             {'text':'Carga horária por evento','class':'left'},
             {'text':'Limitação','class':'left'},
-            {'text':'Status','class':'center'},
             {'text':'Matrizes','class':'center'},
+            {'text':'Status','class':'status-col'},
           ]) }}
 
           {% for v in versoes %}
@@ -163,15 +166,15 @@
                 {% endif %}
               </div>
               <div class="cell">
-                <span class="badge status-badge status-pill status-{{ status_tone }}">{{ status_label }}</span>
-              </div>
-              <div class="cell">
                 <span class="version-usage"
                       title="{{ v.uso_em_matrizes or 0 }} {{ 'Matriz' if (v.uso_em_matrizes or 0) == 1 else 'Matrizes' }}"
                       aria-label="Uso em Matrizes: {{ v.uso_em_matrizes or 0 }}">
                   <i class="lucide" data-lucide="table-2" aria-hidden="true"></i>
                   {{ v.uso_em_matrizes or 0 }}
                 </span>
+              </div>
+              <div class="cell status-col">
+                <span class="badge status-badge status-pill status-{{ status_tone }}">{{ status_label }}</span>
               </div>
             </div>
             {% if can_edit_atividades %}

@@ -35,9 +35,11 @@ from app.arquivos import (
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
+from app.text import human_text_contains, human_text_key
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
     append_conditions_sql,
+    human_text_contains_sql,
     get_date_range_query,
     get_multi_query_values,
     get_text_query_value,
@@ -58,8 +60,11 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
     params = []
     if q:
         like = f"%{q}%"
-        where.append("(titulo LIKE ? OR descricao LIKE ? OR original_filename LIKE ?)")
-        params.extend([like, like, like])
+        where.append(
+            "(" + human_text_contains_sql("titulo") + " OR " + human_text_contains_sql("descricao")
+            + " OR original_filename LIKE ?)"
+        )
+        params.extend([human_text_key(q), human_text_key(q), like])
 
     order_map = {
         "titulo": "titulo",
@@ -68,6 +73,9 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
         "visivel": "visivel",
     }
     col = order_map.get(sort_field, "criado_em")
+    if sort_field in ("titulo", "descricao"):
+        # Human text: ordered by the canonical key (app/text.py).
+        col += " COLLATE PTBR_NOACCENT"
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
     sql = """
@@ -143,19 +151,17 @@ def admin_arquivos():
         arquivos.append(item)
 
     if titulo_filter:
-        filtro = titulo_filter.casefold()
         arquivos = [
             arquivo
             for arquivo in arquivos
-            if filtro in str(arquivo.get("titulo") or "").casefold()
+            if human_text_contains(arquivo.get("titulo"), titulo_filter)
         ]
 
     if descricao_filter:
-        filtro = descricao_filter.casefold()
         arquivos = [
             arquivo
             for arquivo in arquivos
-            if filtro in str(arquivo.get("descricao") or "").casefold()
+            if human_text_contains(arquivo.get("descricao"), descricao_filter)
         ]
 
     if tipo_filters:

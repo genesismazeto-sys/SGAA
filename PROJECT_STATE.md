@@ -111,6 +111,41 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Human-text order/search + list consistency — CLOSED / LANDED (2026-10-03)
+
+Published by this landing commit (SHA not invented); parent
+`2330d9182fd60a836adfa3f92e6f78c6c24558e5`.
+
+* Human text (names, titles, descriptions) is ordered and searched through one
+  authority: `app/text.py` `human_text_key` (NFKD, combining marks dropped,
+  casefold, spaces collapsed; display text never rewritten), exposed to SQL as
+  `COLLATE PTBR_NOACCENT` and `PTBR_FOLD()` on every request connection
+  (`app.db.get_db_connection`), and to the browser as `SGAAHumanText.key`
+  (`static/js/human-text.js`, loaded by both base layouts). Acesso, Alunos,
+  Cursos, Turmas, Matrizes, Atividades, Reportes, Requisições, Alertas,
+  Arquivos, the Turma add/edit Curso selects and the student lists use it.
+  E-mail, matrícula, codes and enum values keep their own semantics. Root
+  cause of the observed defect: `ORDER BY LOWER(u.nome)` (ASCII-only LOWER,
+  binary UTF-8) listed "Éverto" after "W"; it is now in the E block.
+* Status is the last column everywhere: fixed on the Versões grid, admin
+  Reportes and both Banco de dados provider logs. `--imp-status-col` is now
+  computed on `.impressoes-cards-scroll` (it was on `:root`, which silently
+  ignored every list's `--imp-status-col-chars`); Requisições adopts the shared
+  contract so "Deferida Parcialmente" no longer clips below 1920px.
+* Client-side live search with zero results shows only the shared
+  `.table-empty` message (header hidden, restored with results). The
+  Atividades search normalizes its scoped `data-search-text`, so "moni" finds
+  "Monitoria voluntária.".
+* Login declares `autocomplete="username"` / `"current-password"`; the
+  authentication backend and password policy are unchanged.
+* Governance: the student-import guard authorizes exactly the human-ordered
+  Curso select (reverting is rejected); `test_ut_tm2` derives the message lines
+  from the AST instead of pinning physical numbers.
+
+Final full suite: 3734 passed / 136 skipped / 0 failed. Canonical database
+unchanged (content digest `c08028e2…`, `integrity_check = ok`,
+`foreign_key_check` empty, `user_version = 12`).
+
 ## Historical UT live-summary record
 
 The block below preserves the prior UT-17 live summary as phase-time history;

@@ -944,7 +944,7 @@
     {% endif %}
 
     function applyAvailableFilters(){
-      const text = (searchInput?.value || '').trim().toLowerCase();
+      const text = window.SGAAHumanText.key(searchInput?.value);
       const group = (groupFilter?.value || '').trim();
       listItems(availableList).forEach((item) => {
         const matchesText = !text || (item.dataset.search || '').includes(text);
@@ -956,7 +956,7 @@
     }
 
     function applySelectedFilters(){
-      const text = (selectedSearchInput?.value || '').trim().toLowerCase();
+      const text = window.SGAAHumanText.key(selectedSearchInput?.value);
       const group = (selectedGroupFilter?.value || '').trim();
       listItems(selectedList).forEach((item) => {
         const matchesText = !text || (item.dataset.search || '').includes(text);

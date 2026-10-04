@@ -1,5 +1,8 @@
 """UT-TM2: precise Turma Matrix errors without changing parser ownership."""
 
+import ast
+from pathlib import Path
+
 import pytest
 
 import main
@@ -242,12 +245,40 @@ def test_add_and_edit_keep_blank_and_compatible_behavior(tmp_path, action, marke
         assert _turma_state()["matriz_id"] == expected_matrix
 
 
+def _return_message_lines() -> dict[str, list[int]]:
+    """Line of every ``return ..., "<text>"`` in ``_resolve_turma_matriz_id``.
+
+    Derived from the source itself, so the catalog usage is proven to point at
+    the exact return statement without pinning physical line numbers that any
+    import added above the function would shift.
+    """
+    source = Path(turmas_view.__file__).read_text(encoding="utf-8")
+    function = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_resolve_turma_matriz_id"
+    )
+    lines: dict[str, list[int]] = {}
+    for node in ast.walk(function):
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Tuple):
+            for element in node.value.elts:
+                if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                    lines.setdefault(element.value, []).append(node.lineno)
+    return lines
+
+
 def test_exact_turma_return_messages_are_owned_by_the_catalog():
     messages._message_catalog.cache_clear()
     catalog = messages._message_catalog()
     entries = {entry["default_text"]: entry for entry in catalog.values()}
 
-    expected_lines = {INVALID: 179, NONEXISTENT: 186, INCOMPATIBLE: 188}
+    return_lines = _return_message_lines()
+    expected_lines = {}
+    for text in (INVALID, NONEXISTENT, INCOMPATIBLE):
+        assert len(return_lines.get(text, [])) == 1, f"{text!r} must be returned exactly once"
+        expected_lines[text] = return_lines[text][0]
+    # The three rejections are distinct statements, in this order.
+    assert expected_lines[INVALID] < expected_lines[NONEXISTENT] < expected_lines[INCOMPATIBLE]
     for text, source_line in expected_lines.items():
         assert text in entries
         assert entries[text]["kinds"] == ("return-message",)

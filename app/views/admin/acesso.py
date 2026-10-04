@@ -67,9 +67,12 @@ from app.user_accounts import (
     usuario_access_is_active,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
+    append_human_text_contains_condition,
     append_text_contains_condition,
+    human_text_contains_sql,
     get_int_multi_query_values,
     get_multi_query_values,
     get_text_query_value,
@@ -225,10 +228,11 @@ def admin_acesso():
     if q:
         like = f"%{q}%"
         where.append(
-            "(u.nome LIKE ? OR u.email LIKE ? OR COALESCE(a.matricula, '') LIKE ? OR COALESCE(t.codigo, t.nome, '') LIKE ?)"
+            "(" + human_text_contains_sql("u.nome")
+            + " OR u.email LIKE ? OR COALESCE(a.matricula, '') LIKE ? OR COALESCE(t.codigo, t.nome, '') LIKE ?)"
         )
-        params.extend([like, like, like, like])
-    append_text_contains_condition(where, params, "u.nome", nome_filter)
+        params.extend([human_text_key(q), like, like, like])
+    append_human_text_contains_condition(where, params, "u.nome", nome_filter)
     append_text_contains_condition(where, params, "u.email", email_filter)
     append_text_contains_condition(where, params, "a.matricula", matricula_filter)
     if turma_filters:
@@ -246,7 +250,7 @@ def admin_acesso():
 
     where_sql = append_conditions_sql(False, where)
     order_map = {
-        "nome": "LOWER(u.nome)",
+        "nome": "COALESCE(u.nome, '') COLLATE PTBR_NOACCENT",
         "email": "LOWER(u.email)",
         "nivel": "LOWER(u.nivel_acesso)",
         "perfil": "LOWER(u.tipo)",

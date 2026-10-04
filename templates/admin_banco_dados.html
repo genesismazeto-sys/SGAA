@@ -987,8 +987,8 @@
                   <th>Provedor</th>
                   <th>Arquivo</th>
                   <th>Tamanho</th>
-                  <th>Status</th>
                   <th>Erro</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -998,6 +998,7 @@
                     <td>{{ item.provider or '-' }}</td>
                     <td>{{ item.file_name or '-' }}</td>
                     <td>{{ item.size_label }}</td>
+                    <td>{{ item.error_message or '-' }}</td>
                     <td>
                       {% if item.status == 'sucesso' %}
                         <span class="db-badge local">Sucesso</span>
@@ -1005,7 +1006,6 @@
                         <span class="db-badge">Erro</span>
                       {% endif %}
                     </td>
-                    <td>{{ item.error_message or '-' }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -1180,8 +1180,8 @@
                   <th>Provedor</th>
                   <th>Arquivo</th>
                   <th>Tamanho</th>
-                  <th>Status</th>
                   <th>Erro</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -1191,6 +1191,7 @@
                     <td>{{ item.provider or '-' }}</td>
                     <td>{{ item.file_name or '-' }}</td>
                     <td>{{ item.size_label }}</td>
+                    <td>{{ item.error_message or '-' }}</td>
                     <td>
                       {% if item.status == 'sucesso' %}
                         <span class="db-badge local">Sucesso</span>
@@ -1198,7 +1199,6 @@
                         <span class="db-badge">Erro</span>
                       {% endif %}
                     </td>
-                    <td>{{ item.error_message or '-' }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

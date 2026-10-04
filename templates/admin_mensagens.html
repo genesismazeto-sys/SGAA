@@ -435,10 +435,10 @@
       const empty = document.getElementById('messages-empty');
 
       const sync = () => {
-        const term = String(input?.value || '').trim().toLowerCase();
+        const term = window.SGAAHumanText.key(input?.value);
         let visible = 0;
         cards.forEach((card) => {
-          const searchIndex = String(card.getAttribute('data-search-index') || '').toLowerCase();
+          const searchIndex = window.SGAAHumanText.key(card.getAttribute('data-search-index'));
           const show = !term || searchIndex.includes(term);
           card.hidden = !show;
           if (show) visible += 1;

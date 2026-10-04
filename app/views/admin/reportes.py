@@ -26,9 +26,12 @@ from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.student_documents import remove_student_document, save_student_document
 from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
+    append_human_text_contains_condition,
     append_text_contains_condition,
+    human_text_contains_sql,
     get_date_range_query,
     get_multi_query_values,
     get_text_query_value,
@@ -72,7 +75,7 @@ def admin_reportes():
         """
         SELECT id, nome, matricula
           FROM alunos
-      ORDER BY LOWER(COALESCE(nome, '')), LOWER(COALESCE(matricula, '')), id
+      ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, LOWER(COALESCE(matricula, '')), id
         """
     ).fetchall()
 
@@ -86,13 +89,15 @@ def admin_reportes():
 
     if q:
         like = f"%{q}%"
+        needle = human_text_key(q)
         where.append(
-            "(LOWER(rep.titulo) LIKE LOWER(?) OR LOWER(rep.descricao) LIKE LOWER(?) OR LOWER(COALESCE(a.nome, '')) LIKE LOWER(?) OR LOWER(COALESCE(a.matricula, '')) LIKE LOWER(?))"
+            "(" + human_text_contains_sql("rep.titulo") + " OR " + human_text_contains_sql("rep.descricao")
+            + " OR " + human_text_contains_sql("a.nome") + " OR LOWER(COALESCE(a.matricula, '')) LIKE LOWER(?))"
         )
-        params.extend([like, like, like, like])
-    append_text_contains_condition(where, params, "a.nome", aluno_filter)
+        params.extend([needle, needle, needle, like])
+    append_human_text_contains_condition(where, params, "a.nome", aluno_filter)
     append_text_contains_condition(where, params, "a.matricula", matricula_filter)
-    append_text_contains_condition(where, params, "rep.titulo", titulo_filter)
+    append_human_text_contains_condition(where, params, "rep.titulo", titulo_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"rep.status IN ({placeholders})")
@@ -113,12 +118,15 @@ def admin_reportes():
 
     sort_map = {
         "data": "datetime(rep.criado_em)",
-        "aluno": "LOWER(COALESCE(a.nome, ''))",
+        "aluno": "COALESCE(a.nome, '') COLLATE PTBR_NOACCENT",
         "titulo": "LOWER(rep.titulo)",
         "categoria": "LOWER(rep.categoria)",
         "status": "LOWER(rep.status)",
     }
     order_col = sort_map.get(sort_field, sort_map["data"])
+    if sort_field == "titulo":
+        # Human text: ordered by the canonical key (app/text.py).
+        order_col += " COLLATE PTBR_NOACCENT"
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
     query = (

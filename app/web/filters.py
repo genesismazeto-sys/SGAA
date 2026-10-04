@@ -3,6 +3,8 @@ import re
 
 from flask import request
 
+from app.text import human_text_key
+
 
 def append_conditions_sql(base_has_where: bool, conditions: list[str], joiner: str = " AND ") -> str:
     """Monta trecho SQL de condições a partir de uma lista de strings.
@@ -81,3 +83,26 @@ def append_text_contains_condition(conditions: list[str], params: list, sql_expr
         return
     conditions.append(f"LOWER(COALESCE({sql_expression}, '')) LIKE ?")
     params.append(f"%{value.lower()}%")
+
+
+def human_text_contains_sql(sql_expression: str) -> str:
+    """SQL predicate: HUMAN text ``sql_expression`` contains the bound needle.
+
+    Bind ``human_text_key(value)``. Both sides go through the one authority
+    (``app.text.human_text_key``, registered on the connection as
+    ``PTBR_FOLD``), so case and accents never decide a match. A literal
+    substring test: ``%`` and ``_`` in the user's text are not wildcards.
+    """
+    return f"INSTR(PTBR_FOLD({sql_expression}), ?) > 0"
+
+
+def append_human_text_contains_condition(conditions: list[str], params: list, sql_expression: str, value: str) -> None:
+    """``append_text_contains_condition`` for names, titles and descriptions.
+
+    E-mails, codes and matrículas keep ``append_text_contains_condition``.
+    """
+    needle = human_text_key(value)
+    if not needle:
+        return
+    conditions.append(human_text_contains_sql(sql_expression))
+    params.append(needle)

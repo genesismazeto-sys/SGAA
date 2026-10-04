@@ -83,6 +83,16 @@
   --imp-status-col-chars:21;
   --imp-status-col-chrome:28px;
   --imp-status-col-font-scale:calc(11 / 14);
+}
+
+/* The track itself is computed ON THE LIST ELEMENT, not on :root. A custom
+   property substitutes its var() references where it is declared, and the
+   descendants inherit the substituted value: computed on :root, every list got
+   the :root default of 21 characters and a list's own
+   `.imp-<list>{ --imp-status-col-chars:N }` had no effect. Every list scope
+   (`.imp-<list>`) sits on its `.impressoes-cards-scroll` element, so declaring
+   the track here resolves it with that list's own character count. */
+.impressoes-cards-scroll{
   --imp-status-col:calc(
     var(--imp-status-col-chars) * 1ch * var(--imp-status-col-font-scale)
     + var(--imp-status-col-chrome)
@@ -355,7 +365,8 @@
    Scoped Layout Adjustments: Requisições (.imp-req)
    (Moved from inline <style> in admin_requisicoes.html)
    ============================================================= */
-.imp-req{ --imp-list-min-width:1212px; }
+.imp-req{ --imp-status-col-chars:21; } /* "Deferida Parcialmente" */
+.imp-req{ --imp-list-min-width:calc(1092px + var(--imp-status-col)); }
 .imp-req { --imp-cols:
   minmax(40px, 48px)   /* ID */
   minmax(88px, 96px)   /* Solicitado em */
@@ -366,7 +377,7 @@
   minmax(72px, 72px)   /* Grupo */
   minmax(280px, 460px) /* Atividade */
   minmax(28px, 28px)   /* E-mail (sem rótulo) */
-  minmax(120px, 160px) /* Status */
+  var(--imp-status-col) /* Status (shared contract, below) */
 };
 /* Dedicated e-mail-status column: fixed width so every row reserves the same
    space whether or not an icon is present, header included. */

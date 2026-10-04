@@ -28,11 +28,10 @@
     return Array.from(root.querySelectorAll('.impresso-card[role="listitem"]')).filter((row) => !row.classList.contains('header') && !row.classList.contains('toolbar-live-search-hidden') && !row.classList.contains('toolbar-filter-hidden'));
   }
 
+  // Human-text search key. The one authority is static/js/human-text.js
+  // (mirror of app/text.py), loaded by both base layouts.
   function normalizeSearchText(value){
-    return String(value || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+    return window.SGAAHumanText.key(value);
   }
 
   async function postDeleteUrls(urls){
@@ -830,17 +829,30 @@
     if (!input || !rowsRoot) return;
 
     const getRows = () => Array.from(rowsRoot.querySelectorAll(rowSelector)).filter((row) => !row.classList.contains('header'));
+    const getHeaders = () => Array.from(rowsRoot.querySelectorAll('.impresso-card.header'));
 
+    // DS-EMPTY-TABLE-STATE on the client: a search that leaves zero rows shows
+    // only the shared `.table-empty` message. The column-header row leaves
+    // with the rows it labels and comes back with them.
     let emptyState = rowsRoot.querySelector('.toolbar-live-search-empty');
     if (!emptyState){
       emptyState = document.createElement('div');
-      emptyState.className = 'toolbar-live-search-empty';
-      emptyState.style.padding = '1rem';
-      emptyState.style.textAlign = 'center';
-      emptyState.style.color = 'var(--text-secondary)';
+      emptyState.className = 'toolbar-live-search-empty table-empty';
       emptyState.hidden = true;
       rowsRoot.appendChild(emptyState);
     }
+
+    // A row is searched by its `data-search-text` when the page scopes the
+    // search (Atividades: the activity name), otherwise by its whole text --
+    // always through the human-text key, computed once per row.
+    const searchKeys = new WeakMap();
+    const haystackOf = (row) => {
+      if (!searchKeys.has(row)){
+        const source = row.dataset.searchText !== undefined ? row.dataset.searchText : row.textContent;
+        searchKeys.set(row, normalizeSearchText(source));
+      }
+      return searchKeys.get(row);
+    };
 
     const applySearch = () => {
       const query = normalizeSearchText(input.value);
@@ -848,16 +860,16 @@
       let visibleCount = 0;
 
       rows.forEach((row) => {
-        const haystack = row.dataset.searchText || normalizeSearchText(row.textContent);
-        if (!row.dataset.searchText) row.dataset.searchText = haystack;
-        const matches = !query || haystack.includes(query);
+        const matches = !query || haystackOf(row).includes(query);
         row.classList.toggle('toolbar-live-search-hidden', !matches);
         row.setAttribute('aria-hidden', matches ? 'false' : 'true');
         if (matches && !row.classList.contains('toolbar-filter-hidden')) visibleCount += 1;
       });
 
+      const noResults = Boolean(rows.length && query && visibleCount === 0);
+      getHeaders().forEach((header) => header.classList.toggle('toolbar-live-search-hidden', noResults));
       emptyState.textContent = emptyMessage;
-      emptyState.hidden = !(rows.length && query && visibleCount === 0);
+      emptyState.hidden = !noResults;
     };
 
     input.addEventListener('input', applySearch);

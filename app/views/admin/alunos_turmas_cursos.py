@@ -58,6 +58,7 @@ from app.user_accounts import (
 )
 from app.web.filters import (
     append_conditions_sql,
+    append_human_text_contains_condition,
     append_text_contains_condition,
     get_int_multi_query_values,
     get_multi_query_values,
@@ -263,7 +264,7 @@ def admin_cursos():
     where = []
     params = []
     append_text_contains_condition(where, params, "c.codigo", codigo_filter)
-    append_text_contains_condition(where, params, "c.nome", nome_filter)
+    append_human_text_contains_condition(where, params, "c.nome", nome_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"LOWER(COALESCE(c.status, '')) IN ({placeholders})")
@@ -293,7 +294,7 @@ def admin_cursos():
     where_sql = append_conditions_sql(False, where)
     order_map = {
         "codigo": "LOWER(COALESCE(c.codigo, ''))",
-        "nome": "LOWER(COALESCE(c.nome, ''))",
+        "nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
         "duracao_periodos": "COALESCE(c.duracao_periodos, 0)",
         "status": "LOWER(COALESCE(c.status, ''))",
     }
@@ -553,7 +554,7 @@ def admin_alunos():
     """
     where = []
     params = []
-    append_text_contains_condition(where, params, "u.nome", nome_filter)
+    append_human_text_contains_condition(where, params, "u.nome", nome_filter)
     append_text_contains_condition(where, params, "u.email", email_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
@@ -964,7 +965,7 @@ def admin_turmas():
     where = []
     params = []
     append_text_contains_condition(where, params, "t.codigo", codigo_filter)
-    append_text_contains_condition(where, params, "tm.nome", matriz_filter)
+    append_human_text_contains_condition(where, params, "tm.nome", matriz_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"COALESCE(t.status, 'Ativa') IN ({placeholders})")
@@ -992,8 +993,8 @@ def admin_turmas():
     where_sql = append_conditions_sql(False, where)
     order_map = {
         "codigo": "LOWER(COALESCE(t.codigo, ''))",
-        "curso_nome": "LOWER(COALESCE(c.nome, ''))",
-        "matriz_nome": "LOWER(COALESCE(tm.nome, ''))",
+        "curso_nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
+        "matriz_nome": "COALESCE(tm.nome, '') COLLATE PTBR_NOACCENT",
         "numero": "COALESCE(t.numero, 0)",
         "status": "LOWER(COALESCE(t.status, ''))",
     }
@@ -1019,7 +1020,7 @@ def admin_turmas():
         """
     ).fetchall()
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
+    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
     filter_schema = [
         {
             "param": "codigo",
@@ -1087,7 +1088,7 @@ def admin_adicionar_turma():
     ensure_turmas_matriz_schema(conn)
     ensure_usuario_access_schema(conn)
 
-    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()
+    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
     default_curso_id = curso_mais_populoso_id() or (cursos[0]["id"] if cursos else None)
     matrizes_by_curso = _matrizes_by_curso(conn)
     default_matriz_id = None
@@ -1189,7 +1190,7 @@ def admin_editar_turma(turma_id):
         flash("Turma não encontrada.", "error")
         return redirect(url_for("admin_turmas"))
 
-    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()
+    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
     matrizes_by_curso = _matrizes_by_curso(conn)
 
     if request.method == "POST":
@@ -1398,7 +1399,7 @@ def admin_detalhes_turma(turma_id):
         SELECT t.id, t.codigo, t.numero, c.nome AS curso_nome
           FROM turmas t
           LEFT JOIN cursos c ON c.id = t.curso_id
-      ORDER BY LOWER(COALESCE(c.nome, '')), COALESCE(t.numero, 0), LOWER(COALESCE(t.codigo, t.nome, '')), t.id
+      ORDER BY COALESCE(c.nome, '') COLLATE PTBR_NOACCENT, COALESCE(t.numero, 0), LOWER(COALESCE(t.codigo, t.nome, '')), t.id
         """
     ).fetchall()
     filter_schema = [

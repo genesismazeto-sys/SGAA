@@ -25,9 +25,11 @@ from app.matrix_scope import (
     is_matrix_assigned,
 )
 from app.settings import get_horas_settings
+from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
-    append_text_contains_condition,
+    append_human_text_contains_condition,
+    human_text_contains_sql,
     get_date_range_query,
     get_multi_query_values,
     get_number_range_query,
@@ -184,12 +186,11 @@ def admin_matrizes():
     where = []
     params = []
     if q:
-        like = f"%{q}%"
         where.append(
-            "(COALESCE(m.nome, '') LIKE ? OR COALESCE(c.nome, '') LIKE ?)"
+            "(" + human_text_contains_sql("m.nome") + " OR " + human_text_contains_sql("c.nome") + ")"
         )
-        params.extend([like, like])
-    append_text_contains_condition(where, params, "m.nome", nome_filter)
+        params.extend([human_text_key(q), human_text_key(q)])
+    append_human_text_contains_condition(where, params, "m.nome", nome_filter)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"LOWER(COALESCE(m.status, 'rascunho')) IN ({placeholders})")
@@ -224,8 +225,8 @@ def admin_matrizes():
         params.append(fim_max)
 
     order_map = {
-        "nome": "LOWER(COALESCE(m.nome, ''))",
-        "curso": "LOWER(COALESCE(c.nome, ''))",
+        "nome": "COALESCE(m.nome, '') COLLATE PTBR_NOACCENT",
+        "curso": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
         "vigencia": "COALESCE(m.data_inicio_vigencia, ''), COALESCE(m.data_fim_vigencia, '')",
         "status": "LOWER(COALESCE(m.status, 'rascunho'))",
         "horas_aac_obrigatorias": "m.horas_aac_obrigatorias",
@@ -251,7 +252,7 @@ def admin_matrizes():
         query_params.extend([per_page, offset])
     rows = conn.execute(query, query_params).fetchall()
 
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
+    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
     filter_schema = [
         {
             "param": "nome",
@@ -441,7 +442,7 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
         FROM atividade_versao v
         JOIN atividade_base b ON b.id=v.atividade_base_id
         WHERE v.eixo=? AND v.status='ativa'
-        ORDER BY LOWER(b.nome_conceito), v.numero_versao, v.id
+        ORDER BY b.nome_conceito COLLATE PTBR_NOACCENT, b.id, v.numero_versao, v.id
         """,
         ('AAC' if activity_type == 'Acadêmica Complementar' else 'AEU',),
     ).fetchall()
@@ -466,14 +467,14 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
                 "base_id": base_id,
                 "nome": row["nome"],
             }
-            selected_item["search_blob"] = " ".join(
+            selected_item["search_blob"] = human_text_key(" ".join(
                 [
-                    str(selected_item["nome"] or "").strip().lower(),
+                    str(selected_item["nome"] or ""),
                     f"v{selected_item['numero_versao']}",
-                    str(selected_item["grupo"] or "").strip().lower(),
-                    str(selected_item["rule_summary"] or "").strip().lower(),
+                    str(selected_item["grupo"] or ""),
+                    str(selected_item["rule_summary"] or ""),
                 ]
-            ).strip()
+            ))
             selected.append(selected_item)
             continue
         if base_id in selected_by_base:
@@ -513,21 +514,21 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
                 ),
             }
         )
-        item["search_blob"] = " ".join(
+        item["search_blob"] = human_text_key(" ".join(
             [
-                str(item["nome"] or "").strip().lower(),
+                str(item["nome"] or ""),
                 *(
                     " ".join(
                         [
                             f"v{version['numero_versao']}",
-                            str(version["grupo"] or "").strip().lower(),
-                            str(version["rule_summary"] or "").strip().lower(),
+                            str(version["grupo"] or ""),
+                            str(version["rule_summary"] or ""),
                         ]
                     )
                     for version in versions
                 ),
             ]
-        ).strip()
+        ))
         available.append(item)
 
     return available, selected, sorted(groups, key=lambda value: value.lower())
@@ -569,7 +570,7 @@ def _render_matriz_form(
     # lock for accounts that may, without claiming their access is limited.
     access_readonly = readonly
     readonly = readonly or view_mode
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY LOWER(nome), id").fetchall()
+    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
     matriz_id = matriz["id"] if matriz else None
     horas_defaults = get_horas_settings(conn) if not matriz_id else None
     activity_tabs_enabled = bool(matriz_id)

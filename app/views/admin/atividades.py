@@ -57,7 +57,7 @@ from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.views.admin.activity_version_delete import admin_catalogo_excluir_versao
 from app.web.filters import (
     append_conditions_sql,
-    append_text_contains_condition,
+    append_human_text_contains_condition,
     get_multi_query_values,
     get_text_query_value,
 )
@@ -549,7 +549,7 @@ def admin_atividades():
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
     where = []
     params = []
-    append_text_contains_condition(where, params, 'nome', nome_filter)
+    append_human_text_contains_condition(where, params, 'nome', nome_filter)
     if tipo_filters:
         placeholders = ", ".join("?" for _ in tipo_filters)
         where.append(f"COALESCE(tipo_atividade, 'Acadêmica Complementar') IN ({placeholders})")
@@ -568,22 +568,25 @@ def admin_atividades():
             where.append("(" + " OR ".join(clauses) + ")")
     where_sql = append_conditions_sql(False, where)
     sort_map = {
-        'nome': f" ORDER BY nome COLLATE NOCASE {sort_dir}, tipo_atividade COLLATE NOCASE ASC, grupo COLLATE NOCASE ASC",
-        'grupo': f" ORDER BY grupo COLLATE NOCASE {sort_dir}, nome COLLATE NOCASE ASC",
-        'tipo_atividade': f" ORDER BY tipo_atividade COLLATE NOCASE {sort_dir}, grupo COLLATE NOCASE ASC, nome COLLATE NOCASE ASC",
-        'versoes': f" ORDER BY total_versoes {sort_dir}, nome COLLATE NOCASE ASC",
+        'nome': f" ORDER BY nome COLLATE PTBR_NOACCENT {sort_dir}, tipo_atividade COLLATE NOCASE ASC, grupo COLLATE NOCASE ASC, base_id ASC",
+        'grupo': f" ORDER BY grupo COLLATE NOCASE {sort_dir}, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
+        'tipo_atividade': f" ORDER BY tipo_atividade COLLATE NOCASE {sort_dir}, grupo COLLATE NOCASE ASC, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
+        'versoes': f" ORDER BY total_versoes {sort_dir}, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
         'limitacao': (
             " ORDER BY "
             f"COALESCE(tem_limitacao, 0) {sort_dir}, "
             f"CASE WHEN tipo_limitacao = 'total' THEN COALESCE(limite_horas_total, 0) "
             f"WHEN tipo_limitacao = 'semestral' THEN COALESCE(limite_horas_semestral, 0) "
             f"ELSE 0 END {sort_dir}, "
-            "nome COLLATE NOCASE ASC"
+            "nome COLLATE PTBR_NOACCENT ASC, base_id ASC"
         ),
     }
     order_sql = sort_map.get(sort_field)
     if not order_sql:
-        order_sql = " ORDER BY tipo_atividade, grupo, nome" if (not where) else " ORDER BY grupo, nome"
+        order_sql = (
+            " ORDER BY tipo_atividade, grupo, nome COLLATE PTBR_NOACCENT, base_id"
+            if (not where) else " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
+        )
     query = (
         "SELECT canonical_activity.*" + base_from + where_sql + order_sql
     )
@@ -695,7 +698,7 @@ def admin_atividades_academicas():
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Acadêmica Complementar'"
-    query = "SELECT *" + base_from + " ORDER BY grupo, nome"
+    query = "SELECT *" + base_from + " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
     apply_limit = wants_pagination()
@@ -714,7 +717,7 @@ def admin_atividades_extensao():
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Extensão Universitária'"
-    query = "SELECT *" + base_from + " ORDER BY grupo, nome"
+    query = "SELECT *" + base_from + " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
     apply_limit = wants_pagination()

@@ -26,13 +26,13 @@ def test_normalize_header_contract(value, expected):
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("  Árvore   Azul ", (False, "arvore azul")),
-        ("ÁRVORE azul", (False, "arvore azul")),
-        (12, (False, "12")),
-        (None, (True, "")),
-        ("", (True, "")),
-        (0, (True, "")),
-        (False, (True, "")),
+        ("  Árvore   Azul ", (False, "arvore azul", "  Árvore   Azul ")),
+        ("ÁRVORE azul", (False, "arvore azul", "ÁRVORE azul")),
+        (12, (False, "12", "12")),
+        (None, (True, "", "")),
+        ("", (True, "", "")),
+        (0, (True, "", "")),
+        (False, (True, "", "")),
     ],
 )
 def test_ptbr_text_sort_key_contract(value, expected):

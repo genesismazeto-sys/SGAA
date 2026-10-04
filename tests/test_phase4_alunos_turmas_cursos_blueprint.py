@@ -146,6 +146,18 @@ UI_C04_BODY_CHANGES = {
 }
 UI_C04_NEW_HANDLERS = {"admin_visualizar_aluno"}
 
+# HUMAN-TEXT-ORDER: the Cursos list orders and filters "Nome" through the
+# canonical human-text authority (app/text.py: COLLATE PTBR_NOACCENT and
+# PTBR_FOLD) instead of ASCII-only LOWER(), so "Ética" sorts with E and
+# "etica" finds it. Only those two SQL fragments differ from the baseline;
+# tests/test_human_text_order_and_search.py proves the behavior.
+HUMAN_TEXT_BODY_CHANGES = {"admin_cursos"}
+
+# HUMAN-TEXT-ORDER in the student-import handlers (admin_adicionar_turma,
+# admin_editar_turma): the active-Curso <select> statement, before and after.
+BASELINE_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()"""
+HUMAN_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()"""
+
 STUDENT_IMPORT_BASELINE_COMMIT = "1796c1e17b7cbd53148631f08b897f53c98590aa"
 STUDENT_IMPORT_HANDLER_NAMES = {
     "admin_adicionar_turma",
@@ -743,6 +755,33 @@ def _drop_matricula_resequence(tree: ast.Module, name: str) -> str | None:
     return None
 
 
+_HUMAN_TEXT_FRAGMENTS = {
+    # current constant/name -> baseline constant/name
+    "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT": "LOWER(COALESCE(c.nome, ''))",
+    "append_human_text_contains_condition": "append_text_contains_condition",
+}
+
+
+def _restore_human_text_fragments(tree: ast.Module, name: str) -> str | None:
+    """HUMAN-TEXT-ORDER: current handler body with exactly the two declared
+    human-text fragments mapped back to their baseline spelling."""
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            cloned = deepcopy(node)
+            restored = 0
+            for inner in ast.walk(cloned):
+                if isinstance(inner, ast.Constant) and inner.value in _HUMAN_TEXT_FRAGMENTS:
+                    inner.value = _HUMAN_TEXT_FRAGMENTS[inner.value]
+                    restored += 1
+                elif isinstance(inner, ast.Name) and inner.id in _HUMAN_TEXT_FRAGMENTS:
+                    inner.id = _HUMAN_TEXT_FRAGMENTS[inner.id]
+                    restored += 1
+            assert restored == 2, f"human-text fragments for {name}: {restored}"
+            wrapped = ast.Module(body=list(cloned.body), type_ignores=[])
+            return ast.dump(wrapped, include_attributes=False)
+    return None
+
+
 def _baseline_main_source() -> str:
     result = subprocess.run(
         ["git", "show", f"{BASELINE_COMMIT}:main.py"],
@@ -939,6 +978,21 @@ posted_mats = set(form_sync.matriculas)
             errors.append(f"{name}: upload cleanup boundary")
         candidate_try.finalbody = deepcopy(baseline_try.finalbody)
         del candidate_post.body[20]
+
+        # HUMAN-TEXT-ORDER: the active-Curso <select> is ordered by the
+        # canonical human-text collation, never by the baseline's binary
+        # ORDER BY nome (which put every accented initial after "Z"). Exactly
+        # this one statement is authorized to differ, and it must be present.
+        human_select = [
+            index
+            for index, stmt in enumerate(candidate.body)
+            if _ast_sequence_equal([stmt], _parsed_statements(HUMAN_CURSO_SELECT))
+        ]
+        if len(human_select) != 1:
+            errors.append(f"{name}: Curso select human order")
+        else:
+            candidate.body[human_select[0]] = _parsed_statements(BASELINE_CURSO_SELECT)[0]
+
         if not _ast_sequence_equal(candidate.body, baseline.body):
             errors.append(f"{name}: mutation outside authorized delta")
 
@@ -1463,6 +1517,24 @@ def test_student_import_guard_rejects_reintroduced_matricula_resequence(name, st
     )
 
 
+@pytest.mark.parametrize("name", ("admin_adicionar_turma", "admin_editar_turma"))
+def test_student_import_guard_rejects_binary_curso_select_order(name):
+    """HUMAN-TEXT-ORDER: going back to ORDER BY nome is not an authorized delta."""
+    candidate_tree = _tree(MODULE_PATH)
+    handler = _function_node(candidate_tree, name)
+    selects = [
+        index
+        for index, stmt in enumerate(handler.body)
+        if _ast_sequence_equal([stmt], _parsed_statements(HUMAN_CURSO_SELECT))
+    ]
+    assert len(selects) == 1
+    handler.body[selects[0]] = _parsed_statements(BASELINE_CURSO_SELECT)[0]
+
+    assert f"{name}: Curso select human order" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
 def test_student_import_guard_rejects_reverting_the_hardened_matrix_read():
     """UT-TM1: going back to the coercive read is not an authorized delta."""
     candidate_tree = _tree(MODULE_PATH)
@@ -1545,6 +1617,13 @@ def test_moved_handler_and_helper_bodies_ast_equivalent_to_baseline():
         elif name in AJAX_DELETE_FEEDBACK_BODY_CHANGES:
             # Declared bounded change; see AJAX-DELETE-FEEDBACK-1 above.
             continue
+        elif name in HUMAN_TEXT_BODY_CHANGES:
+            # Declared bounded change; see HUMAN-TEXT-ORDER above.
+            expected = _function_body_dump(baseline_tree, name)
+            assert _restore_human_text_fragments(module_tree, name) == expected, (
+                f"moved body differs from baseline beyond the human-text "
+                f"ordering/filter fragments for {name}"
+            )
         elif name in MATRICULA_PRESERVATION_BODY_CHANGES:
             expected = _drop_matricula_resequence(baseline_tree, name)
             assert expected == module_body, (

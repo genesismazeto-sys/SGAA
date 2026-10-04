@@ -46,7 +46,7 @@ from app.request_email_notifications import (
 from app.requisitions import auto_indefer_devolvidas
 from app.student_matrix import get_allowed_activity_version_ids_for_student
 from app.storage.contracts import StorageError
-from app.text import normalize_header
+from app.text import normalize_header, ptbr_text_sort_key
 from app.uploads import _allowed, save_upload
 from app.versioning.request_history import (
     HistoricalRequestAuthorityError,
@@ -278,8 +278,17 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
     return {
         "aluno": row,
         "allowed_activity_ids": sorted(allowed_activity_ids) if allowed_activity_ids is not None else None,
+        # Same axis/group order as the catalogue; names in human order.
         "activities": (
-            list_exact_matrix_activity_catalogue(conn, matriz["id"])
+            sorted(
+                list_exact_matrix_activity_catalogue(conn, matriz["id"]),
+                key=lambda item: (
+                    str(item["tipo_atividade"] or ""),
+                    str(item["grupo"] or ""),
+                    ptbr_text_sort_key(item["nome"]),
+                    item["id"],
+                ),
+            )
             if matriz
             else []
         ),
@@ -296,7 +305,7 @@ def _list_admin_requisicao_alunos(conn):
                COALESCE(t.codigo, t.nome, 'Sem turma') AS turma_label
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
-         ORDER BY a.nome COLLATE NOCASE, a.id
+         ORDER BY a.nome COLLATE PTBR_NOACCENT, a.id
         """
     ).fetchall()
 
@@ -430,7 +439,7 @@ def admin_requisicoes():
     order_map = {
         'data_solicitacao': 'r.data_solicitacao',
         'data_processamento': 'r.data_processamento',
-        'aluno_nome': 'a.nome',
+        'aluno_nome': 'a.nome COLLATE PTBR_NOACCENT',
         'turma_codigo': 't.codigo',
         'status': 'r.status'
     }
@@ -441,7 +450,7 @@ def admin_requisicoes():
     }
     col = order_map.get(sort_field, 'r.data_solicitacao')
     direction = 'DESC' if sort_dir == 'desc' else 'ASC'
-    query += f" ORDER BY {col} {direction}"
+    query += f" ORDER BY {col} {direction}, r.id ASC"
     requisicoes_rows = conn.execute(query, params).fetchall()
     selected_rows = filter_historical_request_rows(
         requisicoes_rows,
@@ -459,7 +468,7 @@ def admin_requisicoes():
     historical_sort = historical_sort_fields.get(sort_field)
     if historical_sort:
         selected_rows.sort(
-            key=lambda item: str(getattr(item[1], historical_sort) or "").casefold(),
+            key=lambda item: ptbr_text_sort_key(getattr(item[1], historical_sort)),
             reverse=direction == "DESC",
         )
     total = len(selected_rows)
@@ -500,7 +509,7 @@ def admin_requisicoes():
              FROM matriz_atividade_versao_item mi
              JOIN atividade_versao v ON v.id=mi.atividade_versao_id
              JOIN atividade_base b ON b.id=mi.atividade_base_id
-         ORDER BY tipo_atividade,v.grupo,b.nome_conceito"""
+         ORDER BY tipo_atividade,v.grupo,b.nome_conceito COLLATE PTBR_NOACCENT,v.id"""
     ).fetchall()
     alunos_opcoes = _list_admin_requisicao_alunos(conn)
     docs_por_atividade = {}
@@ -522,7 +531,7 @@ def admin_requisicoes():
           FROM requisicoes r
           LEFT JOIN alunos a ON r.aluno_id = a.id
          WHERE COALESCE(NULLIF(TRIM(a.nome), ''), '') <> ''
-      ORDER BY LOWER(COALESCE(a.nome, '')) ASC
+      ORDER BY aluno_nome COLLATE PTBR_NOACCENT ASC, aluno_nome ASC
         """
     ).fetchall()
     turmas_filtro = conn.execute(
@@ -543,15 +552,15 @@ def admin_requisicoes():
     history_filters = [read_request_presentation(row, conn=conn) for row in history_filter_rows]
     tipos_filtro = [
         {"tipo_atividade": value}
-        for value in sorted({row.tipo_atividade for row in history_filters})
+        for value in sorted({row.tipo_atividade for row in history_filters}, key=ptbr_text_sort_key)
     ]
     grupos_filtro = [
         {"grupo": value}
-        for value in sorted({row.grupo for row in history_filters if row.grupo})
+        for value in sorted({row.grupo for row in history_filters if row.grupo}, key=ptbr_text_sort_key)
     ]
     atividades_filtro = [
         {"atividade_nome": value}
-        for value in sorted({row.nome for row in history_filters if row.nome})
+        for value in sorted({row.nome for row in history_filters if row.nome}, key=ptbr_text_sort_key)
     ]
     filter_schema = [
         {

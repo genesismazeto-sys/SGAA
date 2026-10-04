@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from app.text import ptbr_text_sort_key
+
 
 class StudentMatrixError(ValueError):
     """Raised when a student Matrix would conflict with the academic Curso."""
@@ -169,27 +171,34 @@ def resolve_student_matrix_for_edit(
 
 
 def list_assignable_matrices_for_student(conn, turma_id: int | None):
-    """Matrices an admin may explicitly assign, carrying Curso context for labels."""
+    """Matrices an admin may explicitly assign, carrying Curso context for labels.
+
+    Ordered in Python by the human-text key (Curso, then Matriz, then id), so
+    the order holds on any connection, with or without the SQL collation.
+    """
     if turma_id is not None:
-        return conn.execute(
+        rows = conn.execute(
             """
             SELECT m.id,m.nome,m.status,c.nome AS curso_nome,c.codigo AS curso_codigo
               FROM turmas t
               JOIN matrizes_atividades m ON m.curso_id=t.curso_id
               JOIN cursos c ON c.id=m.curso_id
              WHERE t.id=?
-          ORDER BY m.nome
             """,
             (turma_id,),
         ).fetchall()
-    return conn.execute(
+        return sorted(rows, key=lambda row: (ptbr_text_sort_key(row["nome"]), row["id"]))
+    rows = conn.execute(
         """
         SELECT m.id,m.nome,m.status,c.nome AS curso_nome,c.codigo AS curso_codigo
           FROM matrizes_atividades m
           JOIN cursos c ON c.id=m.curso_id
-      ORDER BY c.nome,m.nome
         """
     ).fetchall()
+    return sorted(
+        rows,
+        key=lambda row: (ptbr_text_sort_key(row["curso_nome"]), ptbr_text_sort_key(row["nome"]), row["id"]),
+    )
 
 
 def get_effective_matrix_for_student(conn, aluno_id: int):

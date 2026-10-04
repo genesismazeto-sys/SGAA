@@ -22,9 +22,11 @@ from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_alertas_table
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
-    append_text_contains_condition,
+    append_human_text_contains_condition,
+    human_text_contains_sql,
     get_multi_query_values,
     get_text_query_value,
 )
@@ -97,10 +99,11 @@ def admin_alertas():
     where = []
     params = []
     if q:
-        like = f"%{q}%"
-        where.append("(COALESCE(titulo, '') LIKE ? OR mensagem LIKE ?)")
-        params.extend([like, like])
-    append_text_contains_condition(where, params, "COALESCE(titulo, mensagem)", titulo_filter)
+        where.append(
+            "(" + human_text_contains_sql("titulo") + " OR " + human_text_contains_sql("mensagem") + ")"
+        )
+        params.extend([human_text_key(q), human_text_key(q)])
+    append_human_text_contains_condition(where, params, "COALESCE(titulo, mensagem)", titulo_filter)
     if status_filters:
         status_where = []
         if "ativo" in status_filters:
@@ -121,6 +124,10 @@ def admin_alertas():
         "status": "visivel",
     }
     order_col = order_map.get(sort_field, order_map["titulo"])
+    if order_col == order_map["titulo"]:
+        # Human text: ordered by the canonical key (app/text.py), so "Ética"
+        # sorts with E -- LOWER() alone is ASCII-only and binary.
+        order_col += " COLLATE PTBR_NOACCENT"
     direction = "DESC" if sort_dir == "desc" else "ASC"
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
     total = conn.execute(count_sql, params).fetchone()[0]

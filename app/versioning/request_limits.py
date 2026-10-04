@@ -32,6 +32,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from app.text import human_text_key
+
 AAC_ACTIVITY_TYPE = "Acadêmica Complementar"
 AEU_ACTIVITY_TYPE = "Extensão Universitária"
 APPROVED_STATUSES = ("Deferida", "Deferida Parcialmente")
@@ -267,7 +269,7 @@ def build_atividade_rule_summary(
         key=lambda line: (
             0 if line.eixo == "AAC" else 1,
             _grupo_order(line.grupo),
-            line.nome.casefold(),
+            human_text_key(line.nome),
             line.atividade_base_id,
             0 if line.periodicidade == SEMESTRAL else 1,
         )
