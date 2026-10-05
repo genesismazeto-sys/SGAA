@@ -6,7 +6,13 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from app.db import connection_in_transaction
+from app.db import (
+    connection_in_transaction,
+    database_engine,
+    lock_password_account,
+    lock_password_token,
+    write_transaction,
+)
 from app.user_accounts import CREDENTIAL_STATE_PERSONAL, first_access_redeemable
 
 
@@ -68,6 +74,15 @@ def issue_password_token(
     ttl: dt.timedelta | None = None,
     token_factory=secrets.token_urlsafe,
 ) -> tuple[str, int]:
+    """Issue a token, superseding prior active tokens of the same purpose.
+
+    The account lock is taken before any ``senha_tokens`` mutation.  Every
+    password/token writer acquires the account first and the token row(s)
+    second; without it, an issuer could own a token row and then wait on the
+    account (its ``usuario_id`` foreign-key check) while a consumer owns the
+    account and waits on that token -- a PostgreSQL 40P01 deadlock.  On SQLite
+    the lock is a no-op because ``BEGIN IMMEDIATE`` already excludes writers.
+    """
     if purpose not in PASSWORD_TOKEN_PURPOSES:
         raise ValueError(f"invalid password token purpose: {purpose!r}")
     current = _utc_now(now)
@@ -77,6 +92,7 @@ def issue_password_token(
         raise PasswordTokenError("generated password token has an invalid shape")
 
     current_text = _db_timestamp(current)
+    lock_password_account(conn, usuario_id)
     conn.execute(
         """
         UPDATE senha_tokens
@@ -205,14 +221,29 @@ def consume_password_token_and_set_password(
     Returns the new ``auth_version`` or ``None`` when the token is no longer
     valid.  Hashing is intentionally performed by the caller before the write
     transaction so PBKDF2 never holds the SQLite write lock.
+
+    The transaction is engine-neutral.  SQLite keeps the historical
+    ``BEGIN IMMEDIATE`` clean-connection contract.  PostgreSQL adopts the
+    request transaction (a harmless INTRANS after a prior SELECT is not an
+    open write transaction) and serializes per account and per token with row
+    locks, so concurrent consume/revoke/reset operations cannot interleave
+    and a losing consumer returns ``None`` instead of failing mid-write.
     """
-    if connection_in_transaction(conn):
+    if database_engine(conn) == "sqlite" and connection_in_transaction(conn):
         raise PasswordTokenError("password token consumption requires a clean transaction")
-    try:
-        conn.execute("BEGIN IMMEDIATE")
+    with write_transaction(conn):
         record = resolve_password_token(conn, raw_token, purpose=purpose, now=now)
         if record is None:
-            conn.execute("ROLLBACK")
+            return None
+        # The first read only identifies the account and token to lock.  The
+        # account lock serializes every credential/token writer of this user
+        # (which already take the user row first), and the token lock stops
+        # token-state writers (invalidate/issue supersession) from changing
+        # the row under the write below.
+        lock_password_account(conn, record.usuario_id)
+        lock_password_token(conn, record.id)
+        record = resolve_password_token(conn, raw_token, purpose=purpose, now=now)
+        if record is None:
             return None
         # Defence in depth: first access only ever completes a PENDING account.
         # The state is read inside this write transaction, so no writer can
@@ -223,7 +254,6 @@ def consume_password_token_and_set_password(
         if purpose == PURPOSE_FIRST_ACCESS and not first_access_redeemable(
             record.credential_state
         ):
-            conn.execute("ROLLBACK")
             return None
 
         from app.user_accounts import get_usuario_auth_version, set_usuario_password_hash
@@ -238,12 +268,7 @@ def consume_password_token_and_set_password(
         auth_version = get_usuario_auth_version(conn, record.usuario_id)
         if auth_version is None:
             raise PasswordTokenError("credential state disappeared during token consumption")
-        conn.execute("COMMIT")
         return auth_version
-    except Exception:
-        if connection_in_transaction(conn):
-            conn.execute("ROLLBACK")
-        raise
 
 
 __all__ = [

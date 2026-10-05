@@ -2,6 +2,8 @@ import logging
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
+
 from flask import current_app, g
 
 from app.backup_settings import (
@@ -223,20 +225,249 @@ def adapt_sql_for_postgres(sql: str) -> str:
     return "".join(out)
 
 
-_TRANSACTIONAL_STATUS_NAMES = frozenset({"INTRANS", "INERROR"})
+_TRANSACTION_IDLE = "IDLE"
+_TRANSACTION_INTRANS = "INTRANS"
+_TRANSACTION_INERROR = "INERROR"
+_TRANSACTIONAL_STATUS_NAMES = frozenset({_TRANSACTION_INTRANS, _TRANSACTION_INERROR})
+
+
+class DatabaseTransactionStateError(DatabaseAdapterError):
+    """A transaction could not start from the connection's current state."""
+
+
+def database_engine(connection) -> str:
+    """The engine behind ``connection``: ``"sqlite"`` or ``"postgres"``.
+
+    The canonical runtime connections are ``sqlite3.Connection`` and
+    ``_PostgresConnectionAdapter``.  psycopg-shaped connections are recognised
+    by their ``info.transaction_status``; anything else falls back to the
+    configured backend, which keeps test proxies of the canonical connections
+    on the engine they wrap.
+    """
+    if isinstance(connection, _PostgresConnectionAdapter):
+        return _BACKEND_POSTGRES
+    if isinstance(connection, sqlite3.Connection):
+        return _BACKEND_SQLITE
+    status = getattr(getattr(connection, "info", None), "transaction_status", None)
+    if getattr(status, "name", None) is not None:
+        return _BACKEND_POSTGRES
+    return database_backend()
+
+
+def connection_transaction_status(connection) -> str:
+    """Engine-neutral transaction status: ``IDLE``, ``INTRANS``, ``INERROR``."""
+    if isinstance(connection, _PostgresConnectionAdapter):
+        connection = connection.raw_connection
+    if isinstance(connection, sqlite3.Connection):
+        return _TRANSACTION_INTRANS if connection.in_transaction else _TRANSACTION_IDLE
+    status = getattr(getattr(connection, "info", None), "transaction_status", None)
+    status_name = getattr(status, "name", None)
+    if status_name in (
+        _TRANSACTION_IDLE,
+        _TRANSACTION_INTRANS,
+        _TRANSACTION_INERROR,
+        "UNKNOWN",
+    ):
+        return status_name
+    if getattr(connection, "in_transaction", False):
+        return _TRANSACTION_INTRANS
+    return _TRANSACTION_IDLE
 
 
 def connection_in_transaction(connection) -> bool:
     """Engine-neutral ``connection.in_transaction`` equivalent."""
-    if isinstance(connection, _PostgresConnectionAdapter):
-        connection = connection.raw_connection
-    if isinstance(connection, sqlite3.Connection):
-        return bool(connection.in_transaction)
-    status = getattr(getattr(connection, "info", None), "transaction_status", None)
-    status_name = getattr(status, "name", None)
-    if status_name is not None:
-        return status_name in _TRANSACTIONAL_STATUS_NAMES
-    return bool(getattr(connection, "in_transaction", False))
+    return connection_transaction_status(connection) in _TRANSACTIONAL_STATUS_NAMES
+
+
+_POSTGRES_XACT_ID_PROBE_SQL = "SELECT pg_current_xact_id_if_assigned()"
+
+
+def _postgres_transaction_has_assigned_xid(connection) -> bool:
+    """Whether the current PostgreSQL transaction already owns write work.
+
+    ``pg_current_xact_id_if_assigned()`` returns NULL until a write or locking
+    statement assigns the transaction an XID, and does not assign one itself.
+    It is therefore the read-only discriminator between a harmless
+    INTRANS-after-SELECT transaction and a caller-owned write/locking
+    transaction.  It requires PostgreSQL 13+.
+    """
+    row = connection.execute(_POSTGRES_XACT_ID_PROBE_SQL).fetchone()
+    if row is None:
+        return False
+    return row[0] is not None
+
+
+_WRITE_TRANSACTION_OWNER_ATTR = "_sgaa_write_transaction_owner"
+_WRITE_TRANSACTION_UNOWNED = object()
+
+
+def _write_transaction_owner(connection):
+    """The manager-ownership token currently claimed on ``connection``.
+
+    A nested ``write_transaction`` must be refused even on an IDLE connection
+    whose outer block has not executed any SQL yet (so no XID exists to probe),
+    so ownership is an explicit per-connection marker rather than an inference
+    from the engine transaction status.  Connections that cannot carry
+    attributes (raw ``sqlite3.Connection``) keep the historical engine-state
+    refusal: ``BEGIN IMMEDIATE`` is taken before the outer block is yielded and
+    makes ``connection_in_transaction`` true for the whole block.  No
+    process-global owner state exists, and the marker dies with the connection.
+    """
+    return getattr(
+        connection, _WRITE_TRANSACTION_OWNER_ATTR, _WRITE_TRANSACTION_UNOWNED
+    )
+
+
+def _claim_write_transaction(connection):
+    owner = object()
+    try:
+        setattr(connection, _WRITE_TRANSACTION_OWNER_ATTR, owner)
+    except (AttributeError, TypeError):
+        return _WRITE_TRANSACTION_UNOWNED
+    return owner
+
+
+def _release_write_transaction(connection, owner) -> None:
+    if owner is _WRITE_TRANSACTION_UNOWNED:
+        return
+    if getattr(connection, _WRITE_TRANSACTION_OWNER_ATTR, None) is not owner:
+        return
+    try:
+        delattr(connection, _WRITE_TRANSACTION_OWNER_ATTR)
+    except (AttributeError, TypeError):
+        pass
+
+
+@contextmanager
+def write_transaction(connection):
+    """Engine-neutral write transaction owned by the ``with`` block.
+
+    SQLite keeps the historical write-intent transaction: a clean connection is
+    required and ``BEGIN IMMEDIATE`` takes the database write lock before the
+    first statement.  PostgreSQL starts lazily (psycopg ``autocommit=False``)
+    or adopts a transaction a prior statement already opened -- a harmless
+    INTRANS after SELECT, with no XID assigned, is not an open write
+    transaction and must not be refused.  An INTRANS transaction that already
+    owns write/locking work (an assigned XID) is caller-owned DML: the block
+    refuses it instead of committing it.  An INERROR transaction is rolled
+    back before the block reuses the connection.  A block that exits normally
+    while the connection is INERROR is rolled back and reported as a state
+    error, never silently committed or reported as success.
+
+    A connection may have at most one active ``write_transaction`` owner.  The
+    owner is an explicit marker claimed on the connection before the block is
+    yielded and released in a ``finally`` path (success, block exception,
+    swallowed-error state exception, commit failure and even rollback failure).
+    A nested entry on the same connection therefore raises
+    ``DatabaseTransactionStateError`` before the inner block runs, whatever the
+    engine status is (IDLE, INTRANS after SELECT, or an assigned XID): the
+    inner block cannot execute, commit or roll back the outer transaction.
+    Separate connections own their markers independently.  Savepoint-style
+    nesting is deliberately not offered -- nested write transactions are not a
+    requirement.
+    """
+    if _write_transaction_owner(connection) is not _WRITE_TRANSACTION_UNOWNED:
+        raise DatabaseTransactionStateError(
+            "write transaction is already owned by an enclosing block on this "
+            "connection"
+        )
+    if database_engine(connection) == _BACKEND_SQLITE:
+        if connection_in_transaction(connection):
+            raise DatabaseTransactionStateError(
+                "write transaction requires a clean connection"
+            )
+        connection.execute("BEGIN IMMEDIATE")
+    else:
+        status = connection_transaction_status(connection)
+        if status == _TRANSACTION_INERROR:
+            connection.rollback()
+            status = _TRANSACTION_IDLE
+        if status == _TRANSACTION_INTRANS and _postgres_transaction_has_assigned_xid(
+            connection
+        ):
+            raise DatabaseTransactionStateError(
+                "write transaction requires a clean connection; the PostgreSQL "
+                "transaction already owns write work"
+            )
+    owner = _claim_write_transaction(connection)
+    try:
+        try:
+            yield connection
+        except BaseException:
+            connection.rollback()
+            raise
+        else:
+            if connection_transaction_status(connection) == _TRANSACTION_INERROR:
+                connection.rollback()
+                raise DatabaseTransactionStateError(
+                    "write transaction entered an error state and was rolled back"
+                )
+            connection.commit()
+    finally:
+        _release_write_transaction(connection, owner)
+
+
+def lock_activity_base(connection, base_id: int) -> bool:
+    """Serialize destructive version-set writes of one activity base.
+
+    SQLite needs no explicit lock: ``BEGIN IMMEDIATE`` already excludes every
+    other writer for the whole transaction.  PostgreSQL locks the parent
+    ``atividade_base`` row for the remainder of the transaction, so concurrent
+    version deletes of the same base cannot interleave their read-check-write
+    and renumbering (which could otherwise empty a base or collide on
+    ``UNIQUE(atividade_base_id, numero_versao)``).  ``FOR NO KEY UPDATE``
+    conflicts with itself, which is all the proven invariant needs, and does
+    not block foreign-key-check inserts of new versions.  A missing row means
+    no version can belong to the base, so the caller's own validation refuses.
+
+    F2 (delete × create-version numbering) is deliberately NOT solved here.
+    Version creators do not take this lock before computing
+    ``get_next_numero_versao`` (MAX+1), so a concurrent create can still leave
+    a ``numero_versao`` gap.  That coordination belongs to the Unit-5
+    schema/creator work, where every relevant creator must take the base lock
+    before MAX+1; no weaker lock is invented in the meantime.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM atividade_base WHERE id = ? FOR NO KEY UPDATE",
+        (int(base_id),),
+    ).fetchone()
+    return row is not None
+
+
+def lock_password_account(connection, usuario_id: int) -> bool:
+    """Serialize credential and token mutations of one account (PostgreSQL).
+
+    The account row is the shared resource every password/token writer updates
+    (``usuarios.senha``, ``usuario_credenciais``), so taking it first gives all
+    of them one lock order.  SQLite needs no explicit lock because
+    ``BEGIN IMMEDIATE`` already serializes the whole database.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM usuarios WHERE id = ? FOR UPDATE",
+        (int(usuario_id),),
+    ).fetchone()
+    return row is not None
+
+
+def lock_password_token(connection, token_id: int) -> bool:
+    """Lock one password-token row against concurrent state changes.
+
+    Token state writers (consume, invalidate, issue supersession, direct
+    password change) all write the token row; locking it after the account
+    keeps the account -> token order, so no deadlock-prone ordering is
+    introduced.  SQLite needs no explicit lock.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM senha_tokens WHERE id = ? FOR UPDATE",
+        (int(token_id),),
+    ).fetchone()
+    return row is not None
 
 
 _SQLITE_CONSTRAINT_NAME_RE = re.compile(r"constraint failed:\s*(.+?)\s*$")
@@ -376,6 +607,10 @@ class _PostgresConnectionAdapter:
 
     def __init__(self, raw_connection):
         self._raw_connection = raw_connection
+        # The natural owner of the write_transaction nesting marker.  The
+        # manager claims/releases it per active block; it never leaks past the
+        # adapter's lifetime and is not shared between connections.
+        self._sgaa_write_transaction_owner = _WRITE_TRANSACTION_UNOWNED
 
     @property
     def raw_connection(self):

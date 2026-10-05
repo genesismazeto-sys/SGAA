@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.db import DatabaseIntegrityError
+from app.db import DatabaseIntegrityError, lock_activity_base
 from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
 from app.presentation import format_date_ptbr
 from app.text import normalize_header
@@ -431,7 +431,14 @@ def delete_activity_version(conn, *, base_id: int, versao_id: int) -> None:
     renumbered v1..vN, so the next created version is vN+1. Survivor ids,
     Requisições, their snapshots and Matriz links are never written. On any
     error the caller must roll the whole transaction back.
+
+    The base's version set is serialized first (``lock_activity_base``): on
+    SQLite the caller's ``BEGIN IMMEDIATE`` already excludes every writer, on
+    PostgreSQL the parent ``atividade_base`` row lock stops a concurrent delete
+    from passing the survivor/reference checks on stale state and interleaving
+    its renumbering.
     """
+    lock_activity_base(conn, base_id)
     version = assert_activity_version_can_be_safely_deleted(
         conn, base_id=base_id, versao_id=versao_id
     )

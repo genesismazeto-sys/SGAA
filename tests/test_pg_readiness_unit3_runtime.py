@@ -475,16 +475,25 @@ def test_admin_add_aluno_sqlite_unique_email_message_preserved(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_token_consumption_refuses_engine_neutral_open_transaction():
+class _EmptyResult:
+    def fetchone(self):
+        return None
+
+
+def test_token_consumption_accepts_postgres_intrans_after_select():
+    """Unit 4 corrected the old refusal: INTRANS after a prior SELECT is not an
+    open SQLite write transaction.  The full PostgreSQL-shaped acceptance proof
+    lives in tests/test_pg_readiness_unit4_transactions.py."""
     status = types.SimpleNamespace(name="INTRANS")
     raw = types.SimpleNamespace(
-        info=types.SimpleNamespace(transaction_status=status)
+        info=types.SimpleNamespace(transaction_status=status),
+        execute=lambda *args, **kwargs: _EmptyResult(),
+        commit=lambda: None,
+        rollback=lambda: None,
     )
-    with pytest.raises(PasswordTokenError) as excinfo:
-        consume_password_token_and_set_password(
-            raw, "raw-token", PURPOSE_FIRST_ACCESS, "hash"
-        )
-    assert "clean transaction" in str(excinfo.value)
+    assert consume_password_token_and_set_password(
+        raw, "T" * 43, PURPOSE_FIRST_ACCESS, "hash"
+    ) is None
 
 
 def test_token_consumption_refuses_sqlite_open_transaction():

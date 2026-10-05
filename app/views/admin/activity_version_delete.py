@@ -10,7 +10,7 @@ from app.activity_catalog import (
     get_atividade_base,
 )
 from app.auth import admin_required
-from app.db import get_db_connection, is_integrity_error
+from app.db import get_db_connection, is_integrity_error, write_transaction
 from utils.messages import flash
 
 
@@ -31,23 +31,25 @@ def _flash_delete_block(exc: ActivityVersionDeleteBlocked) -> None:
 
 @admin_required
 def admin_catalogo_excluir_versao(base_id: int, versao_id: int):
-    """Hard-delete one version atomically, re-anchoring and renumbering survivors."""
+    """Hard-delete one version atomically, re-anchoring and renumbering survivors.
+
+    The neutral write transaction takes ``BEGIN IMMEDIATE`` on SQLite and the
+    per-base row lock on PostgreSQL; on failure it rolls the whole delete back,
+    so the refusal branches below read a clean connection.
+    """
     conn = get_db_connection()
     redirect_endpoint = "admin_catalogo_versao_detalhe"
     redirect_values = {"base_id": base_id}
     try:
-        conn.execute("BEGIN IMMEDIATE")
-        delete_activity_version(conn, base_id=base_id, versao_id=versao_id)
-        conn.commit()
+        with write_transaction(conn):
+            delete_activity_version(conn, base_id=base_id, versao_id=versao_id)
         flash("Versão excluída definitivamente com sucesso.", "success")
     except ActivityVersionDeleteBlocked as exc:
-        conn.rollback()
         if get_atividade_base(conn, base_id) is None:
             redirect_endpoint = "admin_atividades"
             redirect_values = {}
         _flash_delete_block(exc)
     except Exception as exc:
-        conn.rollback()
         if is_integrity_error(exc):
             flash(
                 "A versão não foi excluída porque uma referência protegida ainda existe.",
