@@ -35,6 +35,7 @@ from app.arquivos import (
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
+from app.sql_dialect import format_date_ptbr
 from app.text import human_text_contains, human_text_key
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -78,10 +79,10 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
         col += " COLLATE PTBR_NOACCENT"
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
-    sql = """
+    sql = f"""
         SELECT id, titulo, descricao, filename, original_filename, visivel,
                storage_status, failure_code,
-               strftime('%d/%m/%Y', criado_em) AS data_upload, criado_em
+               {format_date_ptbr(conn, "criado_em")} AS data_upload, criado_em
           FROM admin_arquivos
     """
     sql += append_conditions_sql(False, where)

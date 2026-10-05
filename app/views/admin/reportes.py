@@ -23,6 +23,7 @@ from app.db import get_db_connection
 from app.db_maintenance import ensure_reportes_table
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
+from app.sql_dialect import current_utc_text, date_compare, datetime_order
 from app.student_documents import remove_student_document, save_student_document
 from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -107,17 +108,17 @@ def admin_reportes():
         where.append(f"rep.categoria IN ({placeholders})")
         params.extend(categoria_filters)
     if data_min:
-        where.append("date(rep.criado_em) >= date(?)")
+        where.append(date_compare(conn, "rep.criado_em", ">="))
         params.append(data_min)
     if data_max:
-        where.append("date(rep.criado_em) <= date(?)")
+        where.append(date_compare(conn, "rep.criado_em", "<="))
         params.append(data_max)
 
     where_sql = append_conditions_sql(False, where)
     total = conn.execute("SELECT COUNT(*)" + base_from + where_sql, params).fetchone()[0]
 
     sort_map = {
-        "data": "datetime(rep.criado_em)",
+        "data": datetime_order(conn, "rep.criado_em"),
         "aluno": "COALESCE(a.nome, '') COLLATE PTBR_NOACCENT",
         "titulo": "LOWER(rep.titulo)",
         "categoria": "LOWER(rep.categoria)",
@@ -310,10 +311,10 @@ def admin_reportes_atualizar_status(reporte_id: int):
         return redirect(url_for("admin_reportes"))
 
     conn.execute(
-        """
+        f"""
         UPDATE reportes
            SET status = ?,
-               atualizado_em = datetime('now'),
+               atualizado_em = {current_utc_text(conn)},
                admin_id = ?
          WHERE id = ?
         """,

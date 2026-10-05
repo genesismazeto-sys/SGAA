@@ -188,6 +188,8 @@ def _load_legacy_presets_file():
 
 
 def _replace_presets_in_db(conn, data):
+    from app.sql_dialect import current_utc_text
+
     conn.execute(f"DELETE FROM {PRESETS_TABLE}")
     for tipo in ("respostas", "emails"):
         for item in data.get(tipo, []):
@@ -195,7 +197,7 @@ def _replace_presets_in_db(conn, data):
                 f"""
                 INSERT INTO {PRESETS_TABLE}
                     (tipo, preset_id, titulo, texto, atualizado_em, assunto, is_default)
-                VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+                VALUES (?, ?, ?, ?, {current_utc_text(conn)}, ?, ?)
                 """,
                 (
                     tipo,

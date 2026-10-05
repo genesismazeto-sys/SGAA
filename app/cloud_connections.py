@@ -16,6 +16,7 @@ from flask import current_app
 import app.cloud_drives as low_level_cloud
 from app.cloud_config import get_application_credential_status, get_onedrive_oauth_config
 from app.db import ensure_cloud_backup_schema
+from app.sql_dialect import current_utc_text
 from app.services.google_drive_service import (
     GoogleDriveServiceError,
     acquire_access_token as acquire_google_access_token,
@@ -62,13 +63,13 @@ def set_active_cloud_account(conn, provider: str, account_email: str, token_json
     ensure_cloud_backup_schema(conn)
     encrypted = encrypt_token_json_for_storage(token_json, env=_runtime_env())
     conn.execute(
-        "UPDATE cloud_accounts SET active = 0, updated_at = datetime('now') WHERE provider = ? AND active = 1",
+        f"UPDATE cloud_accounts SET active = 0, updated_at = {current_utc_text(conn)} WHERE provider = ? AND active = 1",
         (normalized,),
     )
     conn.execute(
-        """
+        f"""
         INSERT INTO cloud_accounts (provider, account_email, token_json, connected_at, updated_at, active)
-        VALUES (?, ?, ?, datetime('now'), datetime('now'), 1)
+        VALUES (?, ?, ?, {current_utc_text(conn)}, {current_utc_text(conn)}, 1)
         """,
         (normalized, (account_email or "").strip() or None, encrypted),
     )
@@ -138,19 +139,19 @@ def update_cloud_account_token(
     encrypted = encrypt_token_json_for_storage(token_json, env=_runtime_env())
     if account_email is None:
         conn.execute(
-            "UPDATE cloud_accounts SET token_json = ?, updated_at = datetime('now') WHERE id = ?",
+            f"UPDATE cloud_accounts SET token_json = ?, updated_at = {current_utc_text(conn)} WHERE id = ?",
             (encrypted, int(account_id)),
         )
     else:
         conn.execute(
-            "UPDATE cloud_accounts SET token_json = ?, account_email = ?, updated_at = datetime('now') WHERE id = ?",
+            f"UPDATE cloud_accounts SET token_json = ?, account_email = ?, updated_at = {current_utc_text(conn)} WHERE id = ?",
             (encrypted, (account_email or "").strip() or None, int(account_id)),
         )
 
 
 def _deactivate_account(conn, account_id: int) -> None:
     conn.execute(
-        "UPDATE cloud_accounts SET active = 0, updated_at = datetime('now') WHERE id = ?",
+        f"UPDATE cloud_accounts SET active = 0, updated_at = {current_utc_text(conn)} WHERE id = ?",
         (int(account_id),),
     )
 
@@ -417,6 +418,6 @@ def disconnect_cloud_account(conn, provider: str) -> None:
         except (TypeError, ValueError, RuntimeError):
             pass
     conn.execute(
-        "UPDATE cloud_accounts SET active = 0, updated_at = datetime('now') WHERE provider = ? AND active = 1",
+        f"UPDATE cloud_accounts SET active = 0, updated_at = {current_utc_text(conn)} WHERE provider = ? AND active = 1",
         (normalized,),
     )

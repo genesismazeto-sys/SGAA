@@ -24,6 +24,7 @@ from app.matrix_scope import (
     is_matrix_assigned,
 )
 from app.settings import get_horas_settings
+from app.sql_dialect import date_compare
 from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
@@ -211,16 +212,16 @@ def admin_matrizes():
         where.append("COALESCE(m.horas_extensao_obrigatorias, 0) <= ?")
         params.append(horas_extensao_max)
     if inicio_min:
-        where.append("date(m.data_inicio_vigencia) >= date(?)")
+        where.append(date_compare(conn, "m.data_inicio_vigencia", ">="))
         params.append(inicio_min)
     if inicio_max:
-        where.append("date(m.data_inicio_vigencia) <= date(?)")
+        where.append(date_compare(conn, "m.data_inicio_vigencia", "<="))
         params.append(inicio_max)
     if fim_min:
-        where.append("date(m.data_fim_vigencia) >= date(?)")
+        where.append(date_compare(conn, "m.data_fim_vigencia", ">="))
         params.append(fim_min)
     if fim_max:
-        where.append("date(m.data_fim_vigencia) <= date(?)")
+        where.append(date_compare(conn, "m.data_fim_vigencia", "<="))
         params.append(fim_max)
 
     order_map = {

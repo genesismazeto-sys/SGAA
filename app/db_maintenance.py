@@ -65,7 +65,8 @@ def seed_usuario_access_default_data(conn) -> None:
         # para preservar o fluxo administrativo. NUNCA reutilize esses valores em
         # produção; reescreva-os via interface após o primeiro login.
         conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+            "INSERT INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?) "
+            "ON CONFLICT DO NOTHING",
             (nivel_acesso, senha_padrao),
         )
 
@@ -96,13 +97,16 @@ def ensure_usuario_access_schema(conn) -> None:
     rollback ownership.
 
     PostgreSQL runtime is a read-only assertion over the already-provisioned
-    baseline: the historical default-access seed and normalization are SQLite
-    dialect DML and belong to U5-B.  U5-A never executes schema DDL here.
+    baseline plus the U5-B application-data default seed (portable, idempotent
+    DML).  It never executes schema DDL and never commits on the caller's
+    behalf.
     """
     from app.db import database_engine
 
     if database_engine(conn) == "postgres":
         ensure_usuario_access_structural_schema(conn)
+        seed_usuario_access_default_data(conn)
+        normalize_usuario_access_startup_data(conn)
         return
     conn.execute("SAVEPOINT ensure_usuario_access_schema")
     try:
@@ -198,6 +202,14 @@ def get_schema_version(conn: sqlite3.Connection) -> int:
 
 
 def get_schema_status(conn: sqlite3.Connection) -> dict[str, object]:
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        # PostgreSQL: the U5-A authority is the schema source of truth; never
+        # read sqlite_master/PRAGMA here.
+        from app.pg_schema import pg_schema_status
+
+        return pg_schema_status(conn)
     status = get_prod1_schema_status(conn)
     return {
         "schema_epoch": status["schema_epoch"],

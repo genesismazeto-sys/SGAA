@@ -41,7 +41,8 @@ def seed_backup_settings_default_data(
 ) -> None:
     for chave, valor in defaults.items():
         conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_backup (chave, valor) VALUES (?, ?)",
+            "INSERT INTO configuracoes_backup (chave, valor) VALUES (?, ?) "
+            "ON CONFLICT DO NOTHING",
             (chave, valor),
         )
 
@@ -49,12 +50,15 @@ def seed_backup_settings_default_data(
 def normalize_legacy_backup_sync_interval(
     conn, defaults: dict[str, str]
 ) -> None:
+    from app.sql_dialect import current_utc_text
+
     intervalo_atual = conn.execute(
         "SELECT valor FROM configuracoes_backup WHERE chave = 'cloud_sync_interval_seconds'"
     ).fetchone()
     if intervalo_atual and str(intervalo_atual["valor"] or "").strip() == "300":
         conn.execute(
-            "UPDATE configuracoes_backup SET valor = ?, atualizado_em = datetime('now') WHERE chave = 'cloud_sync_interval_seconds'",
+            "UPDATE configuracoes_backup SET valor = ?, atualizado_em = "
+            f"{current_utc_text(conn)} WHERE chave = 'cloud_sync_interval_seconds'",
             (defaults["cloud_sync_interval_seconds"],),
         )
 

@@ -68,6 +68,7 @@ from app.db_maintenance import (
     restore_database_snapshot,
 )
 from app.presentation import _format_bytes_label
+from app.sql_dialect import current_utc_text, datetime_order
 from app.services.backup_service import (
     BackupServiceError,
     cleanup_backup_artifacts,
@@ -148,10 +149,10 @@ def save_backup_settings(conn, payload: dict[str, str]) -> dict[str, str]:
 
     for chave, valor in normalized.items():
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_backup (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (chave, valor),
         )
@@ -202,10 +203,10 @@ def save_retention_policy(conn, payload: dict) -> dict[str, str]:
 
     for chave, valor in normalized.items():
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_backup (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (chave, valor),
         )
@@ -236,15 +237,15 @@ def _save_cloud_drive_folder_setting(
     safe_folder_path = (folder_path_label or "").strip()
     safe_drive_id = (drive_id or "").strip()
     conn.execute(
-        """
+        f"""
         INSERT INTO cloud_drive_settings (provider, folder_id, folder_name, folder_path_label, drive_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, {current_utc_text(conn)})
         ON CONFLICT(provider) DO UPDATE SET
             folder_id = excluded.folder_id,
             folder_name = excluded.folder_name,
             folder_path_label = excluded.folder_path_label,
             drive_id = excluded.drive_id,
-            updated_at = datetime('now')
+            updated_at = {current_utc_text(conn)}
         """,
         (
             safe_provider,
@@ -357,7 +358,7 @@ def _list_backup_logs(conn, *, provider: str | None = None, limit: int = 20):
     if provider:
         sql += " WHERE provider = ?"
         params.append(provider)
-    sql += " ORDER BY datetime(created_at) DESC, id DESC LIMIT ?"
+    sql += f" ORDER BY {datetime_order(conn, 'created_at')} DESC, id DESC LIMIT ?"
     params.append(safe_limit)
     return conn.execute(sql, tuple(params)).fetchall()
 

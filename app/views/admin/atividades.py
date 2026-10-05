@@ -828,9 +828,7 @@ def admin_adicionar_atividade():
             conn.rollback()
             if is_integrity_error(e):
                 constraint = integrity_constraint_name(e) or ""
-                if not is_unique_violation(e) and constraint == "atividade_versao.grupo":
-                    flash("Erro: selecione um número de grupo válido.", "error")
-                elif is_unique_violation(e) and "nome" in constraint:
+                if is_unique_violation(e) and constraint == "atividade_base.nome_conceito":
                     flash("Erro: Atividade com este nome já existe.", "error")
                 else:
                     flash(f"Erro de integridade: {e}", "error")

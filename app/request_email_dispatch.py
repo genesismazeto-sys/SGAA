@@ -30,6 +30,7 @@ from app.request_email_notifications import (
     mark_events_sent,
 )
 from app.request_email_render import PlaceholderError, render_student_email
+from app.sql_dialect import current_utc_text
 from app.services.mail_service import (
     MailMessage,
     MailTransportError,
@@ -268,7 +269,7 @@ def dispatch(
 
         conn.execute(
             "UPDATE email_envios"
-            "   SET status='sent', enviado_em=datetime('now'), ultimo_erro=NULL,"
+            f"   SET status='sent', enviado_em={current_utc_text(conn)}, ultimo_erro=NULL,"
             "       provider_message_id=? WHERE id=?",
             (str(provider.get("http_status") or ""), envio_id),
         )

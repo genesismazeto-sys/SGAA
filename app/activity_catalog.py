@@ -5,6 +5,7 @@ import json
 from app.db import DatabaseIntegrityError, lock_activity_base
 from app.matrix_scope import is_activity_version_referenced_by_assigned_matrix
 from app.presentation import format_date_ptbr
+from app.sql_dialect import datetime_order
 from app.text import normalize_header
 
 
@@ -665,7 +666,7 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
     atividade_base, sem mutar dados.
     """
     rows = conn.execute(
-        """
+        f"""
         SELECT t.id,
                t.tipo_transicao,
                t.justificativa,
@@ -684,7 +685,7 @@ def get_atividade_transicoes_por_base(conn, base_id: int) -> list[dict]:
           LEFT JOIN atividade_versao dst ON dst.id = t.to_atividade_versao_id
          WHERE src.atividade_base_id = ?
             OR dst.atividade_base_id = ?
-         ORDER BY datetime(t.created_at) DESC, t.id DESC
+         ORDER BY {datetime_order(conn, "t.created_at")} DESC, t.id DESC
         """,
         (base_id, base_id),
     ).fetchall()

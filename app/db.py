@@ -473,6 +473,14 @@ def lock_password_token(connection, token_id: int) -> bool:
 _SQLITE_CONSTRAINT_NAME_RE = re.compile(r"constraint failed:\s*(.+?)\s*$")
 _PG_CONSTRAINT_NAME_RE = re.compile(r'constraint "([^"]+)"')
 
+#: U5-A PostgreSQL trigger functions raise this custom SQLSTATE for business
+#: integrity refusals.  It is defined here as a literal so importing
+#: ``app.db`` never imports ``app.pg_schema``; ``PG_BUSINESS_RULE_SQLSTATE`` is
+#: asserted equal in the U5-B tests.
+_PG_BUSINESS_RULE_SQLSTATE = "SG001"
+
+_PG_CONSTRAINT_IDENTITIES = None
+
 
 def _sqlite_constraint_name(exc):
     match = _SQLITE_CONSTRAINT_NAME_RE.search(str(exc))
@@ -495,6 +503,73 @@ def _pg_constraint_name(exc):
     return match.group(1) if match else None
 
 
+def _pg_sqlstate(exc):
+    """Structured PostgreSQL SQLSTATE only, never inferred from message text.
+
+    Trusts the psycopg-shaped metadata surfaces ``exc.sqlstate`` and
+    ``exc.diag.sqlstate``.  Arbitrary exception text (``str``/``repr``/``args``)
+    is never inspected, so an application error whose message happens to
+    contain a SQLSTATE-looking token is not reclassified as a database error.
+    """
+    state = getattr(exc, "sqlstate", None)
+    if state:
+        return str(state)
+    diag = getattr(exc, "diag", None)
+    state = getattr(diag, "sqlstate", None)
+    if state:
+        return str(state)
+    return None
+
+
+def _pg_constraint_identities():
+    """Lazily built ``explicit PostgreSQL name -> neutral logical identity``.
+
+    The mapping is derived from the U5-A ``PG_CONSTRAINT_MAP`` (the single
+    owner of the explicit stable names) only when a PostgreSQL-shaped name is
+    first seen, so importing ``app.db`` on SQLite never imports
+    ``app.pg_schema``.  A constraint name absent from the map is left as-is:
+    unknown PostgreSQL names stay diagnosable rather than being silently
+    misclassified.
+    """
+    global _PG_CONSTRAINT_IDENTITIES
+    if _PG_CONSTRAINT_IDENTITIES is None:
+        mapping = {}
+        try:
+            from app.pg_schema import PG_CONSTRAINT_MAP
+        except Exception:  # pragma: no cover - authority always importable
+            PG_CONSTRAINT_MAP = {}
+        for name, entry in PG_CONSTRAINT_MAP.items():
+            table = entry.get("table")
+            if not table:
+                continue
+            fields = entry.get("fields")
+            if fields:
+                mapping[name] = ", ".join(f"{table}.{field}" for field in fields)
+            else:
+                mapping[name] = f"{table}.{name}"
+        _PG_CONSTRAINT_IDENTITIES = mapping
+    return _PG_CONSTRAINT_IDENTITIES
+
+
+def normalize_constraint_identity(name):
+    """Map an engine constraint name to the neutral logical identity.
+
+    SQLite already reports the logical ``table.column`` identity; PostgreSQL
+    reports the explicit stable name created by U5-A, which is translated
+    through :data:`PG_CONSTRAINT_MAP`.  Unknown names are returned unchanged.
+    """
+    if not name:
+        return None
+    text = str(name)
+    return _pg_constraint_identities().get(text, text)
+
+
+def _classified(cls, exc, **kwargs):
+    classified = cls(str(exc), **kwargs)
+    classified.__cause__ = exc
+    return classified
+
+
 def _psycopg_error_types():
     try:
         import psycopg
@@ -509,31 +584,47 @@ def classify_database_error(exc):
     if isinstance(exc, DatabaseAdapterError):
         return exc
     if isinstance(exc, sqlite3.IntegrityError):
-        return DatabaseIntegrityError(
-            str(exc),
+        return _classified(
+            DatabaseIntegrityError,
+            exc,
             constraint_name=_sqlite_constraint_name(exc),
             is_unique=_sqlite_is_unique(exc),
         )
     if isinstance(exc, sqlite3.OperationalError):
-        return DatabaseOperationalError(str(exc))
+        return _classified(DatabaseOperationalError, exc)
     if isinstance(exc, sqlite3.DatabaseError):
-        return DatabaseAdapterError(str(exc))
+        return _classified(DatabaseAdapterError, exc)
+    if _pg_sqlstate(exc) == _PG_BUSINESS_RULE_SQLSTATE:
+        # U5-A trigger business refusal: an integrity/business failure, never a
+        # unique violation.  The trigger message is preserved.
+        return _classified(
+            DatabaseIntegrityError,
+            exc,
+            constraint_name=_pg_constraint_name(exc),
+            is_unique=False,
+        )
     types_ = _psycopg_error_types()
     if types_ is None:
         return None
     psycopg, errors = types_
     if isinstance(exc, errors.UniqueViolation):
-        return DatabaseIntegrityError(
-            str(exc), constraint_name=_pg_constraint_name(exc), is_unique=True
+        return _classified(
+            DatabaseIntegrityError,
+            exc,
+            constraint_name=_pg_constraint_name(exc),
+            is_unique=True,
         )
     if isinstance(exc, errors.IntegrityError):
-        return DatabaseIntegrityError(
-            str(exc), constraint_name=_pg_constraint_name(exc), is_unique=False
+        return _classified(
+            DatabaseIntegrityError,
+            exc,
+            constraint_name=_pg_constraint_name(exc),
+            is_unique=False,
         )
     if isinstance(exc, errors.OperationalError):
-        return DatabaseOperationalError(str(exc))
+        return _classified(DatabaseOperationalError, exc)
     if isinstance(exc, (errors.DatabaseError, psycopg.Error)):
-        return DatabaseAdapterError(str(exc))
+        return _classified(DatabaseAdapterError, exc)
     return None
 
 
@@ -551,9 +642,15 @@ def is_operational_error(exc) -> bool:
 
 
 def integrity_constraint_name(exc):
+    """The neutral logical identity of the violated constraint, if any.
+
+    SQLite reports ``table.column`` directly; PostgreSQL explicit U5-A names
+    are normalised to the same identity so call sites never learn PostgreSQL
+    constraint names.
+    """
     classified = classify_database_error(exc)
     if isinstance(classified, DatabaseIntegrityError):
-        return classified.constraint_name
+        return normalize_constraint_identity(classified.constraint_name)
     return None
 
 
@@ -704,18 +801,25 @@ def _app_settings_defaults() -> dict[str, str]:
 
 def ensure_app_settings_schema(conn) -> None:
     if database_engine(conn) != _BACKEND_SQLITE:
-        # PostgreSQL runtime: the baseline is already provisioned by the
-        # explicit CLI, so this is a read-only assertion.  The historical
-        # ``INSERT OR IGNORE`` default seed is SQLite dialect and belongs to
-        # U5-B; U5-A must not execute schema DDL or SQLite-only SQL here.
+        # PostgreSQL runtime: the physical baseline is provisioned by the
+        # explicit CLI (U5-A, read-only assertion here).  The application-data
+        # default rows are U5-B and are seeded idempotently without ever
+        # executing DDL or SQLite-only SQL.
         from app.pg_schema import require_pg_tables
 
         require_pg_tables(conn, "configuracoes_app")
+        for chave, valor in _app_settings_defaults().items():
+            conn.execute(
+                "INSERT INTO configuracoes_app (chave, valor) VALUES (?, ?) "
+                "ON CONFLICT DO NOTHING",
+                (chave, valor),
+            )
         return
     validate_prod1_schema(conn)
     for chave, valor in _app_settings_defaults().items():
         conn.execute(
-            "INSERT OR IGNORE INTO configuracoes_app (chave, valor) VALUES (?, ?)",
+            "INSERT INTO configuracoes_app (chave, valor) VALUES (?, ?) "
+            "ON CONFLICT DO NOTHING",
             (chave, valor),
         )
 

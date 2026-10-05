@@ -2549,6 +2549,79 @@ def validate_pg_schema(connection):
 
 
 # ---------------------------------------------------------------------------
+# read-only lightweight status
+# ---------------------------------------------------------------------------
+
+
+def pg_schema_status(connection):
+    """Lightweight read-only PostgreSQL baseline status for runtime consumers.
+
+    Unlike :func:`validate_pg_schema` this performs no full material census; it
+    reads the U5-A ``pg_schema_meta`` authority (epoch/version/digest) plus the
+    baseline migration metadata row, and returns the same summary shape as the
+    SQLite ``get_schema_status``.  Executes SELECT statements only.
+    """
+    _current_schema(connection)
+    meta_rows = _fetch(
+        connection,
+        "SELECT id, schema_epoch, schema_version, contract_sha256, applied_at "
+        f"FROM {PG_SCHEMA_META_TABLE} ORDER BY id",
+    )
+    if len(meta_rows) != 1:
+        raise PostgresSchemaError(
+            f"{PG_SCHEMA_META_TABLE} must hold exactly one row, found {len(meta_rows)}"
+        )
+    meta_id, epoch, version, digest, applied_at = meta_rows[0]
+    if int(meta_id) != PG_SCHEMA_META_ID:
+        raise PostgresSchemaError(
+            f"{PG_SCHEMA_META_TABLE}.id must be {PG_SCHEMA_META_ID}"
+        )
+    if str(epoch) != PG_SCHEMA_EPOCH:
+        raise PostgresSchemaError(
+            f"{PG_SCHEMA_META_TABLE}.schema_epoch mismatch: {epoch!r}"
+        )
+    if int(version) != PG_SCHEMA_VERSION:
+        raise PostgresSchemaError(
+            f"{PG_SCHEMA_META_TABLE}.schema_version mismatch: {version!r}"
+        )
+    if str(digest) != PG_CONTRACT_SHA256:
+        raise PostgresSchemaError(
+            f"{PG_SCHEMA_META_TABLE}.contract_sha256 does not match the "
+            "application-owned contract digest"
+        )
+    migration_row = connection.execute(
+        "SELECT name, applied_at, details_json FROM schema_migrations "
+        "WHERE version = ?",
+        (PG_SCHEMA_VERSION,),
+    ).fetchone()
+    details = None
+    migration_name = PG_SCHEMA_MIGRATIONS_SEMANTICS
+    migration_applied_at = str(applied_at)
+    if migration_row is not None:
+        migration_name = str(migration_row[0])
+        migration_applied_at = str(migration_row[1])
+        if migration_row[2]:
+            try:
+                details = json.loads(migration_row[2])
+            except (TypeError, ValueError):
+                details = None
+    return {
+        "schema_epoch": PG_SCHEMA_EPOCH,
+        "schema_version": PG_SCHEMA_VERSION,
+        "target_schema_epoch": PG_SCHEMA_EPOCH,
+        "target_schema_version": PG_SCHEMA_VERSION,
+        "contract_sha256": PG_CONTRACT_SHA256,
+        "latest_migration": {
+            "version": PG_SCHEMA_VERSION,
+            "name": migration_name,
+            "schema_epoch": PG_SCHEMA_EPOCH,
+            "applied_at": migration_applied_at,
+            "details": details,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # explicit provisioning
 # ---------------------------------------------------------------------------
 

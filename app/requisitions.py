@@ -4,6 +4,7 @@ import datetime
 
 from app.db import DEFAULT_RETURN_RESPONSE_DAYS
 from app.settings import get_response_time_settings
+from app.sql_dialect import datetime_before_now_days, newline
 from app.web.urls import aluno_url
 from utils.messages import resolve_user_message
 
@@ -26,17 +27,17 @@ def auto_indefer_devolvidas(conn) -> int:
         return 0
 
     result = conn.execute(
-        """
+        f"""
         UPDATE requisicoes
            SET status = 'Indeferida',
                observacao = CASE
                    WHEN observacao IS NULL OR observacao = ''
                        THEN '[Indeferida automaticamente: prazo de adequação de ' || ? || ' dias expirado.]'
-                   ELSE observacao || char(10) || '[Indeferida automaticamente: prazo de adequação de ' || ? || ' dias expirado.]'
+                   ELSE observacao || {newline(conn)} || '[Indeferida automaticamente: prazo de adequação de ' || ? || ' dias expirado.]'
                END
          WHERE status = 'Devolvida'
            AND data_processamento IS NOT NULL
-           AND datetime(data_processamento) <= datetime('now', '-' || ? || ' days')
+           AND {datetime_before_now_days(conn, "data_processamento")}
         """,
         (days, days, days),
     )

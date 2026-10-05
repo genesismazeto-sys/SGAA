@@ -12,6 +12,7 @@ from app.db import (
     ensure_app_settings_schema,
 )
 from app.presentation import format_date_ptbr
+from app.sql_dialect import current_utc_text
 
 
 
@@ -116,10 +117,10 @@ def save_app_settings(conn, payload: dict[str, str]) -> dict[str, str]:
 
     for chave, valor in normalized.items():
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_app (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (chave, valor),
         )
@@ -161,10 +162,10 @@ def save_return_response_settings(conn, payload: dict[str, str]) -> dict[str, st
     }
     for chave, valor in normalized.items():
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_app (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (chave, valor),
         )
@@ -217,10 +218,10 @@ def save_horas_settings(conn, payload: dict[str, str]) -> dict[str, str]:
                 "O valor de horas deve ser um número inteiro maior ou igual a zero."
             ) from exc
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_app (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (key, str(value)),
         )

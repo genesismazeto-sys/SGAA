@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import os
 import subprocess
 import sys
@@ -194,6 +195,100 @@ def test_b7p_neutral_owners_import_without_importing_main():
         assert "import main" not in source
 
 
+# ---------------------------------------------------------------------------
+# U5-B sanctioned dialect delta (engine-neutral SQL translation)
+#
+# The B7-P guard freezes the canonical-owner bodies against the entry baseline
+# at ENTRY_BASELINE_SHA.  U5-B intentionally replaced the SQLite-only ordering
+# expression inside app/admin_alerts.py::list_active_admin_alertas
+#
+#     ORDER BY datetime(criado_em) DESC, id DESC
+#
+# with the engine-neutral dialect helper
+#
+#     ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
+#
+# whose SQLite branch renders byte-for-byte the previous `datetime(...)`
+# fragment and whose PostgreSQL branch renders `COALESCE(criado_em, '')`.
+# The guard below still freezes the *entire* body: only this single approved
+# expression is canonicalised back to its entry-baseline SQLite rendering
+# before comparison, so any unrelated edit to the function still fails.
+# ---------------------------------------------------------------------------
+U5B_ORDER_HELPER = "datetime_order"
+U5B_APPROVED_ORDER_COLUMN = "criado_em"
+U5B_APPROVED_ORDER_SQLITE_RENDER = "datetime(criado_em)"
+
+
+class _U5BApprovedDialectNormalizer(ast.NodeTransformer):
+    """Rewrite the one sanctioned U5-B dialect call back to the exact
+    entry-baseline SQLite fragment.
+
+    Any other shape is left untouched, so the surrounding equivalence
+    comparison still fails on unrelated edits to the function.
+    """
+
+    def __init__(self) -> None:
+        self.replacements = 0
+
+    def visit_JoinedStr(self, node: ast.JoinedStr):
+        self.generic_visit(node)
+        values = node.values
+        if (
+            len(values) == 3
+            and isinstance(values[0], ast.Constant)
+            and isinstance(values[0].value, str)
+            and isinstance(values[1], ast.FormattedValue)
+            and values[1].format_spec is None
+            and isinstance(values[2], ast.Constant)
+            and isinstance(values[2].value, str)
+        ):
+            call = values[1].value
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == U5B_ORDER_HELPER
+                and not call.keywords
+                and len(call.args) == 2
+                and isinstance(call.args[0], ast.Name)
+                and isinstance(call.args[1], ast.Constant)
+                and call.args[1].value == U5B_APPROVED_ORDER_COLUMN
+            ):
+                self.replacements += 1
+                return ast.Constant(
+                    value=values[0].value
+                    + U5B_APPROVED_ORDER_SQLITE_RENDER
+                    + values[2].value
+                )
+        return node
+
+
+def _canonicalized_body(func: ast.FunctionDef):
+    """Return ``(approved_replacements, normalized_body_dump)``.
+
+    The dump equals ``_dump_body(func)`` except that the single approved U5-B
+    dialect expression is normalized to its entry-baseline SQLite rendering.
+    """
+    normalizer = _U5BApprovedDialectNormalizer()
+    normalized = normalizer.visit(copy.deepcopy(func))
+    return normalizer.replacements, _dump_body(normalized)
+
+
+def _mutate_first_string(func: ast.FunctionDef, old: str, new: str) -> bool:
+    for node in ast.walk(func):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and old in node.value:
+            node.value = node.value.replace(old, new, 1)
+            return True
+    return False
+
+
+def _mutate_first_attribute(func: ast.FunctionDef, old: str, new: str) -> bool:
+    for node in ast.walk(func):
+        if isinstance(node, ast.Attribute) and node.attr == old:
+            node.attr = new
+            return True
+    return False
+
+
 def test_b7p_body_equivalence_against_entry_baseline():
     baseline_main = _baseline_text("main.py")
 
@@ -216,12 +311,66 @@ def test_b7p_body_equivalence_against_entry_baseline():
         assert table_name in body
         assert "CREATE TABLE" not in body.upper()
     assert _dump_body(baseline_get_arquivo) == _dump_body(current_get_arquivo)
-    assert _dump_body(baseline_list_alertas) == _dump_body(current_list_alertas)
+
+    baseline_alertas_replacements, baseline_alertas_body = _canonicalized_body(
+        baseline_list_alertas
+    )
+    current_alertas_replacements, current_alertas_body = _canonicalized_body(
+        current_list_alertas
+    )
+    # The entry baseline carries no dialect call; the corrected owner carries
+    # exactly one approved U5-B dialect call.
+    assert baseline_alertas_replacements == 0
+    assert current_alertas_replacements == 1, (
+        "app/admin_alerts.py::list_active_admin_alertas must use exactly one "
+        f"approved U5-B dialect call ({U5B_ORDER_HELPER}(conn, "
+        f"{U5B_APPROVED_ORDER_COLUMN!r}))"
+    )
+    assert baseline_alertas_body == current_alertas_body
 
     assert ast.dump(baseline_ensure_arquivos.args) == ast.dump(current_ensure_arquivos.args)
     assert ast.dump(baseline_ensure_alertas.args) == ast.dump(current_ensure_alertas.args)
     assert ast.dump(baseline_get_arquivo.args) == ast.dump(current_get_arquivo.args)
     assert ast.dump(baseline_list_alertas.args) == ast.dump(current_list_alertas.args)
+
+
+def test_b7p_body_equivalence_negative_control_rejects_unrelated_edits():
+    """Mutation proof: the canonicalized B7-P comparison is not vacuous.
+
+    An unrelated semantic edit to ``list_active_admin_alertas`` (while keeping
+    the approved U5-B dialect call) must still be rejected by the guard.
+    """
+    baseline_main = _baseline_text("main.py")
+    baseline_list_alertas = _find_function(baseline_main, "list_active_admin_alertas")
+    current_list_alertas = _find_function(
+        _read_text(ADMIN_ALERTS_PATH), "list_active_admin_alertas"
+    )
+
+    baseline_replacements, baseline_body = _canonicalized_body(baseline_list_alertas)
+    current_replacements, current_body = _canonicalized_body(current_list_alertas)
+    assert baseline_replacements == 0
+    assert current_replacements == 1
+    # Sanity: the live function is accepted by the guard.
+    assert baseline_body == current_body
+
+    mutations = (
+        ("string", "id DESC", "id ASC"),  # ordering tiebreak change
+        ("string", "WHERE visivel = 1", "WHERE visivel IN (0, 1)"),  # filter widening
+        ("attribute", "fetchall", "fetchone"),  # result cardinality change
+    )
+    for kind, old, new in mutations:
+        mutated = copy.deepcopy(current_list_alertas)
+        if kind == "string":
+            assert _mutate_first_string(mutated, old, new), (old, new)
+        else:
+            assert _mutate_first_attribute(mutated, old, new), (old, new)
+        replacements, body = _canonicalized_body(mutated)
+        # The mutation must retain the approved dialect call so the guard is
+        # proven to reject the *unrelated* edit, not a missing dialect call.
+        assert replacements == 1, (old, new)
+        assert body != baseline_body, (
+            f"unrelated mutation {old!r} -> {new!r} was not rejected by the guard"
+        )
 
 
 def test_b7p_aluno_consumes_three_b7_symbols_directly():

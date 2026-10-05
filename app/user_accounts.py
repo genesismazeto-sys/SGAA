@@ -7,6 +7,7 @@ from app.auth import (
 )
 from app.db_maintenance import ensure_usuario_access_schema
 from app.security.passwords import hash_password, hash_password_batch
+from app.sql_dialect import current_utc_text
 
 
 # prod-1/v11 credential states -- see app/prod1_credential_pending_ddl.py.
@@ -79,12 +80,12 @@ def prepare_pending_password_hashes(count: int) -> list[str]:
 def set_usuario_credential_state(conn, usuario_id: int, state: str) -> None:
     state = _validate_credential_state(state)
     conn.execute(
-        """
+        f"""
         INSERT INTO usuario_credenciais(usuario_id,estado)
         VALUES(?,?)
         ON CONFLICT(usuario_id) DO UPDATE SET
             estado=excluded.estado,
-            atualizado_em=datetime('now')
+            atualizado_em={current_utc_text(conn)}
         """,
         (usuario_id, state),
     )
@@ -120,14 +121,15 @@ def set_usuario_access_active(conn, usuario_id: int, active: bool) -> None:
     """
     if active:
         conn.execute(
-            "UPDATE usuario_credenciais SET acesso_ativo=1, atualizado_em=datetime('now') "
-            "WHERE usuario_id=?",
+            "UPDATE usuario_credenciais SET acesso_ativo=1, atualizado_em="
+            f"{current_utc_text(conn)} WHERE usuario_id=?",
             (int(usuario_id),),
         )
         return
     conn.execute(
         "UPDATE usuario_credenciais SET acesso_ativo=0, "
-        "auth_version=auth_version+1, atualizado_em=datetime('now') WHERE usuario_id=?",
+        f"auth_version=auth_version+1, atualizado_em={current_utc_text(conn)} "
+        "WHERE usuario_id=?",
         (int(usuario_id),),
     )
 
@@ -143,9 +145,9 @@ def _write_usuario_credential_after_password_change(
     state: str,
 ) -> None:
     conn.execute(
-        """
+        f"""
         INSERT INTO usuario_credenciais(usuario_id,estado,auth_version,atualizado_em)
-        VALUES(?,?,1,datetime('now'))
+        VALUES(?,?,1,{current_utc_text(conn)})
         ON CONFLICT(usuario_id) DO UPDATE SET
             estado=excluded.estado,
             auth_version=usuario_credenciais.auth_version+1,
@@ -173,7 +175,7 @@ def invalidate_usuario_password_tokens(
     cursor = conn.execute(
         f"""
         UPDATE senha_tokens
-           SET invalidated_at=datetime('now')
+           SET invalidated_at={current_utc_text(conn)}
          WHERE usuario_id IN ({placeholders})
            AND consumed_at IS NULL
            AND invalidated_at IS NULL
@@ -305,9 +307,9 @@ def set_usuarios_password_hash(
     )
     if consumed_token_id is not None:
         consumed = conn.execute(
-            """
+            f"""
             UPDATE senha_tokens
-               SET consumed_at=datetime('now')
+               SET consumed_at={current_utc_text(conn)}
              WHERE id=? AND usuario_id=?
                AND consumed_at IS NULL AND invalidated_at IS NULL
             """,
@@ -346,9 +348,9 @@ def rehash_usuario_password(conn, usuario_id: int, senha_hash: str) -> None:
     if cursor.rowcount != 1:
         raise ValueError(f"usuario not found for password rehash: {usuario_id}")
     credential = conn.execute(
-        """
+        f"""
         UPDATE usuario_credenciais
-           SET auth_version=auth_version+1,atualizado_em=datetime('now')
+           SET auth_version=auth_version+1,atualizado_em={current_utc_text(conn)}
          WHERE usuario_id=?
         """,
         (int(usuario_id),),

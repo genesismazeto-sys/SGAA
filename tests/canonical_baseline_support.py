@@ -192,6 +192,15 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "(msg_caa55d22991ae66f). 1 addition, 3 retirements",
         -2,
     ),
+    (
+        "U5-B PostgreSQL runtime dialect: the unreachable "
+        "atividade_versao.grupo integrity-classifier branch in "
+        "admin_adicionar_atividade is retired. prod-1/v12 never constrained "
+        "atividade_versao.grupo, so its refusal flash 'Erro: selecione um "
+        "numero de grupo valido.' (msg_51d35cf7e0da9f99) had no reachable "
+        "consumer. 0 additions, 1 retirement",
+        -1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -233,9 +242,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # UI-C11 swaps four backup-result messages for four, so it stays at 582;
 # UI-C14 adds the 403 fallback, to 583; UI-C06 retires "Voltar", to 582;
 # UI-C13 adds the backup-lock busy message, to 583; AVD1 swaps three version-
-# delete refusals for one that names the real dependency, to 581.
+# delete refusals for one that names the real dependency, to 581; U5-B retires
+# the unreachable atividade_versao.grupo classifier message, to 580.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "8d9787453384e9e21d733b08bfada404652d76f6bfc4663929ff0c711b79e9db"
+    "fcffb13bcd64274e7db5025dc14c5edbfecf23c1f0c7312b3fdd48269721ec13"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -398,6 +408,13 @@ AVD1_VERSION_DELETE_RETIRED_KEYS = frozenset(
         "msg_1dab9e6df404e2b3",  # ...versao utilizada como versao anterior por outra versao.
         "msg_a4823b394cdedd6b",  # ...versao vinculada a Matriz.
         "msg_b45a4f716181b610",  # ...versao vinculada a Requisicao.
+    }
+)
+# U5-B PostgreSQL runtime dialect.  Purely a retirement (-1): the unreachable
+# atividade_versao.grupo integrity-classifier message had no reachable consumer.
+U5B_RUNTIME_DIALECT_RETIRED_KEYS = frozenset(
+    {
+        "msg_51d35cf7e0da9f99",  # Erro: selecione um numero de grupo valido.
     }
 )
 
@@ -737,6 +754,16 @@ def catalog_keys_before_version_delete(keys) -> set[str]:
     return (set(keys) - set(AVD1_VERSION_DELETE_KEYS)) | set(
         AVD1_VERSION_DELETE_RETIRED_KEYS
     )
+
+
+def catalog_keys_before_u5b_runtime_dialect(keys) -> set[str]:
+    """Undo the U5-B term: put the retired grupo-classifier key back.
+
+    U5-B is the newest term, so a reconstruction walks back through this first,
+    then AVD1, UI-C13, UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the
+    password foundation.
+    """
+    return set(keys) | set(U5B_RUNTIME_DIALECT_RETIRED_KEYS)
 
 
 def catalog_keys_before_backup_lock(keys) -> set[str]:

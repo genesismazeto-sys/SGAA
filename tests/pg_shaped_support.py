@@ -44,8 +44,20 @@ WHAT THIS DOUBLE DOES NOT MODEL (do not over-read it):
 """
 from __future__ import annotations
 
+import datetime
 import re
 import types
+
+
+def _emulated_sgaa_utcnow_text() -> str:
+    """SQLite UDF emulating the U5-A PostgreSQL ``sgaa_utcnow_text()``.
+
+    The PG-shaped double wraps a real SQLite engine; U5-B runtime SQL now emits
+    the PostgreSQL current-time helper whenever the connection reports the
+    PostgreSQL engine.  Registering the same helper on the wrapped engine lets
+    those PostgreSQL-shaped runtime paths execute without a server.
+    """
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class PostgresSyntaxError(Exception):
@@ -138,6 +150,9 @@ class PostgresShapedConnection:
 
     def __init__(self, real, *, lock_registry=None, owner=None):
         self._real = real
+        create_function = getattr(real, "create_function", None)
+        if create_function is not None:
+            create_function("sgaa_utcnow_text", 0, _emulated_sgaa_utcnow_text)
         self._status = "IDLE"
         self._xid_assigned = False
         self._lock_registry = lock_registry if lock_registry is not None else {}

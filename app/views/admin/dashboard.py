@@ -44,6 +44,7 @@ from app.requisitions import (
     auto_indefer_devolvidas,
 )
 from app.settings import get_response_time_settings
+from app.sql_dialect import json_text
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from utils.messages import resolve_user_message
 
@@ -142,8 +143,9 @@ def mark_admin_new_request_alert_seen(
     seen_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn.executemany(
         """
-        INSERT OR IGNORE INTO requisicao_alerta_receipts (requisicao_id, usuario_id, alert_kind, seen_at)
+        INSERT INTO requisicao_alerta_receipts (requisicao_id, usuario_id, alert_kind, seen_at)
         VALUES (?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
         """,
         [(requisicao_id, usuario_id, alert_kind, seen_at) for requisicao_id in requisicao_ids],
     )
@@ -498,8 +500,8 @@ def admin_dashboard():
         metrics['tempo_medio_resposta_meta_excedida'] = avg_pending_response_days > response_time_settings["response_goal_days"]
         metrics['requisicoes_devolvidas_abertas'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE status = 'Devolvida'").fetchone()[0]
         metrics['requisicoes_atrasadas_meta_dias'] = overdue_pending_count
-        metrics['requisicoes_academicas'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE json_extract(regra_snapshot_json,'$.eixo')='AAC'").fetchone()[0]
-        metrics['requisicoes_extensao'] = conn.execute("SELECT COUNT(*) FROM requisicoes WHERE json_extract(regra_snapshot_json,'$.eixo')='AEU'").fetchone()[0]
+        metrics['requisicoes_academicas'] = conn.execute(f"SELECT COUNT(*) FROM requisicoes WHERE {json_text(conn, 'regra_snapshot_json', 'eixo')}='AAC'").fetchone()[0]
+        metrics['requisicoes_extensao'] = conn.execute(f"SELECT COUNT(*) FROM requisicoes WHERE {json_text(conn, 'regra_snapshot_json', 'eixo')}='AEU'").fetchone()[0]
         metrics['turma_cards'], metrics['dashboard_total_geral'], turma_summary = _build_admin_dashboard_turma_cards(conn)
         metrics.update(turma_summary)
         g._adm_dash_metrics = metrics

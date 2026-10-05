@@ -998,11 +998,13 @@ def save_message_override(conn, message_key: str, message_text: str) -> None:
         return
 
     ensure_message_overrides_schema(conn)
+    from app.sql_dialect import current_utc_text
+
     conn.execute(
         f"""
         INSERT INTO {MESSAGE_TABLE_NAME} (chave, texto, atualizado_em)
-        VALUES (?, ?, datetime('now'))
-        ON CONFLICT(chave) DO UPDATE SET texto = excluded.texto, atualizado_em = datetime('now')
+        VALUES (?, ?, {current_utc_text(conn)})
+        ON CONFLICT(chave) DO UPDATE SET texto = excluded.texto, atualizado_em = {current_utc_text(conn)}
         """,
         (key, text),
     )

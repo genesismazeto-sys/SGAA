@@ -85,6 +85,11 @@ from app.db import (
 from app.student_documents import (
     save_student_document,
 )
+from app.sql_dialect import (
+    date_compare,
+    datetime_order,
+    format_date_ptbr as sql_format_date_ptbr,
+)
 from app.storage.contracts import StorageError
 from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.text import human_text_contains, human_text_key, ptbr_text_sort_key
@@ -1004,18 +1009,18 @@ def aluno_arquivos():
     ensure_admin_arquivos_table(conn)
     arquivos = []
     rows = conn.execute(
-        """
+        f"""
         SELECT id,
                titulo,
                descricao,
                filename,
                original_filename,
-               COALESCE(strftime('%d/%m/%Y', criado_em), '-') AS data_upload,
+               COALESCE({sql_format_date_ptbr(conn, "criado_em")}, '-') AS data_upload,
                criado_em
           FROM admin_arquivos
          WHERE visivel = 1
            AND storage_status IN ('legacy_active','active','replacement_cleanup_pending')
-      ORDER BY datetime(criado_em) DESC, id DESC
+      ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
         """
     ).fetchall()
 
@@ -1254,11 +1259,11 @@ def aluno_reportar():
                 except ValueError:
                     flash("A captura deve estar em PNG, JPG, JPEG ou WEBP.", "error")
                     reportes_rows = conn.execute(
-                        """
+                        f"""
                         SELECT id, titulo, descricao, categoria, screenshot_filename, status, criado_em, atualizado_em
                           FROM reportes
                          WHERE aluno_id = ?
-                      ORDER BY datetime(criado_em) DESC, id DESC
+                      ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
                         """,
                         (aluno["id"],),
                     ).fetchall()
@@ -1295,11 +1300,11 @@ def aluno_reportar():
             return redirect(_aluno_url("aluno_reportar"))
 
     reportes_rows = conn.execute(
-        """
+        f"""
         SELECT id, titulo, descricao, categoria, screenshot_filename, status, criado_em, atualizado_em
           FROM reportes
          WHERE aluno_id = ?
-      ORDER BY datetime(criado_em) DESC, id DESC
+      ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
         """,
         (aluno["id"],),
     ).fetchall()
@@ -1374,16 +1379,16 @@ def aluno_minhas_requisicoes():
         where_parts.append(f"COALESCE(r.status, '') IN ({placeholders})")
         params.extend(status_filters)
     if data_evento_min:
-        where_parts.append("date(r.data_evento) >= date(?)")
+        where_parts.append(date_compare(conn, "r.data_evento", ">="))
         params.append(data_evento_min)
     if data_evento_max:
-        where_parts.append("date(r.data_evento) <= date(?)")
+        where_parts.append(date_compare(conn, "r.data_evento", "<="))
         params.append(data_evento_max)
     if data_processamento_min:
-        where_parts.append("date(r.data_processamento) >= date(?)")
+        where_parts.append(date_compare(conn, "r.data_processamento", ">="))
         params.append(data_processamento_min)
     if data_processamento_max:
-        where_parts.append("date(r.data_processamento) <= date(?)")
+        where_parts.append(date_compare(conn, "r.data_processamento", "<="))
         params.append(data_processamento_max)
     if horas_solicitadas_min is not None:
         where_parts.append("COALESCE(r.horas_solicitadas, 0) >= ?")

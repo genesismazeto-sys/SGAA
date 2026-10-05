@@ -64,6 +64,7 @@ from app.status_presentation import (
     ACCESS_STATUS_PENDENTE,
     ACCESS_STATUS_REVOGADO,
 )
+from app.sql_dialect import fetch_current_utc_text
 
 
 #: Selects the newest CONFIRMED-SENT first-access delivery per account, with
@@ -98,7 +99,7 @@ def _db_now(conn) -> str:
     Comparing against a Python clock would risk a timezone skew deciding
     whether an onboarding link counts as expired.
     """
-    return str(conn.execute("SELECT datetime('now')").fetchone()[0])
+    return fetch_current_utc_text(conn)
 
 
 def derive_access_status(

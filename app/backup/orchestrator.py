@@ -225,12 +225,14 @@ def get_drive_settings(conn) -> dict[str, str]:
 
 def _save_drive_config(conn, updates: dict[str, str]) -> None:
     ensure_backup_settings_schema(conn)
+    from app.sql_dialect import current_utc_text
+
     for chave, valor in updates.items():
         conn.execute(
-            """
+            f"""
             INSERT INTO configuracoes_backup (chave, valor, atualizado_em)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')
+            VALUES (?, ?, {current_utc_text(conn)})
+            ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}
             """,
             (chave, str(valor)),
         )

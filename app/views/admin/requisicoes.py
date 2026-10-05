@@ -45,6 +45,7 @@ from app.request_email_notifications import (
 )
 from app.requisitions import auto_indefer_devolvidas
 from app.student_matrix import get_allowed_activity_version_ids_for_student
+from app.sql_dialect import date_compare
 from app.storage.contracts import StorageError
 from app.text import normalize_header, ptbr_text_sort_key
 from app.uploads import _allowed, save_upload
@@ -394,16 +395,16 @@ def admin_requisicoes():
         where.append(f"COALESCE(TRIM(COALESCE(t.codigo, t.nome)), '') IN ({placeholders})")
         params.extend(turma_filters)
     if data_solicitacao_min:
-        where.append("date(r.data_solicitacao) >= date(?)")
+        where.append(date_compare(conn, "r.data_solicitacao", ">="))
         params.append(data_solicitacao_min)
     if data_solicitacao_max:
-        where.append("date(r.data_solicitacao) <= date(?)")
+        where.append(date_compare(conn, "r.data_solicitacao", "<="))
         params.append(data_solicitacao_max)
     if data_processamento_min:
-        where.append("date(r.data_processamento) >= date(?)")
+        where.append(date_compare(conn, "r.data_processamento", ">="))
         params.append(data_processamento_min)
     if data_processamento_max:
-        where.append("date(r.data_processamento) <= date(?)")
+        where.append(date_compare(conn, "r.data_processamento", "<="))
         params.append(data_processamento_max)
     if processamento_filters:
         processamento_clauses = []

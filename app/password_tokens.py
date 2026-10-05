@@ -14,6 +14,7 @@ from app.db import (
     write_transaction,
 )
 from app.user_accounts import CREDENTIAL_STATE_PERSONAL, first_access_redeemable
+from app.sql_dialect import current_utc_text
 
 
 PURPOSE_FIRST_ACCESS = "first_access"
@@ -198,9 +199,9 @@ def mark_password_token_sent(
 
 def invalidate_password_token(conn, token_id: int) -> bool:
     cursor = conn.execute(
-        """
+        f"""
         UPDATE senha_tokens
-           SET invalidated_at=datetime('now')
+           SET invalidated_at={current_utc_text(conn)}
          WHERE id=? AND consumed_at IS NULL AND invalidated_at IS NULL
         """,
         (int(token_id),),

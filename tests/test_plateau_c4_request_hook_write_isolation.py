@@ -160,7 +160,10 @@ def _normalized_sql(text: str) -> str:
 
 _ACCESS_BOOTSTRAP_SQL = (
     "SAVEPOINT ensure_usuario_access_schema",
-    "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+    # U5-B: the retired SQLite-only seed "INSERT OR IGNORE" was replaced by the
+    # portable "INSERT ... ON CONFLICT DO NOTHING" (see app/db_maintenance.py
+    # and the U5-B no-INSERT-OR-IGNORE gate).
+    "INSERT INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?) ON CONFLICT DO NOTHING",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'admin' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND (nivel_acesso IS NULL OR TRIM(nivel_acesso) = '')",
     "UPDATE usuarios SET nivel_acesso = ? WHERE tipo = 'aluno' AND LOWER(TRIM(COALESCE(nivel_acesso, ''))) = 'administrativo'",
@@ -377,6 +380,18 @@ def _sql_execute_statements(tree):
         if text:
             statements.append(text)
     return statements
+
+
+def _live_execute_sql(path: Path):
+    """Normalized SQL literals actually passed to execute/executemany/
+    executescript in a live module.
+
+    Implicit string-literal concatenation is already joined by the parser, so a
+    portable multi-line statement is returned as one unit (the raw-source
+    ``_normalized_sql`` view cannot see across the Python quote boundary).
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+    return [_normalized_sql(text) for text in _sql_execute_statements(tree)]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -858,16 +873,45 @@ def test_write_class_classifier_flags_every_ddl_dml_and_transaction_form():
 
 
 def test_classifier_is_not_vacuous_against_the_live_access_bootstrap():
-    source = (PROJECT_ROOT / "app" / "db_maintenance.py").read_text(
-        encoding="utf-8-sig"
-    )
-    normalized_source = _normalized_sql(source)
+    # Match the corpus against the exact SQL literals the live module passes to
+    # execute(); this recognizes the U5-B portable seed shape (implicit string
+    # concatenation is joined by the parser) and cannot be satisfied by a
+    # retired or merely similar statement.
+    live_sql = _live_execute_sql(PROJECT_ROOT / "app" / "db_maintenance.py")
     for statement in set(_ACCESS_BOOTSTRAP_SQL):
-        assert _normalized_sql(statement) in normalized_source, (
+        assert _normalized_sql(statement) in live_sql, (
             f"corpus statement not present in the live access bootstrap: {statement!r}"
         )
     assert len(_ACCESS_BOOTSTRAP_SQL) == 7
     assert sum(_is_write_class_sql(statement) for statement in _ACCESS_BOOTSTRAP_SQL) == 7
+
+
+def test_access_bootstrap_corpus_rejects_unapproved_writes():
+    """Negative control: the access-bootstrap corpus is pinned to the exact live
+    statements; similar-but-unapproved writes are not silently accepted."""
+    live_sql = _live_execute_sql(PROJECT_ROOT / "app" / "db_maintenance.py")
+    unapproved = (
+        # retired SQLite-only seed form
+        "INSERT OR IGNORE INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+        # same table but missing the portable idempotency clause
+        "INSERT INTO configuracoes_acesso (nivel_acesso, senha_padrao) VALUES (?, ?)",
+        # dangerous unapproved write to the same table
+        "DELETE FROM configuracoes_acesso",
+        # unapproved unconditional privilege promotion (removed historically)
+        "UPDATE usuarios SET nivel_acesso = 'admin_total' WHERE email = 'admin@ej.edu.br'",
+    )
+    for statement in unapproved:
+        assert _normalized_sql(statement) not in live_sql, (
+            f"unapproved statement must not be present in the live access "
+            f"bootstrap: {statement!r}"
+        )
+    # ...while the approved current seed IS present and write-class.
+    approved = (
+        "INSERT INTO configuracoes_acesso (nivel_acesso, senha_padrao) "
+        "VALUES (?, ?) ON CONFLICT DO NOTHING"
+    )
+    assert _normalized_sql(approved) in live_sql
+    assert _is_write_class_sql(approved)
 
 
 def test_classifier_matches_the_read_only_message_schema_validator():
