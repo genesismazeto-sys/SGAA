@@ -887,11 +887,32 @@ _ALLOWED_LEGACY_READERS = {
     "app/prod1_credential_pending_v11.py",
 }
 
+#: Schema authorities own the physical schema and the historical migration
+#: metadata seeded into ``schema_migrations`` -- including seed rows that name
+#: retired settings. They are not runtime business code and are the ONLY
+#: modules exempt from the retired-setting scan; no directory is ever exempt.
+_SCHEMA_AUTHORITY_MODULES = frozenset(
+    {
+        "app/prod1_schema.py",  # SQLite schema authority
+        "app/pg_schema.py",     # PostgreSQL schema authority (U5-A)
+    }
+)
 
-def test_no_application_code_reads_or_writes_the_retired_setting():
+_LEGACY_READER_SYMBOLS = (
+    "get_default_passwords_enabled",
+    "save_default_passwords_enabled",
+)
+
+
+def _retired_setting_offenders(base: Path, paths) -> list[str]:
+    """Files among ``paths`` that mention the retired setting in code.
+
+    String literals are scanned except in schema-authority modules; docstrings
+    are ignored; retired reader/writer symbols are always flagged.
+    """
     offenders = []
-    for path in [*ROOT.joinpath("app").rglob("*.py"), ROOT / "main.py", *ROOT.joinpath("services").rglob("*.py")]:
-        relative = path.relative_to(ROOT).as_posix()
+    for path in paths:
+        relative = path.relative_to(base).as_posix()
         if relative in _ALLOWED_LEGACY_READERS:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8-sig"))
@@ -909,14 +930,79 @@ def test_no_application_code_reads_or_writes_the_retired_setting():
                 and isinstance(node.value, str)
                 and id(node) not in docstrings
                 and LEGACY in node.value
-                and not relative.startswith("app/prod1_schema")
+                and relative not in _SCHEMA_AUTHORITY_MODULES
             ):
                 offenders.append(relative)
             if isinstance(node, (ast.Name, ast.Attribute)):
                 name = node.id if isinstance(node, ast.Name) else node.attr
-                if name in ("get_default_passwords_enabled", "save_default_passwords_enabled"):
+                if name in _LEGACY_READER_SYMBOLS:
                     offenders.append(relative)
+    return offenders
+
+
+def test_no_application_code_reads_or_writes_the_retired_setting():
+    offenders = _retired_setting_offenders(
+        ROOT,
+        [
+            *ROOT.joinpath("app").rglob("*.py"),
+            ROOT / "main.py",
+            *ROOT.joinpath("services").rglob("*.py"),
+        ],
+    )
     assert offenders == []
+
+
+def test_retired_setting_scan_still_flags_ordinary_application_modules(tmp_path):
+    """The schema-authority exemption must never weaken ordinary-module scans."""
+    ordinary_literal = tmp_path / "app" / "ordinary_literal.py"
+    ordinary_literal.parent.mkdir()
+    ordinary_literal.write_text(
+        "SETTING_KEY = 'default_passwords_enabled'\n", encoding="utf-8"
+    )
+    ordinary_reader = tmp_path / "app" / "ordinary_reader.py"
+    ordinary_reader.write_text(
+        "def read(conn):\n    return get_default_passwords_enabled(conn)\n",
+        encoding="utf-8",
+    )
+    assert _retired_setting_offenders(tmp_path, [ordinary_literal]) == [
+        "app/ordinary_literal.py"
+    ]
+    assert _retired_setting_offenders(tmp_path, [ordinary_reader]) == [
+        "app/ordinary_reader.py"
+    ]
+
+
+def test_retired_setting_exemption_is_exactly_the_schema_authorities(tmp_path):
+    assert _SCHEMA_AUTHORITY_MODULES == {
+        "app/prod1_schema.py",
+        "app/pg_schema.py",
+    }
+    for module in sorted(_SCHEMA_AUTHORITY_MODULES):
+        authority = tmp_path / module
+        authority.parent.mkdir(parents=True, exist_ok=True)
+        authority.write_text(
+            "SEED = 'default_passwords_enabled'\n", encoding="utf-8"
+        )
+        assert _retired_setting_offenders(tmp_path, [authority]) == []
+    # The exemption is per module, never per directory: a sibling module whose
+    # path merely starts like an authority is still flagged.
+    sibling = tmp_path / "app" / "pg_schema_helpers.py"
+    sibling.write_text("SEED = 'default_passwords_enabled'\n", encoding="utf-8")
+    assert _retired_setting_offenders(tmp_path, [sibling]) == [
+        "app/pg_schema_helpers.py"
+    ]
+
+
+def test_pg_schema_authority_names_the_setting_only_in_seed_metadata():
+    """The pg_schema.py mention is canonical v11 seed metadata, not runtime code."""
+    source = (ROOT / "app" / "pg_schema.py").read_text(encoding="utf-8")
+    assert source.count(LEGACY) == 1
+    from app import pg_schema
+
+    seed_blob = "".join(
+        details for _, _, details in pg_schema.PG_SCHEMA_MIGRATIONS_SEED
+    )
+    assert LEGACY in seed_blob
 
 
 def test_settings_module_no_longer_exposes_the_switch():

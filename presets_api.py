@@ -148,6 +148,16 @@ def ensure_presets_schema(conn):
     would reject the database.
     """
     # Import tardio evita ciclo: app.__init__ importa presets_api durante bootstrap.
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        # PostgreSQL baseline is created only by the explicit provisioning CLI;
+        # this runtime path is a read-only assertion and never a CREATE TABLE.
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, PRESETS_TABLE)
+        return
+
     from app.prod1_presets_ddl import (
         CONFIGURACOES_PRESETS_DEFAULT_INDEX_SQL,
         CONFIGURACOES_PRESETS_TABLE_SQL,

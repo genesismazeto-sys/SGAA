@@ -703,6 +703,15 @@ def _app_settings_defaults() -> dict[str, str]:
 
 
 def ensure_app_settings_schema(conn) -> None:
+    if database_engine(conn) != _BACKEND_SQLITE:
+        # PostgreSQL runtime: the baseline is already provisioned by the
+        # explicit CLI, so this is a read-only assertion.  The historical
+        # ``INSERT OR IGNORE`` default seed is SQLite dialect and belongs to
+        # U5-B; U5-A must not execute schema DDL or SQLite-only SQL here.
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, "configuracoes_app")
+        return
     validate_prod1_schema(conn)
     for chave, valor in _app_settings_defaults().items():
         conn.execute(
@@ -712,19 +721,42 @@ def ensure_app_settings_schema(conn) -> None:
 
 
 def ensure_cloud_backup_schema(conn) -> None:
+    if database_engine(conn) != _BACKEND_SQLITE:
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, "cloud_accounts", "backup_logs", "cloud_drive_settings")
+        return
     validate_prod1_schema(conn)
 
 
 def ensure_turmas_matriz_schema(conn) -> None:
+    if database_engine(conn) != _BACKEND_SQLITE:
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, "turmas", "matrizes_atividades")
+        return
     validate_prod1_schema(conn)
 
 
 def init_db():
     """Bootstrap or validate the empty-only first-production database."""
     if database_backend() != _BACKEND_SQLITE:
-        raise RuntimeError(
-            "PostgreSQL schema bootstrap is not implemented in this runtime yet"
-        )
+        # PostgreSQL boundary: validate the explicitly provisioned baseline and
+        # never bootstrap, repair, migrate or execute DDL here.
+        from app.pg_schema import PostgresSchemaError, validate_pg_schema
+
+        db = get_db_connection()
+        try:
+            validate_pg_schema(db)
+        except PostgresSchemaError as exc:
+            raise RuntimeError(
+                "PostgreSQL schema is not provisioned or is incompatible; run "
+                "'python -m app.pg_schema provision' explicitly before startup: "
+                f"{exc}"
+            ) from exc
+        finally:
+            db.rollback()
+        return
     runtime_app = current_app._get_current_object()
     bind_backup_settings_runtime_app(runtime_app)
     conn = get_db_connection()

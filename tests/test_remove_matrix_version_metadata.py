@@ -460,17 +460,41 @@ def test_v2_marker_with_v3_physical_shape_fails_closed(tmp_path):
     conn.close()
 
 
-def test_runtime_sources_have_no_matrix_version_residue():
-    root = Path(main.__file__).resolve().parent
+# ---------------------------------------------------------------------------
+# Static residue scan
+# ---------------------------------------------------------------------------
+
+#: Schema authorities legitimately carry canonical schema metadata: the v3
+#: seed row records the retired fields and the canonical v12 unique constraint
+#: keeps its name. They are the ONLY files exempt from the runtime residue
+#: scan; no directory is ever exempt.
+_SCHEMA_AUTHORITY_SOURCES = (
+    "app/prod1_schema.py",  # SQLite schema authority
+    "app/pg_schema.py",     # PostgreSQL schema authority (U5-A)
+)
+
+
+def _matrix_version_residual_hits(text: str) -> list[str]:
+    casefolded = text.casefold()
+    return [term for term in RESIDUAL_RUNTIME_PATTERNS if term.casefold() in casefolded]
+
+
+def _runtime_source_paths(root):
     runtime_paths = [root / "main.py"]
     for directory in (root / "app", root / "templates", root / "tools"):
         runtime_paths.extend(path for path in directory.rglob("*") if path.suffix in {".py", ".html", ".js"})
-    runtime_paths.remove(root / "app" / "prod1_schema.py")
+    for relative in _SCHEMA_AUTHORITY_SOURCES:
+        authority = root / relative
+        assert authority in runtime_paths, f"schema authority not scanned: {relative}"
+        runtime_paths.remove(authority)
+    return runtime_paths
 
+
+def test_runtime_sources_have_no_matrix_version_residue():
+    root = Path(main.__file__).resolve().parent
     residuals = {}
-    for path in runtime_paths:
-        text = path.read_text(encoding="utf-8").casefold()
-        hits = [term for term in RESIDUAL_RUNTIME_PATTERNS if term in text]
+    for path in _runtime_source_paths(root):
+        hits = _matrix_version_residual_hits(path.read_text(encoding="utf-8"))
         if hits:
             residuals[str(path.relative_to(root))] = hits
     assert residuals == {}
@@ -479,3 +503,27 @@ def test_runtime_sources_have_no_matrix_version_residue():
     assert migration_source.count("matriz_origem_id") == 2
     assert migration_source.count("matrizes_atividades.versao") == 2
     assert "matrizes_atividades.matriz_origem_id" in migration_source
+
+    pg_source = (root / "app" / "pg_schema.py").read_text(encoding="utf-8").casefold()
+    # The PostgreSQL authority keeps only canonical metadata: the v12 unique
+    # constraint name and the v3 seed row that records the removal.
+    assert pg_source.count("matriz_versao") == 1
+    assert pg_source.count("matriz_origem_id") == 1
+
+
+def test_matrix_version_residue_scan_still_flags_ordinary_runtime_sources(tmp_path):
+    """The schema-authority exemption must never weaken ordinary-source scans."""
+    for index, term in enumerate(RESIDUAL_RUNTIME_PATTERNS):
+        ordinary = tmp_path / "app" / f"ordinary_module_{index}.py"
+        ordinary.parent.mkdir(parents=True, exist_ok=True)
+        ordinary.write_text(f'LEGACY = "{term}"\n', encoding="utf-8")
+        assert _matrix_version_residual_hits(
+            ordinary.read_text(encoding="utf-8")
+        ) == [term]
+
+
+def test_only_the_two_schema_authorities_are_exempt_from_the_residue_scan():
+    assert _SCHEMA_AUTHORITY_SOURCES == (
+        "app/prod1_schema.py",
+        "app/pg_schema.py",
+    )

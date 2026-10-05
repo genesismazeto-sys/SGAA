@@ -150,6 +150,14 @@ def _format_preview_limitacao(tem_limitacao: bool, tipo_limitacao: str | None, l
 
 
 def _ensure_grupos_def_table(conn) -> None:
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, "grupos_def")
+        return
+
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='grupos_def'").fetchone():
         raise RuntimeError("prod-1 schema missing grupos_def")
 

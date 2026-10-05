@@ -94,7 +94,16 @@ def ensure_usuario_access_schema(conn) -> None:
     Releasing this helper-owned savepoint persists its work on a clean
     connection. Under an existing transaction, the caller retains commit and
     rollback ownership.
+
+    PostgreSQL runtime is a read-only assertion over the already-provisioned
+    baseline: the historical default-access seed and normalization are SQLite
+    dialect DML and belong to U5-B.  U5-A never executes schema DDL here.
     """
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        ensure_usuario_access_structural_schema(conn)
+        return
     conn.execute("SAVEPOINT ensure_usuario_access_schema")
     try:
         ensure_usuario_access_structural_schema(conn)
@@ -584,7 +593,14 @@ def restore_database_snapshot(source_snapshot_path: str, target_db_path: str, lo
         logger.info("Banco restaurado a partir de %s", source_snapshot_path)
 
 
-def _require_prod1_tables(conn: sqlite3.Connection, *names: str) -> None:
+def _require_prod1_tables(conn, *names: str) -> None:
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        from app.pg_schema import require_pg_tables
+
+        require_pg_tables(conn, *names)
+        return
     present = {
         str(row[0])
         for row in conn.execute(
@@ -617,21 +633,36 @@ def ensure_atividade_versioning_leaf_tables(conn) -> None:
 
 
 def ensure_atividade_versioning_leaf_triggers(conn) -> None:
+    from app.db import database_engine
+
     expected = {
         "trg_atividade_transicao_aac_para_aeu_insert",
         "trg_atividade_transicao_aac_para_aeu_update",
     }
-    present = {
-        str(row[0])
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='trigger'"
-        )
-    }
+    if database_engine(conn) == "postgres":
+        present = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT t.tgname FROM pg_catalog.pg_trigger t "
+                "JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid "
+                "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = current_schema() AND NOT t.tgisinternal"
+            )
+        }
+    else:
+        present = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
     if not expected <= present:
         raise SchemaMigrationStateError("prod-1 activity transition triggers missing")
 
 
 def ensure_atividade_versioning_leaf_indexes(conn) -> None:
+    from app.db import database_engine
+
     expected = {
         "idx_matriz_atividade_versao_item_matriz",
         "idx_matriz_atividade_versao_item_base",
@@ -640,16 +671,37 @@ def ensure_atividade_versioning_leaf_indexes(conn) -> None:
         "idx_atividade_transicao_to",
         "idx_atividade_transicao_tipo",
     }
-    present = {
-        str(row[0])
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='index'"
-        )
-    }
+    if database_engine(conn) == "postgres":
+        present = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT indexname FROM pg_catalog.pg_indexes "
+                "WHERE schemaname = current_schema()"
+            )
+        }
+    else:
+        present = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
     if not expected <= present:
         raise SchemaMigrationStateError("prod-1 activity versioning indexes missing")
 
 
 def ensure_atividade_versioning_schema(conn) -> None:
-    """Validate the central prod-1 activity graph; performs no schema mutation."""
+    """Validate the central prod-1 activity graph; performs no schema mutation.
+
+    PostgreSQL uses lightweight read-only catalog assertions instead of the
+    full SQLite schema status/digest validation, which must not run on every
+    request.
+    """
+    from app.db import database_engine
+
+    if database_engine(conn) == "postgres":
+        ensure_atividade_versioning_leaf_tables(conn)
+        ensure_atividade_versioning_leaf_triggers(conn)
+        ensure_atividade_versioning_leaf_indexes(conn)
+        return
     get_prod1_schema_status(conn)
