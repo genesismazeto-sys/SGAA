@@ -113,6 +113,175 @@ def route_choice(conn):
     assert ("route_choice", "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, "app/choice.py")
 
 
+_LATEST_OWNER = "get_latest_atividade_versao_for_base"
+_RENAME = "rename_current_activity_group_versions"
+_CATALOGUE = "app/activity_catalog.py"
+_LATEST_QUERY = (
+    "SELECT * FROM atividade_versao WHERE atividade_base_id = ? AND eixo = ? "
+    "ORDER BY numero_versao DESC, id DESC LIMIT 1"
+)
+_CANONICAL_CALL = f"{_LATEST_OWNER}(conn, base_id, eixo=eixo)"
+
+
+def _canonical_delegation_source() -> str:
+    return f'''
+def {_LATEST_OWNER}(conn, base_id, *, eixo=None):
+    return conn.execute({_LATEST_QUERY!r}, (base_id, eixo)).fetchone()
+def {_RENAME}(conn, *, eixo, group_number, new_label):
+    base_ids = [1, 2]
+    for base_id in base_ids:
+        lock_activity_base(conn, base_id)
+    results = []
+    for base_id in base_ids:
+        row = {_CANONICAL_CALL}
+        results.append(row)
+    return results
+'''
+
+
+def test_canonical_delegation_permission_does_not_expand_sql_authority():
+    assert scanner.ALLOWED_LATEST_SQL == {
+        (_CATALOGUE, _LATEST_OWNER),
+        (_CATALOGUE, "apply_latest_activity_version_semantic_changes"),
+        ("app/views/admin/matrizes.py", "_ensure_default_versao_link"),
+        ("app/views/admin/matrizes.py", "_save_matriz_activity_links"),
+    }
+    assert scanner.ALLOWED_CANONICAL_LATEST_CALLERS == {
+        (_CATALOGUE, _RENAME, _LATEST_OWNER),
+    }
+    assert (_CATALOGUE, _RENAME) not in scanner.ALLOWED_LATEST_SQL
+
+
+def test_approved_direct_canonical_delegation_passes_nonvacuously():
+    source = _canonical_delegation_source()
+    assert scanner.has_latest_sql(source)
+    assert _LATEST_OWNER in next(
+        facts.calls for facts in scanner.source_facts(source) if facts.name == _RENAME
+    )
+    assert scanner.analyze_sources({_CATALOGUE: source}) == set()
+
+
+def test_accepted_production_delegation_shape_is_recognized():
+    source = (ROOT / _CATALOGUE).read_text(encoding="utf-8-sig")
+    tree = ast.parse(source)
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == _RENAME)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    calls = [node for node in ast.walk(function)
+             if isinstance(node, ast.Call) and scanner.call_tail(node) == _LATEST_OWNER]
+    assert len(calls) == 1
+    assert scanner.approved_canonical_latest_call(calls[0], function, _CATALOGUE, parents)
+    assert not scanner.has_latest_sql(ast.get_source_segment(source, function))
+    assert scanner.source_findings(source, _CATALOGUE) == set()
+
+
+@pytest.mark.parametrize("retain_canonical", [False, True])
+def test_rename_inline_latest_sql_is_rejected_even_with_consumption_permission(retain_canonical):
+    source = _canonical_delegation_source()
+    inline = f"conn.execute({_LATEST_QUERY!r}, (base_id, eixo)).fetchone()"
+    if retain_canonical:
+        source = source.replace("        results.append(row)", f"        other = {inline}\n        results.append(row)")
+    else:
+        source = source.replace(_CANONICAL_CALL, inline)
+    assert (_RENAME, "inline_latest_version_sql") in scanner.source_findings(source, _CATALOGUE)
+
+
+@pytest.mark.parametrize("retain_canonical", [False, True])
+def test_new_hidden_latest_sql_helper_and_rename_caller_are_rejected(retain_canonical):
+    source = _canonical_delegation_source()
+    helper = f'''
+def select_current(conn, base_id, *, eixo):
+    return conn.execute({_LATEST_QUERY!r}, (base_id, eixo)).fetchone()
+'''
+    if retain_canonical:
+        source = source.replace("        results.append(row)", "        other = select_current(conn, base_id, eixo=eixo)\n        results.append(row)")
+    else:
+        source = source.replace(_CANONICAL_CALL, "select_current(conn, base_id, eixo=eixo)")
+        # Removing the approved call must not let this negative control pass
+        # vacuously: the replacement still implements and consumes latest SQL.
+        assert _LATEST_OWNER not in next(
+            facts.calls for facts in scanner.source_facts(source) if facts.name == _RENAME
+        )
+    findings = scanner.source_findings(source + helper, _CATALOGUE)
+    assert ("select_current", "inline_latest_version_sql") in findings
+    assert (_RENAME, "resolve_time_preferred_latest_fallback") in findings
+
+
+def test_noncanonical_resolution_bridge_from_rename_is_rejected():
+    source = _canonical_delegation_source().replace(
+        _CANONICAL_CALL, "resolver_versao_por_matriz(conn, base_id)"
+    )
+    assert (_RENAME, "unexpected_resolver_execution_bridge") in scanner.source_findings(source, _CATALOGUE)
+
+
+def test_local_forwarding_wrapper_is_not_an_approved_canonical_delegate():
+    source = _canonical_delegation_source().replace(_CANONICAL_CALL, "select_current(conn, base_id, eixo=eixo)")
+    source += f'''
+def select_current(conn, base_id, *, eixo):
+    return {_CANONICAL_CALL}
+'''
+    assert ("select_current", "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, _CATALOGUE)
+
+
+@pytest.mark.parametrize("replacement", [
+    f"{_LATEST_OWNER}(conn, base_id)",
+    f"{_LATEST_OWNER}(conn, base_id, eixo=None)",
+    f'{_LATEST_OWNER}(conn, base_id, eixo="AAC")',
+    f"{_LATEST_OWNER}(conn, base_id, eixo=other_axis)",
+    f"{_LATEST_OWNER}(conn, base_id, **options)",
+    f"{_LATEST_OWNER}(conn, other_base, eixo=eixo)",
+    f"catalogue.{_CANONICAL_CALL}",
+    f"exact_version(conn, base_id) or {_CANONICAL_CALL}",
+    f"{_CANONICAL_CALL} if exact is None else exact",
+])
+def test_canonical_delegation_rejects_wrong_axis_or_fallback_call_shape(replacement):
+    source = _canonical_delegation_source().replace(_CANONICAL_CALL, replacement)
+    assert (_RENAME, "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, _CATALOGUE)
+
+
+@pytest.mark.parametrize("replacement", [
+    f"        exact = exact_version(conn, base_id)\n        if exact is None:\n            row = {_CANONICAL_CALL}",
+    f"        exact = exact_version(conn, base_id)\n        if exact is not None:\n            return exact\n        row = {_CANONICAL_CALL}",
+    f"        try:\n            row = exact_version(conn, base_id)\n        except LookupError:\n            row = {_CANONICAL_CALL}",
+])
+def test_exact_then_silent_latest_fallback_in_approved_caller_is_rejected(replacement):
+    source = _canonical_delegation_source().replace(f"        row = {_CANONICAL_CALL}", replacement)
+    assert (_RENAME, "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, _CATALOGUE)
+
+
+def test_exact_then_early_return_before_latest_loop_is_rejected():
+    source = _canonical_delegation_source().replace(
+        "    results = []",
+        "    exact = exact_version(conn, base_ids[0])\n    if exact is not None:\n        return exact\n    results = []",
+    )
+    assert (_RENAME, "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, _CATALOGUE)
+
+
+def test_latest_sql_moved_into_unapproved_module_is_still_rejected():
+    consumer = _canonical_delegation_source().replace(_CANONICAL_CALL, "select_current(conn, base_id, eixo=eixo)")
+    consumer = "from app.other_catalogue import select_current\n" + consumer
+    helper = f'''
+def select_current(conn, base_id, *, eixo):
+    return conn.execute({_LATEST_QUERY!r}, (base_id, eixo)).fetchone()
+'''
+    assert ("app/other_catalogue.py", "select_current", "inline_latest_version_sql") in scanner.analyze_sources({
+        _CATALOGUE: consumer,
+        "app/other_catalogue.py": helper,
+    })
+
+
+@pytest.mark.parametrize("mutation", ["path", "caller", "rebind"])
+def test_permission_is_bound_to_exact_path_caller_and_unshadowed_owner(mutation):
+    source, path = _canonical_delegation_source(), _CATALOGUE
+    if mutation == "path":
+        path = "app/other_catalogue.py"
+    elif mutation == "caller":
+        source = source.replace(f"def {_RENAME}(", "def another_consumer(")
+    else:
+        source = source.replace("    results = []", f"    {_LATEST_OWNER} = noncanonical_resolver\n    results = []")
+    caller = "another_consumer" if mutation == "caller" else _RENAME
+    assert (caller, "resolve_time_preferred_latest_fallback") in scanner.source_findings(source, path)
+
+
 def test_cross_module_latest_version_write_authority_is_detected():
     sources = {
         "app/activity_catalog.py": '''

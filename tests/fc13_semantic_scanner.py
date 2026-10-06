@@ -20,6 +20,11 @@ ALLOWED_LATEST_SQL = {
     ("app/views/admin/matrizes.py", "_ensure_default_versao_link"),
     ("app/views/admin/matrizes.py", "_save_matriz_activity_links"),
 }
+# Consumption permission, not permission to implement latest/current SQL.
+ALLOWED_CANONICAL_LATEST_CALLERS = {
+    ("app/activity_catalog.py", "rename_current_activity_group_versions",
+     "get_latest_atividade_versao_for_base"),
+}
 SHADOW_TERMS = re.compile(r"(?:shadow|probe|comparison|compare|diverg)", re.I)
 VERSION_TERMS = re.compile(r"(?:version|vers[aãa]o|resolver)", re.I)
 FALLBACK_TERMS = re.compile(r"(?:preferred|preferid|latest|newest|ultima|[uú]ltima)", re.I)
@@ -220,6 +225,73 @@ def branch_controls_authority(source: str, function_name: str, path: str = "") -
     return False
 
 
+def approved_canonical_latest_call(
+    call: ast.Call,
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    path: str,
+    parents: dict[ast.AST, ast.AST],
+) -> bool:
+    """Recognize only the approved, unconditional axis-scoped delegation.
+
+    Inspect each call, rather than exempting its caller wholesale. The owner
+    must not be rebound locally, and conditional/exact-then-latest fallback
+    shapes do not inherit this consumption permission. Lock ordering remains
+    a business-contract assertion in the U5-C behavioral tests.
+    """
+    if not isinstance(call.func, ast.Name):
+        return False
+    callee = call.func.id
+    if (path, function.name, callee) not in ALLOWED_CANONICAL_LATEST_CALLERS:
+        return False
+    if (path, callee) not in ALLOWED_LATEST_SQL:
+        return False
+    if [dotted(arg) for arg in call.args] != ["conn", "base_id"]:
+        return False
+    if len(call.keywords) != 1 or call.keywords[0].arg != "eixo":
+        return False
+    if not isinstance(call.keywords[0].value, ast.Name) or call.keywords[0].value.id != "eixo":
+        return False
+    for node in ast.walk(function):
+        # An early conditional return can turn an otherwise direct loop read
+        # into an exact-then-latest fallback outside the loop itself.
+        if isinstance(node, ast.Return) and parents.get(node) is not function:
+            return False
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and node.id == callee:
+            return False
+        if isinstance(node, ast.arg) and node.arg == callee:
+            return False
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == callee:
+            return False
+        if isinstance(node, ast.alias) and (node.asname or node.name.split(".")[0]) == callee:
+            return False
+    assignment = parents.get(call)
+    if not isinstance(assignment, ast.Assign) or assignment.value is not call:
+        return False
+    # The accepted read is the first statement of the per-base processing
+    # loop, not a conditional recovery read after an exact lookup.
+    loop = parents.get(assignment)
+    if not isinstance(loop, ast.For) or loop.body[0] is not assignment:
+        return False
+    ancestor = parents.get(loop)
+    while ancestor is not function:
+        if not isinstance(ancestor, ast.For):
+            return False
+        ancestor = parents.get(ancestor)
+    return True
+
+
+def prohibited_latest_calls(source: str, path: str, latest_functions: set[str]) -> bool:
+    tree = ast.parse(source)
+    function = tree.body[0]
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    return any(
+        call_tail(node) in latest_functions
+        and not approved_canonical_latest_call(node, function, path, parents)
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+    )
+
+
 def source_findings(source: str, path: str) -> set[tuple[str, str]]:
     findings: set[tuple[str, str]] = set()
     facts_set = source_facts(source, path)
@@ -235,7 +307,8 @@ def source_findings(source: str, path: str) -> set[tuple[str, str]]:
             findings.add((facts.name, "alternate_authority_flag"))
         if has_latest_sql(facts.source) and (path, facts.name) not in ALLOWED_LATEST_SQL:
             findings.add((facts.name, "inline_latest_version_sql"))
-        if facts.calls & latest_functions and (path, facts.name) not in ALLOWED_LATEST_SQL:
+        if (facts.calls & latest_functions and (path, facts.name) not in ALLOWED_LATEST_SQL
+                and prohibited_latest_calls(facts.source, path, latest_functions)):
             findings.add((facts.name, "resolve_time_preferred_latest_fallback"))
         if facts.appends_file and (semantic_shadow or resolver):
             findings.add((facts.name, "shadow_append_writer"))

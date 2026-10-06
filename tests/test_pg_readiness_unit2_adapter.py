@@ -370,6 +370,7 @@ def test_psycopg_operational_error_is_classified():
 
 def _fake_psycopg(monkeypatch, opened):
     fake = types.ModuleType("psycopg")
+    fake.IsolationLevel = types.SimpleNamespace(READ_COMMITTED="READ_COMMITTED")
 
     class _FakeRaw:
         def __init__(self):

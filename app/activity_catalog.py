@@ -250,8 +250,21 @@ def get_versoes_por_base(conn, base_id: int) -> list:
     ).fetchall()
 
 
-def get_latest_atividade_versao_for_base(conn, base_id: int):
-    """Return the highest numbered version for an exact activity base."""
+def get_latest_atividade_versao_for_base(
+    conn, base_id: int, *, eixo: str | None = None
+):
+    """Return the highest numbered version, optionally within an exact axis.
+
+    Omitting the axis retains the global per-base policy. No status filtering
+    applies in either mode; callers driving mutations must lock the base first.
+    """
+    if eixo is not None:
+        return conn.execute(
+            "SELECT * FROM atividade_versao "
+            "WHERE atividade_base_id = ? AND eixo = ? "
+            "ORDER BY numero_versao DESC, id DESC LIMIT 1",
+            (base_id, eixo),
+        ).fetchone()
     return conn.execute(
         "SELECT * FROM atividade_versao "
         "WHERE atividade_base_id = ? ORDER BY numero_versao DESC, id DESC LIMIT 1",
@@ -555,6 +568,13 @@ def apply_activity_version_semantic_changes(
     Frozen predecessors are never updated. A same-axis successor is copied in
     full and receives only the intentional delta; Matrix links are untouched.
     The caller owns the surrounding transaction.
+
+    When a successor must be created, its ``numero_versao`` is this base's
+    ``MAX(numero_versao) + 1``. The base row is locked first (``lock_activity_base``:
+    SQLite ``BEGIN IMMEDIATE`` already excludes writers; PostgreSQL
+    ``FOR NO KEY UPDATE`` on ``atividade_base``), so a concurrent creator or
+    delete of the same base cannot interleave its own MAX+1 / renumbering
+    between the read and the insert. Unrelated bases are never serialized.
     """
     unknown = set(changes) - ACTIVITY_VERSION_SEMANTIC_FIELDS
     if unknown:
@@ -583,7 +603,11 @@ def apply_activity_version_semantic_changes(
 
     payload = {field: version[field] for field in ACTIVITY_VERSION_SEMANTIC_FIELDS}
     payload.update(effective_changes)
-    next_number = get_next_numero_versao(conn, int(version["atividade_base_id"]))
+    # U5-C: take the per-base lock before computing MAX+1 so competing creators
+    # and the delete path serialize on the same atividade_base row.
+    base_id = int(version["atividade_base_id"])
+    lock_activity_base(conn, base_id)
+    next_number = get_next_numero_versao(conn, base_id)
     columns = (
         "atividade_base_id", "eixo", "grupo",
         "ch_por_evento", "limite_semestre", "limite_total", "observacao_aluno",
@@ -617,7 +641,13 @@ def apply_latest_activity_version_semantic_changes(
     *,
     expected_axis: str | None = None,
 ) -> dict[str, object]:
-    """Resolve and mutate the current version inside the canonical owner."""
+    """Resolve the current version under its base lock in the caller's transaction.
+
+    With PostgreSQL READ COMMITTED, this separate post-lock SELECT sees the
+    version committed by the previous lock owner before deriving any changes.
+    The exact-version helper retains its own lock for other direct callers.
+    """
+    lock_activity_base(conn, base_id)
     version = conn.execute(
         "SELECT * FROM atividade_versao WHERE atividade_base_id = ? "
         "ORDER BY numero_versao DESC, id DESC LIMIT 1",
@@ -637,17 +667,27 @@ def rename_current_activity_group_versions(
     group_number: str,
     new_label: str,
 ) -> list[dict[str, object]]:
-    """Rename only each base's current semantic version via the freeze policy."""
-    rows = conn.execute(
-        "SELECT * FROM atividade_versao WHERE eixo = ? "
-        "ORDER BY atividade_base_id, numero_versao DESC, id DESC",
+    """Rename each base's current version of the requested axis under its lock.
+
+    Discovery only supplies base ids; source content and group eligibility are
+    resolved again after locking. Keep the existing per-axis current policy.
+    The caller owns the transaction, including all acquired per-base locks.
+    Global order: required group definitions (tipo, int(numero)) ascending in
+    the caller, then ALL existing base ids ascending, then version mutations.
+    """
+    bases = conn.execute(
+        "SELECT DISTINCT atividade_base_id FROM atividade_versao WHERE eixo = ? "
+        "ORDER BY atividade_base_id",
         (eixo,),
     ).fetchall()
-    current_by_base = {}
-    for row in rows:
-        current_by_base.setdefault(int(row["atividade_base_id"]), row)
+    base_ids = [int(base["atividade_base_id"]) for base in bases]
+    for base_id in base_ids:
+        lock_activity_base(conn, base_id)
     results = []
-    for row in current_by_base.values():
+    for base_id in base_ids:
+        row = get_latest_atividade_versao_for_base(conn, base_id, eixo=eixo)
+        if row is None:
+            continue
         raw_group = str(row["grupo"] or "").strip()
         numeric_prefix = raw_group.split("-", 1)[0].strip()
         if numeric_prefix != str(group_number) or raw_group == new_label:

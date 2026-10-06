@@ -45,6 +45,8 @@ from app.db import (
     integrity_constraint_name,
     is_integrity_error,
     is_unique_violation,
+    lock_activity_base,
+    write_transaction,
 )
 from app.db_maintenance import (
     ensure_atividade_versioning_schema,
@@ -859,37 +861,66 @@ def admin_editar_atividade(atividade_id):
 @admin_required
 def admin_deletar_atividade(atividade_id):
     conn = get_db_connection()
-    atividade = conn.execute("SELECT v.id,v.atividade_base_id,b.nome_conceito AS nome FROM atividade_versao v JOIN atividade_base b ON b.id=v.atividade_base_id WHERE v.id=?", (atividade_id,)).fetchone()
-    if not atividade:
-        flash("Atividade não encontrada.", "error")
-        return redirect(url_for("admin_atividades"))
-
-    requisicoes_em_uso = conn.execute(
-        "SELECT COUNT(*) FROM requisicoes WHERE atividade_versao_id = ?",
-        (atividade_id,),
-    ).fetchone()[0]
-    if requisicoes_em_uso:
-        sufixo = "requisição" if requisicoes_em_uso == 1 else "requisições"
-        flash(
-            f"Não é possível excluir a atividade porque ela está vinculada a {requisicoes_em_uso} {sufixo}.",
-            "error",
-        )
-        return redirect(url_for("admin_atividades"))
-
-    if is_activity_base_referenced_by_assigned_matrix(conn, atividade['atividade_base_id']):
-        flash(ACADEMIC_GRAPH_FROZEN_MESSAGE, "error")
-        return redirect(url_for("admin_atividades"))
-
     try:
-        ensure_matriz_atividade_links_table(conn)
-        conn.execute("DELETE FROM matriz_atividade_versao_item WHERE atividade_versao_id = ?", (atividade_id,))
-        conn.execute("DELETE FROM atividade_versao WHERE id = ?", (atividade_id,))
-        if not conn.execute("SELECT 1 FROM atividade_versao WHERE atividade_base_id=?", (atividade['atividade_base_id'],)).fetchone():
-            conn.execute("DELETE FROM atividade_base WHERE id=?", (atividade['atividade_base_id'],))
-        conn.commit()
+        with write_transaction(conn):
+            # The legacy URL only carries the version id, so discover its base
+            # inside the owned transaction, lock that base, then revalidate the
+            # exact relationship before making any decision or mutation.
+            atividade = conn.execute(
+                "SELECT v.id,v.atividade_base_id,b.nome_conceito AS nome "
+                "FROM atividade_versao v "
+                "JOIN atividade_base b ON b.id=v.atividade_base_id "
+                "WHERE v.id=?",
+                (atividade_id,),
+            ).fetchone()
+            if not atividade:
+                flash("Atividade não encontrada.", "error")
+                return redirect(url_for("admin_atividades"))
+
+            base_id = int(atividade["atividade_base_id"])
+            if not lock_activity_base(conn, base_id):
+                flash("Atividade não encontrada.", "error")
+                return redirect(url_for("admin_atividades"))
+            atividade = conn.execute(
+                "SELECT v.id,v.atividade_base_id,b.nome_conceito AS nome "
+                "FROM atividade_versao v "
+                "JOIN atividade_base b ON b.id=v.atividade_base_id "
+                "WHERE v.id=? AND v.atividade_base_id=?",
+                (atividade_id, base_id),
+            ).fetchone()
+            if not atividade:
+                flash("Atividade não encontrada.", "error")
+                return redirect(url_for("admin_atividades"))
+
+            requisicoes_em_uso = conn.execute(
+                "SELECT COUNT(*) FROM requisicoes WHERE atividade_versao_id = ?",
+                (atividade_id,),
+            ).fetchone()[0]
+            if requisicoes_em_uso:
+                sufixo = "requisição" if requisicoes_em_uso == 1 else "requisições"
+                flash(
+                    f"Não é possível excluir a atividade porque ela está vinculada a {requisicoes_em_uso} {sufixo}.",
+                    "error",
+                )
+                return redirect(url_for("admin_atividades"))
+
+            if is_activity_base_referenced_by_assigned_matrix(conn, base_id):
+                flash(ACADEMIC_GRAPH_FROZEN_MESSAGE, "error")
+                return redirect(url_for("admin_atividades"))
+
+            ensure_matriz_atividade_links_table(conn)
+            conn.execute(
+                "DELETE FROM matriz_atividade_versao_item WHERE atividade_versao_id = ?",
+                (atividade_id,),
+            )
+            conn.execute("DELETE FROM atividade_versao WHERE id = ?", (atividade_id,))
+            if not conn.execute(
+                "SELECT 1 FROM atividade_versao WHERE atividade_base_id=?",
+                (base_id,),
+            ).fetchone():
+                conn.execute("DELETE FROM atividade_base WHERE id=?", (base_id,))
         flash("Atividade deletada com sucesso.", "success")
     except Exception as exc:
-        conn.rollback()
         if is_integrity_error(exc):
             logging.exception("Erro de integridade ao deletar atividade %s", atividade_id)
             flash("Não foi possível excluir a atividade porque ela possui vínculos em uso no sistema.", "error")
@@ -937,37 +968,51 @@ def admin_atividades_importar_confirmar():
     updated = 0
     csv_relpath = payload.get("csv_relpath")
     try:
-        for row in payload.get("rows", []):
-            _upsert_grupo_definition(conn, row["tipo_atividade"], row["grupo_numero"], row["grupo_descricao"])
-            if row.get("action") == "create":
-                axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
-                base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,status) VALUES(?,'ativo') RETURNING id", (row['nome'],)).fetchone()[0]
-                conn.execute("""INSERT INTO atividade_versao
-                    (atividade_base_id,eixo,grupo,limite_total,limite_semestre,numero_versao,status)
-                    VALUES(?,?,?,?,?,1,'ativa')""",
-                    (base_id,axis,row['grupo'],row['limite_horas_total'],row['limite_horas_semestral']))
-                created += 1
-            elif row.get("action") == "update":
-                axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
-                try:
-                    apply_latest_activity_version_semantic_changes(
-                        conn,
-                        row["existing_id"],
-                        {
-                            "grupo": row['grupo'],
-                            "limite_total": row['limite_horas_total'],
-                            "limite_semestre": row['limite_horas_semestral'],
-                        },
-                        expected_axis=axis,
-                    )
-                except ValueError as exc:
-                    raise DatabaseIntegrityError(str(exc)) from exc
-                updated += 1
-        conn.commit()
+        rows = list(payload.get("rows", []))
+        # Preserve last-description-wins and payload processing order separately
+        # from the global lock order: group (tipo, int(numero)), then existing
+        # base id, both ascending, then version mutations. New bases are private
+        # to this transaction and are not pre-existing shared lock targets.
+        groups = {
+            (row["tipo_atividade"], int(row["grupo_numero"])): row["grupo_descricao"]
+            for row in rows
+        }
+        base_ids = sorted({
+            int(row["existing_id"]) for row in rows if row.get("action") == "update"
+        })
+        with write_transaction(conn):
+            for (tipo, numero), descricao in sorted(groups.items()):
+                _upsert_grupo_definition(conn, tipo, numero, descricao)
+            for base_id in base_ids:
+                lock_activity_base(conn, base_id)
+            for row in rows:
+                if row.get("action") == "create":
+                    axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
+                    base_id = conn.execute("INSERT INTO atividade_base(nome_conceito,status) VALUES(?,'ativo') RETURNING id", (row['nome'],)).fetchone()[0]
+                    conn.execute("""INSERT INTO atividade_versao
+                        (atividade_base_id,eixo,grupo,limite_total,limite_semestre,numero_versao,status)
+                        VALUES(?,?,?,?,?,1,'ativa')""",
+                        (base_id,axis,row['grupo'],row['limite_horas_total'],row['limite_horas_semestral']))
+                    created += 1
+                elif row.get("action") == "update":
+                    axis = 'AAC' if row['tipo_atividade'] == 'Acadêmica Complementar' else 'AEU'
+                    try:
+                        apply_latest_activity_version_semantic_changes(
+                            conn,
+                            row["existing_id"],
+                            {
+                                "grupo": row['grupo'],
+                                "limite_total": row['limite_horas_total'],
+                                "limite_semestre": row['limite_horas_semestral'],
+                            },
+                            expected_axis=axis,
+                        )
+                    except ValueError as exc:
+                        raise DatabaseIntegrityError(str(exc)) from exc
+                    updated += 1
     except Exception as exc:
         if not is_integrity_error(exc):
             raise
-        conn.rollback()
         flash(f"Falha ao confirmar importação: {exc}", "error")
         _delete_atividades_import_preview(preview_key)
         _delete_upload_relpath(csv_relpath)
@@ -994,25 +1039,18 @@ def admin_grupos_renomear():
         conn = get_db_connection()
         _ensure_grupos_def_table(conn)
         eixo = 'AAC' if tipo == 'Acadêmica Complementar' else 'AEU'
-        mutations = rename_current_activity_group_versions(
-            conn,
-            eixo=eixo,
-            group_number=numero,
-            new_label=novo_label,
-        )
-        updated = len(mutations)
-        successors = sum(item["mode"] == "successor" for item in mutations)
-        # upsert definition (compatible): try update, if none affected then insert
-        cur2 = conn.execute(
-            "UPDATE grupos_def SET descricao = ? WHERE tipo_atividade = ? AND numero = ?",
-            (descricao, tipo, int(numero))
-        )
-        if cur2.rowcount == 0:
-            conn.execute(
-                "INSERT INTO grupos_def (tipo_atividade, numero, descricao) VALUES (?,?,?)",
-                (tipo, int(numero), descricao)
+        # U5-C global order: group definition first, then all existing bases
+        # ascending inside the helper, then version mutations; one Unit-4 owner.
+        with write_transaction(conn):
+            _upsert_grupo_definition(conn, tipo, int(numero), descricao)
+            mutations = rename_current_activity_group_versions(
+                conn,
+                eixo=eixo,
+                group_number=numero,
+                new_label=novo_label,
             )
-        conn.commit()
+            updated = len(mutations)
+            successors = sum(item["mode"] == "successor" for item in mutations)
         return jsonify({ 'ok': True, 'updated': updated, 'successors': successors, 'label': novo_label })
     except Exception as e:
         logging.exception('Erro ao renomear grupo')
@@ -1347,51 +1385,54 @@ def admin_catalogo_nova_versao(base_id: int):
             observacao_admin = observacoes
 
         try:
-            next_num = get_next_numero_versao(conn, base_id)
-            conn.execute(
-                "UPDATE atividade_base SET nome_conceito = ?, descricao = ? WHERE id = ?",
-                (values["nome"], values["descricao"] or None, base_id),
-            )
-            new_version_id = conn.execute(
-                """
-                INSERT INTO atividade_versao (
-                    atividade_base_id, eixo, grupo,
-                    ch_por_evento, limite_semestre, limite_total,
-                    observacao_aluno, observacao_admin, documentos_json,
-                    vigencia_inicio, vigencia_fim, numero_versao, status, versao_anterior_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
-                RETURNING id
-                """,
-                (
-                    base_id, eixo, grupo or None,
-                    ch_por_evento, limite_semestre, limite_total,
-                    observacao_aluno, observacao_admin,
-                    source["documentos_json"] if source else "[]",
-                    source["vigencia_inicio"] if source else None,
-                    source["vigencia_fim"] if source else None,
-                    next_num,
-                    None if cross_axis else versao_anterior_id,
-                ),
-            ).fetchone()[0]
-            if cross_axis:
+            # U5-C: own the Unit-4 write transaction, lock the parent base row,
+            # and only then compute MAX+1 and insert.  Competing creators and
+            # the delete path serialize on this same per-base lock domain.
+            with write_transaction(conn):
+                lock_activity_base(conn, base_id)
+                next_num = get_next_numero_versao(conn, base_id)
                 conn.execute(
+                    "UPDATE atividade_base SET nome_conceito = ?, descricao = ? WHERE id = ?",
+                    (values["nome"], values["descricao"] or None, base_id),
+                )
+                new_version_id = conn.execute(
                     """
-                    INSERT INTO atividade_transicao (
-                        from_atividade_versao_id, to_atividade_versao_id,
-                        tipo_transicao, justificativa
-                    ) VALUES (?, ?, 'aac_para_aeu', ?)
+                    INSERT INTO atividade_versao (
+                        atividade_base_id, eixo, grupo,
+                        ch_por_evento, limite_semestre, limite_total,
+                        observacao_aluno, observacao_admin, documentos_json,
+                        vigencia_inicio, vigencia_fim, numero_versao, status, versao_anterior_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rascunho', ?)
+                    RETURNING id
                     """,
                     (
-                        source["id"],
-                        new_version_id,
-                        "Alteração de Tipo AAC para AEU na criação de nova versão.",
+                        base_id, eixo, grupo or None,
+                        ch_por_evento, limite_semestre, limite_total,
+                        observacao_aluno, observacao_admin,
+                        source["documentos_json"] if source else "[]",
+                        source["vigencia_inicio"] if source else None,
+                        source["vigencia_fim"] if source else None,
+                        next_num,
+                        None if cross_axis else versao_anterior_id,
                     ),
-                )
-            conn.commit()
+                ).fetchone()[0]
+                if cross_axis:
+                    conn.execute(
+                        """
+                        INSERT INTO atividade_transicao (
+                            from_atividade_versao_id, to_atividade_versao_id,
+                            tipo_transicao, justificativa
+                        ) VALUES (?, ?, 'aac_para_aeu', ?)
+                        """,
+                        (
+                            source["id"],
+                            new_version_id,
+                            "Alteração de Tipo AAC para AEU na criação de nova versão.",
+                        ),
+                    )
             flash("Versão criada com sucesso em rascunho.", "success")
             return redirect(url_for("admin_catalogo_versao_detalhe", base_id=base_id))
         except Exception as exc:
-            conn.rollback()
             return _render(f"Erro ao criar versão: {exc}")
 
     prefill, prefill_error = _resolve_nova_versao_prefill(

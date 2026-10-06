@@ -420,12 +420,14 @@ def lock_activity_base(connection, base_id: int) -> bool:
     not block foreign-key-check inserts of new versions.  A missing row means
     no version can belong to the base, so the caller's own validation refuses.
 
-    F2 (delete × create-version numbering) is deliberately NOT solved here.
-    Version creators do not take this lock before computing
-    ``get_next_numero_versao`` (MAX+1), so a concurrent create can still leave
-    a ``numero_versao`` gap.  That coordination belongs to the Unit-5
-    schema/creator work, where every relevant creator must take the base lock
-    before MAX+1; no weaker lock is invented in the meantime.
+    F2 (delete × create-version numbering) is solved by the callers, not here:
+    every automatic version creator takes this same base lock before computing
+    ``get_next_numero_versao`` (MAX+1), so a concurrent creator or delete of the
+    same base serializes on one lock domain.  ``FOR NO KEY UPDATE`` is retained
+    because it is the weakest mode that still conflicts with itself (two
+    creators, creator × delete) while remaining compatible with the foreign-key
+    ``KEY SHARE`` checks that insert new versions; no table-wide lock and no
+    unrelated-base serialization are introduced.
     """
     if database_engine(connection) != _BACKEND_POSTGRES:
         return True
@@ -751,9 +753,15 @@ class _PostgresConnectionAdapter:
 def _connect_postgres():
     import psycopg
 
-    return _PostgresConnectionAdapter(
-        psycopg.connect(DATABASE_URL, prepare_threshold=None, autocommit=False)
-    )
+    raw = psycopg.connect(DATABASE_URL, prepare_threshold=None, autocommit=False)
+    # Configure while IDLE: post-lock latest/current reads require a fresh
+    # READ COMMITTED snapshot, regardless of server/role/database defaults.
+    try:
+        raw.isolation_level = psycopg.IsolationLevel.READ_COMMITTED
+    except Exception:
+        raw.close()
+        raise
+    return _PostgresConnectionAdapter(raw)
 
 
 def get_db_connection():
