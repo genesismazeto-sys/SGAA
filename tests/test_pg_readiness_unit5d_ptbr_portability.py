@@ -1771,7 +1771,7 @@ def test_epg1_database_collation_is_not_c_for_the_order_proof(real_pg_connection
         "SELECT x FROM unnest(ARRAY['anabela', 'ana maria']) AS t(x) ORDER BY x"
     ).fetchall()
     # Precondition: the default collation really differs from code-point order.
-    assert [r[0] for r in rows] != ["ana maria", "anabela"] or collate
+    assert [r[0] for r in rows] != ["ana maria", "anabela"], collate
 
 
 @real_pg

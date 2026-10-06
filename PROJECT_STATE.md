@@ -111,6 +111,62 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Real-PostgreSQL qualification — existing E-PG1 checkpoint — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`e687afe8c232a211ebeac945ce89f420d76f7acf`. No production change; U5-A..U5-F
+are not reopened.
+
+* Environment: PostgreSQL 15.19 (`server_version_num` 150019) in WSL2 Ubuntu,
+  cluster `15/main`, reached from Windows at `127.0.0.1:54315`; UTF8; cluster
+  locale C.UTF-8, with `en_US.utf8`/`pt_BR.utf8` available for dedicated
+  databases; non-superuser CREATEDB role `sgaa_qual`. Persistent local
+  qualification environment; only test databases are disposable. Credentials
+  are kept outside the repository (libpq password file); no secret is recorded.
+* REAL-PG EVIDENCE is no longer globally ABSENT. Existing E-PG1 GREEN: 45
+  passed / 0 skipped / 0 failed (~1.7 min, calibration data; largest node the
+  full code-point fold, ~27.8 s). U5-A `tests/test_pg_readiness_unit5a_real_pg.py`
+  22 functions / 33 nodes, 33 passed. U5-D real-PG section of
+  `tests/test_pg_readiness_unit5d_ptbr_portability.py` 8 functions / 12 nodes,
+  12 passed. All test databases were dropped by the tests.
+* Proven on PG15 — U5-A: provisioning, idempotent re-provision, partial schema
+  fails closed, provision/validate CLI, identity BY DEFAULT with explicit ids
+  and `setval` advancement, FK contracts, partial unique indexes, JSON checks
+  without PG16 `IS JSON`, UTC text helper, trigger families raising SG001,
+  read-only validator and mutation detection, validate-only `init_db`, no DDL
+  from runtime `ensure_*` paths. U5-D: the ~140 KB `sgaa_human_text_key`
+  parses and runs (IMMUTABLE, non-STRICT); every assigned code point matches
+  the frozen Python fold; supplementary-plane and multi-character
+  discriminators; human ordering, NOCASE, contains and technical LIKE equal
+  SQLite; non-C collation precondition. Incidentally: qmark->`%s` adapter,
+  EngineRow indexed access, UTF8 enforcement.
+* Test-only correction: the U5-D collation precondition was tautological
+  (`assert rows != c_order or collate`, `collate` always truthy after the C
+  skip guard); now `assert rows != c_order, collate`. Verified before the run:
+  en_US/pt_BR databases order `['anabela', 'ana maria']`, a C.UTF-8 database
+  gives code-point order, so the assertion discriminates.
+* Still owed under E-PG1 (not covered by the 45 nodes): M1 SQLSTATE /
+  `PG_CONSTRAINT_MAP` classification; M2 INERROR recovery and connection
+  reuse; M3 `write_transaction` adoption/refusal and transaction-id semantics
+  (observed: a `FOR NO KEY UPDATE` row lock alone assigns a transaction id);
+  M4 adapter edge cases and full EngineRow contract; M5 `sql_dialect`
+  fragments and settings upserts; M6 `pg_schema_status`; M7 lazy default
+  seed persistence; M8 explicit server-version floor; M9 U5-F uniqueness
+  CREATE/EDIT; route-level real-PG smoke. E-PG2 P1–P8 outstanding (account →
+  token lock order, consume × consume, FOR NO KEY UPDATE semantics, create ×
+  create, create × delete with fresh READ COMMITTED snapshot, delete ×
+  delete, deadlock ordering, different-base negative control).
+* Operational note (not a product defect): WSL may stop the distro when no
+  WSL process is alive, so `127.0.0.1:54315` disappears and connects without
+  a timeout hang. Keep the distro alive during Windows test runs (a
+  password-free keepalive process is sufficient); PostgreSQL itself is
+  enabled under systemd.
+* Unchanged: R4 — Path A greenfield (R4 disappears), Path A' reference-data
+  migration required, Path B full data CUTOVER_BLOCKER; no path decided. R5 —
+  PRODUCTION_BLOCKER for Path A/A'. PostgreSQL-native backup required
+  BEFORE_FIRST_REAL_DATA.
+* TEP: E-PG1 lane only; T5 NOT_TRIGGERED; no SQLite suite run.
+
 ## PostgreSQL-readiness U5-F (untyped-NULL query portability, R3) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
