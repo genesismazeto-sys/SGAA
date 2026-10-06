@@ -562,10 +562,15 @@ def admin_acesso_salvar():
             usuario_id = int(revoked["id"])
             reactivating = True
 
-    dup_email = conn.execute(
-        "SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND (? IS NULL OR id <> ?)",
-        (email, usuario_id, usuario_id),
-    ).fetchone()
+    # The row exclusion is emitted only when there is a row to exclude: a
+    # placeholder tested only for NULL and bound to None has no type
+    # PostgreSQL can infer (SQLSTATE 42P18).
+    dup_sql = "SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?)"
+    dup_params = [email]
+    if usuario_id is not None:
+        dup_sql += " AND id <> ?"
+        dup_params.append(usuario_id)
+    dup_email = conn.execute(dup_sql, tuple(dup_params)).fetchone()
     if dup_email:
         flash("Já existe um usuário com este e-mail.", "error")
         return redirect(url_for("admin_acesso"))

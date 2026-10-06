@@ -111,6 +111,47 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## PostgreSQL-readiness U5-F (untyped-NULL query portability, R3) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`7637e6dcd4fb18b09cc42eb22fe6d2042f305a1b`. U5-A..U5-E are unchanged and not
+reopened. No schema, DDL, migration, dialect helper or engine branch.
+
+* Defect: the `admin_acesso_salvar` e-mail uniqueness check bound
+  `(email, usuario_id, usuario_id)` to `… AND (? IS NULL OR id <> ?)`; on
+  CREATE `usuario_id` is `None`, which psycopg sends untyped, so PostgreSQL
+  rejects the placeholder tested only for NULL (SQLSTATE 42P18). Eliminated by
+  database-neutral construction in `app/views/admin/acesso.py`.
+* CREATE (`usuario_id is None`): `SELECT id FROM usuarios WHERE LOWER(email) =
+  LOWER(?)` with `(email,)` — every row is checked, no exclusion predicate, no
+  `None` bound. EDIT (`usuario_id is not None`): the same predicate plus
+  `AND id <> ?`, bound once with the integer id — the edited row is excluded,
+  any other row with the e-mail still conflicts. Reactivation assigns the
+  revoked identity's integer id before the check and so follows EDIT; it is not
+  special-cased. No cast/COALESCE/NULLIF/sentinel/engine branch.
+* Guard: `tests/test_pg_readiness_unit5f_untyped_null_query.py` — a PG-shaped
+  double (production `adapt_sql_for_postgres`) raising 42P18 where PostgreSQL
+  would, CREATE/EDIT route contracts on both engines, and a static AST scan
+  forbidding a placeholder used only as `IS [NOT] NULL` in `app/` SQL literals
+  (column `IS NULL` is unaffected).
+* Evidence under TEP (no full suite): RED 3 failed / 6 passed; T1 9 passed;
+  T2 5 owner files 119 passed; T3 9 mechanically selected dependents (POST to
+  `/admin/acesso/salvar` or referencing the handler) 197 passed. No historical
+  test pinned the old spelling; none changed.
+  `tests/test_manual_student_email_validation.py` was not collectable —
+  `xlwt==1.3.0` is pinned in `requirements-dev.txt` but absent from the test
+  venv: ENV_GAP_NON_BLOCKING (it rejects malformed e-mail before the uniqueness
+  query, so no unique U5-F evidence); coverage owed once `xlwt` is installed.
+  T4 NOT_IMPLICATED; T5 NOT_TRIGGERED.
+* REAL-PG EVIDENCE: ABSENT. Owed under E-PG1: real route smoke for
+  `/admin/acesso/salvar` and PostgreSQL execution of the uniqueness path.
+* R4 — SQLite→PostgreSQL data transport plus identity/sequence advancement:
+  unchanged, CONDITIONAL_CUTOVER_BLOCKER.
+* Future hardening (non-material): the static scan covers `app/` only, not
+  top-level `main.py`/`presets_api.py` (both independently clean); SQL split
+  across literals or built at runtime could evade it; the `_placeholders` test
+  helper docstring understates its yield arity.
+
 ## PostgreSQL-readiness U5-E (unsupported SQLite maintenance boundary) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
