@@ -21,6 +21,7 @@ psycopg-shaped recording doubles and SQL-shape assertions.  SQLite behaviour is
 proved against real SQLite connections.
 """
 import ast
+import inspect
 import sqlite3
 import types
 from pathlib import Path
@@ -64,7 +65,9 @@ _GATE_EXEMPTIONS = {
     "app/sql_dialect.py": "engine-neutral dialect owner (SQLite branch intentional)",
     "app/db.py": "canonical SQLite connection setup (engine-guarded PRAGMA)",
     "app/db_maintenance.py": "SQLite schema/migration+backup authority and engine-guarded validation",
-    "app/views/admin/atividades.py": "engine-guarded grupos_def check + U5-D PTBR COLLATE NOCASE ordering",
+    # U5-D moved this file's PTBR/NOCASE ordering into app.sql_dialect; the
+    # exemption now covers only the engine-guarded sqlite_master probe.
+    "app/views/admin/atividades.py": "engine-guarded grupos_def check (sqlite_master probe)",
     "app/versioning/integrity.py": "UT-16 frozen MOVE-DO-NOT-CHANGE fingerprint; not PG-reachable",
     "app/backup/automatic.py": "SQLite backup engine",
     "app/backup/orchestrator.py": "SQLite backup engine",
@@ -80,6 +83,10 @@ _FORBIDDEN_TOKENS = (
     "COLLATE NOCASE",
     "sqlite_master",
     "PRAGMA",
+    # U5-D: SQLite-only human-text SQL, owned by app.sql_dialect only.
+    "COLLATE PTBR",
+    "PTBR_FOLD(",
+    "INSTR(",
 )
 
 
@@ -789,12 +796,81 @@ def test_u5c_activity_version_locking_unchanged():
     assert "MAX(numero_versao)" in catalog_source or "get_next_numero_versao" in catalog_source
 
 
-def test_u5d_ptbr_constructs_remain_excluded():
+#: U5-D owners: the only dialect code allowed to spell the SQLite human-text SQL.
+_U5D_OWNERS = {
+    "human_text_order": ("COLLATE PTBR_NOACCENT",),
+    "human_text_contains": ("INSTR(PTBR_FOLD(",),
+    "ascii_nocase_order": ("COLLATE NOCASE",),
+}
+#: SQLite-only human-text SQL, looked up in string literals (identifiers such as
+#: ``_ASCII_NOCASE_EXPRESSIONS`` are not SQL).
+_U5D_RAW_TOKENS = ("COLLATE PTBR", "PTBR_FOLD(", "INSTR(", "COLLATE NOCASE")
+
+
+def _literals_with_u5d_tokens(source):
+    return sorted(
+        {
+            token
+            for literal in _string_literals(source)
+            for token in _U5D_RAW_TOKENS
+            if token.lower() in literal.lower()
+        }
+    )
+
+
+def _dialect_source_outside(owner_names):
+    source = (REPO_ROOT / "app/sql_dialect.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lines = source.splitlines()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in owner_names:
+            for index in range(node.lineno - 1, node.end_lineno):
+                lines[index] = ""
+    return "\n".join(lines)
+
+
+def test_u5d_ptbr_constructs_owned_by_the_dialect():
+    """Pre-U5-D this pin held the boundary "U5-B did not absorb PTBR": the
+    SQLite-only human-text SQL stayed in atividades.py and out of the dialect.
+    U5-D moved it into dedicated sql_dialect owners; the enduring invariant is
+    that it now lives ONLY in those owners' SQLite branches."""
     atividades = (REPO_ROOT / "app/views/admin/atividades.py").read_text(encoding="utf-8")
-    assert "COLLATE PTBR_NOACCENT" in atividades
-    assert "COLLATE NOCASE" in atividades
+    assert "COLLATE PTBR_NOACCENT" not in atividades
+    assert "COLLATE NOCASE" not in atividades
+    assert "human_text_order(" in atividades and "ascii_nocase_order(" in atividades
     text_source = (REPO_ROOT / "app/text.py").read_text(encoding="utf-8")
-    assert "PTBR_NOACCENT" in text_source or "ptbr" in text_source.lower()
-    dialect_source = (REPO_ROOT / "app/sql_dialect.py").read_text(encoding="utf-8")
-    assert "PTBR" not in dialect_source
-    assert "INSTR" not in dialect_source
+    assert 'create_collation("PTBR_NOACCENT"' in text_source  # SQLite registration kept
+    for name, tokens in _U5D_OWNERS.items():
+        owner_source = inspect.getsource(getattr(sql_dialect, name))
+        for token in tokens:
+            assert token in owner_source, (name, token)
+    remainder = _dialect_source_outside(_U5D_OWNERS)
+    assert _literals_with_u5d_tokens(remainder) == [], "raw human-text SQL outside the U5-D owners"
+
+
+def test_u5d_dialect_boundary_check_is_not_vacuous():
+    # Negative control: without excluding the owners every token is found, so
+    # the remainder check above is what proves confinement.
+    whole = _dialect_source_outside(())
+    assert _literals_with_u5d_tokens(whole) == sorted(_U5D_RAW_TOKENS)
+
+
+def test_u5d_gate_tokens_catch_raw_human_text_sql():
+    """Negative control for the strengthened gate tokens (D-4 ratchet)."""
+    samples = {
+        "COLLATE PTBR": "SELECT 1 ORDER BY nome COLLATE PTBR_NOACCENT",
+        "PTBR_FOLD(": "SELECT PTBR_FOLD(nome)",
+        "INSTR(": "WHERE instr(PTBR_FOLD(nome), ?) > 0",
+        "COLLATE NOCASE": "ORDER BY grupo collate nocase",
+    }
+    for token, literal in samples.items():
+        source = f"X = {literal!r}\n"
+        flagged = [
+            t for value in _string_literals(source) for t in _FORBIDDEN_TOKENS
+            if t.lower() in value.lower()
+        ]
+        assert token in flagged, (token, flagged)
+    assert not [
+        t for value in _string_literals("X = 'ORDER BY LOWER(u.email)'\n")
+        for t in _FORBIDDEN_TOKENS if t.lower() in value.lower()
+    ]

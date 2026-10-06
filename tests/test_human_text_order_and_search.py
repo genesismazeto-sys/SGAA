@@ -151,13 +151,20 @@ def test_sql_fold_function_is_registered_on_request_connections(tmp_path):
 
 def test_technical_fields_keep_their_own_semantics():
     """E-mails, matrículas and codes are not human text: no accent folding."""
+    # PG-READINESS-U5-D (D-5): the filter helpers now take the caller-owned
+    # connection explicitly; the technical/human split is unchanged.
     acesso = (ROOT / "app/views/admin/acesso.py").read_text(encoding="utf-8")
-    assert 'append_text_contains_condition(where, params, "u.email", email_filter)' in acesso
-    assert 'append_text_contains_condition(where, params, "a.matricula", matricula_filter)' in acesso
+    assert 'append_text_contains_condition(where, params, "u.email", email_filter, connection=conn)' in acesso
+    assert 'append_text_contains_condition(where, params, "a.matricula", matricula_filter, connection=conn)' in acesso
     assert '"email": "LOWER(u.email)",' in acesso
     cursos = (ROOT / "app/views/admin/alunos_turmas_cursos.py").read_text(encoding="utf-8")
-    assert 'append_text_contains_condition(where, params, "c.codigo", codigo_filter)' in cursos
-    assert 'append_text_contains_condition(where, params, "u.email", email_filter)' in cursos
+    assert 'append_text_contains_condition(where, params, "c.codigo", codigo_filter, connection=conn)' in cursos
+    assert 'append_text_contains_condition(where, params, "u.email", email_filter, connection=conn)' in cursos
+    # Negative control: technical fields never go through the human-text fold.
+    for source in (acesso, cursos):
+        for field in ("u.email", "a.matricula", "c.codigo", "t.codigo"):
+            assert f'append_human_text_contains_condition(where, params, "{field}"' not in source
+            assert f'human_text_contains_sql("{field}"' not in source
 
 
 # --------------------------------------------------------------------------

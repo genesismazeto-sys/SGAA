@@ -45,7 +45,7 @@ from app.request_email_notifications import (
 )
 from app.requisitions import auto_indefer_devolvidas
 from app.student_matrix import get_allowed_activity_version_ids_for_student
-from app.sql_dialect import date_compare
+from app.sql_dialect import date_compare, human_text_order
 from app.storage.contracts import StorageError
 from app.text import normalize_header, ptbr_text_sort_key
 from app.uploads import _allowed, save_upload
@@ -301,12 +301,12 @@ def _get_admin_requisicao_scope_for_aluno(conn, aluno_id):
 def _list_admin_requisicao_alunos(conn):
     ensure_turmas_matriz_schema(conn)
     return conn.execute(
-        """
+        f"""
         SELECT a.id, a.nome, a.matricula,
                COALESCE(t.codigo, t.nome, 'Sem turma') AS turma_label
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
-         ORDER BY a.nome COLLATE PTBR_NOACCENT, a.id
+         ORDER BY {human_text_order("a.nome", connection=conn)}, a.id
         """
     ).fetchall()
 
@@ -440,7 +440,7 @@ def admin_requisicoes():
     order_map = {
         'data_solicitacao': 'r.data_solicitacao',
         'data_processamento': 'r.data_processamento',
-        'aluno_nome': 'a.nome COLLATE PTBR_NOACCENT',
+        'aluno_nome': human_text_order('a.nome', connection=conn),
         'turma_codigo': 't.codigo',
         'status': 'r.status'
     }
@@ -504,7 +504,7 @@ def admin_requisicoes():
         requisicoes.append(item)
     # Carregar atividades e documentos obrigatórios (para reuso do form do aluno no modal admin)
     atividades = conn.execute(
-        """SELECT *
+        f"""SELECT *
              FROM (
                   SELECT DISTINCT v.id, v.id AS atividade_versao_id, b.nome_conceito AS nome,
                                   CASE v.eixo WHEN 'AAC' THEN 'Acadêmica Complementar' ELSE 'Extensão Universitária' END AS tipo_atividade,
@@ -513,7 +513,7 @@ def admin_requisicoes():
                     JOIN atividade_versao v ON v.id=mi.atividade_versao_id
                     JOIN atividade_base b ON b.id=mi.atividade_base_id
              ) AS atividade_versao_opcoes
-         ORDER BY tipo_atividade,grupo,nome COLLATE PTBR_NOACCENT,id"""
+         ORDER BY tipo_atividade,grupo,{human_text_order("nome", connection=conn)},id"""
     ).fetchall()
     alunos_opcoes = _list_admin_requisicao_alunos(conn)
     docs_por_atividade = {}
@@ -530,7 +530,7 @@ def admin_requisicoes():
     except Exception:
         pass
     alunos_filtro = conn.execute(
-        """
+        f"""
         SELECT aluno_nome
           FROM (
                 SELECT DISTINCT COALESCE(NULLIF(TRIM(a.nome), ''), '') AS aluno_nome
@@ -538,7 +538,7 @@ def admin_requisicoes():
                   LEFT JOIN alunos a ON r.aluno_id = a.id
                  WHERE COALESCE(NULLIF(TRIM(a.nome), ''), '') <> ''
           ) AS aluno_nome_opcoes
-      ORDER BY aluno_nome COLLATE PTBR_NOACCENT ASC, aluno_nome ASC
+      ORDER BY {human_text_order("aluno_nome", connection=conn)} ASC, aluno_nome ASC
         """
     ).fetchall()
     turmas_filtro = conn.execute(

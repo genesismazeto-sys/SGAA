@@ -1628,4 +1628,12 @@ def test_u5c_scope_boundaries():
     schema = (root / "app/pg_schema.py").read_text(encoding="utf-8")
     assert "lock_activity_base" not in schema
     atividades = (root / "app/views/admin/atividades.py").read_text(encoding="utf-8")
-    assert "COLLATE PTBR_NOACCENT" in atividades
+    # Pre-U5-D this asserted the raw "COLLATE PTBR_NOACCENT" was still present
+    # (U5-C left U5-D's PTBR ordering alone).  U5-D moved that ordering into
+    # app.sql_dialect; the enduring boundary is that U5-C's locking stays out
+    # of the dialect (above) and atividades orders through the U5-D owners,
+    # never through raw SQLite human-text SQL.
+    assert "COLLATE PTBR_NOACCENT" not in atividades
+    assert "COLLATE NOCASE" not in atividades
+    assert "human_text_order(" in atividades
+    assert "ascii_nocase_order(" in atividades

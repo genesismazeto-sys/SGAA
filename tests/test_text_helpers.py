@@ -104,3 +104,32 @@ def test_app_text_import_does_not_import_main():
         env=os.environ.copy(),
     )
     assert result.returncode == 0, result.stderr
+
+
+#: PG-READINESS-U5-D: sha256 of ``human_text_key`` over every assigned code
+#: point (unicodedata 15.0.0), recorded from the historical per-character
+#: implementation at 091ba4b *before* the key was consolidated onto the frozen
+#: fold in ``app.human_text_fold``.  It is an independent regression pin: the
+#: consolidation makes ``human_text_key == fold`` true by construction.
+HISTORICAL_HUMAN_TEXT_KEY_FINGERPRINT = (
+    286719,
+    "aaead8f8ea2b43befb5bf3de9edf007ebe9e1bacfec303edaca9acfb8e506db2",
+)
+
+
+def test_human_text_key_matches_the_historical_fingerprint_on_every_code_point():
+    import hashlib
+    import unicodedata
+
+    from app.text import human_text_key
+
+    assert unicodedata.unidata_version == "15.0.0", "re-record deliberately on a new Unicode version"
+    digest = hashlib.sha256()
+    count = 0
+    for code_point in range(0x110000):
+        char = chr(code_point)
+        if unicodedata.category(char) in ("Cn", "Cs"):
+            continue
+        digest.update(f"{code_point:x}\t{human_text_key(char)}\n".encode("utf-8"))
+        count += 1
+    assert (count, digest.hexdigest()) == HISTORICAL_HUMAN_TEXT_KEY_FINGERPRINT

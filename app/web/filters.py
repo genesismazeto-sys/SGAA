@@ -3,6 +3,7 @@ import re
 
 from flask import request
 
+from app.sql_dialect import ascii_ci_like, human_text_contains
 from app.text import human_text_key
 
 
@@ -78,25 +79,35 @@ def get_date_range_query(name: str):
     return _parse(request.args.get(f"{name}_min")), _parse(request.args.get(f"{name}_max"))
 
 
-def append_text_contains_condition(conditions: list[str], params: list, sql_expression: str, value: str) -> None:
+def append_text_contains_condition(
+    conditions: list[str], params: list, sql_expression: str, value: str, *, connection
+) -> None:
+    """Technical-token contains filter (e-mails, codes, matrículas).
+
+    SQLite LIKE semantics on every engine (``app.sql_dialect.ascii_ci_like``):
+    ASCII case-insensitive, no escape character.
+    """
     if not value:
         return
-    conditions.append(f"LOWER(COALESCE({sql_expression}, '')) LIKE ?")
+    conditions.append(ascii_ci_like(f"LOWER(COALESCE({sql_expression}, ''))", connection=connection))
     params.append(f"%{value.lower()}%")
 
 
-def human_text_contains_sql(sql_expression: str) -> str:
+def human_text_contains_sql(sql_expression: str, *, connection) -> str:
     """SQL predicate: HUMAN text ``sql_expression`` contains the bound needle.
 
     Bind ``human_text_key(value)``. Both sides go through the one authority
-    (``app.text.human_text_key``, registered on the connection as
-    ``PTBR_FOLD``), so case and accents never decide a match. A literal
-    substring test: ``%`` and ``_`` in the user's text are not wildcards.
+    (``app.text.human_text_key``: ``PTBR_FOLD`` on SQLite,
+    ``sgaa_human_text_key`` on PostgreSQL), so case and accents never decide a
+    match. A literal substring test: ``%`` and ``_`` in the user's text are not
+    wildcards.
     """
-    return f"INSTR(PTBR_FOLD({sql_expression}), ?) > 0"
+    return human_text_contains(sql_expression, connection=connection)
 
 
-def append_human_text_contains_condition(conditions: list[str], params: list, sql_expression: str, value: str) -> None:
+def append_human_text_contains_condition(
+    conditions: list[str], params: list, sql_expression: str, value: str, *, connection
+) -> None:
     """``append_text_contains_condition`` for names, titles and descriptions.
 
     E-mails, codes and matrículas keep ``append_text_contains_condition``.
@@ -104,5 +115,5 @@ def append_human_text_contains_condition(conditions: list[str], params: list, sq
     needle = human_text_key(value)
     if not needle:
         return
-    conditions.append(human_text_contains_sql(sql_expression))
+    conditions.append(human_text_contains_sql(sql_expression, connection=connection))
     params.append(needle)

@@ -24,7 +24,7 @@ from app.matrix_scope import (
     is_matrix_assigned,
 )
 from app.settings import get_horas_settings
-from app.sql_dialect import date_compare
+from app.sql_dialect import date_compare, human_text_order
 from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
@@ -187,10 +187,11 @@ def admin_matrizes():
     params = []
     if q:
         where.append(
-            "(" + human_text_contains_sql("m.nome") + " OR " + human_text_contains_sql("c.nome") + ")"
+            "(" + human_text_contains_sql("m.nome", connection=conn)
+            + " OR " + human_text_contains_sql("c.nome", connection=conn) + ")"
         )
         params.extend([human_text_key(q), human_text_key(q)])
-    append_human_text_contains_condition(where, params, "m.nome", nome_filter)
+    append_human_text_contains_condition(where, params, "m.nome", nome_filter, connection=conn)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"LOWER(COALESCE(m.status, 'rascunho')) IN ({placeholders})")
@@ -225,8 +226,8 @@ def admin_matrizes():
         params.append(fim_max)
 
     order_map = {
-        "nome": "COALESCE(m.nome, '') COLLATE PTBR_NOACCENT",
-        "curso": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
+        "nome": human_text_order("COALESCE(m.nome, '')", connection=conn),
+        "curso": human_text_order("COALESCE(c.nome, '')", connection=conn),
         "vigencia": "COALESCE(m.data_inicio_vigencia, ''), COALESCE(m.data_fim_vigencia, '')",
         "status": "LOWER(COALESCE(m.status, 'rascunho'))",
         "horas_aac_obrigatorias": "m.horas_aac_obrigatorias",
@@ -252,7 +253,11 @@ def admin_matrizes():
         query_params.extend([per_page, offset])
     rows = conn.execute(query, query_params).fetchall()
 
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo FROM cursos ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     filter_schema = [
         {
             "param": "nome",
@@ -430,7 +435,7 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
         ).fetchall()
     }
     rows = conn.execute(
-        """
+        f"""
         SELECT
             v.id, v.atividade_base_id, v.numero_versao, b.nome_conceito AS nome,
             COALESCE(NULLIF(TRIM(v.grupo), ''), 'Sem grupo') AS grupo,
@@ -442,7 +447,7 @@ def _matriz_transfer_lists(conn, matriz_id: int, active_tab: str):
         FROM atividade_versao v
         JOIN atividade_base b ON b.id=v.atividade_base_id
         WHERE v.eixo=? AND v.status='ativa'
-        ORDER BY b.nome_conceito COLLATE PTBR_NOACCENT, b.id, v.numero_versao, v.id
+        ORDER BY {human_text_order("b.nome_conceito", connection=conn)}, b.id, v.numero_versao, v.id
         """,
         ('AAC' if activity_type == 'Acadêmica Complementar' else 'AEU',),
     ).fetchall()
@@ -570,7 +575,11 @@ def _render_matriz_form(
     # lock for accounts that may, without claiming their access is limited.
     access_readonly = readonly
     readonly = readonly or view_mode
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo FROM cursos ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     matriz_id = matriz["id"] if matriz else None
     horas_defaults = get_horas_settings(conn) if not matriz_id else None
     activity_tabs_enabled = bool(matriz_id)

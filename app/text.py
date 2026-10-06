@@ -1,6 +1,6 @@
-import unicodedata
-
 from unidecode import unidecode
+
+from app.human_text_fold import fold as _human_text_fold
 
 
 def normalize_header(text):
@@ -21,12 +21,12 @@ def human_text_key(value) -> str:
     Comparison only -- stored and displayed text is never rewritten. Not for
     e-mails, codes, enum values or other technical tokens, which keep their own
     semantics. SQLite sees this function as ``PTBR_FOLD`` and the collation
-    ``PTBR_NOACCENT`` (see ``register_human_text_sql``); the browser mirrors it
-    in ``static/js/human-text.js``.
+    ``PTBR_NOACCENT`` (see ``register_human_text_sql``); PostgreSQL as
+    ``sgaa_human_text_key`` (``app.pg_schema``); the browser mirrors it in
+    ``static/js/human-text.js``. The single implementation is the frozen fold
+    in ``app.human_text_fold``.
     """
-    decomposed = unicodedata.normalize("NFKD", str(value or ""))
-    base = "".join(ch for ch in decomposed if not unicodedata.category(ch).startswith("M"))
-    return " ".join(base.casefold().split())
+    return _human_text_fold(value)
 
 
 def human_text_contains(haystack, needle) -> bool:

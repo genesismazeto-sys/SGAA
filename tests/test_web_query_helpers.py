@@ -1,5 +1,6 @@
 import inspect
 import os
+import sqlite3
 import subprocess
 import sys
 
@@ -72,12 +73,22 @@ def test_sql_helper_contract_preserves_exact_fragments_and_parameter_shape():
     assert append_conditions_sql(False, ["a = ?", "b = ?"]) == " WHERE a = ? AND b = ?"
     assert append_conditions_sql(True, ["a = ?", "b = ?"], joiner=" OR ") == " AND a = ? OR b = ?"
 
-    conditions = []
-    params = []
-    append_text_contains_condition(conditions, params, "u.nome", "Ana")
-    append_text_contains_condition(conditions, params, "u.email", "")
-    assert conditions == ["LOWER(COALESCE(u.nome, '')) LIKE ?"]
-    assert params == ["%ana%"]
+    # PG-READINESS-U5-D: the helper takes the caller-owned connection (D-5) and
+    # accepts only the inventoried technical fields; the SQLite fragment and the
+    # parameter shape are unchanged.  "u.nome" (the former example) is human
+    # text and goes through append_human_text_contains_condition instead.
+    sqlite_conn = sqlite3.connect(":memory:")
+    try:
+        conditions = []
+        params = []
+        append_text_contains_condition(conditions, params, "u.email", "Ana", connection=sqlite_conn)
+        append_text_contains_condition(conditions, params, "u.email", "", connection=sqlite_conn)
+        assert conditions == ["LOWER(COALESCE(u.email, '')) LIKE ?"]
+        assert params == ["%ana%"]
+        with pytest.raises(ValueError):
+            append_text_contains_condition([], [], "u.nome", "Ana", connection=sqlite_conn)
+    finally:
+        sqlite_conn.close()
 
 
 def test_main_compatibility_exports_are_the_shared_callables():

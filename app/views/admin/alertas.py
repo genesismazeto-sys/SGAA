@@ -22,6 +22,7 @@ from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_alertas_table
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.sql_dialect import human_text_order
 from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
@@ -100,10 +101,13 @@ def admin_alertas():
     params = []
     if q:
         where.append(
-            "(" + human_text_contains_sql("titulo") + " OR " + human_text_contains_sql("mensagem") + ")"
+            "(" + human_text_contains_sql("titulo", connection=conn)
+            + " OR " + human_text_contains_sql("mensagem", connection=conn) + ")"
         )
         params.extend([human_text_key(q), human_text_key(q)])
-    append_human_text_contains_condition(where, params, "COALESCE(titulo, mensagem)", titulo_filter)
+    append_human_text_contains_condition(
+        where, params, "COALESCE(titulo, mensagem)", titulo_filter, connection=conn
+    )
     if status_filters:
         status_where = []
         if "ativo" in status_filters:
@@ -127,7 +131,7 @@ def admin_alertas():
     if order_col == order_map["titulo"]:
         # Human text: ordered by the canonical key (app/text.py), so "Ética"
         # sorts with E -- LOWER() alone is ASCII-only and binary.
-        order_col += " COLLATE PTBR_NOACCENT"
+        order_col = human_text_order(order_col, connection=conn)
     direction = "DESC" if sort_dir == "desc" else "ASC"
     count_sql = "SELECT COUNT(*)" + base_from + where_sql
     total = conn.execute(count_sql, params).fetchone()[0]

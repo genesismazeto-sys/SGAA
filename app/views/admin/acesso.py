@@ -66,6 +66,7 @@ from app.user_accounts import (
     usuario_access_is_active,
 )
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.sql_dialect import ascii_ci_like, human_text_order
 from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
@@ -227,13 +228,15 @@ def admin_acesso():
     if q:
         like = f"%{q}%"
         where.append(
-            "(" + human_text_contains_sql("u.nome")
-            + " OR u.email LIKE ? OR COALESCE(a.matricula, '') LIKE ? OR COALESCE(t.codigo, t.nome, '') LIKE ?)"
+            "(" + human_text_contains_sql("u.nome", connection=conn)
+            + " OR " + ascii_ci_like("u.email", connection=conn)
+            + " OR " + ascii_ci_like("COALESCE(a.matricula, '')", connection=conn)
+            + " OR " + ascii_ci_like("COALESCE(t.codigo, t.nome, '')", connection=conn) + ")"
         )
         params.extend([human_text_key(q), like, like, like])
-    append_human_text_contains_condition(where, params, "u.nome", nome_filter)
-    append_text_contains_condition(where, params, "u.email", email_filter)
-    append_text_contains_condition(where, params, "a.matricula", matricula_filter)
+    append_human_text_contains_condition(where, params, "u.nome", nome_filter, connection=conn)
+    append_text_contains_condition(where, params, "u.email", email_filter, connection=conn)
+    append_text_contains_condition(where, params, "a.matricula", matricula_filter, connection=conn)
     if turma_filters:
         placeholders = ", ".join("?" for _ in turma_filters)
         where.append(f"a.turma_id IN ({placeholders})")
@@ -249,7 +252,7 @@ def admin_acesso():
 
     where_sql = append_conditions_sql(False, where)
     order_map = {
-        "nome": "COALESCE(u.nome, '') COLLATE PTBR_NOACCENT",
+        "nome": human_text_order("COALESCE(u.nome, '')", connection=conn),
         "email": "LOWER(u.email)",
         "nivel": "LOWER(u.nivel_acesso)",
         "perfil": "LOWER(u.tipo)",

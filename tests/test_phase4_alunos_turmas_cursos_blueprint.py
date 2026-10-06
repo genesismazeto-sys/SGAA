@@ -168,8 +168,12 @@ PG_UNIT3_BODY_CHANGES = {"admin_adicionar_curso"}
 
 # HUMAN-TEXT-ORDER in the student-import handlers (admin_adicionar_turma,
 # admin_editar_turma): the active-Curso <select> statement, before and after.
+# U5-D: the human order is spelled by the dialect owner (SQLite still emits
+# exactly the pre-U5-D "COALESCE(nome, '') COLLATE PTBR_NOACCENT"); the raw
+# SQLite spelling is no longer an authorized form of this statement.
 BASELINE_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY nome").fetchall()"""
-HUMAN_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()"""
+PRE_U5D_HUMAN_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()"""
+HUMAN_CURSO_SELECT = """cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY " + human_text_order("COALESCE(nome, '')", connection=conn) + ", id").fetchall()"""
 
 STUDENT_IMPORT_BASELINE_COMMIT = "1796c1e17b7cbd53148631f08b897f53c98590aa"
 STUDENT_IMPORT_HANDLER_NAMES = {
@@ -775,12 +779,64 @@ _HUMAN_TEXT_FRAGMENTS = {
 }
 
 
+#: PG-READINESS-U5-D: the dialect-owner spelling of the human-text fragments.
+#: ``human_text_order("<expr>", connection=conn)`` maps back to the pre-U5-D
+#: constant ``"<expr> COLLATE PTBR_NOACCENT"`` (exactly what the SQLite branch
+#: still emits) and the explicit caller-owned ``connection=conn`` keyword of the
+#: filter helpers is dropped.  Exact per-handler counts keep any other change
+#: visible.
+_U5D_FILTER_HELPERS = {
+    "append_text_contains_condition",
+    "append_human_text_contains_condition",
+    "human_text_contains_sql",
+}
+_U5D_DIALECT_NORMALIZATIONS = {"admin_cursos": 3}
+
+
+class _U5DDialectRestorer(ast.NodeTransformer):
+    def __init__(self):
+        self.count = 0
+
+    def visit_Call(self, node):
+        self.generic_visit(node)
+        func = node.func.id if isinstance(node.func, ast.Name) else None
+        conn_keyword = [
+            keyword for keyword in node.keywords
+            if keyword.arg == "connection"
+            and isinstance(keyword.value, ast.Name)
+            and keyword.value.id == "conn"
+        ]
+        if (
+            func == "human_text_order"
+            and len(node.args) == 1
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and len(node.keywords) == 1
+            and conn_keyword
+        ):
+            self.count += 1
+            return ast.Constant(value=f"{node.args[0].value} COLLATE PTBR_NOACCENT")
+        if func in _U5D_FILTER_HELPERS and len(conn_keyword) == 1:
+            self.count += 1
+            node.keywords = [k for k in node.keywords if k is not conn_keyword[0]]
+        return node
+
+
+def _restore_u5d_dialect_calls(node, name: str):
+    restorer = _U5DDialectRestorer()
+    restored = restorer.visit(node)
+    expected = _U5D_DIALECT_NORMALIZATIONS.get(name, 0)
+    assert restorer.count == expected, f"U5-D dialect normalizations for {name}: {restorer.count}"
+    return restored
+
+
 def _restore_human_text_fragments(tree: ast.Module, name: str) -> str | None:
     """HUMAN-TEXT-ORDER: current handler body with exactly the two declared
-    human-text fragments mapped back to their baseline spelling."""
+    human-text fragments mapped back to their baseline spelling (after the
+    declared U5-D dialect-owner spelling is mapped back to the pre-U5-D one)."""
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-            cloned = deepcopy(node)
+            cloned = _restore_u5d_dialect_calls(deepcopy(node), name)
             restored = 0
             for inner in ast.walk(cloned):
                 if isinstance(inner, ast.Constant) and inner.value in _HUMAN_TEXT_FRAGMENTS:
@@ -1631,6 +1687,48 @@ def test_student_import_guard_rejects_binary_curso_select_order(name):
     assert f"{name}: Curso select human order" in (
         _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
     )
+
+
+@pytest.mark.parametrize("name", ("admin_adicionar_turma", "admin_editar_turma"))
+def test_student_import_guard_rejects_raw_sqlite_curso_select_order(name):
+    """PG-READINESS-U5-D: the raw SQLite COLLATE PTBR_NOACCENT spelling is no
+    longer an authorized form of the Curso select (it fails on PostgreSQL)."""
+    candidate_tree = _tree(MODULE_PATH)
+    handler = _function_node(candidate_tree, name)
+    selects = [
+        index
+        for index, stmt in enumerate(handler.body)
+        if _ast_sequence_equal([stmt], _parsed_statements(HUMAN_CURSO_SELECT))
+    ]
+    assert len(selects) == 1
+    handler.body[selects[0]] = _parsed_statements(PRE_U5D_HUMAN_CURSO_SELECT)[0]
+
+    assert f"{name}: Curso select human order" in (
+        _student_import_guard_errors(candidate_tree, _student_import_baseline_tree())
+    )
+
+
+def test_u5d_dialect_restorer_does_not_hide_other_changes():
+    """Negative control: a different human-order expression, or a dialect call
+    beyond the declared count, is not absorbed by the U5-D normalization."""
+    module_tree = ast.parse(Path(_canonical_module().__file__).read_text(encoding="utf-8"))
+    handler = _function_node(module_tree, "admin_cursos")
+    calls = [
+        node for node in ast.walk(handler)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "human_text_order"
+    ]
+    assert len(calls) == 1
+    calls[0].args[0] = ast.Constant(value="COALESCE(c.codigo, '')")
+    with pytest.raises(AssertionError):
+        _restore_human_text_fragments(module_tree, "admin_cursos")
+
+    module_tree = ast.parse(Path(_canonical_module().__file__).read_text(encoding="utf-8"))
+    handler = _function_node(module_tree, "admin_cursos")
+    handler.body.insert(
+        0, _parsed_statements('x = human_text_order("COALESCE(c.nome, \'\')", connection=conn)')[0]
+    )
+    with pytest.raises(AssertionError):
+        _restore_human_text_fragments(module_tree, "admin_cursos")
 
 
 def test_student_import_guard_rejects_reverting_the_hardened_matrix_read():

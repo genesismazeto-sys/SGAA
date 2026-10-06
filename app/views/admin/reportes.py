@@ -23,7 +23,13 @@ from app.db import get_db_connection
 from app.db_maintenance import ensure_reportes_table
 from app.presentation import format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
-from app.sql_dialect import current_utc_text, date_compare, datetime_order
+from app.sql_dialect import (
+    ascii_ci_like,
+    current_utc_text,
+    date_compare,
+    datetime_order,
+    human_text_order,
+)
 from app.student_documents import remove_student_document, save_student_document
 from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
@@ -73,10 +79,10 @@ def admin_reportes():
     conn = get_db_connection()
     ensure_reportes_table(conn)
     alunos = conn.execute(
-        """
+        f"""
         SELECT id, nome, matricula
           FROM alunos
-      ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, LOWER(COALESCE(matricula, '')), id
+      ORDER BY {human_text_order("COALESCE(nome, '')", connection=conn)}, LOWER(COALESCE(matricula, '')), id
         """
     ).fetchall()
 
@@ -91,14 +97,18 @@ def admin_reportes():
     if q:
         like = f"%{q}%"
         needle = human_text_key(q)
+        # LOWER(...) LIKE LOWER(?) on SQLite is the ASCII case-insensitive
+        # LIKE that ascii_ci_like spells as LOWER(...) LIKE ?.
         where.append(
-            "(" + human_text_contains_sql("rep.titulo") + " OR " + human_text_contains_sql("rep.descricao")
-            + " OR " + human_text_contains_sql("a.nome") + " OR LOWER(COALESCE(a.matricula, '')) LIKE LOWER(?))"
+            "(" + human_text_contains_sql("rep.titulo", connection=conn)
+            + " OR " + human_text_contains_sql("rep.descricao", connection=conn)
+            + " OR " + human_text_contains_sql("a.nome", connection=conn)
+            + " OR " + ascii_ci_like("LOWER(COALESCE(a.matricula, ''))", connection=conn) + ")"
         )
         params.extend([needle, needle, needle, like])
-    append_human_text_contains_condition(where, params, "a.nome", aluno_filter)
-    append_text_contains_condition(where, params, "a.matricula", matricula_filter)
-    append_human_text_contains_condition(where, params, "rep.titulo", titulo_filter)
+    append_human_text_contains_condition(where, params, "a.nome", aluno_filter, connection=conn)
+    append_text_contains_condition(where, params, "a.matricula", matricula_filter, connection=conn)
+    append_human_text_contains_condition(where, params, "rep.titulo", titulo_filter, connection=conn)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"rep.status IN ({placeholders})")
@@ -119,7 +129,7 @@ def admin_reportes():
 
     sort_map = {
         "data": datetime_order(conn, "rep.criado_em"),
-        "aluno": "COALESCE(a.nome, '') COLLATE PTBR_NOACCENT",
+        "aluno": human_text_order("COALESCE(a.nome, '')", connection=conn),
         "titulo": "LOWER(rep.titulo)",
         "categoria": "LOWER(rep.categoria)",
         "status": "LOWER(rep.status)",
@@ -127,7 +137,7 @@ def admin_reportes():
     order_col = sort_map.get(sort_field, sort_map["data"])
     if sort_field == "titulo":
         # Human text: ordered by the canonical key (app/text.py).
-        order_col += " COLLATE PTBR_NOACCENT"
+        order_col = human_text_order(order_col, connection=conn)
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
     query = (

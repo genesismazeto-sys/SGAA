@@ -59,6 +59,7 @@ from app.matrix_scope import (
     is_activity_version_referenced_by_assigned_matrix,
 )
 from app.uploads import ALLOWED_CSV, save_upload
+from app.sql_dialect import ascii_nocase_order, human_text_order
 from app.text import normalize_header
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.views.admin.activity_version_delete import admin_catalogo_excluir_versao
@@ -564,7 +565,7 @@ def admin_atividades():
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity"
     where = []
     params = []
-    append_human_text_contains_condition(where, params, 'nome', nome_filter)
+    append_human_text_contains_condition(where, params, 'nome', nome_filter, connection=conn)
     if tipo_filters:
         placeholders = ", ".join("?" for _ in tipo_filters)
         where.append(f"COALESCE(tipo_atividade, 'Acadêmica Complementar') IN ({placeholders})")
@@ -582,25 +583,28 @@ def admin_atividades():
         if clauses:
             where.append("(" + " OR ".join(clauses) + ")")
     where_sql = append_conditions_sql(False, where)
+    nome_order = human_text_order('nome', connection=conn)
+    tipo_nocase = ascii_nocase_order('tipo_atividade', connection=conn)
+    grupo_nocase = ascii_nocase_order('grupo', connection=conn)
     sort_map = {
-        'nome': f" ORDER BY nome COLLATE PTBR_NOACCENT {sort_dir}, tipo_atividade COLLATE NOCASE ASC, grupo COLLATE NOCASE ASC, base_id ASC",
-        'grupo': f" ORDER BY grupo COLLATE NOCASE {sort_dir}, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
-        'tipo_atividade': f" ORDER BY tipo_atividade COLLATE NOCASE {sort_dir}, grupo COLLATE NOCASE ASC, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
-        'versoes': f" ORDER BY total_versoes {sort_dir}, nome COLLATE PTBR_NOACCENT ASC, base_id ASC",
+        'nome': f" ORDER BY {nome_order} {sort_dir}, {tipo_nocase} ASC, {grupo_nocase} ASC, base_id ASC",
+        'grupo': f" ORDER BY {grupo_nocase} {sort_dir}, {nome_order} ASC, base_id ASC",
+        'tipo_atividade': f" ORDER BY {tipo_nocase} {sort_dir}, {grupo_nocase} ASC, {nome_order} ASC, base_id ASC",
+        'versoes': f" ORDER BY total_versoes {sort_dir}, {nome_order} ASC, base_id ASC",
         'limitacao': (
             " ORDER BY "
             f"COALESCE(tem_limitacao, 0) {sort_dir}, "
             f"CASE WHEN tipo_limitacao = 'total' THEN COALESCE(limite_horas_total, 0) "
             f"WHEN tipo_limitacao = 'semestral' THEN COALESCE(limite_horas_semestral, 0) "
             f"ELSE 0 END {sort_dir}, "
-            "nome COLLATE PTBR_NOACCENT ASC, base_id ASC"
+            f"{nome_order} ASC, base_id ASC"
         ),
     }
     order_sql = sort_map.get(sort_field)
     if not order_sql:
         order_sql = (
-            " ORDER BY tipo_atividade, grupo, nome COLLATE PTBR_NOACCENT, base_id"
-            if (not where) else " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
+            f" ORDER BY tipo_atividade, grupo, {nome_order}, base_id"
+            if (not where) else f" ORDER BY grupo, {nome_order}, base_id"
         )
     query = (
         "SELECT canonical_activity.*" + base_from + where_sql + order_sql
@@ -714,7 +718,7 @@ def admin_atividades_academicas():
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Acadêmica Complementar'"
-    query = "SELECT *" + base_from + " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
+    query = "SELECT *" + base_from + " ORDER BY grupo, " + human_text_order("nome", connection=conn) + ", base_id"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
     apply_limit = wants_pagination()
@@ -733,7 +737,7 @@ def admin_atividades_extensao():
     page, per_page, offset = get_pagination(default_per_page=50)
     conn = get_db_connection()
     base_from = " FROM (" + _canonical_activity_rows_sql() + ") canonical_activity WHERE tipo_atividade = 'Extensão Universitária'"
-    query = "SELECT *" + base_from + " ORDER BY grupo, nome COLLATE PTBR_NOACCENT, base_id"
+    query = "SELECT *" + base_from + " ORDER BY grupo, " + human_text_order("nome", connection=conn) + ", base_id"
     count_sql = "SELECT COUNT(*)" + base_from
     total = conn.execute(count_sql).fetchone()[0]
     apply_limit = wants_pagination()

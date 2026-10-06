@@ -49,6 +49,7 @@ from app.student_matrix import (
     parse_submitted_matriz_id,
     resolve_student_matrix_for_edit,
 )
+from app.sql_dialect import human_text_order
 from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
@@ -262,8 +263,8 @@ def admin_cursos():
     )
     where = []
     params = []
-    append_text_contains_condition(where, params, "c.codigo", codigo_filter)
-    append_human_text_contains_condition(where, params, "c.nome", nome_filter)
+    append_text_contains_condition(where, params, "c.codigo", codigo_filter, connection=conn)
+    append_human_text_contains_condition(where, params, "c.nome", nome_filter, connection=conn)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"LOWER(COALESCE(c.status, '')) IN ({placeholders})")
@@ -293,7 +294,7 @@ def admin_cursos():
     where_sql = append_conditions_sql(False, where)
     order_map = {
         "codigo": "LOWER(COALESCE(c.codigo, ''))",
-        "nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
+        "nome": human_text_order("COALESCE(c.nome, '')", connection=conn),
         "duracao_periodos": "COALESCE(c.duracao_periodos, 0)",
         "status": "LOWER(COALESCE(c.status, ''))",
     }
@@ -565,8 +566,8 @@ def admin_alunos():
     """
     where = []
     params = []
-    append_human_text_contains_condition(where, params, "u.nome", nome_filter)
-    append_text_contains_condition(where, params, "u.email", email_filter)
+    append_human_text_contains_condition(where, params, "u.nome", nome_filter, connection=conn)
+    append_text_contains_condition(where, params, "u.email", email_filter, connection=conn)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"COALESCE(a.status, 'Ativo') IN ({placeholders})")
@@ -593,12 +594,12 @@ def admin_alunos():
 
     where_sql = append_conditions_sql(False, where)
     order_map = {
-        "nome": "COALESCE(u.nome, '') COLLATE PTBR_NOACCENT",
-        "matricula": "COALESCE(a.matricula, '') COLLATE PTBR_NOACCENT",
-        "email": "COALESCE(u.email, '') COLLATE PTBR_NOACCENT",
-        "curso_nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
-        "turma": "COALESCE(t.codigo, t.nome, '') COLLATE PTBR_NOACCENT",
-        "status": "COALESCE(a.status, '') COLLATE PTBR_NOACCENT",
+        "nome": human_text_order("COALESCE(u.nome, '')", connection=conn),
+        "matricula": human_text_order("COALESCE(a.matricula, '')", connection=conn),
+        "email": human_text_order("COALESCE(u.email, '')", connection=conn),
+        "curso_nome": human_text_order("COALESCE(c.nome, '')", connection=conn),
+        "turma": human_text_order("COALESCE(t.codigo, t.nome, '')", connection=conn),
+        "status": human_text_order("COALESCE(a.status, '')", connection=conn),
         "pendentes": "COALESCE(p.pendentes, 0)",
     }
     order_sql = order_map.get(sort_field, order_map["nome"])
@@ -614,15 +615,19 @@ def admin_alunos():
         params_exec += [per_page, offset]
     alunos = conn.execute(query, params_exec).fetchall()
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo FROM cursos ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     turmas = conn.execute(
-        """
+        f"""
         SELECT t.id, t.codigo, t.nome, t.numero, c.nome AS curso_nome
           FROM turmas t
           LEFT JOIN cursos c ON c.id = t.curso_id
-            ORDER BY COALESCE(c.nome, '') COLLATE PTBR_NOACCENT,
+            ORDER BY {human_text_order("COALESCE(c.nome, '')", connection=conn)},
                              COALESCE(t.numero, 0),
-                             COALESCE(t.codigo, t.nome, '') COLLATE PTBR_NOACCENT,
+                             {human_text_order("COALESCE(t.codigo, t.nome, '')", connection=conn)},
                              t.id
         """
     ).fetchall()
@@ -977,8 +982,8 @@ def admin_turmas():
     """
     where = []
     params = []
-    append_text_contains_condition(where, params, "t.codigo", codigo_filter)
-    append_human_text_contains_condition(where, params, "tm.nome", matriz_filter)
+    append_text_contains_condition(where, params, "t.codigo", codigo_filter, connection=conn)
+    append_human_text_contains_condition(where, params, "tm.nome", matriz_filter, connection=conn)
     if status_filters:
         placeholders = ", ".join("?" for _ in status_filters)
         where.append(f"COALESCE(t.status, 'Ativa') IN ({placeholders})")
@@ -1006,8 +1011,8 @@ def admin_turmas():
     where_sql = append_conditions_sql(False, where)
     order_map = {
         "codigo": "LOWER(COALESCE(t.codigo, ''))",
-        "curso_nome": "COALESCE(c.nome, '') COLLATE PTBR_NOACCENT",
-        "matriz_nome": "COALESCE(tm.nome, '') COLLATE PTBR_NOACCENT",
+        "curso_nome": human_text_order("COALESCE(c.nome, '')", connection=conn),
+        "matriz_nome": human_text_order("COALESCE(tm.nome, '')", connection=conn),
         "numero": "COALESCE(t.numero, 0)",
         "status": "LOWER(COALESCE(t.status, ''))",
     }
@@ -1035,7 +1040,11 @@ def admin_turmas():
         """
     ).fetchall()
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
-    cursos = conn.execute("SELECT id, nome, codigo FROM cursos ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo FROM cursos ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     filter_schema = [
         {
             "param": "codigo",
@@ -1103,7 +1112,11 @@ def admin_adicionar_turma():
     ensure_turmas_matriz_schema(conn)
     ensure_usuario_access_schema(conn)
 
-    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     default_curso_id = curso_mais_populoso_id() or (cursos[0]["id"] if cursos else None)
     matrizes_by_curso = _matrizes_by_curso(conn)
     default_matriz_id = None
@@ -1208,7 +1221,11 @@ def admin_editar_turma(turma_id):
         flash("Turma não encontrada.", "error")
         return redirect(url_for("admin_turmas"))
 
-    cursos = conn.execute("SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY COALESCE(nome, '') COLLATE PTBR_NOACCENT, id").fetchall()
+    cursos = conn.execute(
+        "SELECT id, nome, codigo, duracao_periodos FROM cursos WHERE status='ativo' ORDER BY "
+        + human_text_order("COALESCE(nome, '')", connection=conn)
+        + ", id"
+    ).fetchall()
     matrizes_by_curso = _matrizes_by_curso(conn)
 
     if request.method == "POST":
@@ -1415,11 +1432,11 @@ def admin_detalhes_turma(turma_id):
     order_key = sort_map.get(sort_field, sort_map["nome"])
     alunos = sorted(alunos_normalizados, key=order_key, reverse=(sort_dir == "desc"))
     all_turmas = conn.execute(
-        """
+        f"""
         SELECT t.id, t.codigo, t.numero, c.nome AS curso_nome
           FROM turmas t
           LEFT JOIN cursos c ON c.id = t.curso_id
-      ORDER BY COALESCE(c.nome, '') COLLATE PTBR_NOACCENT, COALESCE(t.numero, 0), LOWER(COALESCE(t.codigo, t.nome, '')), t.id
+      ORDER BY {human_text_order("COALESCE(c.nome, '')", connection=conn)}, COALESCE(t.numero, 0), LOWER(COALESCE(t.codigo, t.nome, '')), t.id
         """
     ).fetchall()
     filter_schema = [

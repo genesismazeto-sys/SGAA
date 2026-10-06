@@ -35,7 +35,7 @@ from app.arquivos import (
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
-from app.sql_dialect import format_date_ptbr
+from app.sql_dialect import ascii_ci_like, format_date_ptbr, human_text_order
 from app.text import human_text_contains, human_text_key
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -62,8 +62,9 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
     if q:
         like = f"%{q}%"
         where.append(
-            "(" + human_text_contains_sql("titulo") + " OR " + human_text_contains_sql("descricao")
-            + " OR original_filename LIKE ?)"
+            "(" + human_text_contains_sql("titulo", connection=conn)
+            + " OR " + human_text_contains_sql("descricao", connection=conn)
+            + " OR " + ascii_ci_like("original_filename", connection=conn) + ")"
         )
         params.extend([human_text_key(q), human_text_key(q), like])
 
@@ -76,7 +77,7 @@ def _list_admin_arquivos_rows(conn, q: str, sort_field: str, sort_dir: str):
     col = order_map.get(sort_field, "criado_em")
     if sort_field in ("titulo", "descricao"):
         # Human text: ordered by the canonical key (app/text.py).
-        col += " COLLATE PTBR_NOACCENT"
+        col = human_text_order(col, connection=conn)
     direction = "DESC" if sort_dir == "desc" else "ASC"
 
     sql = f"""

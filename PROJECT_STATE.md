@@ -111,6 +111,55 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## PostgreSQL-readiness U5-D (PTBR / human-text portability) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`091ba4bea9eea47a100bdd304ac1a2f06cf35af3`. U5-A/U5-B/U5-C are unchanged and
+not reopened (U5-C locking untouched).
+
+* Scope: the human-text ordering/search surfaces U5-B deferred
+  (`COLLATE PTBR_NOACCENT`, `INSTR(PTBR_FOLD(..))`, `COLLATE NOCASE`) and the
+  inventoried technical-token `LIKE` sites, now portable to PostgreSQL 15+.
+* Fold authority: `app/human_text_fold.py` is the single frozen low-level fold;
+  `app.text.human_text_key` delegates to it. It is the effective per-code-point
+  result of NFKD -> drop category M -> casefold under Unicode 15.0.0 (then
+  space collapse/trim), as literal data; no runtime Unicode database (host
+  `unicodedata` or PostgreSQL `normalize()`, whose tables are Unicode 14/15.0/
+  15.1 on PG15/16/17). `MAPPING_SHA256`
+  `a0bdb3060a845794db7abbc244193184b5bf9818f1c73be26d7b096ad02112dd`;
+  deletions 2,452, 1:1 5,700, 1:n 1,099, Hangul 11,172 (by rule), identity
+  1,091,641; supplementary-plane mapped sources 3,331. Historical fingerprint
+  of the pre-U5-D key preserved: 286,719 assigned code points,
+  `aaead8f8ea2b43befb5bf3de9edf007ebe9e1bacfec303edaca9acfb8e506db2`.
+* PostgreSQL: `sgaa_human_text_key` (extension-free, no `normalize`/`unaccent`/
+  ICU, `LANGUAGE sql IMMUTABLE PARALLEL SAFE`, non-STRICT, NULL -> '') rendered
+  from the same frozen data; schema validation/provisioning fail fast unless
+  `server_encoding = UTF8`. `PG_CONTRACT_SHA256`
+  `46c0bef938e2b658235841862ba0cfa585facfa811f8a918b06a242892e213e7`; no table,
+  column, constraint, index or schema-version change.
+* Dialect: `app.sql_dialect` owns `human_text_order`, `human_text_contains`,
+  `ascii_nocase_order` and `ascii_ci_like` (explicit caller-owned connection,
+  closed expression allowlists; SQLite SQL unchanged). The eight admin view
+  modules and `app/web/filters.py` carry no raw PTBR/INSTR/NOCASE SQL; the
+  U5-B/U5-C deferral pins became post-U5-D ownership guards.
+* Evidence under TEP (no full suite): U5-D module 155 passed / 12 skipped;
+  owner contracts 169 passed / 33 skipped; mechanically selected impact set
+  (101 files) 1,748 passed / 48 skipped (~717 s against a 3–6 min budget:
+  RUNTIME_ESTIMATION_MISS / CALIBRATION_DATA); 0 failed throughout.
+* REAL-PG EVIDENCE: ABSENT — CUTOVER BLOCKER. PostgreSQL 15+ is now supported
+  independently of server Unicode tables, but execution is unproven until E-PG1
+  runs (helper on real PG15+, `regexp_split_to_table(.., '')` splitting, the
+  ~140 KB function's parse/plan/runtime, IMMUTABLE/PARALLEL SAFE behaviour,
+  fold equivalence incl. supplementary planes and the U+1E030 discriminator,
+  ordering/contains/NOCASE/technical LIKE, route-level SQL validity).
+* Future hardening (non-material): three dead `ascii_ci_like` allowlist
+  entries; the `_invoke` Parameter-identity bug in the U5-D test helper; the
+  file-wide `atividades.py` U5-B gate exemption; a faster lookup/translation
+  for the PostgreSQL helper; optional E-PG1 identity checks on unassigned code
+  points. Still out of scope: F-1 (plain/default-collation technical
+  ordering), F-3 (JS mirror), F-4 (swallowed SQLite PTBR registration
+  failure), F-5 (validator body-digest hardening).
+
 ## Human-text order/search + list consistency — CLOSED / LANDED (2026-10-03)
 
 Published by this landing commit (SHA not invented); parent

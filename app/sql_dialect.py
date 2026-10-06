@@ -17,7 +17,10 @@ Design rules:
   historical expression verbatim.
 * PostgreSQL fragments are PG15-compatible and rely only on helpers already
   provisioned by the U5-A schema authority (``sgaa_utcnow_text``,
-  ``sgaa_datetime_text_valid``).  No DDL is executed or required.
+  ``sgaa_datetime_text_valid``, and the U5-D ``sgaa_human_text_key``).  No
+  DDL is executed or required.
+* Human-text/technical-token fragments (U5-D) accept only closed,
+  application-owned expression lists; anything else raises ``ValueError``.
 * Timestamp columns remain canonical UTC ``TEXT`` (``YYYY-MM-DD HH:MM:SS``);
   this module never converts them to ``timestamp``/``timestamptz`` columns.
 
@@ -213,13 +216,159 @@ def newline(connection) -> str:
     return "char(10)"
 
 
+# ---------------------------------------------------------------------------
+# human text and technical-token comparison (U5-D)
+# ---------------------------------------------------------------------------
+#
+# Each family accepts only the application-owned expressions listed here (a
+# closed contract, not a sanitiser).  The mapping value is the operand used on
+# PostgreSQL: SQLite's ``LOWER()`` is ASCII-only and is absorbed by the folding
+# itself, so it is dropped there instead of becoming PostgreSQL's
+# locale-dependent ``lower()``.
+
+_HUMAN_TEXT_ORDER_EXPRESSIONS = {
+    "COALESCE(u.nome, '')": "COALESCE(u.nome, '')",
+    "LOWER(COALESCE(titulo, mensagem))": "COALESCE(titulo, mensagem)",
+    "COALESCE(c.nome, '')": "COALESCE(c.nome, '')",
+    "COALESCE(a.matricula, '')": "COALESCE(a.matricula, '')",
+    "COALESCE(u.email, '')": "COALESCE(u.email, '')",
+    "COALESCE(t.codigo, t.nome, '')": "COALESCE(t.codigo, t.nome, '')",
+    "COALESCE(a.status, '')": "COALESCE(a.status, '')",
+    "COALESCE(tm.nome, '')": "COALESCE(tm.nome, '')",
+    "COALESCE(nome, '')": "COALESCE(nome, '')",
+    "COALESCE(m.nome, '')": "COALESCE(m.nome, '')",
+    "COALESCE(a.nome, '')": "COALESCE(a.nome, '')",
+    "LOWER(rep.titulo)": "rep.titulo",
+    "titulo": "titulo",
+    "descricao": "descricao",
+    "nome": "nome",
+    "b.nome_conceito": "b.nome_conceito",
+    "a.nome": "a.nome",
+    "aluno_nome": "aluno_nome",
+}
+_HUMAN_TEXT_CONTAINS_EXPRESSIONS = frozenset({
+    "u.nome",
+    "titulo",
+    "mensagem",
+    "COALESCE(titulo, mensagem)",
+    "c.nome",
+    "tm.nome",
+    "nome",
+    "m.nome",
+    "rep.titulo",
+    "rep.descricao",
+    "a.nome",
+    "descricao",
+})
+_ASCII_NOCASE_EXPRESSIONS = frozenset({"tipo_atividade", "grupo"})
+_ASCII_CI_LIKE_EXPRESSIONS = {
+    "u.email": "u.email",
+    "a.matricula": "a.matricula",
+    "c.codigo": "c.codigo",
+    "t.codigo": "t.codigo",
+    "original_filename": "original_filename",
+    "COALESCE(a.matricula, '')": "COALESCE(a.matricula, '')",
+    "COALESCE(t.codigo, t.nome, '')": "COALESCE(t.codigo, t.nome, '')",
+    # ``app.web.filters.append_text_contains_condition`` spelling.
+    "LOWER(COALESCE(u.email, ''))": "COALESCE(u.email, '')",
+    "LOWER(COALESCE(a.matricula, ''))": "COALESCE(a.matricula, '')",
+    "LOWER(COALESCE(c.codigo, ''))": "COALESCE(c.codigo, '')",
+    "LOWER(COALESCE(t.codigo, ''))": "COALESCE(t.codigo, '')",
+}
+
+_ASCII_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_ASCII_LOWER = "abcdefghijklmnopqrstuvwxyz"
+_PG_HUMAN_TEXT_KEY = "sgaa_human_text_key"  # app.pg_schema.PG_HUMAN_TEXT_KEY_FUNCTION
+
+
+def _allowed(expression: str, allowed, family: str) -> str:
+    if not isinstance(expression, str) or expression not in allowed:
+        raise ValueError(f"expression not allowed for {family}: {expression!r}")
+    return expression
+
+
+def _pg_text_sort_key(operand: str, key: str) -> str:
+    # SQLite places NULL before every value (ASC) and after it (DESC) and never
+    # confuses NULL with a value whose key is ''.  PostgreSQL defaults to the
+    # opposite NULL placement, so the key itself carries it: NULL -> '' and
+    # every value -> chr(1) || key.  "C" compares code points, exactly as the
+    # SQLite collations compare their keys, whatever the database collation.
+    return f"(CASE WHEN {operand} IS NULL THEN '' ELSE chr(1) || {key} END) COLLATE \"C\""
+
+
+def human_text_order(expression: str, *, connection) -> str:
+    """ORDER BY term for human text (names, titles, descriptions).
+
+    SQLite keeps ``<expr> COLLATE PTBR_NOACCENT``.  PostgreSQL orders by the
+    same key (``sgaa_human_text_key``) under ``"C"`` with SQLite's NULL
+    placement.  The direction and the id tie-break stay with the caller.
+    """
+    expression = _allowed(expression, _HUMAN_TEXT_ORDER_EXPRESSIONS, "human_text_order")
+    if _is_postgres(connection):
+        operand = _HUMAN_TEXT_ORDER_EXPRESSIONS[expression]
+        return _pg_text_sort_key(operand, f"{_PG_HUMAN_TEXT_KEY}({operand})")
+    return f"{expression} COLLATE PTBR_NOACCENT"
+
+
+def human_text_contains(expression: str, *, connection) -> str:
+    """Predicate: human text ``expression`` contains the bound needle.
+
+    Exactly one ``?``, bound to ``app.text.human_text_key(value)``.  A literal
+    substring test of the folded haystack: ``%``, ``_`` and ``\\`` are plain
+    characters.  SQLite keeps ``INSTR(PTBR_FOLD(<expr>), ?) > 0``; PostgreSQL
+    uses ``strpos`` on ``sgaa_human_text_key``.  Both fold NULL to ''.
+    """
+    expression = _allowed(expression, _HUMAN_TEXT_CONTAINS_EXPRESSIONS, "human_text_contains")
+    if _is_postgres(connection):
+        return f"strpos({_PG_HUMAN_TEXT_KEY}({expression}), ?) > 0"
+    return f"INSTR(PTBR_FOLD({expression}), ?) > 0"
+
+
+def ascii_nocase_order(expression: str, *, connection) -> str:
+    """ORDER BY term equivalent to SQLite ``COLLATE NOCASE``.
+
+    NOCASE folds ASCII A-Z only and compares bytes; PostgreSQL reproduces it
+    with an explicit A-Z translation under ``"C"`` (never Unicode folding or
+    ``lower()``) and SQLite's NULL placement.
+    """
+    expression = _allowed(expression, _ASCII_NOCASE_EXPRESSIONS, "ascii_nocase_order")
+    if _is_postgres(connection):
+        return _pg_text_sort_key(
+            expression, f"translate({expression}, '{_ASCII_UPPER}', '{_ASCII_LOWER}')"
+        )
+    return f"{expression} COLLATE NOCASE"
+
+
+def ascii_ci_like(expression: str, *, connection) -> str:
+    """``<expr> LIKE ?`` with SQLite's default LIKE semantics.
+
+    Exactly one ``?`` (the caller's pattern; ``%``/``_`` stay wildcards).
+    SQLite LIKE folds ASCII case only and has no escape character.  PostgreSQL
+    LIKE is case-sensitive and escapes with ``\\`` by default, so both sides
+    are ASCII-translated and ``ESCAPE ''`` disables escaping (a trailing
+    backslash never raises SQLSTATE 22025).
+    """
+    expression = _allowed(expression, _ASCII_CI_LIKE_EXPRESSIONS, "ascii_ci_like")
+    if _is_postgres(connection):
+        operand = _ASCII_CI_LIKE_EXPRESSIONS[expression]
+        return (
+            f"translate({operand}, '{_ASCII_UPPER}', '{_ASCII_LOWER}') "
+            f"LIKE translate(?, '{_ASCII_UPPER}', '{_ASCII_LOWER}') ESCAPE ''"
+        )
+    return f"{expression} LIKE ?"
+
+
 __all__ = [
+    "ascii_ci_like",
+    "ascii_nocase_order",
     "current_utc_text",
     "date_compare",
     "datetime_before_now_days",
     "datetime_order",
     "fetch_current_utc_text",
     "format_date_ptbr",
+    "human_text_contains",
+    "human_text_order",
     "json_text",
     "newline",
 ]

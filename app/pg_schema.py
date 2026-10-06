@@ -53,6 +53,8 @@ import os
 import re
 import sys
 
+from app import human_text_fold
+
 PG_SCHEMA_EPOCH = "prod-1"
 PG_SCHEMA_VERSION = 12
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
@@ -64,12 +66,17 @@ PG_UTC_NOW_FUNCTION = "sgaa_utcnow_text"
 PG_DATETIME_VALID_FUNCTION = "sgaa_datetime_text_valid"
 PG_JSON_VALID_FUNCTION = "sgaa_json_is_valid"
 PG_JSON_OBJECT_FUNCTION = "sgaa_json_is_object"
+#: U5-D human-text key (``app.text.human_text_key``), built from the frozen
+#: ``app.human_text_fold`` mapping.  Needs ``normalize()``, hence UTF8.
+PG_HUMAN_TEXT_KEY_FUNCTION = "sgaa_human_text_key"
+PG_REQUIRED_SERVER_ENCODING = "UTF8"
 
 PG_HELPERS = (
     PG_UTC_NOW_FUNCTION,
     PG_DATETIME_VALID_FUNCTION,
     PG_JSON_VALID_FUNCTION,
     PG_JSON_OBJECT_FUNCTION,
+    PG_HUMAN_TEXT_KEY_FUNCTION,
 )
 
 
@@ -1701,6 +1708,11 @@ def pg_contract_payload():
         "epoch": PG_SCHEMA_EPOCH,
         "version": PG_SCHEMA_VERSION,
         "helpers": list(PG_HELPERS),
+        "human_text_fold": {
+            "unicode_version": human_text_fold.UNICODE_VERSION,
+            "mapping_sha256": human_text_fold.MAPPING_SHA256,
+        },
+        "server_encoding": PG_REQUIRED_SERVER_ENCODING,
         "business_rule_sqlstate": PG_BUSINESS_RULE_SQLSTATE,
         "tables": {
             table: {
@@ -1965,6 +1977,7 @@ BEGIN
 END;
 $fn$
 """,
+    human_text_fold.pg_function_sql(PG_HUMAN_TEXT_KEY_FUNCTION),
 )
 
 
@@ -1996,6 +2009,22 @@ PG_SCHEMA_SQL_TEXT = "\n".join(PG_SCHEMA_STATEMENTS)
 def _fetch(connection, sql):
     cursor = connection.execute(sql)
     return [tuple(row) for row in cursor.fetchall()]
+
+
+def _require_server_encoding(connection):
+    """Fail fast unless the server encoding is UTF8.
+
+    ``sgaa_human_text_key`` relies on ``normalize()`` and on Unicode escapes,
+    both of which require a UTF8 server; nothing else in the contract is
+    meaningful without it.
+    """
+    rows = _fetch(connection, "SELECT current_setting('server_encoding')")
+    encoding = str(rows[0][0]) if rows else None
+    if encoding != PG_REQUIRED_SERVER_ENCODING:
+        raise PostgresSchemaError(
+            f"PostgreSQL server_encoding must be {PG_REQUIRED_SERVER_ENCODING!r}, "
+            f"found {encoding!r}"
+        )
 
 
 def _current_schema(connection):
@@ -2253,8 +2282,10 @@ def validate_pg_schema(connection):
     Returns a summary dict.  Raises :class:`PostgresSchemaError` on the first
     material divergence (missing/extra table, column, constraint, index,
     trigger, wrong FK action, wrong identity or wrong ``pg_schema_meta``
-    epoch/version/digest).  Executes SELECT statements only.
+    epoch/version/digest).  Executes SELECT statements only.  The UTF8
+    server-encoding precondition is checked first.
     """
+    _require_server_encoding(connection)
     schema = _current_schema(connection)
     actual_tables = {
         str(row[0])
@@ -2634,6 +2665,7 @@ def provision_pg_schema(connection):
     anything else fails closed with :class:`PostgresSchemaIncompatibleError`
     and is never dropped, altered or repaired.
     """
+    _require_server_encoding(connection)
     relations = _schema_relation_names(connection)
     functions = _schema_function_names(connection)
     if relations or functions:
