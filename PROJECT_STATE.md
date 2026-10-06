@@ -111,6 +111,55 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## PostgreSQL-readiness U5-E (unsupported SQLite maintenance boundary) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`8719957da26836e893e2ea7152fb8e01179758d4`. U5-A..U5-D are unchanged and not
+reopened. No PostgreSQL-native backup/restore was added.
+
+* Purpose: under a configured PostgreSQL backend the SQLite file backup/restore
+  subsystem silently snapshotted, uploaded and "restored" a stale `database.db`
+  and reported success. It now refuses before any side effect.
+* Single owner: `app/backup/capability.py` (`sqlite_maintenance_supported`,
+  `require_sqlite_maintenance_backend`, `SQLiteMaintenanceUnsupported`, which
+  is not a `RuntimeError`/`OSError`). It reads `app.db.database_backend()` at
+  call time and opens no connection. No other backup module reads
+  `DATABASE_URL`, `os.environ`, the file header or `psycopg`.
+* Refusals under PostgreSQL, before any `sqlite3.connect`, snapshot, digest,
+  ZIP, upload, restore validation/extraction, `os.replace`, `init_db`, scheduler
+  state or success: manual backup, both restore routes and the Google
+  Drive/OneDrive database uploads redirect with one warning
+  (`msg_a3d2097f6be0d8a4`, catalog ledger +1, now 581); `run_backup_cycle`,
+  `_maybe_sync_database_snapshot`, `run_automatic_cycle` and
+  `_restore_database_from_source` raise the domain refusal; `python -m
+  app.backup.sync [--scheduled]` exits `4` (`EXIT_UNSUPPORTED_BACKEND`).
+  Defence in depth: the SQLite-file owners in `app/db_maintenance.py` and
+  `app/services/backup_service.py` check the same owner first. Routes, RBAC and
+  decorators are unchanged; the admin page shows a PostgreSQL notice.
+* Settings: connection-less fallbacks use the active backend's context
+  connection on PostgreSQL (borrowed, never closed there) instead of the stale
+  file, so download/delete of existing artifacts stay available. SQLite
+  behaviour is unchanged.
+* Evidence under TEP (no full suite): T1 U5-E module 22 passed; T2 12 backup
+  owner files 189 passed + 3 deterministic pin failures (UT-8 ownership set,
+  catalog ledger), corrected test-only, 39 passed; T3 30 mechanically selected
+  files 713 passed + 1 ledger-index pin, corrected, 10/10; T4 (connection
+  ownership, app→main edges, residual ownership, preflight, FC13) 180 passed.
+  Delta-qualified: corrections were test/governance-only. T5 not triggered.
+* REAL-PG EVIDENCE: ABSENT (global cutover debt; not required for this
+  refusal boundary).
+* Next: R3 — `admin_acesso_salvar` binds an untyped NULL in `? IS NULL`
+  (PostgreSQL 42P18), the next recommended micro-unit. R4 — SQLite→PostgreSQL
+  data transport plus identity/sequence advancement: CONDITIONAL_CUTOVER_BLOCKER
+  pending an explicit decision that current SQLite data must be carried.
+* Future hardening (non-material): `_distribute_snapshot` has no local guard
+  (all callers are guarded); under PostgreSQL the page may still report the
+  Windows automatic-backup task as active although execution refuses; the
+  PostgreSQL settings fallback keeps an irrelevant `sqlite3.OperationalError`
+  branch; the U5-E tests do not explicitly prove the borrowed `g.db` stays open;
+  the `app.backup` package placement forces lazy imports from
+  `app/db_maintenance.py` and `app/services/backup_service.py`.
+
 ## PostgreSQL-readiness U5-D (PTBR / human-text portability) — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent

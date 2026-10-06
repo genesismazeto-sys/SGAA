@@ -76,8 +76,20 @@ def _validate_created_zip(zip_path: str, *, expected_member: str, source_file_pa
     }
 
 
+def _require_sqlite_file_maintenance() -> None:
+    """U5-E: packaging/validating a SQLite file exists only for a SQLite backend.
+
+    Delegates to the single capability owner (imported lazily: the ``app.backup``
+    package import chain is heavier than this service needs at import time).
+    """
+    from app.backup.capability import require_sqlite_maintenance_backend
+
+    require_sqlite_maintenance_backend()
+
+
 def create_sqlite_backup_zip(source_db_path: str) -> dict[str, object]:
     """Create a consistent SQLite backup, compress it, and validate the ZIP."""
+    _require_sqlite_file_maintenance()
     if not source_db_path or not os.path.exists(source_db_path):
         raise BackupServiceError("Banco SQLite não encontrado para gerar backup.")
 
@@ -168,6 +180,7 @@ def _validate_manifest_database_consistency(
 
 
 def _validate_restore_database_file(database_path: str) -> dict[str, object]:
+    _require_sqlite_file_maintenance()
     if not database_path or not os.path.exists(database_path):
         raise BackupServiceError("Arquivo SQLite do backup não foi encontrado.")
 
@@ -225,6 +238,7 @@ def extract_restore_database_artifact(
     *,
     work_dir: str | None = None,
 ) -> dict[str, object]:
+    _require_sqlite_file_maintenance()
     if not source_path or not os.path.exists(source_path):
         raise BackupServiceError("Arquivo enviado para restauração não foi encontrado.")
 

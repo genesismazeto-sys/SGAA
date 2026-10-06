@@ -580,6 +580,10 @@
   <header>
     <h1 class="main-title">Banco de dados</h1>
     <p class="db-note">O sistema mantém o schema versionado para upgrades futuros e gera snapshots consistentes do SQLite. A restauração cobre os dados básicos do banco; anexos enviados ficam fora desse escopo.</p>
+    {# U5-E: SQLite file backup/restore is unavailable for a PostgreSQL backend. #}
+    {% if sqlite_maintenance_supported is sameas false %}
+      <p class="db-cloud-store-warning" role="status">O banco de dados configurado é PostgreSQL: backup, restauração e envio do arquivo SQLite estão indisponíveis e não são executados por esta tela.</p>
+    {% endif %}
   </header>
 
   <div class="db-admin-top">

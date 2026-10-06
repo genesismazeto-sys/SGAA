@@ -238,7 +238,19 @@ def _database_change_signature(database_path: str) -> str:
     return "|".join(parts)
 
 
+def _require_sqlite_file_maintenance() -> None:
+    """U5-E: file snapshot/restore exists only for a configured SQLite backend.
+
+    Delegates to the single capability owner; imported lazily because importing
+    the ``app.backup`` package reaches this module.
+    """
+    from app.backup.capability import require_sqlite_maintenance_backend
+
+    require_sqlite_maintenance_backend()
+
+
 def _snapshot_database(source_db_path: str, destination_db_path: str) -> None:
+    _require_sqlite_file_maintenance()
     os.makedirs(os.path.dirname(destination_db_path), exist_ok=True)
     source_conn = sqlite3.connect(source_db_path)
     target_conn = sqlite3.connect(destination_db_path)
@@ -269,6 +281,7 @@ def create_database_snapshot(
     logger=None,
     extra_metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    _require_sqlite_file_maintenance()
     verified_schema_status = _read_backup_schema_status(source_db_path)
     if schema_status:
         if (
@@ -464,6 +477,7 @@ def maybe_sync_database_to_cloud(
     force: bool = False,
     logger=None,
 ) -> dict[str, object]:
+    _require_sqlite_file_maintenance()
     if not cloud_root:
         return {"ok": False, "skipped": True, "reason": "cloud_backup_disabled"}
 
@@ -581,6 +595,7 @@ def apply_retention_policy(
 
 
 def restore_database_snapshot(source_snapshot_path: str, target_db_path: str, logger=None) -> None:
+    _require_sqlite_file_maintenance()
     _read_backup_schema_status(source_snapshot_path)
     temp_dir = os.path.dirname(target_db_path) or os.getcwd()
     temp_handle = tempfile.NamedTemporaryFile(prefix="restore-", suffix=".db", dir=temp_dir, delete=False)

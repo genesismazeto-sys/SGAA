@@ -201,6 +201,15 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "consumer. 0 additions, 1 retirement",
         -1,
     ),
+    (
+        "U5-E unsupported maintenance boundary: with PostgreSQL configured, "
+        "the manual backup, both restore routes and the Google Drive/OneDrive "
+        "database uploads refuse before touching the SQLite file, flashing "
+        "'Backup e restauração do banco por arquivo SQLite não "
+        "estão disponíveis: o banco de dados configurado é "
+        "PostgreSQL.' (msg_a3d2097f6be0d8a4). 1 addition, 0 retirements",
+        1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -243,9 +252,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # UI-C14 adds the 403 fallback, to 583; UI-C06 retires "Voltar", to 582;
 # UI-C13 adds the backup-lock busy message, to 583; AVD1 swaps three version-
 # delete refusals for one that names the real dependency, to 581; U5-B retires
-# the unreachable atividade_versao.grupo classifier message, to 580.
+# the unreachable atividade_versao.grupo classifier message, to 580; U5-E adds
+# the SQLite-maintenance-unsupported refusal, to 581.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "fcffb13bcd64274e7db5025dc14c5edbfecf23c1f0c7312b3fdd48269721ec13"
+    "382674875fe1b75f9130f0a7c45bc039cd046170080b31b60382533897ec2686"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -417,6 +427,15 @@ U5B_RUNTIME_DIALECT_RETIRED_KEYS = frozenset(
         "msg_51d35cf7e0da9f99",  # Erro: selecione um numero de grupo valido.
     }
 )
+# U5-E unsupported maintenance boundary.  Purely additive (+1): one refusal
+# shared by every SQLite file backup/restore route under PostgreSQL.  Removing
+# exactly this key from the live catalog reproduces the U5-B digest.
+U5E_MAINTENANCE_BOUNDARY_KEYS = frozenset(
+    {
+        "msg_a3d2097f6be0d8a4",  # Backup e restauracao do banco por arquivo SQLite nao estao disponiveis...
+    }
+)
+U5E_MAINTENANCE_BOUNDARY_RETIRED_KEYS = frozenset()
 
 
 def catalog_keys_digest(keys) -> str:
@@ -756,12 +775,23 @@ def catalog_keys_before_version_delete(keys) -> set[str]:
     )
 
 
+def catalog_keys_before_u5e_maintenance_boundary(keys) -> set[str]:
+    """Undo the U5-E term: drop the SQLite-maintenance-unsupported key.
+
+    U5-E is the newest term, so a reconstruction walks back through this first,
+    then U5-B and every older term.
+    """
+    return (set(keys) - set(U5E_MAINTENANCE_BOUNDARY_KEYS)) | set(
+        U5E_MAINTENANCE_BOUNDARY_RETIRED_KEYS
+    )
+
+
 def catalog_keys_before_u5b_runtime_dialect(keys) -> set[str]:
     """Undo the U5-B term: put the retired grupo-classifier key back.
 
-    U5-B is the newest term, so a reconstruction walks back through this first,
-    then AVD1, UI-C13, UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the
-    password foundation.
+    A reconstruction walks back through U5-E first, then this, then AVD1,
+    UI-C13, UI-C06, UI-C14, UI-C11, UI-B19, CP1, RA1, AR1 and the password
+    foundation.
     """
     return set(keys) | set(U5B_RUNTIME_DIALECT_RETIRED_KEYS)
 

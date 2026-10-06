@@ -33,6 +33,10 @@ from flask import current_app, g
 import app.cloud_drives as _cd
 import app.cloud_connections as _cloud_connections
 from app import db as _app_db
+from app.backup.capability import (
+    require_sqlite_maintenance_backend,
+    sqlite_maintenance_supported,
+)
 from app.backup_settings import (
     _apply_backup_settings_to_app,
     _backup_settings_defaults,
@@ -57,12 +61,25 @@ logger = logging.getLogger("main")
 # ===================== Configurações de runtime =====================
 
 
+def _fallback_settings_connection():
+    """Conexão para ler configurações quando o chamador não passou uma.
+
+    SQLite mantém o comportamento histórico: uma conexão temporária ao arquivo
+    (a fechar pelo chamador). Em outro backend (U5-E) o arquivo SQLite é dado
+    obsoleto e nunca é aberto: usa-se a conexão canônica do contexto ativo,
+    que pertence ao contexto e não é fechada aqui.
+    """
+    if sqlite_maintenance_supported():
+        temp_conn = sqlite3.connect(_app_db.DATABASE)
+        temp_conn.row_factory = sqlite3.Row
+        return temp_conn, temp_conn
+    return _app_db.get_db_connection(), None
+
+
 def _get_runtime_backup_settings(conn=None):
     temp_conn = None
     if conn is None:
-        temp_conn = sqlite3.connect(_app_db.DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
+        conn, temp_conn = _fallback_settings_connection()
     try:
         try:
             settings = get_backup_settings(conn)
@@ -138,9 +155,7 @@ def _build_retention_policy_windows(settings: dict[str, str]) -> list[dict]:
 def _run_retention_cleanup(conn=None) -> dict:
     temp_conn = None
     if conn is None:
-        temp_conn = sqlite3.connect(_app_db.DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
+        conn, temp_conn = _fallback_settings_connection()
     try:
         settings = _get_runtime_backup_settings(conn)
         retention_settings = get_retention_policy(conn)
@@ -307,9 +322,7 @@ def _maybe_upload_to_drives(snapshot_path: str, conn=None) -> dict[str, dict[str
     outcomes: dict[str, dict[str, str]] = {}
     temp_conn = None
     if conn is None:
-        temp_conn = sqlite3.connect(_app_db.DATABASE)
-        temp_conn.row_factory = sqlite3.Row
-        conn = temp_conn
+        conn, temp_conn = _fallback_settings_connection()
     try:
         drive_settings = get_drive_settings(conn)
         retention_settings = get_retention_policy(conn)
@@ -395,6 +408,7 @@ def _upload_snapshot_if_external_enabled(snapshot: dict[str, object], settings: 
 
 
 def _maybe_sync_database_snapshot(force: bool = False, conn=None):
+    require_sqlite_maintenance_backend()
     settings = _get_runtime_backup_settings(conn)
     cloud_root = settings.get("cloud_backup_dir") or current_app.config.get("CLOUD_BACKUP_DIR")
     if not cloud_root:
@@ -486,7 +500,12 @@ def run_backup_cycle(*, force: bool = False, conn=None) -> dict:
     "sem alterações"/intervalo mínimo. O upload ao servidor externo **não** faz
     parte deste ciclo: continua sendo um primitivo composto pela rota manual de
     "Banco de Dados".
+
+    U5-E: com backend configurado diferente de SQLite levanta
+    :class:`app.backup.capability.SQLiteMaintenanceUnsupported` antes de abrir
+    qualquer conexão, criar snapshot ou enviar algo.
     """
+    require_sqlite_maintenance_backend()
     temp_conn = None
     if conn is None:
         temp_conn = sqlite3.connect(_app_db.DATABASE)

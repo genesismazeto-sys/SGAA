@@ -923,7 +923,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # backup-lock busy refusal, for +1.  AVD1 is the nineteenth: one version-
     # delete refusal naming the real dependency replaces three, for -2.  U5-B
     # is the twentieth: the unreachable atividade_versao.grupo classifier
-    # message retires, for -1.
+    # message retires, for -1.  U5-E is the twenty-first: the SQLite-
+    # maintenance-unsupported refusal under PostgreSQL, for +1.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -945,7 +946,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         1,
         -2,
         -1,
-    ], "the named catalog delta ledger must stay exactly these twenty terms"
+        1,
+    ], "the named catalog delta ledger must stay exactly these twenty-one terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -954,13 +956,14 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 580
+    assert governance.CANONICAL_CATALOG_COUNT == 581
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
     ) - len(
+        governance.catalog_keys_before_u5e_maintenance_boundary(
         governance.catalog_keys_before_u5b_runtime_dialect(
             governance.catalog_keys_before_password_foundation(
                 governance.catalog_keys_before_access_repair(
@@ -980,6 +983,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
                     )
                 )
             )
+        )
         )
         )
         - set(governance.TMA1_MATRIX_AUTHORITY_KEYS)

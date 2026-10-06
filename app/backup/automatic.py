@@ -32,6 +32,7 @@ from flask import current_app
 
 from app import db as _app_db
 from app.backup import orchestrator as _orchestrator
+from app.backup.capability import require_sqlite_maintenance_backend
 from app.backup.lock import BackupCycleBusy, backup_cycle_lock
 
 logger = logging.getLogger("main")
@@ -212,7 +213,12 @@ def run_automatic_cycle(*, trigger: str, now: datetime.datetime | None = None) -
     como antes. Exige application context. Retorna ``{"ran": bool, "reason":
     str, "result": dict | None}``; levanta :class:`BackupCycleBusy` se outro
     ciclo estiver em andamento, e deixa falhas do ciclo propagarem.
+
+    U5-E: com backend configurado diferente de SQLite levanta
+    :class:`app.backup.capability.SQLiteMaintenanceUnsupported` antes de ler
+    configurações, calcular a impressão digital do arquivo ou gravar estado.
     """
+    require_sqlite_maintenance_backend()
     moment = now or _utc_now()
     database_path = _app_db.DATABASE
     settings = _orchestrator._get_runtime_backup_settings()

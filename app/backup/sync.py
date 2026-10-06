@@ -28,6 +28,9 @@ Códigos de saída (determinísticos):
          (inclui não conseguir criar o snapshot local)
     2 -- falha ao inicializar a aplicação
     3 -- sem --scheduled: outro ciclo de backup já está em andamento
+    4 -- backend de banco configurado não suporta backup por arquivo SQLite
+         (U5-E: PostgreSQL); nada foi lido, copiado ou enviado, com ou sem
+         --scheduled
 
 Falhas de destino (pasta em nuvem, Google Drive, OneDrive) permanecem
 *best-effort*: são independentes entre si, aparecem no log por destino e, por
@@ -40,6 +43,7 @@ import logging
 
 from app import create_app
 from app.backup.automatic import configure_run_log, run_automatic_cycle
+from app.backup.capability import SQLiteMaintenanceUnsupported
 from app.backup.lock import BackupCycleBusy
 
 
@@ -49,6 +53,7 @@ EXIT_OK = 0
 EXIT_RUNTIME_FAILURE = 1
 EXIT_STARTUP_FAILURE = 2
 EXIT_BUSY = 3
+EXIT_UNSUPPORTED_BACKEND = 4
 
 _LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
@@ -93,6 +98,9 @@ def main(argv=None) -> int:
     try:
         with flask_app.app_context():
             outcome = run_automatic_cycle(trigger=trigger)
+    except SQLiteMaintenanceUnsupported as exc:
+        logger.error("Backup automático indisponível (gatilho=%s): %s", trigger, exc)
+        return EXIT_UNSUPPORTED_BACKEND
     except BackupCycleBusy:
         logger.info("Backup automático: outro ciclo de backup está em andamento; nada foi feito (gatilho=%s).", trigger)
         return EXIT_OK if args.scheduled else EXIT_BUSY

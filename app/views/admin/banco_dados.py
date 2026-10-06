@@ -44,6 +44,11 @@ from app.cloud_config import (
 )
 from app.auth import admin_required
 from app.backup import orchestrator as _backup_orchestrator
+from app.backup.capability import (
+    SQLiteMaintenanceUnsupported,
+    require_sqlite_maintenance_backend,
+    sqlite_maintenance_supported,
+)
 from app.backup.lock import BackupCycleBusy, backup_cycle_lock
 from app.backup import (
     _RETENTION_WINDOWS_META,
@@ -413,6 +418,25 @@ def _onedrive_mail_capability(conn) -> dict:
     }
 
 
+def _refuse_unsupported_sqlite_maintenance():
+    """U5-E: redirect with a notice when SQLite file maintenance is unsupported.
+
+    Returns ``None`` when the configured backend is SQLite (the route proceeds
+    unchanged); otherwise the refusal happens before any connection, snapshot,
+    package, upload or restore.
+    """
+    try:
+        require_sqlite_maintenance_backend()
+    except SQLiteMaintenanceUnsupported:
+        flash(
+            "Backup e restauração do banco por arquivo SQLite não estão disponíveis: "
+            "o banco de dados configurado é PostgreSQL.",
+            "warning",
+        )
+        return redirect(url_for("admin_banco_dados"))
+    return None
+
+
 def _build_database_admin_context(conn):
     settings = _get_runtime_backup_settings(conn)
     oauth_context = _build_oauth_redirect_context()
@@ -532,6 +556,8 @@ def _build_database_admin_context(conn):
 
     automatic_backup_status = _task_scheduler.automatic_backup_status(settings, app_db.DATABASE)
     return {
+        # U5-E: SQLite file backup/restore is unavailable for other backends.
+        "sqlite_maintenance_supported": sqlite_maintenance_supported(),
         "schema_status": schema_status,
         "backups": backups,
         "backup_settings": settings,
@@ -782,6 +808,9 @@ def google_callback():
 
 @admin_required
 def admin_backup_google_upload():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     conn = get_db_connection()
     google_account = _get_active_cloud_account(conn, "google")
     if not google_account:
@@ -1100,6 +1129,9 @@ def onedrive_callback():
 
 @admin_required
 def admin_backup_onedrive_upload():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     conn = get_db_connection()
     onedrive_account = _get_active_cloud_account(conn, "onedrive")
     if not onedrive_account:
@@ -1677,6 +1709,9 @@ def admin_banco_dados_drive_settings():
 
 @admin_required
 def admin_banco_dados_backup():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     conn = get_db_connection()
     context = _build_database_admin_context(conn)
     settings = context["backup_settings"]
@@ -1801,6 +1836,7 @@ def _restore_database_from_source(
     source_upload_name: str = "",
     source_kind: str = "snapshot",
 ) -> None:
+    require_sqlite_maintenance_backend()
     runtime_settings = _get_runtime_backup_settings()
     extra_metadata = {
         "requested_by": session.get("user_id"),
@@ -1863,6 +1899,9 @@ def _restore_database_from_source(
 
 @admin_required
 def admin_banco_dados_restaurar():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     manifest_path = _resolve_allowed_backup_manifest_path(request.form.get("manifest_path") or "")
     if not manifest_path or not os.path.exists(manifest_path):
         flash("Backup selecionado é inválido ou não está mais disponível.", "error")
@@ -1903,6 +1942,9 @@ def admin_banco_dados_restaurar():
 
 @admin_required
 def admin_banco_dados_restaurar_upload():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     request.max_content_length = current_app.config.get("BACKUP_RESTORE_MAX_CONTENT_LENGTH")
     backup_file = request.files.get("backup_file")
     if not backup_file or not getattr(backup_file, "filename", ""):

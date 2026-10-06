@@ -107,6 +107,15 @@ HELPER_NAMES = (
     "_restore_database_from_source",
 )
 
+#: Helpers added to the module after UT-8.  They are owned here but were never
+#: moved from main, so they are NOT part of the main compatibility facade
+#: (MOVED_SYMBOLS); they only widen the exact top-level ownership set.
+POST_UT8_HELPER_NAMES = (
+    # U5-E: refuse SQLite file backup/restore when the configured backend is
+    # not SQLite (delegates to app.backup.capability).
+    "_refuse_unsupported_sqlite_maintenance",
+)
+
 CONSTANT_NAMES = (
     "_RETENTION_INTERVAL_OPTIONS",
     "_CLOUD_FOLDER_PROVIDERS",
@@ -462,10 +471,12 @@ def test_red_b_target_owns_exact_46_symbol_set_with_categories():
     top_level = _top_level_defs(source)
     assigned = _top_level_assignments(source)
 
-    assert top_level == set(ROUTE_NAMES) | set(HELPER_NAMES), (
-        f"target top-level functions must be exactly the 44 moved callables; "
-        f"missing={sorted((set(ROUTE_NAMES) | set(HELPER_NAMES)) - top_level)} "
-        f"extra={sorted(top_level - (set(ROUTE_NAMES) | set(HELPER_NAMES)))}"
+    owned = set(ROUTE_NAMES) | set(HELPER_NAMES) | set(POST_UT8_HELPER_NAMES)
+    assert top_level == owned, (
+        f"target top-level functions must be exactly the 44 moved callables "
+        f"plus the named post-UT-8 helpers; "
+        f"missing={sorted(owned - top_level)} "
+        f"extra={sorted(top_level - owned)}"
     )
     assert set(CONSTANT_NAMES) <= assigned, (
         f"target must own constants {set(CONSTANT_NAMES)}; missing="
