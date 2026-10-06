@@ -1,12 +1,29 @@
 # SGAA-EJ — PROTOCOLO DE EXECUÇÃO DO REFACTOR (FASE FINAL)
 
-**Versão:** 1.4 — 2026-08-10
+**Versão:** 1.5 — 2026-10-06
 **Autoridade:** substitui a governança por fase (contrato + closeout por unidade) para todo o
 trabalho remanescente. Não revoga contratos fechados (B1–B7-P permanecem como histórico).
+**Seleção de testes (desde v1.5):** para todo trabalho posterior à UT-17, a autoridade é
+`docs/TEST_EXECUTION_POLICY.md` (TEP), não a §7 passo 7 deste arquivo.
 **Condutor:** ChatGPT / GPT-5.6 Sol (sem acesso direto ao código; lê o repositório via GitHub após push).
 **Executores:** GPT-5.6 Sol, Claude Opus 5, Claude Sonnet 5, DeepSeek V4 Pro, DeepSeek V4 Flash.
 
 ### Changelog
+
+**1.5 — 2026-10-06 — TEST EXECUTION GOVERNANCE ONLY (Fase G1, somente documentação).**
+Autorizada pelo humano. Não altera escopo de UT, sequência, arquitetura, invariantes (§4),
+regras de estrutura (§5), roteamento de modelos (§6), a tabela de aposentadoria (§8),
+critérios de parada (§3) nem nenhum registro histórico. Adota
+`docs/TEST_EXECUTION_POLICY.md` (TEP) como autoridade transversal canônica de seleção de
+testes, gatilhos de suíte completa, qualificação por delta, invalidadores de evidência,
+classificação de falhas / rerun e evidência PostgreSQL para todo trabalho posterior à UT-17.
+Consequências: (a) a §7 passo 7 ("SUÍTE COMPLETA … ~330s, 0 failed / 0 errors" por unidade)
+e a estimativa de ~330s passam a ser **requisitos históricos** do refactor estrutural
+(UT-1…UT-17) e não governam trabalho novo; (b) execuções repetidas de "suíte canônica /
+fresh final full" registradas na §11 e em blocos históricos permanecem como **registro
+histórico**, não como precedente; (c) o Critério 7 da §3 permanece como critério histórico
+já qualificado do PLATEAU / REFACTOR ESTRUTURAL COMPLETO. Contratos de fase congelados
+continuam autoritativos onde prescrevem explicitamente gates para o próprio escopo.
 
 **1.4 — 2026-08-10 — FINAL ROADMAP RECONCILIATION ONLY.** Não altera escopo de
 produção, comportamento de negócio, database/schema, invariantes, Criterion 4, model-routing
@@ -599,6 +616,12 @@ O repositório contém `database.db` com dados reais de alunos e `documentos_alu
 ```
 
 Passo 6 é read-only; o revisor não edita, emite veredito. Defeito material volta ao passo 4.
+
+> **v1.5 — escopo histórico do passo 7.** O passo 7 (suíte completa por unidade, ~330s) e o
+> passo 5 ("suíte focada") governaram as UT-1…UT-17 e permanecem como registro histórico.
+> Para trabalho posterior à UT-17, a seleção de testes, a suíte completa (apenas por gatilho
+> ou marco), a qualificação por delta e a política de rerun seguem
+> `docs/TEST_EXECUTION_POLICY.md`. Nenhuma evidência histórica é reclassificada.
 
 Mensagem de commit:
 ```
