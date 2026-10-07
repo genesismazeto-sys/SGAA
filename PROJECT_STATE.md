@@ -111,6 +111,55 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Real-PostgreSQL qualification — E-PG2 P1–P8 concurrency — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`f6647216dbca8ff9fcd81e09c8edce62e188402c`. Test-only: new module
+`tests/test_pg_readiness_epg2_concurrency.py`; no production change; E-PG1 and
+U5-A..U5-F are not reopened.
+
+* Environment: the same local PostgreSQL 15.19 (WSL2 Ubuntu,
+  `127.0.0.1:54315`, role `sgaa_qual`), one disposable run-owned database per
+  node. E-PG2 P1–P8 GREEN: 12 passed / 0 skipped / 0 failed; independent
+  review ACCEPT.
+* P1a: issuer holds the account, consumer waits on `usuarios FOR UPDATE`
+  before any token lock, then refuses the superseded token cleanly. P1b:
+  consumer holds account then token, issuer waits on the account before
+  touching `senha_tokens`; both complete. P2: consume × consume of one token —
+  exactly one success, the loser returns `None`. P3a: `lock_activity_base`
+  (FOR NO KEY UPDATE) conflicts with itself. P3b: it stays compatible with the
+  FK KEY SHARE check (real version insert commits while held). P3c: FOR UPDATE
+  control blocks that insert. P4: create × create on one base — contiguous
+  vN+1/vN+2 (exact-version sibling lineage, current contract). P5: delete ×
+  latest-create — creator sees the post-commit state after the lock wait
+  (fresh READ COMMITTED, even with a REPEATABLE READ database default). P6a/
+  P6b: delete × delete of different / same version — serialized, re-anchored,
+  contiguous; same-version loser refused (`wrong_base_or_version`). P7: real
+  `/admin/atividades/importar/confirmar` with opposite payload orders locks
+  bases in one ascending order; no 40P01. P8: different bases do not
+  serialize.
+* Determinism: blocks are proven by `pg_stat_activity.wait_event_type =
+  'Lock'` with the holder in `pg_blocking_pids()`, `pg_locks`, and NOWAIT /
+  SQLSTATE 55P03 probes; non-blocks by completion while the other transaction
+  is still open; bounded thread/observer deadlines and `lock_timeout` /
+  `statement_timeout`. No assertion depends on sleep length, elapsed time or
+  scheduling luck.
+* Harness history (HARNESS_FIX_VALID, no production implication): libpq
+  `options` URL encoding corrected; teardown uses plain `DROP DATABASE` first,
+  FORCE only on ObjectInUse (autovacuum workers block FORCE for a non-superuser).
+* Real-PG evidence to date: 96 green nodes (E-PG1 84 + E-PG2 12), 0 skipped.
+  This does NOT complete PostgreSQL qualification; not
+  READY_FOR_PRODUCTION_INTEGRATION.
+* Still open: broad real-PG route smoke; R4 A/A'/B decision and R5 unchanged;
+  PostgreSQL-native backup required BEFORE_FIRST_REAL_DATA.
+* Review notes (non-material, not actioned): the P1b docstring slightly
+  overstates the exact reversed-order failure shape (the test still catches
+  it); P4 pins the current sibling-lineage policy, whose future is outside
+  E-PG2; the FORCE fallback could terminate an untracked connection inside a
+  run-owned database; `env.production()` swaps global `DATABASE_URL` and is
+  safe only because route workers never overlap that swap.
+* TEP: E-PG2 lane only; T5 NOT_TRIGGERED; no SQLite suite run.
+
 ## Real-PostgreSQL qualification — E-PG1 M1–M9 — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
