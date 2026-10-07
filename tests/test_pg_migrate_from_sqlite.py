@@ -849,7 +849,9 @@ def test_actual_source_rehearsal_cutover_chain(tmp_path, target, monkeypatch, ca
             columns = ", ".join(pathb._columns(table))
             expected = pathb.normalize_rows(table, source_rows[table])
             actual = pathb.normalize_rows(table, observer.execute(f"SELECT {columns} FROM {table}").fetchall())
-            assert pathb.compare_rows(table, expected, actual) == [], table
+            # Count only: assertion introspection must never render row keys or values.
+            differences = len(pathb.compare_rows(table, expected, actual))
+            assert differences == 0, table
             evidence.append(
                 f"independent: {table} source={len(expected)} target={counts[table]} "
                 f"sha256={pathb.table_digest(table, actual)}"

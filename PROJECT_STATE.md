@@ -111,6 +111,87 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## PostgreSQL Layer-2 logical backup / restore — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
+
+Published by this landing commit (SHA not invented); parent
+`5e5ca2f8db4ac46b79641ced92ae21d09919d2ac`. New operator tool
+`tools/pg_backup.py` (never imported by `app/` or `main.py`; no web route),
+`docs/PG_BACKUP_RESTORE_RUNBOOK.md`, `tests/test_pg_backup_tool.py` (no
+database) and `tests/test_pg_backup_restore_real_pg.py` (real PG + native
+tools); `tests/test_pg_migrate_from_sqlite.py` closes Path-B NM1 (count-only
+assertion, no row values through pytest introspection). Independent
+adversarial review ACCEPT_PG_BACKUP_HARDENED_FOR_LANDING after targeted
+hardening (NM-A–NM-E CLOSED) and the hostaddr pin.
+
+* PostgreSQL Layer-2 logical backup/restore: IMPLEMENTED_AND_RESTORE_PROVEN on
+  local real PostgreSQL 15.19 (WSL2 `127.0.0.1:54315`, Windows native client
+  15.19, run prefix `sgaa_pgbk_test_<run>_`). Path-B open gate
+  "POSTGRESQL-NATIVE BACKUP BEFORE CUTOVER": tooling CLOSED and proven on
+  plain PG; the Supabase cross-environment proof below remains OUTSTANDING.
+* Supported commands (offline, operator-run): `python tools/pg_backup.py backup
+  --output-dir DIR --label LABEL` | `verify --manifest FILE [--restored]` |
+  `restore --manifest FILE`. Source `DATABASE_URL`, target
+  `SGAA_RESTORE_TARGET_URL`; no URL/password option, no `--force`/`--clean`.
+  Artifact set: custom-format `pg_dump --schema=public --no-owner
+  --no-privileges` archive + `.sha256` sidecar + sealed, non-sensitive manifest,
+  built under staging names and promoted without replacing, manifest last.
+* Scope: SGAA application objects in `public` only; the archive TOC must equal
+  the SGAA contract exactly (other schemas, extensions, ACL/role entries or
+  stray objects refused). Exit codes: 0 ok; 1 refused/failed with nothing
+  restored; 2 usage; 3 reconciliation required.
+* Online relational consistency: exported snapshot proven (E-PG2 node: a writer
+  committing after `pg_export_snapshot()` is in neither manifest nor archive).
+  Identity sequences are recorded as archived; all 21 identities verified after
+  restore (next id above every archived row id; clone-only allocation probes).
+* Restore target protection: only a new EMPTY plain-PG database; source
+  (cluster system identifier + name, or `DATABASE_URL` alias) and protected or
+  template targets refused; single-host routing required (no multi-host or
+  host/hostaddr/port/dbname/service query override); `pg_restore
+  --single-transaction` with a filtered TOC list (late failure proven to leave
+  the target empty); post-restore read-only verification of schema, rows and
+  digests, identities, 37 domain checks, 11 triggers and account cardinality.
+  Once `pg_restore` has committed, any verification failure, error or
+  interruption is RESTORE_VERIFY_FAILED (exit 3, target kept, no rollback
+  claim, no automatic cleanup).
+* Native `pg_restore` target transport: pinned to the numeric peer address of
+  the checked preflight connection (`PGHOSTADDR` overwritten, never
+  inherited; `PGSERVICE` refused, service variables removed; no second DNS
+  lookup), with the original hostname kept in the URI for TLS verify-full and
+  pgpass. No numeric address → TARGET_HOSTADDR_UNAVAILABLE (refused).
+  `pg_dump` unchanged (bound by the exported snapshot).
+* Secret boundary: hardened. URLs carrying a password or other secret-valued
+  libpq parameter (`password`, `sslpassword`, `oauth_client_secret`, SCRAM
+  keys; any case or encoding) are refused unread and never reach native argv or
+  output; native stderr is classified, never forwarded; usage errors never echo
+  the offending argument; credentials only via pgpass / `PGPASSWORD`.
+* Current-data recovery chain: GREEN — frozen canonical SQLite copy → Path-B
+  migration → validation → R5 admin activation/login → logical backup → fresh
+  PostgreSQL restore → post-restore validation → restored login. Canonical
+  `database.db` never opened; aggregate evidence only; artifacts deleted.
+  Reused for the final candidate by delta qualification (no backup/restore
+  data-semantics change in the hardening).
+* Final qualification: unit module 61 passed; real-PG restore-focused nodes
+  green (normal restore/verify, refusals, late-failure rollback, 3
+  post-commit verification-failure nodes, hostaddr-pin node with stale
+  inherited `PGHOSTADDR`/`PGSERVICE`). T4: IMPLICATED (`tools/`), targeted
+  guards GREEN (FC13 module + lastrowid + SQLite-connect owners + web-import
+  guard, 78 passed); pin delta qualified by inspection. T5: NOT_TRIGGERED. No
+  SQLite full suite.
+* R4: CLOSED_AND_PUBLISHED. R5: CLOSED_AND_PUBLISHED.
+* Still open: Layer-1 provider backup/PITR — PENDING PRODUCTION CONFIGURATION;
+  persistent local-upload storage — OUTSTANDING PRODUCTION BLOCKER; actual
+  Supabase PostgreSQL major — OUTSTANDING QUALIFICATION; Supabase-specific
+  EMPTY-target contract — OUTSTANDING; `SUPABASE_DATA_API_DISABLED` — REQUIRED
+  FUTURE CUTOVER INVARIANT (not yet applied); cross-environment backup/restore
+  proof on the actual Supabase project — OUTSTANDING; actual Supabase/Vercel
+  integration — OUTSTANDING.
+* Non-blocking follow-ups (not actioned): NM-F additional EMPTY strictness /
+  collation; NM-G sequence negative-test gaps and absolute dump-path note;
+  NM-H Ctrl-C during final publication can leave a manifest without its dump
+  (the verifier fails safely); NM-I pre-existing function-body validation gap; NM-J–NM-L
+  from the final independent review. All NON-BLOCKING FOLLOW-UPS.
+* NOT READY_FOR_PRODUCTION_INTEGRATION.
+
 ## Path-B SQLite → PostgreSQL cutover migration — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
 
 Published by this landing commit (SHA not invented); parent
