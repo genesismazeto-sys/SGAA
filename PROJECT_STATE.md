@@ -111,6 +111,61 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## R5 supported first/full admin bootstrap — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
+
+Published by this landing commit (SHA not invented); parent
+`2ecdcf163e8ff056f3509cb836e18ed5eddef5e4`. New production module
+`app/admin_bootstrap.py` plus `tests/test_admin_bootstrap_cli.py` and
+`tests/test_pg_readiness_r5_admin_bootstrap_real_pg.py`; no existing file's
+semantics changed. Independent review ACCEPT_R5_BOOTSTRAP_FOR_LANDING.
+
+* R4: PATH B SELECTED (full current data). This unit migrates no data.
+* R5: CLOSED. Path-B cutover gap CLOSED; greenfield/DR gap CLOSED.
+* Supported command: `python -m app.admin_bootstrap --email EMAIL [--name NAME]`
+  (offline, configured database). No password argv; `getpass` hidden prompt
+  with confirmation; refusal decided before prompting; output never carries the
+  password, hash or DB URL; no `--force`. Nonzero exit on refusal/error.
+* State matrix (decided inside one `write_transaction`; PG also takes
+  `LOCK TABLE usuarios, usuario_credenciais IN SHARE ROW EXCLUSIVE MODE`):
+  CREATE only when no full admin of any state exists; ACTIVATE in place a named
+  full admin whose credential is `pending` when no full admin is
+  login-capable. Refused: any login-capable full admin exists (`personal` or
+  applied `default`); target not a full admin (Coordenador/Consultor/aluno or an
+  override-narrowed `admin_total` — no escalation); revoked target; ambiguous
+  `LOWER(email)` match; unknown access level / missing or unknown credential;
+  pending/revoked full admin under another e-mail. "Full admin" = `tipo='admin'`
+  + canonical `admin_total` + effective scopes all `full`.
+* Owners reused: `create_usuario_with_access_level`, `set_usuario_password_hash`
+  (`personal`, `auth_version` +1, outstanding links invalidated),
+  `hash_password`, `lock_password_account`, `write_transaction`.
+* Qualification: 9 CLI/unit + 17 real-PG = 26 green targeted nodes, 0 skipped
+  (PG15 `127.0.0.1:54315`, run prefix `sgaa_r5bs_test_<run>_`, template clone
+  per node). Fresh PG: exactly one usable `admin_total`, real `POST /login` and
+  `/admin/acesso`. Path-B shape: same `usuarios.id`, no duplicate, role and FK
+  relationships preserved, login works, Coordenador still refused on
+  `/admin/acesso`. Atomicity: a test-only trigger failing the credential write
+  after the `usuarios` write leaves no partial state (create and activate).
+* Review verdicts: CLI_SECRET_HANDLING_SAFE; TOCTOU_SAFE;
+  LOCKING_STRATEGY_ACCEPTABLE; effective full-admin classification ACCEPTED;
+  `default` treated as login-capable CORRECT; concurrent bootstrap AT MOST ONE
+  WINNER; backend neutrality and error handling ACCEPTED. An existing usable
+  admin cannot be reset through bootstrap.
+* Non-material notes (not actioned): NM-1 a bootstrap racing another
+  password/account writer on the same pending admin has a narrow PG deadlock
+  window — PG aborts one side, rollback is clean; run bootstrap with
+  application traffic stopped and retry if needed. NM-2 the CLI targets the
+  configured database; without `DATABASE_URL` it targets local SQLite — the
+  cutover runbook must set/verify the PostgreSQL `DATABASE_URL` first (future
+  hardening: print non-secret backend identity before the prompt). Also:
+  creation may seed `configuracoes_acesso` via existing normalization; a created
+  e-mail is lowercased; root break-glass is not counted as a usable full admin.
+* Real-PG evidence to date: 124 green nodes (107 + R5 17).
+* Open gates: Path-B migration implementation; Path-B rehearsal/validation;
+  PostgreSQL-native backup before cutover. NOT READY_FOR_PRODUCTION_INTEGRATION.
+* TEP: targeted lanes only; T4 NOT_IMPLICATED; T5 NOT_TRIGGERED (isolated new
+  module + focused tests; no shared DB primitive, schema, seed, conftest,
+  dependency or app-wide runtime change); no SQLite full suite.
+
 ## Real-PostgreSQL qualification — broad route smoke — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
