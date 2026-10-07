@@ -73,14 +73,17 @@ SQLITE_FREE_RUNTIME_MODULES = (
 
 #: Every module allowed to open a private ``sqlite3.connect`` directly: the
 #: canonical connection owner, schema migration/bootstrap, backup/restore
-#: machinery and the restore schema-status fallback.  A request path opening
-#: its own database would be a hidden second writer.
+#: machinery, the restore schema-status fallback and the offline Path-B
+#: migration tooling (read-only, immutable open of a frozen copy; never
+#: imported by the runtime).  A request path opening its own database would be
+#: a hidden second writer.
 DIRECT_SQLITE_CONNECT_OWNERS = frozenset(
     {
         "app/db.py",
         "app/backup/automatic.py",
         "app/backup/orchestrator.py",
         "app/db_maintenance.py",
+        "app/pg_migrate_from_sqlite.py",
         "app/prod1_schema.py",
         "app/services/backup_service.py",
         "app/views/admin/banco_dados.py",

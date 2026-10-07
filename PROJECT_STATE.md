@@ -111,6 +111,70 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Path-B SQLite → PostgreSQL cutover migration — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
+
+Published by this landing commit (SHA not invented); parent
+`298b83c28097fc20d963c656bd7b5cae9884e2dd`. New production module
+`app/pg_migrate_from_sqlite.py` plus `tests/test_pg_migrate_from_sqlite.py`;
+`tests/test_pg_readiness_unit3_runtime.py` adds the module to the exact
+`DIRECT_SQLITE_CONNECT_OWNERS` set (guard not weakened). Independent
+fresh-session review ACCEPT_PATH_B_MIGRATION_FOR_LANDING after one rejection
+(M1 owner-guard, N1–N3 hardening — all CLOSED).
+
+* R4: PATH B SELECTED. Path-B migration: IMPLEMENTED. R5: CLOSED.
+* Supported command (offline, never imported by runtime):
+  `python -m app.pg_migrate_from_sqlite --source FROZEN_COPY
+  --expected-source-sha256 HEX [--source-upload-root D --target-upload-root D]
+  [--apply]`. Target from `DATABASE_URL` only (no URL/password argv, no
+  `--force`); prints non-secret target identity before mutation; dry run
+  without `--apply`.
+* Data semantics: complete source/target policy manifest — 24 MIGRATE_EXACT
+  tables; `schema_migrations`, `configuracoes_backup`, `cloud_drive_settings`,
+  `cloud_accounts` RECREATE_TARGET_SIDE; `senha_tokens`, `backup_logs`,
+  `sqlite_sequence` OMIT_EPHEMERAL; `pg_schema_meta`
+  TARGET_SIDE_INITIALIZATION. Excluded rows reported by table/count/reason,
+  never by value. Source: frozen copy opened `mode=ro&immutable=1`, hash
+  required and re-verified, non-empty `-wal` and the runtime DB refused,
+  user_version/integrity/FK/column parity checked. Target: PG ≥ 15, full
+  `validate_pg_schema`, provisioner seed, all application tables empty under
+  `ACCESS EXCLUSIVE`. One relational transaction: FK-derived load order,
+  explicit source ids, `atividade_versao.versao_anterior_id` restored in a
+  second pass under the real lineage trigger, all constraints/triggers
+  enabled (request snapshots validated), identity high-water =
+  max(`sqlite_sequence`, max id) via transactional `RESTART`, row-by-row
+  exact-value validation with per-table digests, 37 domain checks. Local
+  `admin_arquivos` assets copied and verified; Drive business references
+  preserved, OAuth tokens never copied.
+* Hardening: once commit begins, a lost/interrupted commit returns
+  COMMIT_OUTCOME_UNCERTAIN (no rollback claim, no asset undo; reconcile target
+  state). Assets use an exclusive-create staging file, size/SHA-256 check,
+  fsync and non-replacing promotion; stale staging is refused, no wildcard
+  deletion, an identical final asset is reused. Post-commit source divergence
+  returns COMMITTED_SOURCE_UNVERIFIED (nonzero, committed target kept).
+* Current-source rehearsal: GREEN on a frozen byte copy into disposable PG15
+  (`127.0.0.1:54315`, prefix `sgaa_pathb_test_<run>_`) — PROVISION → MIGRATE →
+  VALIDATE → ACTIVATE ADMIN (R5, same `usuarios.id`) → LOGIN (`POST /login`,
+  `/admin/acesso`) GREEN; source/target counts and digests equal; canonical
+  `database.db` never opened. Reused for the final candidate by delta
+  qualification (no data-semantics change).
+* Final qualification: T4 owner guard 1 passed; Path-B module 16 passed, actual
+  rehearsal node deselected. T4: IMPLICATED, targeted guard GREEN.
+  T5: NOT_TRIGGERED. No SQLite full suite.
+* External cutover prerequisites: explicit PostgreSQL `DATABASE_URL`;
+  application traffic stopped; canonical WAL confirmed 0 B before copying;
+  migrate ONLY a frozen byte copy; local `admin_arquivos` asset
+  transfer/reconciliation; OneDrive/mail account reconnect; reconnect the SAME
+  Google account that holds the existing Drive-backed evidence; run R5
+  activation after migration validation.
+* Operational notes: a commit-uncertain result requires target-state
+  reconciliation before any rerun; an abandoned cutover may require removing
+  files created by that run. NM1 (future hygiene, not fixed in this landing):
+  one pre-existing assertion in the actual-source rehearsal node could expose
+  row values through pytest introspection if it failed — convert it to a
+  boolean/no-value assertion BEFORE the next current-source rehearsal.
+* Open gate: POSTGRESQL-NATIVE BACKUP BEFORE CUTOVER.
+  NOT READY_FOR_PRODUCTION_INTEGRATION.
+
 ## R5 supported first/full admin bootstrap — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
 
 Published by this landing commit (SHA not invented); parent
