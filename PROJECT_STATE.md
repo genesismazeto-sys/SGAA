@@ -111,6 +111,44 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Real-PostgreSQL qualification — E-PG1 M1–M9 — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`dbf665020d778ac0849b136b04194decf57c21a7`. Test-only: new module
+`tests/test_pg_readiness_epg1_missing_contracts.py`; no production change;
+U5-A..U5-F and the existing E-PG1 checkpoint are not reopened.
+
+* Environment: the same local PostgreSQL 15.19 (`server_version_num` 150019,
+  WSL2 Ubuntu, `127.0.0.1:54315`, role `sgaa_qual`). E-PG1 M1–M9 GREEN:
+  39 passed / 0 skipped / 0 failed; independent review ACCEPT.
+* M1 (5): real SQLSTATE classification — 23505, 23503, 23514, 23502, SG001.
+  M2 (2): INERROR recovery on `write_transaction` entry; INERROR exit
+  detection and connection reuse. M3 (3): read-only INTRANS adoption;
+  refusal with an assigned transaction id; refusal after a row lock alone
+  (which assigns a transaction id). M4 (3): adapter qmark parser and EngineRow
+  semantics on a real server. M5 (8): `sql_dialect` fragments and real
+  settings/message upserts. M6 (7): `pg_schema_status` healthy, empty and
+  mismatched states. M7 (5): lazy-default persistence, rollback and request
+  commit boundaries. M8 (1): explicit PG15 qualification,
+  `150000 <= server_version_num < 160000`. M9 (5): real-PG
+  `/admin/acesso/salvar` — historical 42P18 control, CREATE, duplicate CREATE,
+  EDIT keeping own e-mail, EDIT to a conflicting e-mail.
+* Real-PG evidence to date: 84 green nodes (existing E-PG1 45 + M1–M9 39),
+  0 skipped. This does NOT complete PostgreSQL qualification.
+* Still open: E-PG2 P1–P8; broad real-PG route smoke (M9 covers
+  `/admin/acesso/salvar` only); R4 — Path A greenfield (R4 disappears), Path
+  A' reference-data migration required, Path B full data CUTOVER_BLOCKER, no
+  path decided; R5 — PRODUCTION_BLOCKER for Path A/A'; PostgreSQL-native
+  backup required BEFORE_FIRST_REAL_DATA.
+* Review notes (non-material, not actioned): M6 healthy-case constants are
+  partly tautological — the mismatch cases carry the proof; the M6
+  unprovisioned case fails closed without pinning one exception class; M7
+  default values come from production constants, so the evidence is
+  persistence semantics, not an independent default-value specification; a
+  hard-killed run can leave its own run-specific orphan databases, which
+  cleanup does not reach across runs.
+* TEP: E-PG1 lane only; T5 NOT_TRIGGERED; no SQLite suite run.
+
 ## Real-PostgreSQL qualification — existing E-PG1 checkpoint — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
