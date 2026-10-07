@@ -531,6 +531,21 @@ NON_GOVERNED_BOUNDARY_CATEGORIES: tuple[NonGovernedCategory, ...] = (
         }),
     ),
     NonGovernedCategory(
+        name="database_image_delivery",
+        rationale=(
+            "STORAGE S1 byte delivery of database-backed images. Each route "
+            "authorizes per request: the profile photo is the session owner's "
+            "own (no id in the URL; an administrator also needs arquivos view, "
+            "as on the upload endpoint); a report screenshot reaches a student "
+            "only for their own report and an administrator only with both "
+            "reportes view and arquivos view."
+        ),
+        identities=frozenset({
+            Combination("/perfil/foto", "images.profile_photo", "GET"),
+            Combination("/reportes/<int:reporte_id>/captura", "images.reporte_captura", "GET"),
+        }),
+    ),
+    NonGovernedCategory(
         name="comprovante_actor_scoped_delivery",
         rationale=(
             "Shared attachment delivery for aluno and admin actors. It enforces "
@@ -742,8 +757,10 @@ CANONICAL_PROFILE_DIGESTS = {
 # They are pinned anyway, as identity digests rather than counts, so that a
 # change in either anchor has to be acknowledged where its security meaning
 # lives: which routes are reachable by parameter, and which actor is denied.
+# STORAGE S1 adds the two non-/admin database-image delivery GETs
+# (category database_image_delivery); no requirement or denial changes.
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
-    "2ff35e4bd550f5b65cb384a459979314773619bbf11b8598134085c72be345b7"
+    "5f62266f815bfe89bfb32dac6c0e6625215b91e69b16a293a376556236f7b3af"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
     "630959fb02f2828ff93f57a08b441d1aa2d0a2b429a52bc35d1e300b10a1017a"

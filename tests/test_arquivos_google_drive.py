@@ -35,6 +35,7 @@ from app.prod1_schema import (
     migrate_prod1_v9_to_v10,
     migrate_prod1_v10_to_v11,
     migrate_prod1_v11_to_v12,
+    migrate_prod1_v12_to_v13,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -204,7 +205,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 13
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -248,6 +249,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     migrate_prod1_v9_to_v10(conn)
     migrate_prod1_v10_to_v11(conn)
     migrate_prod1_v11_to_v12(conn)
+    migrate_prod1_v12_to_v13(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)

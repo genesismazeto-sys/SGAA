@@ -9,7 +9,8 @@ database is only used to create and drop them.
 A. synthetic source A (users/credentials, lineage with a forward reference,
    AAC->AEU transition, matrix items, turma/aluno/request snapshots, local and
    Drive file references, identity high-water above max(id), an empty table
-   with historical identity state) is backed up once; the artifact set,
+   with historical identity state, prod-1/v13 image rows with binary
+   content) is backed up once; the artifact set,
    manifest and TOC census are checked; A is restored into a new empty B and
    verified read-only; disposable clones of B prove identity behaviour, the
    restored triggers, and that a tampered row or sequence fails verification.
@@ -32,6 +33,7 @@ D. the current-data recovery rehearsal, opt-in through the Path-B frozen-copy
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import logging
@@ -70,16 +72,27 @@ HIGH_WATER = {
     "atividade_base": 23, "atividade_versao": 80, "atividade_transicao": 2,
     "matriz_atividade_versao_item": 14, "requisicoes": 25, "requisicao_arquivos": 6,
     "requisicao_alerta_receipts": 2, "admin_arquivos": 4, "admin_alertas": 1, "email_envios": 3,
+    "reportes": 5,
 }
 #: ``(last_value, is_called)`` on A: high-water tables restarted, backup_logs
 #: consumed one id and is empty again, the rest never used.
 EXPECTED_IDENTITIES = {
     **{table: (high_water + 1, False) for table, high_water in HIGH_WATER.items()},
     "backup_logs": (1, True),
-    **{t: (1, False) for t in ("senha_tokens", "cloud_accounts", "cloud_drive_settings", "reportes",
+    **{t: (1, False) for t in ("senha_tokens", "cloud_accounts", "cloud_drive_settings",
                                "requisicao_email_eventos")},
 }
-PII_MARKERS = (ADMIN_EMAIL, STUDENT_EMAIL, "pbkdf2", "Admin Sintetico", "Aluno Sintetico", "synthetic-profile-default")
+#: v13 image content: a recognisable marker that must never reach any output.
+BLOB_MARKER = b"PGBK-BLOB-MARKER"
+IMAGE_BLOBS = {
+    "usuarios_foto": (3, "image/png", b"\x89PNG\r\n\x1a\n" + BLOB_MARKER * 8 + bytes(range(256))),
+    "alunos_foto": (11, "image/jpeg", b"\xff\xd8\xff" + BLOB_MARKER * 5 + b"\x00\xff" * 300),
+    "reportes_captura": (5, "image/webp", b"RIFF\x00\x00\x00\x00WEBP" + BLOB_MARKER + bytes(4096)),
+}
+PII_MARKERS = (
+    ADMIN_EMAIL, STUDENT_EMAIL, "pbkdf2", "Admin Sintetico", "Aluno Sintetico", "synthetic-profile-default",
+    BLOB_MARKER.decode("ascii"), BLOB_MARKER.hex(),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +226,13 @@ def populate_source(conn):
     i("admin_alertas", id=1, titulo="Aviso", mensagem="Mensagem", visivel=1, criado_em=TS)
     i("email_envios", id=3, aluno_id=11, destinatario=STUDENT_EMAIL, assunto="A", corpo="C", status="sent",
       tentativas=1, idempotency_key="k-1", criado_em=TS, enviado_em=TS)
+    i("reportes", id=5, aluno_id=11, titulo="Reporte", descricao="Descricao", categoria="Outro", status="Novo",
+      criado_em=TS, atualizado_em=TS)
+    for table, (owner_id, mime_type, content) in IMAGE_BLOBS.items():
+        owner_column = pg_schema.PG_TABLE_SPECS[table]["primary_key"]["columns"][0]
+        _insert(conn, table, **{owner_column: owner_id}, mime_type=mime_type, size_bytes=len(content),
+                sha256=hashlib.sha256(content).hexdigest(), width=64, height=48, conteudo=content,
+                atualizado_em=TS)
     for table, high_water in HIGH_WATER.items():
         conn.execute(f"ALTER TABLE {table} ALTER COLUMN id RESTART WITH {high_water + 1}")
     # Historical identity state on an empty table.
@@ -272,6 +292,17 @@ def _rows(url) -> dict:
     conn = tool.connect(url)
     try:
         return {t: pathb.normalize_rows(t, pathb.read_target_rows(conn, t)) for t in pg_schema.PG_SCHEMA_TABLES}
+    finally:
+        conn.close()
+
+
+def _image_contents(url) -> dict:
+    conn = tool.connect(url)
+    try:
+        return {
+            table: bytes(conn.execute(f"SELECT conteudo FROM {table}").fetchone()[0])
+            for table in IMAGE_BLOBS
+        }
     finally:
         conn.close()
 
@@ -382,9 +413,11 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION
     assert manifest["schema"]["contract_sha256"] == pg_schema.PG_CONTRACT_SHA256
-    assert manifest["schema"]["latest_migration"]["version"] == 12
+    assert manifest["schema"]["latest_migration"]["version"] == 13
     assert manifest["tables"] == backup_set["before"].tables
-    assert len(manifest["tables"]) == 31
+    assert len(manifest["tables"]) == 34
+    for table in IMAGE_BLOBS:
+        assert manifest["tables"][table]["rows"] == 1, table
     assert manifest["tables"]["usuarios"]["rows"] == 2 and manifest["tables"]["backup_logs"]["rows"] == 0
     identities = {t: (v["last_value"], v["is_called"]) for t, v in manifest["identities"].items()}
     assert identities == EXPECTED_IDENTITIES
@@ -394,11 +427,11 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["identities"]["backup_logs"]["predicted_next_id"] == 2
     assert manifest["identities"]["backup_logs"]["max_id"] == 0
     assert manifest["toc"]["classes"] == {
-        "CONSTRAINT": 48, "FK CONSTRAINT": 30, "FUNCTION": 12, "INDEX": 49, "SEQUENCE": 21,
-        "SEQUENCE SET": 21, "TABLE": 31, "TABLE DATA": 31, "TRIGGER": 11,
+        "CONSTRAINT": 51, "FK CONSTRAINT": 33, "FUNCTION": 12, "INDEX": 49, "SEQUENCE": 21,
+        "SEQUENCE SET": 21, "TABLE": 34, "TABLE DATA": 34, "TRIGGER": 11,
     }
     assert manifest["toc"]["public_schema_entries"] == 2
-    assert manifest["domain_validation"]["checks"] == 37 and manifest["domain_validation"]["failing"] == 0
+    assert manifest["domain_validation"]["checks"] == 49 and manifest["domain_validation"]["failing"] == 0
     assert manifest["triggers"] == {"expected": 11, "enabled": 11}
     assert manifest["accounts"]["usuarios"] == 2 and manifest["accounts"]["full_admins"] == 1
     assert manifest["tool"]["sha256"] == tool.file_sha256(Path(tool.__file__))[1]
@@ -453,7 +486,11 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
         ).fetchone()[0]
     finally:
         observer.close()
-    assert fks == 30 and enabled == 11
+    assert fks == 33 and enabled == 11
+    # Binary content survives byte for byte, not only by digest.
+    assert _image_contents(target_url) == _image_contents(source_url) == {
+        table: content for table, (_owner, _mime, content) in IMAGE_BLOBS.items()
+    }
     assert checks == sum(len(pg_schema.PG_TABLE_SPECS[t]["checks"]) for t in pg_schema.PG_SCHEMA_TABLES)
     assert partial == sum(1 for index in pg_schema.PG_EXPLICIT_INDEXES.values() if index["predicate"])
 
@@ -504,6 +541,27 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
     assert code == 1 and "category=ROW_DIGEST_MISMATCH object=admin_alertas" in output
     assert "tampered" not in output.replace("tampered_", "")
     registry.drop(tampered)
+
+    # H2: one flipped byte of image content fails verification, reported as
+    # table + category only -- the content never appears.
+    flipped, flipped_url = registry.create("blobtamper", template=target)
+    connection = _connect(flipped_url)
+    connection.execute(
+        "UPDATE alunos_foto SET conteudo = overlay(conteudo placing '\\x00'::bytea from 20 for 1) "
+        "WHERE aluno_id = 11"
+    )
+    connection.close()
+    with pytest.raises(tool.Failed) as caught:
+        tool.verify_database(manifest, flipped_url)
+    assert set(caught.value.mismatches) == {
+        ("ROW_DIGEST_MISMATCH", "alunos_foto"), ("DOMAIN_CHECK_FAILED", "alunos_foto_content_mismatch"),
+    }
+    monkeypatch.setenv(tool.TARGET_URL_ENV, flipped_url)
+    code, output = _run_cli(["verify", "--manifest", manifest_path, "--restored"])
+    assert code == 1 and "category=ROW_DIGEST_MISMATCH object=alunos_foto" in output
+    blob_clean = _no_secrets(output, PG_URL, flipped_url)
+    assert blob_clean
+    registry.drop(flipped)
 
     # I: a tampered identity sequence fails verification (on a clone).
     sequenced, sequenced_url = registry.create("seqtamper", template=target)

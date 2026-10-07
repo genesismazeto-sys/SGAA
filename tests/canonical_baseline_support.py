@@ -521,8 +521,11 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # single-account password e-mail route and the three public password routes.
 # The default-password activation is NOT a route: the Senhas padrão panel is
 # one settings surface saved by the pre-existing senhas-default endpoint.
+# STORAGE S1 (prod-1/v13) adds the two GET-only database-image delivery
+# routes: /perfil/foto (images.profile_photo) and
+# /reportes/<int:reporte_id>/captura (images.reporte_captura).
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "2c847292d7681b92693459d9872dc7bfbb31ffa149ce7417844af53674a7a85a"
+    "47d2567d6489552a5da3132209cd6f81958de4afb890598385642a161ee00ce1"
 )
 
 

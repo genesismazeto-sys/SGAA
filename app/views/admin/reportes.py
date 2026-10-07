@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from flask import (
     Blueprint,
-    current_app,
     redirect,
     render_template,
     request,
@@ -20,8 +19,16 @@ from flask import (
 
 from app.auth import admin_required
 from app.db import get_db_connection
+from app.db_images import REPORTES_CAPTURA, store_image
 from app.db_maintenance import ensure_reportes_table
-from app.presentation import format_date_ptbr
+from app.image_validation import (
+    REPORT_SCREENSHOT_MAX_BYTES,
+    ImageRejected,
+    ImageTooLarge,
+    read_upload_limited,
+    validate_report_screenshot,
+)
+from app.presentation import _format_bytes_label, format_date_ptbr
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.sql_dialect import (
     ascii_ci_like,
@@ -30,9 +37,8 @@ from app.sql_dialect import (
     datetime_order,
     human_text_order,
 )
-from app.student_documents import remove_student_document, save_student_document
-from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.views.images import reporte_captura_url
 from app.text import human_text_key
 from app.web.filters import (
     append_conditions_sql,
@@ -90,6 +96,7 @@ def admin_reportes():
         " FROM reportes rep"
         " JOIN alunos a ON a.id = rep.aluno_id"
         " LEFT JOIN usuarios u ON u.id = a.usuario_id"
+        " LEFT JOIN reportes_captura cap ON cap.reporte_id = rep.id"
     )
     where = []
     params: list[object] = []
@@ -143,7 +150,7 @@ def admin_reportes():
     query = (
         "SELECT rep.id, rep.titulo, rep.descricao, rep.categoria, rep.screenshot_filename, rep.status,"
         " rep.criado_em, rep.atualizado_em, a.nome AS aluno_nome, a.matricula,"
-        " COALESCE(u.email, a.email, '') AS aluno_email"
+        " COALESCE(u.email, a.email, '') AS aluno_email, cap.sha256 AS captura_sha256"
         + base_from
         + where_sql
         + f" ORDER BY {order_col} {direction}, rep.id DESC"
@@ -161,7 +168,9 @@ def admin_reportes():
             "titulo": row["titulo"],
             "descricao": row["descricao"],
             "categoria": row["categoria"],
-            "screenshot_filename": row["screenshot_filename"],
+            "screenshot_url": reporte_captura_url(
+                row["id"], row["captura_sha256"], row["screenshot_filename"]
+            ),
             "status": row["status"],
             "status_badge_type": _reporte_status_badge_type(row["status"]),
             "criado_em_fmt": format_date_ptbr(row["criado_em"]),
@@ -264,41 +273,34 @@ def admin_reportes_novo():
         flash("Descreva o problema encontrado.", "error")
         return redirect(url_for("admin_reportes", novo="1"))
 
-    screenshot_filename = None
-    try:
-        if captura_tela and getattr(captura_tela, "filename", ""):
-            screenshot_filename = save_student_document(
-                captura_tela,
-                ALLOWED_REPORTE_SCREENSHOTS,
-                root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
-                student_id=aluno["id"],
-                student_name=aluno["nome"],
-                category="reportes",
-                prefix=f"reporte{aluno['id']}",
+    captura = None
+    if captura_tela and getattr(captura_tela, "filename", ""):
+        try:
+            captura = validate_report_screenshot(
+                read_upload_limited(captura_tela, REPORT_SCREENSHOT_MAX_BYTES)
             )
-    except ValueError:
-        flash("A captura deve estar em PNG, JPG, JPEG ou WEBP.", "error")
-        return redirect(url_for("admin_reportes", novo="1"))
+        except ImageTooLarge:
+            flash(f"Arquivo muito grande. Tamanho máximo: {_format_bytes_label(REPORT_SCREENSHOT_MAX_BYTES)}.", "error")
+            return redirect(url_for("admin_reportes", novo="1"))
+        except ImageRejected:
+            flash("A captura deve estar em PNG, JPG, JPEG ou WEBP.", "error")
+            return redirect(url_for("admin_reportes", novo="1"))
 
     try:
-        conn.execute(
+        reporte_id = conn.execute(
             """
             INSERT INTO reportes
-                (aluno_id, titulo, descricao, categoria, screenshot_filename, status)
-            VALUES (?, ?, ?, ?, ?, 'Novo')
+                (aluno_id, titulo, descricao, categoria, status)
+            VALUES (?, ?, ?, ?, 'Novo')
+            RETURNING id
             """,
-            (aluno["id"], titulo, descricao, categoria, screenshot_filename),
-        )
+            (aluno["id"], titulo, descricao, categoria),
+        ).fetchone()[0]
+        if captura is not None:
+            store_image(conn, REPORTES_CAPTURA, reporte_id, captura)
         conn.commit()
     except Exception:
         conn.rollback()
-        if screenshot_filename:
-            try:
-                remove_student_document(
-                    current_app.config["DOCUMENTOS_ALUNOS_FOLDER"], screenshot_filename
-                )
-            except (OSError, ValueError):
-                pass
         flash("Não foi possível criar o reporte.", "error")
         return redirect(url_for("admin_reportes", novo="1"))
 

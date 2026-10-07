@@ -33,7 +33,7 @@ BACKUP
     Preconditions: PostgreSQL, ``current_schema() = public``, client majors
     >= server major, ``validate_pg_schema`` CURRENT (contract digest), the
     provisioner ``schema_migrations`` baseline, 11 triggers enabled, no
-    extension objects in ``public`` and the 37 Path-B domain checks green.
+    extension objects in ``public`` and the 49 Path-B domain checks green.
     One ``REPEATABLE READ READ ONLY`` transaction exports its snapshot; the
     manifest's relational state is read in it and ``pg_dump --snapshot`` dumps
     the same snapshot while it stays open.  The source is never written.
@@ -756,7 +756,7 @@ def read_state(conn) -> DatabaseState:
     ]
     seed = [(v, n, pg_schema.PG_SCHEMA_EPOCH, d) for v, n, d in pg_schema.PG_SCHEMA_MIGRATIONS_SEED]
     if markers != seed:
-        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1/v12 baseline")
+        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1/v13 baseline")
     epoch, version, contract = conn.execute(
         f"SELECT schema_epoch, schema_version, contract_sha256 FROM {pg_schema.PG_SCHEMA_META_TABLE}"
     ).fetchone()

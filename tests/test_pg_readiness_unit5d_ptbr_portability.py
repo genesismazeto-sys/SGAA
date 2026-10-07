@@ -55,6 +55,7 @@ unit records REAL-PG EVIDENCE: ABSENT.
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import html as html_module
 import importlib
@@ -127,6 +128,13 @@ U5A_CURRENT_STATE_KEYS = (
     "schema_migrations_baseline",
 )
 U5A_CURRENT_STATE_SHA256 = "dc66f9b0b4c20eaa45d922f657bd4d3972ccea57e0515fa2494356fb6cab2866"
+#: Later, separately authorized schema units whose additive delta is removed
+#: before the U5-A digest is recomputed: STORAGE S1 (prod-1/v13) added exactly
+#: these three image tables and baseline row 13, and moved the version to 13.
+#: Everything else in the U5-A sections must still be byte-identical.
+LATER_ADDED_TABLES = ("usuarios_foto", "alunos_foto", "reportes_captura")
+LATER_ADDED_BASELINE_VERSIONS = (13,)
+U5A_SCHEMA_VERSION = 12
 
 # ---------------------------------------------------------------------------
 # Inventoried call-site expressions (read-only inventory at 091ba4b).  The
@@ -870,19 +878,46 @@ TECHNICAL = "LOWER(u.email)"  # D-6: plain technical ordering is not a U5-D toke
     assert not _raw_token_hits('"""COLLATE PTBR_NOACCENT"""\nX = "LOWER(u.email)"\n')
 
 
+def _u5a_sections(payload):
+    """The U5-A contract sections with only the declared later deltas removed."""
+    sections = copy.deepcopy({key: payload[key] for key in U5A_CURRENT_STATE_KEYS})
+    assert set(LATER_ADDED_TABLES) <= set(sections["tables"]), "declared later tables missing"
+    for table in LATER_ADDED_TABLES:
+        del sections["tables"][table]
+    baseline = sections["schema_migrations_baseline"]
+    assert [row["version"] for row in baseline][-len(LATER_ADDED_BASELINE_VERSIONS):] == list(
+        LATER_ADDED_BASELINE_VERSIONS
+    )
+    sections["schema_migrations_baseline"] = baseline[: -len(LATER_ADDED_BASELINE_VERSIONS)]
+    assert sections["version"] == sections["schema_meta"]["version"] == U5A_SCHEMA_VERSION + len(
+        LATER_ADDED_BASELINE_VERSIONS
+    )
+    sections["version"] = sections["schema_meta"]["version"] = U5A_SCHEMA_VERSION
+    return sections
+
+
+def _sections_digest(sections):
+    return hashlib.sha256(
+        json.dumps(sections, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def test_control_u5a_current_state_authority_untouched():
     payload = pg_schema.pg_contract_payload()
-    digest = hashlib.sha256(
-        json.dumps(
-            {key: payload[key] for key in U5A_CURRENT_STATE_KEYS},
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
+    digest = _sections_digest(_u5a_sections(payload))
     assert digest == U5A_CURRENT_STATE_SHA256, "D-1 forbids U5-A table/index/trigger/version change"
     assert tuple(pg_schema.PG_HELPERS[: len(U5A_HELPERS)]) == U5A_HELPERS
-    assert pg_schema.PG_SCHEMA_VERSION == 12
+    assert pg_schema.PG_SCHEMA_VERSION == U5A_SCHEMA_VERSION + len(LATER_ADDED_BASELINE_VERSIONS)
+
+
+def test_control_u5a_guard_still_detects_an_undeclared_change():
+    """Negative control: removing the declared S1 delta must not hide any other edit."""
+    payload = copy.deepcopy(pg_schema.pg_contract_payload())
+    payload["tables"]["reportes"]["columns"][0]["not_null"] = False
+    assert _sections_digest(_u5a_sections(payload)) != U5A_CURRENT_STATE_SHA256
+    payload = copy.deepcopy(pg_schema.pg_contract_payload())
+    payload["tables"]["usuarios_foto_extra"] = payload["tables"]["usuarios_foto"]
+    assert _sections_digest(_u5a_sections(payload)) != U5A_CURRENT_STATE_SHA256
 
 
 def test_control_no_unaccent_or_extension_dependency():

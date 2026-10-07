@@ -33,10 +33,10 @@ def revert_prod1_v11_to_v10(
     retired ``default_passwords_enabled`` row as ``(valor, atualizado_em)``.
     No hash is touched: the v11 migration never rewrites one.
 
-    Handed the bootstrapped head (v12), it reverts v12 first, so every
+    Handed a later head (v12 or v13), it reverts down to v11 first, so every
     predecessor builder keeps a single "revert from the head" call.
     """
-    if conn.execute("PRAGMA user_version").fetchone()[0] == 12:
+    if conn.execute("PRAGMA user_version").fetchone()[0] in (12, 13):
         revert_prod1_v12_to_v11(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
     foreign_keys = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])

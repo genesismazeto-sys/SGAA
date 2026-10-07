@@ -52,6 +52,8 @@ _SQLITE_TO_PG_TYPE = {
     "TEXT": "text",
     "INTEGER": "integer",
     "REAL": "double precision",
+    # prod-1/v13 image content (usuarios_foto / alunos_foto / reportes_captura).
+    "BLOB": "bytea",
 }
 
 #: Physical canonical truth of prod-1/v12 (six, not the brief's five).
@@ -65,7 +67,9 @@ _CANONICAL_PARTIAL_UNIQUE_INDEXES = {
 }
 
 _IDENTITY_PK_COUNT = 21
-_CANONICAL_APP_TABLE_COUNT = 30
+#: 30 application tables through v12; STORAGE S1 (v13) adds the three
+#: one-to-one image side tables, which have no identity column.
+_CANONICAL_APP_TABLE_COUNT = 33
 _CANONICAL_EXPLICIT_INDEX_COUNT = 49
 _CANONICAL_TRIGGER_COUNT = 11
 
@@ -653,7 +657,7 @@ def test_sqlite_v12_authority_is_unchanged():
     conn = _canonical_sqlite()
     status = validate_prod1_schema(conn)
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert status["schema_version"] == SCHEMA_VERSION == 12
+    assert status["schema_version"] == SCHEMA_VERSION == 13
     assert len(_sqlite_explicit_indexes(conn)) == _CANONICAL_EXPLICIT_INDEX_COUNT
     assert len(_sqlite_triggers(conn)) == _CANONICAL_TRIGGER_COUNT
     tables = {

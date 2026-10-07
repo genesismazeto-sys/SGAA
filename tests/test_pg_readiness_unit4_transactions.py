@@ -85,12 +85,17 @@ DEFERRED_MIGRATION_BEGIN_IMMEDIATE = frozenset(
         "app/prod1_comprovantes_v4.py",
         "app/prod1_credential_pending_v11.py",
         "app/prod1_extension_hours_v12.py",
+        "app/prod1_images_v13.py",
         "app/prod1_notifications_v7.py",
         "app/prod1_password_foundation_v8.py",
         "app/prod1_schema.py",
         "app/prod1_student_matrix_v6.py",
     }
 )
+#: The offline one-shot legacy image importer (STORAGE S1) opens an explicit
+#: SQLite file outside any request and moves one record per BEGIN IMMEDIATE
+#: transaction; it is never imported by the runtime.
+OFFLINE_TOOL_BEGIN_IMMEDIATE = frozenset({"app/image_import.py"})
 
 
 def _require(name):
@@ -1660,7 +1665,9 @@ def test_runtime_begin_immediate_is_confined_to_deferred_migrations():
             found.add(path.relative_to(REPO_ROOT).as_posix())
     # app/db.py is the single runtime owner that still emits BEGIN IMMEDIATE,
     # and only on the SQLite branch of the neutral write transaction.
-    assert frozenset(found) == DEFERRED_MIGRATION_BEGIN_IMMEDIATE | {"app/db.py"}
+    assert frozenset(found) == (
+        DEFERRED_MIGRATION_BEGIN_IMMEDIATE | OFFLINE_TOOL_BEGIN_IMMEDIATE | {"app/db.py"}
+    )
 
 
 def test_runtime_transaction_paths_use_the_neutral_manager():

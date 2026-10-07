@@ -11,8 +11,16 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
+from PIL import Image
+
 import main
 from tests.session_support import stamp_auth_version
+
+
+def _png_bytes(size=(32, 24), color=(200, 30, 30)) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color).save(buffer, "PNG")
+    return buffer.getvalue()
 
 
 @pytest.fixture(scope="module")
@@ -153,7 +161,7 @@ def test_admin_report_creation_stores_valid_screenshot(client, report_creation_s
             "categoria": "Outro",
             "titulo": title,
             "descricao": "Reporte com screenshot.",
-            "captura_tela": (io.BytesIO(b"\x89PNG\r\n\x1a\nadmin"), "admin-shot.PNG"),
+            "captura_tela": (io.BytesIO(_png_bytes()), "admin-shot.PNG"),
         },
         content_type="multipart/form-data",
         follow_redirects=False,
@@ -161,13 +169,20 @@ def test_admin_report_creation_stores_valid_screenshot(client, report_creation_s
 
     assert response.status_code in (302, 303)
     with main.app.app_context():
-        row = main.get_db_connection().execute(
-            "SELECT screenshot_filename FROM reportes WHERE titulo = ?", (title,)
+        conn = main.get_db_connection()
+        row = conn.execute(
+            "SELECT id, screenshot_filename FROM reportes WHERE titulo = ?", (title,)
         ).fetchone()
-    assert row and row["screenshot_filename"]
-    saved = Path(main.app.config["DOCUMENTOS_ALUNOS_FOLDER"]) / Path(row["screenshot_filename"])
-    assert saved.is_file()
-    assert saved.suffix == ".png"
+        captura = conn.execute(
+            "SELECT mime_type, size_bytes, width, height FROM reportes_captura WHERE reporte_id = ?",
+            (row["id"],),
+        ).fetchone()
+    # STORAGE S1: the screenshot is a database row of the new report, never a file.
+    assert row and row["screenshot_filename"] is None
+    assert captura is not None
+    assert (captura["mime_type"], captura["size_bytes"], captura["width"], captura["height"]) == (
+        "image/png", len(_png_bytes()), 32, 24
+    )
 
 
 def test_admin_report_creation_rejects_invalid_screenshot_extension(client, report_creation_student):
@@ -610,7 +625,7 @@ def test_admin_reportes_status_update_uses_correct_post_route_and_respects_permi
             conn.commit()
 
 
-def test_aluno_report_screenshot_is_saved_in_documentos_alunos_and_served_for_admin(client, tmp_path):
+def test_aluno_report_screenshot_is_stored_in_database_and_served_for_admin(client, tmp_path):
     token = uuid.uuid4().hex[:8]
     aluno_email = f"reporte.arquivo.aluno.{token}@ej.edu.br"
     aluno_matricula = f"RPA-{token}"
@@ -649,7 +664,7 @@ def test_aluno_report_screenshot_is_saved_in_documentos_alunos_and_served_for_ad
                 "categoria": "Bug na plataforma",
                 "titulo": reporte_titulo,
                 "descricao": "Reporte com captura",
-                "captura_tela": (io.BytesIO(b"\x89PNG\r\n\x1a\nreport"), "captura.png"),
+                "captura_tela": (io.BytesIO(_png_bytes()), "captura.png"),
             },
             content_type="multipart/form-data",
             follow_redirects=False,
@@ -659,18 +674,20 @@ def test_aluno_report_screenshot_is_saved_in_documentos_alunos_and_served_for_ad
         with main.app.app_context():
             conn = main.get_db_connection()
             reporte = conn.execute(
-                "SELECT screenshot_filename FROM reportes WHERE titulo = ? ORDER BY id DESC LIMIT 1",
+                "SELECT id, screenshot_filename FROM reportes WHERE titulo = ? ORDER BY id DESC LIMIT 1",
                 (reporte_titulo,),
             ).fetchone()
         assert reporte is not None
-        rel_path = reporte["screenshot_filename"]
-        assert rel_path
-        assert os.path.isfile(os.path.join(str(documents_root), rel_path))
-        assert not os.path.exists(os.path.join(str(upload_root), rel_path))
+        assert reporte["screenshot_filename"] is None
+        # Nothing was written under either root.
+        assert not any(p.is_file() for p in documents_root.rglob("*"))
+        assert not any(p.is_file() for p in upload_root.rglob("*"))
 
         _login_admin(client)
-        served = client.get(f"/uploads/{rel_path}", follow_redirects=False)
+        served = client.get(f"/reportes/{reporte['id']}/captura", follow_redirects=False)
         assert served.status_code == 200
+        assert served.mimetype == "image/png"
+        assert served.data == _png_bytes()
     finally:
         main.app.config["UPLOAD_FOLDER"] = original_upload_folder
         main.app.config["DOCUMENTOS_ALUNOS_FOLDER"] = original_documents_folder

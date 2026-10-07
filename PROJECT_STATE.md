@@ -111,6 +111,70 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## STORAGE S1 — database-backed application images — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
+
+Published by this landing commit (SHA not invented); parent
+`6175f5de44edde4d802ea4296bde0c454a1460a4`. Independent review
+ACCEPT_STORAGE_S1_IMAGES_FOR_LANDING (material findings: none). HYBRID
+STORAGE: IN PROGRESS -- this unit covers only the small application-owned
+images.
+
+* SQLite schema v13 (`image_storage`, additive): IMPLEMENTED AND QUALIFIED.
+  One-to-one side tables `usuarios_foto`, `alunos_foto`, `reportes_captura`
+  (owner id PK, FK `ON DELETE CASCADE`, MIME / size / SHA-256 / geometry
+  metadata, BLOB content, CHECK-enforced invariants). Legacy path columns
+  `usuarios.foto_perfil`, `alunos.foto_perfil`, `reportes.screenshot_filename`
+  kept for the transition; new writes never fill them.
+* PostgreSQL schema authority: COHERENT AT v13 (bytea, semantically equivalent
+  CHECKs, seed row 13; same constraint vector, same verdicts on both engines).
+* Profile photos: DATABASE-BACKED, no new durable filesystem writes (<= 2 MiB
+  upload; decoded, oriented, <= 512 px, re-encoded JPEG -- PNG only for real
+  transparency -- <= 1 MiB stored). Report screenshots: DATABASE-BACKED, no
+  new durable filesystem writes (PNG/JPEG/WEBP still images, <= 4 MiB, verified
+  and kept as uploaded). Written in the owning transaction; served by
+  `/perfil/foto` (session owner only) and `/reportes/<id>/captura` (own report /
+  admin `reportes`+`arquivos` view) with SHA-256 ETag, 304, `nosniff`,
+  `private, no-cache`. Session keeps a version marker, never a path.
+* Legacy filesystem fallback: TRANSITIONAL ONLY (read-only, never preferred over
+  a database row) until the normalization/removal unit retires it.
+* One-shot importer `python -m app.image_import` (dry run by default). Current
+  frozen-copy census: ZERO legacy image references (`usuarios.foto_perfil` 0,
+  `alunos.foto_perfil` 0, `reportes.screenshot_filename` 0) -- structurally
+  qualified, no current asset bytes to migrate.
+* Path-B: v13 image tables MIGRATE_EXACT, BLOB -> BYTEA with value-free
+  length + SHA-256 digests; QUALIFIED on local PG15; legacy path refusal
+  unchanged; 49 domain checks.
+* Layer-2 PG backup / restore: v13 census and binary-safe digests; synthetic
+  binary round-trip QUALIFIED on local PG15 (byte-identical restore; a flipped
+  byte is reported by table and category only). A v12 archive is refused by
+  the v13 tool and needs its compatible repository revision.
+* T5: TRIGGERED (schema / migration / init_db) and run EXACTLY ONCE -- NOT a
+  fully green suite: 4539 collected, 4248 passed, 4 failed, 287 skipped, 6
+  collection errors. Adjudication: 2 candidate stale test expectations
+  (BEGIN IMMEDIATE allowlist, PG-shaped double at version 12) fixed and
+  delta-qualified by their owner modules; 2 failures reproduced on the clean
+  published parent (MX3 catalog walk-back omits the U5-E term; runtime-isolation
+  sentinel aborted by the collection errors); all 6 collection errors are the
+  baseline environment gap (missing `xlwt`). Production bytes unchanged after
+  T5; the T5 evidence remains binding.
+* Non-blocking follow-ups (not actioned):
+  - S1-NM1: before Vercel production, add a server-side maximum length for
+    report `descricao` so a 4 MiB screenshot plus form metadata cannot exceed
+    platform ingress.
+  - S1-NM2: `validate_pg_schema` validates CHECK constraint identity by name,
+    not expression body; strengthen in a later schema-governance unit.
+  - S1-NM3: define an explicit forward PostgreSQL schema-migration strategy for
+    post-v13 evolution; historical v12 backups currently require their
+    compatible repository revision.
+  - Reviewer observations kept as-is: browser private-cache policy;
+    `exif_transpose` unexpected-error UX; synthetic-byte pytest
+    introspection; inherited `arquivos:view` requirement for an admin's own
+    avatar.
+* BUSINESS DOCUMENTS: NOT YET ON SUPABASE STORAGE. GOOGLE DRIVE: STILL
+  SYNCHRONOUS FOR BUSINESS DOCUMENTS UNTIL S3. No S2/S3, Supabase or Vercel
+  work.
+* NOT READY_FOR_PRODUCTION_INTEGRATION.
+
 ## PostgreSQL Layer-2 logical backup / restore — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
 
 Published by this landing commit (SHA not invented); parent

@@ -25,8 +25,8 @@
       <div>
         <div id="avatar-wrap">
           <div id="avatar-box" aria-label="{{ user_message('Foto de perfil') }}">
-            {% if profile.foto_perfil %}
-            <img id="avatar-img" src="{{ url_for('uploaded_file', filename=profile.foto_perfil) }}" alt="{{ user_message('Foto de perfil') }}" style="display:block;" />
+            {% if foto_versao %}
+            <img id="avatar-img" src="{{ url_for('images.profile_photo', v=foto_versao) }}" alt="{{ user_message('Foto de perfil') }}" style="display:block;" />
             <div id="avatar-placeholder" style="display:none;"><i class="lucide" data-lucide="user"></i></div>
             <div id="avatar-actions" class="has-foto" aria-hidden="false">
             {% else %}

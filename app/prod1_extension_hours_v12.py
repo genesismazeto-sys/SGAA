@@ -88,7 +88,7 @@ def migrate_prod1_v11_to_v12(conn: sqlite3.Connection) -> dict[str, object]:
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v11_schema,
-        validate_prod1_schema,
+        _validate_prod1_v12_schema,
     )
 
     if conn.in_transaction:
@@ -151,7 +151,7 @@ def migrate_prod1_v11_to_v12(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v12 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v12_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
@@ -160,7 +160,8 @@ def migrate_prod1_v11_to_v12(conn: sqlite3.Connection) -> dict[str, object]:
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v12_schema(conn)
+    status = {"schema_epoch": SCHEMA_EPOCH, "schema_version": 12}
     return {
         **status,
         "extension_hours_default": 160,

@@ -64,7 +64,7 @@ from app.versioning.request_limits import (
     semester_label_for_date,
     semester_sort_key,
 )
-from app.presentation import format_date_ptbr, format_semester_label
+from app.presentation import _format_bytes_label, format_date_ptbr, format_semester_label
 from app.reporting import REPORTE_CATEGORY_OPTIONS
 from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
 from app.security.passwords import hash_password
@@ -82,8 +82,21 @@ from app.db import (
     is_integrity_error,
     is_unique_violation,
 )
-from app.student_documents import (
-    save_student_document,
+from app.db_images import (
+    ALUNOS_FOTO,
+    REPORTES_CAPTURA,
+    delete_image,
+    image_marker,
+    store_image,
+)
+from app.image_validation import (
+    PROFILE_PHOTO_MAX_UPLOAD_BYTES,
+    REPORT_SCREENSHOT_MAX_BYTES,
+    ImageRejected,
+    ImageTooLarge,
+    normalize_profile_photo,
+    read_upload_limited,
+    validate_report_screenshot,
 )
 from app.sql_dialect import (
     date_compare,
@@ -91,7 +104,7 @@ from app.sql_dialect import (
     format_date_ptbr as sql_format_date_ptbr,
 )
 from app.storage.contracts import StorageError
-from app.uploads import ALLOWED_REPORTE_SCREENSHOTS
+from app.views.images import reporte_captura_url
 from app.text import human_text_contains, human_text_key, ptbr_text_sort_key
 from app.web.filters import (
     get_date_range_query,
@@ -930,27 +943,20 @@ def aluno_meus_dados():
             remove_foto = request.form.get("remove_foto") == "1"
             foto_file = request.files.get("foto_perfil")
             if remove_foto:
-                conn.execute("UPDATE alunos SET foto_perfil = NULL WHERE usuario_id = ?", (usuario_id,))
+                delete_image(conn, ALUNOS_FOTO, aluno["aluno_id"])
                 session.pop("foto_perfil", None)
             elif foto_file and foto_file.filename:
                 try:
-                    foto_rel = save_student_document(
-                        foto_file,
-                        {"png", "jpg", "jpeg"},
-                        root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
-                        student_id=aluno["aluno_id"],
-                        student_name=nome,
-                        category="perfil",
-                        prefix="foto-perfil",
+                    foto = normalize_profile_photo(
+                        read_upload_limited(foto_file, PROFILE_PHOTO_MAX_UPLOAD_BYTES)
                     )
-                    if foto_rel:
-                        conn.execute(
-                            "UPDATE alunos SET foto_perfil = ? WHERE usuario_id = ?",
-                            (foto_rel, usuario_id),
-                        )
-                        session["foto_perfil"] = foto_rel
-                except ValueError:
+                except ImageTooLarge:
+                    flash(f"Arquivo muito grande. Tamanho máximo: {_format_bytes_label(PROFILE_PHOTO_MAX_UPLOAD_BYTES)}.", "error")
+                except ImageRejected:
                     flash("Foto inválida. Use PNG ou JPG.", "error")
+                else:
+                    store_image(conn, ALUNOS_FOTO, aluno["aluno_id"], foto)
+                    session["foto_perfil"] = foto.version
             conn.commit()
             if senha:
                 session["auth_version"] = get_usuario_auth_version(conn, usuario_id)
@@ -983,6 +989,7 @@ def aluno_meus_dados():
         "aluno_meus_dados.html",
         base_template="base_aluno.html",
         profile=aluno,
+        foto_versao=image_marker(conn, ALUNOS_FOTO, aluno["aluno_id"]) if aluno else None,
         show_student_fields=True,
         cancel_url=_aluno_url("aluno_dashboard"),
         turmas=turmas,
@@ -1203,10 +1210,38 @@ def aluno_baixar_arquivo(arquivo_id: int):
     return resp
 
 
+def _aluno_reportes(conn, aluno_id):
+    rows = conn.execute(
+        f"""
+        SELECT rep.id, rep.titulo, rep.descricao, rep.categoria, rep.screenshot_filename,
+               rep.status, rep.criado_em, rep.atualizado_em, cap.sha256 AS captura_sha256
+          FROM reportes rep
+          LEFT JOIN reportes_captura cap ON cap.reporte_id = rep.id
+         WHERE rep.aluno_id = ?
+      ORDER BY {datetime_order(conn, "rep.criado_em")} DESC, rep.id DESC
+        """,
+        (aluno_id,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "titulo": row["titulo"],
+            "descricao": row["descricao"],
+            "categoria": row["categoria"],
+            "screenshot_url": reporte_captura_url(
+                row["id"], row["captura_sha256"], row["screenshot_filename"]
+            ),
+            "status": row["status"],
+            "criado_em_fmt": format_date_ptbr(row["criado_em"]),
+            "atualizado_em_fmt": format_date_ptbr(row["atualizado_em"]),
+        }
+        for row in rows
+    ]
+
+
 @bp_aluno.route("/aluno/reportar", methods=["GET", "POST"])
 @aluno_required
 def aluno_reportar():
-    screenshot_extensions = ALLOWED_REPORTE_SCREENSHOTS
     categoria_options = REPORTE_CATEGORY_OPTIONS
 
     conn = get_db_connection()
@@ -1244,89 +1279,45 @@ def aluno_reportar():
         if not titulo or not descricao:
             flash("Informe o título e descreva o problema encontrado.", "error")
         else:
-            screenshot_filename = None
+            captura = None
             if captura_tela and getattr(captura_tela, "filename", ""):
                 try:
-                    screenshot_filename = save_student_document(
-                        captura_tela,
-                        screenshot_extensions,
-                        root_folder=current_app.config["DOCUMENTOS_ALUNOS_FOLDER"],
-                        student_id=aluno["id"],
-                        student_name=aluno["nome"],
-                        category="reportes",
-                        prefix=f"reporte{aluno['id']}",
+                    captura = validate_report_screenshot(
+                        read_upload_limited(captura_tela, REPORT_SCREENSHOT_MAX_BYTES)
                     )
-                except ValueError:
+                except ImageTooLarge:
+                    flash(f"Arquivo muito grande. Tamanho máximo: {_format_bytes_label(REPORT_SCREENSHOT_MAX_BYTES)}.", "error")
+                except ImageRejected:
                     flash("A captura deve estar em PNG, JPG, JPEG ou WEBP.", "error")
-                    reportes_rows = conn.execute(
-                        f"""
-                        SELECT id, titulo, descricao, categoria, screenshot_filename, status, criado_em, atualizado_em
-                          FROM reportes
-                         WHERE aluno_id = ?
-                      ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
-                        """,
-                        (aluno["id"],),
-                    ).fetchall()
-                    reportes = [
-                        {
-                            "id": row["id"],
-                            "titulo": row["titulo"],
-                            "descricao": row["descricao"],
-                            "categoria": row["categoria"],
-                            "screenshot_filename": row["screenshot_filename"],
-                            "status": row["status"],
-                            "criado_em_fmt": format_date_ptbr(row["criado_em"]),
-                            "atualizado_em_fmt": format_date_ptbr(row["atualizado_em"]),
-                        }
-                        for row in reportes_rows
-                    ]
+                if captura is None:
                     return render_template(
                         "aluno_reportar.html",
                         aluno=aluno,
                         form_data=form_data,
                         categoria_options=categoria_options,
-                        reportes=reportes,
+                        reportes=_aluno_reportes(conn, aluno["id"]),
                     )
 
-            conn.execute(
+            reporte_id = conn.execute(
                 """
-                INSERT INTO reportes (aluno_id, titulo, descricao, categoria, screenshot_filename, status)
-                VALUES (?, ?, ?, ?, ?, 'Novo')
+                INSERT INTO reportes (aluno_id, titulo, descricao, categoria, status)
+                VALUES (?, ?, ?, ?, 'Novo')
+                RETURNING id
                 """,
-                (aluno["id"], titulo, descricao, categoria, screenshot_filename),
-            )
+                (aluno["id"], titulo, descricao, categoria),
+            ).fetchone()[0]
+            if captura is not None:
+                store_image(conn, REPORTES_CAPTURA, reporte_id, captura)
             conn.commit()
             flash("Reporte registrado para acompanhamento.", "success")
             return redirect(_aluno_url("aluno_reportar"))
 
-    reportes_rows = conn.execute(
-        f"""
-        SELECT id, titulo, descricao, categoria, screenshot_filename, status, criado_em, atualizado_em
-          FROM reportes
-         WHERE aluno_id = ?
-      ORDER BY {datetime_order(conn, "criado_em")} DESC, id DESC
-        """,
-        (aluno["id"],),
-    ).fetchall()
-    reportes = [
-        {
-            "id": row["id"],
-            "titulo": row["titulo"],
-            "descricao": row["descricao"],
-            "categoria": row["categoria"],
-            "screenshot_filename": row["screenshot_filename"],
-            "status": row["status"],
-            "criado_em_fmt": format_date_ptbr(row["criado_em"]),
-            "atualizado_em_fmt": format_date_ptbr(row["atualizado_em"]),
-        }
-        for row in reportes_rows
-    ]
     return render_template(
         "aluno_reportar.html",
         aluno=aluno,
         form_data=form_data,
         categoria_options=categoria_options,
-        reportes=reportes,
+        reportes=_aluno_reportes(conn, aluno["id"]),
     )
 
 

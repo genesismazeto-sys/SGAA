@@ -24,10 +24,18 @@ from app.db import (
     is_integrity_error,
     is_unique_violation,
 )
+from app.db_images import USUARIOS_FOTO, delete_image, image_marker, store_image
 from app.db_maintenance import ensure_usuario_profile_schema
+from app.image_validation import (
+    PROFILE_PHOTO_MAX_UPLOAD_BYTES,
+    ImageRejected,
+    ImageTooLarge,
+    normalize_profile_photo,
+    read_upload_limited,
+)
+from app.presentation import _format_bytes_label
 from app.root_admin import RootAdminEmailLocked, is_root_admin
 from app.security.passwords import hash_password
-from app.uploads import save_upload
 from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL,
     InvalidEmailError,
@@ -85,24 +93,20 @@ def admin_meus_dados():
             remove_foto = request.form.get("remove_foto") == "1"
             foto_file = request.files.get("foto_perfil")
             if remove_foto:
-                conn.execute("UPDATE usuarios SET foto_perfil = NULL WHERE id = ?", (usuario_id,))
+                delete_image(conn, USUARIOS_FOTO, usuario_id)
                 session.pop("foto_perfil", None)
             elif foto_file and foto_file.filename:
                 try:
-                    foto_rel = save_upload(
-                        foto_file,
-                        {"png", "jpg", "jpeg"},
-                        prefix="avatar",
-                        subdir=f"avatars/usuario_{usuario_id}",
+                    foto = normalize_profile_photo(
+                        read_upload_limited(foto_file, PROFILE_PHOTO_MAX_UPLOAD_BYTES)
                     )
-                    if foto_rel:
-                        conn.execute(
-                            "UPDATE usuarios SET foto_perfil = ? WHERE id = ?",
-                            (foto_rel, usuario_id),
-                        )
-                        session["foto_perfil"] = foto_rel
-                except ValueError:
+                except ImageTooLarge:
+                    flash(f"Arquivo muito grande. Tamanho máximo: {_format_bytes_label(PROFILE_PHOTO_MAX_UPLOAD_BYTES)}.", "error")
+                except ImageRejected:
                     flash("Foto inválida. Use PNG ou JPG.", "error")
+                else:
+                    store_image(conn, USUARIOS_FOTO, usuario_id, foto)
+                    session["foto_perfil"] = foto.version
 
             conn.commit()
             if senha:
@@ -127,6 +131,7 @@ def admin_meus_dados():
         "aluno_meus_dados.html",
         base_template="base.html",
         profile=profile,
+        foto_versao=image_marker(conn, USUARIOS_FOTO, usuario_id),
         show_student_fields=False,
         email_readonly=email_locked,
         cancel_url=url_for("admin_dashboard"),

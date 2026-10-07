@@ -48,7 +48,7 @@
 
           <span>{{ _nome_aluno }}</span>
           {% if _foto_aluno %}
-            <img src="{{ url_for('uploaded_file', filename=_foto_aluno) }}" alt="Foto de {{ _nome_aluno }}" class="user-avatar" />
+            <img src="{{ url_for('images.profile_photo', v=_foto_aluno) }}" alt="Foto de {{ _nome_aluno }}" class="user-avatar" />
           {% else %}
             <i class="lucide" data-lucide="user-circle-2" aria-hidden="true"></i>
           {% endif %}

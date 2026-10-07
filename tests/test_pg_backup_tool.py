@@ -438,13 +438,13 @@ def test_contract_toc_is_accepted_with_census():
     specs = pg_schema.PG_TABLE_SPECS
     assert census["classes"] == {
         "CONSTRAINT": sum(1 + len(specs[t]["uniques"]) for t in pg_schema.PG_SCHEMA_TABLES),
-        "FK CONSTRAINT": 30,
+        "FK CONSTRAINT": 33,
         "FUNCTION": 12,
         "INDEX": len(pg_schema.PG_EXPLICIT_INDEXES),
         "SEQUENCE": 21,
         "SEQUENCE SET": 21,
-        "TABLE": 31,
-        "TABLE DATA": 31,
+        "TABLE": 34,
+        "TABLE DATA": 34,
         "TRIGGER": 11,
     }
     assert census["public_schema_entries"] == 2

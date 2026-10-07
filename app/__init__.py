@@ -47,6 +47,7 @@ from app.views import core as core_views
 from app.views import passwords as password_views
 from app.views.files import uploaded_file
 from app.views.comprovantes import bp_comprovantes
+from app.views.images import bp_images
 from app.session_auth import enforce_session_auth_version
 
 
@@ -309,6 +310,7 @@ def create_app(
     if register_aluno_blueprint:
         app.register_blueprint(bp_aluno)
     app.register_blueprint(bp_comprovantes)
+    app.register_blueprint(bp_images)
     core_specs = [
         ("/", "index", core_views.index, ["GET"]),
         ("/login", "login", core_views.login, ["GET", "POST"]),

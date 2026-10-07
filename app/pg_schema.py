@@ -1,5 +1,5 @@
 # coding: utf-8
-"""PostgreSQL current-state schema authority for the SGAA prod-1/v12 contract.
+"""PostgreSQL current-state schema authority for the SGAA prod-1/v13 contract.
 
 This module is the single owner of the PostgreSQL physical schema.  It is
 deliberately independent of Flask and of request handling:
@@ -9,23 +9,23 @@ deliberately independent of Flask and of request handling:
   generated from them and ``PG_CONTRACT_SHA256`` is the digest of their
   normalized JSON representation.  The digest is application-owned, never a
   digest of ``pg_catalog`` formatting.
-* ``provision_pg_schema`` creates the baseline at logical v12 directly (the
-  SQLite migrations v1..v12 are never ported).  It is reachable only through
+* ``provision_pg_schema`` creates the baseline at logical v13 directly (the
+  SQLite migrations v1..v13 are never ported).  It is reachable only through
   the explicit CLI (``python -m app.pg_schema provision``) and never from
   ``init_db`` or from request-time ``ensure_*`` paths.
 * ``validate_pg_schema`` is strictly read-only: it checks material catalog
   facts plus the ``pg_schema_meta`` epoch/version/digest already applied at
   provisioning time.
-* ``schema_migrations`` rows 1..12 are seeded by the baseline as baseline metadata
+* ``schema_migrations`` rows 1..13 are seeded by the baseline as baseline metadata
   (``PG_SCHEMA_MIGRATIONS_SEMANTICS = "baseline_metadata"``).  They exist
   because PostgreSQL-backed runtime readers keep the same logical metadata
-  surface; they are NOT proof that PostgreSQL migrations v1..v12 were executed
-  -- PostgreSQL is provisioned directly at v12.
+  surface; they are NOT proof that PostgreSQL migrations v1..v13 were executed
+  -- PostgreSQL is provisioned directly at v13.
 
 Contract shape notes
 --------------------
 * SQLite ``TEXT`` -> ``text``; ``INTEGER`` -> ``integer``; ``REAL`` ->
-  ``double precision``.  Timestamp columns stay ``text`` in the exact
+  ``double precision``; ``BLOB`` -> ``bytea`` (the v13 image content).  Timestamp columns stay ``text`` in the exact
   ``YYYY-MM-DD HH:MM:SS`` UTC-like shape through ``sgaa_utcnow_text()``;
   timestamps are never migrated to ``timestamp``/``timestamptz``.
 * Former ``AUTOINCREMENT`` integer primary keys use
@@ -40,7 +40,7 @@ Contract shape notes
   ``<table>_<fields>`` name would exceed PostgreSQL's 63-byte identifier
   limit; ``PG_CONSTRAINT_MAP`` is the machine-readable map U5-B will use to
   translate ``pg`` diagnostics into neutral business identities.
-* The eleven prod-1/v12 triggers keep their SQLite names and are implemented
+* The eleven prod-1/v13 triggers keep their SQLite names and are implemented
   with one trigger function per identical semantic body.  Business refusals
   raise SQLSTATE ``SG001`` (``PG_BUSINESS_RULE_SQLSTATE``); U5-B owns the
   broader engine-error-to-route classification and must map this state.
@@ -54,9 +54,17 @@ import re
 import sys
 
 from app import human_text_fold
+from app.prod1_images_ddl import (
+    PROFILE_PHOTO_MAX_EDGE,
+    PROFILE_PHOTO_MAX_STORED_BYTES,
+    PROFILE_PHOTO_MIME_TYPES,
+    REPORT_SCREENSHOT_MAX_BYTES,
+    REPORT_SCREENSHOT_MAX_EDGE,
+    REPORT_SCREENSHOT_MIME_TYPES,
+)
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 12
+PG_SCHEMA_VERSION = 13
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -119,6 +127,10 @@ def _integer(name, not_null=False, default=None):
 
 def _real(name, not_null=False, default=None):
     return _col(name, "double precision", not_null=not_null, default=default)
+
+
+def _bytea(name, not_null=False, default=None):
+    return _col(name, "bytea", not_null=not_null, default=default)
 
 
 def _identity(name):
@@ -190,6 +202,42 @@ def _trigger(name, table, events, function, *, columns=None):
     }
 
 
+def _image_spec(table, owner_column, owner_table, mime_types, max_bytes, max_edge):
+    """One v13 image side table; the same constraints as ``app.prod1_images_ddl``."""
+    mime_list = ",".join(f"'{mime}'" for mime in mime_types)
+    return _spec(
+        [
+            _integer(owner_column, not_null=True),
+            _text("mime_type", not_null=True),
+            _integer("size_bytes", not_null=True),
+            _text("sha256", not_null=True),
+            _integer("width", not_null=True),
+            _integer("height", not_null=True),
+            _bytea("conteudo", not_null=True),
+            _text("atualizado_em", not_null=True, default=_NOW),
+        ],
+        _pk(table, owner_column),
+        checks=[
+            _ck(table, "mime_type", f"mime_type IN ({mime_list})"),
+            _ck(table, "size_bytes", f"size_bytes > 0 AND size_bytes <= {max_bytes}"),
+            _ck(table, "sha256", "sha256 ~ '^[0-9a-f]{64}$'"),
+            _ck(table, "width", f"width > 0 AND width <= {max_edge}"),
+            _ck(table, "height", f"height > 0 AND height <= {max_edge}"),
+            _ck(table, "conteudo", "octet_length(conteudo) = size_bytes"),
+        ],
+        foreign_keys=[
+            _fk(
+                table,
+                [owner_column],
+                owner_table,
+                ["id"],
+                on_delete="CASCADE",
+                on_update="CASCADE",
+            ),
+        ],
+    )
+
+
 PG_APPLICATION_TABLES = (
     "schema_migrations",
     "usuarios",
@@ -221,6 +269,9 @@ PG_APPLICATION_TABLES = (
     "admin_alertas",
     "email_envios",
     "requisicao_email_eventos",
+    "usuarios_foto",
+    "alunos_foto",
+    "reportes_captura",
 )
 
 PG_SCHEMA_TABLES = PG_APPLICATION_TABLES + (PG_SCHEMA_META_TABLE,)
@@ -1143,6 +1194,18 @@ PG_TABLE_SPECS = {
             ),
         ],
     ),
+    "usuarios_foto": _image_spec(
+        "usuarios_foto", "usuario_id", "usuarios",
+        PROFILE_PHOTO_MIME_TYPES, PROFILE_PHOTO_MAX_STORED_BYTES, PROFILE_PHOTO_MAX_EDGE,
+    ),
+    "alunos_foto": _image_spec(
+        "alunos_foto", "aluno_id", "alunos",
+        PROFILE_PHOTO_MIME_TYPES, PROFILE_PHOTO_MAX_STORED_BYTES, PROFILE_PHOTO_MAX_EDGE,
+    ),
+    "reportes_captura": _image_spec(
+        "reportes_captura", "reporte_id", "reportes",
+        REPORT_SCREENSHOT_MIME_TYPES, REPORT_SCREENSHOT_MAX_BYTES, REPORT_SCREENSHOT_MAX_EDGE,
+    ),
     PG_SCHEMA_META_TABLE: _spec(
         [
             _integer("id", not_null=True),
@@ -1661,6 +1724,14 @@ PG_SCHEMA_MIGRATIONS_SEED = (
         '"columns":["cursos.total_horas_aeu",'
         '"matrizes_atividades.horas_extensao_obrigatorias"],'
         '"backfill":"none_stored_values_kept"}',
+    ),
+    (
+        13,
+        "image_storage",
+        '{"schema_epoch":"prod-1","image_storage":"database",'
+        '"tables":["usuarios_foto","alunos_foto","reportes_captura"],'
+        '"legacy_columns":["usuarios.foto_perfil","alunos.foto_perfil",'
+        '"reportes.screenshot_filename"],"backfill":"none_one_shot_importer"}',
     ),
 )
 
@@ -2277,7 +2348,7 @@ def _normalized_trigger_definition(definition, schema):
 
 
 def validate_pg_schema(connection):
-    """Read-only validation of the material PostgreSQL prod-1/v12 contract.
+    """Read-only validation of the material PostgreSQL prod-1/v13 contract.
 
     Returns a summary dict.  Raises :class:`PostgresSchemaError` on the first
     material divergence (missing/extra table, column, constraint, index,
@@ -2658,7 +2729,7 @@ def pg_schema_status(connection):
 
 
 def provision_pg_schema(connection):
-    """Provision the prod-1/v12 baseline into the connection's current schema.
+    """Provision the prod-1/v13 baseline into the connection's current schema.
 
     The caller owns the transaction.  An empty schema is created from scratch;
     a schema that already matches the contract exactly is an idempotent no-op;
@@ -2673,7 +2744,7 @@ def provision_pg_schema(connection):
             status = validate_pg_schema(connection)
         except PostgresSchemaError as exc:
             raise PostgresSchemaIncompatibleError(
-                "existing schema is not the SGAA prod-1/v12 PostgreSQL baseline; "
+                "existing schema is not the SGAA prod-1/v13 PostgreSQL baseline; "
                 "explicit provisioning refuses to drop, alter or repair it: "
                 f"{exc}"
             ) from exc
@@ -2741,7 +2812,7 @@ def provision_database(database_url):
 _USAGE = (
     "usage: python -m app.pg_schema <provision|validate>\n"
     "\n"
-    "Explicit PostgreSQL schema operations for the SGAA prod-1/v12 baseline.\n"
+    "Explicit PostgreSQL schema operations for the SGAA prod-1/v13 baseline.\n"
     "DATABASE_URL must be a PostgreSQL URL. 'provision' creates the baseline\n"
     "from an empty schema or is a no-op when it already matches; it never\n"
     "drops, alters or repairs an existing schema.\n"

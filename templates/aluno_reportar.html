@@ -382,8 +382,6 @@
     const mrmShotLink   = document.getElementById('mrm-shot-link');
     const mrmShotImg    = document.getElementById('mrm-shot-img');
 
-    const shotUrlTpl = "{{ url_for('uploaded_file', filename='__X__') }}";
-
     function openModal(r){
       mrmTitleText.textContent  = r.titulo            || 'Reporte';
       mrmCategoria.textContent  = r.categoria         || '-';
@@ -392,8 +390,8 @@
       mrmAtualizado.textContent = r.atualizado_em_fmt || '-';
       mrmDescricao.textContent  = r.descricao         || '';
 
-      if (r.screenshot_filename){
-        const url = shotUrlTpl.replace('__X__', encodeURIComponent(r.screenshot_filename));
+      if (r.screenshot_url){
+        const url = r.screenshot_url;
         mrmShotLink.href   = url;
         mrmShotImg.src     = url;
         mrmShotWrap.hidden = false;

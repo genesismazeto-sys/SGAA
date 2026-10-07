@@ -29,11 +29,13 @@ from app.prod1_schema import (
     _PROD1_V12_SIGNATURE_SHA256,
     _physical_schema_digest,
     _validate_prod1_v11_schema,
+    _validate_prod1_v12_schema,
     bootstrap_prod1_schema,
     validate_prod1_schema,
 )
 from tests.canonical_matrix_test_support import login_admin
 from tests.prod1_v12_support import revert_prod1_v12_to_v11
+from tests.prod1_v13_support import revert_prod1_v13_to_v12
 from tests.versioned_test_support import isolated_versioned_app_env
 
 
@@ -101,8 +103,11 @@ def _dump(conn) -> dict:
 
 def test_head_schema_and_constants_default_extension_to_160():
     conn = _head()
-    assert SCHEMA_VERSION == 12
-    assert _physical_schema_digest(conn) == _PROD1_V12_SIGNATURE_SHA256
+    # v13 only adds the image tables; without them the head is v12 exactly.
+    assert SCHEMA_VERSION == 13
+    shape = _head()
+    revert_prod1_v13_to_v12(shape)
+    assert _physical_schema_digest(shape) == _PROD1_V12_SIGNATURE_SHA256
     assert _column_default(conn, "cursos", "total_horas_aac") == "160"
     assert _column_default(conn, "cursos", "total_horas_aeu") == "160"
     assert _column_default(conn, "matrizes_atividades", "horas_aac_obrigatorias") == "160"
@@ -163,9 +168,10 @@ def test_migration_keeps_every_value_and_changes_only_future_defaults():
     before = _dump(conn)
     assert _column_default(conn, "cursos", "total_horas_aeu") == "80"
 
-    result = bootstrap_prod1_schema(conn)
+    result = migrate_prod1_v11_to_v12(conn)
 
     assert result["schema_version"] == 12
+    _validate_prod1_v12_schema(conn)
     assert _physical_schema_digest(conn) == _PROD1_V12_SIGNATURE_SHA256
     assert _dump(conn) == before  # every row, id and AUTOINCREMENT counter
     assert [
@@ -220,9 +226,9 @@ def test_migration_is_idempotent_through_the_dispatcher():
     first = bootstrap_prod1_schema(conn)
     snapshot = _dump(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 12
+    assert first["schema_version"] == second["schema_version"] == 13
     assert _dump(conn) == snapshot
-    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 12
+    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 13
     with pytest.raises(Prod1SchemaError, match="prod-1/v11"):
         migrate_prod1_v11_to_v12(conn)
 
@@ -235,7 +241,7 @@ def test_a_failed_migration_leaves_v11_untouched(monkeypatch):
     def _boom(_conn):
         raise Prod1SchemaError("injected failure after the rebuild")
 
-    monkeypatch.setattr(prod1_schema, "validate_prod1_schema", _boom)
+    monkeypatch.setattr(prod1_schema, "_validate_prod1_v12_schema", _boom)
     with pytest.raises(Prod1SchemaError, match="injected"):
         migrate_prod1_v11_to_v12(conn)
 
@@ -247,7 +253,7 @@ def test_a_failed_migration_leaves_v11_untouched(monkeypatch):
 
 def test_bootstrap_and_migration_record_the_same_marker_text():
     assert _V12_DETAILS_JSON in PROD1_SCHEMA_SQL
-    assert validate_prod1_schema(_head())["schema_version"] == 12
+    assert validate_prod1_schema(_head())["schema_version"] == 13
 
 
 # --- D. no application path falls back to 80 -------------------------------------

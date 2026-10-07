@@ -122,7 +122,7 @@ def test_v7_to_v8_migration_preserves_hashes_and_classifies_current_defaults():
     status = migrate_prod1_v7_to_v8(conn)
 
     assert status["schema_version"] == 8, "the v7->v8 step yields v8"
-    assert SCHEMA_VERSION == 12, "the current head is v12"
+    assert SCHEMA_VERSION == 13, "the current head is v13"
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
     assert conn.execute(
         "SELECT name FROM schema_migrations WHERE version=8"

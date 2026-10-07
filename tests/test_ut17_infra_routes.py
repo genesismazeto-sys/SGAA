@@ -45,7 +45,7 @@ duplicated (EXECUTION_PROTOCOL §7 / RED contract §7):
   - requisicao_arquivos-linked file 200 (own requisicao):
     tests/test_release_requisicoes_flow.py::test_release_requisicoes_flow_with_attachment
   - DOCUMENTOS_ALUNOS_FOLDER serving for admin:
-    tests/test_admin_reportes.py::test_aluno_report_screenshot_is_saved_in_documentos_alunos_and_served_for_admin
+    tests/test_db_images_runtime.py::test_uploaded_file_still_serves_legacy_student_documents_for_admin
   - UPLOAD_FOLDER fallback serving (aluno own legacy path):
     tests/test_release_requisicoes_flow.py::test_release_requisicoes_flow_reads_legacy_attachment_from_uploads
   - anonymous redirect and traversal refusal:
@@ -635,8 +635,8 @@ def test_green_6_message_catalog_stays_canonical():
 def test_green_7_schema_version_four_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 12, f"prod-1 SCHEMA_VERSION must be 12, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, (
+    assert SCHEMA_VERSION == 13, f"prod-1 SCHEMA_VERSION must be 13, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}, (
         "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"

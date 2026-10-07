@@ -15,6 +15,7 @@ from app.auth import (
     default_access_level_for_user_type,
 )
 from app.db import get_db_connection
+from app.db_images import profile_photo_marker
 from app.root_admin import is_root_admin, verify_root_master_key
 from app.security.passwords import check_password, hash_password, is_legacy_password_hash
 from app.user_accounts import (
@@ -147,14 +148,11 @@ def login():
             session["access_level"] = access_level
             session["perfil"] = access_level_label(access_level)
             session["auth_version"] = int(credential["auth_version"])
-            if user_type == "aluno":
-                foto_row = conn.execute(
-                    "SELECT foto_perfil FROM alunos WHERE usuario_id = ?", (user["id"],)
-                ).fetchone()
-                if foto_row and foto_row["foto_perfil"]:
-                    session["foto_perfil"] = foto_row["foto_perfil"]
-            elif user_type == "admin" and "foto_perfil" in user.keys() and user["foto_perfil"]:
-                session["foto_perfil"] = user["foto_perfil"]
+            # Version marker of the profile photo (never a path or the bytes);
+            # the header image is served by images.profile_photo.
+            foto_marker = profile_photo_marker(conn, user_type, user["id"])
+            if foto_marker:
+                session["foto_perfil"] = foto_marker
 
             _clear_login_attempts(ip=ip, account=email)
             if user_type == "admin":

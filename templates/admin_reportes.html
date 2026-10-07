@@ -470,7 +470,6 @@
 
   const statusUrlTpl = "{{ url_for('admin_reportes_atualizar_status', reporte_id=0) }}";
   const deleteUrlTpl = "{{ url_for('admin_reportes_deletar', reporte_id=0) }}";
-  const shotUrlTpl   = "{{ url_for('uploaded_file', filename='__X__') }}";
 
   function openModal(r){
     rmTitleText.textContent  = r.titulo       || 'Reporte';
@@ -486,8 +485,8 @@
     rmStatusPill.className   = 'badge status-pill ' + statusToPillClass(r.status);
     rmStatusPill.textContent = r.status || '—';
 
-    if (r.screenshot_filename){
-      const url = shotUrlTpl.replace('__X__', encodeURIComponent(r.screenshot_filename));
+    if (r.screenshot_url){
+      const url = r.screenshot_url;
       rmShotLink.href = url;
       rmShotImg.src   = url;
       rmShotImg.alt   = 'Captura enviada por ' + (r.aluno_nome || 'aluno');

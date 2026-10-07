@@ -934,6 +934,13 @@
       "rule": "/onedrive/callback"
     },
     {
+      "endpoint": "images.profile_photo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/perfil/foto"
+    },
+    {
       "endpoint": "first_access",
       "methods": [
         "GET",
@@ -948,6 +955,13 @@
         "POST"
       ],
       "rule": "/redefinir-senha"
+    },
+    {
+      "endpoint": "images.reporte_captura",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/reportes/<int:reporte_id>/captura"
     },
     {
       "endpoint": "static",

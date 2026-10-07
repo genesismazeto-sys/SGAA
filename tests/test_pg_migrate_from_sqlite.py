@@ -5,9 +5,9 @@ A. static/refusal nodes (no PostgreSQL): the policy manifest covers every
    source and target table, the load order puts parents first, and the source
    and target preconditions refuse before anything is written.
 B. synthetic real-PostgreSQL nodes (``SGAA_PG_TEST_URL``): a hand-built
-   prod-1/v12 SQLite source with sparse ids, ``sqlite_sequence`` above
-   ``max(id)``, a forward self-reference, excluded secrets and one local file
-   is migrated into a freshly provisioned clone; failures after the first
+   prod-1/v13 SQLite source with sparse ids, ``sqlite_sequence`` above
+   ``max(id)``, a forward self-reference, excluded secrets, one local file and
+   v13 image rows (BLOB -> bytea) is migrated into a freshly provisioned clone; failures after the first
    write roll back rows, identity sequences and copied files.
 C. the actual-source rehearsal, opt-in through ``SGAA_PATHB_SOURCE`` /
    ``SGAA_PATHB_SOURCE_SHA256`` / ``SGAA_PATHB_SOURCE_UPLOAD_ROOT``: a frozen
@@ -55,6 +55,13 @@ SECRET_TOKEN_JSON = '{"refresh_token":"pathb-synthetic-secret"}'
 ASSET_RELATIVE = "pathb_docs/manual.pdf"
 ASSET_BYTES = b"%PDF-1.4\n% pathb synthetic manual\n%%EOF\n"
 TS = "2026-01-02 03:04:05"
+#: v13 image content; the marker must never reach any output.
+BLOB_MARKER = b"PATHB-BLOB-MARKER"
+IMAGE_ROWS = {
+    "usuarios_foto": ("usuario_id", 3, "image/png", b"\x89PNG\r\n\x1a\n" + BLOB_MARKER * 6 + bytes(range(256))),
+    "alunos_foto": ("aluno_id", 11, "image/jpeg", b"\xff\xd8\xff" + BLOB_MARKER * 4 + b"\x00\xff" * 200),
+    "reportes_captura": ("reporte_id", 4, "image/webp", b"RIFF\x00\x00\x00\x00WEBP" + BLOB_MARKER + bytes(2048)),
+}
 
 #: Synthetic ``sqlite_sequence`` high-waters, all above the rows' max(id).
 HIGH_WATER = {
@@ -97,7 +104,7 @@ def _insert(conn, table, **values):
 
 
 def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tuple[Path, str]:
-    """A frozen prod-1/v12 SQLite file holding synthetic data only."""
+    """A frozen prod-1/v13 SQLite file holding synthetic data only."""
     path = directory / "pathb_source.db"
     session = sqlite3.connect(os.environ["APP_DATABASE"])
     conn = sqlite3.connect(path)
@@ -166,6 +173,11 @@ def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tu
     i(conn, "admin_alertas", id=1, titulo="Aviso", mensagem="Mensagem", visivel=1, criado_em=TS)
     i(conn, "email_envios", id=3, aluno_id=11, destinatario=STUDENT_EMAIL, assunto="A", corpo="C", status="sent",
       tentativas=tentativas, idempotency_key="k-1", criado_em=TS, enviado_em=TS)
+    i(conn, "reportes", id=4, aluno_id=11, titulo="Reporte", descricao="Descricao", categoria="Outro",
+      status="Novo", criado_em=TS, atualizado_em=TS)
+    for table, (owner_column, owner_id, mime_type, content) in IMAGE_ROWS.items():
+        i(conn, table, **{owner_column: owner_id}, mime_type=mime_type, size_bytes=len(content),
+          sha256=_sha256(content), width=64, height=48, conteudo=content, atualizado_em=TS)
     from app.pg_schema import PG_SCHEMA_EPOCH, PG_SCHEMA_MIGRATIONS_SEED
 
     for version, name, details in PG_SCHEMA_MIGRATIONS_SEED:
@@ -176,7 +188,7 @@ def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tu
     for sql in extra_sql:
         conn.execute(sql)
     conn.commit()
-    conn.execute("PRAGMA user_version = 12")
+    conn.execute(f"PRAGMA user_version = {pg_schema.PG_SCHEMA_VERSION}")
     assert not conn.execute("PRAGMA foreign_key_check").fetchall()
     conn.execute("PRAGMA journal_mode = DELETE")
     conn.close()
@@ -246,11 +258,14 @@ def test_unsupported_source_schema_and_assets_are_refused(tmp_path, monkeypatch)
     (tmp_path / "a").mkdir()
     source, digest = build_synthetic_source(tmp_path / "a", extra_sql=["CREATE TABLE stray (id INTEGER)"])
     _refusal("SOURCE_SCHEMA_UNSUPPORTED", source, digest)
-    (tmp_path / "b").mkdir()
-    source, digest = build_synthetic_source(
-        tmp_path / "b", extra_sql=["UPDATE usuarios SET foto_perfil = 'fotos/x.png' WHERE id = 7"]
-    )
-    _refusal("UNSUPPORTED_LOCAL_ASSET", source, digest)
+    for label, sql in (
+        ("b", "UPDATE usuarios SET foto_perfil = 'fotos/x.png' WHERE id = 7"),
+        ("b2", "UPDATE alunos SET foto_perfil = 'aluno_11 - x/perfil/x.png' WHERE id = 11"),
+        ("b3", "UPDATE reportes SET screenshot_filename = 'aluno_11 - x/reportes/x.png' WHERE id = 4"),
+    ):
+        (tmp_path / label).mkdir()
+        source, digest = build_synthetic_source(tmp_path / label, extra_sql=[sql])
+        _refusal("UNSUPPORTED_LOCAL_ASSET", source, digest)
     (tmp_path / "c").mkdir()
     source, digest = build_synthetic_source(tmp_path / "c")
     _refusal("ASSET_ROOTS_REQUIRED", source, digest)
@@ -558,7 +573,7 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
     out = captured.out + captured.err
     assert "result: MIGRATED" in out and "verified_after=yes" in out
     for secret in (ADMIN_EMAIL, STUDENT_EMAIL, "pbkdf2", "pathb-synthetic-secret", "synthetic-profile-default",
-                   "C:/synthetic", "remote-file", PG_URL, url):
+                   "C:/synthetic", "remote-file", PG_URL, url, BLOB_MARKER.decode(), BLOB_MARKER.hex()):
         assert secret not in out
     assert out.index("target: backend=postgresql") < out.index("copied:")
     assert "prerequisite: GOOGLE_DRIVE_RECONNECT_REQUIRED" in out
@@ -572,7 +587,14 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
     # Excluded and scrubbed tables are empty; the provisioner seed is intact.
     for table in ("cloud_accounts", "configuracoes_backup", "cloud_drive_settings", "senha_tokens", "backup_logs"):
         assert observer.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
-    assert observer.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 12
+    assert observer.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 13
+    # v13 image rows arrive byte for byte; no local file is involved.
+    for table, (owner_column, owner_id, mime_type, content) in IMAGE_ROWS.items():
+        row = observer.execute(
+            f"SELECT {owner_column}, mime_type, size_bytes, sha256, conteudo FROM {table}"
+        ).fetchall()
+        assert len(row) == 1 and tuple(row[0][:4]) == (owner_id, mime_type, len(content), _sha256(content)), table
+        assert bytes(row[0][4]) == content, table
     # Every exact table equals the source, row by row.
     source_conn = pathb.open_source_readonly(source)
     try:
@@ -600,6 +622,66 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
     # A second run refuses the now non-empty target; there is no --force.
     assert pathb.main(argv + ["--apply"]) == 1
     assert "TARGET_NOT_EMPTY" in capsys.readouterr().err
+
+
+def test_binary_values_normalize_to_length_and_digest_only():
+    content = b"\x89PNG" + BLOB_MARKER
+    normalized = pathb.normalize_value(content, "bytea")
+    assert normalized == ("bytea", len(content), _sha256(content))
+    assert pathb.normalize_value(memoryview(content), "bytea") == normalized
+    with pytest.raises(TypeError) as caught:
+        pathb.normalize_value(content.decode("latin-1"), "bytea")
+    assert str(caught.value) == "bytea"
+    # A one-byte difference is a value mismatch reported without any byte.
+    table = "alunos_foto"
+    columns = pathb._columns(table)
+    row = [None] * len(columns)
+    for name, value in (("aluno_id", 11), ("mime_type", "image/png"), ("size_bytes", len(content)),
+                        ("sha256", _sha256(content)), ("width", 1), ("height", 1), ("conteudo", content),
+                        ("atualizado_em", TS)):
+        row[columns.index(name)] = value
+    other = list(row)
+    other[columns.index("conteudo")] = content[:-1] + b"X"
+    source = pathb.normalize_rows(table, [tuple(row)])
+    target = pathb.normalize_rows(table, [tuple(other)])
+    [mismatch] = pathb.compare_rows(table, source, target)
+    assert (mismatch.table, mismatch.primary_key, mismatch.column, mismatch.category) == (
+        table, (11,), "conteudo", "VALUE_DIFFERS"
+    )
+    assert pathb.table_digest(table, source) != pathb.table_digest(table, target)
+    for text in (repr(mismatch), repr(source), pathb.table_digest(table, source)):
+        assert BLOB_MARKER.decode() not in text and BLOB_MARKER.hex() not in text
+
+
+@needs_pg
+def test_binary_corruption_during_load_is_detected_value_free_and_rolled_back(
+    tmp_path, target, monkeypatch, capsys
+):
+    database, url, observer = target
+    source, digest = build_synthetic_source(tmp_path)
+    upload_root, asset_root = _upload_root(tmp_path), tmp_path / "target_uploads"
+    provisioned = _identity_states(observer)
+    original = pathb._to_parameter
+
+    def corrupt(value, pg_type):
+        value = original(value, pg_type)
+        if pg_type == "bytea" and value == IMAGE_ROWS["alunos_foto"][3]:
+            return value[:-1] + bytes([value[-1] ^ 0xFF])  # same length: passes every constraint
+        return value
+
+    monkeypatch.setattr(pathb, "_to_parameter", corrupt)
+    code = pathb.main(["--source", str(source), "--expected-source-sha256", digest,
+                       "--source-upload-root", str(upload_root), "--target-upload-root", str(asset_root),
+                       "--apply"])
+    captured = capsys.readouterr()
+    out = captured.out + captured.err
+    assert code == 1
+    assert "mismatch table=alunos_foto key=(11,) column=conteudo category=VALUE_DIFFERS" in out
+    assert "VALUE_VALIDATION_FAILED" in out
+    assert BLOB_MARKER.decode() not in out and BLOB_MARKER.hex() not in out
+    _assert_untouched(observer, provisioned)
+    assert not asset_root.exists()
+    assert _sha256(source.read_bytes()) == digest
 
 
 @needs_pg

@@ -76,6 +76,7 @@ EXPECTED_BACKEND_MESSAGE_FILES = frozenset(
         "app/views/comprovantes.py",
         "app/views/core.py",
         "app/views/files.py",
+        "app/views/images.py",
         "app/views/passwords.py",
         "app/web/authz_gate.py",
         "app/web/errors.py",

@@ -384,7 +384,7 @@ def test_provisioning_completes_and_second_provision_is_idempotent(schema_conn):
         ).fetchall()
     }
     assert tables == set(pg.PG_SCHEMA_TABLES)
-    assert len(tables) == 31
+    assert len(tables) == 34
     triggers = {
         row[0]
         for row in connection.execute(
@@ -1053,6 +1053,9 @@ def test_validate_pg_schema_is_read_only_and_passes_valid_schema(provisioned_sch
         "DROP INDEX idx_usuarios_email",
         "ALTER TABLE alunos DROP CONSTRAINT fk_alunos_turma_id",
         "DROP TABLE requisicao_email_eventos CASCADE",
+        "ALTER TABLE reportes_captura DROP CONSTRAINT ck_reportes_captura_conteudo",
+        "ALTER TABLE alunos_foto DROP CONSTRAINT fk_alunos_foto_aluno_id",
+        "ALTER TABLE usuarios_foto ALTER COLUMN conteudo TYPE text",
         "UPDATE pg_schema_meta SET contract_sha256 = repeat('0', 64)",
         "UPDATE pg_schema_meta SET schema_version = 11",
         "UPDATE pg_schema_meta SET schema_epoch = 'other'",

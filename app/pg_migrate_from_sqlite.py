@@ -1,10 +1,10 @@
 # coding: utf-8
-"""Path-B cutover: copy a frozen SQLite prod-1/v12 database into PostgreSQL.
+"""Path-B cutover: copy a frozen SQLite prod-1/v13 database into PostgreSQL.
 
 WHY THIS EXISTS
     Path B keeps the business records of the running SQLite installation when
     production moves to PostgreSQL.  ``python -m app.pg_schema provision``
-    creates the empty prod-1/v12 PostgreSQL baseline; this module is the one
+    creates the empty prod-1/v13 PostgreSQL baseline; this module is the one
     supported, offline way to fill it from a FROZEN COPY of the SQLite file.
     Nothing in the application runtime imports or runs it.
 
@@ -106,7 +106,7 @@ class TablePolicy:
 _EXACT = TablePolicy(MIGRATE_EXACT)
 
 SOURCE_TABLE_POLICIES = {
-    # The provisioner seeds rows 1..12; the source rows must equal that seed.
+    # The provisioner seeds rows 1..13; the source rows must equal that seed.
     "schema_migrations": TablePolicy(RECREATE_TARGET_SIDE, (OMITTED_TARGET_SCHEMA_METADATA,)),
     "usuarios": _EXACT,
     # Admin-chosen profile defaults; without them the product falls back to
@@ -150,6 +150,11 @@ SOURCE_TABLE_POLICIES = {
     "admin_alertas": _EXACT,
     "email_envios": _EXACT,
     "requisicao_email_eventos": _EXACT,
+    # v13 database-backed images: verified bytes travel with their row, so no
+    # local file is needed on the target.
+    "usuarios_foto": _EXACT,
+    "alunos_foto": _EXACT,
+    "reportes_captura": _EXACT,
     SQLITE_SEQUENCE_TABLE: TablePolicy(OMIT_EPHEMERAL, (OMITTED_SQLITE_INTERNAL,)),
 }
 
@@ -160,7 +165,10 @@ TARGET_ONLY_TABLE_POLICIES = {
 
 #: Columns that reference local files under an upload root.  Only the
 #: ``admin_arquivos`` legacy files have a supported copy contract; any other
-#: populated reference is refused rather than silently left dangling.
+#: populated reference is refused rather than silently left dangling.  The
+#: legacy image path columns stay here: the source must have been normalized
+#: by ``python -m app.image_import`` (images moved into the v13 tables, paths
+#: NULL) before the cutover.
 _UNSUPPORTED_LOCAL_REFERENCES = (
     ("requisicao_arquivos", "SELECT count(*) FROM requisicao_arquivos WHERE provider = 'local_legacy'"),
     ("usuarios", "SELECT count(*) FROM usuarios WHERE COALESCE(foto_perfil, '') <> ''"),
@@ -173,6 +181,7 @@ _SQLITE_CLASSES = {
     "text": {"text"},
     "integer": {"integer"},
     "double precision": {"real", "integer"},
+    "bytea": {"blob"},
 }
 CONNECT_TIMEOUT_SECONDS = 15
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -370,9 +379,19 @@ class MigrationReport:
 
 
 def normalize_value(value, pg_type):
-    """One backend-neutral representation per contract type."""
+    """One backend-neutral representation per contract type.
+
+    Binary content (SQLite BLOB / PostgreSQL bytea) is represented by
+    ``("bytea", length, sha256)``: comparisons and table digests cover every
+    byte, while a mismatch report or digest input never carries the bytes.
+    """
     if value is None:
         return None
+    if pg_type == "bytea":
+        if not isinstance(value, (bytes, bytearray, memoryview)):
+            raise TypeError("bytea")
+        content = bytes(value)
+        return ("bytea", len(content), hashlib.sha256(content).hexdigest())
     if pg_type == "integer":
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError("integer")
@@ -538,7 +557,7 @@ def read_source(path, expected_sha256) -> SourceSnapshot:
         ]
         if markers != seed:
             raise MigrationRefused(
-                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1/v12 baseline"
+                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1/v13 baseline"
             )
 
         for table in pg_schema.PG_APPLICATION_TABLES:
@@ -826,6 +845,8 @@ def _lock_target(conn):
 def _to_parameter(value, pg_type):
     if value is not None and pg_type == "double precision":
         return float(value)
+    if value is not None and pg_type == "bytea":
+        return bytes(value)
     return value
 
 
@@ -940,6 +961,43 @@ DOMAIN_CHECKS = {
         "WHERE t.tipo_transicao = 'aac_para_aeu' AND (f.eixo <> 'AAC' OR o.eixo <> 'AEU')"
     ),
 }
+
+#: v13 image tables: ``(table, owner table, owner column, legacy path column,
+#: allowed MIME types)``.  One row per owner is the primary key itself.
+IMAGE_TABLES = (
+    ("usuarios_foto", "usuarios", "usuario_id", "foto_perfil", ("image/jpeg", "image/png")),
+    ("alunos_foto", "alunos", "aluno_id", "foto_perfil", ("image/jpeg", "image/png")),
+    (
+        "reportes_captura", "reportes", "reporte_id", "screenshot_filename",
+        ("image/jpeg", "image/png", "image/webp"),
+    ),
+)
+
+
+def _image_domain_checks():
+    checks = {}
+    for table, owner, owner_column, legacy_column, mime_types in IMAGE_TABLES:
+        mime_list = ", ".join(f"'{mime}'" for mime in mime_types)
+        checks[f"{table}_metadata_invalid"] = (
+            f"SELECT count(*) FROM {table} WHERE mime_type NOT IN ({mime_list}) "
+            "OR size_bytes <= 0 OR width <= 0 OR height <= 0 "
+            "OR sha256 !~ '^[0-9a-f]{64}$'"
+        )
+        # Length and content digest against the recorded metadata; a value-free count.
+        checks[f"{table}_content_mismatch"] = (
+            f"SELECT count(*) FROM {table} WHERE octet_length(conteudo) <> size_bytes "
+            "OR encode(sha256(conteudo), 'hex') <> sha256"
+        )
+        # A database image supersedes its owner's legacy file path: new writes
+        # and the importer clear the path in the same transaction.
+        checks[f"{table}_with_legacy_path"] = (
+            f"SELECT count(*) FROM {table} i JOIN {owner} o ON o.id = i.{owner_column} "
+            f"WHERE COALESCE(o.{legacy_column}, '') <> ''"
+        )
+    return checks
+
+
+DOMAIN_CHECKS.update(_image_domain_checks())
 
 
 def foreign_key_orphan_checks():
@@ -1180,7 +1238,7 @@ _USAGE = (
     "         --expected-source-sha256 HEX\n"
     "         [--source-upload-root DIR --target-upload-root DIR] [--apply]\n"
     "\n"
-    "Path-B cutover: copies a frozen copy of the SQLite prod-1/v12 database into\n"
+    "Path-B cutover: copies a frozen copy of the SQLite prod-1/v13 database into\n"
     "the freshly provisioned, empty PostgreSQL database named by DATABASE_URL, in\n"
     "one transaction. Without --apply it only verifies source, target and local\n"
     "files. It refuses a non-empty or non-current target; there is no --force.\n"

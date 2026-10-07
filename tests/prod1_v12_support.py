@@ -22,6 +22,7 @@ from app.prod1_extension_hours_ddl import (
     MATRIZES_ATIVIDADES_INDEX_SQL,
     MATRIZES_ATIVIDADES_V12_TABLE_SQL,
 )
+from tests.prod1_v13_support import revert_prod1_v13_to_v12
 
 CURSOS_V11_TABLE_SQL = CURSOS_V12_TABLE_SQL.replace(
     "total_horas_aeu INTEGER NOT NULL DEFAULT 160",
@@ -39,8 +40,12 @@ def revert_prod1_v12_to_v11(conn: sqlite3.Connection) -> None:
     """Rebuild both tables with the v11 DEFAULT 80 and drop marker 12.
 
     Rows, ids and AUTOINCREMENT counters are carried over exactly, as the
-    forward migration does.
+    forward migration does.  Handed the bootstrapped head (v13), it reverts
+    v13 first, so every predecessor builder keeps a single "revert from the
+    head" call.
     """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 13:
+        revert_prod1_v13_to_v12(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
     foreign_keys = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
     conn.commit()

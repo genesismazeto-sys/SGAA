@@ -15,7 +15,7 @@ Tests: `tests/test_pg_backup_tool.py` (no database),
 
 Layer 2 is **mandatory** even when Layer 1 exists. A Layer-2 artifact is an
 **SGAA application backup**: the SGAA objects in schema `public` only
-(31 tables incl. `pg_schema_meta`, 21 identity sequences, 12 functions,
+(34 tables incl. `pg_schema_meta`, 21 identity sequences, 12 functions,
 constraints, 49 explicit indexes, 11 triggers, all rows). It is **not** a
 cluster dump and **not** a Supabase platform dump: roles, ownership,
 privileges, `auth`, `storage`, `vault`, `extensions`, `realtime` and every
@@ -44,8 +44,8 @@ Two procedures are kept apart throughout:
    environment.
 3. `DATABASE_URL` naming the source database **without a password**.
 4. The source is the SGAA contract: `validate_pg_schema` CURRENT (epoch
-   `prod-1`, v12, contract digest), `schema_migrations` = provisioner baseline,
-   11 triggers enabled, no extension-owned objects in `public`, the 37 Path-B
+   `prod-1`, v13, contract digest), `schema_migrations` = provisioner baseline,
+   11 triggers enabled, no extension-owned objects in `public`, the 49 Path-B
    domain checks green. Anything else is refused; the tool never repairs.
 5. An output directory **outside the repository** (refused inside it:
    `OUTPUT_INSIDE_REPOSITORY`) on encrypted storage, with no leftover
@@ -130,9 +130,10 @@ pg_dump options, sanitized source identity (backend, host, port, database,
 user, server version, cluster system identifier), server version/major/
 encoding/collation, pg_dump and pg_restore versions, artifact file/size/
 SHA-256, consistency mode, schema epoch/version/contract digest/latest
-migration, per-table row count + normalized digest (31 tables), 21 identity
+migration, per-table row count + normalized digest (34 tables; image `bytea`
+content enters the digest as length + SHA-256, never as bytes), 21 identity
 records (`last_value`, `is_called`, `predicted_next_id`, `max_id`, in-snapshot
-observation), TOC census + digest, 37 domain-check results, triggers enabled,
+observation), TOC census + digest, 49 domain-check results, triggers enabled,
 account/credential cardinality, tool git SHA + file SHA-256, `result: ok`.
 No password, URL, token, configuration value, row value or personal data.
 
@@ -221,10 +222,10 @@ python tools/pg_backup.py verify --manifest <...>.manifest.json --restored
 
 Read-only (`REPEATABLE READ READ ONLY`, rolled back; no `nextval`): §D
 artifact checks, then `validate_pg_schema` CURRENT (tables, columns, types,
-nullability, identity, PK/unique/check/FK incl. the 30 FKs and their actions,
+nullability, identity, PK/unique/check/FK incl. the 33 FKs and their actions,
 explicit/partial indexes, the 11 triggers, required functions,
 `pg_schema_meta`), `schema_migrations` baseline, every table's row count and
-normalized digest, all 21 identity states, 37 domain checks, 11 triggers
+normalized digest, all 21 identity states, 49 domain checks, 11 triggers
 enabled, account/credential cardinality — each compared with the manifest.
 Differences print `category=<C> object=<table>` only. The same command
 against the quiescent source proves the source still equals its manifest.
@@ -254,6 +255,15 @@ under the upload root, Drive ids in `requisicao_arquivos` / `admin_arquivos`.
 A Layer-2 backup does not contain the files. After a restore, reconcile every
 `local_legacy` row against the restored upload root (same relative path,
 same size/SHA-256 as recorded at copy time) before opening traffic.
+Profile photos and report screenshots (prod-1/v13 `usuarios_foto`,
+`alunos_foto`, `reportes_captura`) are database rows, so they are inside the
+archive and covered by the row digests; they need no file reconciliation.
+
+An archive is bound to the contract version that wrote it: the manifest's
+table set, schema version and contract digest must equal the tool's current
+contract, so a v12 archive is refused by the v13 tool (`MANIFEST_INVALID`).
+Restore an older archive with the repository revision recorded in its
+manifest (`tool.git_sha`).
 **`LOCAL_UPLOAD_STORAGE_PRODUCTION_BLOCKER_REMAINS`**: production has no
 persistent upload storage yet; Vercel's filesystem is not one.
 

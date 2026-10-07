@@ -144,9 +144,9 @@ class _PgRecordingConnection:
         self.current_schema = current_schema
         self.utc_now = utc_now
         # The contract digest must match the authority for status reads.
-        from app.pg_schema import PG_CONTRACT_SHA256
+        from app.pg_schema import PG_CONTRACT_SHA256, PG_SCHEMA_VERSION
 
-        self.meta_row = (1, "prod-1", 12, PG_CONTRACT_SHA256, "2026-01-01 00:00:00")
+        self.meta_row = (1, "prod-1", PG_SCHEMA_VERSION, PG_CONTRACT_SHA256, "2026-01-01 00:00:00")
         self.migration_row = (
             "extension_hours_default",
             "2026-01-01 00:00:00",
@@ -717,8 +717,8 @@ def test_get_schema_status_postgres_uses_pg_authority_without_sqlite_introspecti
     conn = _pg_connection("usuarios")
     status = get_schema_status(conn)
     assert status["schema_epoch"] == "prod-1"
-    assert status["schema_version"] == 12
-    assert status["target_schema_version"] == 12
+    assert status["schema_version"] == 13
+    assert status["target_schema_version"] == 13
     assert "latest_migration" in status
     lowered = "\n".join(_statements(conn)).lower()
     assert "sqlite_master" not in lowered
@@ -736,8 +736,8 @@ def test_sqlite_get_schema_status_unchanged(tmp_path):
         conn.executescript(PROD1_SCHEMA_SQL)
         status = db_maintenance.get_schema_status(conn)
         assert status["schema_epoch"] == "prod-1"
-        assert status["schema_version"] == 12
-        assert status["target_schema_version"] == 12
+        assert status["schema_version"] == 13
+        assert status["target_schema_version"] == 13
     finally:
         conn.close()
 

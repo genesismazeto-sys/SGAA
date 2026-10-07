@@ -85,6 +85,8 @@ from app import db as app_db_module
 from app.auth import get_admin_permission_requirement
 from flask import session
 
+from PIL import Image as PILImage
+
 import main
 
 from tests.canonical_baseline_support import (
@@ -885,9 +887,9 @@ def test_green_5_message_catalog_schema_and_reverse_dependencies():
 
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 12, f"prod-1 SCHEMA_VERSION must be 12, got {SCHEMA_VERSION}"
+    assert SCHEMA_VERSION == 13, f"prod-1 SCHEMA_VERSION must be 13, got {SCHEMA_VERSION}"
     versions = {version for version, _name, _fn in SCHEMA_MIGRATIONS}
-    assert versions == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, (
+    assert versions == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}, (
         "prod-1 registry must contain only the baseline bootstrap; "
         f"got {sorted(versions)}"
     )
@@ -1127,6 +1129,8 @@ def test_green_10_avatar_upload_and_valueerror_continues_to_commit(tmp_path, mon
 
     monkeypatch.setattr(view_module, "get_db_connection", _wrapped_get_db_connection)
 
+    png = io.BytesIO()
+    PILImage.new("RGB", (40, 30), (12, 34, 56)).save(png, "PNG")
     with main.app.test_request_context(
         "/admin/meus_dados",
         method="POST",
@@ -1134,7 +1138,7 @@ def test_green_10_avatar_upload_and_valueerror_continues_to_commit(tmp_path, mon
             "nome": "Admin UT14",
             "email": "admin.ut14@teste.local",
             "remove_foto": "0",
-            "foto_perfil": (io.BytesIO(b"png-bytes"), "minhafoto.png"),
+            "foto_perfil": (io.BytesIO(png.getvalue()), "minhafoto.png"),
         },
         content_type="multipart/form-data",
     ):
@@ -1146,20 +1150,26 @@ def test_green_10_avatar_upload_and_valueerror_continues_to_commit(tmp_path, mon
     assert result.status_code == 302
     assert calls["commits"] == 1
     assert foto_after is not None, "successful upload must set session foto_perfil"
-    foto_after_norm = foto_after.replace("\\", "/")
-    assert foto_after_norm.startswith(f"avatars/usuario_{admin_id}/"), foto_after
-    assert "avatar-" in foto_after, "save_upload prefix must be avatar-"
     with main.app.app_context():
         conn = main.get_db_connection()
         row = conn.execute(
             "SELECT foto_perfil FROM usuarios WHERE id = ?", (admin_id,)
         ).fetchone()
-    assert row["foto_perfil"] == foto_after
-    assert (tmp_path / "uploads" / foto_after).is_file(), (
-        "avatar must be persisted below the upload root"
+        stored = conn.execute(
+            "SELECT mime_type, sha256, width, height FROM usuarios_foto WHERE usuario_id = ?",
+            (admin_id,),
+        ).fetchone()
+    # STORAGE S1: the photo is a database row in the same transaction; the
+    # session holds a short version marker, never a path; no file is written.
+    assert row["foto_perfil"] is None, "a new photo never writes the legacy path column"
+    assert stored is not None and stored["mime_type"] == "image/jpeg"
+    assert (stored["width"], stored["height"]) == (40, 30)
+    assert foto_after == stored["sha256"][:16]
+    assert not any(p.is_file() for p in (tmp_path / "uploads").rglob("*")), (
+        "a database-backed photo must not create any upload file"
     )
 
-    # Disallowed extension -> save_upload raises ValueError inside the route;
+    # Content that is not an image (whatever its name) -> ImageRejected inside the route;
     # the flash is recorded, the profile transaction STILL commits and the
     # success redirect still happens (MOVE, DO NOT CHANGE -- pre-existing debt).
     calls["commits"] = 0
@@ -1303,9 +1313,12 @@ def test_green_12_template_and_frontend_endpoint_contract():
     assert 'name="foto_perfil"' in meus_dados_html
     assert 'name="remove_foto"' in meus_dados_html
     assert "cancel_url" in meus_dados_html, "cancel link must keep using cancel_url"
-    assert "url_for('uploaded_file'" in meus_dados_html, (
-        "avatar display must keep using the main-owned uploaded_file endpoint"
+    # STORAGE S1: the avatar is a database row served by images.profile_photo
+    # (session owner only); the template never names a file path again.
+    assert "url_for('images.profile_photo', v=foto_versao)" in meus_dados_html, (
+        "avatar display must use the database-backed profile photo endpoint"
     )
+    assert "url_for('uploaded_file'" not in meus_dados_html
 
     aluno_views_src = (PROJECT_ROOT / "app" / "views" / "aluno.py").read_text(
         encoding="utf-8"

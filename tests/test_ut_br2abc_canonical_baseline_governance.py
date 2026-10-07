@@ -154,9 +154,10 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
 
 def test_derived_projections_agree_with_the_versioned_artifacts():
     """Every count the suites now delegate is read off the canonical artifacts."""
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 133
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 132
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 132
+    # STORAGE S1 adds two GET rules with their own endpoints (images.*).
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 135
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 134
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 134
     assert governance.CANONICAL_CSRF_ROW_COUNT == 78
     assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 68
     assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 78
