@@ -111,6 +111,66 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## Real-PostgreSQL qualification — broad route smoke — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
+
+Published by this landing commit (SHA not invented); parent
+`6dae6f4def3c60e4b4ef74a8a1895d4574123c9d`. Test-only: new module
+`tests/test_pg_readiness_route_smoke_real_pg.py`; no production change; E-PG1,
+E-PG2 and U5-A..U5-F are not reopened.
+
+* Environment: the same local PostgreSQL 15.19 (WSL2 Ubuntu,
+  `127.0.0.1:54315`, role `sgaa_qual`); one disposable run-owned database
+  (prefix `sgaa_rsmk_test_<run>_`) provisioned by `provision_pg_schema`,
+  dropped at teardown with the accepted guard model. BROAD_REAL_PG_ROUTE_SMOKE
+  GREEN: 11 passed / 0 skipped / 0 failed; independent review ACCEPT.
+* Route matrix through real `main.app` requests (node labels R0–R8 are smoke
+  labels, not the project gates R4/R5): R0 fresh provisioned state; R1
+  `GET /health` (`SELECT 1` on the PG adapter); R2 `POST /login` success
+  (real hash, credential, `auth_version`, admin route unlocked) and wrong
+  password (no session); R3 `/admin/acesso` list, case-insensitive `q`,
+  asc/desc order by rendered table rows; R4 one `/admin/acesso/salvar` CREATE
+  (M9 keeps uniqueness coverage); R5 `/admin/atividades` list, `nome` filter,
+  asc/desc order; R6 `GET`+`POST .../nova-versao` (`write_transaction` +
+  `lock_activity_base`); R7 `POST .../versoes/<id>/excluir` (re-anchor +
+  renumber); R8 `GET /admin/banco-dados` PG notice and `POST
+  /admin/banco-dados/backup` U5-E refusal (warning, no success, no DB/file
+  mutation, app still usable).
+* POSTGRES_ROUTE_PURITY_PROVEN: `database_backend`/`get_db_connection`
+  resolve at call time from the redirected `app.db.DATABASE_URL` (no
+  imported-by-value bypass); every request's `g.db` was
+  `_PostgresConnectionAdapter` on the disposable database; a `sqlite3.connect`
+  tripwire recorded zero SQLite connections; seed data exists only there;
+  canonical `database.db` byte-identical.
+* Commit evidence: access save, new version and version delete were each
+  confirmed after the request by a separate autocommit psycopg observer, never
+  by status, redirect, flash or the request-owned connection.
+* Harness history (no production implication): R0 first assumed zero rows
+  everywhere (TEST_EXPECTATION_WRONG) — provisioning's `pg_schema_meta` and
+  `schema_migrations` are now asserted separately; R3 first measured the
+  embedded id-ordered JSON blob (TEST_HARNESS_DEFECT) — now rendered row
+  attributes.
+* R5 observation (gap identified, NOT solved): a fresh provisioned database
+  has only schema metadata — no first admin or its credential, no
+  `configuracoes_*` rows, no `grupos_def`/catalog rows, no Geral/reference
+  row. PG `init_db()` only validates the schema; no existing PG path creates
+  the first administrator; settings/access defaults are written lazily at
+  runtime. Mandatory fixture bootstrap: first admin + credential/password
+  state. Scenario-only: extra users, activity bases/versions. Not proven
+  globally: whether Geral/`grupos_def`/reference data are needed by workflows
+  outside the smoke surface.
+* Real-PG evidence to date: 107 green nodes (E-PG1 84 + E-PG2 12 + route smoke
+  11), 0 skipped. NOT READY_FOR_PRODUCTION_INTEGRATION.
+* Still open: R4 cutover-data decision A/A'/B; R5 first-admin bootstrap plus
+  an explicit reference-data decision for the chosen cutover path;
+  PostgreSQL-native backup required BEFORE_FIRST_REAL_DATA.
+* Review notes (non-material, not actioned): R8b's row-count control alone
+  would miss UPDATEs, but the refusal precedes any DB connection; R8a is
+  somewhat redundant; R5's asc check could coincide with default order, desc
+  closes it; R1's docstring says "app startup" but the node does not exercise
+  PG `init_db` validation.
+* TEP: route-smoke lane only; T4 NOT_IMPLICATED; T5 NOT_TRIGGERED; no SQLite
+  suite run.
+
 ## Real-PostgreSQL qualification — E-PG2 P1–P8 concurrency — CLOSED / ACCEPTED / PUBLISHED (2026-10-06)
 
 Published by this landing commit (SHA not invented); parent
