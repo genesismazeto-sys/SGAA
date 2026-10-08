@@ -21,8 +21,8 @@ def test_single_init_owner_and_no_main_bridge():
     assert "_get_main_db_helpers" not in app_defs
 
 
-def test_migration_registry_is_exactly_prod1_v1_to_v14():
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 14
+def test_migration_registry_is_exactly_prod1_v1_to_v15():
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 15
     assert [(version, marker) for version, marker, _ in db_maintenance.SCHEMA_MIGRATIONS] == [
         (1, "first_production_baseline"),
         (2, "remove_norma_domain"),
@@ -38,6 +38,7 @@ def test_migration_registry_is_exactly_prod1_v1_to_v14():
         (12, "extension_hours_default"),
         (13, "image_storage"),
         (14, "canonical_storage"),
+        (15, "canonical_document_custody"),
     ]
     assert all(owner.__module__ == "app.prod1_schema" for _, _, owner in db_maintenance.SCHEMA_MIGRATIONS)
 

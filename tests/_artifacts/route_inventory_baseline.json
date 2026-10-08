@@ -971,6 +971,20 @@
       "rule": "/static/<path:filename>"
     },
     {
+      "endpoint": "comprovantes.issue_upload_intent",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/storage/upload-intents"
+    },
+    {
+      "endpoint": "comprovantes.finalize_upload_intent",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/storage/upload-intents/<intent_id>/finalize"
+    },
+    {
       "endpoint": "uploaded_file",
       "methods": [
         "GET"

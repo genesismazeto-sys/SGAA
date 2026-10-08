@@ -717,8 +717,8 @@ def test_get_schema_status_postgres_uses_pg_authority_without_sqlite_introspecti
     conn = _pg_connection("usuarios")
     status = get_schema_status(conn)
     assert status["schema_epoch"] == "prod-1"
-    assert status["schema_version"] == 14
-    assert status["target_schema_version"] == 14
+    assert status["schema_version"] == 15
+    assert status["target_schema_version"] == 15
     assert "latest_migration" in status
     lowered = "\n".join(_statements(conn)).lower()
     assert "sqlite_master" not in lowered
@@ -736,8 +736,8 @@ def test_sqlite_get_schema_status_unchanged(tmp_path):
         conn.executescript(PROD1_SCHEMA_SQL)
         status = db_maintenance.get_schema_status(conn)
         assert status["schema_epoch"] == "prod-1"
-        assert status["schema_version"] == 14
-        assert status["target_schema_version"] == 14
+        assert status["schema_version"] == 15
+        assert status["target_schema_version"] == 15
     finally:
         conn.close()
 

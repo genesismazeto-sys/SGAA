@@ -23,9 +23,9 @@ from tests.prod1_v14_support import revert_prod1_v14_to_v13
 def revert_prod1_v13_to_v12(conn: sqlite3.Connection) -> None:
     """Drop the three (empty) image tables and marker 13.
 
-    Handed the bootstrapped head (v14), it reverts v14 first.
+    Handed the bootstrapped head (v14 or v15), it reverts down to v13 first.
     """
-    if conn.execute("PRAGMA user_version").fetchone()[0] == 14:
+    if conn.execute("PRAGMA user_version").fetchone()[0] in (14, 15):
         revert_prod1_v14_to_v13(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 13
     for table in IMAGES_V13_TABLES:

@@ -129,7 +129,9 @@ def test_invalid_attachment_batch_is_rejected_before_any_storage_call(fc10_env, 
         },
         content_type="multipart/form-data",
     )
-    assert response.status_code == 200
+    # STORAGE S3-A: file bytes posted to the application are refused outright
+    # (415, the form re-rendered) -- before any storage call and any request row.
+    assert response.status_code == 415
     with main.app.app_context():
         assert _request(main.get_db_connection(), name) is None
 

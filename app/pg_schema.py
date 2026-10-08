@@ -63,6 +63,10 @@ from app.prod1_images_ddl import (
     REPORT_SCREENSHOT_MAX_EDGE,
     REPORT_SCREENSHOT_MIME_TYPES,
 )
+from app.prod1_document_custody_ddl import (
+    DOCUMENT_CUSTODY_V15_DETAILS_JSON,
+    LEGACY_LOCAL_LOCATOR_MAX_LENGTH,
+)
 from app.prod1_storage_ddl import (
     BUSINESS_DOCUMENT_MAX_BYTES,
     BUSINESS_DOCUMENT_MIME_TYPES,
@@ -87,7 +91,7 @@ from app.prod1_storage_ddl import (
 )
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 14
+PG_SCHEMA_VERSION = 15
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -1342,7 +1346,7 @@ PG_TABLE_SPECS = {
             _ck(
                 "admin_arquivos",
                 "provider",
-                "provider IN ('local_legacy','google')",
+                "provider IN ('local_legacy','google','supabase')",
             ),
             _ck(
                 "admin_arquivos",
@@ -1853,7 +1857,7 @@ $fn$
 CREATE FUNCTION fn_requisicao_arquivos_custody() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
 BEGIN
-  IF NEW.provider NOT IN ('local_legacy','google')
+  IF NEW.provider NOT IN ('local_legacy','google','supabase')
      OR NEW.storage_status NOT IN ('legacy_active','pending','uploaded','active',
         'failed','reconciliation_required','deletion_pending','trashed')
      OR (NEW.size_bytes IS NOT NULL AND NEW.size_bytes < 0)
@@ -1874,12 +1878,24 @@ BEGIN
           OR NEW.uploader_user_id IS NULL
           OR COALESCE(TRIM(NEW.operation_key),'') = '' OR length(NEW.operation_key) > 124
           OR NEW.delete_previous_status IS NOT NULL OR NEW.delete_started_at IS NOT NULL))
-     OR (NEW.storage_status IN ('deletion_pending','trashed') AND (
+     OR (NEW.storage_status IN ('deletion_pending','trashed') AND NEW.provider <> 'supabase' AND (
           NEW.provider <> 'google' OR COALESCE(TRIM(NEW.remote_file_id),'') = ''
           OR COALESCE(NEW.delete_previous_status,'') NOT IN
              ('pending','uploaded','active','failed','reconciliation_required')
           OR COALESCE(TRIM(NEW.delete_started_at),'') = ''
-          OR sgaa_datetime_text_valid(NEW.delete_started_at) IS NOT TRUE)) THEN
+          OR sgaa_datetime_text_valid(NEW.delete_started_at) IS NOT TRUE))
+     OR (NEW.provider = 'supabase' AND (
+          NEW.storage_object_id IS NULL OR NEW.storage_status NOT IN ('active','trashed')
+          OR NEW.remote_file_id IS NOT NULL OR NEW.remote_parent_id IS NOT NULL
+          OR NEW.delete_previous_status IS NOT NULL OR NEW.delete_started_at IS NOT NULL
+          OR COALESCE(TRIM(NEW.filename),'') = '' OR COALESCE(TRIM(NEW.original_filename),'') = ''
+          OR NEW.mime_type IS NULL OR NEW.mime_type NOT IN ('application/pdf','image/png','image/jpeg')
+          OR NEW.size_bytes IS NULL OR NEW.size_bytes <= 0
+          OR NEW.sha256 IS NULL OR length(NEW.sha256) <> 64 OR NEW.sha256 ~ '[^0-9a-f]'
+          OR COALESCE(TRIM(NEW.uploaded_at),'') = ''
+          OR sgaa_datetime_text_valid(NEW.uploaded_at) IS NOT TRUE
+          OR NEW.uploader_user_id IS NULL
+          OR COALESCE(TRIM(NEW.operation_key),'') = '' OR length(NEW.operation_key) > 124)) THEN
     RAISE EXCEPTION 'invalid comprovante custody metadata'
       USING ERRCODE = 'SG001';
   END IF;
@@ -1934,10 +1950,30 @@ BEGIN
     OR (NEW.storage_status = 'deletion_pending' AND (
         COALESCE(TRIM(NEW.cleanup_started_at),'') = ''
         OR sgaa_datetime_text_valid(NEW.cleanup_started_at) IS NOT TRUE))
-    OR (NEW.storage_status NOT IN ('replacement_cleanup_pending') AND (
+    OR (NEW.provider <> 'supabase' AND NEW.storage_status NOT IN ('replacement_cleanup_pending') AND (
         NEW.prior_provider IS NOT NULL OR NEW.prior_locator IS NOT NULL))
     OR (NEW.storage_status NOT IN ('replacement_cleanup_pending','deletion_pending')
         AND NEW.cleanup_started_at IS NOT NULL)
+    OR (NEW.provider = 'supabase' AND (
+        NEW.storage_object_id IS NULL OR NEW.storage_status <> 'active'
+        OR NEW.remote_file_id IS NOT NULL OR NEW.remote_parent_id IS NOT NULL
+        OR NEW.cleanup_started_at IS NOT NULL OR COALESCE(NEW.failure_code,'') LIKE 'REPLACEMENT_%'
+        OR (NEW.prior_provider IS NULL) <> (NEW.prior_locator IS NULL)
+        OR (NEW.prior_provider = 'google' AND (
+            length(NEW.prior_locator) NOT BETWEEN 1 AND 256 OR NEW.prior_locator ~ '[^A-Za-z0-9_-]'))
+        OR (NEW.prior_provider = 'local_legacy' AND (
+            TRIM(NEW.prior_locator) = '' OR length(NEW.prior_locator) > 1024
+            OR TRIM(NEW.prior_locator) <> NEW.prior_locator
+            OR left(NEW.prior_locator, 1) IN ('/', '\') OR position(':' in NEW.prior_locator) > 0
+            OR position('..' in NEW.prior_locator) > 0))
+        OR COALESCE(TRIM(NEW.filename),'') = '' OR COALESCE(TRIM(NEW.original_filename),'') = ''
+          OR NEW.mime_type IS NULL OR NEW.mime_type NOT IN ('application/pdf','image/png','image/jpeg')
+          OR NEW.size_bytes IS NULL OR NEW.size_bytes <= 0
+          OR NEW.sha256 IS NULL OR length(NEW.sha256) <> 64 OR NEW.sha256 ~ '[^0-9a-f]'
+          OR COALESCE(TRIM(NEW.uploaded_at),'') = ''
+          OR sgaa_datetime_text_valid(NEW.uploaded_at) IS NOT TRUE
+          OR NEW.uploader_user_id IS NULL
+          OR COALESCE(TRIM(NEW.operation_key),'') = '' OR length(NEW.operation_key) > 124))
   THEN
     RAISE EXCEPTION 'invalid admin arquivo custody metadata'
       USING ERRCODE = 'SG001';
@@ -2102,6 +2138,12 @@ PG_TRIGGERS = (
 )
 
 
+# v15: the local legacy-residue locator bound is the SQLite authority's.
+assert f"length(NEW.prior_locator) > {LEGACY_LOCAL_LOCATOR_MAX_LENGTH}" in PG_TRIGGER_FUNCTIONS[
+    "fn_admin_arquivos_custody"
+]
+
+
 PG_SCHEMA_MIGRATIONS_SEED = (
     (1, "first_production_baseline", '{"schema_epoch":"prod-1"}'),
     (
@@ -2188,6 +2230,7 @@ PG_SCHEMA_MIGRATIONS_SEED = (
         '"columns":["requisicao_arquivos.storage_object_id","admin_arquivos.storage_object_id"],'
         '"backfill":"none","runtime_switch":"none"}',
     ),
+    (15, "canonical_document_custody", DOCUMENT_CUSTODY_V15_DETAILS_JSON),
 )
 
 

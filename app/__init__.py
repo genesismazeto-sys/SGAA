@@ -479,6 +479,13 @@ def create_app(
     #     and https://unpkg.com could be dropped from script-src below. A
     #     source map is never a runtime dependency and never a reason to widen
     #     connect-src.
+    # STORAGE S3-A: request documents upload from the browser straight to the
+    # project's direct Storage origin (signed TUS).  It joins connect-src ONLY
+    # when SUPABASE_URL is configured -- exactly that origin, never a wildcard.
+    from app.storage.supabase_store import configured_storage_origin
+
+    storage_origin = configured_storage_origin()
+    storage_connect_src = f" {storage_origin}" if storage_origin else ""
     csp_default = (
         "default-src 'self'; "
         "img-src 'self' data: blob:; "
@@ -486,7 +493,8 @@ def create_app(
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com; "
         "frame-src 'self' https://accounts.google.com https://picker.googleapis.com https://docs.google.com; "
-        "connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com; "
+        "connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com"
+        f"{storage_connect_src}; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self'"

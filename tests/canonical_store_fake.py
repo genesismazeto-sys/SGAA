@@ -4,9 +4,15 @@ Implements ``app.storage.object_store.CanonicalObjectStore`` with the semantics
 the S2/S3 flows rely on:
 
 * immutable keys -- a second upload (direct or signed) to a taken key is
-  ``STORAGE_ALREADY_EXISTS``; nothing is ever overwritten;
-* signed uploads -- ``create_signed_upload`` issues a one-use token bound to
-  exactly one (bucket, key); ``complete_signed_upload`` plays the browser PUT;
+  ``STORAGE_ALREADY_EXISTS``; nothing is ever overwritten (upsert is false);
+* signed uploads -- ``create_signed_upload`` issues a token bound to exactly
+  one (bucket, key) and, like the service, REUSABLE until it expires (a reuse
+  against a taken key is ``STORAGE_ALREADY_EXISTS``, never an overwrite);
+  ``expire_signed_uploads`` plays the clock running past every capability;
+  ``complete_signed_upload`` plays the browser PUT and
+  ``complete_resumable_upload`` the browser's signed TUS upload (the token,
+  sent as ``x-signature``, must match the TUS ``bucketName`` / ``objectName``
+  metadata; chunking is not observable by the application and not modelled);
 * bounded reads, metadata, deletion, missing objects;
 * failure injection -- ``fail_next(code)`` makes the next call raise that
   sanitized error (provider outage, auth failure, invalid response ...).
@@ -18,6 +24,7 @@ import secrets
 
 from app.storage.object_store import (
     STORAGE_ALREADY_EXISTS,
+    STORAGE_AUTH_FAILURE,
     STORAGE_INVALID_LOCATOR,
     STORAGE_OBJECT_MISSING,
     STORAGE_OBJECT_TOO_LARGE,
@@ -56,13 +63,28 @@ class InMemoryObjectStore:
         return SignedUpload(bucket, key, url=f"memory://upload/{bucket}/{key}?token={token}", token=token)
 
     def complete_signed_upload(self, token: str, content: bytes, *, mime_type: str) -> None:
-        """The browser's PUT to a signed URL: one use, the bound key only."""
-        locator = self.pending_uploads.pop(token, None)
+        """The browser's PUT to a signed URL: the bound key only, no overwrite."""
+        locator = self.pending_uploads.get(token)
         if locator is None:
             raise CanonicalStoreError(STORAGE_INVALID_LOCATOR, "token")
         if locator in self.objects:
             raise CanonicalStoreError(STORAGE_ALREADY_EXISTS)
         self.objects[locator] = (bytes(content), mime_type)
+
+    def complete_resumable_upload(
+        self, *, token: str, bucket: str, object_name: str, content: bytes, content_type: str
+    ) -> None:
+        """The browser's signed TUS upload: ``x-signature`` must bind the metadata locator."""
+        locator = self.pending_uploads.get(token)
+        if locator is None:
+            raise CanonicalStoreError(STORAGE_INVALID_LOCATOR, "token")
+        if locator != (bucket, object_name):
+            raise CanonicalStoreError(STORAGE_AUTH_FAILURE, "signature")
+        self.complete_signed_upload(token, content, mime_type=content_type)
+
+    def expire_signed_uploads(self) -> None:
+        """Every outstanding upload capability passes its expiry."""
+        self.pending_uploads.clear()
 
     def create_signed_download(self, bucket, key, *, expires_in, download_name=None) -> SignedDownload:
         self._enter("create_signed_download")

@@ -210,6 +210,15 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "PostgreSQL.' (msg_a3d2097f6be0d8a4). 1 addition, 0 retirements",
         1,
     ),
+    (
+        "STORAGE S3-A direct request documents: request documents upload "
+        "straight to canonical storage, so the request create / edit flows "
+        "never resolve Google Drive and their 'Não foi possível acessar o "
+        "Google Drive com segurança.' flash (msg_dcaa59c11a39d76c) retires; the "
+        "new upload-intent JSON messages are service constants, not "
+        "catalogued literals. 0 additions, 1 retirement",
+        -1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -253,9 +262,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # UI-C13 adds the backup-lock busy message, to 583; AVD1 swaps three version-
 # delete refusals for one that names the real dependency, to 581; U5-B retires
 # the unreachable atividade_versao.grupo classifier message, to 580; U5-E adds
-# the SQLite-maintenance-unsupported refusal, to 581.
+# the SQLite-maintenance-unsupported refusal, to 581; STORAGE S3-A retires the
+# request-flow Google Drive flash, to 580.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "382674875fe1b75f9130f0a7c45bc039cd046170080b31b60382533897ec2686"
+    "34780f80e5d31e41d0888b54b000234ef0a4a0abf577ab9335f9e8085ac6e2c3"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -436,6 +446,15 @@ U5E_MAINTENANCE_BOUNDARY_KEYS = frozenset(
     }
 )
 U5E_MAINTENANCE_BOUNDARY_RETIRED_KEYS = frozenset()
+# STORAGE S3-A direct request documents.  Purely a retirement (-1): the
+# request create / edit flows no longer reach Google Drive.  Putting exactly
+# this key back into the live catalog reproduces the U5-E digest.
+S3A_DIRECT_DOCUMENTS_KEYS = frozenset()
+S3A_DIRECT_DOCUMENTS_RETIRED_KEYS = frozenset(
+    {
+        "msg_dcaa59c11a39d76c",  # Nao foi possivel acessar o Google Drive com seguranca.
+    }
+)
 
 
 def catalog_keys_digest(keys) -> str:
@@ -524,8 +543,12 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # STORAGE S1 (prod-1/v13) adds the two GET-only database-image delivery
 # routes: /perfil/foto (images.profile_photo) and
 # /reportes/<int:reporte_id>/captura (images.reporte_captura).
+# STORAGE S3-A adds the two CSRF-protected, session-authenticated POST routes
+# of the direct request-document upload: /storage/upload-intents
+# (comprovantes.issue_upload_intent) and
+# /storage/upload-intents/<intent_id>/finalize (comprovantes.finalize_upload_intent).
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "47d2567d6489552a5da3132209cd6f81958de4afb890598385642a161ee00ce1"
+    "5e4d9b3cd32dc92d49d0f0fd89ed1143cf5cac00ec462af42f7b383a5667a7cd"
 )
 
 
@@ -778,11 +801,20 @@ def catalog_keys_before_version_delete(keys) -> set[str]:
     )
 
 
+def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:
+    """Undo the S3-A term: put the retired request-flow Drive flash back.
+
+    S3-A is the newest term, so a reconstruction walks back through this first,
+    then U5-E, U5-B and every older term.
+    """
+    return (set(keys) - set(S3A_DIRECT_DOCUMENTS_KEYS)) | set(S3A_DIRECT_DOCUMENTS_RETIRED_KEYS)
+
+
 def catalog_keys_before_u5e_maintenance_boundary(keys) -> set[str]:
     """Undo the U5-E term: drop the SQLite-maintenance-unsupported key.
 
-    U5-E is the newest term, so a reconstruction walks back through this first,
-    then U5-B and every older term.
+    A reconstruction walks back through S3-A first, then this, then U5-B and
+    every older term.
     """
     return (set(keys) - set(U5E_MAINTENANCE_BOUNDARY_KEYS)) | set(
         U5E_MAINTENANCE_BOUNDARY_RETIRED_KEYS

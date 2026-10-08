@@ -111,6 +111,116 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## STORAGE S3-A — direct request documents — TECHNICALLY ACCEPTED / LIVE REHEARSAL PASSED / INDEPENDENT REVIEW ACCEPTED / FINAL T5 QUALIFIED / READY TO LAND (2026-10-08)
+
+UNCOMMITTED candidate on top of the published S2 baseline
+`e418746c770d888c4dbb93a41773ed17e049f10b`. Not landed, not published, not
+closed. HYBRID STORAGE: IN PROGRESS.
+
+* Logical schema v15 (`canonical_document_custody`) on SQLite and PostgreSQL:
+  `provider = 'supabase'` becomes legal on `requisicao_arquivos` (custody
+  triggers replaced; canonical statuses `active` / `trashed`) and -- schema
+  preparation only -- on `admin_arquivos` (table rebuilt for its provider
+  CHECK; canonical status `active`, optional legacy residue in the existing
+  `prior_provider` / `prior_locator` meaning "preserved for S5", never cleanup
+  pending, `cleanup_started_at` NULL). `supabase` => `storage_object_id` NOT
+  NULL and no Google locator; the reverse implication is deliberately NOT a
+  database rule (S2 / Path-B / Layer-2 legacy + `storage_object_id`
+  compatibility kept). Fresh v15 == v14 -> v15 == v12 -> ... -> v15
+  (physical digest `01053f90…`); the v14 migration now validates the frozen
+  v14, the v4 / v5 rebuilds derive from the head minus the v15 and v14 blocks.
+  Path-B and Layer-2 policies unchanged; canonical rows migrate / restore
+  exactly with no Google prerequisite.
+* NEW request documents (student create, student edit + add, admin create,
+  admin edit + add) are canonical Supabase objects in the candidate: the
+  browser uploads straight to the project's direct storage host with signed
+  resumable (TUS) uploads (6 MiB chunks, vendored pinned `tus-js-client`
+  4.3.1, `static/js/direct-upload.js`, no supabase-js). Signed TUS contract
+  (live-proven): the session is created at
+  `https://<ref>.storage.supabase.co/storage/v1/upload/resumable/sign`; the
+  browser sends `apikey: <sb_publishable_...>` + `x-signature: <signed upload
+  token>` and NO `Authorization` header; the returned session Location is
+  `/storage/v1/upload/resumable/<upload-id>`. The capability carries the
+  publishable key from the new non-secret setting `SUPABASE_PUBLISHABLE_KEY`,
+  which accepts modern `sb_publishable_` keys only (a `sb_secret_` key, a
+  legacy JWT or the configured secret is refused by name, never substituted);
+  `SUPABASE_SECRET_KEY` stays server-only;
+  `POST /storage/upload-intents` (server-chosen bucket / key, 2-hour intent,
+  operation `<submission_id>:<upload_slot_id>`) and
+  `POST /storage/upload-intents/<id>/finalize` (bounded server read <= 16 MiB,
+  SHA-256, structural PDF / PNG / JPEG validation, sniffed == declared ==
+  Storage Content-Type); the form posts only `comprovantes_submission_id` and
+  verified `comprovantes_intent_ids`, never file bytes (multipart refused,
+  415); request INSERT / edit + consume + canonical attach in ONE
+  transaction; submission total <= 16 MiB enforced on verified sizes.
+* Request runtime is Drive-independent in the candidate:
+  DRIVE_AVAILABILITY_MUST_NOT_BLOCK_REQUEST_SUBMISSION is ACTIVE FOR NEW
+  REQUEST DOCUMENTS (proven with every Google entry point as a recording
+  tripwire, no account, no app credentials, corrupt token). Canonical open =
+  60-second signed private URL (302, `no-store`, `no-referrer`); canonical
+  remove / request delete retire the object (no physical delete, no Google).
+  Legacy Google / local rows keep their legacy read / removal paths.
+* `sb_secret_` keys are sent only as `apikey` (never `Authorization: Bearer`).
+* ARQUIVOS REMAINS DRIVE-SYNCHRONOUS (S3-B). No S4 worker, no S5 migration,
+  no physical purge.
+* Focused qualification (no full suite / T5 by instruction): new S3-A suite
+  133/133 (incl. 6 real-PG); revised published suites and governance green;
+  real-PG lanes green (S2, S3-A, U5-A, Path-B, Layer-2, route smoke, E-PG1,
+  E-PG2, R5); six mutation controls killed. Known baseline gaps unchanged
+  (missing `xlwt` collection errors; the MX3 catalogue walk-back node fails
+  identically on the clean published parent).
+* First DEV live attempt: the direct `/storage/v1/upload/resumable` endpoint
+  with `x-signature` only was refused by the provider ("Invalid Compact
+  JWS"); a narrow diagnostic confirmed the direct-host `/resumable/sign`
+  contract above and the candidate was corrected to it (endpoint,
+  `SUPABASE_PUBLISHABLE_KEY`, capability `apikey`, client headers). No
+  fallback to signed PUT or to the project host.
+* Correction focused qualification: 268 collected, 268 passed, 0 failed,
+  0 skipped, 0 errors (254.87 s).
+* DEV-only LIVE REHEARSAL PASSED on DEV `sgaa-dev` (`pkwtgqsiulzeqkqlsdou`);
+  PROD `sgaa-prod` (`uckadhcwfknklmdktuyi`) remained untouched. Proven with
+  the candidate's own adapter and a > 6 MiB PNG: `sb_secret_` sent only as
+  `apikey`; signed `/resumable/sign` session creation (CORS preflights and
+  exposed `Location` / `Upload-Offset`); exact 6 MiB first chunk; deliberate
+  interruption; fresh-context HEAD offset recovery; resume and completion;
+  exact final size / SHA-256 / MIME; bounded read; the application document
+  validator; overwrite protection (upsert false); private unsigned-access
+  denial; signed download (plain and named); leak audit clean; complete
+  cleanup with zero remaining DEV rehearsal resources.
+* Independent review: ACCEPT_STORAGE_S3A_SIGNED_TUS_CORRECTION, no material
+  findings.
+* Accepted pre-governance candidate identities: tracked diff (`git diff |
+  sha256sum`) `6b9227a2a474d507de5b7791bb4d458792b5718dd7cba671199284cf8b698d36`;
+  13-new-file manifest
+  `53258de4402b5b4194c59de4db5bfcb970bbd314be73a24b38dc878dea8bcae5`
+  (recipe: the 13 untracked repository-relative paths, sorted with
+  `LC_ALL=C`; `sha256sum -b` per file, each line exactly `<hash> *<path>\n`;
+  lines concatenated in sorted order; SHA-256 of that byte stream -- not the
+  two-space text-mode form). This governance update changes only this file,
+  so the final tracked-diff identity is recorded at the T5 gate.
+* Final T5 (one replacement run; the first attempt aborted at collection on
+  the known missing-`xlwt` environment gap and was classified invalid,
+  class D): `python -m pytest -q -p no:cacheprovider
+  --continue-on-collection-errors --durations=50 -rs --junitxml=<outside the
+  repository>` -- 4,531 passed, 2 failed, 304 skipped, 6 errors, 0 xfailed,
+  0 xpassed, 4 warnings, 2,223.67 s (4,837 tests collected + 6 collection
+  errors). NOT green. T5_QUALIFIED_WITH_KNOWN_BASELINE_NON_GREEN: the
+  complete non-green set is (a) six collection errors from the missing `xlwt`
+  (`test_manual_student_email_validation`, `test_student_bulk_import_contract`,
+  `test_student_bulk_import_material_findings`,
+  `test_student_import_optional_header`, `test_student_import_row_validation`,
+  `test_student_import_spreadsheet_expressions`); (b)
+  `TestSentinelSurvival::test_sentinels_survive_collection_and_probe`, whose
+  inner collect-only hits the same `xlwt` gap; (c) the MX3 catalogue node
+  `test_student_matrix_error_catalog_delta_is_exact_and_bounded`
+  (`assert len(parent_keys) == PARENT_CATALOG_COUNT`, 549 == 548), which fails
+  with the identical assertion and values on a pristine export of the
+  published parent `e418746c`. Skips: real-PG lanes without
+  `SGAA_PG_TEST_URL` (REAL-PG EVIDENCE in this run: ABSENT), opt-in visual /
+  browser tests, Path-B source rehearsals not requested.
+* S3-A READY TO LAND. S3 NOT CLOSED -- S3-B outstanding. NOT
+  READY_FOR_PRODUCTION_INTEGRATION.
+
 ## STORAGE S2 — canonical storage infrastructure — CLOSED / ACCEPTED / PUBLISHED (2026-10-08)
 
 Published by this landing commit (SHA not invented); parent

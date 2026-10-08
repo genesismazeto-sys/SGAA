@@ -34,6 +34,7 @@ from app.db import write_transaction
 from app.prod1_schema import (
     _PROD1_V13_SIGNATURE_SHA256,
     _PROD1_V14_SIGNATURE_SHA256,
+    _PROD1_V15_SIGNATURE_SHA256,
     CANONICAL_STORAGE_MARKER,
     PROD1_SCHEMA_SQL,
     SCHEMA_VERSION,
@@ -53,6 +54,7 @@ from app.storage.object_store import CanonicalStoreError, verify_object
 from app.storage.supabase_store import SupabaseObjectStore, SupabaseStorageConfig
 from tests.canonical_store_fake import InMemoryObjectStore
 from tests.prod1_v14_support import revert_prod1_v14_to_v13
+from tests.prod1_v15_support import revert_prod1_v15_to_v14
 from tests.storage_s2_support import (
     ACCOUNT_KEY,
     BUCKET,
@@ -116,11 +118,12 @@ def _dump(conn) -> dict:
 # --- A. SQLite authority ------------------------------------------------------------
 
 
-def test_fresh_bootstrap_is_v14_with_empty_storage_objects():
+def test_fresh_bootstrap_carries_v14_with_empty_storage_objects():
+    """The v15 head (STORAGE S3-A) still carries the v14 storage contract unchanged."""
     conn = _head()
     status = validate_prod1_schema(conn)
-    assert SCHEMA_VERSION == status["schema_version"] == 14 and status["table_count"] == 36
-    assert _physical_schema_digest(conn) == _PROD1_V14_SIGNATURE_SHA256
+    assert SCHEMA_VERSION == status["schema_version"] == 15 and status["table_count"] == 36
+    assert _physical_schema_digest(conn) == _PROD1_V15_SIGNATURE_SHA256
     assert conn.execute("SELECT name,details_json FROM schema_migrations WHERE version=14").fetchone() == (
         CANONICAL_STORAGE_MARKER, _V14_DETAILS_JSON
     )
@@ -150,11 +153,14 @@ def _v13_with_rows() -> sqlite3.Connection:
 
 
 def test_v13_to_v14_is_additive_and_matches_the_fresh_head():
+    """v14 is now the frozen predecessor: v13 -> v14 equals the head reverted to v14."""
     conn = _v13_with_rows()
     before = _dump(conn)
     status = migrate_prod1_v13_to_v14(conn)
     assert status["schema_version"] == 14 and status["canonical_storage"] == "supabase"
-    assert _physical_schema_digest(conn) == _physical_schema_digest(_head()) == _PROD1_V14_SIGNATURE_SHA256
+    frozen_v14 = _head()
+    revert_prod1_v15_to_v14(frozen_v14)
+    assert _physical_schema_digest(conn) == _physical_schema_digest(frozen_v14) == _PROD1_V14_SIGNATURE_SHA256
     after = _dump(conn)
     for table, rows in before.items():
         if table in ("requisicao_arquivos", "admin_arquivos", "cloud_accounts"):
@@ -171,9 +177,9 @@ def test_v13_to_v14_is_additive_and_matches_the_fresh_head():
 
 def test_v14_dispatch_is_idempotent_and_refuses_non_v13():
     conn = _v13_with_rows()
-    first = bootstrap_prod1_schema(conn)  # migrates (status carries the migration report)
+    first = bootstrap_prod1_schema(conn)  # migrates v13 -> v14 -> v15 (the v15 report)
     snapshot = _dump(conn)
-    assert first["schema_version"] == 14
+    assert first["schema_version"] == 15
     assert bootstrap_prod1_schema(conn) == validate_prod1_schema(conn)  # second call: validate only
     assert _dump(conn) == snapshot
     with pytest.raises(Prod1SchemaError, match="prod-1/v13"):
@@ -188,7 +194,8 @@ def test_a_failed_v14_migration_leaves_v13_untouched(monkeypatch):
     def _boom(_conn):
         raise Prod1SchemaError("injected failure after the v14 objects were created")
 
-    monkeypatch.setattr(prod1_schema, "validate_prod1_schema", _boom)
+    # The v14 migration validates against the frozen v14 contract (not the moving head).
+    monkeypatch.setattr(prod1_schema, "_validate_prod1_v14_schema", _boom)
     with pytest.raises(Prod1SchemaError, match="injected"):
         migrate_prod1_v13_to_v14(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 13
@@ -600,7 +607,14 @@ def test_fake_store_signed_upload_flow_is_immutable_and_verifiable():
     store.complete_signed_upload(signed.token, b"documento A", mime_type="application/pdf")
     with pytest.raises(CanonicalStoreError) as caught:
         store.complete_signed_upload(signed.token, b"other", mime_type="application/pdf")
-    assert caught.value.code == "STORAGE_INVALID_LOCATOR"  # one use only
+    # S3-A: like the service, the capability stays valid until it expires, but a
+    # reuse can never overwrite the taken key (upsert is false) ...
+    assert caught.value.code == "STORAGE_ALREADY_EXISTS"
+    store.expire_signed_uploads()
+    with pytest.raises(CanonicalStoreError) as caught:
+        store.complete_signed_upload(signed.token, b"other", mime_type="application/pdf")
+    assert caught.value.code == "STORAGE_INVALID_LOCATOR"  # ... and an expired one is refused
+    assert store.read(BUCKET, key, max_bytes=16) == b"documento A"
     for action in (lambda: store.create_signed_upload(BUCKET, key),
                    lambda: store.upload(BUCKET, key, b"other", mime_type="application/pdf")):
         with pytest.raises(CanonicalStoreError) as caught:
@@ -695,7 +709,8 @@ def test_adapter_signed_upload_url_headers_and_parsing():
     signed = store.create_signed_upload(BUCKET, KEY)
     method, url, kwargs = session.requests[0]
     assert (method, url) == ("POST", f"{URL}/storage/v1/object/upload/sign/{BUCKET}/{KEY}")
-    assert kwargs["headers"] == {"apikey": SECRET, "Authorization": f"Bearer {SECRET}", "x-upsert": "false"}
+    # S3-A: an sb_secret_ key is a backend API key -- never a Bearer token.
+    assert kwargs["headers"] == {"apikey": SECRET, "x-upsert": "false"}
     assert kwargs["timeout"] == (5.0, 30.0) and kwargs["allow_redirects"] is False
     assert (signed.url, signed.token) == (f"{URL}/storage/v1{signed_path}", "tok123")
     assert "tok123" not in repr(signed) and SECRET not in repr(store)
@@ -833,23 +848,32 @@ def test_v14_objects_have_the_same_shape_on_both_engines():
         assert {c["name"] for c in pg_schema.PG_TABLE_SPECS[table]["checks"]}  # every table is constrained
 
 
-def test_s2_is_dormant_no_route_no_startup_import_no_required_configuration():
-    for path in list((ROOT / "app" / "views").rglob("*.py")) + list((ROOT / "templates").rglob("*.html")) + [
-        ROOT / "app" / "__init__.py", ROOT / "main.py"
-    ]:
+def test_s3a_activates_only_request_documents_and_needs_no_startup_configuration():
+    """S2 shipped the primitives dormant; S3-A wires them into the REQUEST documents only.
+
+    ARQUIVOS stays on Google Drive (S3-B), no mirror worker runs (S4), and the
+    application still starts without any Supabase configuration -- the store is
+    built lazily on first use, never at startup.
+    """
+    for path in (ROOT / "app" / "views" / "admin" / "arquivos.py", ROOT / "app" / "arquivos.py",
+                 ROOT / "app" / "admin_files.py", ROOT / "templates" / "admin_arquivos.html"):
         text = path.read_text(encoding="utf-8", errors="replace")
-        for marker in ("upload_intents", "mirror_outbox", "supabase_store", "object_store", "storage_objects"):
+        for marker in ("upload_intents", "mirror_outbox", "supabase_store", "object_store",
+                       "request_documents", "canonical_object_store", "storage_objects"):
             assert marker not in text, (path.name, marker)
+    for path in list((ROOT / "app" / "views").rglob("*.py")) + [ROOT / "app" / "__init__.py", ROOT / "main.py"]:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        assert "claim_due_mirror_work" not in text and "complete_synced" not in text, path.name
     env = {k: v for k, v in os.environ.items()
            if k not in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SGAA_STORAGE_BUCKET")}
     probe = (
-        "import sys, main; "
+        "import main, app.storage.supabase_store as s; "
         "assert main.app is not None; "
-        "loaded = [m for m in sys.modules if m.startswith('app.storage.') and m.split('.')[-1] in "
-        "('upload_intents','mirror_outbox','supabase_store','object_store','custody_common')]; "
-        "print('LOADED=' + ','.join(sorted(loaded)))"
+        "assert main.app.extensions.get('canonical_object_store') is None; "
+        "assert 'supabase' not in main.app.config['CONTENT_SECURITY_POLICY']; "
+        "print('STARTED')"
     )
     completed = subprocess.run([sys.executable, "-c", probe], cwd=ROOT, env=env, capture_output=True,
                                text=True, timeout=120)
     assert completed.returncode == 0, completed.stderr[-2000:]
-    assert "LOADED=\n" in completed.stdout or completed.stdout.strip().endswith("LOADED=")
+    assert completed.stdout.strip().endswith("STARTED")

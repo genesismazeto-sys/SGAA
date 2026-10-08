@@ -557,6 +557,25 @@ NON_GOVERNED_BOUNDARY_CATEGORIES: tuple[NonGovernedCategory, ...] = (
             Combination("/comprovantes/<int:attachment_id>/open", "comprovantes.open_comprovante", "GET"),
         }),
     ),
+    NonGovernedCategory(
+        name="request_document_direct_upload",
+        rationale=(
+            "STORAGE S3-A direct request-document upload, shared by aluno and "
+            "admin actors (session-authenticated, CSRF-protected JSON). Each call "
+            "re-authorizes per request: the intent is bound to the session actor, "
+            "a server-issued session submission id and -- for an existing request -- "
+            "authorize_request_comprovante_actor with admin_scope='edit' plus the "
+            "request's editable status; an admin creating a request needs "
+            "requisicoes edit. Another actor's intent is indistinguishable from an "
+            "unknown one."
+        ),
+        identities=frozenset({
+            Combination("/storage/upload-intents", "comprovantes.issue_upload_intent", "POST"),
+            Combination(
+                "/storage/upload-intents/<intent_id>/finalize", "comprovantes.finalize_upload_intent", "POST"
+            ),
+        }),
+    ),
 )
 
 
@@ -759,8 +778,10 @@ CANONICAL_PROFILE_DIGESTS = {
 # lives: which routes are reachable by parameter, and which actor is denied.
 # STORAGE S1 adds the two non-/admin database-image delivery GETs
 # (category database_image_delivery); no requirement or denial changes.
+# STORAGE S3-A adds the two non-/admin direct request-document upload POSTs
+# (category request_document_direct_upload); no requirement or denial changes.
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
-    "5f62266f815bfe89bfb32dac6c0e6625215b91e69b16a293a376556236f7b3af"
+    "a7286c53ea2780d1f97f9f5ebdffc7827a3909e1f0a60b65d5e30550bfbccbc1"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
     "630959fb02f2828ff93f57a08b441d1aa2d0a2b429a52bc35d1e300b10a1017a"

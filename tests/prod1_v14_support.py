@@ -18,6 +18,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_storage_ddl import STORAGE_OBJECT_REFERENCE_TABLES, STORAGE_V14_TABLES
+from tests.prod1_v15_support import revert_prod1_v15_to_v14
 
 _V14_TRIGGERS = (
     "trg_requisicao_arquivos_storage_object_insert",
@@ -33,7 +34,12 @@ _V14_BUSINESS_INDEXES = (
 
 
 def revert_prod1_v14_to_v13(conn: sqlite3.Connection) -> None:
-    """Drop the (empty) v14 objects, the three NULL columns and marker 14."""
+    """Drop the (empty) v14 objects, the three NULL columns and marker 14.
+
+    Handed the bootstrapped head (v15), it reverts v15 first.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 15:
+        revert_prod1_v15_to_v14(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 14
     for table in STORAGE_V14_TABLES:
         assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0, table

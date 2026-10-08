@@ -1,10 +1,10 @@
 # coding: utf-8
-"""Path-B cutover: copy a frozen SQLite prod-1/v14 database into PostgreSQL.
+"""Path-B cutover: copy a frozen SQLite prod-1 (v15) database into PostgreSQL.
 
 WHY THIS EXISTS
     Path B keeps the business records of the running SQLite installation when
     production moves to PostgreSQL.  ``python -m app.pg_schema provision``
-    creates the empty prod-1/v14 PostgreSQL baseline; this module is the one
+    creates the empty prod-1 (v15) PostgreSQL baseline; this module is the one
     supported, offline way to fill it from a FROZEN COPY of the SQLite file.
     Nothing in the application runtime imports or runs it.
 
@@ -18,6 +18,12 @@ WHAT IT COPIES -- AND WHAT IT REFUSES TO COPY
     machine-local key.  Those tables stay empty on the target and are reported
     by table, row count and reason -- never by value.  ``sqlite_sequence`` is
     not copied either; it is the identity high-water evidence.
+
+    v15 canonical document custody: a canonical request row
+    (``provider = 'supabase'``, its ``storage_object_id``, status and custody
+    metadata) is copied exactly like every other business row; it needs no
+    Google credential, connection or Drive account (only a Google-custody row
+    or a Drive-bound mirror raises GOOGLE_DRIVE_RECONNECT_REQUIRED).
 
     v14 canonical storage: ``storage_objects`` and the business rows'
     ``storage_object_id`` are copied exactly (metadata only -- object bytes
@@ -597,7 +603,7 @@ def read_source(path, expected_sha256) -> SourceSnapshot:
         ]
         if markers != seed:
             raise MigrationRefused(
-                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1/v14 baseline"
+                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1 baseline"
             )
 
         for table in pg_schema.PG_APPLICATION_TABLES:
@@ -1339,7 +1345,7 @@ _USAGE = (
     "         --expected-source-sha256 HEX\n"
     "         [--source-upload-root DIR --target-upload-root DIR] [--apply]\n"
     "\n"
-    "Path-B cutover: copies a frozen copy of the SQLite prod-1/v14 database into\n"
+    "Path-B cutover: copies a frozen copy of the SQLite prod-1 (v15) database into\n"
     "the freshly provisioned, empty PostgreSQL database named by DATABASE_URL, in\n"
     "one transaction. Without --apply it only verifies source, target and local\n"
     "files. It refuses a non-empty or non-current target; there is no --force.\n"

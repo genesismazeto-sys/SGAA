@@ -916,6 +916,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/tus-js-client-4.3.1.min.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
 <script>
   (function(){
     const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
@@ -1253,9 +1255,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       {#- UI-C03: no action is rendered. Only Criar/Editar assign one (with
           edit_target_id naming the request the form was filled for); every
           other mode and every close removes it again. -#}
-      <form id="req-form" method="post" enctype="multipart/form-data">
+      <form id="req-form" method="post" data-direct-upload>
         <input type="hidden" name="edit_target_id" id="m_edit_target_id" value="">
         <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
+        <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-cards-narrow form-cards-narrow--gutter-wide">
           <div class="form-row">
@@ -1339,9 +1342,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
             <label class="row-label">Comprovantes</label>
             <div class="field-card file-card" data-upload-card>
               <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
-              <input class="file-input" id="m_comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes">
+              <input class="file-input" id="m_comprovantes_files" type="file" multiple accept=".pdf,.png,.jpg,.jpeg" aria-label="Comprovantes" data-direct-upload-input disabled>
               <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
               <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+            </div>
+            <div class="direct-upload-feedback">
+              <ul class="file-list" data-direct-upload-list aria-label="Comprovantes em envio" aria-live="polite"></ul>
+              <p class="form-note" data-direct-upload-status role="status"></p>
+              <noscript><p class="form-note" role="alert">Para anexar comprovantes é necessário habilitar o JavaScript: os arquivos são enviados diretamente ao armazenamento seguro. Sem JavaScript, a requisição só pode ser enviada sem comprovantes.</p></noscript>
             </div>
           </div>
 

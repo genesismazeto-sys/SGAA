@@ -10,6 +10,12 @@ Now the same render carries ``init`` built from the submitted fields only.
 The native file input is legitimately empty after the round trip (a page can
 never restore local file selections) and nothing pretends otherwise; a failed
 submission still creates nothing and stores no file.
+
+STORAGE S3-A: documents upload straight to canonical storage and are attached
+by verified intent ids, so an invalid FILE is refused before the form is ever
+posted (issue / finalize); the server-side refusal this suite exercises is a
+submitted document the server will not attach -- with the same contract: the
+values come back, nothing is created, nothing is claimed as attached.
 """
 from __future__ import annotations
 
@@ -21,6 +27,13 @@ import pytest
 from markupsafe import escape
 
 import main
+from tests.canonical_request_documents_support import (
+    INTENT_IDS_FIELD,
+    SUBMISSION_FIELD,
+    canonical_documents,
+    form_submission,
+    upload_verified,
+)
 from tests.cdp_browser_support import BrowserSession, find_chromium
 from tests.test_comprovantes_google_drive import PDF, PNG, FakeStorage
 from tests.session_support import stamp_auth_version
@@ -34,7 +47,8 @@ def env(tmp_path):
         original = main.app.extensions.get("comprovante_storage")
         main.app.extensions["comprovante_storage"] = storage
         try:
-            yield {**environment, "storage": storage}
+            with canonical_documents(main.app) as canonical:
+                yield {**environment, "storage": storage, "canonical": canonical}
         finally:
             if original is None:
                 main.app.extensions.pop("comprovante_storage", None)
@@ -105,6 +119,17 @@ def _post(client, data, files=()):
     return client.post("/aluno/nova-requisicao", data=payload, content_type="multipart/form-data")
 
 
+UNATTACHABLE_INTENT = "f" * 32  # not this submission's verified intent
+
+
+def _refused_document_post(client, data):
+    """A submission carrying a document the server must not attach."""
+    submission = form_submission(client, "/aluno/nova-requisicao")
+    return client.post("/aluno/nova-requisicao", data={
+        **data, SUBMISSION_FIELD: submission, INTENT_IDS_FIELD: [UNATTACHABLE_INTENT],
+    }), submission
+
+
 def _init(html):
     raw = re.search(r'<script id="init-form-json" type="application/json">(.*?)</script>', html, re.S)
     assert raw, "the prefill payload is gone"
@@ -163,18 +188,20 @@ def test_an_invalid_file_keeps_the_values_and_claims_no_attachment(env):
     student = _login(client)
     activity, grupo = _allowed_activity(student)
     data = _form(activity, grupo)
-    html = _post(client, data, files=[(PDF, "certificado.pdf"), (b"x", "planilha.xlsx")]).get_data(as_text=True)
-    assert "planilha.xlsx: envie somente arquivos PDF, PNG ou JPEG." in html
+    response, _submission = _refused_document_post(client, data)
+    html = response.get_data(as_text=True)
+    assert response.status_code == 409
+    assert "Os comprovantes enviados não pertencem a esta requisição." in html
     _assert_fields_rendered(html, data)
     assert _init(html)["atividade_versao_id"] == activity
     # The native input is empty after the round trip and the page says so.
     listing = html.split('id="comprovantes-list"', 1)[1].split("</ul>", 1)[0]
     assert " hidden>" in listing.split("\n", 1)[0] and "file-list-item" not in listing
     assert '<div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>' in html
-    assert "certificado.pdf" not in html
+    assert UNATTACHABLE_INTENT not in html
     # Nothing was created, stored or uploaded.
     assert _count() == (0, 0)
-    assert env["storage"].upload_calls == []
+    assert env["storage"].upload_calls == [] and env["canonical"].objects == {}
 
 
 def test_a_corrected_retry_saves_exactly_once(env):
@@ -182,10 +209,15 @@ def test_a_corrected_retry_saves_exactly_once(env):
     student = _login(client)
     activity, grupo = _allowed_activity(student)
     data = _form(activity, grupo)
-    failed = _post(client, data, files=[(b"x", "planilha.xlsx")]).get_data(as_text=True)
-    operation = re.search(r'name="comprovantes_operation_id" value="([^"]+)"', failed).group(1)
-    assert operation != "b27-op", "the retry is a new, intentional operation"
-    retry = _post(client, {**data, "comprovantes_operation_id": operation}, files=[(PDF, "a.pdf"), (PNG, "b.png")])
+    failed_response, failed_submission = _refused_document_post(client, data)
+    failed = failed_response.get_data(as_text=True)
+    submission = re.search(r'name="comprovantes_submission_id" value="([0-9a-f]{32})"', failed).group(1)
+    assert submission != failed_submission, "the retry is a new, intentional submission"
+    intents = [upload_verified(client, env["canonical"], submission, content, name)
+               for content, name in ((PDF, "a.pdf"), (PNG, "b.png"))]
+    retry = client.post("/aluno/nova-requisicao", data={
+        **data, SUBMISSION_FIELD: submission, INTENT_IDS_FIELD: intents,
+    })
     assert retry.status_code == 302
     assert _count() == (1, 2)
 
@@ -230,7 +262,7 @@ def test_the_rerendered_form_reselects_tipo_grupo_and_activity_in_the_browser(en
     student = _login(client)
     activity, grupo = _allowed_activity(student)
     data = _form(activity, grupo)
-    failed = _post(client, data, files=[(b"x", "planilha.xlsx")]).get_data(as_text=True).encode("utf-8")
+    failed = _refused_document_post(client, data)[0].get_data(as_text=True).encode("utf-8")
     session = BrowserSession(client, CHROMIUM)
     try:
         session.response_rewrites["/aluno/nova-requisicao"] = lambda _payload: failed

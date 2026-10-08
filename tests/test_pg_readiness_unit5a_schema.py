@@ -668,7 +668,7 @@ def test_sqlite_v12_authority_is_unchanged():
     conn = _canonical_sqlite()
     status = validate_prod1_schema(conn)
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert status["schema_version"] == SCHEMA_VERSION == 14
+    assert status["schema_version"] == SCHEMA_VERSION == 15
     assert len(_sqlite_explicit_indexes(conn)) == _CANONICAL_EXPLICIT_INDEX_COUNT
     assert len(_sqlite_triggers(conn)) == _CANONICAL_TRIGGER_COUNT
     tables = {

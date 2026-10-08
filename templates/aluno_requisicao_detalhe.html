@@ -60,17 +60,21 @@
     {% endif %}
 
     {% if r.status == 'Pendente' %}
-      <form method="post" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:8px; max-width:520px;">
+      <form method="post" data-direct-upload data-requisicao-id="{{ r.id }}" style="display:flex; flex-direction:column; gap:8px; max-width:520px;">
         <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
+        <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
         <div>
           <div class="help">Adicionar comprovantes</div>
           <div class="field-card file-card" data-upload-card>
             <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
-            <input class="file-input" type="file" name="comprovantes_files" multiple aria-label="Adicionar comprovantes" data-file-list="comprovantes-list">
+            <input class="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg" aria-label="Adicionar comprovantes" data-file-list="comprovantes-list" data-direct-upload-input disabled>
             <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
             <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
           </div>
           <ul class="file-list" id="comprovantes-list" aria-label="Comprovantes selecionados" hidden></ul>
+          <ul class="file-list" data-direct-upload-list aria-label="Comprovantes em envio" aria-live="polite"></ul>
+  <p class="form-note" data-direct-upload-status role="status"></p>
+  <noscript><p class="form-note" role="alert">Para anexar comprovantes é necessário habilitar o JavaScript: os arquivos são enviados diretamente ao armazenamento seguro. Sem JavaScript, a requisição só pode ser enviada sem comprovantes.</p></noscript>
         </div>
         <label>
           <div class="help">Observação</div>
@@ -93,5 +97,7 @@
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/comprovantes-picker.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='vendor/tus-js-client-4.3.1.min.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
 <script>document.addEventListener('DOMContentLoaded',()=>{ if(window.lucide) lucide.createIcons(); });</script>
 {% endblock %}

@@ -4,7 +4,7 @@ import io
 import mimetypes
 import os
 
-from flask import Blueprint, abort, current_app, redirect, send_file, session, url_for
+from flask import Blueprint, abort, current_app, jsonify, redirect, request, send_file, session, url_for
 
 from app.comprovantes import (
     ComprovanteError,
@@ -13,7 +13,9 @@ from app.comprovantes import (
     resolve_google_storage,
 )
 from app.db import get_db_connection
+from app.storage import request_documents as documents
 from app.storage.contracts import StorageError
+from app.storage.object_store import STORAGE_CONFIG_MISSING, CanonicalStoreError
 from app.student_documents import resolve_student_document_path
 
 
@@ -52,6 +54,20 @@ def open_comprovante(attachment_id: int):
         abort(403)
     if row["storage_status"] not in {"active", "legacy_active"}:
         abort(404)
+    if row["storage_object_id"] is not None:
+        # Canonical custody wins whenever a canonical reference exists: the
+        # browser is sent to a 60-second signed private URL; no body here.
+        try:
+            url = documents.canonical_download_url(
+                conn, row, download=(request.args.get("download") or "").strip() == "1"
+            )
+        except documents.RequestDocumentError as exc:
+            if exc.status == 404:
+                abort(404)
+            return _secure_headers(current_app.response_class(exc.user_message, status=503))
+        response = redirect(url, code=302)
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return _secure_headers(response)
     stored_name = os.path.basename(str(row["filename"] or "comprovante"))
     if row["provider"] == "google":
         try:
@@ -103,4 +119,76 @@ def open_comprovante(attachment_id: int):
     abort(404)
 
 
-__all__ = ["INLINE_MIME_TYPES", "bp_comprovantes", "open_comprovante"]
+def _no_store_json(body: dict, status: int):
+    response = jsonify(body)
+    response.status_code = status
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _document_error(exc: "documents.RequestDocumentError"):
+    body = {"error": exc.code, "message": exc.user_message}
+    if exc.state:
+        body["state"] = exc.state
+    if exc.intent_id:
+        body["intent_id"] = exc.intent_id
+    return _no_store_json(body, exc.status)
+
+
+def _store_error(exc: CanonicalStoreError):
+    code = "STORAGE_NOT_CONFIGURED" if exc.code == STORAGE_CONFIG_MISSING else "STORAGE_UNAVAILABLE"
+    return _no_store_json({"error": code, "message": documents.STORAGE_UNAVAILABLE_MESSAGE}, 503)
+
+
+def _upload_actor() -> int | None:
+    if session.get("user_type") not in ("aluno", "admin") or not session.get("user_id"):
+        return None
+    return int(session["user_id"])
+
+
+@bp_comprovantes.post("/storage/upload-intents")
+def issue_upload_intent():
+    """Issue (or replay) one request-document upload intent + signed TUS capability."""
+    actor = _upload_actor()
+    if actor is None:
+        return _no_store_json(
+            {"error": "AUTHENTICATION_REQUIRED", "message": documents.AUTHENTICATION_REQUIRED_MESSAGE}, 401
+        )
+    conn = get_db_connection()
+    try:
+        capability = documents.issue_request_document(
+            conn, session, actor_user_id=actor, payload=request.get_json(silent=True)
+        )
+    except documents.RequestDocumentError as exc:
+        return _document_error(exc)
+    except CanonicalStoreError as exc:
+        return _store_error(exc)
+    return _no_store_json(capability.as_json(), 201)
+
+
+@bp_comprovantes.post("/storage/upload-intents/<intent_id>/finalize")
+def finalize_upload_intent(intent_id: str):
+    """Verify the uploaded object server-side; only the path id is an input."""
+    actor = _upload_actor()
+    if actor is None:
+        return _no_store_json(
+            {"error": "AUTHENTICATION_REQUIRED", "message": documents.AUTHENTICATION_REQUIRED_MESSAGE}, 401
+        )
+    conn = get_db_connection()
+    try:
+        state = documents.finalize_request_document(conn, actor_user_id=actor, intent_id=intent_id)
+    except documents.RequestDocumentError as exc:
+        return _document_error(exc)
+    except CanonicalStoreError as exc:
+        return _store_error(exc)
+    return _no_store_json({"intent_id": intent_id, "state": state}, 200)
+
+
+__all__ = [
+    "INLINE_MIME_TYPES",
+    "bp_comprovantes",
+    "finalize_upload_intent",
+    "issue_upload_intent",
+    "open_comprovante",
+]

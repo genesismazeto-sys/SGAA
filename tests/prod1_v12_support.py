@@ -40,11 +40,11 @@ def revert_prod1_v12_to_v11(conn: sqlite3.Connection) -> None:
     """Rebuild both tables with the v11 DEFAULT 80 and drop marker 12.
 
     Rows, ids and AUTOINCREMENT counters are carried over exactly, as the
-    forward migration does.  Handed a later head (v13 or v14), it reverts
+    forward migration does.  Handed a later head (v13, v14 or v15), it reverts
     down to v12 first, so every predecessor builder keeps a single "revert from the
     head" call.
     """
-    if conn.execute("PRAGMA user_version").fetchone()[0] in (13, 14):
+    if conn.execute("PRAGMA user_version").fetchone()[0] in (13, 14, 15):
         revert_prod1_v13_to_v12(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
     foreign_keys = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])

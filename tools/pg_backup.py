@@ -46,7 +46,7 @@ BACKUP
     exactly -- any other schema, object class, role/ACL entry or object is
     refused; the scope is proven from the artifact, not from the command line.
 
-TABLE DATA POLICY (prod-1/v14)
+TABLE DATA POLICY (prod-1 v14 / v15)
     Every contract table is archived with its schema.  Two tables are
     archived SCHEMA ONLY (``pg_dump --exclude-table-data``) and their absence
     of TABLE DATA is part of the TOC contract, so it is proven from the
@@ -58,7 +58,8 @@ TABLE DATA POLICY (prod-1/v14)
       health is never restored; no row is the authoritative "never ran" state.
 
     ``storage_objects`` and the business ``storage_object_id`` references are
-    archived in full.  The manifest adds a value-free canonical-storage census
+    archived in full -- including the v15 canonical request rows
+    (``provider = 'supabase'``), restored exactly like every other row.  The manifest adds a value-free canonical-storage census
     (counts by lifecycle / mirror state, total size, a reference digest over
     id/bucket/key/sha256/size -- no filename, no person).  Object BYTES live in
     the canonical bucket and are NOT part of this logical backup.
@@ -821,7 +822,7 @@ def read_state(conn) -> DatabaseState:
     ]
     seed = [(v, n, pg_schema.PG_SCHEMA_EPOCH, d) for v, n, d in pg_schema.PG_SCHEMA_MIGRATIONS_SEED]
     if markers != seed:
-        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1/v14 baseline")
+        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1 baseline")
     epoch, version, contract = conn.execute(
         f"SELECT schema_epoch, schema_version, contract_sha256 FROM {pg_schema.PG_SCHEMA_META_TABLE}"
     ).fetchone()

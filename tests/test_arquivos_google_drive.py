@@ -37,6 +37,7 @@ from app.prod1_schema import (
     migrate_prod1_v11_to_v12,
     migrate_prod1_v12_to_v13,
     migrate_prod1_v13_to_v14,
+    migrate_prod1_v14_to_v15,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -206,7 +207,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 14
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 15
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -223,9 +224,13 @@ def test_v5_bootstrap_and_migration_consume_single_arquivos_ddl_authority():
     assert "CREATE TABLE admin_arquivos" not in schema_source
     assert "CREATE TABLE admin_arquivos (" not in migration_source
     assert authority_source.count("CREATE TABLE admin_arquivos") == 1
-    # The v5 rebuild predates v14: same authority minus the v14 additions.
+    # The v5 rebuild predates v14 (and v15): same authority minus both additions.
     assert "canonical_prod1_pre_v14_object_sql" in migration_source
-    assert "_PRE_V14_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(STORAGE_V14_SCHEMA_OBJECTS_SQL" in schema_source
+    assert "_PRE_V15_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(DOCUMENT_CUSTODY_V15_SCHEMA_OBJECTS_SQL" in schema_source
+    assert "_PRE_V14_SCHEMA_SQL = _PRE_V15_SCHEMA_SQL.replace(STORAGE_V14_SCHEMA_OBJECTS_SQL" in schema_source
+    # v15 (S3-A) rebuilds the table once more, from its own single authority.
+    custody_source = (root / "app" / "prod1_document_custody_ddl.py").read_text(encoding="utf-8")
+    assert custody_source.count("CREATE TABLE admin_arquivos") == 1
 
 
 def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
@@ -254,6 +259,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     migrate_prod1_v11_to_v12(conn)
     migrate_prod1_v12_to_v13(conn)
     migrate_prod1_v13_to_v14(conn)
+    migrate_prod1_v14_to_v15(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)
@@ -930,7 +936,9 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # delete refusal naming the real dependency replaces three, for -2.  U5-B
     # is the twentieth: the unreachable atividade_versao.grupo classifier
     # message retires, for -1.  U5-E is the twenty-first: the SQLite-
-    # maintenance-unsupported refusal under PostgreSQL, for +1.
+    # maintenance-unsupported refusal under PostgreSQL, for +1.  STORAGE S3-A is
+    # the twenty-second: the request flows stop reaching Google Drive and their
+    # Drive flash retires, for -1.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -953,7 +961,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         -2,
         -1,
         1,
-    ], "the named catalog delta ledger must stay exactly these twenty-one terms"
+        -1,
+    ], "the named catalog delta ledger must stay exactly these twenty-two terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -962,13 +971,14 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 581
+    assert governance.CANONICAL_CATALOG_COUNT == 580
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
         governance.CATALOG_FC07_HEAD_EXPECTED
         + governance.CATALOG_FC07_NET_PRODUCT_DELTA
     ) - len(
+        governance.catalog_keys_before_s3a_direct_documents(
         governance.catalog_keys_before_u5e_maintenance_boundary(
         governance.catalog_keys_before_u5b_runtime_dialect(
             governance.catalog_keys_before_password_foundation(
@@ -989,6 +999,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
                     )
                 )
             )
+        )
         )
         )
         )

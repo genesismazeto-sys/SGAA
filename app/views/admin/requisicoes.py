@@ -21,7 +21,8 @@ from app.comprovantes import (
     resolve_google_storage,
     upload_comprovantes,
 )
-from app.db import ensure_turmas_matriz_schema, get_db_connection
+from app.db import ensure_turmas_matriz_schema, get_db_connection, write_transaction
+from app.storage import request_documents as documents
 from app.db_maintenance import (
     ensure_matriz_atividade_links_table,
     ensure_requisicao_arquivos_table,
@@ -309,6 +310,20 @@ def _list_admin_requisicao_alunos(conn):
          ORDER BY {human_text_order("a.nome", connection=conn)}, a.id
         """
     ).fetchall()
+
+
+DIRECT_UPLOAD_REQUIRED_MESSAGE = (
+    "Os comprovantes são enviados diretamente pelo navegador e exigem JavaScript. "
+    "Recarregue a página e selecione os arquivos novamente."
+)
+
+
+def _canonical_document_form():
+    """``(intent_ids, submission_id)`` of a request form; bytes are refused upstream."""
+    return (
+        documents.submitted_intent_ids(request.form),
+        (request.form.get(documents.SUBMISSION_FIELD) or "").strip(),
+    )
 
 
 def _append_requisicao_arquivos(
@@ -670,6 +685,7 @@ def admin_requisicoes():
         docs_por_atividade=docs_por_atividade,
         filter_schema=filter_schema,
         comprovantes_operation_id=new_comprovante_operation_id(),
+        comprovantes_submission_id=documents.issue_submission(session, int(session["user_id"])),
         email_pendentes=email_pendentes,
         email_falhas=email_falhas,
         email_placeholder_help=PLACEHOLDER_HELP,
@@ -732,23 +748,24 @@ def admin_nova_requisicao():
         flash("Informe uma data válida para o evento.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    arquivos = request.files.getlist("comprovantes_files") or []
+    # STORAGE S3-A: documents arrive verified in canonical storage, never as bytes.
+    if documents.has_file_parts(request.files):
+        flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    intent_ids, submission_id = _canonical_document_form()
+    actor_id = int(session["user_id"])
     try:
-        batch = prepare_comprovante_batch(
-            arquivos,
-            batch_key=(
-                request.form.get("comprovantes_operation_id")
-                or request.headers.get("Idempotency-Key")
-            ),
-            max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
-        )
-        replayed_request_id = find_completed_request_retry(
-            conn, aluno_id=aluno_id, batch=batch
-        )
-        if replayed_request_id is not None:
-            flash("Requisição criada com sucesso.", "success")
-            return redirect(url_for("admin_requisicoes"))
-        storage = resolve_google_storage(conn) if batch else None
+        if intent_ids:
+            replayed_request_id = documents.find_completed_submission(
+                conn, actor_user_id=actor_id, intent_ids=intent_ids
+            )
+            if replayed_request_id is not None:
+                flash("Requisição criada com sucesso.", "success")
+                return redirect(url_for("admin_requisicoes"))
+            if not documents.submission_is_live(session, submission_id, actor_id):
+                raise documents.RequestDocumentError(
+                    "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
+                )
         prepared_snapshot = prepare_versioned_requisicao_snapshot(
             conn,
             flow_origin="admin_create",
@@ -756,13 +773,9 @@ def admin_nova_requisicao():
             atividade_versao_id=atividade_id,
         )
         turma_snapshot = capture_student_turma_snapshot(conn, aluno_id)
-    except (RequisicaoSnapshotError, ComprovanteError) as exc:
+    except (RequisicaoSnapshotError, ComprovanteError, documents.RequestDocumentError) as exc:
         conn.rollback()
         flash(getattr(exc, "user_message", str(exc)), "error")
-        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
-    except StorageError:
-        conn.rollback()
-        flash("Não foi possível acessar o Google Drive com segurança.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     except Exception:
         conn.rollback()
@@ -771,8 +784,9 @@ def admin_nova_requisicao():
 
     data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        cur = conn.cursor()
-        cur.execute(
+        # One transaction: the request row and every canonical attachment.
+        with write_transaction(conn):
+            req_id = conn.execute(
             """
             INSERT INTO requisicoes
             (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
@@ -794,24 +808,18 @@ def admin_nova_requisicao():
                 turma_snapshot.turma_id,
                 turma_snapshot.turma_codigo,
             ),
-        )
-        req_id = cur.fetchone()[0]
-        if batch:
-            upload_comprovantes(
+            ).fetchone()[0]
+            documents.attach_request_documents(
                 conn,
-                request_id=req_id,
-                uploader_user_id=int(session["user_id"]),
-                batch=batch,
-                storage=storage,
+                actor_user_id=actor_id,
+                request_id=int(req_id),
+                submission_id=submission_id,
+                intent_ids=intent_ids,
+                create=True,
             )
-        else:
-            conn.commit()
-    except ComprovanteError as exc:
+    except (ComprovanteError, documents.RequestDocumentError) as exc:
         try:
             conn.rollback()
-            if "req_id" in locals() and not exc.reconciliation_required:
-                conn.execute("DELETE FROM requisicoes WHERE id=?", (req_id,))
-                conn.commit()
         except Exception:
             logger.exception("Falha ao reverter requisição do admin")
         flash(exc.user_message, "error")
@@ -926,25 +934,34 @@ def admin_editar_requisicao(req_id):
         params.append(observacao)
     sql += " WHERE id = ?"
     params.append(req_id)
-    arquivos = request.files.getlist("comprovantes_files") or []
+    if documents.has_file_parts(request.files):
+        flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
+        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    intent_ids, submission_id = _canonical_document_form()
+    actor_id = int(session["user_id"])
     try:
-        uploaded = _append_requisicao_arquivos(
-            conn,
-            req_id,
-            requisicao["aluno_id"],
-            arquivos,
-            finalize_db=lambda: conn.execute(sql, tuple(params)),
-        )
-        if uploaded is None:
+        if intent_ids and documents.find_completed_submission(
+            conn, actor_user_id=actor_id, intent_ids=intent_ids
+        ) == int(req_id):
+            intent_ids = []  # response-lost retry: these documents are attached already
+        if intent_ids and not documents.submission_is_live(session, submission_id, actor_id):
+            raise documents.RequestDocumentError(
+                "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
+            )
+        # The field update and every canonical attachment commit together.
+        with write_transaction(conn):
             conn.execute(sql, tuple(params))
-            conn.commit()
-    except ComprovanteError as exc:
+            documents.attach_request_documents(
+                conn,
+                actor_user_id=actor_id,
+                request_id=int(req_id),
+                submission_id=submission_id,
+                intent_ids=intent_ids,
+                create=False,
+            )
+    except (ComprovanteError, documents.RequestDocumentError) as exc:
         conn.rollback()
         flash(exc.user_message, "error")
-        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
-    except StorageError:
-        conn.rollback()
-        flash("Não foi possível acessar o Google Drive com segurança.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
     except Exception:
         conn.rollback()

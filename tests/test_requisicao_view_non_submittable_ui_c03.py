@@ -281,7 +281,9 @@ def test_d_view_then_edit_rebuilds_the_target_and_save_updates_only_r1(page):
     session.pump(0.5)
     posts = [r for r in session.requests[sent:] if r[0] == "POST"]
     assert [p[1] for p in posts] == [f"/admin/requisicoes/{r1}/editar"]
-    assert f'name="edit_target_id"\r\n\r\n{r1}\r\n' in posts[0][2]
+    # STORAGE S3-A: the request form no longer posts multipart (no file bytes);
+    # the browser sends it url-encoded, naming the same edit target.
+    assert f"edit_target_id={r1}" in posts[0][2].split("&")
     assert _row(r1)["nome_evento"] == "R1 via Salvar"
     assert _row(r1)["observacao"] == "OBS R1", "a normal edit must keep observação"
     assert _row(r2) == before_r2

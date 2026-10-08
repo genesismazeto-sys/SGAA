@@ -81,6 +81,7 @@ from app.db import (
     integrity_constraint_name,
     is_integrity_error,
     is_unique_violation,
+    write_transaction,
 )
 from app.db_images import (
     ALUNOS_FOTO,
@@ -103,6 +104,7 @@ from app.sql_dialect import (
     datetime_order,
     format_date_ptbr as sql_format_date_ptbr,
 )
+from app.storage import request_documents as documents
 from app.storage.contracts import StorageError
 from app.views.images import reporte_captura_url
 from app.text import human_text_contains, human_text_key, ptbr_text_sort_key
@@ -134,6 +136,11 @@ def _get_main_helpers():
 
 
 bp_aluno = Blueprint("aluno", __name__)
+
+DIRECT_UPLOAD_REQUIRED_MESSAGE = (
+    "Os comprovantes são enviados diretamente pelo navegador e exigem JavaScript. "
+    "Recarregue a página e selecione os arquivos novamente."
+)
 
 AAC_ACTIVITY_TYPE = "Acadêmica Complementar"
 EXT_ACTIVITY_TYPE = "Extensão Universitária"
@@ -1635,6 +1642,7 @@ def aluno_nova_requisicao():
         flash("Dados do aluno não encontrados.", "error")
         return redirect(url_for("login"))
 
+    response_status = 200
     if request.method == "POST":
         aluno_id = aluno_scope["aluno_id"]
 
@@ -1661,6 +1669,7 @@ def aluno_nova_requisicao():
                 tipo_atual=tipo_inicial,
                 init=_submitted_request_init(request.form, keep_activity=not tipo_divergente),
                 comprovantes_operation_id=new_comprovante_operation_id(),
+                comprovantes_submission_id=documents.issue_submission(session, usuario_id),
             )
         if not _is_activity_allowed_for_usuario(conn, usuario_id, versao_id):
             flash("A atividade selecionada não está disponível para a matriz da sua turma.", "error")
@@ -1670,29 +1679,41 @@ def aluno_nova_requisicao():
                 tipo_atual=tipo_inicial,
                 init=_submitted_request_init(request.form, keep_activity=False),
                 comprovantes_operation_id=new_comprovante_operation_id(),
+                comprovantes_submission_id=documents.issue_submission(session, usuario_id),
             )
 
-        arquivos = request.files.getlist("comprovantes_files") or []
-        labels = request.form.getlist("comprovantes_labels") or []
+        # STORAGE S3-A: request documents never travel through the application.
+        # They were uploaded straight to canonical storage and verified; the
+        # form carries only the submission id and the verified intent ids.
+        if documents.has_file_parts(request.files):
+            # Refused before anything is stored (415: file bytes are not an
+            # accepted media type here); the form comes back with the typed
+            # values (UI-B27), never with a pretended attachment.
+            flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
+            return render_template(
+                "aluno_nova_requisicao.html",
+                atividades=atividades,
+                tipo_atual=tipo_inicial,
+                init=_submitted_request_init(request.form),
+                comprovantes_operation_id=new_comprovante_operation_id(),
+                comprovantes_submission_id=documents.issue_submission(session, usuario_id),
+            ), 415
+        intent_ids = documents.submitted_intent_ids(request.form)
+        submission_id = (request.form.get(documents.SUBMISSION_FIELD) or "").strip()
         data_solicitacao = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         try:
-            batch = prepare_comprovante_batch(
-                arquivos,
-                labels=labels,
-                batch_key=(
-                    request.form.get("comprovantes_operation_id")
-                    or request.headers.get("Idempotency-Key")
-                ),
-                max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
-            )
-            replayed_request_id = find_completed_request_retry(
-                conn, aluno_id=aluno_id, batch=batch
-            )
-            if replayed_request_id is not None:
-                flash("Requisição enviada com sucesso.", "success")
-                return redirect(_aluno_url("aluno_dashboard"))
-            storage = resolve_google_storage(conn) if batch else None
+            if intent_ids:
+                replayed_request_id = documents.find_completed_submission(
+                    conn, actor_user_id=int(usuario_id), intent_ids=intent_ids
+                )
+                if replayed_request_id is not None:
+                    flash("Requisição enviada com sucesso.", "success")
+                    return redirect(_aluno_url("aluno_dashboard"))
+                if not documents.submission_is_live(session, submission_id, int(usuario_id)):
+                    raise documents.RequestDocumentError(
+                        "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
+                    )
             prepared_snapshot = prepare_versioned_requisicao_snapshot(
                 conn,
                 flow_origin="aluno_create",
@@ -1700,9 +1721,10 @@ def aluno_nova_requisicao():
                 atividade_versao_id=versao_id,
             )
             turma_snapshot = capture_student_turma_snapshot(conn, aluno_id)
-            cur = conn.cursor()
-            cur.execute(
-                """
+            # One transaction: the request row and every canonical attachment.
+            with write_transaction(conn):
+                req_id = conn.execute(
+                    """
                 INSERT INTO requisicoes
                 (aluno_id, atividade_versao_id, data_solicitacao, data_evento,
                  horas_solicitadas, nome_evento, status, observacao,
@@ -1723,18 +1745,15 @@ def aluno_nova_requisicao():
                     turma_snapshot.turma_id,
                     turma_snapshot.turma_codigo,
                 ),
-            )
-            req_id = cur.fetchone()[0]
-            if batch:
-                upload_comprovantes(
+                ).fetchone()[0]
+                documents.attach_request_documents(
                     conn,
-                    request_id=req_id,
-                    uploader_user_id=int(session["user_id"]),
-                    batch=batch,
-                    storage=storage,
+                    actor_user_id=int(usuario_id),
+                    request_id=int(req_id),
+                    submission_id=submission_id,
+                    intent_ids=intent_ids,
+                    create=True,
                 )
-            else:
-                conn.commit()
             flash("Requisição enviada com sucesso.", "success")
             return redirect(_aluno_url("aluno_dashboard"))
         except RequisicaoSnapshotError as exc:
@@ -1743,18 +1762,14 @@ def aluno_nova_requisicao():
             except Exception:
                 current_app.logger.exception("Falha ao reverter requisição do aluno")
             flash(exc.user_message, "error")
-        except ComprovanteError as exc:
+        except (ComprovanteError, documents.RequestDocumentError) as exc:
             try:
                 conn.rollback()
-                if "req_id" in locals() and not exc.reconciliation_required:
-                    conn.execute("DELETE FROM requisicoes WHERE id=?", (req_id,))
-                    conn.commit()
             except Exception:
                 current_app.logger.exception("Falha ao reverter requisição com comprovantes")
+            # A refused canonical submission re-renders the form with its own status.
+            response_status = getattr(exc, "status", 200)
             flash(exc.user_message, "error")
-        except StorageError:
-            conn.rollback()
-            flash("Não foi possível acessar o Google Drive com segurança.", "error")
         except Exception as exc:
             try:
                 conn.rollback()
@@ -1769,7 +1784,8 @@ def aluno_nova_requisicao():
         tipo_atual=tipo_inicial,
         init=_submitted_request_init(request.form) if request.method == "POST" else None,
         comprovantes_operation_id=new_comprovante_operation_id(),
-    )
+        comprovantes_submission_id=documents.issue_submission(session, usuario_id),
+    ), response_status
 
 
 @bp_aluno.route("/aluno/requisicoes/<int:req_id>", methods=["GET", "POST"])
@@ -1898,54 +1914,52 @@ def aluno_requisicao_detalhe(req_id: int):
             + ", ".join(set_parts)
             + " WHERE id = ? AND aluno_id = ?"
         )
-        arquivos = request.files.getlist("comprovantes_files") or []
-        labels = request.form.getlist("comprovantes_labels") or []
+        if documents.has_file_parts(request.files):
+            flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
+            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
+        intent_ids = documents.submitted_intent_ids(request.form)
+        submission_id = (request.form.get(documents.SUBMISSION_FIELD) or "").strip()
         # UI-B23: only explicitly submitted ids are removed -- an omitted list
         # keeps every stored comprovante. They are checked before any write and
         # removed only after the edit itself succeeded.
         remover_ids = request.form.getlist("remover_comprovantes")
+        actor_id = int(session["user_id"])
         try:
             validate_comprovante_removal(conn, request_id=req_id, attachment_ids=remover_ids)
-            batch = prepare_comprovante_batch(
-                arquivos,
-                labels=labels,
-                batch_key=(
-                    request.form.get("comprovantes_operation_id")
-                    or request.headers.get("Idempotency-Key")
-                ),
-                max_file_bytes=current_app.config["MAX_CONTENT_LENGTH"],
-            )
-            storage = None
-            if batch:
-                storage = resolve_google_storage(conn)
-                upload_comprovantes(
-                    conn,
-                    request_id=req_id,
-                    uploader_user_id=int(session["user_id"]),
-                    batch=batch,
-                    storage=storage,
-                    finalize_db=lambda: conn.execute(sql, tuple(params)),
+            if intent_ids and documents.find_completed_submission(
+                conn, actor_user_id=actor_id, intent_ids=intent_ids
+            ) == int(req_id):
+                intent_ids = []  # response-lost retry: these documents are attached already
+            if intent_ids and not documents.submission_is_live(session, submission_id, actor_id):
+                raise documents.RequestDocumentError(
+                    "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
                 )
-            else:
+            # The field update and every canonical attachment commit together.
+            with write_transaction(conn):
                 conn.execute(sql, tuple(params))
-                conn.commit()
+                documents.attach_request_documents(
+                    conn,
+                    actor_user_id=actor_id,
+                    request_id=int(req_id),
+                    submission_id=submission_id,
+                    intent_ids=intent_ids,
+                    create=False,
+                )
             flash("Requisição atualizada.", "success")
+            # Removal runs after the committed edit: a failed LEGACY Drive
+            # removal keeps those files and never undoes the edit above.
             try:
                 remove_comprovantes(
                     conn,
                     request_id=req_id,
                     attachment_ids=remover_ids,
-                    actor_user_id=int(session["user_id"]),
-                    storage=storage,
+                    actor_user_id=actor_id,
                 )
             except ComprovanteError as exc:
                 flash(exc.user_message, "error")
-        except ComprovanteError as exc:
+        except (ComprovanteError, documents.RequestDocumentError) as exc:
             conn.rollback()
             flash(exc.user_message, "error")
-        except StorageError:
-            conn.rollback()
-            flash("Não foi possível acessar o Google Drive com segurança.", "error")
         except Exception:
             conn.rollback()
             flash("Falha ao atualizar requisição.", "error")
@@ -2052,6 +2066,8 @@ def aluno_requisicao_detalhe(req_id: int):
             init=init,
             anexos=anexos,
             comprovantes_operation_id=new_comprovante_operation_id(),
+            comprovantes_submission_id=documents.issue_submission(session, user_id),
+            requisicao_id=(req_id if edit_flag else None),
         )
 
     return render_template(
@@ -2059,5 +2075,6 @@ def aluno_requisicao_detalhe(req_id: int):
         r=detalhe,
         anexos=anexos,
         comprovantes_operation_id=new_comprovante_operation_id(),
+        comprovantes_submission_id=documents.issue_submission(session, user_id),
     )
 

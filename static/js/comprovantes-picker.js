@@ -137,6 +137,9 @@
     });
 
     input.addEventListener('change', function(){
+      // STORAGE S3-A: a direct-upload input is owned by direct-upload.js; the
+      // picker keeps only the stored-attachment removal markers.
+      if (input.hasAttribute('data-direct-upload-input')) return;
       var picked = Array.prototype.slice.call(input.files || []);
       if (!canRebuild){
         selected = picked;

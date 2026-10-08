@@ -8,13 +8,16 @@ FileList (silently dropping the first choice), two or more files collapsed
 into "N arquivos selecionados" with the names only in a stripped ``title``,
 and no stored comprovante could be removed individually.
 
-Contract now:
-* picking appends; every selected file is listed with its own remove button;
-  the submitted FileList is exactly the listed files (static/js/comprovantes-picker.js);
+Contract now (STORAGE S3-A: request documents upload straight to canonical
+storage -- static/js/direct-upload.js -- and the form posts only the verified
+intent ids, never file bytes):
+* picking appends; every selected file gets its own upload slot and is listed
+  with its own remove button; the form cannot be submitted until every listed
+  file is verified or removed, and a submit never carries file parts;
 * a stored comprovante is removed only when its id is submitted in
   ``remover_comprovantes`` -- an omitted list keeps every file, and an id that
   is not a current attachment of this request refuses the whole edit;
-* one invalid file refuses the whole batch and the message names it;
+* an invalid file is refused before any upload and the message names it;
 * "Nome do evento" / "Data do evento" guidance is visible whenever the form is
   editable, tied to its control with aria-describedby.
 """
@@ -24,12 +27,19 @@ import json
 import re
 import struct
 import zlib
-from io import BytesIO
 from pathlib import Path
 
 import pytest
 
 import main
+from tests.canonical_request_documents_support import (
+    INTENT_IDS_FIELD,
+    SUBMISSION_FIELD,
+    canonical_documents,
+    form_submission,
+    issue,
+    upload_verified,
+)
 from tests.cdp_browser_support import BrowserSession, find_chromium
 from tests.test_comprovantes_google_drive import PDF, PNG, FakeStorage, _png_chunk
 from tests.session_support import stamp_auth_version
@@ -60,7 +70,8 @@ def env(tmp_path):
         original = main.app.extensions.get("comprovante_storage")
         main.app.extensions["comprovante_storage"] = storage
         try:
-            yield {**environment, "storage": storage}
+            with canonical_documents(main.app) as canonical:
+                yield {**environment, "storage": storage, "canonical": canonical}
         finally:
             if original is None:
                 main.app.extensions.pop("comprovante_storage", None)
@@ -114,8 +125,14 @@ def _as_admin(env):
     _login(env["client"], admin["id"], "admin", admin["nivel_acesso"])
 
 
-def _create(env, files, name="Palestra B23", operation="b23-create"):
+def _create(env, files, name="Palestra B23"):
+    """A request whose documents went through the canonical direct-upload protocol."""
     student = _as_student(env)
+    submission = form_submission(env["client"], "/aluno/nova-requisicao")
+    intent_ids = [
+        upload_verified(env["client"], env["canonical"], submission, content, filename)
+        for content, filename in files
+    ]
     response = env["client"].post(
         "/aluno/nova-requisicao",
         data={
@@ -123,10 +140,9 @@ def _create(env, files, name="Palestra B23", operation="b23-create"):
             "nome_evento": name,
             "data_evento": "2026-09-06",
             "horas_solicitadas": "2",
-            "comprovantes_operation_id": operation,
-            "comprovantes_files": [(BytesIO(content), filename) for content, filename in files],
+            SUBMISSION_FIELD: submission,
+            INTENT_IDS_FIELD: intent_ids,
         },
-        content_type="multipart/form-data",
     )
     with main.app.app_context():
         row = _db().execute("SELECT * FROM requisicoes WHERE nome_evento=? ORDER BY id DESC LIMIT 1", (name,)).fetchone()
@@ -145,10 +161,14 @@ def _attachments(request_id, statuses=("active", "legacy_active")):
 def _edit(env, request_id, data, files=()):
     payload = dict(data)
     if files:
-        payload["comprovantes_files"] = [(BytesIO(content), filename) for content, filename in files]
-    return env["client"].post(
-        f"/aluno/requisicoes/{request_id}", data=payload, content_type="multipart/form-data"
-    )
+        submission = form_submission(env["client"], f"/aluno/requisicoes/{request_id}?edit=1")
+        payload[SUBMISSION_FIELD] = submission
+        payload[INTENT_IDS_FIELD] = [
+            upload_verified(env["client"], env["canonical"], submission, content, filename,
+                            requisicao_id=request_id)
+            for content, filename in files
+        ]
+    return env["client"].post(f"/aluno/requisicoes/{request_id}", data=payload)
 
 
 def _flashes(client):
@@ -164,8 +184,8 @@ def test_two_proofs_in_one_request_persist_and_are_visible_everywhere(env):
     assert response.status_code == 302 and request is not None
     rows = _attachments(request["id"])
     assert [row["original_filename"] for row in rows] == ["certificado.pdf", "foto-evento.png"]
-    assert {row["provider"] for row in rows} == {"google"}
-    assert len(env["storage"].files) == 2
+    assert {row["provider"] for row in rows} == {"supabase"}
+    assert len(env["canonical"].objects) == 2 and env["storage"].files == {}
 
     client = env["client"]
     edit_page = client.get(f"/aluno/requisicoes/{request['id']}?edit=1").get_data(as_text=True)
@@ -173,7 +193,7 @@ def test_two_proofs_in_one_request_persist_and_are_visible_everywhere(env):
     for row in rows:
         url = f"/comprovantes/{row['id']}/open"
         assert url in edit_page and url in detail_page
-        assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 302  # signed canonical URL, never a proxied body
     assert "certificado.pdf" in edit_page and "foto-evento.png" in edit_page
 
     _as_admin(env)
@@ -184,7 +204,7 @@ def test_two_proofs_in_one_request_persist_and_are_visible_everywhere(env):
     for row in rows:
         url = f"/comprovantes/{row['id']}/open"
         assert url in direct and url in process
-        assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 302
 
 
 def test_same_filename_with_different_content_is_kept_twice_without_collision(env):
@@ -195,12 +215,21 @@ def test_same_filename_with_different_content_is_kept_twice_without_collision(en
     assert len({row["sha256"] for row in rows}) == 2
 
 
-def test_one_invalid_file_refuses_the_whole_batch_and_names_it(env):
-    response, request = _create(env, [(PDF, "valido.pdf"), (b"texto", "planilha.xlsx")], name="Lote invalido")
-    assert response.status_code == 200
-    assert request is None, "no request may be created from a refused batch"
-    assert env["storage"].upload_calls == []
-    assert "planilha.xlsx: envie somente arquivos PDF, PNG ou JPEG." in response.get_data(as_text=True)
+def test_one_invalid_file_is_refused_before_any_upload_and_names_it(env):
+    """The refusal happens at issue time, per file, naming it; nothing is uploaded or created.
+
+    (Submission stays blocked in the browser while a listed file is unresolved --
+    see the direct-upload browser test below.)"""
+    _as_student(env)
+    submission = form_submission(env["client"], "/aluno/nova-requisicao")
+    refused = issue(env["client"], submission, b"texto", "planilha.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    assert refused.status_code == 400
+    assert refused.get_json()["message"] == "planilha.xlsx: envie somente arquivos PDF, PNG ou JPEG."
+    assert env["canonical"].calls == [] and env["storage"].upload_calls == []
+    with main.app.app_context():
+        assert _db().execute("SELECT count(*) FROM storage_upload_intents").fetchone()[0] == 0
+        assert _db().execute("SELECT count(*) FROM requisicoes WHERE nome_evento='Lote invalido'").fetchone()[0] == 0
 
 
 # ------------------------------------------------------------------- edit
@@ -224,13 +253,17 @@ def test_editing_another_field_keeps_every_comprovante(env, stored_pair):
 
 def test_explicit_removal_trashes_only_the_named_file_then_a_new_file_is_added(env, stored_pair):
     request, (first, second) = stored_pair
-    assert _edit(env, request["id"], {"remover_comprovantes": str(first["id"]), "comprovantes_operation_id": "b23-e2"}).status_code == 302
+    assert _edit(env, request["id"], {"remover_comprovantes": str(first["id"])}).status_code == 302
     assert [row["id"] for row in _attachments(request["id"])] == [second["id"]]
-    assert env["storage"].trashed == [first["remote_file_id"]]
+    assert env["storage"].trashed == []  # canonical removal never touches Drive
     with main.app.app_context():
         removed = dict(_db().execute("SELECT * FROM requisicao_arquivos WHERE id=?", (first["id"],)).fetchone())
-    assert removed["storage_status"] == "trashed" and removed["delete_previous_status"] == "active"
-    assert _edit(env, request["id"], {"comprovantes_operation_id": "b23-e3"}, files=[(PDF, "c.pdf")]).status_code == 302
+        lifecycle = _db().execute(
+            "SELECT lifecycle_state FROM storage_objects WHERE id=?", (removed["storage_object_id"],)
+        ).fetchone()[0]
+    assert removed["storage_status"] == "trashed" and removed["storage_object_id"] == first["storage_object_id"]
+    assert lifecycle == "retired" and len(env["canonical"].objects) == 2  # retired, never deleted
+    assert _edit(env, request["id"], {}, files=[(PDF, "c.pdf")]).status_code == 302
     assert [row["original_filename"] for row in _attachments(request["id"])] == ["b.png", "c.pdf"]
 
 
@@ -249,7 +282,7 @@ def test_the_edit_page_lists_stored_files_with_named_remove_buttons(env, stored_
 
 def test_a_foreign_attachment_id_refuses_the_whole_edit(env, stored_pair):
     request, rows = stored_pair
-    _response, other = _create(env, [(PDF, "outro.pdf")], name="Outra B23", operation="b23-other")
+    _response, other = _create(env, [(PDF, "outro.pdf")], name="Outra B23")
     foreign = _attachments(other["id"])[0]
     before = _attachments(request["id"]) + _attachments(other["id"])
     response = _edit(env, request["id"], {"nome_evento": "vazou", "remover_comprovantes": str(foreign["id"])})
@@ -286,10 +319,14 @@ def test_another_students_request_cannot_be_touched(env, stored_pair):
 
 
 def test_a_remote_trash_failure_keeps_the_file_and_the_saved_edit(env, stored_pair):
+    """Legacy Google custody control: a pre-S3 Drive comprovante keeps its Drive removal."""
+    from tests.test_comprovantes_routes import _legacy_google_attachment
+
     request, (first, second) = stored_pair
+    legacy = _legacy_google_attachment(env, request["id"])
     env["storage"].fail_trash = True
-    _edit(env, request["id"], {"nome_evento": "Edicao salva", "remover_comprovantes": str(first["id"])})
-    assert [row["id"] for row in _attachments(request["id"])] == [first["id"], second["id"]]
+    _edit(env, request["id"], {"nome_evento": "Edicao salva", "remover_comprovantes": str(legacy["id"])})
+    assert [row["id"] for row in _attachments(request["id"])] == [first["id"], second["id"], legacy["id"]]
     with main.app.app_context():
         assert _db().execute("SELECT nome_evento FROM requisicoes WHERE id=?", (request["id"],)).fetchone()[0] == "Edicao salva"
     messages = _flashes(env["client"])
@@ -388,15 +425,40 @@ def files(tmp_path):
     return folder
 
 
+DIRECT_STATE = """JSON.stringify((() => {
+  const input = document.getElementById('comprovantes_files');
+  const form = input.form;
+  return {
+    enabled: !input.disabled,
+    named: input.hasAttribute('name'),
+    listed: Array.from(form.querySelectorAll('[data-direct-upload-list] li > span')).map(s => s.textContent.split(' — ')[0]),
+    submitDisabled: Array.from(form.querySelectorAll('button[type="submit"]')).every(b => b.disabled),
+    intents: Array.from(form.querySelectorAll('input[name="comprovantes_intent_ids"]')).map(i => i.value),
+  };
+})())"""
+
+
+def _issue_bodies(session):
+    return [json.loads(body) for method, path, body in session.requests
+            if method == "POST" and path == "/storage/upload-intents"]
+
+
 @browser
-def test_picker_appends_dedupes_and_removes_before_submit(env, files):
+def test_direct_upload_picks_append_with_their_own_slots_and_block_submit_until_verified(env, files):
+    """S3-A replaces the FileList picker for new files: each pick is declared to the
+    application (slot + SHA-256, no bytes) and uploads straight to canonical storage;
+    the harness blocks every non-local host, so these uploads never complete and the
+    form must stay unsubmittable."""
+    import hashlib
+
     _as_student(env)
     session = BrowserSession(env["client"], CHROMIUM)
     try:
         session.goto("/aluno/nova-requisicao")
         session.call("DOM.getDocument", {})
-        state = json.loads(session.evaluate(LIST_STATE))
-        assert state["hidden"] is True and state["files"] == []
+        state = json.loads(session.evaluate(DIRECT_STATE))
+        assert state["enabled"] is True, "direct-upload.js enables the picker"
+        assert state["named"] is False and state["listed"] == []
         # Guidance is on screen without any click or hover.
         visible = session.evaluate(
             "['nome-evento-orientacao','data-evento-orientacao'].every(id => {"
@@ -407,20 +469,31 @@ def test_picker_appends_dedupes_and_removes_before_submit(env, files):
 
         _pick(session, [files / "a.pdf"])
         _pick(session, [files / "b.png"])
-        state = json.loads(session.evaluate(LIST_STATE))
-        assert state["files"] == ["a.pdf", "b.png"], "a second pick must not discard the first"
+        session.wait_for("document.querySelectorAll('[data-direct-upload-list] li').length === 2")
+        for _ in range(40):
+            if len(_issue_bodies(session)) >= 2:
+                break
+            session.pump(0.1)
+        bodies = _issue_bodies(session)
+        assert [body["filename"] for body in bodies] == ["a.pdf", "b.png"]
+        assert [body["sha256"] for body in bodies] == [
+            hashlib.sha256(PDF).hexdigest(), hashlib.sha256(PNG).hexdigest()
+        ]
+        slots = [body["upload_slot_id"] for body in bodies]
+        assert all(re.fullmatch(r"[0-9a-f]{32}", slot) for slot in slots) and len(set(slots)) == 2
+        assert all(body["purpose"] == "comprovante" and body["size_bytes"] > 0 for body in bodies)
+
+        state = json.loads(session.evaluate(DIRECT_STATE))
         assert state["listed"] == ["a.pdf", "b.png"]
-        assert state["buttons"] == ["Remover comprovante a.pdf", "Remover comprovante b.png"]
-        assert state["summary"] == "2 arquivos selecionados"
+        assert state["submitDisabled"] is True and state["intents"] == []
 
-        _pick(session, [files / "a.pdf"])
-        assert json.loads(session.evaluate(LIST_STATE))["files"] == ["a.pdf", "b.png"], "same file twice is kept once"
-
-        session.click('#comprovantes-list .file-list-remove[aria-label="Remover comprovante a.pdf"]')
-        state = json.loads(session.evaluate(LIST_STATE))
-        assert state["files"] == ["b.png"] and state["listed"] == ["b.png"]
-        assert state["summary"] == "1 arquivo selecionado"
-        assert session.evaluate("document.activeElement.getAttribute('aria-label')") == "Remover comprovante b.png"
+        session.evaluate(
+            "(() => { const li = Array.from(document.querySelectorAll('[data-direct-upload-list] li'))"
+            ".find(item => item.textContent.startsWith('a.pdf'));"
+            " const buttons = li.querySelectorAll('button'); buttons[buttons.length - 1].click(); return true; })()"
+        )
+        state = json.loads(session.evaluate(DIRECT_STATE))
+        assert state["listed"] == ["b.png"] and state["submitDisabled"] is True
     finally:
         session.close()
 
@@ -443,34 +516,39 @@ def test_stored_file_removal_is_only_a_marked_id_until_submit(env, stored_pair):
 
 
 @browser
-def test_a_browser_submit_sends_exactly_the_listed_files(env, files):
-    """The real multipart the browser posts carries exactly the listed files.
+def test_a_browser_submit_never_carries_file_bytes(env, files):
+    """The browser never posts a file to the application.
 
-    (Chrome's Fetch interception, which serves these pages from the test
-    client, forwards the file *parts* but not their bytes, so persistence of
-    the files themselves is proven by the server-side tests above.)
+    A pending (unverified) document blocks the submit event; even a forced
+    ``form.submit()`` posts only the business fields and the submission id --
+    the picker has no form name, so no file part can exist.
     """
     student = _as_student(env)
     version = _version(student)
     session = BrowserSession(env["client"], CHROMIUM)
     try:
         session.goto("/aluno/nova-requisicao")
-        _pick(session, [files / "a.pdf"])
         _pick(session, [files / "b.png"])
-        session.click('#comprovantes-list .file-list-remove[aria-label="Remover comprovante a.pdf"]')
-        session.requests.clear()
-        session.evaluate(
-            "(() => { const f = document.querySelector('form[enctype]');"
+        session.wait_for("document.querySelectorAll('[data-direct-upload-list] li').length === 1")
+        fill = (
+            "const f = document.getElementById('comprovantes_files').form;"
             " const sel = f.querySelector('#atividade_versao_id_select'); sel.disabled = false;"
             " const opt = document.createElement('option'); opt.value = '%s'; sel.appendChild(opt); sel.value = '%s';"
             " f.querySelector('[name=nome_evento]').value = 'Envio pelo navegador';"
             " f.querySelector('[name=data_evento]').value = '2026-09-06';"
-            " f.querySelector('[name=horas_solicitadas]').value = '2';"
-            " f.submit(); return true; })()" % (version, version)
+            " f.querySelector('[name=horas_solicitadas]').value = '2';" % (version, version)
         )
+        session.requests.clear()
+        session.evaluate("(() => { %s f.requestSubmit(); return true; })()" % fill)
+        session.pump(1.0)
+        blocked = [path for method, path, _body in session.requests if method == "POST" and path == "/aluno/nova-requisicao"]
+        session.requests.clear()
+        session.evaluate("(() => { %s f.submit(); return true; })()" % fill)
         session.pump(2.0)
         posts = [body for method, path, body in session.requests if method == "POST" and path == "/aluno/nova-requisicao"]
     finally:
         session.close()
+    assert blocked == [], "an unresolved document must block the submit event"
     assert len(posts) == 1
-    assert re.findall(r'name="comprovantes_files"; filename="([^"]*)"', posts[0]) == ["b.png"]
+    assert "filename=" not in posts[0] and "comprovantes_files" not in posts[0]
+    assert "comprovantes_submission_id=" in posts[0]

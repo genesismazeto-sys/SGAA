@@ -74,8 +74,9 @@
 {% set page_mode = mode or 'create' %}
 <h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição') }}</h1>
 
-<form method="post" enctype="multipart/form-data">
+<form method="post" data-direct-upload{% if requisicao_id %} data-requisicao-id="{{ requisicao_id }}"{% endif %}>
   <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
+  <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
   <div class="form-cards-narrow form-cards-narrow--gutter-wide">
     {% set t = (tipo_atual or 'Acadêmica Complementar') %}
     <!-- Tipo da Atividade (topo) -->
@@ -177,7 +178,7 @@
     <label class="row-label">Comprovantes</label>
     <div class="field-card file-card" data-upload-card>
       <div class="field-chip"><i class="lucide" data-lucide="paperclip"></i></div>
-      <input class="file-input" id="comprovantes_files" type="file" name="comprovantes_files" multiple aria-label="Comprovantes" data-file-list="comprovantes-list">
+      <input class="file-input" id="comprovantes_files" type="file" multiple accept=".pdf,.png,.jpg,.jpeg" aria-label="Comprovantes" data-file-list="comprovantes-list" data-direct-upload-input disabled>
       <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
       <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
     </div>
@@ -195,6 +196,9 @@
     </li>
     {% endfor %}
   </ul>
+  <ul class="file-list" data-direct-upload-list aria-label="Comprovantes em envio" aria-live="polite"></ul>
+  <p class="form-note" data-direct-upload-status role="status"></p>
+  <noscript><p class="form-note" role="alert">Para anexar comprovantes é necessário habilitar o JavaScript: os arquivos são enviados diretamente ao armazenamento seguro. Sem JavaScript, a requisição só pode ser enviada sem comprovantes.</p></noscript>
   {% endif %}
 
   {% if page_mode == 'view_readonly' and anexos and anexos|length %}
@@ -236,6 +240,8 @@
 {% endblock %}
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/comprovantes-picker.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='vendor/tus-js-client-4.3.1.min.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
 <!-- Inicialização do modo edição somente leitura -->
 <script id="init-form-json" type="application/json">{{ (init or {}) | tojson | safe }}</script>
 <meta id="readonly-flag" data-readonly="{{ '1' if page_mode=='view_readonly' else '0' }}">

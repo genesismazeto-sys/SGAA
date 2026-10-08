@@ -134,8 +134,11 @@ U5A_CURRENT_STATE_SHA256 = "dc66f9b0b4c20eaa45d922f657bd4d3972ccea57e0515fa24943
 #: STORAGE S2 (prod-1/v14) added the three canonical-storage tables, one
 #: nullable ``storage_object_id`` column + FK on each business file table, the
 #: nullable ``cloud_accounts.provider_account_key`` column + CHECK, seven
-#: indexes, six triggers and baseline row 14.  Everything else in the U5-A
-#: sections must still be byte-identical.
+#: indexes, six triggers and baseline row 14; STORAGE S3-A (prod-1/v15) added
+#: the canonical ``supabase`` provider to the ``admin_arquivos`` provider CHECK
+#: (restored below to its declared U5-A expression; the custody trigger
+#: FUNCTION bodies are not a U5-A section) and baseline row 15.  Everything
+#: else in the U5-A sections must still be byte-identical.
 LATER_ADDED_TABLES = (
     "usuarios_foto", "alunos_foto", "reportes_captura",
     "storage_objects", "storage_upload_intents", "storage_worker_status",
@@ -156,7 +159,15 @@ LATER_ADDED_TRIGGERS = (
     "trg_admin_arquivos_storage_object_insert", "trg_admin_arquivos_storage_object_update",
     "trg_storage_upload_intents_transition", "trg_storage_objects_drive_account_bound",
 )
-LATER_ADDED_BASELINE_VERSIONS = (13, 14)
+LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15)
+#: ``(table, check name): (U5-A expression, later expression)`` -- a later unit's
+#: declared change of an existing CHECK, reverted before the digest.
+LATER_CHANGED_CHECKS = {
+    ("admin_arquivos", "ck_admin_arquivos_provider"): (
+        "provider IN ('local_legacy','google')",
+        "provider IN ('local_legacy','google','supabase')",
+    ),
+}
 U5A_SCHEMA_VERSION = 12
 
 # ---------------------------------------------------------------------------
@@ -917,6 +928,10 @@ def _u5a_sections(payload):
         if check is not None:
             [declared] = [ck for ck in spec["checks"] if ck["name"] == check]
             spec["checks"].remove(declared)
+    for (table, check), (u5a_expression, later_expression) in LATER_CHANGED_CHECKS.items():
+        [declared] = [ck for ck in sections["tables"][table]["checks"] if ck["name"] == check]
+        assert declared["expression"] == later_expression, "declared later CHECK change missing"
+        declared["expression"] = u5a_expression
     for name in LATER_ADDED_INDEXES:
         del sections["indexes"][name]
     for name in LATER_ADDED_TRIGGERS:

@@ -19,11 +19,17 @@ from __future__ import annotations
 
 import json
 import re
-from io import BytesIO
 
 import pytest
 
 import main
+from tests.canonical_request_documents_support import (
+    INTENT_IDS_FIELD,
+    SUBMISSION_FIELD,
+    canonical_documents,
+    form_submission,
+    upload_verified,
+)
 from tests.cdp_browser_support import BrowserSession, find_chromium
 from tests.session_support import stamp_auth_version
 from tests.test_comprovantes_google_drive import PDF, PNG, FakeStorage
@@ -41,7 +47,8 @@ def env(tmp_path):
         main.app.extensions["comprovante_storage"] = storage
         try:
             _login(environment["client"])
-            yield {**environment, "storage": storage}
+            with canonical_documents(main.app) as canonical:
+                yield {**environment, "storage": storage, "canonical": canonical}
         finally:
             if original is None:
                 main.app.extensions.pop("comprovante_storage", None)
@@ -108,10 +115,24 @@ def _form(activity, tipo, **overrides):
 
 
 def _post(client, data, files=()):
+    """STORAGE S3-A: documents go through the direct-upload protocol; the form
+    posts the submission id and the verified intent ids, never file bytes."""
     payload = dict(data)
     if files:
-        payload["comprovantes_files"] = [(BytesIO(content), name) for content, name in files]
-    return client.post("/aluno/nova-requisicao", data=payload, content_type="multipart/form-data")
+        store = main.app.extensions["canonical_object_store"]
+        submission = form_submission(client, "/aluno/nova-requisicao")
+        payload[SUBMISSION_FIELD] = submission
+        payload[INTENT_IDS_FIELD] = [upload_verified(client, store, submission, content, name)
+                                     for content, name in files]
+    return client.post("/aluno/nova-requisicao", data=payload)
+
+
+def _refused_document_post(client, data):
+    """A submission carrying a document the server must not attach."""
+    submission = form_submission(client, "/aluno/nova-requisicao")
+    return client.post("/aluno/nova-requisicao", data={
+        **data, SUBMISSION_FIELD: submission, INTENT_IDS_FIELD: ["f" * 32],
+    })
 
 
 def _requests():
@@ -250,8 +271,8 @@ def test_the_tipo_select_filters_each_family(env):
 def test_a_rejected_extensao_request_comes_back_as_extensao(env):
     activity = _matrix_versions("AEU")[0]
     data = _form(activity, AEU)
-    failed = _post(env["client"], data, files=[(b"x", "planilha.xlsx")]).get_data(as_text=True)
-    assert "planilha.xlsx: envie somente arquivos PDF, PNG ou JPEG." in failed
+    failed = _refused_document_post(env["client"], data).get_data(as_text=True)
+    assert "Os comprovantes enviados não pertencem a esta requisição." in failed
     assert _requests() == []
     session = BrowserSession(env["client"], CHROMIUM)
     try:

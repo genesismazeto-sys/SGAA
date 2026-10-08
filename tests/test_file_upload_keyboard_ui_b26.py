@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 import main
+from tests.canonical_request_documents_support import canonical_documents
 from tests.canonical_request_test_support import login_student
 from tests.cdp_browser_support import BrowserSession, find_chromium
 from tests.test_comprovantes_google_drive import PDF, PNG, FakeStorage
@@ -136,7 +137,8 @@ def env(tmp_path):
         main.app.extensions["comprovante_storage"] = storage
         try:
             login_student(environment["client"])
-            yield environment
+            with canonical_documents(main.app):
+                yield environment
         finally:
             if original is None:
                 main.app.extensions.pop("comprovante_storage", None)
@@ -190,6 +192,8 @@ def test_keyboard_reaches_and_opens_anexar_on_nova_requisicao(env, picks):
         assert session.evaluate("document.activeElement.name") == "observacao"
 
         # After picking, Tab walks the remove buttons; Enter removes one file.
+        # (STORAGE S3-A: picked files are listed by direct-upload.js, one
+        # stable row per file whose remove button is named for its file.)
         node = session.call("Runtime.evaluate", {"expression": "document.getElementById('comprovantes_files')"})
         session.call("DOM.setFileInputFiles", {"files": [str(picks / "a.pdf"), str(picks / "b.png")], "objectId": node["result"]["objectId"]})
         session.pump(0.3)
@@ -199,7 +203,10 @@ def test_keyboard_reaches_and_opens_anexar_on_nova_requisicao(env, picks):
         session.tab()
         assert session.active() == "Remover comprovante b.png"
         session.key("Enter", "Enter", 13, "\r")
-        names = session.evaluate("JSON.stringify(Array.from(document.getElementById('comprovantes_files').files).map(f => f.name))")
+        names = session.evaluate(
+            "JSON.stringify(Array.from(document.querySelectorAll('[data-direct-upload-list] li > span'))"
+            ".map(s => s.textContent.split(' \u2014 ')[0]))"
+        )
         assert json.loads(names) == ["a.pdf"]
     finally:
         session.close()

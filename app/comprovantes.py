@@ -24,7 +24,10 @@ from app.storage.contracts import (
     StorageIntegrityError,
 )
 from app.storage.google_drive import GoogleDriveComprovanteStorage
+from app.storage import custody_common
+from app.storage import mirror_outbox
 from app.storage.google_connection import resolve_google_managed_storage
+from app.db import write_transaction
 from app.student_documents import resolve_student_document_path
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
@@ -616,6 +619,23 @@ def _mark_remote_reconciliation(conn, file_ids: set[str], code: str) -> None:
     conn.commit()
 
 
+def _retire_canonical_objects(conn, rows) -> None:
+    """Lifecycle only (``active`` -> ``retired``) for canonical rows; never a byte deleted.
+
+    The caller owns the write transaction.  Already retired objects are left
+    as they are (a removed attachment of a later-deleted request).
+    """
+    now = custody_common.utc_now_text()
+    for row in rows:
+        if row["provider"] != "supabase" or row["storage_object_id"] is None:
+            continue
+        state = conn.execute(
+            "SELECT lifecycle_state FROM storage_objects WHERE id=?", (int(row["storage_object_id"]),)
+        ).fetchone()
+        if state is not None and state["lifecycle_state"] == "active":
+            mirror_outbox.retire_object(conn, object_id=int(row["storage_object_id"]), now=now)
+
+
 def _remove_legacy_files(rows, roots) -> None:
     removed: set[str] = set()
     for row in rows:
@@ -685,8 +705,15 @@ def delete_request_with_comprovantes(
     google_rows = [
         row for row in rows if row["provider"] == "google" and row["remote_file_id"]
     ]
-    if google_rows:
-        storage = storage or resolve_google_storage(conn)
+    if google_rows and storage is None:
+        try:
+            storage = resolve_google_storage(conn)
+        except StorageError as exc:
+            # Legacy Drive custody only: a controlled refusal, never an unhandled error.
+            raise ComprovanteError(
+                "Não foi possível acessar o Google Drive; a requisição foi preservada.",
+                code=getattr(exc, "code", "STORAGE_UNAVAILABLE"),
+            ) from exc
     delete_rows = _begin_delete_intent(conn, int(request_id)) if google_rows else []
     try:
         for row in delete_rows:
@@ -720,10 +747,14 @@ def delete_request_with_comprovantes(
             reconciliation_required=bool(restore_failed),
         ) from exc
     try:
-        cursor = conn.execute(query.replace("SELECT id", "DELETE"), params)
-        if cursor.rowcount != 1:
-            raise ComprovanteError("Requisição não encontrada.", code="REQUEST_NOT_FOUND")
-        conn.commit()
+        # Canonical attachments: their objects are retired in the SAME
+        # transaction as the request delete (the rows then cascade); no Google
+        # call and no physical Storage delete.
+        with write_transaction(conn):
+            _retire_canonical_objects(conn, rows)
+            cursor = conn.execute(query.replace("SELECT id", "DELETE"), params)
+            if cursor.rowcount != 1:
+                raise ComprovanteError("Requisição não encontrada.", code="REQUEST_NOT_FOUND")
     except Exception as exc:
         conn.rollback()
         restore_failed = (
@@ -802,8 +833,20 @@ def remove_comprovantes(
         return []
     _authorize_comprovante_upload(conn, int(request_id), int(actor_user_id))
     rows = _removal_rows(conn, request_id, attachment_ids)
+    canonical_rows = [row for row in rows if row["provider"] == "supabase"]
     google_ids = [int(row["id"]) for row in rows if row["provider"] == "google"]
     legacy_rows = [row for row in rows if row["provider"] == "local_legacy"]
+    if canonical_rows:
+        # Canonical removal is one DB transaction: the row is kept as
+        # 'trashed' (with its object reference as evidence) and the object is
+        # retired.  No Google call; the bytes stay in canonical storage.
+        with write_transaction(conn):
+            for row in canonical_rows:
+                conn.execute(
+                    "UPDATE requisicao_arquivos SET storage_status='trashed' WHERE id=? AND storage_status='active'",
+                    (int(row["id"]),),
+                )
+            _retire_canonical_objects(conn, canonical_rows)
     delete_rows = []
     if google_ids:
         if storage is None:

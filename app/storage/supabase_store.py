@@ -16,12 +16,27 @@ CONFIGURATION IS LAZY
     and a missing variable is reported by NAME (``STORAGE_CONFIG_MISSING``).
 
 SECRET HANDLING
-    The server-side secret key is sent as ``apikey`` and duplicated as
-    ``Authorization: Bearer`` (the gateway accepts both the legacy JWT
-    ``service_role`` key and the opaque ``sb_secret_`` key this way).  It is
-    excluded from every ``repr``; redirects are never followed (the
-    ``Authorization`` header must not reach another host); provider bodies,
-    URLs and signed tokens are never placed in an exception or a log line.
+    An opaque ``sb_secret_...`` key is a backend-only API key: it is sent ONLY
+    as ``apikey`` and never as ``Authorization: Bearer`` (it is not a JWT).  A
+    legacy JWT ``service_role`` key keeps the published compatibility form
+    (``apikey`` duplicated as ``Authorization: Bearer``).  The secret is
+    excluded from every ``repr``; redirects are never followed (no credential
+    header may reach another host); provider bodies, URLs and signed tokens
+    are never placed in an exception or a log line.
+
+BROWSER CAPABILITY (STORAGE S3-A)
+    The browser uploads with signed resumable (TUS) uploads straight to the
+    project's direct storage hostname: the session is created at
+    ``https://<project-ref>.storage.supabase.co/storage/v1/upload/resumable/sign``
+    (the provider's Location then names ``/upload/resumable/<upload-id>``),
+    authenticated by the signed upload token in ``x-signature`` plus the
+    project's browser-safe publishable key (``sb_publishable_...``) in
+    ``apikey`` -- never an ``Authorization`` header -- in 6 MiB chunks
+    (live-proven on a non-production project).  ``resumable_upload_endpoint``
+    / ``storage_browser_origin`` derive that public location from
+    ``SUPABASE_URL`` and ``configured_publishable_key`` reads
+    ``SUPABASE_PUBLISHABLE_KEY``, refusing anything that is not a publishable
+    key; nothing here hands the secret key to a browser.
     The bucket is assumed PRIVATE: only signed or authenticated endpoints are
     used, never ``/object/public``.
 """
@@ -51,11 +66,19 @@ from app.storage.object_store import (
 
 SUPABASE_URL_ENV = "SUPABASE_URL"
 SUPABASE_SECRET_KEY_ENV = "SUPABASE_SECRET_KEY"
+SUPABASE_PUBLISHABLE_KEY_ENV = "SUPABASE_PUBLISHABLE_KEY"
 STORAGE_BUCKET_ENV = "SGAA_STORAGE_BUCKET"
 
 #: (connect, read) seconds -- fixed, never configurable per call.
 HTTP_TIMEOUT = (5.0, 30.0)
 SIGNED_DOWNLOAD_MAX_SECONDS = 3600
+SECRET_KEY_PREFIX = "sb_secret_"
+PUBLISHABLE_KEY_PREFIX = "sb_publishable_"
+#: Supabase's documented resumable chunk size ("must be set to 6MB").
+TUS_CHUNK_BYTES = 6 * 1024 * 1024
+#: Signed (x-signature) resumable session creation; live-proven on the direct host.
+RESUMABLE_PATH = "/storage/v1/upload/resumable/sign"
+_HOSTED_SUFFIX = ".supabase.co"
 _READ_CHUNK = 64 * 1024
 
 _BUCKET_RE = re.compile(rf"^[a-z0-9._-]{{1,{STORAGE_BUCKET_MAX_LENGTH}}}$")
@@ -69,6 +92,92 @@ def check_locator(bucket: str, key: str) -> None:
         raise CanonicalStoreError(STORAGE_INVALID_LOCATOR, "bucket")
     if not isinstance(key, str) or not _KEY_RE.fullmatch(key) or ".." in key:
         raise CanonicalStoreError(STORAGE_INVALID_LOCATOR, "key")
+
+
+def _validated_project_url(value: str) -> str:
+    """``SUPABASE_URL`` as an origin (https, or http on localhost); else refused by NAME."""
+    url = str(value or "").strip().rstrip("/")
+    parts = urlsplit(url)
+    local = parts.scheme == "http" and parts.hostname in _LOCAL_HOSTS
+    if (
+        (parts.scheme != "https" and not local)
+        or not parts.hostname
+        or parts.username
+        or parts.password
+        or parts.path
+        or parts.query
+        or parts.fragment
+    ):
+        raise CanonicalStoreError(STORAGE_CONFIG_MISSING, SUPABASE_URL_ENV)
+    return url
+
+
+def storage_browser_origin(supabase_url: str) -> str:
+    """The origin the browser uploads to: the hosted project's DIRECT storage host.
+
+    ``https://<ref>.supabase.co`` -> ``https://<ref>.storage.supabase.co``; a
+    local / self-hosted URL is its own storage origin.
+    """
+    url = _validated_project_url(supabase_url)
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if host.endswith(_HOSTED_SUFFIX):
+        ref = host[: -len(_HOSTED_SUFFIX)]
+        if ref and "." not in ref and parts.port is None:
+            return f"https://{ref}.storage.supabase.co"
+    return url
+
+
+def resumable_upload_endpoint(supabase_url: str) -> str:
+    """The direct signed-TUS session-creation endpoint (``.../upload/resumable/sign``)."""
+    return storage_browser_origin(supabase_url) + RESUMABLE_PATH
+
+
+def configured_project_url(environ=None) -> str:
+    environ = os.environ if environ is None else environ
+    value = str(environ.get(SUPABASE_URL_ENV) or "").strip()
+    if not value:
+        raise CanonicalStoreError(STORAGE_CONFIG_MISSING, SUPABASE_URL_ENV)
+    return _validated_project_url(value)
+
+
+def configured_bucket(environ=None) -> str:
+    environ = os.environ if environ is None else environ
+    bucket = str(environ.get(STORAGE_BUCKET_ENV) or "").strip()
+    if not _BUCKET_RE.fullmatch(bucket):
+        raise CanonicalStoreError(STORAGE_CONFIG_MISSING, STORAGE_BUCKET_ENV)
+    return bucket
+
+
+_PUBLISHABLE_KEY_RE = re.compile(rf"^{PUBLISHABLE_KEY_PREFIX}[A-Za-z0-9_-]{{8,200}}$")
+
+
+def configured_publishable_key(environ=None) -> str:
+    """``SUPABASE_PUBLISHABLE_KEY``: the browser-safe key sent as ``apikey`` with signed TUS.
+
+    Only a modern ``sb_publishable_...`` key is accepted.  A secret key, a
+    legacy JWT (anon / service_role) or the configured secret itself is refused
+    by NAME and never substituted: a backend credential must not reach a browser.
+    """
+    environ = os.environ if environ is None else environ
+    value = str(environ.get(SUPABASE_PUBLISHABLE_KEY_ENV) or "").strip()
+    secret = str(environ.get(SUPABASE_SECRET_KEY_ENV) or "").strip()
+    if (
+        not _PUBLISHABLE_KEY_RE.fullmatch(value)
+        or value.startswith(SECRET_KEY_PREFIX)
+        or value.count(".") >= 2
+        or (secret and value == secret)
+    ):
+        raise CanonicalStoreError(STORAGE_CONFIG_MISSING, SUPABASE_PUBLISHABLE_KEY_ENV)
+    return value
+
+
+def configured_storage_origin(environ=None) -> str | None:
+    """The browser storage origin when ``SUPABASE_URL`` is configured and valid, else None."""
+    try:
+        return storage_browser_origin(configured_project_url(environ))
+    except CanonicalStoreError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -87,19 +196,7 @@ class SupabaseStorageConfig:
         missing = [name for name, value in values.items() if not value]
         if missing:
             raise CanonicalStoreError(STORAGE_CONFIG_MISSING, ",".join(missing))
-        url = values[SUPABASE_URL_ENV].rstrip("/")
-        parts = urlsplit(url)
-        local = parts.scheme == "http" and parts.hostname in _LOCAL_HOSTS
-        if (
-            (parts.scheme != "https" and not local)
-            or not parts.hostname
-            or parts.username
-            or parts.password
-            or parts.path
-            or parts.query
-            or parts.fragment
-        ):
-            raise CanonicalStoreError(STORAGE_CONFIG_MISSING, SUPABASE_URL_ENV)
+        url = _validated_project_url(values[SUPABASE_URL_ENV])
         bucket = values[STORAGE_BUCKET_ENV]
         if not _BUCKET_RE.fullmatch(bucket):
             raise CanonicalStoreError(STORAGE_CONFIG_MISSING, STORAGE_BUCKET_ENV)
@@ -186,10 +283,11 @@ class SupabaseObjectStore:
         return path
 
     def _headers(self, extra=None) -> dict:
-        headers = {
-            "apikey": self._config.secret_key,
-            "Authorization": f"Bearer {self._config.secret_key}",
-        }
+        secret = self._config.secret_key
+        headers = {"apikey": secret}
+        if not secret.startswith(SECRET_KEY_PREFIX):
+            # Legacy JWT service_role key only; an sb_secret_ key is never a Bearer token.
+            headers["Authorization"] = f"Bearer {secret}"
         headers.update(extra or {})
         return headers
 
@@ -341,6 +439,17 @@ class SupabaseObjectStore:
 
 __all__ = [
     "HTTP_TIMEOUT",
+    "PUBLISHABLE_KEY_PREFIX",
+    "RESUMABLE_PATH",
+    "SECRET_KEY_PREFIX",
+    "SUPABASE_PUBLISHABLE_KEY_ENV",
+    "TUS_CHUNK_BYTES",
+    "configured_bucket",
+    "configured_project_url",
+    "configured_publishable_key",
+    "configured_storage_origin",
+    "resumable_upload_endpoint",
+    "storage_browser_origin",
     "STORAGE_BUCKET_ENV",
     "SUPABASE_SECRET_KEY_ENV",
     "SUPABASE_URL_ENV",
