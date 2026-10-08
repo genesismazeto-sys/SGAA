@@ -11,7 +11,7 @@ from app.prod1_schema import (
     _quote_identifier,
     _validate_prod1_v3_schema,
     _validate_prod1_v4_schema,
-    canonical_prod1_object_sql,
+    canonical_prod1_pre_v14_object_sql,
 )
 
 
@@ -33,8 +33,8 @@ def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
             kind = "TRIGGER" if name.startswith("trg_") else "INDEX"
             conn.execute(f"DROP {kind} IF EXISTS {_quote_identifier(name)}")
 
-        requisicoes_sql = canonical_prod1_object_sql("table", "requisicoes")
-        arquivos_sql = canonical_prod1_object_sql("table", "requisicao_arquivos")
+        requisicoes_sql = canonical_prod1_pre_v14_object_sql("table", "requisicoes")
+        arquivos_sql = canonical_prod1_pre_v14_object_sql("table", "requisicao_arquivos")
         conn.execute(
             requisicoes_sql.replace(
                 "CREATE TABLE requisicoes", "CREATE TABLE _requisicoes_v4", 1
@@ -119,7 +119,7 @@ def migrate_prod1_v3_to_v4(conn: sqlite3.Connection) -> dict[str, object]:
         }
         for kind, names in schema_objects.items():
             for name in names:
-                conn.execute(canonical_prod1_object_sql(kind, name))
+                conn.execute(canonical_prod1_pre_v14_object_sql(kind, name))
         conn.execute(
             "INSERT INTO schema_migrations(version,name,schema_epoch,details_json) VALUES(?,?,?,?)",
             (4, COMPROVANTES_GOOGLE_DRIVE_MARKER, SCHEMA_EPOCH,

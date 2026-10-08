@@ -211,7 +211,8 @@ def _cloud_fixture(monkeypatch, key: str):
             token_json TEXT NOT NULL,
             connected_at TEXT,
             updated_at TEXT,
-            active INTEGER NOT NULL DEFAULT 1
+            active INTEGER NOT NULL DEFAULT 1,
+            provider_account_key TEXT
         )
         """
     )

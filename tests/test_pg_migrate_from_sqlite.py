@@ -5,10 +5,12 @@ A. static/refusal nodes (no PostgreSQL): the policy manifest covers every
    source and target table, the load order puts parents first, and the source
    and target preconditions refuse before anything is written.
 B. synthetic real-PostgreSQL nodes (``SGAA_PG_TEST_URL``): a hand-built
-   prod-1/v13 SQLite source with sparse ids, ``sqlite_sequence`` above
+   prod-1/v14 SQLite source with sparse ids, ``sqlite_sequence`` above
    ``max(id)``, a forward self-reference, excluded secrets, one local file and
-   v13 image rows (BLOB -> bytea) is migrated into a freshly provisioned clone; failures after the first
-   write roll back rows, identity sequences and copied files.
+   v13 image rows (BLOB -> bytea) and v14 canonical-storage rows (objects and a
+   business reference copied exactly; terminal upload intents omitted; worker
+   health recreated empty) is migrated into a freshly provisioned clone; failures
+   after the first write roll back rows, identity sequences and copied files.
 C. the actual-source rehearsal, opt-in through ``SGAA_PATHB_SOURCE`` /
    ``SGAA_PATHB_SOURCE_SHA256`` / ``SGAA_PATHB_SOURCE_UPLOAD_ROOT``: a frozen
    copy is migrated, validated independently, its pending full administrator
@@ -85,7 +87,27 @@ HIGH_WATER = {
     "admin_alertas": 1,
     "email_envios": 3,
     "requisicao_email_eventos": 2,
+    "storage_objects": 20,
 }
+
+#: Logical Google-account key of the synthetic mirror (SHA-256 of a synthetic
+#: ``sub``); it must survive the target-side recreation of ``cloud_accounts``.
+PATHB_ACCOUNT_KEY = "c3" * 32
+#: v14 canonical-storage metadata (server-generated locators; no filename).
+STORAGE_OBJECTS = (
+    dict(id=9, storage_backend="supabase", storage_bucket="sgaa-documentos",
+         storage_key="comprovantes/2026/01/" + "a" * 32, sha256="d" * 64, size_bytes=4096,
+         mime_type="application/pdf", uploader_user_id=7, origin="direct_upload",
+         content_verified_at=TS, created_at=TS, lifecycle_state="active", drive_sync_state="synced",
+         drive_generation=1, drive_attempts=1, drive_file_id="drv-9", drive_account_key=PATHB_ACCOUNT_KEY,
+         drive_synced_at=TS),
+    dict(id=14, storage_backend="supabase", storage_bucket="sgaa-documentos",
+         storage_key="arquivos/2026/01/" + "b" * 32, sha256="e" * 64, size_bytes=77,
+         mime_type="image/png", uploader_user_id=3, origin="direct_upload", content_verified_at=TS,
+         created_at=TS, lifecycle_state="retired", retired_at=TS, drive_sync_state="retry",
+         drive_generation=3, drive_attempts=3, drive_last_error_code="DRIVE_QUOTA",
+         drive_next_attempt_at="2026-01-03 00:00:00", drive_last_attempt_at=TS),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +126,7 @@ def _insert(conn, table, **values):
 
 
 def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tuple[Path, str]:
-    """A frozen prod-1/v13 SQLite file holding synthetic data only."""
+    """A frozen prod-1/v14 SQLite file holding synthetic data only."""
     path = directory / "pathb_source.db"
     session = sqlite3.connect(os.environ["APP_DATABASE"])
     conn = sqlite3.connect(path)
@@ -128,7 +150,8 @@ def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tu
       assunto="A", is_default=1)
     i(conn, "configuracoes_backup", chave="local_backup_dir", valor="C:/synthetic/backups", atualizado_em=TS)
     i(conn, "cloud_accounts", id=4, provider="google", account_email="drive@example.test",
-      token_json=SECRET_TOKEN_JSON, connected_at=TS, updated_at=TS, active=1)
+      token_json=SECRET_TOKEN_JSON, connected_at=TS, updated_at=TS, active=1,
+      provider_account_key=PATHB_ACCOUNT_KEY)
     i(conn, "cloud_drive_settings", id=1, provider="google", folder_id="synthetic-folder",
       folder_name="Backups", folder_path_label="Backups", drive_id=None, updated_at=TS)
     i(conn, "senha_tokens", id=5, usuario_id=7, purpose="first_access", token_hash="b" * 64,
@@ -178,6 +201,21 @@ def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tu
     for table, (owner_column, owner_id, mime_type, content) in IMAGE_ROWS.items():
         i(conn, table, **{owner_column: owner_id}, mime_type=mime_type, size_bytes=len(content),
           sha256=_sha256(content), width=64, height=48, conteudo=content, atualizado_em=TS)
+    for row in STORAGE_OBJECTS:
+        i(conn, "storage_objects", **row)
+    conn.execute("UPDATE requisicao_arquivos SET storage_object_id = 9 WHERE id = 6")
+    # Terminal intent history (consumed / expired) is ephemeral: never copied.
+    i(conn, "storage_upload_intents", id="1" * 32, actor_user_id=7, purpose="comprovante",
+      operation_id="op-1", storage_bucket="sgaa-documentos", storage_key=STORAGE_OBJECTS[0]["storage_key"],
+      declared_mime_type="application/pdf", declared_size_bytes=4096, declared_sha256="d" * 64,
+      state="consumed", issued_at=TS, expires_at="2026-01-02 03:19:05", sweep_after="2026-01-03 03:19:05",
+      verified_at=TS, consumed_at=TS, storage_object_id=9)
+    i(conn, "storage_upload_intents", id="2" * 32, actor_user_id=3, purpose="admin_arquivo",
+      operation_id="op-2", storage_bucket="sgaa-documentos", storage_key="arquivos/2026/01/" + "c" * 32,
+      declared_mime_type="application/pdf", declared_size_bytes=10, declared_sha256="f" * 64,
+      state="expired", issued_at=TS, expires_at="2026-01-02 03:19:05", sweep_after="2026-01-03 03:19:05")
+    i(conn, "storage_worker_status", id=1, last_started_at=TS, last_finished_at=TS, last_result_code="OK",
+      last_claimed_count=2, last_synced_count=1, last_retry_count=1)
     from app.pg_schema import PG_SCHEMA_EPOCH, PG_SCHEMA_MIGRATIONS_SEED
 
     for version, name, details in PG_SCHEMA_MIGRATIONS_SEED:
@@ -218,6 +256,7 @@ def test_policy_manifest_covers_every_table_exactly_once():
     assert excluded == {
         "schema_migrations", "senha_tokens", "configuracoes_backup", "cloud_accounts",
         "backup_logs", "cloud_drive_settings", "sqlite_sequence",
+        "storage_upload_intents", "storage_worker_status",
     }
 
 
@@ -229,6 +268,16 @@ def test_load_order_puts_every_parent_first():
             if fk["references_table"] != table:
                 assert order.index(fk["references_table"]) < order.index(table), (table, fk["name"])
     assert pathb.self_reference_columns("atividade_versao") == ("versao_anterior_id",)
+
+
+#: A live (issued / verified) intent, inserted directly into the frozen source.
+_LIVE_INTENT_SQL = (
+    "INSERT INTO storage_upload_intents (id, actor_user_id, purpose, operation_id, storage_bucket, "
+    "storage_key, declared_mime_type, declared_size_bytes, declared_sha256, state, issued_at, expires_at, "
+    "sweep_after, verified_at) VALUES ('" + "3" * 32 + "', 7, 'comprovante', 'op-live', 'sgaa-documentos', "
+    "'comprovantes/2026/01/" + "9" * 32 + "', 'application/pdf', 5, '" + "a" * 64 + "', '{state}', "
+    "'2026-01-02 03:04:05', '2099-01-01 00:00:00', '2099-01-02 00:00:00', {verified})"
+)
 
 
 def _refusal(code, *args, **kwargs):
@@ -269,6 +318,21 @@ def test_unsupported_source_schema_and_assets_are_refused(tmp_path, monkeypatch)
     (tmp_path / "c").mkdir()
     source, digest = build_synthetic_source(tmp_path / "c")
     _refusal("ASSET_ROOTS_REQUIRED", source, digest)
+    # v14 cutover freeze: live intents and mirror leases are refused before any
+    # connection.  An account-bound mirror is NOT refused: its logical key needs
+    # no credential row (see the synthetic migration below).
+    for label, code, sql in (
+        ("d1", "LIVE_UPLOAD_INTENTS", _LIVE_INTENT_SQL.format(state="issued", verified="NULL")),
+        ("d2", "LIVE_UPLOAD_INTENTS", _LIVE_INTENT_SQL.format(state="verified", verified="'" + TS + "'")),
+        ("d3", "STORAGE_MIRROR_LEASE_ACTIVE", "UPDATE storage_objects SET drive_sync_state = 'syncing', "
+         "lease_token = '" + "0" * 32 + "', lease_expires_at = '" + TS + "' WHERE id = 9"),
+    ):
+        (tmp_path / label).mkdir()
+        frozen, frozen_digest = build_synthetic_source(tmp_path / label, extra_sql=[sql])
+        with pytest.raises(pathb.MigrationRefused) as caught:
+            pathb.migrate(frozen, frozen_digest)
+        assert caught.value.code == code, str(caught.value)
+        assert "drv-1" not in str(caught.value) and "sgaa-documentos" not in str(caught.value)
     _refusal("ASSET_MISSING", source, digest, source_upload_root=tmp_path / "empty", target_upload_root=tmp_path / "t")
 
 
@@ -585,9 +649,27 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
     lineage = dict(observer.execute("SELECT id, versao_anterior_id FROM atividade_versao").fetchall())
     assert lineage == {12: 70, 30: None, 45: 30, 50: None, 70: None}
     # Excluded and scrubbed tables are empty; the provisioner seed is intact.
-    for table in ("cloud_accounts", "configuracoes_backup", "cloud_drive_settings", "senha_tokens", "backup_logs"):
+    for table in ("cloud_accounts", "configuracoes_backup", "cloud_drive_settings", "senha_tokens", "backup_logs",
+                  "storage_upload_intents", "storage_worker_status"):
         assert observer.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
-    assert observer.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 13
+    assert observer.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == len(
+        pg_schema.PG_SCHEMA_MIGRATIONS_SEED
+    )
+    # v14 canonical custody arrives exactly: objects, their mirror/lifecycle
+    # state and the business reference.  Bytes are not Path-B's concern.
+    assert [tuple(r) for r in observer.execute(
+        "SELECT id, storage_key, lifecycle_state, drive_sync_state, drive_generation, drive_last_error_code, "
+        "drive_account_key "
+        "FROM storage_objects ORDER BY id"
+    ).fetchall()] == [
+        (9, STORAGE_OBJECTS[0]["storage_key"], "active", "synced", 1, None, PATHB_ACCOUNT_KEY),
+        (14, STORAGE_OBJECTS[1]["storage_key"], "retired", "retry", 3, "DRIVE_QUOTA", None),
+    ]
+    # The logical Drive identity survived although no credential row exists on
+    # the target (cloud_accounts recreated empty): no active credential was
+    # needed for the cutover.
+    assert observer.execute("SELECT storage_object_id FROM requisicao_arquivos WHERE id = 6").fetchone()[0] == 9
+    assert "prerequisite: CANONICAL_STORAGE_BUCKET_REQUIRED" in out
     # v13 image rows arrive byte for byte; no local file is involved.
     for table, (owner_column, owner_id, mime_type, content) in IMAGE_ROWS.items():
         row = observer.execute(

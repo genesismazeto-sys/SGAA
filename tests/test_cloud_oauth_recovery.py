@@ -146,7 +146,20 @@ def test_callback_urls_come_from_machine_local_runtime_configuration(monkeypatch
     assert oauth_config.get_onedrive_redirect_uri() == "https://sgaa.example/onedrive/callback"
 
 
+def _unsigned_id_token(claims):
+    import base64
+
+    def part(value):
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+    return f"{part({'alg': 'RS256'})}.{part(claims)}.signature"
+
+
 def test_google_start_and_callback_bind_the_same_pkce_verifier(monkeypatch):
+    import time
+
+    from app.cloud_account_identity import google_account_key
+
     calls = []
 
     class FakeCredentials:
@@ -155,6 +168,10 @@ def test_google_start_and_callback_bind_the_same_pkce_verifier(monkeypatch):
         token_uri = "https://oauth2.googleapis.com/token"
         scopes = ["scope-a"]
         expiry = None
+        id_token = _unsigned_id_token(
+            {"iss": "https://accounts.google.com", "aud": "client-1", "sub": "108555000111222333444",
+             "exp": time.time() + 3600}
+        )
 
     class FakeFlow:
         code_verifier = "pkce-verifier"
@@ -176,7 +193,9 @@ def test_google_start_and_callback_bind_the_same_pkce_verifier(monkeypatch):
         "_import_google_dependencies",
         lambda: (object, object, FakeFlow, object, object),
     )
-    monkeypatch.setattr(google_drive_service, "_build_client_config", lambda redirect_uri: {"web": {}})
+    monkeypatch.setattr(
+        google_drive_service, "_build_client_config", lambda redirect_uri: {"web": {"client_id": "client-1"}}
+    )
     monkeypatch.setattr(google_drive_service, "_get_scopes", lambda: ["scope-a"])
     monkeypatch.setattr(google_drive_service, "get_redirect_uri", lambda default_uri=None: "http://localhost:5000/google/callback")
     monkeypatch.setattr(google_drive_service, "_fetch_email", lambda credentials: "admin@example.com")
@@ -184,9 +203,12 @@ def test_google_start_and_callback_bind_the_same_pkce_verifier(monkeypatch):
     auth_url, state, verifier = google_drive_service.create_authorization_url(
         state="local-state", is_debug=False
     )
-    token_json, identity = google_drive_service.exchange_code_for_token(
+    token_json, identity, account_key = google_drive_service.exchange_code_for_token(
         code="callback-code", code_verifier=verifier, is_debug=False
     )
+    # v14: the logical account identity comes from the same exchange's ID token.
+    assert account_key == google_account_key("108555000111222333444")
+    assert "108555000111222333444" not in token_json
 
     assert auth_url == "https://accounts.example/authorize"
     assert state == "provider-state"
@@ -330,7 +352,8 @@ def _cloud_connection_fixture(monkeypatch):
             token_json TEXT NOT NULL,
             connected_at TEXT,
             updated_at TEXT,
-            active INTEGER NOT NULL DEFAULT 1
+            active INTEGER NOT NULL DEFAULT 1,
+            provider_account_key TEXT
         )
         """
     )

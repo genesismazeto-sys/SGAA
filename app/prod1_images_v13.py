@@ -70,7 +70,7 @@ def migrate_prod1_v12_to_v13(conn: sqlite3.Connection) -> dict[str, object]:
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v12_schema,
-        validate_prod1_schema,
+        _validate_prod1_v13_schema,
     )
 
     if conn.in_transaction:
@@ -106,14 +106,15 @@ def migrate_prod1_v12_to_v13(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v13 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v13_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v13_schema(conn)
+    status = {"schema_epoch": SCHEMA_EPOCH, "schema_version": 13}
     return {
         **status,
         "image_storage": "database",

@@ -305,8 +305,12 @@ def _extract_oauth_scopes(token_json: str) -> list[str]:
         return [scope.strip() for scope in scopes.split() if scope.strip()]
     return []
 
-def _set_active_cloud_account(conn, provider: str, account_email: str, token_json: str) -> None:
-    _cloud_connections.set_active_cloud_account(conn, provider, account_email, token_json)
+def _set_active_cloud_account(
+    conn, provider: str, account_email: str, token_json: str, *, provider_account_key: str | None = None
+) -> None:
+    _cloud_connections.set_active_cloud_account(
+        conn, provider, account_email, token_json, provider_account_key=provider_account_key
+    )
 
 def _get_active_cloud_account(conn, provider: str):
     return _cloud_connections.get_active_cloud_account(conn, provider)
@@ -777,12 +781,12 @@ def google_callback():
 
     conn = get_db_connection()
     try:
-        token_json, account_email = google_exchange_code_for_token(
+        token_json, account_email, account_key = google_exchange_code_for_token(
             code=code,
             code_verifier=code_verifier,
             is_debug=not current_app.config.get("IS_PRODUCTION", False),
         )
-        _set_active_cloud_account(conn, "google", account_email, token_json)
+        _set_active_cloud_account(conn, "google", account_email, token_json, provider_account_key=account_key)
         _save_drive_config(
             conn,
             {

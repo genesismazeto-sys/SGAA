@@ -14,6 +14,11 @@ from typing import Any
 from flask import current_app
 
 import app.cloud_drives as low_level_cloud
+from app.cloud_account_identity import (
+    AccountIdentityError,
+    google_account_key,
+    require_provider_account_key,
+)
 from app.cloud_config import get_application_credential_status, get_onedrive_oauth_config
 from app.db import ensure_cloud_backup_schema
 from app.sql_dialect import current_utc_text
@@ -58,8 +63,32 @@ def _runtime_env() -> str:
     return str(current_app.config.get("APP_ENV") or os.getenv("APP_ENV") or "development")
 
 
-def set_active_cloud_account(conn, provider: str, account_email: str, token_json: str) -> None:
+def set_active_cloud_account(
+    conn,
+    provider: str,
+    account_email: str,
+    token_json: str,
+    *,
+    provider_account_key: str | None = None,
+) -> None:
+    """Insert the new active connection row (a reconnect always inserts).
+
+    ``provider_account_key`` is the LOGICAL provider-account identity
+    (``app.cloud_account_identity``); the row id only identifies this
+    credential instance.  The Google connect flow always supplies it
+    (``exchange_code_for_token`` refuses a connect without one); ``None``
+    remains valid for a row whose identity was never established.
+    """
     normalized = normalize_provider(provider)
+    if provider_account_key is not None:
+        if normalized != "google":
+            raise CloudConnectionError(
+                "Identidade de conta nao suportada.", debug_code="ACCOUNT_IDENTITY_PROVIDER_UNSUPPORTED"
+            )
+        try:
+            require_provider_account_key(provider_account_key)
+        except AccountIdentityError as exc:
+            raise CloudConnectionError("Identidade de conta invalida.", debug_code=exc.code) from None
     ensure_cloud_backup_schema(conn)
     encrypted = encrypt_token_json_for_storage(token_json, env=_runtime_env())
     conn.execute(
@@ -68,11 +97,36 @@ def set_active_cloud_account(conn, provider: str, account_email: str, token_json
     )
     conn.execute(
         f"""
-        INSERT INTO cloud_accounts (provider, account_email, token_json, connected_at, updated_at, active)
-        VALUES (?, ?, ?, {current_utc_text(conn)}, {current_utc_text(conn)}, 1)
+        INSERT INTO cloud_accounts (provider, account_email, token_json, connected_at, updated_at, active,
+                                    provider_account_key)
+        VALUES (?, ?, ?, {current_utc_text(conn)}, {current_utc_text(conn)}, 1, ?)
         """,
-        (normalized, (account_email or "").strip() or None, encrypted),
+        (normalized, (account_email or "").strip() or None, encrypted, provider_account_key),
     )
+
+
+def resolve_active_account_id_by_key(conn, provider: str, provider_account_key: str) -> int | None:
+    """The active connection row of one LOGICAL provider account, or ``None``.
+
+    ``None`` means the mirror's account is disconnected / unavailable -- never
+    a reason to doubt the canonical object.  Two active rows for one logical
+    account cannot be ordered meaningfully: refuse instead of choosing.
+    """
+    normalized = normalize_provider(provider)
+    try:
+        require_provider_account_key(provider_account_key)
+    except AccountIdentityError as exc:
+        raise CloudConnectionError("Identidade de conta invalida.", debug_code=exc.code) from None
+    rows = conn.execute(
+        "SELECT id FROM cloud_accounts WHERE provider = ? AND provider_account_key = ? AND active = 1",
+        (normalized, provider_account_key),
+    ).fetchall()
+    if len(rows) > 1:
+        raise CloudConnectionError(
+            "Mais de uma conexao ativa para a mesma conta. Reconecte a conta.",
+            debug_code="ACCOUNT_IDENTITY_AMBIGUOUS",
+        )
+    return int(rows[0][0]) if rows else None
 
 
 def get_active_cloud_account(conn, provider: str) -> dict[str, Any] | None:
@@ -80,7 +134,8 @@ def get_active_cloud_account(conn, provider: str) -> dict[str, Any] | None:
     ensure_cloud_backup_schema(conn)
     row = conn.execute(
         """
-        SELECT id, provider, account_email, token_json, connected_at, updated_at, active
+        SELECT id, provider, account_email, token_json, connected_at, updated_at, active,
+               provider_account_key
           FROM cloud_accounts
          WHERE provider = ? AND active = 1
       ORDER BY id DESC
@@ -378,6 +433,7 @@ def test_connection(conn, provider: str) -> dict[str, str]:
         if normalized == "google":
             identity = low_level_cloud.google_userinfo(access_token)
             account_email = str(identity.get("email") or account_email).strip()
+            observed_key = _google_key_from_userinfo(identity)
         else:
             identity = low_level_cloud.onedrive_userinfo(access_token)
             account_email = str(
@@ -395,6 +451,8 @@ def test_connection(conn, provider: str) -> dict[str, str]:
             ) from exc
         raise CloudConnectionError("Nao foi possivel validar a conexao com o provedor.") from exc
     account = get_active_cloud_account(conn, normalized)
+    if account and normalized == "google" and observed_key is not None:
+        _bind_or_check_google_identity(conn, account, observed_key)
     if account and account_email and account_email != str(account.get("account_email") or ""):
         update_cloud_account_token(
             conn,
@@ -404,6 +462,31 @@ def test_connection(conn, provider: str) -> dict[str, str]:
         )
         conn.commit()
     return {"provider": normalized, "status": "connected", "account_email": account_email}
+
+
+def _google_key_from_userinfo(identity) -> str | None:
+    """Key of the OIDC ``sub`` in a trusted userinfo response; ``None`` if absent/invalid."""
+    try:
+        return google_account_key(identity.get("sub") if isinstance(identity, dict) else None)
+    except AccountIdentityError:
+        return None
+
+
+def _bind_or_check_google_identity(conn, account, observed_key: str) -> None:
+    """Backfill a NULL logical key from a trusted response; refuse a different account."""
+    recorded = account.get("provider_account_key")
+    if recorded is None:
+        conn.execute(
+            "UPDATE cloud_accounts SET provider_account_key = ? WHERE id = ? AND provider_account_key IS NULL",
+            (observed_key, int(account["id"])),
+        )
+        conn.commit()
+        return
+    if recorded != observed_key:
+        raise CloudConnectionError(
+            "A conta Google autorizada nao corresponde a conta registrada. Reconecte o Google Drive.",
+            debug_code="ACCOUNT_IDENTITY_MISMATCH",
+        )
 
 
 def disconnect_cloud_account(conn, provider: str) -> None:

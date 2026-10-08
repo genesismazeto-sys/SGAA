@@ -1,5 +1,5 @@
 # coding: utf-8
-"""PostgreSQL current-state schema authority for the SGAA prod-1/v13 contract.
+"""PostgreSQL current-state schema authority for the SGAA prod-1/v14 contract.
 
 This module is the single owner of the PostgreSQL physical schema.  It is
 deliberately independent of Flask and of request handling:
@@ -9,18 +9,18 @@ deliberately independent of Flask and of request handling:
   generated from them and ``PG_CONTRACT_SHA256`` is the digest of their
   normalized JSON representation.  The digest is application-owned, never a
   digest of ``pg_catalog`` formatting.
-* ``provision_pg_schema`` creates the baseline at logical v13 directly (the
-  SQLite migrations v1..v13 are never ported).  It is reachable only through
+* ``provision_pg_schema`` creates the baseline at logical v14 directly (the
+  SQLite migrations v1..v14 are never ported).  It is reachable only through
   the explicit CLI (``python -m app.pg_schema provision``) and never from
   ``init_db`` or from request-time ``ensure_*`` paths.
 * ``validate_pg_schema`` is strictly read-only: it checks material catalog
   facts plus the ``pg_schema_meta`` epoch/version/digest already applied at
   provisioning time.
-* ``schema_migrations`` rows 1..13 are seeded by the baseline as baseline metadata
+* ``schema_migrations`` rows 1..14 are seeded by the baseline as baseline metadata
   (``PG_SCHEMA_MIGRATIONS_SEMANTICS = "baseline_metadata"``).  They exist
   because PostgreSQL-backed runtime readers keep the same logical metadata
-  surface; they are NOT proof that PostgreSQL migrations v1..v13 were executed
-  -- PostgreSQL is provisioned directly at v13.
+  surface; they are NOT proof that PostgreSQL migrations v1..v14 were executed
+  -- PostgreSQL is provisioned directly at v14.
 
 Contract shape notes
 --------------------
@@ -40,8 +40,9 @@ Contract shape notes
   ``<table>_<fields>`` name would exceed PostgreSQL's 63-byte identifier
   limit; ``PG_CONSTRAINT_MAP`` is the machine-readable map U5-B will use to
   translate ``pg`` diagnostics into neutral business identities.
-* The eleven prod-1/v13 triggers keep their SQLite names and are implemented
-  with one trigger function per identical semantic body.  Business refusals
+* The seventeen prod-1/v14 triggers keep their SQLite names and are implemented
+  with one trigger function per identical semantic body (the v14
+  storage-object exclusivity triggers share one function keyed on the table).  Business refusals
   raise SQLSTATE ``SG001`` (``PG_BUSINESS_RULE_SQLSTATE``); U5-B owns the
   broader engine-error-to-route classification and must map this state.
 """
@@ -62,9 +63,31 @@ from app.prod1_images_ddl import (
     REPORT_SCREENSHOT_MAX_EDGE,
     REPORT_SCREENSHOT_MIME_TYPES,
 )
+from app.prod1_storage_ddl import (
+    BUSINESS_DOCUMENT_MAX_BYTES,
+    BUSINESS_DOCUMENT_MIME_TYPES,
+    DRIVE_ID_MAX_LENGTH,
+    DRIVE_SYNC_STATES,
+    ERROR_CODE_MAX_LENGTH,
+    INTENT_ID_LENGTH,
+    INTENT_IMMUTABLE_COLUMNS,
+    INTENT_PURPOSES,
+    INTENT_STATES,
+    INTENT_TERMINAL_FROZEN_COLUMNS,
+    INTENT_TERMINAL_STATES,
+    INTENT_TRANSITIONS,
+    LEASE_TOKEN_LENGTH,
+    LIFECYCLE_STATES,
+    OPERATION_ID_MAX_LENGTH,
+    ORIGINAL_FILENAME_MAX_LENGTH,
+    STORAGE_BACKENDS,
+    STORAGE_BUCKET_MAX_LENGTH,
+    STORAGE_KEY_MAX_LENGTH,
+    STORAGE_ORIGINS,
+)
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 13
+PG_SCHEMA_VERSION = 14
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -238,6 +261,276 @@ def _image_spec(table, owner_column, owner_table, mime_types, max_bytes, max_edg
     )
 
 
+def _in_list(values):
+    return ",".join(f"'{value}'" for value in values)
+
+
+def _ts_check(column):
+    """Exact canonical ``YYYY-MM-DD HH:MM:SS`` text that is also a real date-time.
+
+    The time part is bounded lexically (hour 00-23, minute / second 00-59):
+    PostgreSQL's timestamp input otherwise accepts and silently normalizes
+    second 60 and hour 24, which the SQLite ``_ts`` refuses.  The helper still
+    validates the calendar date (and refuses year 0000).
+    """
+    return (
+        f"{column} ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}} ([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$' "
+        f"AND {PG_DATETIME_VALID_FUNCTION}({column})"
+    )
+
+
+def _opt_ts_check(column):
+    return f"{column} IS NULL OR ({_ts_check(column)})"
+
+
+def _code_check(column):
+    return f"{column} IS NULL OR {column} ~ '^[A-Z0-9_]{{1,{ERROR_CODE_MAX_LENGTH}}}$'"
+
+
+def _bucket_check(column):
+    return f"{column} ~ '^[a-z0-9._-]{{1,{STORAGE_BUCKET_MAX_LENGTH}}}$'"
+
+
+def _key_check(column):
+    # PostgreSQL AREs cap a {m,n} bound at 255: lengths go to char_length().
+    return (
+        f"{column} ~ '^[A-Za-z0-9_.-][A-Za-z0-9/_.-]*$' "
+        f"AND char_length({column}) <= {STORAGE_KEY_MAX_LENGTH} "
+        f"AND position('..' in {column}) = 0"
+    )
+
+
+def _account_key_check(column):
+    """Logical provider-account key: NULL or SHA-256 lowercase hex (no FK, by design)."""
+    return f"{column} IS NULL OR {column} ~ '^[0-9a-f]{{64}}$'"
+
+
+def _storage_objects_spec():
+    """v14 canonical object custody; the same constraints as ``app.prod1_storage_ddl``."""
+    t = "storage_objects"
+    drive_id = "'^[A-Za-z0-9_-]+$'"
+    drive_len = DRIVE_ID_MAX_LENGTH
+    return _spec(
+        [
+            _identity("id"),
+            _text("storage_backend", not_null=True),
+            _text("storage_bucket", not_null=True),
+            _text("storage_key", not_null=True),
+            _text("sha256", not_null=True),
+            _integer("size_bytes", not_null=True),
+            _text("mime_type", not_null=True),
+            _integer("uploader_user_id"),
+            _text("origin", not_null=True),
+            _text("content_verified_at", not_null=True),
+            _text("created_at", not_null=True, default=_NOW),
+            _text("lifecycle_state", not_null=True, default="'active'"),
+            _text("retired_at"),
+            _text("purge_after"),
+            _text("drive_sync_state", not_null=True, default="'pending'"),
+            _integer("drive_generation", not_null=True, default="0"),
+            _text("drive_file_id"),
+            _text("drive_parent_id"),
+            _text("drive_account_key"),
+            _integer("drive_attempts", not_null=True, default="0"),
+            _text("drive_next_attempt_at"),
+            _text("drive_last_attempt_at"),
+            _text("drive_last_error_code"),
+            _text("drive_synced_at"),
+            _text("lease_token"),
+            _text("lease_expires_at"),
+        ],
+        _pk(t, "id"),
+        uniques=[_uq(t, "storage_bucket", "storage_key")],
+        checks=[
+            _ck(t, "storage_backend", f"storage_backend IN ({_in_list(STORAGE_BACKENDS)})"),
+            _ck(t, "storage_bucket", _bucket_check("storage_bucket")),
+            _ck(t, "storage_key", _key_check("storage_key")),
+            _ck(t, "sha256", "sha256 ~ '^[0-9a-f]{64}$'"),
+            _ck(t, "size_bytes", f"size_bytes > 0 AND size_bytes <= {BUSINESS_DOCUMENT_MAX_BYTES}"),
+            _ck(t, "mime_type", f"mime_type IN ({_in_list(BUSINESS_DOCUMENT_MIME_TYPES)})"),
+            _ck(t, "origin", f"origin IN ({_in_list(STORAGE_ORIGINS)})"),
+            _ck(t, "content_verified_at", _ts_check("content_verified_at")),
+            _ck(t, "created_at", _ts_check("created_at")),
+            _ck(t, "lifecycle_state", f"lifecycle_state IN ({_in_list(LIFECYCLE_STATES)})"),
+            _ck(t, "retired_at", _opt_ts_check("retired_at")),
+            _ck(t, "purge_after", _opt_ts_check("purge_after")),
+            _ck(t, "drive_sync_state", f"drive_sync_state IN ({_in_list(DRIVE_SYNC_STATES)})"),
+            _ck(t, "drive_generation", "drive_generation >= 0"),
+            _ck(
+                t,
+                "drive_file_id",
+                f"drive_file_id IS NULL OR (drive_file_id ~ {drive_id} "
+                f"AND char_length(drive_file_id) <= {drive_len})",
+            ),
+            _ck(
+                t,
+                "drive_parent_id",
+                f"drive_parent_id IS NULL OR (drive_parent_id ~ {drive_id} "
+                f"AND char_length(drive_parent_id) <= {drive_len})",
+            ),
+            _ck(t, "drive_attempts", "drive_attempts >= 0"),
+            _ck(t, "drive_next_attempt_at", _opt_ts_check("drive_next_attempt_at")),
+            _ck(t, "drive_last_attempt_at", _opt_ts_check("drive_last_attempt_at")),
+            _ck(t, "drive_last_error_code", _code_check("drive_last_error_code")),
+            _ck(t, "drive_synced_at", _opt_ts_check("drive_synced_at")),
+            _ck(t, "lease_token", f"lease_token IS NULL OR lease_token ~ '^[0-9a-f]{{{LEASE_TOKEN_LENGTH}}}$'"),
+            _ck(t, "lease_expires_at", _opt_ts_check("lease_expires_at")),
+            _ck(t, "direct_upload_uploader", "origin <> 'direct_upload' OR uploader_user_id IS NOT NULL"),
+            _ck(
+                t,
+                "lifecycle",
+                "(lifecycle_state = 'active' AND retired_at IS NULL AND purge_after IS NULL) "
+                "OR (lifecycle_state = 'retired' AND retired_at IS NOT NULL)",
+            ),
+            _ck(t, "lease_only_syncing", "(drive_sync_state = 'syncing') = (lease_token IS NOT NULL)"),
+            _ck(t, "lease_complete", "(lease_token IS NULL) = (lease_expires_at IS NULL)"),
+            _ck(
+                t,
+                "synced_complete",
+                "drive_sync_state <> 'synced' OR (drive_file_id IS NOT NULL "
+                "AND drive_account_key IS NOT NULL AND drive_synced_at IS NOT NULL)",
+            ),
+            _ck(
+                t,
+                "failure_code",
+                "drive_sync_state NOT IN ('retry','reconciliation_required') "
+                "OR drive_last_error_code IS NOT NULL",
+            ),
+            _ck(t, "retry_due", "drive_sync_state <> 'retry' OR drive_next_attempt_at IS NOT NULL"),
+            _ck(t, "drive_file_account", "drive_file_id IS NULL OR drive_account_key IS NOT NULL"),
+            _ck(t, "drive_account_key", _account_key_check("drive_account_key")),
+        ],
+        foreign_keys=[
+            _fk(t, ["uploader_user_id"], "usuarios", ["id"], on_delete="RESTRICT", on_update="CASCADE"),
+        ],
+    )
+
+
+def _storage_upload_intents_spec():
+    """v14 ephemeral upload authorizations; same constraints as ``app.prod1_storage_ddl``."""
+    t = "storage_upload_intents"
+    mime_list = _in_list(BUSINESS_DOCUMENT_MIME_TYPES)
+    return _spec(
+        [
+            _text("id", not_null=True),
+            _integer("actor_user_id", not_null=True),
+            _text("purpose", not_null=True),
+            _text("operation_id", not_null=True),
+            _text("storage_bucket", not_null=True),
+            _text("storage_key", not_null=True),
+            _integer("requisicao_id"),
+            _integer("admin_arquivo_id"),
+            _text("original_filename"),
+            _text("declared_mime_type", not_null=True),
+            _integer("declared_size_bytes", not_null=True),
+            _text("declared_sha256", not_null=True),
+            _text("state", not_null=True, default="'issued'"),
+            _text("rejection_code"),
+            _text("issued_at", not_null=True),
+            _text("expires_at", not_null=True),
+            _text("sweep_after", not_null=True),
+            _text("verified_at"),
+            _text("consumed_at"),
+            _integer("storage_object_id"),
+        ],
+        _pk(t, "id"),
+        uniques=[
+            _uq(t, "storage_bucket", "storage_key"),
+            _uq(t, "actor_user_id", "purpose", "operation_id"),
+            _uq(t, "storage_object_id"),
+        ],
+        checks=[
+            _ck(t, "id", f"id ~ '^[0-9a-f]{{{INTENT_ID_LENGTH}}}$'"),
+            _ck(t, "purpose", f"purpose IN ({_in_list(INTENT_PURPOSES)})"),
+            _ck(t, "operation_id", f"operation_id ~ '^[A-Za-z0-9_.:-]{{1,{OPERATION_ID_MAX_LENGTH}}}$'"),
+            _ck(t, "storage_bucket", _bucket_check("storage_bucket")),
+            _ck(t, "storage_key", _key_check("storage_key")),
+            _ck(
+                t,
+                "original_filename",
+                "original_filename IS NULL OR char_length(original_filename) "
+                f"BETWEEN 1 AND {ORIGINAL_FILENAME_MAX_LENGTH}",
+            ),
+            _ck(t, "declared_mime_type", f"declared_mime_type IN ({mime_list})"),
+            _ck(
+                t,
+                "declared_size_bytes",
+                f"declared_size_bytes > 0 AND declared_size_bytes <= {BUSINESS_DOCUMENT_MAX_BYTES}",
+            ),
+            _ck(t, "declared_sha256", "declared_sha256 ~ '^[0-9a-f]{64}$'"),
+            _ck(t, "state", f"state IN ({_in_list(INTENT_STATES)})"),
+            _ck(t, "rejection_code", _code_check("rejection_code")),
+            _ck(t, "issued_at", _ts_check("issued_at")),
+            _ck(t, "expires_at", _ts_check("expires_at")),
+            _ck(t, "sweep_after", _ts_check("sweep_after")),
+            _ck(t, "verified_at", _opt_ts_check("verified_at")),
+            _ck(t, "consumed_at", _opt_ts_check("consumed_at")),
+            _ck(t, "window", "expires_at > issued_at AND sweep_after >= expires_at"),
+            _ck(t, "requisicao_binding", "purpose = 'comprovante' OR requisicao_id IS NULL"),
+            _ck(t, "admin_arquivo_binding", "purpose = 'admin_arquivo' OR admin_arquivo_id IS NULL"),
+            _ck(t, "rejected_code", "(state = 'rejected') = (rejection_code IS NOT NULL)"),
+            _ck(
+                t,
+                "verified_at_state",
+                "(state IN ('verified','consumed')) = (verified_at IS NOT NULL) "
+                "OR state IN ('rejected','expired')",
+            ),
+            _ck(
+                t,
+                "consumed_complete",
+                "(state = 'consumed') = (consumed_at IS NOT NULL AND storage_object_id IS NOT NULL)",
+            ),
+            _ck(
+                t,
+                "unconsumed_clean",
+                "state = 'consumed' OR (consumed_at IS NULL AND storage_object_id IS NULL)",
+            ),
+        ],
+        foreign_keys=[
+            _fk(t, ["actor_user_id"], "usuarios", ["id"], on_delete="CASCADE"),
+            _fk(t, ["requisicao_id"], "requisicoes", ["id"], on_delete="CASCADE"),
+            _fk(t, ["admin_arquivo_id"], "admin_arquivos", ["id"], on_delete="CASCADE"),
+            _fk(t, ["storage_object_id"], "storage_objects", ["id"], on_delete="RESTRICT"),
+        ],
+    )
+
+
+def _storage_worker_status_spec():
+    """v14 mirror-worker health: at most one row; no row means "never ran"."""
+    t = "storage_worker_status"
+    return _spec(
+        [
+            _integer("id", not_null=True),
+            _text("last_started_at", not_null=True),
+            _text("last_finished_at"),
+            _text("last_result_code"),
+            _integer("last_claimed_count", not_null=True, default="0"),
+            _integer("last_synced_count", not_null=True, default="0"),
+            _integer("last_retry_count", not_null=True, default="0"),
+        ],
+        _pk(t, "id"),
+        checks=[
+            _ck(t, "singleton", "id = 1"),
+            _ck(t, "last_started_at", _ts_check("last_started_at")),
+            _ck(t, "last_finished_at", _opt_ts_check("last_finished_at")),
+            _ck(t, "last_result_code", _code_check("last_result_code")),
+            _ck(t, "last_claimed_count", "last_claimed_count >= 0"),
+            _ck(t, "last_synced_count", "last_synced_count >= 0"),
+            _ck(t, "last_retry_count", "last_retry_count >= 0"),
+            _ck(t, "finished_result", "(last_finished_at IS NULL) = (last_result_code IS NULL)"),
+            _ck(
+                t,
+                "finished_order",
+                "last_finished_at IS NULL OR last_finished_at >= last_started_at",
+            ),
+        ],
+    )
+
+
+def _storage_object_fk(table):
+    return _fk(table, ["storage_object_id"], "storage_objects", ["id"], on_delete="RESTRICT")
+
+
 PG_APPLICATION_TABLES = (
     "schema_migrations",
     "usuarios",
@@ -251,6 +544,7 @@ PG_APPLICATION_TABLES = (
     "cloud_accounts",
     "backup_logs",
     "cloud_drive_settings",
+    "storage_objects",
     "mensagens_editaveis",
     "cursos",
     "matrizes_atividades",
@@ -272,6 +566,8 @@ PG_APPLICATION_TABLES = (
     "usuarios_foto",
     "alunos_foto",
     "reportes_captura",
+    "storage_upload_intents",
+    "storage_worker_status",
 )
 
 PG_SCHEMA_TABLES = PG_APPLICATION_TABLES + (PG_SCHEMA_META_TABLE,)
@@ -436,8 +732,14 @@ PG_TABLE_SPECS = {
             _text("connected_at", default=_NOW),
             _text("updated_at"),
             _integer("active", default="1"),
+            # v14: logical provider-account identity (nullable; see
+            # app.cloud_account_identity) -- ``id`` is the credential instance.
+            _text("provider_account_key"),
         ],
         _pk("cloud_accounts", "id"),
+        checks=[
+            _ck("cloud_accounts", "provider_account_key", _account_key_check("provider_account_key")),
+        ],
     ),
     "backup_logs": _spec(
         [
@@ -911,6 +1213,7 @@ PG_TABLE_SPECS = {
             _text("failure_code"),
             _text("delete_previous_status"),
             _text("delete_started_at"),
+            _integer("storage_object_id"),
         ],
         _pk("requisicao_arquivos", "id"),
         foreign_keys=[
@@ -929,6 +1232,7 @@ PG_TABLE_SPECS = {
                 on_delete="RESTRICT",
                 on_update="CASCADE",
             ),
+            _storage_object_fk("requisicao_arquivos"),
         ],
     ),
     "requisicao_alerta_receipts": _spec(
@@ -1030,6 +1334,7 @@ PG_TABLE_SPECS = {
             _text("prior_provider"),
             _text("prior_locator"),
             _text("cleanup_started_at"),
+            _integer("storage_object_id"),
         ],
         _pk("admin_arquivos", "id"),
         checks=[
@@ -1070,7 +1375,8 @@ PG_TABLE_SPECS = {
                 ["id"],
                 on_delete="RESTRICT",
                 on_update="CASCADE",
-            )
+            ),
+            _storage_object_fk("admin_arquivos"),
         ],
     ),
     "admin_alertas": _spec(
@@ -1206,6 +1512,9 @@ PG_TABLE_SPECS = {
         "reportes_captura", "reporte_id", "reportes",
         REPORT_SCREENSHOT_MIME_TYPES, REPORT_SCREENSHOT_MAX_BYTES, REPORT_SCREENSHOT_MAX_EDGE,
     ),
+    "storage_objects": _storage_objects_spec(),
+    "storage_upload_intents": _storage_upload_intents_spec(),
+    "storage_worker_status": _storage_worker_status_spec(),
     PG_SCHEMA_META_TABLE: _spec(
         [
             _integer("id", not_null=True),
@@ -1389,8 +1698,72 @@ PG_EXPLICIT_INDEXES = {
             descending=[False, True],
         ),
         _index("idx_email_envios_status", "email_envios", ["status"]),
+        _index(
+            "idx_storage_objects_drive_due",
+            "storage_objects",
+            ["drive_sync_state", "drive_next_attempt_at"],
+        ),
+        _index("idx_storage_objects_uploader", "storage_objects", ["uploader_user_id"]),
+        _index(
+            "ux_storage_objects_drive_file",
+            "storage_objects",
+            ["drive_account_key", "drive_file_id"],
+            unique=True,
+            predicate="drive_file_id IS NOT NULL",
+        ),
+        _index(
+            "idx_cloud_accounts_provider_account_key",
+            "cloud_accounts",
+            ["provider", "provider_account_key", "active"],
+        ),
+        _index(
+            "idx_storage_upload_intents_state_expires",
+            "storage_upload_intents",
+            ["state", "expires_at"],
+        ),
+        _index(
+            "ux_req_arquivos_storage_object",
+            "requisicao_arquivos",
+            ["storage_object_id"],
+            unique=True,
+            predicate="storage_object_id IS NOT NULL",
+        ),
+        _index(
+            "ux_admin_arquivos_storage_object",
+            "admin_arquivos",
+            ["storage_object_id"],
+            unique=True,
+            predicate="storage_object_id IS NOT NULL",
+        ),
     )
 }
+
+
+def _intent_transition_function_sql():
+    """Same rule as the SQLite ``trg_storage_upload_intents_transition``."""
+    new_fixed = ", ".join(f"NEW.{c}" for c in INTENT_IMMUTABLE_COLUMNS)
+    old_fixed = ", ".join(f"OLD.{c}" for c in INTENT_IMMUTABLE_COLUMNS)
+    new_frozen = ", ".join(f"NEW.{c}" for c in INTENT_TERMINAL_FROZEN_COLUMNS)
+    old_frozen = ", ".join(f"OLD.{c}" for c in INTENT_TERMINAL_FROZEN_COLUMNS)
+    legal = " OR ".join(
+        f"(OLD.state = '{before}' AND NEW.state = '{after}')" for before, after in INTENT_TRANSITIONS
+    )
+    return f"""
+CREATE FUNCTION fn_storage_upload_intents_transition() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF ROW({new_fixed}) IS DISTINCT FROM ROW({old_fixed})
+     OR (OLD.state IN ({_in_list(INTENT_TERMINAL_STATES)})
+         AND ROW({new_frozen}) IS DISTINCT FROM ROW({old_frozen}))
+     OR (NEW.state IS DISTINCT FROM OLD.state AND NOT ({legal}))
+  THEN
+    RAISE EXCEPTION 'invalid storage upload intent transition'
+      USING ERRCODE = 'SG001';
+  END IF;
+  RETURN NEW;
+END;
+$fn$
+"""
 
 
 PG_TRIGGER_FUNCTIONS = {
@@ -1573,6 +1946,41 @@ BEGIN
 END;
 $fn$
 """,
+    # The row lock serializes two binders of the same object, so the
+    # cross-table EXISTS sees a concurrently committed owner.
+    "fn_storage_object_exclusive_owner": r"""
+CREATE FUNCTION fn_storage_object_exclusive_owner() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.storage_object_id IS NOT NULL THEN
+    PERFORM 1 FROM storage_objects WHERE id = NEW.storage_object_id FOR NO KEY UPDATE;
+    IF (TG_TABLE_NAME = 'requisicao_arquivos' AND EXISTS (
+          SELECT 1 FROM admin_arquivos WHERE storage_object_id = NEW.storage_object_id))
+       OR (TG_TABLE_NAME = 'admin_arquivos' AND EXISTS (
+          SELECT 1 FROM requisicao_arquivos WHERE storage_object_id = NEW.storage_object_id))
+    THEN
+      RAISE EXCEPTION 'storage object already owned by another business file'
+        USING ERRCODE = 'SG001';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$fn$
+""",
+    "fn_storage_upload_intents_transition": _intent_transition_function_sql(),
+    "fn_storage_objects_drive_account_bound": r"""
+CREATE FUNCTION fn_storage_objects_drive_account_bound() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF OLD.drive_account_key IS NOT NULL
+     AND NEW.drive_account_key IS DISTINCT FROM OLD.drive_account_key THEN
+    RAISE EXCEPTION 'storage object Drive account is already bound'
+      USING ERRCODE = 'SG001';
+  END IF;
+  RETURN NEW;
+END;
+$fn$
+""",
 }
 
 
@@ -1651,6 +2059,45 @@ PG_TRIGGERS = (
         "admin_arquivos",
         ["UPDATE"],
         "fn_admin_arquivos_custody",
+    ),
+    _trigger(
+        "trg_requisicao_arquivos_storage_object_insert",
+        "requisicao_arquivos",
+        ["INSERT"],
+        "fn_storage_object_exclusive_owner",
+    ),
+    _trigger(
+        "trg_requisicao_arquivos_storage_object_update",
+        "requisicao_arquivos",
+        ["UPDATE"],
+        "fn_storage_object_exclusive_owner",
+        columns=["storage_object_id"],
+    ),
+    _trigger(
+        "trg_admin_arquivos_storage_object_insert",
+        "admin_arquivos",
+        ["INSERT"],
+        "fn_storage_object_exclusive_owner",
+    ),
+    _trigger(
+        "trg_admin_arquivos_storage_object_update",
+        "admin_arquivos",
+        ["UPDATE"],
+        "fn_storage_object_exclusive_owner",
+        columns=["storage_object_id"],
+    ),
+    _trigger(
+        "trg_storage_upload_intents_transition",
+        "storage_upload_intents",
+        ["UPDATE"],
+        "fn_storage_upload_intents_transition",
+    ),
+    _trigger(
+        "trg_storage_objects_drive_account_bound",
+        "storage_objects",
+        ["UPDATE"],
+        "fn_storage_objects_drive_account_bound",
+        columns=["drive_account_key"],
     ),
 )
 
@@ -1732,6 +2179,14 @@ PG_SCHEMA_MIGRATIONS_SEED = (
         '"tables":["usuarios_foto","alunos_foto","reportes_captura"],'
         '"legacy_columns":["usuarios.foto_perfil","alunos.foto_perfil",'
         '"reportes.screenshot_filename"],"backfill":"none_one_shot_importer"}',
+    ),
+    (
+        14,
+        "canonical_storage",
+        '{"schema_epoch":"prod-1","canonical_storage":"supabase","drive":"async_mirror",'
+        '"tables":["storage_objects","storage_upload_intents","storage_worker_status"],'
+        '"columns":["requisicao_arquivos.storage_object_id","admin_arquivos.storage_object_id"],'
+        '"backfill":"none","runtime_switch":"none"}',
     ),
 )
 
@@ -2348,7 +2803,7 @@ def _normalized_trigger_definition(definition, schema):
 
 
 def validate_pg_schema(connection):
-    """Read-only validation of the material PostgreSQL prod-1/v13 contract.
+    """Read-only validation of the material PostgreSQL prod-1/v14 contract.
 
     Returns a summary dict.  Raises :class:`PostgresSchemaError` on the first
     material divergence (missing/extra table, column, constraint, index,
@@ -2729,7 +3184,7 @@ def pg_schema_status(connection):
 
 
 def provision_pg_schema(connection):
-    """Provision the prod-1/v13 baseline into the connection's current schema.
+    """Provision the prod-1/v14 baseline into the connection's current schema.
 
     The caller owns the transaction.  An empty schema is created from scratch;
     a schema that already matches the contract exactly is an idempotent no-op;
@@ -2744,7 +3199,7 @@ def provision_pg_schema(connection):
             status = validate_pg_schema(connection)
         except PostgresSchemaError as exc:
             raise PostgresSchemaIncompatibleError(
-                "existing schema is not the SGAA prod-1/v13 PostgreSQL baseline; "
+                "existing schema is not the SGAA prod-1/v14 PostgreSQL baseline; "
                 "explicit provisioning refuses to drop, alter or repair it: "
                 f"{exc}"
             ) from exc
@@ -2812,7 +3267,7 @@ def provision_database(database_url):
 _USAGE = (
     "usage: python -m app.pg_schema <provision|validate>\n"
     "\n"
-    "Explicit PostgreSQL schema operations for the SGAA prod-1/v13 baseline.\n"
+    "Explicit PostgreSQL schema operations for the SGAA prod-1/v14 baseline.\n"
     "DATABASE_URL must be a PostgreSQL URL. 'provision' creates the baseline\n"
     "from an empty schema or is a no-op when it already matches; it never\n"
     "drops, alters or repairs an existing schema.\n"

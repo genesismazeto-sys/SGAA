@@ -134,16 +134,16 @@ def _rows(conn, sql: str) -> list[tuple]:
 # =========================================================================== #
 
 
-def test_v11_is_registered_two_steps_before_the_v13_head():
-    assert SCHEMA_VERSION == 13
+def test_v11_is_registered_three_steps_before_the_v14_head():
+    assert SCHEMA_VERSION == 14
     assert db_maintenance.SCHEMA_MIGRATIONS[10][:2] == (11, CREDENTIAL_PENDING_MARKER)
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 13
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 14
 
 
 def test_fresh_bootstrap_keeps_the_v11_credential_shape():
     conn = _connect()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 13
+    assert status["schema_version"] == 14
     # v12 only changes two hour DEFAULTs and v13 only adds the image tables;
     # without them the head is v11 exactly.
     shape = _connect()
@@ -231,8 +231,8 @@ def test_bootstrap_chains_a_v10_database_to_the_head():
     conn = _connect()
     _build_v10(conn)
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 13
-    assert [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] == list(range(1, 14))
+    assert status["schema_version"] == 14
+    assert [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")] == list(range(1, 15))
 
 
 # =========================================================================== #

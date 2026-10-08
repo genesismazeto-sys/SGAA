@@ -32,8 +32,8 @@ SECRETS
 BACKUP
     Preconditions: PostgreSQL, ``current_schema() = public``, client majors
     >= server major, ``validate_pg_schema`` CURRENT (contract digest), the
-    provisioner ``schema_migrations`` baseline, 11 triggers enabled, no
-    extension objects in ``public`` and the 49 Path-B domain checks green.
+    provisioner ``schema_migrations`` baseline, every contract trigger enabled,
+    no extension objects in ``public`` and every Path-B domain check green.
     One ``REPEATABLE READ READ ONLY`` transaction exports its snapshot; the
     manifest's relational state is read in it and ``pg_dump --snapshot`` dumps
     the same snapshot while it stays open.  The source is never written.
@@ -45,6 +45,23 @@ BACKUP
     The archive's own TOC (``pg_restore --list``) must equal the SGAA contract
     exactly -- any other schema, object class, role/ACL entry or object is
     refused; the scope is proven from the artifact, not from the command line.
+
+TABLE DATA POLICY (prod-1/v14)
+    Every contract table is archived with its schema.  Two tables are
+    archived SCHEMA ONLY (``pg_dump --exclude-table-data``) and their absence
+    of TABLE DATA is part of the TOC contract, so it is proven from the
+    artifact rather than assumed from "probably empty" tables:
+
+    * ``storage_upload_intents`` -- EPHEMERAL_OMITTED: signed-upload workflow
+      state is never restored; a restored database has no live intent.
+    * ``storage_worker_status`` -- TARGET_SIDE_RECREATED: stale scheduler
+      health is never restored; no row is the authoritative "never ran" state.
+
+    ``storage_objects`` and the business ``storage_object_id`` references are
+    archived in full.  The manifest adds a value-free canonical-storage census
+    (counts by lifecycle / mirror state, total size, a reference digest over
+    id/bucket/key/sha256/size -- no filename, no person).  Object BYTES live in
+    the canonical bucket and are NOT part of this logical backup.
 
 ARTIFACTS
     ``<base>.dump`` + ``<base>.dump.sha256`` + ``<base>.manifest.json`` are
@@ -108,8 +125,8 @@ from app import pg_migrate_from_sqlite as pathb  # noqa: E402
 from app import pg_schema  # noqa: E402
 
 MANIFEST_FORMAT = "sgaa-pg-logical-backup"
-MANIFEST_FORMAT_VERSION = 1
-TOOL_VERSION = 1
+MANIFEST_FORMAT_VERSION = 2
+TOOL_VERSION = 2
 SOURCE_URL_ENV = "DATABASE_URL"
 TARGET_URL_ENV = "SGAA_RESTORE_TARGET_URL"
 BIN_DIR_ENV = "SGAA_PG_BIN_DIR"
@@ -122,7 +139,15 @@ MANIFEST_SUFFIX = ".manifest.json"
 STAGING_SUFFIX = ".sgaa-pgbackup-staging"
 
 PROTECTED_DATABASES = frozenset({"postgres", "template0", "template1", "sgaa_qual"})
-PG_DUMP_OPTIONS = ("--format=custom", "--schema=public", "--no-owner", "--no-privileges")
+#: Tables archived schema-only, with the manifest policy recorded for each.
+SCHEMA_ONLY_TABLE_POLICIES = {
+    "storage_upload_intents": "EPHEMERAL_OMITTED",
+    "storage_worker_status": "TARGET_SIDE_RECREATED",
+}
+PG_DUMP_OPTIONS = (
+    "--format=custom", "--schema=public", "--no-owner", "--no-privileges",
+    *(f"--exclude-table-data=public.{table}" for table in SCHEMA_ONLY_TABLE_POLICIES),
+)
 PG_RESTORE_OPTIONS = ("--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges")
 
 EXIT_OK = 0
@@ -572,7 +597,7 @@ def expected_toc(sequence_names) -> dict:
     return {
         "FUNCTION": set(pg_schema.PG_HELPERS) | {t["function"] for t in pg_schema.PG_TRIGGERS},
         "TABLE": tables,
-        "TABLE DATA": tables,
+        "TABLE DATA": tables - set(SCHEMA_ONLY_TABLE_POLICIES),
         "SEQUENCE": sequences,
         "SEQUENCE SET": sequences,
         "CONSTRAINT": {
@@ -724,6 +749,44 @@ def _accounts(conn) -> dict:
     }
 
 
+def _storage_census(conn) -> dict:
+    """Value-free canonical-storage census: counts, total size, reference digests."""
+    def grouped(column):
+        return {
+            str(k): int(v)
+            for k, v in conn.execute(
+                f"SELECT {column}, count(*) FROM storage_objects GROUP BY {column} ORDER BY {column}"
+            ).fetchall()
+        }
+
+    rows, total = conn.execute("SELECT count(*), COALESCE(sum(size_bytes), 0) FROM storage_objects").fetchone()
+    objects = hashlib.sha256()
+    for row in conn.execute(
+        "SELECT id, storage_bucket, storage_key, sha256, size_bytes FROM storage_objects ORDER BY id"
+    ).fetchall():
+        objects.update(json.dumps([int(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4])],
+                                  separators=(",", ":")).encode("utf-8") + b"\n")
+    references = hashlib.sha256()
+    counts = {}
+    for table in ("requisicao_arquivos", "admin_arquivos"):
+        found = conn.execute(
+            f"SELECT id, storage_object_id FROM {table} WHERE storage_object_id IS NOT NULL ORDER BY id"
+        ).fetchall()
+        counts[table] = len(found)
+        for row in found:
+            references.update(f"{table}:{int(row[0])}:{int(row[1])}\n".encode("utf-8"))
+    return {
+        "objects": int(rows),
+        "total_size_bytes": int(total),
+        "by_lifecycle_state": grouped("lifecycle_state"),
+        "by_drive_sync_state": grouped("drive_sync_state"),
+        "objects_digest": objects.hexdigest(),
+        "business_references": counts,
+        "business_references_digest": references.hexdigest(),
+        "object_bytes": "NOT_INCLUDED_CANONICAL_BUCKET",
+    }
+
+
 @dataclass
 class DatabaseState:
     schema: dict = field(default_factory=dict)
@@ -734,6 +797,8 @@ class DatabaseState:
     domain: dict = field(default_factory=dict)
     triggers_enabled: int = 0
     accounts: dict = field(default_factory=dict)
+    storage: dict = field(default_factory=dict)
+    schema_only_sources: dict = field(default_factory=dict)  # table -> value-free source census
 
 
 def read_state(conn) -> DatabaseState:
@@ -756,7 +821,7 @@ def read_state(conn) -> DatabaseState:
     ]
     seed = [(v, n, pg_schema.PG_SCHEMA_EPOCH, d) for v, n, d in pg_schema.PG_SCHEMA_MIGRATIONS_SEED]
     if markers != seed:
-        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1/v13 baseline")
+        raise Refused("SCHEMA_MIGRATIONS_NOT_BASELINE", "schema_migrations is not the prod-1/v14 baseline")
     epoch, version, contract = conn.execute(
         f"SELECT schema_epoch, schema_version, contract_sha256 FROM {pg_schema.PG_SCHEMA_META_TABLE}"
     ).fetchone()
@@ -804,6 +869,20 @@ def read_state(conn) -> DatabaseState:
             f"{state.triggers_enabled} of {len(pg_schema.PG_TRIGGERS)} contract triggers enabled",
         )
     state.accounts = _accounts(conn)
+    state.storage = _storage_census(conn)
+    state.schema_only_sources = {
+        "storage_upload_intents": {
+            "rows_by_state": {
+                str(k): int(v)
+                for k, v in conn.execute(
+                    "SELECT state, count(*) FROM storage_upload_intents GROUP BY state ORDER BY state"
+                ).fetchall()
+            }
+        },
+        "storage_worker_status": {
+            "rows": int(conn.execute("SELECT count(*) FROM storage_worker_status").fetchone()[0])
+        },
+    }
     return state
 
 
@@ -996,6 +1075,12 @@ def _check_identities(state: DatabaseState, archived: dict) -> dict:
     return identities
 
 
+#: A schema-only table restores empty: its manifest entry is that state.
+_EMPTY_TABLE = {
+    table: {"rows": 0, "sha256": pathb.table_digest(table, {})} for table in SCHEMA_ONLY_TABLE_POLICIES
+}
+
+
 def build_manifest(*, created_at, label, identity, server_num, tools, paths, size, sha256, state,
                    identities, census) -> dict:
     failing = sorted(name for name, count in state.domain.items() if count)
@@ -1019,7 +1104,15 @@ def build_manifest(*, created_at, label, identity, server_num, tools, paths, siz
         "consistency": {"mode": "exported_snapshot", "transaction": "REPEATABLE READ READ ONLY",
                         "identity_semantics": IDENTITY_SEMANTICS},
         "schema": state.schema,
-        "tables": state.tables,
+        "tables": {
+            table: (_EMPTY_TABLE[table] if table in SCHEMA_ONLY_TABLE_POLICIES else summary)
+            for table, summary in state.tables.items()
+        },
+        "table_data_policy": {
+            table: {"policy": policy, "restored_rows": 0, "source": state.schema_only_sources[table]}
+            for table, policy in SCHEMA_ONLY_TABLE_POLICIES.items()
+        },
+        "storage": state.storage,
         "identities": identities,
         "toc": census,
         "domain_validation": {"checks": len(state.domain), "failing": len(failing), "results": state.domain},
@@ -1140,6 +1233,14 @@ def load_manifest(manifest_path) -> dict:
             raise Refused("MANIFEST_INVALID", "identity table set differs from the contract")
         if set(manifest["tables"]) != set(pg_schema.PG_SCHEMA_TABLES):
             raise Refused("MANIFEST_INVALID", "table set differs from the contract")
+        policies = {t: entry["policy"] for t, entry in manifest["table_data_policy"].items()}
+        if policies != SCHEMA_ONLY_TABLE_POLICIES:
+            raise Refused("MANIFEST_INVALID", "table data policy differs from the contract")
+        for table in SCHEMA_ONLY_TABLE_POLICIES:
+            if manifest["tables"][table] != _EMPTY_TABLE[table]:
+                raise Refused("MANIFEST_INVALID", f"{table} must be recorded as restored empty")
+        if not isinstance(manifest["storage"], dict):
+            raise Refused("MANIFEST_INVALID", "storage census missing")
     except (KeyError, TypeError) as exc:
         raise Refused("MANIFEST_INVALID", "required manifest fields are missing") from exc
     return manifest
@@ -1211,6 +1312,11 @@ def compare_state(manifest, state: DatabaseState) -> list[tuple[str, str]]:
         mismatches.append(("TRIGGERS_MISMATCH", "*"))
     if state.accounts != manifest["accounts"]:
         mismatches.append(("ACCOUNT_CARDINALITY_MISMATCH", "usuarios/usuario_credenciais"))
+    if state.storage != manifest["storage"]:
+        mismatches.append(("STORAGE_CENSUS_MISMATCH", "storage_objects"))
+    for table in SCHEMA_ONLY_TABLE_POLICIES:
+        if state.tables[table]["rows"]:
+            mismatches.append(("SCHEMA_ONLY_TABLE_NOT_EMPTY", table))
     return mismatches
 
 
@@ -1233,7 +1339,8 @@ def verify_database(manifest, url, *, announce=lambda line: None) -> DatabaseSta
     announce(
         f"verified: schema CURRENT; {len(state.tables)} tables rows+digests equal; "
         f"{len(state.identities)} identities equal; {len(state.domain)} domain checks green; "
-        f"{state.triggers_enabled} triggers enabled; accounts equal"
+        f"{state.triggers_enabled} triggers enabled; accounts equal; storage census equal; "
+        f"schema-only tables empty ({', '.join(sorted(SCHEMA_ONLY_TABLE_POLICIES))})"
     )
     return state
 

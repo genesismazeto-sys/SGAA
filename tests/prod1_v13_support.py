@@ -17,10 +17,16 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_images_ddl import IMAGES_V13_TABLES
+from tests.prod1_v14_support import revert_prod1_v14_to_v13
 
 
 def revert_prod1_v13_to_v12(conn: sqlite3.Connection) -> None:
-    """Drop the three (empty) image tables and marker 13."""
+    """Drop the three (empty) image tables and marker 13.
+
+    Handed the bootstrapped head (v14), it reverts v14 first.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 14:
+        revert_prod1_v14_to_v13(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 13
     for table in IMAGES_V13_TABLES:
         assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0, table

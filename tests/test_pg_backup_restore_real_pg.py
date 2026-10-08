@@ -10,9 +10,12 @@ A. synthetic source A (users/credentials, lineage with a forward reference,
    AAC->AEU transition, matrix items, turma/aluno/request snapshots, local and
    Drive file references, identity high-water above max(id), an empty table
    with historical identity state, prod-1/v13 image rows with binary
-   content) is backed up once; the artifact set,
-   manifest and TOC census are checked; A is restored into a new empty B and
-   verified read-only; disposable clones of B prove identity behaviour, the
+   content, prod-1/v14 canonical-storage objects with business references,
+   a LIVE upload intent and worker health) is backed up once; the artifact set,
+   manifest and TOC census are checked (the two v14 schema-only tables carry
+   no TABLE DATA in the archive); A is restored into a new empty B and
+   verified read-only (storage objects and references exact, intents and
+   worker health empty); disposable clones of B prove identity behaviour, the
    restored triggers, and that a tampered row or sequence fails verification.
 B. negative controls: tampered artifact / manifest / sidecar, missing or bad
    manifest, restore into the source, a protected or a non-empty database,
@@ -48,6 +51,7 @@ import pytest
 
 from app import pg_migrate_from_sqlite as pathb
 from app import pg_schema
+from app.cloud_account_identity import google_account_key
 from tools import pg_backup as tool
 
 PG_URL = os.environ.get("SGAA_PG_TEST_URL", "").strip()
@@ -72,14 +76,24 @@ HIGH_WATER = {
     "atividade_base": 23, "atividade_versao": 80, "atividade_transicao": 2,
     "matriz_atividade_versao_item": 14, "requisicoes": 25, "requisicao_arquivos": 6,
     "requisicao_alerta_receipts": 2, "admin_arquivos": 4, "admin_alertas": 1, "email_envios": 3,
-    "reportes": 5,
+    "reportes": 5, "storage_objects": 20, "cloud_accounts": 4,
 }
+#: Synthetic Google OIDC subject: only its logical key may reach the database;
+#: the raw value must never appear in any manifest or output.
+RAW_GOOGLE_SUB = "109876543210987654321"
+DRIVE_ACCOUNT_KEY = google_account_key(RAW_GOOGLE_SUB)
+#: v14 storage objects ``(id, key suffix, size, lifecycle, drive state)``.
+STORAGE_OBJECTS = (
+    (9, "a", 4096, "active", "synced"),
+    (14, "b", 77, "retired", "retry"),
+    (15, "c", 1000, "active", "pending"),
+)
 #: ``(last_value, is_called)`` on A: high-water tables restarted, backup_logs
 #: consumed one id and is empty again, the rest never used.
 EXPECTED_IDENTITIES = {
     **{table: (high_water + 1, False) for table, high_water in HIGH_WATER.items()},
     "backup_logs": (1, True),
-    **{t: (1, False) for t in ("senha_tokens", "cloud_accounts", "cloud_drive_settings",
+    **{t: (1, False) for t in ("senha_tokens", "cloud_drive_settings",
                                "requisicao_email_eventos")},
 }
 #: v13 image content: a recognisable marker that must never reach any output.
@@ -233,6 +247,37 @@ def populate_source(conn):
         _insert(conn, table, **{owner_column: owner_id}, mime_type=mime_type, size_bytes=len(content),
                 sha256=hashlib.sha256(content).hexdigest(), width=64, height=48, conteudo=content,
                 atualizado_em=TS)
+    # v14 canonical custody.  The Drive account row (identity restarted with
+    # the other high-waters below) holds no address and no real token.
+    i("cloud_accounts", id=4, provider="google", account_email=None, token_json="{}", connected_at=TS,
+      updated_at=TS, active=1, provider_account_key=DRIVE_ACCOUNT_KEY)
+    for object_id, suffix, size, lifecycle, drive_state in STORAGE_OBJECTS:
+        extra = {}
+        if lifecycle == "retired":
+            extra.update(retired_at=TS)
+        if drive_state == "synced":
+            extra.update(drive_file_id=f"drv-{object_id}", drive_account_key=DRIVE_ACCOUNT_KEY, drive_synced_at=TS,
+                         drive_generation=1)
+        if drive_state == "retry":
+            extra.update(drive_last_error_code="DRIVE_QUOTA", drive_next_attempt_at=TS, drive_generation=2)
+        i("storage_objects", id=object_id, storage_backend="supabase", storage_bucket="sgaa-documentos",
+          storage_key=f"comprovantes/2026/01/{suffix * 32}", sha256=suffix * 64, size_bytes=size,
+          mime_type="application/pdf", uploader_user_id=3, origin="direct_upload", content_verified_at=TS,
+          created_at=TS, lifecycle_state=lifecycle, drive_sync_state=drive_state, **extra)
+    conn.execute("UPDATE requisicao_arquivos SET storage_object_id = 9 WHERE id = 6")
+    conn.execute("UPDATE admin_arquivos SET storage_object_id = 15 WHERE id = 4")
+    i("storage_upload_intents", id="1" * 32, actor_user_id=3, purpose="admin_arquivo", operation_id="op-c",
+      storage_bucket="sgaa-documentos", storage_key="comprovantes/2026/01/" + "c" * 32,
+      declared_mime_type="application/pdf", declared_size_bytes=1000, declared_sha256="c" * 64, state="consumed",
+      issued_at=TS, expires_at="2026-01-02 03:19:05", sweep_after="2026-01-03 03:19:05", verified_at=TS,
+      consumed_at=TS, storage_object_id=15)
+    # A LIVE intent: a restore must never revive it.
+    i("storage_upload_intents", id="2" * 32, actor_user_id=7, purpose="comprovante", operation_id="op-live",
+      storage_bucket="sgaa-documentos", storage_key="comprovantes/2026/01/" + "d" * 32,
+      declared_mime_type="image/png", declared_size_bytes=10, declared_sha256="d" * 64, state="issued",
+      issued_at=TS, expires_at="2099-01-01 00:00:00", sweep_after="2099-01-02 00:00:00")
+    i("storage_worker_status", id=1, last_started_at=TS, last_finished_at=TS, last_result_code="OK",
+      last_claimed_count=3, last_synced_count=1, last_retry_count=1)
     for table, high_water in HIGH_WATER.items():
         conn.execute(f"ALTER TABLE {table} ALTER COLUMN id RESTART WITH {high_water + 1}")
     # Historical identity state on an empty table.
@@ -404,7 +449,7 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert tool.file_sha256(dump) == (manifest["artifact"]["size"], manifest["artifact"]["sha256"])
     assert (directory / manifest["artifact"]["sidecar"]).read_text(encoding="ascii") == \
         f"{manifest['artifact']['sha256']}  {dump.name}\n"
-    assert manifest["result"] == "ok" and manifest["format_version"] == 1
+    assert manifest["result"] == "ok" and manifest["format_version"] == 2
     assert manifest["source"]["database"] == source and manifest["source"]["system_identifier"]
     assert set(manifest["source"]) == {"backend", "host", "port", "database", "user", "server_version",
                                        "system_identifier"}
@@ -413,9 +458,33 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION
     assert manifest["schema"]["contract_sha256"] == pg_schema.PG_CONTRACT_SHA256
-    assert manifest["schema"]["latest_migration"]["version"] == 13
-    assert manifest["tables"] == backup_set["before"].tables
-    assert len(manifest["tables"]) == 34
+    assert manifest["schema"]["latest_migration"]["version"] == 14
+    schema_only = set(tool.SCHEMA_ONLY_TABLE_POLICIES)
+    assert {t: v for t, v in manifest["tables"].items() if t not in schema_only} == {
+        t: v for t, v in backup_set["before"].tables.items() if t not in schema_only
+    }
+    assert len(manifest["tables"]) == 37
+    # v14: schema-only tables are recorded as what a restore yields -- empty --
+    # with their policy and a value-free source census.
+    for table in schema_only:
+        assert manifest["tables"][table] == tool._EMPTY_TABLE[table]
+    assert {t: backup_set["before"].tables[t]["rows"] for t in schema_only} == {
+        "storage_upload_intents": 2, "storage_worker_status": 1,
+    }
+    assert manifest["table_data_policy"] == {
+        "storage_upload_intents": {"policy": "EPHEMERAL_OMITTED", "restored_rows": 0,
+                                   "source": {"rows_by_state": {"consumed": 1, "issued": 1}}},
+        "storage_worker_status": {"policy": "TARGET_SIDE_RECREATED", "restored_rows": 0,
+                                  "source": {"rows": 1}},
+    }
+    storage = manifest["storage"]
+    assert (storage["objects"], storage["total_size_bytes"]) == (3, 4096 + 77 + 1000)
+    assert storage["by_lifecycle_state"] == {"active": 2, "retired": 1}
+    assert storage["by_drive_sync_state"] == {"pending": 1, "retry": 1, "synced": 1}
+    assert storage["business_references"] == {"requisicao_arquivos": 1, "admin_arquivos": 1}
+    assert storage["object_bytes"] == "NOT_INCLUDED_CANONICAL_BUCKET"
+    assert "drv-9" not in text and "op-live" not in text
+    assert RAW_GOOGLE_SUB not in text and RAW_GOOGLE_SUB not in output
     for table in IMAGE_BLOBS:
         assert manifest["tables"][table]["rows"] == 1, table
     assert manifest["tables"]["usuarios"]["rows"] == 2 and manifest["tables"]["backup_logs"]["rows"] == 0
@@ -427,12 +496,16 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["identities"]["backup_logs"]["predicted_next_id"] == 2
     assert manifest["identities"]["backup_logs"]["max_id"] == 0
     assert manifest["toc"]["classes"] == {
-        "CONSTRAINT": 51, "FK CONSTRAINT": 33, "FUNCTION": 12, "INDEX": 49, "SEQUENCE": 21,
-        "SEQUENCE SET": 21, "TABLE": 34, "TABLE DATA": 34, "TRIGGER": 11,
+        "CONSTRAINT": 58, "FK CONSTRAINT": 40, "FUNCTION": 15, "INDEX": 56, "SEQUENCE": 22,
+        "SEQUENCE SET": 22, "TABLE": 37, "TABLE DATA": 35, "TRIGGER": 17,
     }
+    # The omission is proven from the archive itself.
+    _listing, entries = tool.read_toc(tool.discover_native_tools(), dump)
+    data_tags = {entry.tag for entry in entries if entry.desc == "TABLE DATA"}
+    assert "storage_objects" in data_tags and not data_tags & schema_only
     assert manifest["toc"]["public_schema_entries"] == 2
-    assert manifest["domain_validation"]["checks"] == 49 and manifest["domain_validation"]["failing"] == 0
-    assert manifest["triggers"] == {"expected": 11, "enabled": 11}
+    assert manifest["domain_validation"]["checks"] == 63 and manifest["domain_validation"]["failing"] == 0
+    assert manifest["triggers"] == {"expected": 17, "enabled": 17}
     assert manifest["accounts"]["usuarios"] == 2 and manifest["accounts"]["full_admins"] == 1
     assert manifest["tool"]["sha256"] == tool.file_sha256(Path(tool.__file__))[1]
 
@@ -458,12 +531,40 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
     assert output_clean
     code, output = _run_cli(["verify", "--manifest", manifest_path, "--restored"])
     assert code == 0 and "VERIFY_OK (artifact + database)" in output
-    # The quiescent source equals its manifest as well.
-    tool.verify_database(manifest, source_url)
+    # The quiescent source equals its manifest except exactly the schema-only
+    # tables: the manifest describes what a restore yields, not the source.
+    with pytest.raises(tool.Failed) as caught:
+        tool.verify_database(manifest, source_url)
+    assert set(caught.value.mismatches) == {
+        (category, table)
+        for table in tool.SCHEMA_ONLY_TABLE_POLICIES
+        for category in ("ROW_COUNT_MISMATCH", "SCHEMA_ONLY_TABLE_NOT_EMPTY")
+    }
 
     # Independent comparison: every row of every table, identities, catalog.
-    rows_equal = _rows(source_url) == _rows(target_url)
+    source_rows, target_rows = _rows(source_url), _rows(target_url)
+    for table in tool.SCHEMA_ONLY_TABLE_POLICIES:
+        assert source_rows.pop(table) and target_rows.pop(table) == {}, table
+    rows_equal = source_rows == target_rows
     assert rows_equal
+    # Restored custody: objects and references exact; no live intent revived;
+    # worker health is the target-side "never ran" state.
+    observer = _connect(target_url)
+    try:
+        assert [tuple(r) for r in observer.execute(
+            "SELECT id, lifecycle_state, drive_sync_state FROM storage_objects ORDER BY id"
+        ).fetchall()] == [(o, lifecycle, state) for o, _s, _z, lifecycle, state in STORAGE_OBJECTS]
+        assert observer.execute(
+            "SELECT (SELECT storage_object_id FROM requisicao_arquivos WHERE id = 6), "
+            "(SELECT storage_object_id FROM admin_arquivos WHERE id = 4)"
+        ).fetchone() == (9, 15)
+        # The logical Drive identity is ordinary pseudonymous DB state: restored exactly.
+        assert observer.execute(
+            "SELECT drive_account_key FROM storage_objects WHERE id = 9").fetchone()[0] == DRIVE_ACCOUNT_KEY
+        assert observer.execute("SELECT count(*) FROM storage_upload_intents").fetchone()[0] == 0
+        assert observer.execute("SELECT count(*) FROM storage_worker_status").fetchone()[0] == 0
+    finally:
+        observer.close()
     restored_identities = _identity_states(target_url)
     assert restored_identities == _identity_states(source_url) == EXPECTED_IDENTITIES
     b_before = _state(target_url)
@@ -486,7 +587,7 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
         ).fetchone()[0]
     finally:
         observer.close()
-    assert fks == 33 and enabled == 11
+    assert fks == 40 and enabled == 17
     # Binary content survives byte for byte, not only by digest.
     assert _image_contents(target_url) == _image_contents(source_url) == {
         table: content for table, (_owner, _mime, content) in IMAGE_BLOBS.items()
@@ -956,8 +1057,10 @@ def test_online_backup_captures_the_exported_snapshot_not_a_later_writer(registr
     assert events["exporting_after"] == 0
     assert events["visible_rows"] == pre_count + 1
     new_id = events["new_id"]
-    # The manifest describes the snapshot, not the committed writer.
-    assert result.manifest["tables"] == pre.tables
+    # The manifest describes the snapshot, not the committed writer (and, for
+    # the v14 schema-only tables, the empty state a restore yields).
+    expected_tables = {**pre.tables, **tool._EMPTY_TABLE}
+    assert result.manifest["tables"] == expected_tables
     post = _state(online_url)
     assert post.tables["admin_alertas"]["rows"] == pre_count + 1
     assert post.tables["usuarios"]["sha256"] != pre.tables["usuarios"]["sha256"]
@@ -971,8 +1074,12 @@ def test_online_backup_captures_the_exported_snapshot_not_a_later_writer(registr
     target, target_url = registry.create("onlinerestore")
     monkeypatch.setenv(tool.TARGET_URL_ENV, target_url)
     restored = tool.restore(result.paths.manifest)
-    assert restored.tables == pre.tables
-    snapshot_rows = _rows(target_url) == pre_rows
+    assert restored.tables == expected_tables
+    restored_rows = _rows(target_url)
+    for table in tool.SCHEMA_ONLY_TABLE_POLICIES:
+        assert restored_rows[table] == {}
+        restored_rows[table] = pre_rows[table]
+    snapshot_rows = restored_rows == pre_rows
     assert snapshot_rows
     connection = _connect(target_url)
     try:

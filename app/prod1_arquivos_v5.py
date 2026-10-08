@@ -8,7 +8,7 @@ from app.prod1_schema import (
     Prod1SchemaError,
     _quote_identifier,
     _validate_prod1_v4_schema,
-    canonical_prod1_object_sql,
+    canonical_prod1_pre_v14_object_sql,
     _validate_prod1_v5_schema,
 )
 
@@ -26,7 +26,7 @@ def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         conn.execute("BEGIN IMMEDIATE")
-        table_sql = canonical_prod1_object_sql("table", "admin_arquivos")
+        table_sql = canonical_prod1_pre_v14_object_sql("table", "admin_arquivos")
         conn.execute(
             table_sql.replace("CREATE TABLE admin_arquivos", "CREATE TABLE _admin_arquivos_v5", 1)
         )
@@ -68,7 +68,7 @@ def migrate_prod1_v4_to_v5(conn: sqlite3.Connection) -> dict[str, object]:
             ),
         }.items():
             for name in names:
-                conn.execute(canonical_prod1_object_sql(kind, name))
+                conn.execute(canonical_prod1_pre_v14_object_sql(kind, name))
         conn.execute(
             "INSERT INTO schema_migrations(version,name,schema_epoch,details_json) VALUES(?,?,?,?)",
             (

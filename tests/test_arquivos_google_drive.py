@@ -36,6 +36,7 @@ from app.prod1_schema import (
     migrate_prod1_v10_to_v11,
     migrate_prod1_v11_to_v12,
     migrate_prod1_v12_to_v13,
+    migrate_prod1_v13_to_v14,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -205,7 +206,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 13
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 14
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -222,7 +223,9 @@ def test_v5_bootstrap_and_migration_consume_single_arquivos_ddl_authority():
     assert "CREATE TABLE admin_arquivos" not in schema_source
     assert "CREATE TABLE admin_arquivos (" not in migration_source
     assert authority_source.count("CREATE TABLE admin_arquivos") == 1
-    assert "canonical_prod1_object_sql" in migration_source
+    # The v5 rebuild predates v14: same authority minus the v14 additions.
+    assert "canonical_prod1_pre_v14_object_sql" in migration_source
+    assert "_PRE_V14_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(STORAGE_V14_SCHEMA_OBJECTS_SQL" in schema_source
 
 
 def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
@@ -250,6 +253,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     migrate_prod1_v10_to_v11(conn)
     migrate_prod1_v11_to_v12(conn)
     migrate_prod1_v12_to_v13(conn)
+    migrate_prod1_v13_to_v14(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)

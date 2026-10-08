@@ -23,6 +23,7 @@ from app.comprovantes import (
 from app.prod1_schema import (
     bootstrap_prod1_schema,
     canonical_prod1_object_sql,
+    canonical_prod1_pre_v14_object_sql,
     migrate_prod1_v2_to_v3,
     migrate_prod1_v3_to_v4,
     _physical_schema_signature,
@@ -1004,5 +1005,8 @@ def test_v4_migration_consumes_the_single_bootstrap_ddl_authority():
     assert "_REQUISICOES_V4_SQL" not in source
     assert "_REQUISICAO_ARQUIVOS_V4_SQL" not in source
     assert "CREATE TRIGGER trg_" not in source
-    assert "canonical_prod1_object_sql" in source
-    assert canonical_prod1_object_sql("table", "requisicao_arquivos")
+    # The v4 rebuild predates v14: it consumes the same authority minus the
+    # v14 additions (which add storage_object_id themselves).
+    assert "canonical_prod1_pre_v14_object_sql" in source
+    assert "storage_object_id" in canonical_prod1_object_sql("table", "requisicao_arquivos")
+    assert "storage_object_id" not in canonical_prod1_pre_v14_object_sql("table", "requisicao_arquivos")

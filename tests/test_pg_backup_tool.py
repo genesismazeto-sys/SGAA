@@ -438,14 +438,15 @@ def test_contract_toc_is_accepted_with_census():
     specs = pg_schema.PG_TABLE_SPECS
     assert census["classes"] == {
         "CONSTRAINT": sum(1 + len(specs[t]["uniques"]) for t in pg_schema.PG_SCHEMA_TABLES),
-        "FK CONSTRAINT": 33,
-        "FUNCTION": 12,
+        "FK CONSTRAINT": 40,
+        "FUNCTION": 15,
         "INDEX": len(pg_schema.PG_EXPLICIT_INDEXES),
-        "SEQUENCE": 21,
-        "SEQUENCE SET": 21,
-        "TABLE": 34,
-        "TABLE DATA": 34,
-        "TRIGGER": 11,
+        "SEQUENCE": 22,
+        "SEQUENCE SET": 22,
+        "TABLE": 37,
+        # v14: storage_upload_intents / storage_worker_status are schema-only.
+        "TABLE DATA": 35,
+        "TRIGGER": 17,
     }
     assert census["public_schema_entries"] == 2
     assert len(census["sha256"]) == 64
@@ -453,6 +454,22 @@ def test_contract_toc_is_accepted_with_census():
     other = _listing().replace(" sgaa_qual", " supabase_admin").replace("1259", "9999")
     assert tool.validate_toc(tool.parse_toc(other), SEQUENCES) == census
     assert tool.validate_toc(tool.parse_toc(_listing(public_entries=False)), SEQUENCES)["public_schema_entries"] == 0
+
+
+def test_schema_only_tables_carry_no_table_data_in_the_contract():
+    """v14: intents / worker health are archived schema-only, proven from the TOC."""
+    assert "--exclude-table-data=public.storage_upload_intents" in tool.PG_DUMP_OPTIONS
+    assert "--exclude-table-data=public.storage_worker_status" in tool.PG_DUMP_OPTIONS
+    assert tool.SCHEMA_ONLY_TABLE_POLICIES == {
+        "storage_upload_intents": "EPHEMERAL_OMITTED", "storage_worker_status": "TARGET_SIDE_RECREATED",
+    }
+    for table in tool.SCHEMA_ONLY_TABLE_POLICIES:
+        leaked = _listing(extra=[f"999; 0 0 TABLE DATA public {table} sgaa_qual"])
+        assert _codes(tool.validate_toc, tool.parse_toc(leaked), SEQUENCES).code == "TOC_UNEXPECTED_OBJECT"
+        assert table in tool.expected_toc(SEQUENCES)["TABLE"]
+    # Negative control: canonical object metadata MUST be archived with data.
+    missing = _listing(drop={("TABLE DATA", "storage_objects")})
+    assert _codes(tool.validate_toc, tool.parse_toc(missing), SEQUENCES).code == "TOC_INCOMPLETE"
 
 
 @pytest.mark.parametrize(
@@ -516,7 +533,13 @@ def _manifest_files(directory: Path, base="sgaa-pg-20260101T000000Z-unit"):
         "format_version": tool.MANIFEST_FORMAT_VERSION,
         "result": "ok",
         "artifact": {"file": dump.name, "sidecar": base + tool.SIDECAR_SUFFIX, "size": size, "sha256": sha},
-        "tables": {t: {"rows": 0, "sha256": "0" * 64} for t in pg_schema.PG_SCHEMA_TABLES},
+        "tables": {
+            t: tool._EMPTY_TABLE.get(t, {"rows": 0, "sha256": "0" * 64}) for t in pg_schema.PG_SCHEMA_TABLES
+        },
+        "table_data_policy": {
+            t: {"policy": p, "restored_rows": 0, "source": {}} for t, p in tool.SCHEMA_ONLY_TABLE_POLICIES.items()
+        },
+        "storage": {},
         "identities": {t: {"sequence": f"{t}_id_seq"} for t in tool.IDENTITY_TABLES},
     })
     (directory / (base + tool.SIDECAR_SUFFIX)).write_bytes(tool.sidecar_bytes(sha, dump.name))
@@ -539,6 +562,23 @@ def test_manifest_seal_detects_any_edit(tmp_path):
     path.unlink()
     assert _codes(tool.load_manifest, path).code == "MANIFEST_MISSING"
     assert _codes(tool.load_manifest, tmp_path / "x.dump").code == "MANIFEST_MISSING"
+
+
+def test_manifest_must_record_the_v14_table_data_policy(tmp_path):
+    path, manifest, _dump = _manifest_files(tmp_path)
+    for mutate in (
+        lambda m: m["table_data_policy"]["storage_upload_intents"].update(policy="MIGRATE_EXACT"),
+        lambda m: m["table_data_policy"].pop("storage_worker_status"),
+        lambda m: m["tables"]["storage_upload_intents"].update(rows=3),
+        lambda m: m.pop("storage"),
+    ):
+        edited = json.loads(json.dumps(manifest))
+        edited.pop("manifest_sha256", None)
+        mutate(edited)
+        path.write_bytes(tool.manifest_bytes(tool.seal_manifest(edited)))
+        assert _codes(tool.load_manifest, path).code == "MANIFEST_INVALID"
+    path.write_bytes(tool.manifest_bytes(manifest))
+    assert tool.load_manifest(path) == manifest
 
 
 def test_artifact_and_sidecar_tamper_is_refused_before_any_tool_runs(tmp_path, monkeypatch):

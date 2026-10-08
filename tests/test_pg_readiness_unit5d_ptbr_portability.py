@@ -130,10 +130,33 @@ U5A_CURRENT_STATE_KEYS = (
 U5A_CURRENT_STATE_SHA256 = "dc66f9b0b4c20eaa45d922f657bd4d3972ccea57e0515fa2494356fb6cab2866"
 #: Later, separately authorized schema units whose additive delta is removed
 #: before the U5-A digest is recomputed: STORAGE S1 (prod-1/v13) added exactly
-#: these three image tables and baseline row 13, and moved the version to 13.
-#: Everything else in the U5-A sections must still be byte-identical.
-LATER_ADDED_TABLES = ("usuarios_foto", "alunos_foto", "reportes_captura")
-LATER_ADDED_BASELINE_VERSIONS = (13,)
+#: these three image tables and baseline row 13, and moved the version to 13;
+#: STORAGE S2 (prod-1/v14) added the three canonical-storage tables, one
+#: nullable ``storage_object_id`` column + FK on each business file table, the
+#: nullable ``cloud_accounts.provider_account_key`` column + CHECK, seven
+#: indexes, six triggers and baseline row 14.  Everything else in the U5-A
+#: sections must still be byte-identical.
+LATER_ADDED_TABLES = (
+    "usuarios_foto", "alunos_foto", "reportes_captura",
+    "storage_objects", "storage_upload_intents", "storage_worker_status",
+)
+#: ``table: (column, foreign key or None, check or None)``.
+LATER_ADDED_COLUMNS = {
+    "requisicao_arquivos": ("storage_object_id", "fk_requisicao_arquivos_storage_object_id", None),
+    "admin_arquivos": ("storage_object_id", "fk_admin_arquivos_storage_object_id", None),
+    "cloud_accounts": ("provider_account_key", None, "ck_cloud_accounts_provider_account_key"),
+}
+LATER_ADDED_INDEXES = (
+    "idx_storage_objects_drive_due", "idx_storage_objects_uploader", "ux_storage_objects_drive_file",
+    "idx_storage_upload_intents_state_expires", "ux_req_arquivos_storage_object",
+    "ux_admin_arquivos_storage_object", "idx_cloud_accounts_provider_account_key",
+)
+LATER_ADDED_TRIGGERS = (
+    "trg_requisicao_arquivos_storage_object_insert", "trg_requisicao_arquivos_storage_object_update",
+    "trg_admin_arquivos_storage_object_insert", "trg_admin_arquivos_storage_object_update",
+    "trg_storage_upload_intents_transition", "trg_storage_objects_drive_account_bound",
+)
+LATER_ADDED_BASELINE_VERSIONS = (13, 14)
 U5A_SCHEMA_VERSION = 12
 
 # ---------------------------------------------------------------------------
@@ -884,6 +907,20 @@ def _u5a_sections(payload):
     assert set(LATER_ADDED_TABLES) <= set(sections["tables"]), "declared later tables missing"
     for table in LATER_ADDED_TABLES:
         del sections["tables"][table]
+    for table, (column, foreign_key, check) in LATER_ADDED_COLUMNS.items():
+        spec = sections["tables"][table]
+        assert spec["columns"][-1]["name"] == column, "declared later column must be the last one"
+        spec["columns"].pop()
+        if foreign_key is not None:
+            [declared] = [fk for fk in spec["foreign_keys"] if fk["name"] == foreign_key]
+            spec["foreign_keys"].remove(declared)
+        if check is not None:
+            [declared] = [ck for ck in spec["checks"] if ck["name"] == check]
+            spec["checks"].remove(declared)
+    for name in LATER_ADDED_INDEXES:
+        del sections["indexes"][name]
+    for name in LATER_ADDED_TRIGGERS:
+        del sections["triggers"][name]
     baseline = sections["schema_migrations_baseline"]
     assert [row["version"] for row in baseline][-len(LATER_ADDED_BASELINE_VERSIONS):] == list(
         LATER_ADDED_BASELINE_VERSIONS

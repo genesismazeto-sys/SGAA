@@ -111,6 +111,133 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## STORAGE S2 — canonical storage infrastructure — CLOSED / ACCEPTED / PUBLISHED (2026-10-08)
+
+Published by this landing commit (SHA not invented); parent
+`3cd0afa0f89cb8d84e54a74f3c11e89c2c705ea4`. Final independent targeted
+recheck ACCEPT_STORAGE_S2_PARITY_FIX_FOR_LANDING (material findings
+remaining: none). HYBRID STORAGE: IN PROGRESS -- this unit adds the
+canonical-storage infrastructure only; no user-facing flow uses it yet.
+
+* Closed technical status: logical schema v14 coherent on SQLite and
+  PostgreSQL; `storage_objects`, upload intents and the durable Drive-mirror
+  outbox / lease model implemented; Supabase canonical-object adapter and a
+  deterministic fake implemented; stable Google logical account identity
+  (provider-namespaced SHA-256 of the OIDC `sub`) implemented, with
+  `cloud_accounts.id` remaining the credential-instance identity; Path-B v14
+  and Layer-2 v14 qualified; the review parity defects fixed before
+  publication; final T5 qualified; independent targeted recheck accepted.
+
+* History: the first independent review REJECTED S2 (REJECT_STORAGE_S2_CANONICAL_INFRA).
+  Two SQLite <-> PostgreSQL v14 parity defects, both corrected before
+  publication (v14 itself fixed; no v15):
+  - M1 timestamp CHECK NULL-pass: the SQLite `_ts` used `datetime(col)=col`,
+    which is NULL -- and a NULL CHECK passes -- for impossible values such as
+    `2024-13-45 99:99:99` or `2024-01-01 23:59:60`. Now `datetime(col) IS col`
+    plus explicit hour <= 23 and year <> 0000. Independent inspection during
+    the fix found the PostgreSQL side normalizing (accepting) second 60 / hour
+    24, so the PG `_ts_check` now bounds hour / minute / second lexically: one
+    verdict on both engines.
+  - M2 nullable intent id: `storage_upload_intents.id TEXT PRIMARY KEY` let
+    SQLite store a NULL id; now `TEXT NOT NULL PRIMARY KEY` (PG already NOT
+    NULL).
+  14 new discriminating parity vectors, shared unchanged by the SQLite and
+  the real-PostgreSQL suites (impossible / leap-second / hour-24 / minute-60 /
+  year-0000 / 29-February timestamps on every v14 timestamp family; NULL
+  intent id). v14
+  SQLite physical fingerprint `28099e3c2ce4cc201d74c1f6eef2eed9c84b54395480f80252cb97eeb1ed37af`
+  -> `96339ae9cf58f94be3af59338db9d1491dfea7d6de4faee64bccfd954480f3d9`.
+  Runbook object/domain counts corrected (63 domain checks, 17 triggers, 40
+  FKs, 15 functions, 56 indexes). The targeted recheck of these corrections
+  was ACCEPTED (ACCEPT_STORAGE_S2_PARITY_FIX_FOR_LANDING).
+* Logical schema v14 (`canonical_storage`, additive) on SQLite AND PostgreSQL,
+  coherent in the same candidate: `storage_objects`, `storage_upload_intents`,
+  `storage_worker_status`; nullable `storage_object_id` (FK, partial UNIQUE,
+  cross-table exclusive) on `requisicao_arquivos` / `admin_arquivos`; nullable
+  `cloud_accounts.provider_account_key`. Fresh bootstrap and v13 -> v14
+  migration produce the same physical digest; no existing row or counter
+  changes. The v3 -> v4 / v4 -> v5 rebuilds now use the pre-v14 DDL (they had
+  taken the moving head DDL).
+* `storage_objects`: backend `supabase` only; unique (bucket, key) with a
+  server-generated key alphabet; SHA-256 / size <= 16 MiB / PDF-PNG-JPEG;
+  `content_verified_at` mandatory; lifecycle `active` / `retired` with inert
+  `purge_after` -- NO physical purge exists anywhere.
+* Upload intents: server-issued id and locator, actor / purpose / operation /
+  target binding, idempotent replay, verify -> single consume creating exactly
+  one object, expiry, sweep; transition/immutability trigger; no URL or token
+  stored. `operation_id` reuses the existing per-file operation identity.
+* Drive mirror outbox in `storage_objects`: pending / syncing / synced / retry /
+  reconciliation_required; fenced leases (token + generation + live lease);
+  PostgreSQL claims with `FOR UPDATE SKIP LOCKED` (E-PG2 proven: no duplicate
+  claim, no waiting, expired-lease reclaim, stale worker refused); sanitized
+  error codes; worker health singleton (no row = never ran). No worker, thread
+  or scheduler.
+* Google logical account identity: `provider_account_key` = SHA-256(b"google"
+  + NUL + OIDC `sub`), 64 lowercase hex, pseudonymous. `sub` comes from the ID
+  token of the backend's own authorization-code exchange with Google's token
+  endpoint (iss / aud / azp / exp / strict `sub` validated; no signature check,
+  accepted by IAsup for this direct exchange only; no nonce is sent).
+  `cloud_accounts.id` remains the credential-instance identity (a reconnect
+  inserts a new row); the key survives reconnect and e-mail change; a different
+  account gets a different key. `storage_objects.drive_account_key` has NO
+  foreign key to a credential row; once bound it never changes silently
+  (trigger + `DRIVE_ACCOUNT_MISMATCH`). Raw `sub` is never stored or printed.
+  Existing rows keep NULL; never derived from an e-mail.
+* Supabase Storage adapter (lazy configuration; secret never in repr / errors /
+  logs; private bucket; upsert=false; bounded reads; fixed timeouts; no
+  redirects; sanitized error model) and an in-memory fake, unit-tested against a
+  mocked HTTP boundary. `SUPABASE_URL` / `SUPABASE_SECRET_KEY` /
+  `SGAA_STORAGE_BUCKET` documented in `.env.example`, NOT required at startup.
+* Path-B v14: QUALIFIED on local PG15. `storage_objects` (incl.
+  `drive_account_key`) MIGRATE_EXACT; intents OMIT_EPHEMERAL with a cutover
+  refusal of live (issued / verified) intents; worker health
+  RECREATE_TARGET_SIDE; an active mirror lease is refused; an account-bound
+  mirror is NOT refused (no credential row needed). 63 domain checks.
+* Layer-2 backup / restore v14: QUALIFIED on local PG15. `storage_objects` and
+  the business references archived in full; `storage_upload_intents` and
+  `storage_worker_status` archived SCHEMA ONLY (`--exclude-table-data`, enforced
+  by the TOC contract) and restored empty; manifest format 2 with
+  `table_data_policy` and a value-free storage census. Object bytes are NOT in
+  Layer-2 (independent Storage backup is a later unit).
+* Frozen-copy rehearsal of canonical (byte copy, deleted): canonical is at v12;
+  v12 -> v14 changes only `schema_migrations` (+2), new tables empty.
+* T5 (final parity-fixed candidate, run once, 2026-10-08, 31m21s): 4695
+  collected, 4395 passed, 2 failed, 298 skipped, 6 errors, 4 warnings, no
+  xfail / xpass. Classification: 6 errors = known `xlwt` gap;
+  TestSentinelSurvival = same gap; MX3 catalogue = reproduced on the clean
+  published parent. No candidate failure, no environment event. Production
+  bytes identical to the pre-T5 freeze:
+  T5_EVIDENCE_BINDS_TO_CORRECTED_S2_BYTES (NOT a fully green suite: 2
+  baseline failures and 6 baseline collection errors). Focused re-qualification: S2
+  unit / schema owners green on SQLite; all 11 real-PostgreSQL modules green;
+  T4 lanes green. (Earlier T5 runs of pre-review candidates are superseded.)
+* NO live Supabase project or bucket was used or mutated. NO Google mutation.
+* HYBRID STORAGE: IN PROGRESS. BUSINESS DOCUMENTS: STILL USE THE SYNCHRONOUS
+  GOOGLE DRIVE RUNTIME (student requests do NOT use Supabase yet). SUPABASE
+  STORAGE: INFRASTRUCTURE IMPLEMENTED BUT NOT LIVE-QUALIFIED.
+  DRIVE_AVAILABILITY_MUST_NOT_BLOCK_REQUEST_SUBMISSION: ARCHITECTURAL
+  INVARIANT, NOT YET ACTIVE IN RUNTIME; activation in S3.
+* Carried follow-ups (not actioned): S1-NM1 report `descricao` maximum before
+  Vercel; S1-NM2 CHECK expression bodies validated by name only; S1-NM3 forward
+  PostgreSQL migration strategy (v13 archives need their revision; v14 likewise);
+  browser private-cache policy; `exif_transpose` UX; synthetic-byte assertion
+  hygiene; admin own-avatar `arquivos:view` inheritance; S4 decides how an
+  intentional Drive-account change opens a new mirror generation.
+* Carried non-material review findings (open, not actioned): the ID-token
+  caller guard is text-based and the parser is publicly exported; `exp`
+  NaN / Infinity hardening; the `test_connection` active-row race stays
+  fail-closed and its helper commits internally; leases use the caller's clock,
+  not the database clock; the locator alphabet permits `//` and dot segments;
+  Path-B expired-lease refusal wording; a verified-but-unconsumed intent can
+  leave an external orphan object after a restore; historical v6 / v7
+  migrations still rebuild from the moving head DDL; `storage_objects` content
+  columns remain UPDATE-able and unreferenced rows deletable; the database does
+  not encode the full mirror state machine; the fake's existing-key timing for
+  signed uploads differs from the service; S3 must re-check the intent target
+  at attachment; the manifest test does not explicitly assert account-key
+  absence; duplicate import / comment / test hygiene.
+* NOT READY_FOR_PRODUCTION_INTEGRATION.
+
 ## STORAGE S1 — database-backed application images — CLOSED / ACCEPTED / PUBLISHED (2026-10-07)
 
 Published by this landing commit (SHA not invented); parent

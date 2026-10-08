@@ -4,6 +4,11 @@ import logging
 import os
 from typing import Any
 
+from app.cloud_account_identity import (
+    AccountIdentityError,
+    google_account_key,
+    google_subject_from_id_token,
+)
 from app.cloud_config import get_google_oauth_config
 from services.oauth_config import OAuthConfigError, get_google_redirect_uri
 
@@ -160,15 +165,24 @@ def _fetch_email(credentials) -> str:
     return str(info.get("email") or "").strip()
 
 
-def exchange_code_for_token(*, code: str, code_verifier: str, is_debug: bool) -> tuple[str, str]:
+def exchange_code_for_token(*, code: str, code_verifier: str, is_debug: bool) -> tuple[str, str, str]:
+    """``(token_json, account_email, provider_account_key)`` of a completed connect.
+
+    ``provider_account_key`` is the logical Google-account identity
+    (``app.cloud_account_identity``), derived from the ``sub`` of the ID token
+    this same exchange returns (``openid`` scope); no extra Google request.  A
+    connect without a valid identity is refused -- the raw ``sub`` is never
+    stored, logged or returned.
+    """
     Credentials, Request, Flow, build, MediaFileUpload = _import_google_dependencies()
     redirect_uri = get_redirect_uri()
     _allow_http_localhost_if_debug(is_debug=is_debug, redirect_uri=redirect_uri)
 
     if not code_verifier:
         raise GoogleDriveServiceError("Sessao PKCE expirada. Inicie a conexao Google novamente.")
+    client_config = _build_client_config(redirect_uri)
     flow = Flow.from_client_config(
-        _build_client_config(redirect_uri),
+        client_config,
         scopes=_get_scopes(),
         code_verifier=code_verifier,
     )
@@ -192,8 +206,20 @@ def exchange_code_for_token(*, code: str, code_verifier: str, is_debug: bool) ->
         email = _fetch_email(credentials)
     except Exception as exc:
         raise GoogleDriveServiceError("Nao foi possivel validar a identidade Google.") from exc
+    try:
+        subject = google_subject_from_id_token(
+            getattr(credentials, "id_token", None),
+            audience=str((client_config.get("web") or {}).get("client_id") or ""),
+        )
+        account_key = google_account_key(subject)
+    except AccountIdentityError as exc:
+        logger.warning("Identidade Google recusada: %s", exc.code)
+        raise GoogleDriveServiceError(
+            "Nao foi possivel validar a identidade Google. Inicie a conexao novamente.",
+            debug_code=exc.code,
+        ) from None
     token_json = json.dumps(_serialize_credentials(credentials), ensure_ascii=False)
-    return token_json, email
+    return token_json, email, account_key
 
 
 def _build_credentials_from_token_json(token_json: str, *, force_refresh: bool = False):

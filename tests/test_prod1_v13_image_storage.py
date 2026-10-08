@@ -37,6 +37,9 @@ from app.prod1_schema import (
     validate_prod1_schema,
 )
 from tests.prod1_v13_support import revert_prod1_v13_to_v12
+from tests.prod1_v14_support import revert_prod1_v14_to_v13
+from tests.prod1_v14_support import revert_prod1_v14_to_v13
+from tests.prod1_v14_support import revert_prod1_v14_to_v13
 
 PG_URL = os.environ.get("SGAA_PG_TEST_URL", "").strip()
 RUN_PREFIX = f"sgaa_s1img_test_{secrets.token_hex(4)}_"
@@ -89,10 +92,13 @@ def _dump(conn) -> dict:
 def test_fresh_bootstrap_is_v13_with_exactly_the_three_image_tables():
     conn = _head()
     status = validate_prod1_schema(conn)
-    assert SCHEMA_VERSION == status["schema_version"] == 13
-    assert status["table_count"] == 33
+    # v14 only adds the canonical-storage objects; without them the head is v13 exactly.
+    assert SCHEMA_VERSION == status["schema_version"] == 14
+    assert status["table_count"] == 36
     assert set(IMAGES_V13_TABLES) <= EXPECTED_TABLES
-    assert _physical_schema_digest(conn) == _PROD1_V13_SIGNATURE_SHA256
+    shape = _head()
+    revert_prod1_v14_to_v13(shape)
+    assert _physical_schema_digest(shape) == _PROD1_V13_SIGNATURE_SHA256
     for table, sql in zip(IMAGES_V13_TABLES, IMAGES_V13_TABLE_SQL):
         stored = conn.execute("SELECT sql FROM sqlite_master WHERE name=?", (table,)).fetchone()[0]
         assert _normalize_schema_sql(stored) == _normalize_schema_sql(sql)
@@ -125,7 +131,7 @@ def test_v13_migration_is_idempotent_through_the_dispatcher_and_refuses_non_v12(
     first = bootstrap_prod1_schema(conn)
     snapshot = _dump(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 13
+    assert first["schema_version"] == second["schema_version"] == 14
     assert _dump(conn) == snapshot
     with pytest.raises(Prod1SchemaError, match="prod-1/v12"):
         migrate_prod1_v12_to_v13(conn)
@@ -139,7 +145,7 @@ def test_a_failed_v13_migration_leaves_v12_untouched(monkeypatch):
     def _boom(_conn):
         raise Prod1SchemaError("injected failure after the image tables were created")
 
-    monkeypatch.setattr(prod1_schema, "validate_prod1_schema", _boom)
+    monkeypatch.setattr(prod1_schema, "_validate_prod1_v13_schema", _boom)
     with pytest.raises(Prod1SchemaError, match="injected"):
         migrate_prod1_v12_to_v13(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
@@ -265,9 +271,9 @@ def test_pg_contract_declares_the_same_tables_and_bytea():
         [fk] = spec["foreign_keys"]
         assert (fk["on_delete"], fk["on_update"], fk["references_columns"]) == ("CASCADE", "CASCADE", ["id"])
         assert not any(c["identity"] for c in spec["columns"])
-    assert pg_schema.PG_SCHEMA_VERSION == SCHEMA_VERSION == 13
-    assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[-1][:2] == (13, IMAGE_STORAGE_MARKER)
-    assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[-1][2] == _V13_DETAILS_JSON
+    assert pg_schema.PG_SCHEMA_VERSION == SCHEMA_VERSION == 14
+    assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[12][:2] == (13, IMAGE_STORAGE_MARKER)
+    assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[12][2] == _V13_DETAILS_JSON
 
 
 @pytest.fixture(scope="module")

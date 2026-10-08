@@ -1,10 +1,10 @@
 # coding: utf-8
-"""Path-B cutover: copy a frozen SQLite prod-1/v13 database into PostgreSQL.
+"""Path-B cutover: copy a frozen SQLite prod-1/v14 database into PostgreSQL.
 
 WHY THIS EXISTS
     Path B keeps the business records of the running SQLite installation when
     production moves to PostgreSQL.  ``python -m app.pg_schema provision``
-    creates the empty prod-1/v13 PostgreSQL baseline; this module is the one
+    creates the empty prod-1/v14 PostgreSQL baseline; this module is the one
     supported, offline way to fill it from a FROZEN COPY of the SQLite file.
     Nothing in the application runtime imports or runs it.
 
@@ -18,6 +18,18 @@ WHAT IT COPIES -- AND WHAT IT REFUSES TO COPY
     machine-local key.  Those tables stay empty on the target and are reported
     by table, row count and reason -- never by value.  ``sqlite_sequence`` is
     not copied either; it is the identity high-water evidence.
+
+    v14 canonical storage: ``storage_objects`` and the business rows'
+    ``storage_object_id`` are copied exactly (metadata only -- object bytes
+    live in the canonical bucket and are never moved by Path B).  Upload
+    intents are ephemeral and never copied: the cutover requires a source with
+    NO live (issued / verified) intent, so no in-flight upload is silently
+    invalidated.  Worker health is recreated target-side (empty = never ran).
+    A mirror lease (in-flight worker state) is refused.  The mirror's Drive
+    account travels as ``storage_objects.drive_account_key`` -- the LOGICAL
+    account key, not a credential row -- so it survives the target-side
+    recreation of ``cloud_accounts``; no active credential is needed for the
+    cutover, and reconnecting the same Google account reproduces the key.
 
 SAFETY MODEL
     * Source: required path and expected SHA-256 (checked before opening and
@@ -88,11 +100,13 @@ OMITTED_SQLITE_INTERNAL = "OMITTED_SQLITE_INTERNAL"
 RESET_ENVIRONMENT_CONFIGURATION = "RESET_ENVIRONMENT_CONFIGURATION"
 SCRUBBED_SECRET = "SCRUBBED_SECRET"
 REQUIRES_EXTERNAL_RECONNECT = "REQUIRES_EXTERNAL_RECONNECT"
+RESET_OPERATIONAL_STATE = "RESET_OPERATIONAL_STATE"
 
 GOOGLE_DRIVE_RECONNECT_REQUIRED = "GOOGLE_DRIVE_RECONNECT_REQUIRED"
 ONEDRIVE_RECONNECT_REQUIRED = "ONEDRIVE_RECONNECT_REQUIRED"
 BACKUP_CONFIGURATION_REQUIRED = "BACKUP_CONFIGURATION_REQUIRED"
 LOCAL_ASSETS_REQUIRED_IN_UPLOAD_ROOT = "LOCAL_ASSETS_REQUIRED_IN_UPLOAD_ROOT"
+CANONICAL_STORAGE_BUCKET_REQUIRED = "CANONICAL_STORAGE_BUCKET_REQUIRED"
 
 SQLITE_SEQUENCE_TABLE = "sqlite_sequence"
 
@@ -106,7 +120,7 @@ class TablePolicy:
 _EXACT = TablePolicy(MIGRATE_EXACT)
 
 SOURCE_TABLE_POLICIES = {
-    # The provisioner seeds rows 1..13; the source rows must equal that seed.
+    # The provisioner seeds rows 1..14; the source rows must equal that seed.
     "schema_migrations": TablePolicy(RECREATE_TARGET_SIDE, (OMITTED_TARGET_SCHEMA_METADATA,)),
     "usuarios": _EXACT,
     # Admin-chosen profile defaults; without them the product falls back to
@@ -155,6 +169,14 @@ SOURCE_TABLE_POLICIES = {
     "usuarios_foto": _EXACT,
     "alunos_foto": _EXACT,
     "reportes_captura": _EXACT,
+    # v14 canonical custody: object metadata travels exactly; the bytes stay in
+    # the canonical bucket (see CANONICAL_STORAGE_BUCKET_REQUIRED).
+    "storage_objects": _EXACT,
+    # Server-issued upload authorizations: the source must hold no live one
+    # (LIVE_UPLOAD_INTENTS); terminal history is not business data.
+    "storage_upload_intents": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
+    # Mirror-worker health of the source machine; empty target = never ran.
+    "storage_worker_status": TablePolicy(RECREATE_TARGET_SIDE, (RESET_OPERATIONAL_STATE,)),
     SQLITE_SEQUENCE_TABLE: TablePolicy(OMIT_EPHEMERAL, (OMITTED_SQLITE_INTERNAL,)),
 }
 
@@ -174,6 +196,24 @@ _UNSUPPORTED_LOCAL_REFERENCES = (
     ("usuarios", "SELECT count(*) FROM usuarios WHERE COALESCE(foto_perfil, '') <> ''"),
     ("alunos", "SELECT count(*) FROM alunos WHERE COALESCE(foto_perfil, '') <> ''"),
     ("reportes", "SELECT count(*) FROM reportes WHERE COALESCE(screenshot_filename, '') <> ''"),
+)
+
+#: v14 cutover freeze: ``(refusal code, SQLite count, value-free detail)``.
+#: Live upload intents would be invalidated by the cutover (intents are never
+#: copied); a lease is in-flight worker state.  The logical Drive account key
+#: needs no credential row, so an account-bound mirror is NOT refused.
+CUTOVER_STORAGE_PRECONDITIONS = (
+    (
+        "LIVE_UPLOAD_INTENTS",
+        "SELECT count(*) FROM storage_upload_intents WHERE state IN ('issued','verified')",
+        "live upload intent(s); drain or expire them before the freeze",
+    ),
+    (
+        "STORAGE_MIRROR_LEASE_ACTIVE",
+        "SELECT count(*) FROM storage_objects WHERE drive_sync_state = 'syncing' "
+        "OR lease_token IS NOT NULL",
+        "storage object(s) leased by a mirror worker; stop the worker and let leases end",
+    ),
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -557,7 +597,7 @@ def read_source(path, expected_sha256) -> SourceSnapshot:
         ]
         if markers != seed:
             raise MigrationRefused(
-                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1/v13 baseline"
+                "SOURCE_SCHEMA_UNSUPPORTED", "schema_migrations does not match the prod-1/v14 baseline"
             )
 
         for table in pg_schema.PG_APPLICATION_TABLES:
@@ -579,6 +619,10 @@ def read_source(path, expected_sha256) -> SourceSnapshot:
                 raise MigrationRefused(
                     "UNSUPPORTED_LOCAL_ASSET", f"{table} references local files without a copy contract"
                 )
+        for code, sql, detail in CUTOVER_STORAGE_PRECONDITIONS:
+            count = int(conn.execute(sql).fetchone()[0])
+            if count:
+                raise MigrationRefused(code, f"{count} {detail}")
 
         snapshot = SourceSnapshot(Path(path), size, actual, mtime_ns, user_version)
         for table in pg_schema.PG_APPLICATION_TABLES:
@@ -999,6 +1043,57 @@ def _image_domain_checks():
 
 DOMAIN_CHECKS.update(_image_domain_checks())
 
+#: v14 canonical-custody invariants (counts that must be zero).  They restate
+#: the table CHECKs as an independent post-load / backup proof, plus the
+#: cross-row rules no single-row CHECK can express.
+STORAGE_DOMAIN_CHECKS = {
+    "storage_objects_metadata_invalid": (
+        "SELECT count(*) FROM storage_objects WHERE storage_backend <> 'supabase' "
+        "OR sha256 !~ '^[0-9a-f]{64}$' OR size_bytes <= 0 OR size_bytes > 16777216 "
+        "OR mime_type NOT IN ('application/pdf','image/png','image/jpeg') "
+        "OR content_verified_at IS NULL OR btrim(storage_bucket) = '' OR btrim(storage_key) = ''"
+    ),
+    "storage_objects_lifecycle_invalid": (
+        "SELECT count(*) FROM storage_objects WHERE NOT ("
+        "(lifecycle_state = 'active' AND retired_at IS NULL AND purge_after IS NULL) "
+        "OR (lifecycle_state = 'retired' AND retired_at IS NOT NULL))"
+    ),
+    "storage_objects_mirror_state_invalid": (
+        "SELECT count(*) FROM storage_objects WHERE "
+        "(drive_sync_state = 'synced' AND (drive_file_id IS NULL OR drive_account_key IS NULL "
+        "OR drive_synced_at IS NULL)) "
+        "OR (drive_sync_state IN ('retry','reconciliation_required') AND drive_last_error_code IS NULL) "
+        "OR (drive_file_id IS NOT NULL AND drive_account_key IS NULL) "
+        "OR drive_account_key !~ '^[0-9a-f]{64}$' "
+        "OR drive_last_error_code !~ '^[A-Z0-9_]{1,64}$'"
+    ),
+    "storage_objects_lease_invalid": (
+        "SELECT count(*) FROM storage_objects WHERE "
+        "(drive_sync_state = 'syncing') <> (lease_token IS NOT NULL) "
+        "OR (lease_token IS NULL) <> (lease_expires_at IS NULL)"
+    ),
+    "storage_objects_shared_by_business_rows": (
+        "SELECT count(*) FROM requisicao_arquivos r JOIN admin_arquivos a "
+        "ON a.storage_object_id = r.storage_object_id"
+    ),
+    "storage_upload_intents_state_invalid": (
+        "SELECT count(*) FROM storage_upload_intents WHERE "
+        "(state = 'consumed') <> (consumed_at IS NOT NULL AND storage_object_id IS NOT NULL) "
+        "OR (state <> 'consumed' AND (consumed_at IS NOT NULL OR storage_object_id IS NOT NULL)) "
+        "OR (state = 'rejected') <> (rejection_code IS NOT NULL) "
+        "OR (state IN ('verified','consumed') AND verified_at IS NULL) "
+        "OR (state = 'issued' AND verified_at IS NOT NULL) "
+        "OR expires_at <= issued_at OR sweep_after < expires_at"
+    ),
+    "storage_upload_intents_object_mismatch": (
+        "SELECT count(*) FROM storage_upload_intents i JOIN storage_objects o "
+        "ON o.id = i.storage_object_id WHERE o.storage_bucket <> i.storage_bucket "
+        "OR o.storage_key <> i.storage_key OR o.sha256 <> i.declared_sha256 "
+        "OR o.size_bytes <> i.declared_size_bytes OR o.mime_type <> i.declared_mime_type"
+    ),
+}
+DOMAIN_CHECKS.update(STORAGE_DOMAIN_CHECKS)
+
 
 def foreign_key_orphan_checks():
     """One anti-join per contract foreign key: ``{name: sql}``."""
@@ -1068,7 +1163,11 @@ def _prerequisites(snapshot, assets):
         for table in ("requisicao_arquivos", "admin_arquivos")
         for row in snapshot.rows[table]
     )
-    if google_files or "google" in providers:
+    mirror_bound = any(
+        row[_columns("storage_objects").index("drive_account_key")] is not None
+        for row in snapshot.rows["storage_objects"]
+    )
+    if google_files or "google" in providers or mirror_bound:
         prerequisites.append(GOOGLE_DRIVE_RECONNECT_REQUIRED)
     if "onedrive" in providers:
         prerequisites.append(ONEDRIVE_RECONNECT_REQUIRED)
@@ -1076,6 +1175,8 @@ def _prerequisites(snapshot, assets):
         prerequisites.append(BACKUP_CONFIGURATION_REQUIRED)
     if assets:
         prerequisites.append(LOCAL_ASSETS_REQUIRED_IN_UPLOAD_ROOT)
+    if snapshot.rows["storage_objects"]:
+        prerequisites.append(CANONICAL_STORAGE_BUCKET_REQUIRED)
     return prerequisites
 
 
@@ -1238,7 +1339,7 @@ _USAGE = (
     "         --expected-source-sha256 HEX\n"
     "         [--source-upload-root DIR --target-upload-root DIR] [--apply]\n"
     "\n"
-    "Path-B cutover: copies a frozen copy of the SQLite prod-1/v13 database into\n"
+    "Path-B cutover: copies a frozen copy of the SQLite prod-1/v14 database into\n"
     "the freshly provisioned, empty PostgreSQL database named by DATABASE_URL, in\n"
     "one transaction. Without --apply it only verifies source, target and local\n"
     "files. It refuses a non-empty or non-current target; there is no --force.\n"
