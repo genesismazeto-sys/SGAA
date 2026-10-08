@@ -111,11 +111,16 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
-## STORAGE S3-A — direct request documents — TECHNICALLY ACCEPTED / LIVE REHEARSAL PASSED / INDEPENDENT REVIEW ACCEPTED / FINAL T5 QUALIFIED / READY TO LAND (2026-10-08)
+## STORAGE S3-A — direct request documents — CLOSED_AND_PUBLISHED (2026-10-08)
 
-UNCOMMITTED candidate on top of the published S2 baseline
-`e418746c770d888c4dbb93a41773ed17e049f10b`. Not landed, not published, not
-closed. HYBRID STORAGE: IN PROGRESS.
+Published as `006a151be3abd9dbbc0d23585f5eb8ed56d0eb34` ("feat: add direct
+Supabase request document uploads"), parent -- the published S2 baseline --
+`e418746c770d888c4dbb93a41773ed17e049f10b`: exactly one technical landing
+commit (76 paths), published by a normal fast-forward push (no force, merge or
+rebase); afterwards local HEAD == origin == ls-remote. Canonical SQLite
+`database.db` remained byte-identical (1,003,520 B, SHA-256
+`e458a9f79551d999e4724c9872de5d9ee3d395b2c43db4124ea5b6b8a50f5b61`).
+HYBRID STORAGE: IN PROGRESS.
 
 * Logical schema v15 (`canonical_document_custody`) on SQLite and PostgreSQL:
   `provider = 'supabase'` becomes legal on `requisicao_arquivos` (custody
@@ -218,7 +223,7 @@ closed. HYBRID STORAGE: IN PROGRESS.
   published parent `e418746c`. Skips: real-PG lanes without
   `SGAA_PG_TEST_URL` (REAL-PG EVIDENCE in this run: ABSENT), opt-in visual /
   browser tests, Path-B source rehearsals not requested.
-* S3-A READY TO LAND. S3 NOT CLOSED -- S3-B outstanding. NOT
+* S3-A CLOSED_AND_PUBLISHED. S3 REMAINS OPEN -- S3-B OUTSTANDING. NOT
   READY_FOR_PRODUCTION_INTEGRATION.
 
 ## STORAGE S2 — canonical storage infrastructure — CLOSED / ACCEPTED / PUBLISHED (2026-10-08)
