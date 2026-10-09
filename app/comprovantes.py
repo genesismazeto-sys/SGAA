@@ -27,7 +27,7 @@ from app.storage.google_drive import GoogleDriveComprovanteStorage
 from app.storage import custody_common
 from app.storage import mirror_outbox
 from app.storage.google_connection import resolve_google_managed_storage
-from app.db import write_transaction
+from app.db import lock_request_attachments, write_transaction
 from app.student_documents import resolve_student_document_path
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
@@ -36,6 +36,14 @@ from app.versioning.snapshots import (
 
 
 DEFAULT_MAX_FILE_BYTES = 16 * 1024 * 1024
+#: A removal refused because a comprovante gained a canonical reference
+#: (legacy convergence) after it was read: retried, it takes the canonical path.
+CUSTODY_CHANGED = "CUSTODY_CHANGED"
+
+
+def request_document_roots(config) -> tuple:
+    """The upload roots legacy local comprovantes live under, in lookup order."""
+    return (config.get("DOCUMENTOS_ALUNOS_FOLDER"), config.get("UPLOAD_FOLDER"))
 
 
 class ComprovanteError(RuntimeError):
@@ -555,12 +563,15 @@ def _restore_trashed(storage: ComprovanteStorage, file_ids: list[str]) -> set[st
 
 
 def _begin_delete_intent(conn, request_id: int) -> list:
+    # Google custody only: a converged row (canonical reference) is retired
+    # with the request, never trashed in Drive.
     started_at = _utc_now()
     conn.execute(
         """UPDATE requisicao_arquivos
               SET delete_previous_status=storage_status,
                   delete_started_at=?,storage_status='deletion_pending',failure_code=NULL
             WHERE requisicao_id=? AND provider='google' AND remote_file_id IS NOT NULL
+              AND storage_object_id IS NULL
               AND storage_status NOT IN ('deletion_pending','trashed')""",
         (started_at, int(request_id)),
     )
@@ -568,6 +579,7 @@ def _begin_delete_intent(conn, request_id: int) -> list:
     return conn.execute(
         """SELECT * FROM requisicao_arquivos
             WHERE requisicao_id=? AND provider='google' AND remote_file_id IS NOT NULL
+              AND storage_object_id IS NULL
          ORDER BY id""",
         (int(request_id),),
     ).fetchall()
@@ -620,26 +632,24 @@ def _mark_remote_reconciliation(conn, file_ids: set[str], code: str) -> None:
 
 
 def _retire_canonical_objects(conn, rows) -> None:
-    """Lifecycle only (``active`` -> ``retired``) for canonical rows; never a byte deleted.
+    """Lifecycle only (``active`` -> ``retired``) for canonical custody; never a byte deleted.
 
-    The caller owns the write transaction.  Already retired objects are left
-    as they are (a removed attachment of a later-deleted request).
+    Canonical custody is any row with a canonical reference -- a canonical
+    row or a converged legacy row.  The caller owns the write transaction.
+    Already retired objects are left as they are (a removed attachment of a
+    later-deleted request).
     """
     now = custody_common.utc_now_text()
     for row in rows:
-        if row["provider"] != "supabase" or row["storage_object_id"] is None:
-            continue
-        state = conn.execute(
-            "SELECT lifecycle_state FROM storage_objects WHERE id=?", (int(row["storage_object_id"]),)
-        ).fetchone()
-        if state is not None and state["lifecycle_state"] == "active":
-            mirror_outbox.retire_object(conn, object_id=int(row["storage_object_id"]), now=now)
+        if row["storage_object_id"] is not None:
+            mirror_outbox.retire_if_active(conn, object_id=int(row["storage_object_id"]), now=now)
 
 
 def _remove_legacy_files(rows, roots) -> None:
     removed: set[str] = set()
     for row in rows:
-        if row["provider"] != "local_legacy" or not row["filename"]:
+        # A converged row's local bytes are legacy residue: never removed here.
+        if row["provider"] != "local_legacy" or not row["filename"] or row["storage_object_id"] is not None:
             continue
         filename = str(row["filename"])
         if filename in removed:
@@ -703,7 +713,8 @@ def delete_request_with_comprovantes(
             reconciliation_required=True,
         )
     google_rows = [
-        row for row in rows if row["provider"] == "google" and row["remote_file_id"]
+        row for row in rows
+        if row["provider"] == "google" and row["remote_file_id"] and row["storage_object_id"] is None
     ]
     if google_rows and storage is None:
         try:
@@ -747,10 +758,16 @@ def delete_request_with_comprovantes(
             reconciliation_required=bool(restore_failed),
         ) from exc
     try:
-        # Canonical attachments: their objects are retired in the SAME
-        # transaction as the request delete (the rows then cascade); no Google
-        # call and no physical Storage delete.
+        # Canonical attachments (canonical or converged): their objects are
+        # retired in the SAME transaction as the request delete (the rows then
+        # cascade); no Google call and no physical Storage delete.  The rows
+        # are locked and re-read here, so a comprovante converged after the
+        # first read is retired too.
         with write_transaction(conn):
+            lock_request_attachments(conn, int(request_id))
+            rows = conn.execute(
+                "SELECT * FROM requisicao_arquivos WHERE requisicao_id=? ORDER BY id", (int(request_id),)
+            ).fetchall()
             _retire_canonical_objects(conn, rows)
             cursor = conn.execute(query.replace("SELECT id", "DELETE"), params)
             if cursor.rowcount != 1:
@@ -771,13 +788,13 @@ def delete_request_with_comprovantes(
             code="DB_DELETE_FAILED",
             reconciliation_required=bool(restore_failed),
         ) from exc
-    _remove_legacy_files(
-        rows,
-        (
-            current_app.config.get("DOCUMENTOS_ALUNOS_FOLDER"),
-            current_app.config.get("UPLOAD_FOLDER"),
-        ),
-    )
+    _remove_legacy_files(rows, request_document_roots(current_app.config))
+
+
+class _CustodyChanged(RuntimeError):
+    """A local comprovante gained a canonical reference while being removed."""
+
+    code = CUSTODY_CHANGED
 
 
 def _removal_rows(conn, request_id: int, attachment_ids) -> list:
@@ -833,19 +850,24 @@ def remove_comprovantes(
         return []
     _authorize_comprovante_upload(conn, int(request_id), int(actor_user_id))
     rows = _removal_rows(conn, request_id, attachment_ids)
-    canonical_rows = [row for row in rows if row["provider"] == "supabase"]
-    google_ids = [int(row["id"]) for row in rows if row["provider"] == "google"]
-    legacy_rows = [row for row in rows if row["provider"] == "local_legacy"]
+    canonical_rows = [row for row in rows if row["storage_object_id"] is not None]
+    google_ids = [int(row["id"]) for row in rows if row["provider"] == "google" and row["storage_object_id"] is None]
+    legacy_rows = [row for row in rows if row["provider"] == "local_legacy" and row["storage_object_id"] is None]
     if canonical_rows:
-        # Canonical removal is one DB transaction: the row is kept as
-        # 'trashed' (with its object reference as evidence) and the object is
-        # retired.  No Google call; the bytes stay in canonical storage.
+        # Canonical removal is one DB transaction: a canonical row is kept as
+        # 'trashed' (with its object reference as evidence), a converged legacy
+        # row -- whose legacy status cannot be 'trashed' -- is deleted, and the
+        # object is retired.  No Google call; the bytes stay in canonical
+        # storage and a converged row's legacy bytes are not touched.
         with write_transaction(conn):
             for row in canonical_rows:
-                conn.execute(
-                    "UPDATE requisicao_arquivos SET storage_status='trashed' WHERE id=? AND storage_status='active'",
-                    (int(row["id"]),),
-                )
+                if row["provider"] == "supabase":
+                    conn.execute(
+                        "UPDATE requisicao_arquivos SET storage_status='trashed' WHERE id=? AND storage_status='active'",
+                        (int(row["id"]),),
+                    )
+                else:
+                    conn.execute("DELETE FROM requisicao_arquivos WHERE id=?", (int(row["id"]),))
             _retire_canonical_objects(conn, canonical_rows)
     delete_rows = []
     if google_ids:
@@ -858,13 +880,22 @@ def remove_comprovantes(
                     code=getattr(exc, "code", "STORAGE_UNAVAILABLE"),
                 ) from exc
         placeholders = ",".join("?" for _ in google_ids)
-        conn.execute(
+        # Conditional on the custody read above: a comprovante converged in
+        # between is not trashed -- the whole removal is refused and retried.
+        marked = conn.execute(
             f"""UPDATE requisicao_arquivos
                    SET delete_previous_status=storage_status,delete_started_at=?,
                        storage_status='deletion_pending',failure_code=NULL
-                 WHERE id IN ({placeholders})""",
+                 WHERE id IN ({placeholders}) AND storage_object_id IS NULL RETURNING id""",
             (_utc_now(), *google_ids),
-        )
+        ).fetchall()
+        if len(marked) != len(google_ids):
+            conn.rollback()
+            raise ComprovanteError(
+                "Não foi possível remover os comprovantes; eles foram mantidos.",
+                code=CUSTODY_CHANGED,
+                retryable=True,
+            )
         conn.commit()
         delete_rows = conn.execute(
             f"SELECT * FROM requisicao_arquivos WHERE id IN ({placeholders}) ORDER BY id",
@@ -879,7 +910,12 @@ def remove_comprovantes(
             )
             conn.commit()
         for row in legacy_rows:
-            conn.execute("DELETE FROM requisicao_arquivos WHERE id=?", (int(row["id"]),))
+            deleted = conn.execute(
+                "DELETE FROM requisicao_arquivos WHERE id=? AND storage_object_id IS NULL RETURNING id",
+                (int(row["id"]),),
+            ).fetchone()
+            if deleted is None:
+                raise _CustodyChanged()
         conn.commit()
     except Exception as exc:
         conn.rollback()
@@ -896,13 +932,7 @@ def remove_comprovantes(
             code=getattr(exc, "code", "REMOTE_TRASH_FAILED"),
             reconciliation_required=bool(restore_failed),
         ) from exc
-    _remove_legacy_files(
-        legacy_rows,
-        (
-            current_app.config.get("DOCUMENTOS_ALUNOS_FOLDER"),
-            current_app.config.get("UPLOAD_FOLDER"),
-        ),
-    )
+    _remove_legacy_files(legacy_rows, request_document_roots(current_app.config))
     return [int(row["id"]) for row in rows]
 
 
@@ -918,6 +948,7 @@ __all__ = [
     "new_comprovante_operation_id",
     "prepare_comprovante_batch",
     "remove_comprovantes",
+    "request_document_roots",
     "resolve_google_storage",
     "upload_comprovantes",
     "validate_comprovante_removal",

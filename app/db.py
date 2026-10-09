@@ -472,6 +472,55 @@ def lock_password_token(connection, token_id: int) -> bool:
     return row is not None
 
 
+def lock_admin_arquivo(connection, arquivo_id: int) -> bool:
+    """Lock one ``admin_arquivos`` row against concurrent custody changes (PostgreSQL).
+
+    Every custody writer of an ARQUIVOS row -- canonical replacement, every
+    deletion transition, legacy convergence -- takes this lock FIRST, then
+    the row's upload intents.  SQLite needs no explicit lock:
+    ``BEGIN IMMEDIATE`` already serializes the whole database.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM admin_arquivos WHERE id = ? FOR UPDATE",
+        (int(arquivo_id),),
+    ).fetchone()
+    return row is not None
+
+
+def lock_requisicao_arquivo(connection, attachment_id: int) -> bool:
+    """Lock one ``requisicao_arquivos`` row against concurrent custody changes (PostgreSQL).
+
+    Legacy convergence links a comprovante under this lock; removal and
+    request deletion change the same row (``lock_request_attachments``), so
+    the two serialize.  SQLite needs no explicit lock.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM requisicao_arquivos WHERE id = ? FOR UPDATE",
+        (int(attachment_id),),
+    ).fetchone()
+    return row is not None
+
+
+def lock_request_attachments(connection, request_id: int) -> None:
+    """Lock every comprovante row of one request, in id order (PostgreSQL).
+
+    A request deletion takes them before it reads which canonical objects to
+    retire: a comprovante linked concurrently (legacy convergence) is then
+    either seen and retired, or waits and finds its row gone.  SQLite needs
+    no explicit lock.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return
+    connection.execute(
+        "SELECT id FROM requisicao_arquivos WHERE requisicao_id = ? ORDER BY id FOR UPDATE",
+        (int(request_id),),
+    ).fetchall()
+
+
 _SQLITE_CONSTRAINT_NAME_RE = re.compile(r"constraint failed:\s*(.+?)\s*$")
 _PG_CONSTRAINT_NAME_RE = re.compile(r'constraint "([^"]+)"')
 

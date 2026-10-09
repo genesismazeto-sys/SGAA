@@ -1,6 +1,6 @@
 # SPEC MP-1 — Storage convergence
 
-Status: FROZEN 2026-10-09
+Status: CLOSED 2026-10-09
 Charter: "Complete the hybrid-storage convergence layer: Supabase Storage remains
 the canonical operational store, while Google Drive remains the required
 asynchronous secondary mirror/archive and must never block canonical SGAA operations."
@@ -345,7 +345,7 @@ Open decisions (product or architecture): none.
 |---|---|---|---|---|
 | 1 | S4 mirror worker, recovery transitions, CLI `mirror-run` / `mirror-requeue` | `mirror_outbox`, `drive_mirror`, `cli`, ES §2, tests | T1–T4 green; E-PG1/E-PG2; I1–I3, I5 for the worker; R2 review | done |
 | 2 | Census and cross-check, `list_objects`, `describe_file`, mirror recovery, CLI `census` / `verify` | `storage_audit`, `supabase_store`, `google_drive`, `cli`, fake, tests | T1–T4; E-PG1; E-LIVE adapter probe; R2 review | done |
-| 3 | Convergence, canonical-first runtime for converged rows, Path-B predicate, lock helpers, CLI `converge`; closure | `legacy_convergence`, `comprovantes`, `arquivos`, `arquivo_documents`, `app/db.py`, Path-B, `cli`, tests, governance | T1–T4; E-PG1/E-PG2; Path-B real-PG; E-LIVE rehearsal; R2 review; SPEC closure, PROJECT_STATE | planned |
+| 3 | Convergence, canonical-first runtime for converged rows, Path-B predicate, lock helpers, CLI `converge`; closure | `legacy_convergence`, `comprovantes`, `arquivos`, `arquivo_documents`, `app/db.py`, Path-B, `cli`, tests, governance | T1–T4; E-PG1/E-PG2; Path-B real-PG; E-LIVE rehearsal; R2 review; SPEC closure, PROJECT_STATE | done |
 
 ## 13. Acceptance criteria
 
@@ -386,6 +386,24 @@ Open decisions (product or architecture): none.
   them before cutover.
 - The eligibility rule is a state rule. A locator outside the legal alphabet is
   classified when convergence reads the row, so an eligible count is an upper bound.
+- A retired object whose Drive copy is missing cannot be requeued, because the
+  worker never starts a copy of a retired object (D5). `verify --drive` therefore
+  exits 4 for it permanently. This fails closed; MP-3/MP-4 decide whether retired
+  objects need an archive copy.
+- A converged row removed or deleted at runtime leaves its legacy bytes
+  (Drive file or local file) untracked once the row is gone. Purge policy is MP-4.
+- Pre-existing request-flow hardening, outside this phase's scope:
+  - manual commit control in `remove_comprovantes` (known debt, ES §12);
+  - the canonical-removal message says the comprovantes were kept even when a
+    canonical part already committed;
+  - a canonical attach committed while a request delete waits on the `requisicoes`
+    row is cascade-deleted, leaving its object active and unowned;
+  - canonical removal writes rows in submission order while request delete locks
+    them in id order, so a PostgreSQL deadlock is possible.
+  The cross-check detects the unowned object (`ACTIVE_OBJECT_UNOWNED`).
+- A local comprovante removal refused as `CUSTODY_CHANGED` (it converged
+  meanwhile) is not flagged retryable, unlike the Google path. The user retries
+  from the page.
 
 ## 16. Amendments
 
@@ -413,7 +431,70 @@ Open decisions (product or architecture): none.
   - The provider -> origin rule now lives in `legacy_convergence` (one owner).
   - The listing reads each folder to an empty page and bounds its requests.
   Not material.
+- A5 2026-10-09 — Slice-3 implementation details:
+  - A third lock helper, `app.db.lock_request_attachments`, lets a request deletion
+    lock and re-read its comprovantes, so a comprovante converged concurrently is
+    retired instead of left as an unowned active object.
+  - When a concurrent run of the tool linked the same row to the same key, the
+    outcome is `ALREADY_CONVERGED`, which counts as success.
+  - `arquivo_documents.is_replaceable` accepts a converged legacy row from the same
+    steady state as an unconverged one.
+  - `converge` exits 0 when every processed row converged, 3 when it is not
+    runnable, and 4 otherwise.
+  Not material.
+- A6 2026-10-09 — Slice-3 R2 review fixes:
+  - **M1 (material, fixed):** a Google row's Drive file is adopted as the synced
+    mirror only while the account that served the bytes is still the active
+    connection (`drive_mirror.still_active`); otherwise the mirror stays `pending`.
+  - A row cursor (`after_id`, the report's `last_row_id`, one table at a time)
+    stops rows that keep failing from stalling a run. These integer row ids are
+    the one exception to "ids only with `--show-ids`"; they are not personal data.
+  - Candidate rows are read in a short transaction.
+  - An unreadable local file is a row outcome (`SOURCE_UNREADABLE`), not a fatal
+    error.
+  - `mirror_outbox.retire_if_active` is the one retire-if-active rule, and
+    `comprovantes.request_document_roots` the one local-roots rule for the tools.
+  Within the declared contract.
 
 ## 17. Closure
 
-Filled in the last slice.
+Closed 2026-10-09. Three slices, each fast-forward published to the development
+branch (subjects; Git holds the SHAs):
+
+1. `feat: add the Drive mirror worker for canonical storage (MP-1 S4)`
+2. `feat: add the storage census and convergence cross-check (MP-1)`
+3. `feat: converge legacy documents into canonical storage (MP-1 S5)`
+
+Acceptance (evidence pointers; reports are outside the repository):
+
+- AC1 met. See `tests/test_storage_mp1_drive_mirror.py` (conventions, adoption,
+  idempotency, crash-after-write resume) and the real-PG IDLE-at-provider node.
+- AC2 met. See `tests/test_storage_mp1_mirror_real_pg.py`: concurrent workers,
+  the stale-worker fence, requeue × claim, crash resume, exhaustion and requeue on
+  PostgreSQL.
+- AC3 met. Recording tripwires (`BaseException`) on canonical upload/delete and on
+  Drive trash/delete, with a negative control.
+- AC4 met. See `tests/test_storage_mp1_audit*.py` and
+  `tests/test_storage_mp1_adapters.py`, plus the E-LIVE DEV adapter probe (listing
+  paging, recursion and bound; server upload; duplicate refusal; bounded read).
+- AC5 met. See `tests/test_storage_mp1_convergence*.py` (SQLite, plus real-PG
+  E-PG1/E-PG2 with proven lock waits) and the E-LIVE DEV rehearsal: dry run, an
+  interrupted apply, resume by adoption, an idempotent rerun, real canonical reads
+  by the mirror worker (re-run on the final, A6-fixed code), a 7 MiB object read back byte-exact, `verify --deep` with
+  a planted unreferenced object detected, legacy bytes untouched, leak audit
+  clean, and a run-owned bucket and database removed.
+- AC6 met. See `tests/test_storage_mp1_converged_runtime.py` (Google tripwires
+  armed) and the Path-B converged nodes in `tests/test_pg_migrate_from_sqlite.py`
+  (real PostgreSQL).
+- AC7 met. Self-audit in the phase report.
+
+Reviews: an independent fresh-context R2 review of every slice, plus a targeted
+recheck after fixes. Slice 1 had 3 MATERIAL findings, slice 2 had 2 and slice 3
+had 1; all were fixed before landing.
+
+Residuals carried to `PROJECT_STATE.md`:
+
+- no live Google proof (D15);
+- terminal legacy rows and unsupported legacy content need an MP-3 decision;
+- no real census or convergence has been run yet (MP-3);
+- purge of legacy bytes, retired objects and bucket orphans (MP-4).

@@ -336,6 +336,53 @@ def test_unsupported_source_schema_and_assets_are_refused(tmp_path, monkeypatch)
     _refusal("ASSET_MISSING", source, digest, source_upload_root=tmp_path / "empty", target_upload_root=tmp_path / "t")
 
 
+#: MP-1 legacy convergence: a local legacy request comprovante and the local
+#: legacy ARQUIVOS row, each linked to its canonical object (provider and
+#: locator kept as provenance).  Their bytes are canonical: no local file.
+def _converged_local_sql(*, request=True, arquivo=True):
+    sql = []
+    if arquivo:
+        sql += [
+            "INSERT INTO storage_objects (id, storage_backend, storage_bucket, storage_key, sha256, size_bytes,"
+            " mime_type, origin, content_verified_at, created_at) VALUES (15, 'supabase', 'sgaa-documentos',"
+            f" 'legacy/arquivos/4', '{'a' * 64}', 12, 'application/pdf', 'migrated_local_legacy', '{TS}', '{TS}')",
+            "UPDATE admin_arquivos SET storage_object_id = 15 WHERE id = 4",
+        ]
+    if request:
+        sql += [
+            "INSERT INTO storage_objects (id, storage_backend, storage_bucket, storage_key, sha256, size_bytes,"
+            " mime_type, origin, content_verified_at, created_at) VALUES (16, 'supabase', 'sgaa-documentos',"
+            f" 'legacy/comprovantes/5', '{'b' * 64}', 34, 'image/png', 'migrated_local_legacy', '{TS}', '{TS}')",
+            "INSERT INTO requisicao_arquivos (id, requisicao_id, filename, criado_em, provider, storage_status,"
+            f" storage_object_id) VALUES (5, 18, 'pathb_docs/legado.png', '{TS}', 'local_legacy', 'legacy_active', 16)",
+        ]
+    return sql
+
+
+def test_converged_local_rows_are_not_unsupported_local_references(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", UNUSED_PG_URL)
+    (tmp_path / "a").mkdir()
+    source, digest = build_synthetic_source(tmp_path / "a", extra_sql=_converged_local_sql(arquivo=False))
+    # Past the local-reference refusal: only the (unconverged) ARQUIVOS file still needs roots.
+    _refusal("ASSET_ROOTS_REQUIRED", source, digest)
+    # Negative control: the same local comprovante WITHOUT a canonical reference is refused.
+    (tmp_path / "b").mkdir()
+    unlinked = [sql.replace("'legacy_active', 16)", "'legacy_active', NULL)") for sql in
+                _converged_local_sql(arquivo=False)]
+    source, digest = build_synthetic_source(tmp_path / "b", extra_sql=unlinked)
+    _refusal("UNSUPPORTED_LOCAL_ASSET", source, digest)
+
+
+def test_converged_local_arquivo_plans_no_local_asset(tmp_path):
+    snapshot, source_root, target_root, _final, _staging = _asset_case(tmp_path)
+    columns = pathb._columns("admin_arquivos")
+    row = list(snapshot.rows["admin_arquivos"][0])
+    row[columns.index("storage_object_id")] = 15
+    converged = pathb.SourceSnapshot(tmp_path / "unused.db", 0, "", 0, 12, rows={"admin_arquivos": [tuple(row)]})
+    assert pathb.plan_local_assets(converged, None, None) == []
+    assert len(pathb.plan_local_assets(snapshot, source_root, target_root)) == 1  # control: unconverged
+
+
 def test_target_must_be_postgresql_from_environment(tmp_path, monkeypatch, capsys):
     source, digest = build_synthetic_source(tmp_path)
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -704,6 +751,26 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
     # A second run refuses the now non-empty target; there is no --force.
     assert pathb.main(argv + ["--apply"]) == 1
     assert "TARGET_NOT_EMPTY" in capsys.readouterr().err
+
+
+@needs_pg
+def test_converged_local_rows_migrate_exactly_without_local_files(tmp_path, target, capsys):
+    database, _url, observer = target
+    source, digest = build_synthetic_source(tmp_path, extra_sql=_converged_local_sql())
+    asset_root = tmp_path / "target_uploads"
+
+    assert pathb.main(["--source", str(source), "--expected-source-sha256", digest, "--apply"]) == 0
+    out = capsys.readouterr().out
+    assert "result: MIGRATED" in out and f"database={database}" in out
+    assert not asset_root.exists()
+    assert [tuple(r) for r in observer.execute(
+        "SELECT id, provider, storage_status, storage_object_id FROM requisicao_arquivos WHERE id = 5"
+    ).fetchall()] == [(5, "local_legacy", "legacy_active", 16)]
+    assert observer.execute("SELECT storage_object_id FROM admin_arquivos WHERE id = 4").fetchone()[0] == 15
+    assert [tuple(r) for r in observer.execute(
+        "SELECT id, origin, uploader_user_id FROM storage_objects WHERE id IN (15, 16) ORDER BY id"
+    ).fetchall()] == [(15, "migrated_local_legacy", None), (16, "migrated_local_legacy", None)]
+    assert set(pathb.run_domain_checks(observer).values()) == {0}
 
 
 def test_binary_values_normalize_to_length_and_digest_only():

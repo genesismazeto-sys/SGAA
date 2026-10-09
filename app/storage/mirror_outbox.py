@@ -337,11 +337,11 @@ def reset_missing_mirror(conn, *, object_id: int, drive_file_id: str, error_code
     return len(rows)
 
 
-def retire_object(conn, *, object_id: int, now: str) -> None:
-    """Lifecycle state only: ``active`` -> ``retired``.  Nothing is purged.
+def retire_if_active(conn, *, object_id: int, now: str) -> bool:
+    """Retire an object that is still active; an already retired one is left as it is.
 
-    ``purge_after`` stays NULL -- the retention policy is not decided, and no
-    code path deletes a canonical object.
+    The idempotent form every custody owner uses when a business row stops
+    owning its document (removal, deletion, replacement).
     """
     require_utc_text(now)
     require_write_transaction(conn)
@@ -350,7 +350,16 @@ def retire_object(conn, *, object_id: int, now: str) -> None:
         " WHERE id = ? AND lifecycle_state = 'active' RETURNING id",
         (now, int(object_id)),
     ).fetchone()
-    if row is None:
+    return row is not None
+
+
+def retire_object(conn, *, object_id: int, now: str) -> None:
+    """Lifecycle state only: ``active`` -> ``retired``.  Nothing is purged.
+
+    ``purge_after`` stays NULL -- the retention policy is not decided, and no
+    code path deletes a canonical object.
+    """
+    if not retire_if_active(conn, object_id=object_id, now=now):
         raise CustodyError("STORAGE_OBJECT_NOT_ACTIVE")
 
 
@@ -425,5 +434,6 @@ __all__ = [
     "release_expired_leases",
     "requeue_for_mirror",
     "reset_missing_mirror",
+    "retire_if_active",
     "retire_object",
 ]

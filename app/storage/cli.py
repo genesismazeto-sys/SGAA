@@ -8,6 +8,8 @@ stderr; no secret, URL, locator, file name or person data is ever printed):
     census           custody-class counts (``app.storage.storage_audit``)
     verify           the convergence cross-check of database references,
                      canonical objects, the bucket and (``--drive``) Drive mirrors
+    converge         legacy -> canonical convergence (``app.storage.legacy_convergence``);
+                     a dry run unless ``--apply``
 
 The commands run under an application context of ``create_app()`` -- the
 ``python -m app.backup.sync`` precedent -- and never under a request.  This
@@ -18,7 +20,8 @@ Exit codes:
     1  runtime failure after the application started
     2  usage error or application startup failure
     3  not runnable: the canonical store or the Drive connection is unavailable
-    4  verify: a check failed (not converged, unclean bucket or unverified mirrors)
+    4  verify: a check failed (not converged, unclean bucket or unverified mirrors);
+       converge: some row did not converge (its outcome class says why)
 """
 
 from __future__ import annotations
@@ -79,6 +82,16 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--requeue-missing-mirrors", action="store_true",
                         help="with --drive: send missing / divergent mirrors back to pending")
     verify.add_argument("--show-ids", action="store_true", help="list integer ids per discrepancy class")
+
+    from app.storage import legacy_convergence
+
+    converge = commands.add_parser("converge", help="legacy -> canonical convergence (dry run by default)")
+    converge.add_argument("--apply", action="store_true", help="write: upload, verify and link")
+    converge.add_argument("--limit", type=_bounded_int(1, legacy_convergence.MAX_CONVERGE_BATCH), default=100,
+                          help="rows per table in this run")
+    converge.add_argument("--table", choices=legacy_convergence.TABLES, default=None)
+    converge.add_argument("--after-id", type=_bounded_int(0, 2**62), default=0,
+                          help="with --table: start after this row id (a previous report's last_row_id)")
     return parser
 
 
@@ -147,11 +160,47 @@ def _verify(conn, args) -> tuple[int, dict]:
     return (EXIT_OK if clean else EXIT_NOT_CONVERGED), report
 
 
+def _converge(conn, args) -> tuple[int, dict]:
+    from flask import current_app
+
+    from app.comprovantes import request_document_roots
+    from app.storage import drive_mirror
+    from app.storage import legacy_convergence
+    from app.storage import request_documents
+    from app.storage.object_store import CanonicalStoreError
+    from app.storage.supabase_store import configured_bucket
+
+    if args.after_id and not args.table:
+        raise _UsageError("--after-id needs --table")
+    store = bucket = None
+    if args.apply:
+        try:
+            store = request_documents.canonical_store()
+            bucket = getattr(store, "bucket", None) or configured_bucket()
+        except CanonicalStoreError as exc:
+            return EXIT_NOT_RUNNABLE, {"result_code": exc.code}
+    try:
+        drive = drive_mirror.active_drive(conn)
+    except drive_mirror.DriveUnavailable:
+        drive = None  # Google rows report DRIVE_UNAVAILABLE; local rows still converge
+    roots = {
+        "requisicao_arquivos": request_document_roots(current_app.config),
+        "admin_arquivos": (current_app.config.get("UPLOAD_FOLDER"),),
+    }
+    report = legacy_convergence.converge(
+        conn, apply=args.apply, limit=args.limit,
+        tables=(args.table,) if args.table else legacy_convergence.TABLES,
+        store=store, bucket=bucket, drive=drive, roots=roots, after_id=args.after_id,
+    )
+    return (EXIT_OK if report.clean else EXIT_NOT_CONVERGED), report.as_dict()
+
+
 _COMMANDS = {
     "mirror-run": _mirror_run,
     "mirror-requeue": _mirror_requeue,
     "census": _census,
     "verify": _verify,
+    "converge": _converge,
 }
 
 

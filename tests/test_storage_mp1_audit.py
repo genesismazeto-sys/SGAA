@@ -500,6 +500,9 @@ def test_cli_verify_exit_codes(env, monkeypatch):
     assert _cli(env, "verify", "--drive")[0] == EXIT_NOT_CONVERGED  # converged, but the mirror backlog remains
     assert drive_mirror.run_mirror_pass(env.conn).synced == 2
     assert _cli(env, "verify", "--drive")[0] == EXIT_OK
+    env.conn.execute("UPDATE cloud_accounts SET provider_account_key=?", (OTHER_ACCOUNT_KEY,))
+    assert _cli(env, "verify", "--drive")[0] == EXIT_NOT_CONVERGED  # mirrors not verifiable here (other account)
+    env.conn.execute("UPDATE cloud_accounts SET provider_account_key=?", (ACCOUNT_KEY,))
     next(iter(env.drive.files.values()))["trashed"] = True
     assert _cli(env, "verify", "--drive")[0] == EXIT_NOT_CONVERGED  # converged, but a mirror is missing
     env.store.objects[(BUCKET, "comprovantes/2026/10/" + "8" * 32)] = (b"%PDF-stray", "application/pdf")

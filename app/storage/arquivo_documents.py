@@ -30,8 +30,13 @@ LOCK ORDER (replacement issue, replace, canonical AND legacy delete):
 CANONICAL STATE: ``provider='supabase'``, ``storage_status='active'``,
 ``storage_object_id`` set, no Drive locator, no cleanup bookkeeping; a legacy
 source's locator is kept as ``prior_provider`` / ``prior_locator`` residue
-for S5 and its bytes are never touched here.  No canonical object is ever
+and its bytes are never touched here.  No canonical object is ever
 physically deleted (retire only).
+
+CONVERGED LEGACY ROWS (``app.storage.legacy_convergence``) keep their legacy
+provider and locator and carry ``storage_object_id``: canonical custody wins
+whenever a canonical reference exists -- they are read, replaced and deleted
+exactly like canonical rows, and their legacy bytes are never touched.
 """
 
 from __future__ import annotations
@@ -45,7 +50,7 @@ from werkzeug.utils import secure_filename
 from app.admin_access import _admin_can, _load_admin_access_context
 from app.arquivos import ArquivoError, update_arquivo
 from app.comprovante_file_validation import MIME_BY_EXTENSION
-from app.db import write_transaction
+from app.db import lock_admin_arquivo, write_transaction
 from app.prod1_document_custody_ddl import LEGACY_LOCAL_LOCATOR_MAX_LENGTH
 from app.prod1_storage_ddl import BUSINESS_DOCUMENT_MAX_BYTES, BUSINESS_DOCUMENT_MIME_TYPES
 from app.storage import custody_common
@@ -181,13 +186,16 @@ def _local_locator_ok(locator: str) -> bool:
 
 
 def is_replaceable(row) -> bool:
-    """Canonical replacement sources: canonical / google active / local legacy_active only."""
+    """Canonical replacement sources: canonical / converged / google active / local legacy_active only."""
     if str(row["failure_code"] or "").startswith("REPLACEMENT_"):
         return False
     provider, status = row["provider"], row["storage_status"]
     if provider == "supabase":
         return status == "active" and row["storage_object_id"] is not None
-    if row["storage_object_id"] is not None or row["failure_code"] is not None:
+    # A converged legacy row (canonical reference, legacy locator kept) is
+    # replaceable from the same steady state as an unconverged one; the
+    # replacement retires its object and keeps the locator as residue.
+    if row["failure_code"] is not None:
         return False
     if row["prior_provider"] is not None or row["cleanup_started_at"] is not None:
         return False
@@ -219,8 +227,8 @@ def _authorize_actor(conn, actor_user_id: int) -> None:
 
 
 def _lock_row(conn, arquivo_id: int):
-    suffix = " FOR UPDATE" if custody_common.is_postgres(conn) else ""
-    return conn.execute(f"SELECT * FROM admin_arquivos WHERE id=?{suffix}", (int(arquivo_id),)).fetchone()
+    lock_admin_arquivo(conn, arquivo_id)
+    return conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
 
 
 # ---------------------------------------------------------------------------
@@ -484,14 +492,10 @@ def _replace(conn, session_obj, *, actor_user_id: int, arquivo_id: int, form, in
             )
             common = """titulo=?,descricao=?,visivel=?,filename=?,original_filename=?,mime_type=?,size_bytes=?,
                         sha256=?,uploaded_at=?,uploader_user_id=?,operation_key=?,storage_object_id=?"""
+            old_object_id = row["storage_object_id"]
             if row["provider"] == "supabase":
-                old_object_id = int(row["storage_object_id"])
                 conn.execute(f"UPDATE admin_arquivos SET {common},failure_code=NULL WHERE id=?",
                              (*values, int(arquivo_id)))
-                state = conn.execute("SELECT lifecycle_state FROM storage_objects WHERE id=?",
-                                     (old_object_id,)).fetchone()
-                if state is not None and state["lifecycle_state"] == "active":
-                    mirror_outbox.retire_object(conn, object_id=old_object_id, now=now)
             else:
                 prior_locator = row["remote_file_id"] if row["provider"] == "google" else row["filename"]
                 conn.execute(
@@ -503,6 +507,8 @@ def _replace(conn, session_obj, *, actor_user_id: int, arquivo_id: int, form, in
                          WHERE id=?""",
                     (*values, row["provider"], str(prior_locator), int(arquivo_id)),
                 )
+            if old_object_id is not None:
+                mirror_outbox.retire_if_active(conn, object_id=int(old_object_id), now=now)
     except CustodyError:
         raise _binding_refused() from None
 
@@ -585,19 +591,20 @@ def lock_for_delete(conn, arquivo_id: int):
     return row
 
 
-def delete_canonical_arquivo(conn, arquivo_id: int) -> None:
-    """Retire the canonical object and delete the row -- behind ``lock_for_delete``.
+def retire_and_delete(conn, row) -> None:
+    """Retire a canonical (or converged) row's object and delete the row.
 
-    Legacy residue bytes are untouched.
+    The caller holds ``lock_for_delete`` inside its write transaction.  Legacy
+    residue and legacy bytes are untouched.
     """
-    now = _now()
+    mirror_outbox.retire_if_active(conn, object_id=int(row["storage_object_id"]), now=_now())
+    conn.execute("DELETE FROM admin_arquivos WHERE id=?", (int(row["id"]),))
+
+
+def delete_canonical_arquivo(conn, arquivo_id: int) -> None:
+    """Retire the canonical object and delete the row -- behind ``lock_for_delete``."""
     with write_transaction(conn):
-        row = lock_for_delete(conn, arquivo_id)
-        object_id = int(row["storage_object_id"])
-        state = conn.execute("SELECT lifecycle_state FROM storage_objects WHERE id=?", (object_id,)).fetchone()
-        if state is not None and state["lifecycle_state"] == "active":
-            mirror_outbox.retire_object(conn, object_id=object_id, now=now)
-        conn.execute("DELETE FROM admin_arquivos WHERE id=?", (int(arquivo_id),))
+        retire_and_delete(conn, lock_for_delete(conn, arquivo_id))
 
 
 __all__ = [
@@ -617,4 +624,5 @@ __all__ = [
     "issue_submission",
     "lock_for_delete",
     "owns_arquivo_intent",
+    "retire_and_delete",
 ]

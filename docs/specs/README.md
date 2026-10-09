@@ -9,4 +9,4 @@ indexes SPECs only.
 | ID | Title | Tier | Status | SPEC |
 |---|---|---|---|---|
 | MP-0 | Spec-driven governance transition | R1 | CLOSED | none — executed under the pre-MP-0 protocol by supervisor instruction; the record is its Git commit |
-| MP-1 | Storage convergence | R2 | FROZEN | [`MP-1-storage-convergence.md`](MP-1-storage-convergence.md) |
+| MP-1 | Storage convergence | R2 | CLOSED | [`MP-1-storage-convergence.md`](MP-1-storage-convergence.md) |

@@ -193,12 +193,16 @@ TARGET_ONLY_TABLE_POLICIES = {
 
 #: Columns that reference local files under an upload root.  Only the
 #: ``admin_arquivos`` legacy files have a supported copy contract; any other
-#: populated reference is refused rather than silently left dangling.  The
+#: populated reference is refused rather than silently left dangling.  A
+#: CONVERGED legacy row (``storage_object_id`` set) is canonical custody: its
+#: bytes are in canonical storage, so its local file is neither required nor
+#: copied.  The
 #: legacy image path columns stay here: the source must have been normalized
 #: by ``python -m app.image_import`` (images moved into the v13 tables, paths
 #: NULL) before the cutover.
 _UNSUPPORTED_LOCAL_REFERENCES = (
-    ("requisicao_arquivos", "SELECT count(*) FROM requisicao_arquivos WHERE provider = 'local_legacy'"),
+    ("requisicao_arquivos",
+     "SELECT count(*) FROM requisicao_arquivos WHERE provider = 'local_legacy' AND storage_object_id IS NULL"),
     ("usuarios", "SELECT count(*) FROM usuarios WHERE COALESCE(foto_perfil, '') <> ''"),
     ("alunos", "SELECT count(*) FROM alunos WHERE COALESCE(foto_perfil, '') <> ''"),
     ("reportes", "SELECT count(*) FROM reportes WHERE COALESCE(screenshot_filename, '') <> ''"),
@@ -675,8 +679,12 @@ def _resolve_under(root, relative):
 
 def plan_local_assets(snapshot, source_root, target_root) -> list[LocalAsset]:
     columns = _columns("admin_arquivos")
-    position = {name: columns.index(name) for name in ("id", "filename", "provider", "storage_status")}
-    rows = [row for row in snapshot.rows["admin_arquivos"] if row[position["provider"]] == "local_legacy"]
+    position = {name: columns.index(name) for name in ("id", "filename", "provider", "storage_status",
+                                                         "storage_object_id")}
+    rows = [
+        row for row in snapshot.rows["admin_arquivos"]
+        if row[position["provider"]] == "local_legacy" and row[position["storage_object_id"]] is None
+    ]
     if not rows:
         return []
     if not source_root or not target_root:

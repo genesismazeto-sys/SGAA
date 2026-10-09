@@ -42,9 +42,9 @@ Two operator questions, answered without exposing a single row value:
     (``table|row|object|sha256|size|lifecycle``): two environments -- the
     SQLite source and the PostgreSQL target of a cutover -- hold the same
     references to the same canonical bytes exactly when their digests are
-    equal (provider, status, origin and mirror state are not part of it).  Integer ids appear only on request
-    (``show_ids``); names, file names, locators, keys, URLs and account keys
-    never appear.
+    equal (provider, status, origin and mirror state are not part of it).
+    Integer ids appear only on request (``show_ids``); names, file names,
+    locators, keys, URLs and account keys never appear.
 
 Read-only, except ``requeue_missing_mirrors``: a synced object whose Drive copy
 is missing or divergent goes back to ``pending`` (``mirror_outbox.reset_missing_mirror``),
@@ -114,7 +114,6 @@ def census(conn) -> dict:
         " GROUP BY drive_sync_state",
         DRIVE_SYNC_STATES,
     )
-    active = sum(mirror.values())
     return {
         "documents": {table: convergence.legacy_census(conn, table) for table in convergence.TABLES},
         "objects": {
@@ -126,7 +125,7 @@ def census(conn) -> dict:
                 conn, "SELECT origin, count(*) FROM storage_objects GROUP BY origin", STORAGE_ORIGINS
             ),
             "mirror": mirror,
-            "mirror_complete": mirror["synced"] == active,
+            "mirror_complete": census_mirror_complete(conn),
         },
         "intents": _counts(
             conn, "SELECT state, count(*) FROM storage_upload_intents GROUP BY state", INTENT_STATES
@@ -359,6 +358,7 @@ __all__ = [
     "REFERENCE_CLASSES",
     "STORAGE_CLASSES",
     "census",
+    "census_mirror_complete",
     "cross_check",
     "reference_digest",
 ]

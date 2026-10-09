@@ -589,22 +589,29 @@ def _delete_locatorless_google_row(conn, row) -> bool:
     return False
 
 
-def _enter_deletion_pending(conn, arquivo_id: int) -> None:
+def _enter_deletion_pending(conn, arquivo_id: int) -> bool:
     """The legacy deletion transition, behind the S3-B live-target-intent gate.
 
     One write transaction (no network I/O): lock the row, refuse while a LIVE
     replacement intent targets it, enter ``deletion_pending``.  Once committed
     the row is no longer replaceable, so no new target intent can be issued;
-    the Drive / local cleanup runs after the commit, as before.
+    the Drive / local cleanup runs after the commit, as before.  A row that
+    became canonical custody meanwhile (legacy convergence) is deleted
+    canonically instead -- its legacy bytes are not touched -- and ``True``
+    tells the caller nothing is left to clean.
     """
     from app.storage import arquivo_documents  # lazy: arquivo_documents imports this module
 
     with write_transaction(conn):
-        arquivo_documents.lock_for_delete(conn, arquivo_id)
+        row = arquivo_documents.lock_for_delete(conn, arquivo_id)
+        if arquivo_documents.is_canonical(row):
+            arquivo_documents.retire_and_delete(conn, row)
+            return True
         conn.execute(
             "UPDATE admin_arquivos SET storage_status='deletion_pending',failure_code=NULL,cleanup_started_at=? WHERE id=?",
             (_utc_now(), int(arquivo_id)),
         )
+    return False
 
 
 def delete_arquivo(conn, arquivo_id: int, *, upload_root: str) -> None:
@@ -626,7 +633,8 @@ def delete_arquivo(conn, arquivo_id: int, *, upload_root: str) -> None:
             return
         row = conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
     if row["storage_status"] != "deletion_pending":
-        _enter_deletion_pending(conn, arquivo_id)
+        if _enter_deletion_pending(conn, arquivo_id):
+            return
         row = conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
     provider = str(row["provider"])
     locator = str(row["remote_file_id"] if provider == "google" else row["filename"])
