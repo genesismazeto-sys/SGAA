@@ -1,5 +1,11 @@
 # Architecture Refactor Ledger
 
+> **FROZEN HISTORICAL RECORD (MP-0, 2026-10-09).** No entries are appended.
+> The block below titled "Current authoritative state" describes the state at
+> refactor completion and is **not** current. Present state:
+> `PROJECT_STATE.md`. Execution governance: `docs/OPERATING_MODEL.md`.
+> Post-refactor history lives in Git and in closed SPECs (`docs/specs/`).
+
 ## Current authoritative state — SGAA-EJ REFACTOR COMPLETE
 
 Active branch: `refactor/design-system-foundation`; current HEAD is

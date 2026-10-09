@@ -1,12 +1,17 @@
 # SGAA-EJ — Test Execution Policy (TEP)
 
-**Version:** 1.0 — 2026-10-06 (Phase G1, docs only; entry HEAD
+**Version:** 1.1 — 2026-10-09 (MP-0: role wording for the spec-driven operating
+model and the E-LIVE lane; tiers, triggers, invalidators and failure classes
+unchanged). v1.0 — 2026-10-06 (Phase G1, docs only; entry HEAD
 `22f0274718d1c9741b8988a34ccc425ccfbb9ffc`).
 **Authority:** canonical cross-cutting owner of test selection, rerun and
 evidence-reuse policy for all work after UT-17 (see §14). It supersedes the
 generic per-unit full-suite rule of `docs/refactor/EXECUTION_PROTOCOL.md` §7
-step 7 for new work. A phase-specific frozen contract stays authoritative where
-it explicitly prescribes a gate for its own scope.
+step 7 for new work. The executor applies this policy autonomously under
+`docs/OPERATING_MODEL.md`; its decisions are recorded, never submitted for
+authorization. Where a frozen phase SPEC is silent, this policy decides; a SPEC
+may demand stronger evidence or declare milestone triggers for its scope, but
+it cannot weaken a MUST of this policy.
 
 Keywords MUST, MUST NOT, SHOULD and MAY are normative.
 
@@ -25,13 +30,14 @@ Two questions decide every run:
 2. **If it fails, what decision changes?**
 
 A run with no concrete answer to (1), or whose failure would change no
-implementation, review, landing or escalation decision under (2), MUST NOT be
-authorized.
+implementation, review, landing or escalation decision under (2), MUST NOT take
+place.
 
 ## 2. Test budget
 
 Before any run expected to exceed 5 minutes, and before every full suite, the
-executor MUST state:
+executor MUST write this decision record into the phase evidence. It is a
+record of the executor's decision, not a request for authorization:
 
 ```
 TEST BUDGET
@@ -42,7 +48,7 @@ new info: <what this run can detect that existing evidence cannot>
 if fails: <decision that changes>
 ```
 
-If `new info` has no concrete answer, the run MUST NOT be authorized. Shorter
+If `new info` has no concrete answer, the run MUST NOT take place. Shorter
 runs need no written budget, but the two questions of §1 still apply.
 
 ## 3. Scope tiers
@@ -93,9 +99,10 @@ This is a judgment criterion recorded in the budget, not a fixed percentage.
 
 Purpose: catch whole-tree ratchets, ownership pins and architecture invariants
 (FC13 is the reference case). **No canonical marker or lane exists yet** (§11).
-Until it does, the conductor MUST select the relevant existing global guards for
-the changed architecture or surface from the candidate families in §11, and name
-them in the run record. Once a measured, acceptably cheap G-lane exists,
+Until it does, the executor MUST select the relevant existing global guards for
+the changed architecture or surface from the candidate families in §11 —
+starting from the permanent guards in `docs/ENGINEERING_STANDARDS.md` §11 — and
+name them in the run record. Once a measured, acceptably cheap G-lane exists,
 governance MAY make it a routine gate for every production change.
 
 ### 3.6 T5 — Full suite
@@ -121,6 +128,7 @@ of T5 replaces a required lane.
 | **E-PG1** | Real PostgreSQL, single connection | Dialect, DDL/types, `RETURNING`, constraints, runtime compatibility |
 | **E-PG2** | Real PostgreSQL, multiple connections | Blocking, serialization, deadlocks, lock ordering, snapshot visibility |
 | **E-UI** | Browser / visual | As governed by `docs/design-system/README.md` §5 (`--visual`, opt-in) |
+| **E-LIVE** | Real external provider, DEV environment only | Provider contracts a fake cannot prove (transport, auth headers, limits, CORS, signed URLs), when the SPEC declares a provider-integration surface |
 
 PostgreSQL evidence hierarchy, weakest to strongest for PG semantics: static
 SQL / lock-order inspection → PG-shaped doubles (`tests/pg_shaped_support.py`:
@@ -140,6 +148,11 @@ Rules:
   gates PostgreSQL cutover, as a cutover blocker.
 - For a lock or isolation change, a small E-PG2 test is the decisive evidence;
   T5 on SQLite MUST NOT be scheduled in its place.
+- E-LIVE runs only against a DEV environment the SPEC declares, with
+  run-owned, uniquely named resources that are cleaned up afterwards, and a
+  leak audit (no secret or personal data in output). Any PROD use is a user
+  gate (`docs/OPERATING_MODEL.md` §7). A green fake-provider suite MUST NOT be
+  cited as E-LIVE evidence.
 
 ## 5. Full-suite triggers
 
@@ -225,15 +238,17 @@ boundary, such as a semester or calendar transition (REF-0TF-A class).
 ## 8. Failure classification and rerun
 
 A rerun is NEVER automatic. Every failure MUST first be classified.
-`docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md` is historical input to this
-taxonomy.
+Classification and the resulting action are the executor's decisions under this
+policy; they are recorded in the phase evidence and need no supervisor
+authorization. `docs/refactor/REF_0TF_FAILURE_CLASSIFICATION.md` is historical
+input to this taxonomy.
 
 | Class | Meaning | Action |
 |---|---|---|
 | **A** | Candidate-related | Fix the candidate; rerun the failing contract plus the appropriate T2/T3/T4. Rerun T5 only if the fix itself hits a §5 trigger or §7 invalidator. |
-| **B** | Deterministic governance / expectation mismatch | Adjudicate the expected or governance change; add negative controls when a guard is weakened; rerun the affected governance/owner lane. No T5 absent an invalidator. |
+| **B** | Deterministic governance / expectation mismatch | The executor adjudicates the expected or governance change when the frozen SPEC's declared contract explains it (otherwise hard stop H9, `docs/OPERATING_MODEL.md` §7); add negative controls when a guard is weakened; rerun the affected governance/owner lane. No T5 absent an invalidator. |
 | **C** | Registered known flake | Valid only if a §8.1 registry entry matches mechanism, affected nodes, failure fingerprint, owner and expiry/review condition. "Probably flaky" is class E. |
-| **D** | Environmental | Repair the environment; rerun only the portion whose evidence the environment failure invalidated. If collection or session initialization aborted, the run is not valid evidence. |
+| **D** | Environmental | Repair the environment; rerun only the portion whose evidence the environment failure invalidated, without further authorization. If collection or session initialization aborted, the run is not valid evidence. The same environmental cause failing twice is a BLOCKER (`docs/OPERATING_MODEL.md` §7), not a reason for a third run. |
 | **E** | Unclear | Investigate and reproduce narrowly before changing anything. A full suite MUST NOT be rerun in the hope it turns green. |
 
 A full suite MUST NOT be repeated merely to re-record a green result. A failure
@@ -254,13 +269,13 @@ mechanism.
 
 | Delta | Required |
 |---|---|
-| Weakening / removing an assertion, widening an allowlist | Explicit adjudication; negative control; affected owner/governance tests. Retirement of a protected assertion still follows its owning retirement rule (e.g. `EXECUTION_PROTOCOL.md` §8). |
+| Weakening / removing an assertion, widening an allowlist | Explicit adjudication by the executor against the SPEC's declared contract change (otherwise hard stop H9); negative control; affected owner/governance tests. Permanent guards: `docs/ENGINEERING_STANDARDS.md` §11. |
 | Strengthening | The new/changed test plus the relevant owner and global-guard scope. |
 | Expected-output rebaseline | Cause tied to the delta; consumers of that baseline rerun. |
 | Narrow allowlist entry | Focused owner/governance test; negative controls proving neighbours remain rejected. |
 | Negative-control-only | Direct file/owner test is ordinarily sufficient. |
 | Shared fixture / `conftest.py` / harness | Potentially broad: apply §5 and §10. |
-| Docs only | T0 only, unless a tool or test explicitly consumes the document. As of 2026-10-06 no test reads the governance documents (references are docstring mentions only). |
+| Docs only | T0 only, unless a tool or test explicitly consumes the document. As of 2026-10-06, re-verified 2026-10-09 (MP-0), no test reads the governance documents (references are docstring mentions only). |
 
 ## 10. Shared test infrastructure
 
@@ -307,9 +322,8 @@ Requirements for the future lane:
 ## 12. Milestone full suites and reporting
 
 Full suites are milestone- or risk-triggered, not periodic. Examples: before a
-release or deployment; at a `clean-baseline` integration milestone; at a major
-multi-unit integration checkpoint declared by the conductor; whenever a §5.1
-trigger applies. A fixed cadence MAY be introduced later, only after timing and
+release or deployment; at a `clean-baseline` integration milestone; at a
+milestone declared in the frozen phase SPEC; whenever a §5.1 trigger applies. A fixed cadence MAY be introduced later, only after timing and
 failure-attribution data exist.
 
 The next legitimately triggered full suite SHOULD record slow tests and skip
@@ -341,15 +355,21 @@ Illustrations of the rules, not permanent special cases.
 
 ## 14. Relationship to other governance
 
-- `docs/refactor/EXECUTION_PROTOCOL.md` — its §7 step 7 per-unit full suite,
-  the ~330 s runtime estimate, and the repeated "canonical / fresh final full"
-  runs recorded in §11 and in historical blocks are historical requirements and
-  records of the structural refactor (UT-1…UT-17). They do not govern new work.
-  Its invariants, structural rules and §8 retirement table are unaffected.
+- `docs/OPERATING_MODEL.md` — the process in which the executor applies this
+  policy; the hard stops and BLOCKER referenced here are defined there (§7).
+- Frozen phase SPECs (`docs/specs/`) — may demand stronger evidence or declare
+  milestone triggers for their own scope; where a SPEC is silent this policy
+  decides; a SPEC cannot weaken a MUST here.
+- `docs/ENGINEERING_STANDARDS.md` — owns the permanent guards (§11) from which
+  T4 selects, and the structural rules that carry forward from
+  `EXECUTION_PROTOCOL.md`.
+- `docs/refactor/EXECUTION_PROTOCOL.md` — historical. Its §7 step 7 per-unit
+  full suite, the ~330 s runtime estimate, and the repeated "canonical / fresh
+  final full" runs recorded in §11 and in historical blocks are historical
+  requirements and records of the structural refactor (UT-1…UT-17). They do
+  not govern new work.
 - `docs/refactor/PYTEST_CUSTODY_EXTERNAL_WRITER_CONTRACT.md` — remains the entry
   contract for any full-suite run (supported runtime state and custody guard).
 - `docs/design-system/README.md` — remains the owner of E-UI gates.
-- Phase-specific frozen contracts remain authoritative where they explicitly
-  prescribe gates for their own scope.
 - Historical evidence everywhere is preserved as recorded; this policy does not
   reclassify or rewrite it.

@@ -1,5 +1,13 @@
 # SGAA-EJ — PROTOCOLO DE EXECUÇÃO DO REFACTOR (FASE FINAL)
 
+> **HISTORICAL — superseded as process authority by MP-0 (2026-10-09).** This
+> file records the process of the UT-1…UT-17 structural refactor and is not
+> edited further. Macro-phase execution is governed by
+> `docs/OPERATING_MODEL.md`, the frozen phase SPEC (`docs/specs/`),
+> `docs/ENGINEERING_STANDARDS.md` (which carries those structural rules of
+> §4, §5 and §8 below that remain valid) and `docs/TEST_EXECUTION_POLICY.md`. Present
+> state: `PROJECT_STATE.md`.
+
 **Versão:** 1.5 — 2026-10-06
 **Autoridade:** substitui a governança por fase (contrato + closeout por unidade) para todo o
 trabalho remanescente. Não revoga contratos fechados (B1–B7-P permanecem como histórico).
