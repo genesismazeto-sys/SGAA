@@ -111,11 +111,18 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
-## STORAGE S3-B — ADMIN ARQUIVOS canonical Supabase documents — IMPLEMENTED / QUALIFIED / READY_FOR_LANDING (2026-10-09)
+## STORAGE S3-B — ADMIN ARQUIVOS canonical Supabase documents — CLOSED_AND_PUBLISHED (2026-10-09)
 
-Candidate on parent `a9393bdf7cb2666fb75f0c1d5ea7fb6f7e5b5d77` (8 modified + 6
-new paths: `app/storage/arquivo_documents.py`, the S3-B / M1 suites and their
-support module); NOT YET COMMITTED / PUBLISHED.
+Published as `6c04481293e999be7049f7526789689d685fd4c3` ("feat: move admin
+arquivos to canonical Supabase storage"), parent -- the published S3-A
+governance baseline -- `a9393bdf7cb2666fb75f0c1d5ea7fb6f7e5b5d77`: exactly one
+technical landing commit (15 paths: 9 modified incl. this file, 6 added --
+`app/storage/arquivo_documents.py`, the S3-B / M1 suites and their support
+module), published by an ordinary fast-forward push (NO_FORCE, NO_MERGE,
+NO_REBASE); afterwards local HEAD == origin == ls-remote, divergence 0/0,
+clean worktree / index. Canonical SQLite `database.db` remained
+byte-identical (1,003,520 B, SHA-256
+`e458a9f79551d999e4724c9872de5d9ee3d395b2c43db4124ea5b6b8a50f5b61`).
 
 * NEW admin ARQUIVOS create / replace / read / delete paths are canonical
   Supabase Storage. The S3-A signed-TUS machinery is reused, not copied:
@@ -204,7 +211,7 @@ support module); NOT YET COMMITTED / PUBLISHED.
   remains active outside the repository and should be revoked when no longer
   needed.
 
-### STORAGE S3 — TECHNICALLY COMPLETE / QUALIFIED / AWAITING PUBLICATION (2026-10-09)
+### STORAGE S3 — CLOSED_AND_PUBLISHED (2026-10-09)
 
 S3-A (published `006a151`) + S3-B (above) complete STORAGE S3: request /
 comprovante documents and new ADMIN ARQUIVOS create / replace / read / delete
@@ -215,9 +222,9 @@ remains.
 
 * DRIVE_AVAILABILITY_MUST_NOT_BLOCK_REQUEST_SUBMISSION = ACTIVE.
 * DRIVE_AVAILABILITY_MUST_NOT_BLOCK_ADMIN_ARQUIVOS_CANONICAL_OPERATION = ACTIVE.
-* S3 closure becomes formal only after the final commit, a fast-forward push,
-  local == remote verification and post-publication custody. Not
-  CLOSED_AND_PUBLISHED yet.
+* Formally closed after the S3-B publication (`6c04481`) was verified: local
+  == origin == ls-remote, divergence 0/0, post-publication custody preserved.
+  S3 closure does NOT mean production-integration readiness.
 * Outstanding, NOT STARTED: S4 (Drive mirror worker / retries / scheduling);
   S5 (legacy Google / local byte migration); S6 (storage cleanup / census /
   backup closure); S7 (broader Vercel / serverless filesystem cleanup); S8
