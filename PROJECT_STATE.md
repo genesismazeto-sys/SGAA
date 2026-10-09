@@ -30,7 +30,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - Refactor, PostgreSQL readiness and real-PG qualification fronts: closed.
 - STORAGE S1, S2, S3 (S3-A + S3-B): CLOSED_AND_PUBLISHED.
 - MP-0 spec-driven governance transition: CLOSED.
-- Active macro-phase: none. MP-1: NEXT / NOT STARTED (awaiting charter).
+- Active macro-phase: MP-1 storage convergence — SPEC FROZEN
+  (`docs/specs/MP-1-storage-convergence.md`).
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -72,7 +73,7 @@ Baseline full suite is not green: six `xlwt` collection errors plus
 | Phase | Scope | Status |
 |---|---|---|
 | MP-0 | Spec-driven governance transition | CLOSED |
-| MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | NEXT / NOT STARTED |
+| MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | IN PROGRESS |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger, object-byte backup (S7, part of S6) | NOT STARTED |
 | MP-3 | Production integration / cutover — S8, Phase C, real-data migration, DR proof, security review | NOT STARTED |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
