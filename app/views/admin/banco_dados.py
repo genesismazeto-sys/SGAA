@@ -618,6 +618,7 @@ def _build_database_admin_context(conn):
         "onedrive_client_id": onedrive_client_id,
         "onedrive_tenant_id": onedrive_tenant_id,
         "cloud_store_unavailable": cloud_store_unavailable,
+        "cloud_credentials_environment_managed": _cloud_credentials.credentials_managed_by_environment(),
         "google_oauth_callback_uri": oauth_context["google_oauth_callback_uri"],
         "onedrive_oauth_callback_uri": oauth_context["onedrive_oauth_callback_uri"],
         "oauth_config_error": oauth_context["oauth_config_error"],

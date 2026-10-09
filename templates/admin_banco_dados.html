@@ -919,7 +919,7 @@
 
           {{ provider_backup_now_target('gdrive-backup-now', gdrive_connected, url_for('admin_backup_google_upload')) }}
 
-          {% if not cloud_store_unavailable %}
+          {% if not cloud_store_unavailable and not cloud_credentials_environment_managed %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="provider" value="google">
@@ -1122,7 +1122,7 @@
 
           {{ provider_backup_now_target('onedrive-backup-now', onedrive_connected, url_for('admin_backup_onedrive_upload')) }}
 
-          {% if not cloud_store_unavailable %}
+          {% if not cloud_store_unavailable and not cloud_credentials_environment_managed %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="provider" value="onedrive">
@@ -1217,7 +1217,9 @@
         <strong>Configuração OAuth:</strong> {{ oauth_config_error }}
       </p>
     {% endif %}
-    {% if cloud_store_unavailable %}
+    {% if cloud_credentials_environment_managed %}
+      <p class="db-note" role="status">As credenciais do aplicativo e o endereço público são definidos pelo ambiente de hospedagem; esta tela apenas conecta e desconecta contas.</p>
+    {% elif cloud_store_unavailable %}
       <p class="db-cloud-store-warning">O armazenamento seguro desta máquina não pôde ser aberto. Nada foi apagado: as credenciais existentes continuam guardadas e a configuração fica indisponível até que esta instalação seja aberta pela conta Windows usada na instalação.</p>
     {% endif %}
   </article>

@@ -15,6 +15,8 @@ import os
 import tempfile
 from typing import Any
 
+from app import hosting
+
 
 _STORE_VERSION = 1
 _STORE_FILENAME = "cloud-oauth.dpapi"
@@ -28,6 +30,9 @@ INFRASTRUCTURE_ENVIRONMENT = "environment"
 
 _STORE_UNAVAILABLE_MESSAGE = (
     "O armazenamento seguro desta maquina nao pode ser preparado agora."
+)
+_ENVIRONMENT_MANAGED_MESSAGE = (
+    "As credenciais desta instalacao sao gerenciadas pelo ambiente de hospedagem."
 )
 
 
@@ -47,6 +52,15 @@ class MachineSecretsError(RuntimeError):
 
 class _DataBlob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+
+def _refuse_when_hosted(operation: str) -> None:
+    """A hosted process never writes, and never creates, the machine store."""
+    if hosting.is_hosted():
+        raise MachineSecretsError(
+            _ENVIRONMENT_MANAGED_MESSAGE,
+            debug_detail=f"hosted runtime: machine store {operation} refused",
+        )
 
 
 def get_machine_secrets_path() -> str:
@@ -133,6 +147,11 @@ def _empty_payload() -> dict[str, Any]:
 
 
 def load_machine_secrets(*, path: str | None = None) -> dict[str, Any]:
+    if hosting.is_hosted():
+        # Environment is the only source: the DPAPI store (and LOCALAPPDATA)
+        # does not exist on a hosted platform, and an absent store is the empty
+        # payload every reader already handles.
+        return _empty_payload()
     store_path = os.path.abspath(path or get_machine_secrets_path())
     if not os.path.isfile(store_path):
         return _empty_payload()
@@ -158,6 +177,7 @@ def load_machine_secrets(*, path: str | None = None) -> dict[str, Any]:
 
 
 def save_machine_secrets(payload: dict[str, Any], *, path: str | None = None) -> str:
+    _refuse_when_hosted("write")
     store_path = os.path.abspath(path or get_machine_secrets_path())
     normalized = dict(payload)
     normalized["version"] = _STORE_VERSION

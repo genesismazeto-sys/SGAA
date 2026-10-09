@@ -37,6 +37,8 @@ explicitly authorized governance change.
 
 ## Current reference documents (accurate for their subsystem)
 
+- `docs/HOSTED_RUNTIME.md` — hosted-runtime contract: mode, startup blockers,
+  variables, filesystem rules, readiness check (owner: `app/hosting.py`).
 - `docs/PG_BACKUP_RESTORE_RUNBOOK.md` — PostgreSQL Layer-2 backup/restore
   operator runbook.
 - `docs/PRE_GO_LIVE_PROD1_RESET_CUTOVER_RECORD.md` — PROD-1 database reset

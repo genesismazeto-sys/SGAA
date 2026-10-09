@@ -799,10 +799,34 @@ class _PostgresConnectionAdapter:
         return getattr(self._raw_connection, name)
 
 
+PG_CONNECT_TIMEOUT_ENV = "SGAA_PG_CONNECT_TIMEOUT"
+_DEFAULT_PG_CONNECT_TIMEOUT_SECONDS = 10
+
+
+def _postgres_connect_options(conninfo: str) -> dict:
+    """``connect_timeout`` unless the connection string already carries one.
+
+    Without a bound, a paused or unreachable database holds a serverless
+    invocation until the platform kills it.
+    """
+    from psycopg.conninfo import conninfo_to_dict
+
+    if "connect_timeout" in conninfo_to_dict(conninfo) or os.getenv("PGCONNECT_TIMEOUT"):
+        return {}
+    configured = (os.getenv(PG_CONNECT_TIMEOUT_ENV) or "").strip()
+    seconds = int(configured) if re.fullmatch(r"[0-9]+", configured) and int(configured) > 0 else _DEFAULT_PG_CONNECT_TIMEOUT_SECONDS
+    return {"connect_timeout": seconds}
+
+
 def _connect_postgres():
     import psycopg
 
-    raw = psycopg.connect(DATABASE_URL, prepare_threshold=None, autocommit=False)
+    raw = psycopg.connect(
+        DATABASE_URL,
+        prepare_threshold=None,
+        autocommit=False,
+        **_postgres_connect_options(DATABASE_URL),
+    )
     # Configure while IDLE: post-lock latest/current reads require a fresh
     # READ COMMITTED snapshot, regardless of server/role/database defaults.
     try:

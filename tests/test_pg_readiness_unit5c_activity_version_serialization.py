@@ -547,7 +547,8 @@ def test_postgres_factory_explicitly_sets_read_committed_while_idle(monkeypatch,
             assert raw.isolation_level != raw.server_default
             assert raw.info.transaction_status.name == "IDLE"
             assert raw.query_log == [] and raw.autocommit is False
-            assert opened[0][1] == {"prepare_threshold": None, "autocommit": False}
+            # D9 (MP-2): every connection is time-bounded; the default is 10 seconds.
+            assert opened[0][1] == {"prepare_threshold": None, "autocommit": False, "connect_timeout": 10}
         finally:
             connection.close()
 

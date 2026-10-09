@@ -27,6 +27,8 @@ appending a change would make an owner worse, a proportional local refactor
 | PostgreSQL schema | `app/pg_schema.py` |
 | SQLite → PostgreSQL cutover; PostgreSQL logical backup | `app/pg_migrate_from_sqlite.py`; `tools/pg_backup.py` (operator tool, never imported by `app/`) |
 | SQLite file backup | `app/backup/` (`capability.py` decides whether it applies) |
+| Hosted-runtime mode, scratch space, startup blockers | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |
+| Machine-local secrets (DPAPI store); environment-only when hosted | `app/machine_secrets.py` (consulted through `app/cloud_config.py`; `app/cloud_credentials.py` is the product-level write path) |
 | RBAC requirements | `app/auth.py` (`get_admin_permission_requirement`, `classify_governed_admin_request`) |
 | User-facing messages | `utils/messages.py` (`flash`, `resolve_user_message`, `_iter_backend_files`) |
 | Storage | `app/storage/`, one module per concern: `contracts` (error hierarchy), `custody_common` (shared custody primitives), `upload_intents`, `mirror_outbox`, `object_store`, `supabase_store`, `google_drive`, `google_connection`, `request_documents`, `arquivo_documents`, `drive_mirror` (Drive mirror worker), `legacy_convergence` (legacy eligibility and convergence), `storage_audit` (census and convergence cross-check), `cli` (operator command line, `python -m app.storage.cli`; never imported by the web runtime) |

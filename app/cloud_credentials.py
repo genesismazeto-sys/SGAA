@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 from contextlib import contextmanager
 
+from app import hosting
 from app.machine_secrets import (
     MachineSecretsError,
     load_machine_secrets,
@@ -100,6 +101,19 @@ class CloudCredentialsError(RuntimeError):
     submitted secret, an environment variable name, a script name or a
     cryptographic primitive.
     """
+
+
+def credentials_managed_by_environment() -> bool:
+    """Whether application credentials come from the environment, not from this screen."""
+    return hosting.is_hosted()
+
+
+def _require_editable() -> None:
+    if credentials_managed_by_environment():
+        raise CloudCredentialsError(
+            "As credenciais do aplicativo e o endereço público são definidos pelo "
+            "ambiente de hospedagem e não podem ser alterados aqui."
+        )
 
 
 def normalize_provider(provider: str) -> str:
@@ -208,6 +222,7 @@ def save_application_credentials(
     Returns ``{"provider", "secret_rotated", "picker_api_key_rotated"}``.  Never
     returns, logs or raises the submitted secret or Picker key.
     """
+    _require_editable()
     normalized = normalize_provider(provider)
     submitted = {"client_id": client_id, "tenant_id": tenant_id}
     values = {
@@ -301,6 +316,7 @@ def save_public_base_url(value: str) -> str:
     cannot be opened the bootstrap writes nothing and the ``load`` below fails
     closed, leaving the file exactly as it was.
     """
+    _require_editable()
     normalized = normalize_public_base_url(value)
     run_startup_preflight()
     with _product_store_failure("gravação do endereço público"):

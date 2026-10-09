@@ -20,7 +20,7 @@ if IAsup disagrees, the reclassification point is before MP-3.
 - An operator declares a hosted runtime (`SGAA_RUNTIME=hosted`). The application then
   refuses to start without PostgreSQL, a stable secret key and a proxy-trust decision. It
   starts and serves without creating a directory or file, takes every secret from the
-  environment, and logs to stderr. `python -m app.hosting check` reports readiness
+  environment, and logs to stderr. `python -m app.hosting_cli check` reports readiness
   without printing a value.
 - Login and password-recovery throttling is shared by all instances through the database,
   and the activity-import preview survives across instances. Neither touches the disk.
@@ -78,7 +78,8 @@ slice that creates each):
 
 | Module | Responsibility |
 |---|---|
-| `app/hosting` (new) | hosted-mode declaration, scratch root, readiness verdict (value-free), `check` CLI. A leaf module: imports nothing from `app` |
+| `app/hosting` (new) | hosted-mode declaration, scratch root, startup blockers (value-free codes). No module-level import from `app` |
+| `app/hosting_cli` (new) | operator readiness command `python -m app.hosting_cli check [--database]`; never imported by the web runtime |
 | `app/machine_secrets`, `cloud_config`, `cloud_credentials` (extended) | when hosted the DPAPI store is never read or written; credentials resolve from the environment |
 | `app/auth_throttle` (new) | durable throttle on `auth_throttle_events` and the hosted/local selector the login and recovery views call |
 | `app/import_previews` (new) | short-lived, user-bound, one-shot server-side preview state on `admin_import_previews` |
@@ -289,7 +290,7 @@ Open decisions (product or architecture): none.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Hosted runtime: mode, readiness, scratch, env-only secrets, connect timeout, health, `check` CLI | `hosting`, `__init__`, `machine_secrets`, `cloud_*`, `db`, tests | T1–T4; E-PG1 hosted smoke; tripwire; R2 | pending |
+| 1 | Hosted runtime: mode, blockers, scratch, env-only secrets (and the read-only credential forms), connect timeout, health, `hosting_cli` | `hosting`, `hosting_cli`, `__init__`, `machine_secrets`, `cloud_credentials`, `banco_dados` (context flag), template, `db`, tests | T1–T4; E-PG1 hosted smoke; tripwire; R2 | done |
 | 2 | PostgreSQL-coherent backup/admin | `capability`, `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | pending |
 | 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | pending |
 | 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | pending |
@@ -338,7 +339,20 @@ Open decisions (product or architecture): none.
 
 ## 16. Amendments
 
-None yet.
+- A1 2026-10-09 — `main.py` (a frozen facade) creates its log directory at import, before
+  `create_app` runs. H1 is kept literal without editing it: when hosted, `app/__init__` calls
+  `hosting.apply_hosted_defaults()` at import, which points an unset `APP_LOG_DIR` at the scratch
+  root, and `create_app` adds the platform stream handler to the `app` and `main` channels. Python
+  probes the temp directory on first use; that probe is the interpreter's, resolved before the
+  tripwire in the E-PG1 smoke. Source: the slice-1 R2 review (the first draft qualified H1
+  instead). Not material.
+- A2 2026-10-09 — Hosted refusals carry fixed codes for every blocker, not only the hosting ones:
+  `create_app` translates the secret-key, token-key and public-address owners' refusals into
+  `HOSTED_SECRET_KEY_REQUIRED`, `HOSTED_TOKEN_KEY_REQUIRED` and `HOSTED_PUBLIC_URL_INVALID` (their
+  rules stay with their owners; local wording is unchanged). The CLI moved to `app/hosting_cli`
+  because `python -m app.hosting` loaded the module twice and lost the blocker identity. The
+  storage-variable rule is the adapter's own reader. `/health` calls `get_schema_status`, which
+  raises on version skew. Not material.
 
 ## 17. Closure
 

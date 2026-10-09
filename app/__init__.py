@@ -20,6 +20,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from werkzeug.routing import BuildError
 
 from presets_api import bp_presets
+from app import hosting
 from app.backup_settings import bind_backup_settings_runtime_app
 from app.db import DATABASE, close_db_connection, get_db_connection
 from app.oauth_log_filter import install_oauth_query_redaction_filter
@@ -50,6 +51,11 @@ from app.views.comprovantes import bp_comprovantes
 from app.views.images import bp_images
 from app.session_auth import enforce_session_auth_version
 
+
+# A hosted process points the one setting `main` reads before the factory runs
+# (its log directory) at scratch, so importing the application writes nothing
+# else.  No-op unless SGAA_RUNTIME=hosted.
+hosting.apply_hosted_defaults()
 
 # Singleton CSRF instance for templates / view exemptions
 csrf = CSRFProtect()
@@ -91,7 +97,7 @@ def _resolve_secret_key(env: str) -> str:
     return _secrets.token_urlsafe(48)
 
 
-def _validate_production_runtime_settings() -> None:
+def _validate_production_runtime_settings(*, hosted: bool = False) -> None:
     debug_requested = _is_truthy(os.getenv("FLASK_DEBUG", "0")) or _is_truthy(
         os.getenv("DEBUG", "0")
     )
@@ -109,11 +115,16 @@ def _validate_production_runtime_settings() -> None:
     try:
         get_public_base_url()
     except OAuthConfigError as exc:
+        if hosted:
+            # `from None`: the chained error quotes the configured address, userinfo and all.
+            raise hosting.single(hosting.HOSTED_PUBLIC_URL_INVALID, "APP_PUBLIC_BASE_URL") from None
         raise RuntimeError(str(exc)) from exc
 
     try:
         validate_token_encryption_configuration(env="production")
     except TokenEncryptionConfigError as exc:
+        if hosted:
+            raise hosting.single(hosting.HOSTED_TOKEN_KEY_REQUIRED, "TOKEN_ENCRYPTION_KEY") from None
         raise RuntimeError(str(exc)) from exc
 
 
@@ -143,6 +154,11 @@ def create_app(
     """
     env = _resolve_app_env()
     is_production = env == "production"
+    # Hosted contract (app.hosting): declared, never inferred; refuses before
+    # anything is built, so a misconfigured host fails at start, not at request.
+    hosted = hosting.require_declared_runtime()
+    if hosted:
+        hosting.require_ready(production=is_production)
 
     app_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(app_dir)
@@ -154,18 +170,27 @@ def create_app(
     app.config["IS_PRODUCTION"] = is_production
 
     # ----- Segurança / sessão -----
-    app.secret_key = _resolve_secret_key(env)
+    # A hosted process has many instances: an ephemeral per-instance key would
+    # invalidate every session on the next cold start, so it is as strict as production.
+    try:
+        app.secret_key = _resolve_secret_key("production" if hosted else env)
+    except RuntimeError as exc:
+        if hosted:
+            raise hosting.single(hosting.HOSTED_SECRET_KEY_REQUIRED, "APP_SECRET_KEY") from None
+        raise
     app.config["SECRET_KEY"] = app.secret_key
     if is_production:
-        _validate_production_runtime_settings()
+        _validate_production_runtime_settings(hosted=hosted)
 
+    # Hosted: the only writable place is scratch, created by whoever writes first.
+    local_root = hosting.scratch_root() if hosted else project_root
     documentos_alunos_folder = (os.getenv("APP_DOCUMENTOS_ALUNOS_FOLDER") or "").strip()
     if not documentos_alunos_folder:
-        documentos_alunos_folder = os.path.join(project_root, "documentos_alunos")
+        documentos_alunos_folder = os.path.join(local_root, "documentos_alunos")
 
     upload_folder = (os.getenv("APP_UPLOAD_FOLDER") or "").strip()
     if not upload_folder:
-        upload_folder = os.path.join(project_root, "uploads")
+        upload_folder = os.path.join(local_root, "uploads")
     app.config["UPLOAD_FOLDER"] = upload_folder
     app.config["DOCUMENTOS_ALUNOS_FOLDER"] = os.path.abspath(documentos_alunos_folder)
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
@@ -209,7 +234,7 @@ def create_app(
     app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(hours=max(1, lifetime_hours))
 
     # Confiar em cabeçalho X-Forwarded-For somente quando explícito (atrás de proxy reverso)
-    app.config["TRUST_PROXY_XFF"] = _is_truthy(os.getenv("TRUST_PROXY_XFF", "0"))
+    app.config["TRUST_PROXY_XFF"] = _is_truthy(os.getenv(hosting.PROXY_TRUST_ENV, "0"))
 
     # Rate limit de login
     app.config["LOGIN_MAX_ATTEMPTS"] = int(os.getenv("LOGIN_MAX_ATTEMPTS", "10"))
@@ -242,8 +267,9 @@ def create_app(
         "APP_BOOTSTRAP_ADMIN_PASSWORD", "" if is_production else "admin123"
     )
 
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    os.makedirs(app.config["DOCUMENTOS_ALUNOS_FOLDER"], exist_ok=True)
+    if not hosted:
+        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+        os.makedirs(app.config["DOCUMENTOS_ALUNOS_FOLDER"], exist_ok=True)
 
     # Compressão HTTP
     Compress(app)
@@ -401,6 +427,12 @@ def create_app(
         try:
             conn = get_db_connection()
             conn.execute("SELECT 1")
+            if hosted:
+                # Version skew between this code and the provisioned schema is a
+                # deployment fault; surface it here, not as random query errors.
+                from app.db_maintenance import get_schema_status
+
+                get_schema_status(conn)
             return jsonify({"status": "ok"})
         except Exception:
             # Evita vazar detalhes internos (paths/driver) no payload público
@@ -441,19 +473,35 @@ def create_app(
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     log_fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    try:
-        logs_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(project_root, "logs")
-        os.makedirs(logs_dir, exist_ok=True)
-        log_path = os.path.join(logs_dir, "app.log")
-        if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
-            rfh = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-            rfh.setFormatter(log_fmt)
-            logger.addHandler(rfh)
-    except Exception:
-        if not any(isinstance(handler, logging.StreamHandler) for handler in logger.handlers):
+    def _attach_stream_handler(target=logger, *, platform_stream=False):
+        # A file handler is a StreamHandler too.  Hosted, the console stream is
+        # what the platform captures, so only a non-file handler counts there;
+        # locally the historical rule (any stream handler) is kept.
+        if not any(
+            isinstance(handler, logging.StreamHandler)
+            and not (platform_stream and isinstance(handler, logging.FileHandler))
+            for handler in target.handlers
+        ):
             sh = logging.StreamHandler()
             sh.setFormatter(log_fmt)
-            logger.addHandler(sh)
+            target.addHandler(sh)
+
+    if hosted:
+        # Hosted logs go to the platform's stream capture, never only to a disk:
+        # the "app" channel here and the "main" channel most modules log on.
+        _attach_stream_handler(platform_stream=True)
+        _attach_stream_handler(logging.getLogger("main"), platform_stream=True)
+    else:
+        try:
+            logs_dir = (os.getenv("APP_LOG_DIR") or "").strip() or os.path.join(project_root, "logs")
+            os.makedirs(logs_dir, exist_ok=True)
+            log_path = os.path.join(logs_dir, "app.log")
+            if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
+                rfh = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+                rfh.setFormatter(log_fmt)
+                logger.addHandler(rfh)
+        except Exception:
+            _attach_stream_handler()
 
     try:
         app.teardown_appcontext(close_db_connection)
