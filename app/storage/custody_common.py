@@ -17,12 +17,13 @@ import datetime
 import re
 import secrets
 
-from app.prod1_storage_ddl import ERROR_CODE_MAX_LENGTH, LEASE_TOKEN_LENGTH
+from app.prod1_storage_ddl import DRIVE_ID_MAX_LENGTH, ERROR_CODE_MAX_LENGTH, LEASE_TOKEN_LENGTH
 
 UNCLASSIFIED_ERROR = "UNCLASSIFIED_ERROR"
 _UTC_TEXT_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 _CODE_RE = re.compile(rf"^[A-Z0-9_]{{1,{ERROR_CODE_MAX_LENGTH}}}$")
 _LEASE_RE = re.compile(rf"^[0-9a-f]{{{LEASE_TOKEN_LENGTH}}}$")
+_DRIVE_ID_RE = re.compile(rf"^[A-Za-z0-9_-]{{1,{DRIVE_ID_MAX_LENGTH}}}$")
 _FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -64,6 +65,11 @@ def require_lease_token(value) -> str:
     return value
 
 
+def is_drive_id(value) -> bool:
+    """A Google Drive file / folder id in the alphabet the v14 / v15 CHECKs accept."""
+    return isinstance(value, str) and bool(_DRIVE_ID_RE.fullmatch(value))
+
+
 def is_postgres(conn) -> bool:
     from app.db import database_engine
 
@@ -86,6 +92,7 @@ __all__ = [
     "CustodyError",
     "UNCLASSIFIED_ERROR",
     "add_seconds",
+    "is_drive_id",
     "is_postgres",
     "new_lease_token",
     "positive_limit",

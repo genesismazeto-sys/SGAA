@@ -95,7 +95,6 @@ UPLOAD_IN_PROGRESS_MESSAGE = (
 
 _HEX128 = re.compile(r"^[0-9a-f]{32}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_DRIVE_ID = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 
 def _now() -> str:
@@ -193,7 +192,7 @@ def is_replaceable(row) -> bool:
     if row["prior_provider"] is not None or row["cleanup_started_at"] is not None:
         return False
     if provider == "google":
-        return status == "active" and bool(_DRIVE_ID.fullmatch(str(row["remote_file_id"] or "")))
+        return status == "active" and custody_common.is_drive_id(row["remote_file_id"])
     if provider == "local_legacy":
         return (
             status == "legacy_active" and row["operation_key"] is None

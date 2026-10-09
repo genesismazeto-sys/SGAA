@@ -139,7 +139,7 @@ class CanonicalObjectStore(Protocol):
 # ---------------------------------------------------------------------------
 
 
-def verify_object(
+def read_verified(
     store: CanonicalObjectStore,
     bucket: str,
     key: str,
@@ -147,8 +147,8 @@ def verify_object(
     expected_size: int,
     expected_sha256: str,
     max_bytes: int,
-) -> VerifiedContent:
-    """Read the stored bytes (bounded) and prove size and SHA-256.
+) -> tuple[bytes, ObjectStat]:
+    """The stored bytes (bounded), proven to have the expected size and SHA-256.
 
     The provider's own metadata is never trusted for integrity: the bytes are
     hashed here.  Raises ``STORAGE_INTEGRITY_MISMATCH`` on any difference.
@@ -159,10 +159,25 @@ def verify_object(
     if stat.size_bytes != expected_size:
         raise CanonicalStoreError(STORAGE_INTEGRITY_MISMATCH, "size")
     content = store.read(bucket, key, max_bytes=max_bytes)
-    digest = hashlib.sha256(content).hexdigest()
-    if len(content) != expected_size or digest != expected_sha256:
+    if len(content) != expected_size or hashlib.sha256(content).hexdigest() != expected_sha256:
         raise CanonicalStoreError(STORAGE_INTEGRITY_MISMATCH, "content")
-    return VerifiedContent(len(content), digest, stat.mime_type)
+    return content, stat
+
+
+def verify_object(
+    store: CanonicalObjectStore,
+    bucket: str,
+    key: str,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+    max_bytes: int,
+) -> VerifiedContent:
+    """Prove a stored object's size and SHA-256 (see :func:`read_verified`)."""
+    content, stat = read_verified(
+        store, bucket, key, expected_size=expected_size, expected_sha256=expected_sha256, max_bytes=max_bytes
+    )
+    return VerifiedContent(len(content), expected_sha256, stat.mime_type)
 
 
 __all__ = [
@@ -181,5 +196,6 @@ __all__ = [
     "SignedDownload",
     "SignedUpload",
     "VerifiedContent",
+    "read_verified",
     "verify_object",
 ]

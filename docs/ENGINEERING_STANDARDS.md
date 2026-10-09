@@ -29,7 +29,7 @@ appending a change would make an owner worse, a proportional local refactor
 | SQLite file backup | `app/backup/` (`capability.py` decides whether it applies) |
 | RBAC requirements | `app/auth.py` (`get_admin_permission_requirement`, `classify_governed_admin_request`) |
 | User-facing messages | `utils/messages.py` (`flash`, `resolve_user_message`, `_iter_backend_files`) |
-| Storage | `app/storage/`, one module per concern: `contracts` (error hierarchy), `custody_common` (shared custody primitives), `upload_intents`, `mirror_outbox`, `object_store`, `supabase_store`, `google_drive`, `google_connection`, `request_documents`, `arquivo_documents` |
+| Storage | `app/storage/`, one module per concern: `contracts` (error hierarchy), `custody_common` (shared custody primitives), `upload_intents`, `mirror_outbox`, `object_store`, `supabase_store`, `google_drive`, `google_connection`, `request_documents`, `arquivo_documents`, `drive_mirror` (Drive mirror worker), `cli` (operator command line, `python -m app.storage.cli`; never imported by the web runtime) |
 
 Domain modules elsewhere in `app/` state their single responsibility in their
 module docstring.

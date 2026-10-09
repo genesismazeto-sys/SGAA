@@ -343,7 +343,7 @@ Open decisions (product or architecture): none.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | S4 mirror worker, recovery transitions, CLI `mirror-run` / `mirror-requeue` | `mirror_outbox`, `drive_mirror`, `cli`, ES §2, tests | T1–T4 green; E-PG1/E-PG2; I1–I3, I5 for the worker; R2 review | planned |
+| 1 | S4 mirror worker, recovery transitions, CLI `mirror-run` / `mirror-requeue` | `mirror_outbox`, `drive_mirror`, `cli`, ES §2, tests | T1–T4 green; E-PG1/E-PG2; I1–I3, I5 for the worker; R2 review | done |
 | 2 | Census and cross-check, `list_objects`, `describe_file`, mirror recovery, CLI `census` / `verify` | `storage_audit`, `supabase_store`, `google_drive`, `cli`, fake, tests | T1–T4; E-PG1; E-LIVE adapter probe; R2 review | planned |
 | 3 | Convergence, canonical-first runtime for converged rows, Path-B predicate, lock helpers, CLI `converge`; closure | `legacy_convergence`, `comprovantes`, `arquivos`, `arquivo_documents`, `app/db.py`, Path-B, `cli`, tests, governance | T1–T4; E-PG1/E-PG2; Path-B real-PG; E-LIVE rehearsal; R2 review; SPEC closure, PROJECT_STATE | planned |
 
@@ -384,7 +384,20 @@ Open decisions (product or architecture): none.
 
 ## 16. Amendments
 
-- none yet.
+- A1 2026-10-09 — D3 clarified. "Drive unavailability" means the OAuth credential or
+  the active account. A transport failure (timeout, reset) is transient and counts
+  toward the retry budget. Two further cases also hand the object back to `pending`
+  uncounted: a lease too close to expiry (`LEASE_SAFETY_MARGIN`, due at once) and an
+  active account that changed during the pass (`DRIVE_ACCOUNT_CHANGED`, the pass
+  stops, nothing is bound). Source: the R2 review. Not material.
+- A2 2026-10-09 — D5 clarified. An object retired while its copy is being written
+  keeps the copy and is recorded `synced`, because the record states what Drive
+  holds. No new copy of a retired object is ever started. Not material.
+- A3 2026-10-09 — Shared owners consolidated (§8):
+  - `object_store.read_verified` returns verified bytes; `verify_object` now uses it.
+  - `custody_common.is_drive_id` replaces the Drive-id pattern copied in
+    `arquivo_documents`.
+  Behaviour is preserved. Not material.
 
 ## 17. Closure
 

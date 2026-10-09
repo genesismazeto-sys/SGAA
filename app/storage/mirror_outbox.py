@@ -6,8 +6,9 @@ Drive a copy, tracked by ``drive_sync_state``:
     pending ──claim──> syncing ──complete_synced──> synced
        ^                 │  ├──mark_retry──> retry ──claim──> syncing
        │                 │  ├──mark_reconciliation_required──> reconciliation_required
-       └─mark_pending_disconnected (no Drive connection)        (operator decides)
-                         └──lease expires──> reclaimable by claim / release_expired_leases
+       ├─mark_pending_disconnected (no usable Drive)              │
+       │                 └──lease expires──> reclaimable by claim / release_expired_leases
+       └─────────── requeue_for_mirror (operator recovery) ───────┘
 
 LEASES AND FENCING
     A claim stamps a fresh random ``lease_token``, a ``lease_expires_at`` and
@@ -36,10 +37,11 @@ ACCOUNT IDENTITY
     credential means "Drive disconnected" (``mark_pending_disconnected``), never
     a problem of the canonical object.
 
-SCOPE (S2)
-    State machine and primitives only.  No Drive upload, no thread, no
-    scheduler, and no physical purge of a canonical object anywhere.  The
-    caller owns the transaction and commits.
+SCOPE
+    State machine and primitives only; the worker that drives them is
+    ``app.storage.drive_mirror``.  No thread, no scheduler, and no physical
+    purge of a canonical object anywhere.  The caller owns the transaction
+    and commits.
 """
 
 from __future__ import annotations
@@ -60,12 +62,14 @@ from app.storage.custody_common import (
 )
 
 MAX_CLAIM_BATCH = 100
+MAX_REQUEUE_BATCH = 1000
 DEFAULT_LEASE_SECONDS = 300
 MAX_LEASE_SECONDS = 3600
 DRIVE_NOT_CONNECTED = "DRIVE_NOT_CONNECTED"
 LEASE_EXPIRED = "LEASE_EXPIRED"
 MIRROR_LEASE_LOST = "MIRROR_LEASE_LOST"
 DRIVE_ACCOUNT_MISMATCH = "DRIVE_ACCOUNT_MISMATCH"
+OPERATOR_REQUEUED = "OPERATOR_REQUEUED"
 
 #: Rows a claimer may take at ``now``.  Retired objects are never mirrored anew.
 _DUE = (
@@ -77,13 +81,16 @@ _DUE = (
 
 _CLAIM_COLUMNS = (
     "id, drive_generation, lease_token, lease_expires_at, storage_bucket, storage_key, "
-    "sha256, size_bytes, mime_type, drive_file_id, drive_account_key"
+    "sha256, size_bytes, mime_type, drive_file_id, drive_account_key, drive_attempts"
 )
 
 
 @dataclass(frozen=True)
 class MirrorWork:
-    """One claimed object.  ``lease_token`` is internal worker state, not a secret."""
+    """One claimed object.  ``lease_token`` is internal worker state, not a secret.
+
+    ``attempts`` counts claims, this one included.
+    """
 
     object_id: int
     generation: int
@@ -96,6 +103,7 @@ class MirrorWork:
     mime_type: str
     drive_file_id: str | None
     drive_account_key: str | None
+    attempts: int
 
 
 def _lease_seconds(value) -> int:
@@ -141,6 +149,7 @@ def claim_due_mirror_work(
                     str(row[6]), int(row[7]), str(row[8]),
                     None if row[9] is None else str(row[9]),
                     None if row[10] is None else str(row[10]),
+                    int(row[11]),
                 )
             )
     return claimed
@@ -218,14 +227,21 @@ def mark_retry(
 
 
 def mark_pending_disconnected(
-    conn, *, object_id: int, lease_token: str, generation: int, next_attempt_at: str, now: str
+    conn, *, object_id: int, lease_token: str, generation: int, next_attempt_at: str, now: str,
+    code: str = DRIVE_NOT_CONNECTED,
 ) -> None:
-    """``syncing`` -> ``pending``: no Drive connection; wait, do not count as failure."""
+    """``syncing`` -> ``pending``: no usable Drive; wait, do not count as failure.
+
+    ``code`` says why (no connection, the bound account is not the active one,
+    the authorization failed mid-pass, the object was retired meanwhile).  The
+    claim's attempt is given back, so waiting never exhausts the retry budget.
+    """
     require_utc_text(next_attempt_at)
     _fenced_update(
         conn, object_id, lease_token, generation, now,
-        "drive_sync_state = 'pending', drive_last_error_code = ?, drive_next_attempt_at = ?",
-        (DRIVE_NOT_CONNECTED, next_attempt_at),
+        "drive_sync_state = 'pending', drive_last_error_code = ?, drive_next_attempt_at = ?,"
+        " drive_attempts = drive_attempts - 1",
+        (sanitize_error_code(code), next_attempt_at),
     )
 
 
@@ -266,6 +282,35 @@ def release_expired_leases(conn, *, now: str, limit: int) -> int:
         ).fetchone()
         released += row is not None
     return released
+
+
+def requeue_for_mirror(conn, *, now: str, limit: int, error_code: str | None = None) -> int:
+    """Operator recovery: active ``reconciliation_required`` -> ``pending``, attempts reset.
+
+    ``error_code`` restricts the batch to one failure class.  One conditional
+    UPDATE: a concurrent requeue or claim re-evaluates the state predicate, so
+    no object is requeued twice and no lease is ever touched.  The account
+    binding is kept: an object stays bound to the logical account it was
+    first mirrored to.
+    """
+    positive_limit(limit, MAX_REQUEUE_BATCH)
+    require_utc_text(now)
+    require_write_transaction(conn)
+    predicate = "drive_sync_state = 'reconciliation_required' AND lifecycle_state = 'active'"
+    params: tuple = ()
+    if error_code is not None:
+        if sanitize_error_code(error_code) != error_code:
+            raise ValueError("error_code must be a sanitized code")
+        predicate += " AND drive_last_error_code = ?"
+        params = (error_code,)
+    rows = conn.execute(
+        "UPDATE storage_objects SET drive_sync_state = 'pending', drive_attempts = 0,"
+        " drive_last_error_code = ?, drive_next_attempt_at = NULL"
+        f" WHERE id IN (SELECT id FROM storage_objects WHERE {predicate} ORDER BY id LIMIT ?)"
+        f" AND {predicate} RETURNING id",
+        (OPERATOR_REQUEUED, *params, limit, *params),
+    ).fetchall()
+    return len(rows)
 
 
 def retire_object(conn, *, object_id: int, now: str) -> None:
@@ -341,8 +386,10 @@ __all__ = [
     "DRIVE_NOT_CONNECTED",
     "LEASE_EXPIRED",
     "MAX_CLAIM_BATCH",
+    "MAX_REQUEUE_BATCH",
     "MIRROR_LEASE_LOST",
     "MirrorWork",
+    "OPERATOR_REQUEUED",
     "claim_due_mirror_work",
     "complete_synced",
     "mark_pending_disconnected",
@@ -352,5 +399,6 @@ __all__ = [
     "record_worker_finished",
     "record_worker_started",
     "release_expired_leases",
+    "requeue_for_mirror",
     "retire_object",
 ]
