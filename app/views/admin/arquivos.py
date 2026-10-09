@@ -25,17 +25,15 @@ from flask import (
 from app.admin_files import get_admin_arquivo
 from app.arquivos import (
     ArquivoError,
-    create_arquivo,
     delete_arquivo,
-    new_arquivo_operation_id,
     read_arquivo_content,
     remove_legacy_arquivo_file,
-    update_arquivo,
 )
 from app.auth import admin_required
 from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
 from app.sql_dialect import ascii_ci_like, format_date_ptbr, human_text_order
+from app.storage import arquivo_documents
 from app.text import human_text_contains, human_text_key
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -234,9 +232,8 @@ def admin_arquivos():
         "admin_arquivos.html",
         arquivos=arquivos,
         edit_arquivo=edit_arquivo,
-        arquivo_operation_id=(
-            request.args.get("operation_id") or new_arquivo_operation_id()
-        ),
+        # STORAGE S3-B: the direct-upload form's server-issued ARQUIVOS submission.
+        arquivos_submission_id=arquivo_documents.issue_submission(session, int(session["user_id"])),
         filter_schema=filter_schema,
     )
 
@@ -244,23 +241,20 @@ def admin_arquivos():
 @admin_required
 def admin_adicionar_arquivo():
     conn = get_db_connection()
-    operation_id = request.form.get("operation_key") or new_arquivo_operation_id()
     try:
-        create_arquivo(
+        # STORAGE S3-B: ONE verified canonical intent, never file bytes.
+        arquivo_documents.create_arquivo_from_intent(
             conn,
-            file_storage=request.files.get("arquivo"),
-            titulo=request.form.get("titulo"),
-            descricao=request.form.get("descricao"),
-            visivel=request.form.get("visivel", "1"),
-            uploader_user_id=int(session["user_id"]),
-            operation_key=operation_id,
-            max_file_bytes=int(current_app.config["MAX_CONTENT_LENGTH"]),
+            session,
+            actor_user_id=int(session["user_id"]),
+            form=request.form,
+            files=request.files,
         )
         flash("Arquivo cadastrado com sucesso.", "success")
         return _redirect_admin_arquivos_return()
     except ArquivoError as exc:
         flash(exc.user_message, "error")
-        return redirect(url_for("admin_arquivos", operation_id=operation_id))
+        return redirect(url_for("admin_arquivos"))
 
 
 @admin_required
@@ -275,15 +269,14 @@ def admin_editar_arquivo(arquivo_id):
         return redirect(url_for("admin_arquivos", edit_arquivo=arquivo_id))
 
     try:
-        cleanup_complete = update_arquivo(
+        # STORAGE S3-B: a verified canonical replacement intent, or metadata only.
+        cleanup_complete = arquivo_documents.edit_arquivo(
             conn,
+            session,
+            actor_user_id=int(session["user_id"]),
             arquivo_id=arquivo_id,
-            file_storage=request.files.get("arquivo"),
-            titulo=request.form.get("titulo"),
-            descricao=request.form.get("descricao"),
-            visivel=request.form.get("visivel", "1"),
-            uploader_user_id=int(session["user_id"]),
-            operation_key=request.form.get("operation_key"),
+            form=request.form,
+            files=request.files,
             max_file_bytes=int(current_app.config["MAX_CONTENT_LENGTH"]),
             upload_root=str(current_app.config["UPLOAD_FOLDER"]),
         )
@@ -294,13 +287,7 @@ def admin_editar_arquivo(arquivo_id):
         return _redirect_admin_arquivos_return()
     except ArquivoError as exc:
         flash(exc.user_message, "error")
-        return redirect(
-            url_for(
-                "admin_arquivos",
-                edit_arquivo=arquivo_id,
-                operation_id=request.form.get("operation_key") or new_arquivo_operation_id(),
-            )
-        )
+        return redirect(url_for("admin_arquivos", edit_arquivo=arquivo_id))
 
 
 @admin_required
@@ -310,6 +297,18 @@ def admin_visualizar_arquivo(arquivo_id):
     if not arquivo:
         flash("Arquivo não encontrado.", "error")
         return redirect(url_for("admin_arquivos"))
+    if arquivo_documents.is_canonical(arquivo):
+        # Canonical custody: a 60-second signed private URL, never proxied bytes.
+        try:
+            signed_url = arquivo_documents.canonical_download_url(conn, arquivo, download=False)
+        except ArquivoError as exc:
+            flash(exc.user_message, "error")
+            return redirect(url_for("admin_arquivos"))
+        response = redirect(signed_url, code=302)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
     try:
         content, mime_type, download_name = read_arquivo_content(
             conn,
@@ -341,11 +340,14 @@ def admin_deletar_arquivo(arquivo_id):
         return redirect(url_for("admin_arquivos"))
 
     try:
-        delete_arquivo(
-            conn,
-            arquivo_id,
-            upload_root=str(current_app.config["UPLOAD_FOLDER"]),
-        )
+        if arquivo_documents.is_canonical(arquivo):
+            arquivo_documents.delete_canonical_arquivo(conn, arquivo_id)
+        else:
+            delete_arquivo(
+                conn,
+                arquivo_id,
+                upload_root=str(current_app.config["UPLOAD_FOLDER"]),
+            )
         flash("Arquivo excluído com sucesso.", "success")
     except ArquivoError as exc:
         flash(exc.user_message, "error")

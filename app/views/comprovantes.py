@@ -13,6 +13,7 @@ from app.comprovantes import (
     resolve_google_storage,
 )
 from app.db import get_db_connection
+from app.storage import arquivo_documents
 from app.storage import request_documents as documents
 from app.storage.contracts import StorageError
 from app.storage.object_store import STORAGE_CONFIG_MISSING, CanonicalStoreError
@@ -156,10 +157,17 @@ def issue_upload_intent():
             {"error": "AUTHENTICATION_REQUIRED", "message": documents.AUTHENTICATION_REQUIRED_MESSAGE}, 401
         )
     conn = get_db_connection()
+    payload = request.get_json(silent=True)
     try:
-        capability = documents.issue_request_document(
-            conn, session, actor_user_id=actor, payload=request.get_json(silent=True)
-        )
+        # STORAGE S3-B: the same route serves admin ARQUIVOS, dispatched on purpose.
+        if isinstance(payload, dict) and payload.get("purpose") == arquivo_documents.PURPOSE:
+            capability = arquivo_documents.issue_arquivo_document(
+                conn, session, actor_user_id=actor, payload=payload
+            )
+        else:
+            capability = documents.issue_request_document(
+                conn, session, actor_user_id=actor, payload=payload
+            )
     except documents.RequestDocumentError as exc:
         return _document_error(exc)
     except CanonicalStoreError as exc:
@@ -177,7 +185,12 @@ def finalize_upload_intent(intent_id: str):
         )
     conn = get_db_connection()
     try:
-        state = documents.finalize_request_document(conn, actor_user_id=actor, intent_id=intent_id)
+        # An actor's own ARQUIVOS intent finalizes as ARQUIVOS; anything else
+        # (unknown or foreign) keeps the S3-A indistinguishable not-found.
+        if arquivo_documents.owns_arquivo_intent(conn, intent_id, actor):
+            state = arquivo_documents.finalize_arquivo_document(conn, actor_user_id=actor, intent_id=intent_id)
+        else:
+            state = documents.finalize_request_document(conn, actor_user_id=actor, intent_id=intent_id)
     except documents.RequestDocumentError as exc:
         return _document_error(exc)
     except CanonicalStoreError as exc:

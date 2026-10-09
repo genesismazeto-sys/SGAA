@@ -111,6 +111,119 @@ Tests: `tests/test_activity_version_consolidation.py`,
 0 AEU and 01.2026 = 27 AAC / 5 AEU, `integrity_check = ok`,
 `foreign_key_check` empty, contiguous `numero_versao` per base.
 
+## STORAGE S3-B — ADMIN ARQUIVOS canonical Supabase documents — IMPLEMENTED / QUALIFIED / READY_FOR_LANDING (2026-10-09)
+
+Candidate on parent `a9393bdf7cb2666fb75f0c1d5ea7fb6f7e5b5d77` (8 modified + 6
+new paths: `app/storage/arquivo_documents.py`, the S3-B / M1 suites and their
+support module); NOT YET COMMITTED / PUBLISHED.
+
+* NEW admin ARQUIVOS create / replace / read / delete paths are canonical
+  Supabase Storage. The S3-A signed-TUS machinery is reused, not copied:
+  `POST /storage/upload-intents` (purpose `admin_arquivo`) and `.../finalize`
+  dispatch on purpose; `mint_capability` / `finalize_intent` are shared, so
+  the comprovante behaviour and the signed-TUS transport contract are
+  unchanged. The browser uploads directly (6 MiB chunks, publishable
+  `apikey` + `x-signature`, no `Authorization`). The business form posts
+  metadata + `arquivos_submission_id` + ONE verified `arquivos_intent_ids`,
+  never file bytes (file parts refused).
+* Create: consume + canonical INSERT in one transaction (`provider='supabase'`,
+  `storage_status='active'`, `operation_key` = the consumed intent's
+  operation id). Read: canonical `storage_object_id` dispatch wins; admin
+  view and student view / download return a 60-second signed private 302
+  (no proxied bytes, no Google fallback; existing authorization unchanged).
+* Replace: a new immutable object key; the old canonical object is retired
+  (never overwritten, never physically purged). A legacy `google` / `active`
+  or `local_legacy` / `legacy_active` row may transition to canonical,
+  keeping `prior_provider` / `prior_locator` (legacy bytes untouched, S5).
+  The custody the row had at issue is bound to the intent in the signed
+  session (digest); stale custody is refused. Lock order: `admin_arquivos`
+  row, then target intents.
+* Delete: canonical delete retires the object and deletes the row (no
+  physical delete). EVERY replaceable target family (canonical, legacy
+  Google, legacy local) is gated by `arquivo_documents.lock_for_delete`:
+  refused while a target `admin_arquivo` intent is LIVE (issued / verified
+  AND `expires_at > now`); terminal or time-expired intents never block.
+* DRIVE_AVAILABILITY_MUST_NOT_BLOCK_ADMIN_ARQUIVOS_CANONICAL_OPERATION =
+  ACTIVE: new canonical create / replace / read / delete make no Google call
+  (proven with every Google entry point as a recording tripwire). Legacy-only
+  Google / local paths stay Drive-dependent until S5. No S4 worker.
+* Review history: the independent review accepted S3-B for live rehearsal and
+  reported a legacy-delete live-intent gap as NON_MATERIAL; the supervisor
+  elevated it to MATERIAL M1; it was corrected before landing (the shared
+  gate above, also used by the legacy deletion transition; replacement issue
+  re-checks the target under its row lock); the targeted independent recheck
+  accepted the correction. M1 CLOSED. No MATERIAL finding remains.
+* Focused qualification: S3-B SQLite 90/90; S3-B real PostgreSQL 6/6; M1
+  SQLite 8/8; M1 real PostgreSQL 5/5; affected legacy owner / guard
+  regression lane 116/116.
+* DEV-only LIVE REHEARSAL PASSED (54/54 checks) on DEV `sgaa-dev`
+  (`pkwtgqsiulzeqkqlsdou`); PROD `uckadhcwfknklmdktuyi` untouched. Ran the
+  candidate runtime against real DEV Storage with a disposable local
+  PostgreSQL 15 v15 business database, in a run-owned ephemeral PRIVATE bucket
+  (DEV had no persistent bucket). Proven: > 6 MiB signed TUS across the
+  6 MiB boundary; issue / finalize / attach; exact size / SHA-256 / MIME;
+  no-upsert; unsigned private access denied; admin and student signed reads
+  (inline and named attachment) byte-exact; immutable replacement with old
+  bytes retained; `local_legacy` -> canonical and (seeded) Google -> canonical;
+  canonical delete retires without application purge; M1 live smoke (legacy
+  delete refused during a verified replacement intent); zero Google calls;
+  leak audit clean. Afterwards the run-owned objects and bucket were deleted
+  and the disposable database dropped.
+* T5 (S3 milestone, TEP §5.1 G): the first attempt was stopped at about 94%
+  by the executor's memory-pressure reaper (class D, inadmissible); the one
+  authorized rerun completed: 4,952 tests -- 4,628 passed, 3 failed,
+  315 skipped, 6 collection errors, 0 xfailed, 0 xpassed, 4 warnings,
+  2,157.50 s. NOT green.
+  T5_QUALIFIED_WITH_KNOWN_BASELINE_NON_GREEN_AND_ONE_RESOLVED_TEST_INFRASTRUCTURE_FAILURE:
+  KNOWN_BASELINE_NON_GREEN = the six missing-`xlwt` collection errors,
+  `TestSentinelSurvival` (same gap) and the MX3 catalogue node (549 == 548);
+  `test_request_version_display_authority` `[canonical-v1-snapshot-v3]` =
+  TEST_INFRASTRUCTURE_NON_HERMETIC / NOT_CANDIDATE_OWNED: its raw `'v3' not
+  in outside` substring check matched the page's random CSRF token. An
+  isolated, deterministic diagnosis proved the mechanism (a pinned token
+  without `v3` passes, one with `v3` fails solely through the CSRF meta
+  tag); no full-suite rerun was required.
+* Final read-only invariant check: GREEN.
+* Accepted technical identities (recipe as in S3-A): tracked diff excluding
+  this file `ca05a9bd91028fff99aabe50a2a5b95cae71d9aad3fc72c983869b3d20f0410d`;
+  6-new-file manifest
+  `07ec298fe1c568fd2d3ac7d165f234b065fa38c1ffac0eb3c58543d14504189c`;
+  frozen RED (3 files)
+  `4a8c057a46cb33b3d1b71122f617443e1ffa9257711652bcb00ff16113afe96a`;
+  RED + M1 (5 files)
+  `e3a3eb0b0fc2fa2f47ab73df02d1ab87be9c30dea3edc74e9e609c7af9726e44`.
+* NON_MATERIAL / FUTURE_HARDENING: replacement-session bindings are never
+  pruned (pathological accumulation can overflow the cookie; fails closed);
+  custody binding is captured at intent issue; some stale / racing legacy
+  issue / delete paths return safe error responses; storage-domain user
+  messages are outside the current catalogue scanner; no live browser smoke
+  (no installed Playwright harness); the signed-redirect HTML body repeats
+  the URL already in `Location`; DEV has no persistent Storage bucket; the
+  request-version display test is non-hermetic (random CSRF substring).
+* Operational cleanup (not a candidate blocker): the DEV rehearsal credential
+  remains active outside the repository and should be revoked when no longer
+  needed.
+
+### STORAGE S3 — TECHNICALLY COMPLETE / QUALIFIED / AWAITING PUBLICATION (2026-10-09)
+
+S3-A (published `006a151`) + S3-B (above) complete STORAGE S3: request /
+comprovante documents and new ADMIN ARQUIVOS create / replace / read / delete
+are canonical Supabase; direct browser signed upload bypasses the application
+payload limit; canonical business success does not wait on Drive; canonical
+bytes are never deleted because of Drive / mirror state; legacy compatibility
+remains.
+
+* DRIVE_AVAILABILITY_MUST_NOT_BLOCK_REQUEST_SUBMISSION = ACTIVE.
+* DRIVE_AVAILABILITY_MUST_NOT_BLOCK_ADMIN_ARQUIVOS_CANONICAL_OPERATION = ACTIVE.
+* S3 closure becomes formal only after the final commit, a fast-forward push,
+  local == remote verification and post-publication custody. Not
+  CLOSED_AND_PUBLISHED yet.
+* Outstanding, NOT STARTED: S4 (Drive mirror worker / retries / scheduling);
+  S5 (legacy Google / local byte migration); S6 (storage cleanup / census /
+  backup closure); S7 (broader Vercel / serverless filesystem cleanup); S8
+  (production Supabase Storage / DR / cross-environment qualification).
+* HYBRID STORAGE: IN PROGRESS. NOT_READY_FOR_PRODUCTION_INTEGRATION.
+
 ## STORAGE S3-A — direct request documents — CLOSED_AND_PUBLISHED (2026-10-08)
 
 Published as `006a151be3abd9dbbc0d23585f5eb8ed56d0eb34` ("feat: add direct

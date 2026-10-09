@@ -214,9 +214,9 @@ def _intent_row(conn, intent_id, *, lock: bool = False):
     return intents._load(conn, intent_id, lock=lock)
 
 
-def _owned_intent(conn, intent_id, actor_user_id: int, *, lock: bool = False):
+def _owned_intent(conn, intent_id, actor_user_id: int, *, lock: bool = False, purpose: str = PURPOSE):
     intent = _intent_row(conn, intent_id, lock=lock)
-    if intent is None or intent.actor_user_id != int(actor_user_id) or intent.purpose != PURPOSE:
+    if intent is None or intent.actor_user_id != int(actor_user_id) or intent.purpose != purpose:
         raise RequestDocumentError("INTENT_NOT_FOUND", "Envio não encontrado.", 404)
     return intent
 
@@ -329,11 +329,18 @@ def issue_request_document(conn, session_obj, *, actor_user_id: int, payload) ->
                 "INTENT_OPERATION_CONFLICT", "Este envio já pertence a outro arquivo.", 409
             ) from None
         raise RequestDocumentError(exc.code, "Envio recusado.", 409) from None
+    return mint_capability(intent, endpoint=endpoint, apikey=apikey)
+
+
+def mint_capability(intent, *, endpoint: str, apikey: str) -> UploadCapability:
+    """The signed TUS capability for one ISSUED intent (shared by every purpose).
+
+    Called outside any transaction: the capability is minted, never stored.
+    """
     if intent.state != "issued":
         raise RequestDocumentError(
             "UPLOAD_ALREADY_FINALIZED", "Este arquivo já foi enviado.", 409, state=intent.state
         )
-    # Outside the transaction: the capability is minted, never stored.
     try:
         signed = canonical_store().create_signed_upload(intent.storage_bucket, intent.storage_key)
     except CanonicalStoreError as exc:
@@ -404,13 +411,27 @@ def _state_refusal(intent, now: str) -> RequestDocumentError | None:
 
 def finalize_request_document(conn, *, actor_user_id: int, intent_id) -> str:
     """Verify one uploaded object; returns ``'verified'`` (idempotent on replay)."""
-    intent = _owned_intent(conn, intent_id, actor_user_id)
+    return finalize_intent(
+        conn, actor_user_id=actor_user_id, intent_id=intent_id, purpose=PURPOSE,
+        authorize=lambda intent: _authorize_target(
+            conn, actor_user_id=actor_user_id, requisicao_id=intent.requisicao_id
+        ),
+    )
+
+
+def finalize_intent(conn, *, actor_user_id: int, intent_id, purpose: str, authorize) -> str:
+    """Bounded server-side verification of one intent of ``purpose``.
+
+    ``authorize(intent)`` re-runs the purpose's business authorization (it
+    raises ``RequestDocumentError`` to refuse).  Idempotent on replay.
+    """
+    intent = _owned_intent(conn, intent_id, actor_user_id, purpose=purpose)
     refusal = _state_refusal(intent, _now())
     if refusal is not None:
         raise refusal
     if intent.state == "verified":
         return "verified"
-    _authorize_target(conn, actor_user_id=actor_user_id, requisicao_id=intent.requisicao_id)
+    authorize(intent)
 
     store = canonical_store()
     try:
@@ -427,7 +448,7 @@ def finalize_request_document(conn, *, actor_user_id: int, intent_id) -> str:
     now = _now()
     try:
         with write_transaction(conn):
-            current = _owned_intent(conn, intent_id, actor_user_id, lock=True)
+            current = _owned_intent(conn, intent_id, actor_user_id, lock=True, purpose=purpose)
             if current.state == "verified" and current.expires_at > now:
                 return "verified"
             refusal = _state_refusal(current, now)
@@ -444,7 +465,7 @@ def finalize_request_document(conn, *, actor_user_id: int, intent_id) -> str:
             else:
                 intents.reject_intent(conn, intent_id=current.id, rejection_code=rejection, now=now)
     except CustodyError:
-        current = _owned_intent(conn, intent_id, actor_user_id)
+        current = _owned_intent(conn, intent_id, actor_user_id, purpose=purpose)
         if current.state == "verified" and current.expires_at > _now():
             return "verified"  # a parallel finalizer won the same transition
         raise _state_refusal(current, _now()) or RequestDocumentError(
@@ -626,11 +647,13 @@ __all__ = [
     "attach_request_documents",
     "canonical_download_url",
     "canonical_store",
+    "finalize_intent",
     "finalize_request_document",
     "find_completed_submission",
     "has_file_parts",
     "issue_request_document",
     "issue_submission",
+    "mint_capability",
     "submission_is_live",
     "submitted_intent_ids",
 ]

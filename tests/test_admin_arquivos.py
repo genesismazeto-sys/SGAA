@@ -11,7 +11,10 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
+from werkzeug.datastructures import FileStorage
+
 import main
+from app.arquivos import create_arquivo
 from tests.test_arquivos_google_drive import FakeManagedStorage, PDF
 from tests.session_support import stamp_auth_version
 
@@ -66,8 +69,13 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
         assert "/admin/arquivos/adicionar" in html
         assert "/admin/arquivos/0/editar" in html
         assert "/admin/arquivos/0/deletar" in html
-        assert re.search(r'name="operation_key" value="[^"]+"', html)
+        # STORAGE S3-B: the direct-upload form carries a server-issued ARQUIVOS
+        # submission; the legacy hidden operation_key is no longer authoritative.
+        assert re.search(r'name="arquivos_submission_id" value="[0-9a-f]{32}"', html)
+        assert 'name="operation_key"' not in html
 
+        # STORAGE S3-B: routed multipart file bytes are refused before any write
+        # (canonical create is covered by tests/test_storage_s3b_arquivos.py).
         create_response = client.post(
             "/admin/arquivos/adicionar",
             data={
@@ -82,6 +90,23 @@ def test_admin_arquivos_page_and_crud_flow(client, tmp_path):
         )
         assert create_response.status_code == 302
         assert create_response.headers["Location"].endswith("/admin/arquivos")
+        assert storage.upload_calls == []
+
+        # Legacy Google row (retained legacy helper, kept for S5): the edit /
+        # view / delete assertions below remain the legacy-row controls.
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            assert conn.execute("SELECT COUNT(*) FROM admin_arquivos WHERE titulo = ?", (titulo,)).fetchone()[0] == 0
+            create_arquivo(
+                conn,
+                file_storage=FileStorage(stream=io.BytesIO(PDF), filename="arquivo-admin.pdf"),
+                titulo=titulo,
+                descricao="Descricao inicial",
+                visivel=1,
+                uploader_user_id=1,
+                operation_key="admin-create-operation",
+                max_file_bytes=int(main.app.config["MAX_CONTENT_LENGTH"]),
+            )
 
         with main.app.app_context():
             conn = main.get_db_connection()

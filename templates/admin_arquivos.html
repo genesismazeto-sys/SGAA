@@ -165,10 +165,11 @@
       <button class="btn" id="admin-arquivo-modal-close" type="button" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
-      <form id="admin-arquivo-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_editar_arquivo', arquivo_id=edit_arquivo.id) if edit_arquivo else url_for('admin_adicionar_arquivo') }}" autocomplete="off">
+      {# STORAGE S3-B: the file goes straight to canonical storage (signed TUS); this form posts metadata + one verified intent id, never bytes. #}
+      <form id="admin-arquivo-form" method="post" action="{{ url_for('admin_editar_arquivo', arquivo_id=edit_arquivo.id) if edit_arquivo else url_for('admin_adicionar_arquivo') }}" autocomplete="off" data-direct-upload data-direct-upload-purpose="admin_arquivo" data-direct-upload-single data-direct-upload-submission-field="arquivos_submission_id" data-direct-upload-intent-field="arquivos_intent_ids"{% if edit_arquivo %} data-admin-arquivo-id="{{ edit_arquivo.id }}"{% endif %}>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.args.get('return_to', '') }}">
-        <input type="hidden" name="operation_key" value="{{ arquivo_operation_id }}">
+        <input type="hidden" name="arquivos_submission_id" value="{{ arquivos_submission_id }}">
         <div class="form-cards-narrow form-cards-narrow--gutter-compact">
           <div class="visibility-switch-row">
             <label class="toggle-switch toggle-switch--large" aria-label="Alternar visibilidade do arquivo">
@@ -183,10 +184,12 @@
             <label class="row-label">Arquivo</label>
             <div class="field-card file-card" data-file-card>
               <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
-              <input class="file-input" id="admin-arquivo-input" name="arquivo" type="file" accept=".pdf,.png,.jpg,.jpeg" aria-label="Arquivo" {% if not edit_arquivo %}required{% endif %}>
+              <input class="file-input" id="admin-arquivo-input" type="file" accept=".pdf,.png,.jpg,.jpeg" aria-label="Arquivo" data-direct-upload-input>
               <div class="control file-name" data-file-name>{% if edit_arquivo %}{{ edit_arquivo.original_filename }}{% else %}Nenhum arquivo selecionado{% endif %}</div>
               <div class="field-chip chip-right" title="{{ 'Substituir arquivo' if edit_arquivo else 'Anexar arquivo' }}"><i class="lucide" data-lucide="paperclip"></i><span>{{ 'Substituir' if edit_arquivo else 'Anexar' }}</span></div>
             </div>
+            <ul class="file-list" data-direct-upload-list aria-label="Arquivo em envio" aria-live="polite"></ul>
+            <p class="form-note" data-direct-upload-status role="status"></p>
           </div>
 
           <div class="form-row">
@@ -219,6 +222,8 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/tus-js-client-4.3.1.min.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
 <script>
   (function(){
     const toolbarQuery = window.createToolbarQueryHelpers();

@@ -18,6 +18,14 @@
  * removed.  No key of any kind lives here: the only credentials are the
  * short-lived signed upload token and the public publishable apikey the
  * server returns per file.  No Authorization header is ever sent.
+ *
+ * STORAGE S3-B: the same client serves admin ARQUIVOS.  A form opts in with
+ *   data-direct-upload-purpose="admin_arquivo"   (default: comprovante)
+ *   data-direct-upload-single                    (one file; a new pick replaces)
+ *   data-direct-upload-submission-field="..."    (default: comprovantes_submission_id)
+ *   data-direct-upload-intent-field="..."        (default: comprovantes_intent_ids)
+ *   data-admin-arquivo-id="<id>"                 (replacement target, sent as admin_arquivo_id)
+ * A form without these attributes behaves exactly as the S3-A comprovantes form.
  */
 (function () {
   'use strict';
@@ -66,8 +74,17 @@
     });
   }
 
+  function formAttr(form, name, fallback) {
+    var value = form.getAttribute(name);
+    return value === null || value === '' ? fallback : value;
+  }
+
   function DirectUploadForm(form) {
     this.form = form;
+    this.purpose = formAttr(form, 'data-direct-upload-purpose', 'comprovante');
+    this.single = form.hasAttribute('data-direct-upload-single');
+    this.submissionField = formAttr(form, 'data-direct-upload-submission-field', SUBMISSION_FIELD);
+    this.intentField = formAttr(form, 'data-direct-upload-intent-field', INTENT_FIELD);
     this.input = form.querySelector('input[type="file"][data-direct-upload-input]');
     this.list = form.querySelector('[data-direct-upload-list]');
     this.status = form.querySelector('[data-direct-upload-status]');
@@ -76,15 +93,17 @@
     this.input.disabled = false;
     this.input.addEventListener('change', this.onSelect.bind(this));
     form.addEventListener('submit', this.onSubmit.bind(this));
+    form.addEventListener('reset', this.onReset.bind(this));
     this.refresh();
   }
 
   DirectUploadForm.prototype.submissionId = function () {
-    var field = this.form.querySelector('input[name="' + SUBMISSION_FIELD + '"]');
+    var field = this.form.querySelector('input[name="' + this.submissionField + '"]');
     return field ? field.value : '';
   };
 
   DirectUploadForm.prototype.target = function () {
+    if (this.purpose === 'admin_arquivo') return this.form.getAttribute('data-admin-arquivo-id') || '';
     var explicit = this.form.getAttribute('data-requisicao-id');
     if (explicit) return explicit;
     var editTarget = this.form.querySelector('input[name="edit_target_id"]');
@@ -95,13 +114,26 @@
 
   DirectUploadForm.prototype.onSelect = function () {
     var files = Array.prototype.slice.call(this.input.files || []);
+    if (this.single) {
+      // One document per ARQUIVOS operation: a new pick replaces the previous one.
+      // The picker keeps its selection for the page's own file card; it has no
+      // name attribute, so a submit never carries its bytes.
+      if (!files.length) return;
+      this.entries = [];
+      files = files.slice(0, 1);
+    }
     for (var i = 0; i < files.length; i += 1) {
       // Every deliberate selection is a new slot; retries keep the same slot.
       var entry = { slot: newSlot(), file: files[i], state: 'pending', intentId: null, attempts: 0 };
       this.entries.push(entry);
       this.start(entry);
     }
-    this.input.value = '';
+    if (!this.single) this.input.value = '';
+    this.refresh();
+  };
+
+  DirectUploadForm.prototype.onReset = function () {
+    this.entries = [];
     this.refresh();
   };
 
@@ -115,7 +147,7 @@
     this.refresh();
     sha256(entry.file).then(function (digest) {
       var body = {
-        purpose: 'comprovante',
+        purpose: self.purpose,
         submission_id: self.submissionId(),
         upload_slot_id: entry.slot,
         filename: entry.file.name,
@@ -124,7 +156,8 @@
         sha256: digest
       };
       var target = self.target();
-      if (target) body.requisicao_id = parseInt(target, 10);
+      if (target && self.purpose === 'admin_arquivo') body.admin_arquivo_id = parseInt(target, 10);
+      else if (target) body.requisicao_id = parseInt(target, 10);
       return postJson(ISSUE_URL, body);
     }).then(function (result) {
       if (result.status === 409 && result.body.error === 'UPLOAD_ALREADY_RECEIVED' && result.body.intent_id) {
@@ -223,14 +256,15 @@
 
   DirectUploadForm.prototype.syncHiddenFields = function () {
     var form = this.form;
-    Array.prototype.forEach.call(form.querySelectorAll('input[name="' + INTENT_FIELD + '"]'), function (node) {
+    var intentField = this.intentField;
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="' + intentField + '"]'), function (node) {
       node.parentNode.removeChild(node);
     });
     this.entries.forEach(function (entry) {
       if (entry.state !== 'verified' || !entry.intentId) return;
       var hidden = document.createElement('input');
       hidden.type = 'hidden';
-      hidden.name = INTENT_FIELD;
+      hidden.name = intentField;
       hidden.value = entry.intentId;
       form.appendChild(hidden);
     });
@@ -240,7 +274,13 @@
     var self = this;
     this.syncHiddenFields();
     var blocked = this.unresolved();
-    Array.prototype.forEach.call(this.form.querySelectorAll('button[type="submit"], input[type="submit"]'), function (button) {
+    var submitters = Array.prototype.slice.call(this.form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+    if (this.form.id) {
+      // Submit buttons associated through form="<id>" (e.g. a modal footer).
+      submitters = submitters.concat(Array.prototype.slice.call(
+        document.querySelectorAll('button[type="submit"][form="' + this.form.id + '"]')));
+    }
+    submitters.forEach(function (button) {
       if (blocked) {
         button.setAttribute('data-direct-upload-blocked', '1');
         button.disabled = true;
@@ -250,7 +290,9 @@
       }
     });
     if (this.status) {
-      this.status.textContent = blocked ? 'Aguarde a conclusão do envio dos comprovantes.' : '';
+      this.status.textContent = !blocked ? ''
+        : (this.purpose === 'admin_arquivo' ? 'Aguarde a conclusão do envio do arquivo.'
+          : 'Aguarde a conclusão do envio dos comprovantes.');
     }
     if (!this.list) return;
     // Each entry owns ONE stable list item, updated in place: re-rendering on
@@ -278,7 +320,7 @@
         drop.type = 'button';
         drop.className = 'file-list-remove';
         drop.textContent = 'Remover';
-        drop.setAttribute('aria-label', 'Remover comprovante ' + entry.file.name);
+        drop.setAttribute('aria-label', (self.purpose === 'admin_arquivo' ? 'Remover arquivo ' : 'Remover comprovante ') + entry.file.name);
         drop.addEventListener('click', function () { self.remove(entry); });
         entry.node.appendChild(drop);
         self.list.appendChild(entry.node);

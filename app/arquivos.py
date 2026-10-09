@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from flask import current_app
 from werkzeug.utils import secure_filename
 
-from app.db import classify_database_error
+from app.db import classify_database_error, write_transaction
 from app.file_validation import MIME_BY_EXTENSION, detect_supported_mime
 from app.storage.contracts import (
     ManagedObjectStorage,
@@ -589,6 +589,24 @@ def _delete_locatorless_google_row(conn, row) -> bool:
     return False
 
 
+def _enter_deletion_pending(conn, arquivo_id: int) -> None:
+    """The legacy deletion transition, behind the S3-B live-target-intent gate.
+
+    One write transaction (no network I/O): lock the row, refuse while a LIVE
+    replacement intent targets it, enter ``deletion_pending``.  Once committed
+    the row is no longer replaceable, so no new target intent can be issued;
+    the Drive / local cleanup runs after the commit, as before.
+    """
+    from app.storage import arquivo_documents  # lazy: arquivo_documents imports this module
+
+    with write_transaction(conn):
+        arquivo_documents.lock_for_delete(conn, arquivo_id)
+        conn.execute(
+            "UPDATE admin_arquivos SET storage_status='deletion_pending',failure_code=NULL,cleanup_started_at=? WHERE id=?",
+            (_utc_now(), int(arquivo_id)),
+        )
+
+
 def delete_arquivo(conn, arquivo_id: int, *, upload_root: str) -> None:
     row = conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
     if not row:
@@ -608,11 +626,7 @@ def delete_arquivo(conn, arquivo_id: int, *, upload_root: str) -> None:
             return
         row = conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
     if row["storage_status"] != "deletion_pending":
-        conn.execute(
-            "UPDATE admin_arquivos SET storage_status='deletion_pending',failure_code=NULL,cleanup_started_at=? WHERE id=?",
-            (_utc_now(), int(arquivo_id)),
-        )
-        conn.commit()
+        _enter_deletion_pending(conn, arquivo_id)
         row = conn.execute("SELECT * FROM admin_arquivos WHERE id=?", (int(arquivo_id),)).fetchone()
     provider = str(row["provider"])
     locator = str(row["remote_file_id"] if provider == "google" else row["filename"])
