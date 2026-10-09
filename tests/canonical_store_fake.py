@@ -26,9 +26,11 @@ from app.storage.object_store import (
     STORAGE_ALREADY_EXISTS,
     STORAGE_AUTH_FAILURE,
     STORAGE_INVALID_LOCATOR,
+    STORAGE_INVALID_RESPONSE,
     STORAGE_OBJECT_MISSING,
     STORAGE_OBJECT_TOO_LARGE,
     CanonicalStoreError,
+    ListedObject,
     ObjectStat,
     SignedDownload,
     SignedUpload,
@@ -131,6 +133,17 @@ class InMemoryObjectStore:
         check_locator(bucket, key)
         if self.objects.pop((bucket, key), None) is None:
             raise CanonicalStoreError(STORAGE_OBJECT_MISSING)
+
+    def list_objects(self, bucket: str, prefix: str = "", *, max_objects: int) -> list[ListedObject]:
+        self._enter("list_objects")
+        folder = str(prefix or "").strip("/")
+        found = [
+            ListedObject(key, len(content)) for (owner, key), (content, _mime) in sorted(self.objects.items())
+            if owner == bucket and (not folder or key.startswith(folder + "/"))
+        ]
+        if len(found) > max_objects:
+            raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "listing_bound")
+        return found
 
 
 __all__ = ["InMemoryObjectStore"]

@@ -8,6 +8,7 @@ Documented Storage REST surface only (``<SUPABASE_URL>/storage/v1``):
     GET    /object/authenticated/{bucket}/{key} server-side bounded read
     POST   /object/{bucket}/{key}               operator/worker upload (x-upsert: false)
     DELETE /object/{bucket}/{key}               remove one object
+    POST   /object/list/{bucket}                one folder level of a listing (paged)
 
 CONFIGURATION IS LAZY
     Nothing reads ``SUPABASE_URL`` / ``SUPABASE_SECRET_KEY`` /
@@ -59,6 +60,7 @@ from app.storage.object_store import (
     STORAGE_OBJECT_TOO_LARGE,
     STORAGE_PROVIDER_UNAVAILABLE,
     CanonicalStoreError,
+    ListedObject,
     ObjectStat,
     SignedDownload,
     SignedUpload,
@@ -80,6 +82,10 @@ TUS_CHUNK_BYTES = 6 * 1024 * 1024
 RESUMABLE_PATH = "/storage/v1/upload/resumable/sign"
 _HOSTED_SUFFIX = ".supabase.co"
 _READ_CHUNK = 64 * 1024
+#: One listing page; the service lists one folder level per request.
+LIST_PAGE_SIZE = 100
+LIST_MAX_DEPTH = 8
+LIST_MAX_REQUESTS = 20_000
 
 _BUCKET_RE = re.compile(rf"^[a-z0-9._-]{{1,{STORAGE_BUCKET_MAX_LENGTH}}}$")
 _KEY_RE = re.compile(rf"^[A-Za-z0-9_.-][A-Za-z0-9/_.-]{{0,{STORAGE_KEY_MAX_LENGTH - 1}}}$")
@@ -436,9 +442,69 @@ class SupabaseObjectStore:
         response = self._request("DELETE", self._endpoint("object", bucket, key))
         _raise_for(response)
 
+    def list_objects(self, bucket: str, prefix: str = "", *, max_objects: int) -> list[ListedObject]:
+        """Every object under ``prefix``, walking folders depth-first; bounded.
+
+        The service lists ONE folder level per request: an entry without an
+        ``id`` is a folder.  Keys are returned as stored, never validated
+        against the application alphabet -- a foreign object is exactly what
+        the cross-check must see.  A folder is read until an EMPTY page, so
+        a service that returns shorter pages than asked never truncates it.
+        Exceeding ``max_objects``, ``LIST_MAX_DEPTH`` or ``LIST_MAX_REQUESTS``
+        raises ``STORAGE_INVALID_RESPONSE`` instead of returning a silently
+        truncated listing.
+        """
+        if not isinstance(bucket, str) or not _BUCKET_RE.fullmatch(bucket):
+            raise CanonicalStoreError(STORAGE_INVALID_LOCATOR, "bucket")
+        if isinstance(max_objects, bool) or not isinstance(max_objects, int) or max_objects <= 0:
+            raise ValueError("max_objects must be a positive integer")
+        found: list[ListedObject] = []
+        folders = [(str(prefix or "").strip("/"), 0)]
+        url = f"{self._config.url}/storage/v1/object/list/{quote(bucket, safe='')}"
+        requests_made = 0
+        while folders:
+            folder, depth = folders.pop()
+            if depth > LIST_MAX_DEPTH:
+                raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "listing_depth")
+            offset = 0
+            while True:
+                requests_made += 1
+                if requests_made > LIST_MAX_REQUESTS:
+                    raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "listing_requests")
+                response = self._request("POST", url, json={
+                    "prefix": folder, "limit": LIST_PAGE_SIZE, "offset": offset,
+                    "sortBy": {"column": "name", "order": "asc"},
+                })
+                _raise_for(response)
+                try:
+                    entries = response.json()
+                except ValueError:
+                    raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "json") from None
+                if not isinstance(entries, list):
+                    raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "json")
+                for entry in entries:
+                    name = entry.get("name") if isinstance(entry, dict) else None
+                    if not isinstance(name, str) or not name or "/" in name:
+                        raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "listing_entry")
+                    key = f"{folder}/{name}" if folder else name
+                    if entry.get("id") is None:
+                        folders.append((key, depth + 1))
+                        continue
+                    metadata = entry.get("metadata")
+                    size = metadata.get("size") if isinstance(metadata, dict) else None
+                    valid = isinstance(size, int) and not isinstance(size, bool)
+                    found.append(ListedObject(key, size if valid else None))
+                    if len(found) > max_objects:
+                        raise CanonicalStoreError(STORAGE_INVALID_RESPONSE, "listing_bound")
+                if not entries:
+                    break
+                offset += len(entries)
+        return found
+
 
 __all__ = [
     "HTTP_TIMEOUT",
+    "LIST_PAGE_SIZE",
     "PUBLISHABLE_KEY_PREFIX",
     "RESUMABLE_PATH",
     "SECRET_KEY_PREFIX",

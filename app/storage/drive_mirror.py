@@ -106,8 +106,8 @@ BACKOFF_BASE_SECONDS = 60
 BACKOFF_CAP_SECONDS = 6 * 60 * 60
 #: A pass that cannot use Drive or the canonical store retries its objects later.
 UNAVAILABLE_DELAY_SECONDS = 5 * 60
-#: An object whose lease ends sooner than this is left alone (it expires and
-#: is reclaimed); a provider call is never started on a nearly lost lease.
+#: An object whose lease ends sooner than this is handed back to ``pending``
+#: at once: a provider call is never started on a nearly lost lease.
 LEASE_SAFETY_SECONDS = 60
 
 RESULT_OK = "OK"
@@ -142,7 +142,7 @@ class ActiveDrive:
 
     storage: object
     account_key: str
-    account_id: int = 0
+    account_id: int
 
     def __repr__(self) -> str:
         return "ActiveDrive(account_key=<bound>)"
@@ -449,8 +449,6 @@ def run_mirror_pass(
     *,
     limit: int = DEFAULT_BATCH,
     lease_seconds: int = outbox.DEFAULT_LEASE_SECONDS,
-    store=None,
-    drive: ActiveDrive | None = None,
 ) -> MirrorPassResult:
     """Run ONE bounded mirror pass; see the module docstring.
 
@@ -463,7 +461,7 @@ def run_mirror_pass(
         raise ValueError(f"lease_seconds must be {LEASE_SAFETY_SECONDS + 1}..{outbox.MAX_LEASE_SECONDS}")
     with write_transaction(conn):
         outbox.record_worker_started(conn, now=_now())
-    result = _pass(conn, limit=limit, lease_seconds=lease_seconds, store=store, drive=drive)
+    result = _pass(conn, limit=limit, lease_seconds=lease_seconds)
     with write_transaction(conn):
         outbox.record_worker_finished(
             conn, now=_now(), result_code=result.result_code, claimed=result.claimed,
@@ -473,20 +471,18 @@ def run_mirror_pass(
     return result
 
 
-def _pass(conn, *, limit: int, lease_seconds: int, store, drive: ActiveDrive | None) -> MirrorPassResult:
+def _pass(conn, *, limit: int, lease_seconds: int) -> MirrorPassResult:
     result = MirrorPassResult()
-    if store is None:
-        try:
-            store = request_documents.canonical_store()
-        except CanonicalStoreError as exc:
-            result.result_code = exc.code
-            return result
-    if drive is None:
-        try:
-            drive = active_drive(conn)
-        except DriveUnavailable as exc:
-            result.result_code = exc.code
-            return result
+    try:
+        store = request_documents.canonical_store()
+    except CanonicalStoreError as exc:
+        result.result_code = exc.code
+        return result
+    try:
+        drive = active_drive(conn)
+    except DriveUnavailable as exc:
+        result.result_code = exc.code
+        return result
     with write_transaction(conn):
         now = _now()
         result.released = outbox.release_expired_leases(conn, now=now, limit=outbox.MAX_CLAIM_BATCH)

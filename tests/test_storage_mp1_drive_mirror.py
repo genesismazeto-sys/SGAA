@@ -261,7 +261,7 @@ def test_stale_worker_loses_its_lease_and_the_new_owner_completes(env):
     assert object_state(env.conn, object_id)["state"] == "synced"
 
 
-def test_nearly_expired_lease_is_left_to_expire(env):
+def test_nearly_expired_lease_is_handed_back_at_once(env):
     seed_canonical_request_document(env.conn, env.store, key=REQ_KEY, content=PDF, operation_key="op-a")
     seed_canonical_request_document(env.conn, env.store, key=EXTRA_KEY, content=PDF + b"x", operation_key="op-b")
     _commit(env.conn)

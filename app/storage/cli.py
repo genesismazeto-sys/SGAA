@@ -5,6 +5,9 @@ stderr; no secret, URL, locator, file name or person data is ever printed):
 
     mirror-run       run bounded Drive mirror passes (``app.storage.drive_mirror``)
     mirror-requeue   operator recovery: ``reconciliation_required`` -> ``pending``
+    census           custody-class counts (``app.storage.storage_audit``)
+    verify           the convergence cross-check of database references,
+                     canonical objects, the bucket and (``--drive``) Drive mirrors
 
 The commands run under an application context of ``create_app()`` -- the
 ``python -m app.backup.sync`` precedent -- and never under a request.  This
@@ -15,6 +18,7 @@ Exit codes:
     1  runtime failure after the application started
     2  usage error or application startup failure
     3  not runnable: the canonical store or the Drive connection is unavailable
+    4  verify: a check failed (not converged, unclean bucket or unverified mirrors)
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ EXIT_OK = 0
 EXIT_RUNTIME_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_NOT_RUNNABLE = 3
+EXIT_NOT_CONVERGED = 4
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +69,16 @@ def _parser() -> argparse.ArgumentParser:
     requeue = commands.add_parser("mirror-requeue", help="requeue reconciliation_required objects")
     requeue.add_argument("--code", default=None, help="only objects whose last error has this code")
     requeue.add_argument("--limit", type=_bounded_int(1, mirror_outbox.MAX_REQUEUE_BATCH), default=100)
+
+    commands.add_parser("census", help="value-free custody-class counts")
+
+    verify = commands.add_parser("verify", help="the convergence cross-check")
+    verify.add_argument("--deep", action="store_true", help="hash every canonical object's bytes")
+    verify.add_argument("--no-listing", action="store_true", help="skip the bucket listing")
+    verify.add_argument("--drive", action="store_true", help="verify synced Drive mirrors (needs Drive)")
+    verify.add_argument("--requeue-missing-mirrors", action="store_true",
+                        help="with --drive: send missing / divergent mirrors back to pending")
+    verify.add_argument("--show-ids", action="store_true", help="list integer ids per discrepancy class")
     return parser
 
 
@@ -95,9 +110,48 @@ def _mirror_requeue(conn, args) -> tuple[int, dict]:
     return EXIT_OK, {"requeued": count}
 
 
+def _census(conn, args) -> tuple[int, dict]:
+    from app.storage import storage_audit
+
+    return EXIT_OK, storage_audit.census(conn)
+
+
+def _verify(conn, args) -> tuple[int, dict]:
+    from app.storage import drive_mirror
+    from app.storage import request_documents
+    from app.storage import storage_audit
+    from app.storage.object_store import CanonicalStoreError
+
+    if args.requeue_missing_mirrors and not args.drive:
+        raise _UsageError("--requeue-missing-mirrors needs --drive")
+    try:
+        store = request_documents.canonical_store()
+    except CanonicalStoreError as exc:
+        return EXIT_NOT_RUNNABLE, {"result_code": exc.code}
+    # The configured bucket is listed even when the database names none.
+    buckets = (store.bucket,) if getattr(store, "bucket", None) else ()
+    drive = None
+    if args.drive:
+        try:
+            drive = drive_mirror.active_drive(conn)
+        except drive_mirror.DriveUnavailable as exc:
+            return EXIT_NOT_RUNNABLE, {"result_code": exc.code}
+    report = storage_audit.cross_check(
+        conn, store=store, deep=args.deep, listing=not args.no_listing, buckets=buckets, drive=drive,
+        requeue_missing_mirrors=args.requeue_missing_mirrors, show_ids=args.show_ids,
+    )
+    verdict = report["verdict"]
+    clean = verdict["converged"] and verdict["bucket_clean"] is not False
+    if args.drive:
+        clean = clean and verdict["mirrors_verified"] is True and verdict["mirror_complete"]
+    return (EXIT_OK if clean else EXIT_NOT_CONVERGED), report
+
+
 _COMMANDS = {
     "mirror-run": _mirror_run,
     "mirror-requeue": _mirror_requeue,
+    "census": _census,
+    "verify": _verify,
 }
 
 
@@ -139,7 +193,7 @@ def main(argv=None, *, app=None, out=None) -> int:
     return code
 
 
-__all__ = ["EXIT_NOT_RUNNABLE", "EXIT_OK", "EXIT_RUNTIME_FAILURE", "EXIT_USAGE", "main"]
+__all__ = ["EXIT_NOT_CONVERGED", "EXIT_NOT_RUNNABLE", "EXIT_OK", "EXIT_RUNTIME_FAILURE", "EXIT_USAGE", "main"]
 
 
 if __name__ == "__main__":

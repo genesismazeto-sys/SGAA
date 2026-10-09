@@ -38,10 +38,10 @@ def _hits(name: str) -> set[str]:
     return {member for member in BACKGROUND if name == member or name.startswith(member + ".")}
 
 
-def background_imports(source: str, module: str = "") -> set[str]:
+def background_imports(source: str, module: str = "", *, is_package: bool = False) -> set[str]:
     """Every BACKGROUND module a source (``module``, for relative imports) reaches."""
     found = set()
-    package = module.rsplit(".", 1)[0] if module else ""
+    package = module if is_package else (module.rsplit(".", 1)[0] if module else "")
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -72,7 +72,8 @@ def test_no_runtime_module_imports_a_storage_background_tool():
     offenders = {
         str(path.relative_to(ROOT)): sorted(found)
         for path in _runtime_sources()
-        if (found := background_imports(path.read_text(encoding="utf-8-sig"), _module_name(path)))
+        if (found := background_imports(path.read_text(encoding="utf-8-sig"), _module_name(path),
+                                        is_package=path.name == "__init__.py"))
     }
     assert offenders == {}
 
@@ -90,6 +91,8 @@ def test_scanner_negative_control_detects_every_import_form():
         ("importlib.import_module('app.storage.drive_mirror')", ""),
     ):
         assert background_imports(source, module), source
+    assert background_imports("from . import drive_mirror", "app.storage", is_package=True)
+    assert background_imports("from .storage import cli", "app", is_package=True)
     for source, module in (
         ("from app.storage import mirror_outbox, request_documents", ""),
         ("from app.storage.drive_mirrors import x", ""),

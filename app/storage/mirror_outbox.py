@@ -8,7 +8,8 @@ Drive a copy, tracked by ``drive_sync_state``:
        │                 │  ├──mark_reconciliation_required──> reconciliation_required
        ├─mark_pending_disconnected (no usable Drive)              │
        │                 └──lease expires──> reclaimable by claim / release_expired_leases
-       └─────────── requeue_for_mirror (operator recovery) ───────┘
+       ├─────────── requeue_for_mirror (operator recovery) ───────┘
+       └─reset_missing_mirror── synced  (the Drive copy is gone or divergent)
 
 LEASES AND FENCING
     A claim stamps a fresh random ``lease_token``, a ``lease_expires_at`` and
@@ -313,6 +314,29 @@ def requeue_for_mirror(conn, *, now: str, limit: int, error_code: str | None = N
     return len(rows)
 
 
+def reset_missing_mirror(conn, *, object_id: int, drive_file_id: str, error_code: str, now: str) -> int:
+    """Mirror recovery: ``synced`` -> ``pending`` when the recorded Drive copy is gone or divergent.
+
+    Conditional on the object still being active, ``synced`` and recorded with
+    exactly ``drive_file_id`` -- a concurrently re-mirrored or retired object
+    is left alone (returns 0).  The Drive file reference is cleared, attempts
+    reset; the logical account binding is kept, so the copy is recreated in
+    the same account.
+    """
+    require_utc_text(now)
+    require_write_transaction(conn)
+    if sanitize_error_code(error_code) != error_code:
+        raise ValueError("error_code must be a sanitized code")
+    rows = conn.execute(
+        "UPDATE storage_objects SET drive_sync_state = 'pending', drive_file_id = NULL, drive_parent_id = NULL,"
+        " drive_synced_at = NULL, drive_attempts = 0, drive_last_error_code = ?, drive_next_attempt_at = NULL"
+        " WHERE id = ? AND drive_sync_state = 'synced' AND drive_file_id = ? AND lifecycle_state = 'active'"
+        " RETURNING id",
+        (error_code, int(object_id), str(drive_file_id)),
+    ).fetchall()
+    return len(rows)
+
+
 def retire_object(conn, *, object_id: int, now: str) -> None:
     """Lifecycle state only: ``active`` -> ``retired``.  Nothing is purged.
 
@@ -400,5 +424,6 @@ __all__ = [
     "record_worker_started",
     "release_expired_leases",
     "requeue_for_mirror",
+    "reset_missing_mirror",
     "retire_object",
 ]

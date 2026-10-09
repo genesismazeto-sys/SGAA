@@ -344,7 +344,7 @@ Open decisions (product or architecture): none.
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
 | 1 | S4 mirror worker, recovery transitions, CLI `mirror-run` / `mirror-requeue` | `mirror_outbox`, `drive_mirror`, `cli`, ES §2, tests | T1–T4 green; E-PG1/E-PG2; I1–I3, I5 for the worker; R2 review | done |
-| 2 | Census and cross-check, `list_objects`, `describe_file`, mirror recovery, CLI `census` / `verify` | `storage_audit`, `supabase_store`, `google_drive`, `cli`, fake, tests | T1–T4; E-PG1; E-LIVE adapter probe; R2 review | planned |
+| 2 | Census and cross-check, `list_objects`, `describe_file`, mirror recovery, CLI `census` / `verify` | `storage_audit`, `supabase_store`, `google_drive`, `cli`, fake, tests | T1–T4; E-PG1; E-LIVE adapter probe; R2 review | done |
 | 3 | Convergence, canonical-first runtime for converged rows, Path-B predicate, lock helpers, CLI `converge`; closure | `legacy_convergence`, `comprovantes`, `arquivos`, `arquivo_documents`, `app/db.py`, Path-B, `cli`, tests, governance | T1–T4; E-PG1/E-PG2; Path-B real-PG; E-LIVE rehearsal; R2 review; SPEC closure, PROJECT_STATE | planned |
 
 ## 13. Acceptance criteria
@@ -381,6 +381,11 @@ Open decisions (product or architecture): none.
   the census.
 - Google live proof of `describe_file` and of a live mirror pass (D15).
 - Purge of unreferenced bucket objects and of retired objects (MP-4).
+- `converged` stays false while terminal legacy rows exist (trashed, failed, in
+  reconciliation). This fails closed; MP-3 decides how to classify or remediate
+  them before cutover.
+- The eligibility rule is a state rule. A locator outside the legal alphabet is
+  classified when convergence reads the row, so an eligible count is an upper bound.
 
 ## 16. Amendments
 
@@ -398,6 +403,16 @@ Open decisions (product or architecture): none.
   - `custody_common.is_drive_id` replaces the Drive-id pattern copied in
     `arquivo_documents`.
   Behaviour is preserved. Not material.
+- A4 2026-10-09 — The D11 verdict is refined after the slice-2 R2 review:
+  - `mirrors_verified` is True only when every synced mirror was verified intact,
+    False on any failed check, and None when some mirror belongs to another account.
+  - A database-only `mirror_complete` reports whether there is a mirror backlog.
+  - `verify` exits 4 unless converged with a clean bucket; with `--drive` it also
+    needs `mirrors_verified` True and `mirror_complete`.
+  - A missing or divergent mirror is not trusted after the active account changed.
+  - The provider -> origin rule now lives in `legacy_convergence` (one owner).
+  - The listing reads each folder to an empty page and bounds its requests.
+  Not material.
 
 ## 17. Closure
 

@@ -77,6 +77,9 @@ class ManagedObjectStorage(Protocol):
 
     def download(self, file_id: str) -> bytes: ...
 
+    def describe_file(self, file_id: str) -> RemoteObject | None:
+        """Metadata of one file; ``None`` when it does not exist or is trashed."""
+
 
 class ComprovanteStorage(Protocol):
     provider: str

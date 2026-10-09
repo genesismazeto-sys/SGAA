@@ -341,6 +341,28 @@ class GoogleDriveManagedObjectStorage:
     def untrash(self, file_id: str) -> None:
         self._set_trashed(file_id, False)
 
+    def describe_file(self, file_id: str) -> RemoteObject | None:
+        """Metadata of one file (``files.get``); ``None`` when missing (404) or trashed."""
+
+        def get_once():
+            request = self._service.files().get(
+                fileId=str(file_id), fields=FILE_FIELDS, supportsAllDrives=True
+            )
+            try:
+                return request.execute(num_retries=0)
+            except HttpError as exc:
+                if self._status(exc) == 404:
+                    return None
+                raise
+
+        payload = self._with_auth_recovery(lambda: self._retry(get_once))
+        if payload is None or (isinstance(payload, dict) and payload.get("trashed")):
+            return None
+        if not isinstance(payload, dict) or str(payload.get("id") or "") != str(file_id):
+            raise StorageError("O Google Drive retornou uma resposta inesperada.")
+        parents = payload.get("parents") or [""]
+        return self._remote_object(payload, str(parents[0]), reused=True)
+
     def download(self, file_id: str) -> bytes:
         def download_once():
             target = io.BytesIO()

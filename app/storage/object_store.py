@@ -101,6 +101,14 @@ class ObjectStat:
 
 
 @dataclass(frozen=True)
+class ListedObject:
+    """One object of a bucket listing: its key and, when reported, its size."""
+
+    key: str
+    size_bytes: int | None
+
+
+@dataclass(frozen=True)
 class VerifiedContent:
     size_bytes: int
     sha256: str
@@ -132,6 +140,9 @@ class CanonicalObjectStore(Protocol):
 
     def delete(self, bucket: str, key: str) -> None:
         """Remove one object; ``STORAGE_OBJECT_MISSING`` if absent."""
+
+    def list_objects(self, bucket: str, prefix: str = "", *, max_objects: int) -> list[ListedObject]:
+        """Every object under ``prefix`` (recursive, bounded); for the storage cross-check."""
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +194,7 @@ def verify_object(
 __all__ = [
     "CanonicalObjectStore",
     "CanonicalStoreError",
+    "ListedObject",
     "ObjectStat",
     "STORAGE_ALREADY_EXISTS",
     "STORAGE_AUTH_FAILURE",
