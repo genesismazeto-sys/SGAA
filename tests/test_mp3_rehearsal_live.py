@@ -35,6 +35,9 @@ pytestmark = pytest.mark.skipif(
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SENTINEL = "ZZLEAK-MP3-REHEARSAL-7f3a91"
+OPERATOR_TOKEN = "rehearsal-operator-" + "T4" * 16
+# The Data API proof binds to a project; the rehearsal's is the DEV project (its proof: SPEC A13/A15).
+DATA_API_PROJECT = __import__("hashlib").sha256(b"pkwtgqsiulzeqkqlsdou").hexdigest()
 GATES_BEFORE_OPEN = ["GP0", "GP1", "GP2", "GR0", "GR1", "GR2", "GR3", "GB1", "GD1", "GG1", "GG2", "GD2", "GO"]
 
 
@@ -94,7 +97,7 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
                           check=True).stdout.strip()
     ledger.advance(ledger_dir, "C0", {
         "commit": head, "runbook_sha256": rs.sha256_file(REPO_ROOT / "docs" / "PRODUCTION_CUTOVER_RUNBOOK.md"),
-        "rehearsal_index_sha256": "0" * 63 + "1", "review_verdict": "PASS",
+        "rehearsal_index_sha256": "0" * 63 + "1", "review_verdict": "PASS", "prod_project_sha256": DATA_API_PROJECT,
     })
 
     # ---- C1: the target is qualified empty ---------------------------------------------------
@@ -111,8 +114,8 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
     listed = dev_bucket.store.list_objects(dev_bucket.name, "", max_objects=100)
     ledger.advance(ledger_dir, "C1", {
         "pg_major": major, "schema_current": True, "rows": rows, "objects": len(listed),
-        "data_api_toggle_off": True, "data_api_probe": "NOT_SERVED", "api_exposure_clean": True,
-        "capacity_ok": True,
+        "data_api_toggle_off": True, "data_api_override": "APPLIED", "data_api_probe": "NOT_SERVED",
+        "data_api_project_sha256": DATA_API_PROJECT, "api_exposure_clean": True, "capacity_ok": True,
     })
 
     # ---- C2: census of a snapshot copy -------------------------------------------------------
@@ -229,60 +232,96 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         "restore_drill": "OK", "verify_backup": "OK", "admin_bootstrap": "NOT_NEEDED",
     })
 
-    # ---- C9: the deployment source -----------------------------------------------------------
+    # ---- C9: the deployment source, re-proven, served dark and CLOSED ------------------------
+    from contextlib import ExitStack
+
+    from tests.mp3_served_app import served_app
+    from tools import hosted_smoke, ops_backup
+
     export_dir = tmp_path / "upload"
     exported = deploy_audit.export(head, export_dir)
     assert deploy_audit.audit(export_dir, sentinels=[SENTINEL.encode()])["findings"] == []
-    ledger.advance(ledger_dir, "C9", {"commit": head, "readiness": "READY", "bundle_audit": "CLEAN",
-                                      "scheduler_front": "DISABLED"})
-    assert exported["files"] > 50
+    proof = deploy_audit.verify(export_dir, head)
+    assert exported["files"] > 50 and proof["result"] == "IDENTICAL"
+    stack = ExitStack()
+    try:
+        closed = stack.enter_context(served_app(target_url, tmp_path / "closed", SGAA_ADMISSION="operator",
+                                                SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN))
+        observer = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url)
+        assert observer.admission() == "closed"
+        ledger.advance(ledger_dir, "C9", {"commit": head, "readiness": "READY", "bundle_audit": "CLEAN",
+                                          "deploy_verify": proof["result"],
+                                          "deploy_tree_sha256": proof["deploy_tree_sha256"],
+                                          "scheduler_front": "DISABLED", "admission": "CLOSED"})
 
-    # ---- C10: the smoke's write set is proven by a before/after fingerprint -------------------
-    monkeypatch.setenv("DATABASE_URL", target_url)
-    before_smoke = custody / "before-smoke.json"
-    assert pg_fingerprint.main(["snapshot", "--out", str(before_smoke)]) == 0
-    # (the public smoke itself runs against the real application in test_mp3_smoke_real_app; the
-    # rehearsal pins the ledger-side contract: identical fingerprints are what write_set_ok means)
-    after_smoke = custody / "after-smoke.json"
-    assert pg_fingerprint.main(["snapshot", "--out", str(after_smoke)]) == 0
-    assert pg_fingerprint.compare(json.loads(before_smoke.read_text()), json.loads(after_smoke.read_text()))[
-        "identical"] is True
-    ledger.advance(ledger_dir, "C10", {"smoke": "PASS", "write_set_ok": True})
-    ledger.advance(ledger_dir, "C11", {"account_key_match": True, "mirror_passes": 1,
-                                       "reconciliation_required": 0, "scheduler_front": "ENABLED"})
-    reference = custody / "reference.json"
-    assert pg_fingerprint.main(["snapshot", "--out", str(reference)]) == 0
-    ref_sha = json.loads(reference.read_text())["fingerprint_sha256"]
-    ledger.advance(ledger_dir, "C12", {"reference_fingerprint_sha256": ref_sha, "opened_at": "2026-11-01T09:00:00Z"})
+        # ---- C10: the operator's smoke through the admission gate; its write set by fingerprint --
+        before_smoke = observer.fingerprint()
+        smoke = hosted_smoke.run(closed.url, allow_insecure=True, operator_token=OPERATOR_TOKEN, admission="closed")
+        assert smoke["result"] == "PASS", [(c["check"], c["code"]) for c in smoke["checks"] if not c["ok"]]
+        assert pg_fingerprint.compare(before_smoke, observer.fingerprint())["identical"] is True
+        ledger.advance(ledger_dir, "C10", {"smoke": "PASS", "write_set_ok": True, "admission": "CLOSED",
+                                           "data_api_project_sha256": DATA_API_PROJECT})
+        ledger.advance(ledger_dir, "C11", {"account_key_match": True, "mirror_passes": 1,
+                                           "reconciliation_required": 0, "scheduler_front": "ENABLED",
+                                           "admission": "CLOSED"})
 
-    # A non-operator business write (a request hour count changed) is detected and recorded.
-    with rs.application(database_url=target_url) as target:
-        target.conn.execute("UPDATE requisicoes SET horas_solicitadas = horas_solicitadas + 1 WHERE id = 1")
-        target.conn.commit()
-    now = custody / "now.json"
-    assert pg_fingerprint.main(["snapshot", "--out", str(now)]) == 0
-    delta = pg_fingerprint.compare(json.loads(reference.read_text()), json.loads(now.read_text()))
-    assert delta["identical"] is False and delta["changed_tables"] == ["REQUISICOES"]
-    assert delta["detail"]["REQUISICOES"]["changed_columns"] == ["horas_solicitadas"]
-    now_sha = json.loads(now.read_text())["fingerprint_sha256"]
-    assert now_sha != ref_sha
-    # A rollback from C12 with the changed fingerprint is refused: the write is the point of no return.
-    with pytest.raises(ledger.Refused) as caught:
-        ledger.rollback(ledger_dir, "CHANGED_MY_MIND", current_fingerprint=now_sha)
-    assert caught.value.code == "FINGERPRINT_CHANGED"
-    ledger.advance(ledger_dir, "C13", {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",
-                                       "current_fingerprint_sha256": now_sha, "adjudicated_by_operator": True})
-    with pytest.raises(ledger.Refused) as caught:
-        ledger.rollback(ledger_dir, "TOO_LATE")
-    assert caught.value.code == "PONR_RECORDED"
-    ledger.advance(ledger_dir, "C14", {"window_days": 30, "second_generation_restore": "OK",
-                                       "unresolved_reconciliation": 0, "object_set_verified": True})
+        # ---- C11 -> C12: a real generation from the DEV bucket, the reference while CLOSED -------
+        dev = rs.load_dev_env()
+        monkeypatch.setenv("SUPABASE_URL", dev["SUPABASE_URL"])
+        monkeypatch.setenv("SUPABASE_SECRET_KEY", dev["SUPABASE_SECRET_KEY"])
+        monkeypatch.setenv("SGAA_STORAGE_BUCKET", dev_bucket.name)
+        monkeypatch.setenv("DATABASE_URL", target_url)
+        root, off = custody / "ops-primary", custody / "ops-off-platform"
+        generation = ops_backup.run_generation(root, label="pre-open", generations=2, objects=True,
+                                               off_platform=off)
+        assert generation["result"] == "GENERATION_COMPLETE"
+        ledger.record_backup(ledger_dir, root, off, observer=observer)
+        reference = custody / "reference.json"
+        ledger.take_reference(ledger_dir, reference, root, off, cadence_hours=24, observer=observer)
+        stack.close()
+        opened = stack.enter_context(served_app(target_url, tmp_path / "open", SGAA_ADMISSION="open"))
+        ledger.open_admission(ledger_dir, observer=ledger.Observer(opened.url, allow_insecure=True,
+                                                                   database_url=target_url))
+        assert ledger.status(ledger_dir)["state"] == "C12"
+
+        # A non-operator business write (a request hour count changed) is detected and recorded.
+        with rs.application(database_url=target_url) as target:
+            target.conn.execute("UPDATE requisicoes SET horas_solicitadas = horas_solicitadas + 1 WHERE id = 1")
+            target.conn.commit()
+        stack.close()
+        closed = stack.enter_context(served_app(target_url, tmp_path / "closed-again", SGAA_ADMISSION="operator",
+                                                SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN))
+        scheduler = stack.enter_context(served_app(target_url, tmp_path / "scheduler", SGAA_ADMISSION="operator",
+                                                   SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN,
+                                                   wsgi="app.storage.scheduler:application"))
+        quiet = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url, scheduler_url=scheduler.url)
+        monkeypatch.setattr(ledger, "QUIESCENCE_SECONDS", 3)
+        with pytest.raises(ledger.Refused) as caught:
+            ledger.rollback(ledger_dir, "CHANGED_MY_MIND", observer=quiet, reference_path=str(reference))
+        assert caught.value.code == "FINGERPRINT_CHANGED"
+        now_sha = quiet.fingerprint()["fingerprint_sha256"]
+        delta = pg_fingerprint.compare(json.loads(reference.read_text()), quiet.fingerprint())
+        assert delta["changed_tables"] == ["REQUISICOES"]
+        assert delta["detail"]["REQUISICOES"]["changed_columns"] == ["horas_solicitadas"]
+        ledger.advance(ledger_dir, "C13", {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",
+                                           "current_fingerprint_sha256": now_sha, "adjudicated_by_operator": True})
+        with pytest.raises(ledger.Refused) as caught:
+            ledger.rollback(ledger_dir, "TOO_LATE", observer=quiet, reference_path=str(reference))
+        assert caught.value.code == "PONR_RECORDED"
+        # The window closes only after UD4's 30 days with the backup cadence held (pinned by the unit tests).
+        with pytest.raises(ledger.Refused) as caught:
+            ledger.advance(ledger_dir, "C14", {"restore_validated_manifest_sha256": "0" * 64, "restore_drill": "OK",
+                                               "unresolved_reconciliation": 0, "object_set_verified": True})
+        assert caught.value.code == "WINDOW_NOT_ELAPSED"
+    finally:
+        stack.close()
 
     # ---- leak audit: the sentinel is in document bytes only, never in any record -------------
-    for artifact in (ledger_dir / ledger.LEDGER_FILE, reference, now, *sets.glob("*.manifest.json"),
-                     object_dir / "MANIFEST.json"):
+    records = [ledger_dir / ledger.LEDGER_FILE, reference, *sets.glob("*.manifest.json"), object_dir / "MANIFEST.json",
+               *root.rglob("*.manifest.json"), *root.rglob("MANIFEST.json"), *root.rglob("*.json")]
+    for artifact in records:
         assert SENTINEL.encode() not in Path(artifact).read_bytes(), artifact.name
-    assert ledger.status(ledger_dir)["state"] == "C14"
+    assert ledger.status(ledger_dir)["state"] == "C13"
 
 
 # ---- fault injection (the same live parts, broken on purpose) ---------------------------------
@@ -421,9 +460,10 @@ def test_different_bytes_already_at_a_key_make_the_row_a_conflict_the_ledger_wil
                           check=True).stdout.strip()
     h = lambda ch: ch * 64  # noqa: E731
     ledger.advance(ledger_dir, "C0", {"commit": head, "runbook_sha256": h("a"), "rehearsal_index_sha256": h("b"),
-                                      "review_verdict": "PASS"})
+                                      "review_verdict": "PASS", "prod_project_sha256": DATA_API_PROJECT})
     ledger.advance(ledger_dir, "C1", {"pg_major": 17, "schema_current": True, "rows": 0, "objects": 0,
-                                      "data_api_toggle_off": True, "data_api_probe": "NOT_SERVED",
+                                      "data_api_toggle_off": True, "data_api_override": "APPLIED",
+                                      "data_api_probe": "NOT_SERVED", "data_api_project_sha256": DATA_API_PROJECT,
                                       "api_exposure_clean": True, "capacity_ok": True})
     ledger.advance(ledger_dir, "C2", {"database_bytes": 1, "document_bytes": 1, "census": {"ROWS": 1}})
     ledger.advance(ledger_dir, "C3", {"source_size": 1, "source_sha256": h("c"), "wal_bytes": 0})

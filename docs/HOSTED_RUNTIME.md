@@ -38,6 +38,8 @@ refusal is a `HostingConfigurationError` carrying fixed codes and variable names
 | `HOSTED_STORAGE_CONFIG_REQUIRED` | production only: a canonical-storage variable is missing or malformed | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET` |
 | `HOSTED_TOKEN_KEY_REQUIRED` | production only: no valid Fernet `TOKEN_ENCRYPTION_KEY` | `TOKEN_ENCRYPTION_KEY` |
 | `HOSTED_PUBLIC_URL_INVALID` | production only: `APP_PUBLIC_BASE_URL` missing or not https | `APP_PUBLIC_BASE_URL` |
+| `HOSTED_ADMISSION_UNDECIDED` | production only: `SGAA_ADMISSION` is neither `operator` nor `open` (unset included); outside production an unset value means `open` | `SGAA_ADMISSION` |
+| `HOSTED_OPERATOR_TOKEN_REQUIRED` | `SGAA_ADMISSION=operator` without a valid `SGAA_OPERATOR_TOKEN` (printable ASCII, at least 32 characters) | `SGAA_OPERATOR_TOKEN` |
 
 `TRUST_PROXY_XFF` is a decision, not a default. On Vercel set `1`: the platform
 overwrites `X-Forwarded-For` with the real client address and never forwards a
@@ -46,12 +48,40 @@ On a host that does not overwrite it, set `0`, and accept that the per-IP login
 limit then sees the proxy address. Without a decision the per-IP limiter is
 either bypassable or locks every user out together.
 
+## 2a. Admission before the opening
+
+A production deployment holds the institution's real data from the moment it is made (MP-3
+C9), and only the operator may use it until the opening (gate GO). "Not announced" is not a
+control, so the hosted runtime carries a fail-closed admission switch
+(`app/web/admission_gate.py`, MP-3 SPEC A15):
+
+- `SGAA_ADMISSION=operator`: the gate is the first request hook. A request that does not
+  present the operator credential gets `503`, `X-SGAA-Admission: closed`, `Cache-Control:
+  no-store` and no cookie, before CSRF, the session, any view or any database access: an
+  ordinary user cannot sign in, attempt a sign-in or write anything. Always reachable:
+  `/health` (read-only), static files and the admission form `/operator-admission`.
+- The operator credential is `SGAA_OPERATOR_TOKEN` (placed by the user in the platform).
+  Tools send it in the `X-SGAA-Operator-Token` header; a browser presents it once on
+  `/operator-admission` (CSRF-protected form; a wrong value is `403` and logged as
+  `operator_admission_refused`) and receives an HttpOnly, Secure, SameSite=Lax cookie holding
+  an HMAC of the token under `APP_SECRET_KEY` (never the token), valid eight hours. Behind
+  the gate the application's own authentication and RBAC decide, as after the opening.
+- `SGAA_ADMISSION=open`: no gate is installed. Setting it and redeploying the same commit is
+  the opening; setting `operator` again and redeploying is the first step of a rollback
+  from C12.
+- Anyone can observe the state without a credential (`tools/hosted_smoke.py
+  probe_admission`, also the ledger's probe): `closed` means every probe (two pages and a
+  credential POST) is `503` with the closed header and sets no cookie.
+
+It is not a second authorization architecture: it knows no user, role or route, and the
+authorization gate, RBAC and the route inventories are unchanged.
+
 ## 3. Variables
 
 | Variable | Hosted use | Secret |
 |---|---|---|
 | `SGAA_RUNTIME` | `hosted` | no |
-| `DATABASE_URL` | the web and scheduler functions use the Supabase **transaction pooler** (port 6543; the application disables prepared statements and keeps no session state). Operator tools that need one session (Layer-2 backup and restore, Path-B, convergence runs) use the direct or the session-pooler address and a libpq password file; Layer-2 refuses a transaction-pooler address. No password in logs | yes |
+| `DATABASE_URL` | the web and scheduler functions use the Supabase **transaction pooler** (port 6543; the application disables prepared statements and keeps no session state). Operator tools that need one session (Layer-2 backup and restore, Path-B, convergence runs) use the direct or the session-pooler address, with the password from the libpq password file (DEV) or typed by the user at a hidden prompt as `PGPASSWORD` for one process (PROD, section 12); Layer-2 refuses a transaction-pooler address. No password in logs | yes |
 | `SGAA_PG_CONNECT_TIMEOUT` | seconds, default 10; ignored when the URL carries `connect_timeout` or `PGCONNECT_TIMEOUT` is set | no |
 | `APP_SECRET_KEY` | session and CSRF signing; at least 24 characters, not a published value | yes |
 | `TRUST_PROXY_XFF` | `0` or `1` | no |
@@ -61,6 +91,8 @@ either bypassable or locks every user out together.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth application (also the Picker values `GOOGLE_PICKER_API_KEY`, `GOOGLE_APP_ID`) | secret / no |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY` | canonical document storage | secret key only |
 | `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
+| `SGAA_ADMISSION` | `operator` (only the operator is admitted, section 2a) or `open`; required in production | no |
+| `SGAA_OPERATOR_TOKEN` | the operator credential while `SGAA_ADMISSION=operator` (at least 32 printable ASCII characters); kept until the rollback window closes, so a rollback can close admission again | yes |
 | `SCHEDULER_MIRROR_BATCH`, `SCHEDULER_MIRROR_LEASE_SECONDS` | objects per mirror invocation (default 5, at most 25) and lease length (default 300) | no |
 | `APP_LOG_DIR` | optional; defaults to `<scratch>/logs` when hosted, because `main` creates its log directory at import, before the factory runs. Logs also go to the platform stream (both the `app` and `main` channels) | no |
 
@@ -184,7 +216,11 @@ method, `404` any other path or a disabled front.
   uploading a second copy.
 - Only the mirror pass is scheduled. Convergence, requeue and object backup remain
   operator decisions (`python -m app.storage.cli`).
-- Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`.
+- Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`. A database
+  trigger never carries the bearer in its job text: the user stores it in Supabase Vault
+  (dashboard, or typed into the SQL editor) and the job reads it from
+  `vault.decrypted_secrets` when it runs, so `cron.job` holds no secret and the executor
+  never sees one (section 12, Secrets).
 
 ## 10. Object backup
 
@@ -313,7 +349,11 @@ unset until the mirror is wanted (the cron entry then reaches a disabled front t
 trigger is spoofable and the bearer is the control.
 
 **Secrets.** Only the platform holds production values; the repository, logs, the ledger
-and every report hold none.
+and every report hold none. The user enters each production value in the platform dashboard
+(sensitive, production scope), or at the platform CLI's interactive prompt
+(`vercel env add NAME production --sensitive` with nothing piped or redirected into it); never
+from a file, a pipe, an argument or a history line. The executor never receives, reads back
+or prints a production value.
 
 | Variable | Set by | Rotation effect |
 |---|---|---|
@@ -321,12 +361,16 @@ and every report hold none.
 | `TOKEN_ENCRYPTION_KEY` | user, platform | stored Google tokens become unreadable: reconnect Google |
 | `DATABASE_URL` (transaction pooler) | user, platform | rotate the database password at the provider, update, redeploy |
 | `SUPABASE_SECRET_KEY` | user, platform only | rotate at the provider, update, redeploy; never on a workstation file |
-| `CRON_SECRET` | user, platform | redeploy; the old value stops working at once |
+| `CRON_SECRET` | user, platform (and Supabase Vault when a database trigger calls the front) | redeploy and update the Vault entry; the old value stops working at once |
+| `SGAA_OPERATOR_TOKEN` | user, platform | redeploy; operator cookies issued under the old value stop working |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | user, platform | the legacy OAuth client; a new client cannot see the legacy Drive files (`drive.file`) |
 | `SUPABASE_URL`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY`, `APP_PUBLIC_BASE_URL` | user, platform | configuration, not secrets (the publishable key is public by design) |
 
-A one-off operator credential (the production secret key for a gated run, a database
-password through the libpq file) is scoped to one process and never written to a file.
+A one-off operator credential for a gated run on the operator machine (the production
+secret key for an object backup, the production database password as `PGPASSWORD`, the
+operator token for the smoke) is typed by the user at a hidden prompt into one terminal's
+process environment and cleared when the run ends; it is never written to a file, including
+the libpq password file, which serves DEV only.
 
 **OAuth.** `APP_PUBLIC_BASE_URL` is https; the legacy `GOOGLE_REDIRECT_URI` /
 `MS_REDIRECT_URI` variables are unset; the exact callback is registered on the legacy

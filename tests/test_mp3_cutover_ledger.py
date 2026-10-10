@@ -1,58 +1,90 @@
 # coding: utf-8
-"""MP-3 slice 5: the cutover evidence ledger (``tools/cutover_ledger.py``) -- no database.
+"""MP-3 slices 5 and the R3 remediation: the cutover evidence ledger (``tools/cutover_ledger.py``).
 
-The ledger is the cutover's memory and referee: order, gates, value-free
-evidence, carried identities, the hash chain, the head binding and the point of
-no return.  Each test names the defect it would catch; the module is exercised
-through the public functions and the command line.
+The ledger is the cutover's memory and referee: order, gates, value-free evidence, carried
+identities, the hash chain, the head binding and the point of no return.  Where the SPEC forbids
+trusting the operator's word -- the opening (C12), a rollback from it, the backups that must exist
+before it and through the window -- the ledger observes for itself through an ``Observer``; here a
+scripted one stands in for the public address, the database and the backup directories, and a
+scripted clock for time.  Each test names the defect it would catch.
 """
 
 from __future__ import annotations
 
 import io
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
+from tests.mp3_ledger_support import ALL_GATES, COMMIT, GOOD, H, OTHER_COMMIT
+from tests.mp3_ledger_support import manifest_digest as _manifest
 from tools import cutover_ledger as ledger
+from tools import pg_fingerprint as fp
 
-H = {"a": "a" * 64, "b": "b" * 64, "c": "c" * 64, "d": "d" * 64, "e": "e" * 64, "f": "f" * 64,
-     "g": "1" * 64, "h": "2" * 64, "i": "3" * 64}  # distinct 64-hex digests
-COMMIT = "c" * 40
-OTHER_COMMIT = "d" * 40
-OPENED = "2026-11-01T09:00:00Z"
+_TABLES = {"alunos": {"rows": 1, "sha256": "d" * 64, "columns": ["id"], "row_hashes": {"1": ["h"]}}}
+REFERENCE = {"format": fp.FORMAT, "tables": _TABLES, "fingerprint_sha256": fp._digest_of(_TABLES)}
+_CHANGED = {"alunos": {"rows": 1, "sha256": "e" * 64, "columns": ["id"], "row_hashes": {"1": ["i"]}}}
+CHANGED = {"format": fp.FORMAT, "tables": _CHANGED, "fingerprint_sha256": fp._digest_of(_CHANGED)}
+IDENTITY = H["j"]
 
-# Evidence a clean cutover would carry, state by state.
-GOOD = {
-    "C0": {"commit": COMMIT, "runbook_sha256": H["a"], "rehearsal_index_sha256": H["b"], "review_verdict": "PASS"},
-    "C1": {"pg_major": 17, "schema_current": True, "rows": 0, "objects": 0, "data_api_toggle_off": True,
-           "data_api_probe": "NOT_SERVED", "api_exposure_clean": True, "capacity_ok": True},
-    "C2": {"database_bytes": 1000, "document_bytes": 2000, "census": {"GOOGLE_ROWS": 4, "LOCAL_ROWS": 2}},
-    "C3": {"source_size": 4096, "source_sha256": H["c"], "wal_bytes": 0},
-    "C4": {"source_sha256": H["c"], "prepared_sha256": H["d"], "integrity_ok": True, "fk_violations": 0,
-           "schema_version": 16, "accepted_exceptions": [{"class": "TRASHED_LEGACY", "count": 2}],
-           "accepted_by_user": True},
-    "C5": {"prepared_sha256": H["d"], "converged_rows": 40, "unconverged": [{"class": "TRASHED_LEGACY", "count": 2}],
-           "legacy_bytes_touched": 0},
-    "C6": {"prepared_sha256": H["d"], "reference_digest": H["e"], "verdict": "CLEAN"},
-    "C7": {"prepared_sha256": H["d"], "pathb_exit": 0, "commit_resolved_by_inspection": False,
-           "commit_outcome": "COMMITTED"},
-    "C8": {"reference_digest": H["e"], "census_equal": True, "baseline_manifest_sha256": H["f"],
-           "object_set_digest": H["g"], "restore_drill": "OK", "verify_backup": "OK",
-           "admin_bootstrap": "NOT_NEEDED"},
-    "C9": {"commit": COMMIT, "readiness": "READY", "bundle_audit": "CLEAN", "scheduler_front": "DISABLED"},
-    "C10": {"smoke": "PASS", "write_set_ok": True},
-    "C11": {"account_key_match": True, "mirror_passes": 2, "reconciliation_required": 0,
-            "scheduler_front": "ENABLED"},
-    "C12": {"reference_fingerprint_sha256": H["h"], "opened_at": OPENED},
-    "C13": {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",
-            "current_fingerprint_sha256": H["i"], "adjudicated_by_operator": True},
-    "C14": {"window_days": 30, "second_generation_restore": "OK", "unresolved_reconciliation": 0,
-            "object_set_verified": True},
-}
-# Gates in the order a cutover needs them (GP3 only when the bootstrap runs).
-ALL_GATES = ["GP0", "GP1", "GP2", "GR0", "GR1", "GR2", "GR3", "GB1", "GD1", "GG1", "GG2", "GD2", "GO"]
+
+class FakeObserver:
+    """Scripted eyes: the admission and scheduler state, external jobs, identity, fingerprints, backups."""
+
+    def __init__(self):
+        self.admission_state = "closed"
+        self.scheduler = "disabled"
+        self.jobs = 0
+        self.identity = IDENTITY
+        self.current = REFERENCE
+        self.verdicts: list[dict] = []
+        self.generation = {"database_set": "sgaa-pg-x-auto-scheduled", "manifest_sha256": _manifest(0),
+                           "manifest_path": "unused", "object_set": "20261101T000000Z-auto-weekly",
+                           "object_set_digest": H["g"]}
+        self.matches = True
+        self.backup_calls: list[bool] = []
+
+    def admission(self):
+        return self.admission_state
+
+    def scheduler_front(self):
+        return self.scheduler
+
+    def external_trigger_jobs(self):
+        return self.jobs
+
+    def database_identity(self):
+        return self.identity
+
+    def fingerprint(self):
+        return self.current
+
+    def classify(self, reference):
+        if self.verdicts:
+            return self.verdicts.pop(0)
+        return {"identical": True, "derived_classes": [], "refusal": None, "current": reference}
+
+    def backup(self, root, off_platform, *, against_database):
+        self.backup_calls.append(against_database)
+        return dict(self.generation)
+
+    def backup_matches(self, manifest_path, fingerprint):
+        return self.matches
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch):
+    state = {"now": datetime(2026, 11, 1, 8, 0, 0, tzinfo=timezone.utc), "slept": []}
+
+    def sleep(seconds):
+        state["slept"].append(seconds)
+        state["now"] += timedelta(seconds=seconds)
+
+    monkeypatch.setattr(ledger, "_CLOCK", lambda: state["now"])
+    monkeypatch.setattr(ledger, "_SLEEP", sleep)
+    return state
 
 
 @pytest.fixture
@@ -62,24 +94,72 @@ def directory(tmp_path):
     return path
 
 
+@pytest.fixture
+def observer():
+    return FakeObserver()
+
+
 def _grant_all(directory, gates=ALL_GATES):
     for index, gate in enumerate(gates):
         ledger.grant(directory, gate, f"user-msg-{index}")
 
 
-def _drive(directory, upto, overrides=None):
+def _reference_file(directory, name="reference.json"):
+    return directory.parent / name
+
+
+def _open(directory, observer):
+    """C11 -> C12 the only way: a post-C11 backup, the reference while closed, then open."""
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                          cadence_hours=24, observer=observer)
+    observer.admission_state = "open"
+    return ledger.open_admission(directory, observer=observer)
+
+
+def _drive(directory, upto, overrides=None, observer=None):
     """Advance through every state up to and including ``upto``."""
     overrides = overrides or {}
+    observer = observer or FakeObserver()
     for state in ledger.STATES[: ledger.STATES.index(upto) + 1]:
+        if state == "C12":
+            _open(directory, observer)
+            continue
+        if state == "C14":
+            _window(directory, observer, days=30)
         evidence = dict(GOOD[state])
         evidence.update(overrides.get(state, {}))
         ledger.advance(directory, state, evidence)
+    return observer
+
+
+def _window(directory, observer, days, *, every_hours=24, objects_every_days=7, skip=()):
+    """Let ``days`` pass after C13, one recorded generation every ``every_hours`` (objects weekly)."""
+    clock = ledger._CLOCK
+    start = clock()
+    for step in range(1, days * 24 // every_hours + 1):
+        moment = start + timedelta(hours=step * every_hours)
+        _set_clock(moment)
+        day = step * every_hours // 24
+        if day in skip:
+            continue
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(day),
+                                   object_set=f"week-{day // objects_every_days}")
+        ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    _set_clock(start + timedelta(days=days, minutes=1))
+
+
+def _set_clock(moment):
+    ledger._CLOCK = lambda: moment  # the autouse fixture restores the original afterwards
 
 
 def _code(call, *args, **kwargs):
     with pytest.raises(ledger.Refused) as caught:
         call(*args, **kwargs)
     return caught.value.code
+
+
+# ---- order, gates and evidence ------------------------------------------------------------------
 
 
 def test_a_clean_cutover_runs_c0_to_c14_and_status_reports_the_position(directory):
@@ -140,9 +220,11 @@ def test_evidence_that_is_not_value_free_is_refused_before_anything_is_written(d
 
 # One value per key that its predicate must refuse; together with GOOD this pins every predicate.
 BAD = {
-    "C0": {"commit": "abc", "runbook_sha256": "xyz", "rehearsal_index_sha256": H["a"][:-1], "review_verdict": "FAIL"},
+    "C0": {"commit": "abc", "runbook_sha256": "xyz", "rehearsal_index_sha256": H["a"][:-1], "review_verdict": "FAIL",
+           "prod_project_sha256": "uckadhcwfknklmdktuyi"},
     "C1": {"pg_major": 14, "schema_current": False, "rows": 3, "objects": 1, "data_api_toggle_off": False,
-           "data_api_probe": "SERVED", "api_exposure_clean": False, "capacity_ok": False},
+           "data_api_override": "SKIPPED", "data_api_probe": "SERVED", "data_api_project_sha256": "nope",
+           "api_exposure_clean": False, "capacity_ok": False},
     "C2": {"database_bytes": -1, "document_bytes": "1", "census": {}},
     "C3": {"source_size": 0, "source_sha256": "nope", "wal_bytes": 12},
     "C4": {"source_sha256": "nope", "prepared_sha256": "nope", "integrity_ok": False, "fk_violations": 1,
@@ -155,23 +237,27 @@ BAD = {
     "C8": {"reference_digest": "nope", "census_equal": False, "baseline_manifest_sha256": "nope",
            "object_set_digest": "nope", "restore_drill": "FAILED", "verify_backup": "FAILED",
            "admin_bootstrap": "MAYBE"},
-    "C9": {"commit": "nope", "readiness": "NOT_READY", "bundle_audit": "FINDINGS", "scheduler_front": "ENABLED"},
-    "C10": {"smoke": "FAIL", "write_set_ok": False},
-    "C11": {"account_key_match": False, "mirror_passes": 0, "reconciliation_required": 2, "scheduler_front": "DISABLED"},
-    "C12": {"reference_fingerprint_sha256": "nope", "opened_at": "yesterday"},
+    "C9": {"commit": "nope", "readiness": "NOT_READY", "bundle_audit": "FINDINGS", "deploy_verify": "DIFFERS",
+           "deploy_tree_sha256": "nope", "scheduler_front": "ENABLED", "admission": "OPEN"},
+    "C10": {"smoke": "FAIL", "write_set_ok": False, "admission": "OPEN", "data_api_project_sha256": "nope"},
+    "C11": {"account_key_match": False, "mirror_passes": 0, "reconciliation_required": 2,
+            "scheduler_front": "DISABLED", "admission": "OPEN"},
     "C13": {"write_class": "a request", "detected_at": "later", "current_fingerprint_sha256": "nope",
             "adjudicated_by_operator": False},
-    "C14": {"window_days": 0, "second_generation_restore": "SKIPPED", "unresolved_reconciliation": 1,
+    "C14": {"restore_validated_manifest_sha256": "nope", "restore_drill": "SKIPPED", "unresolved_reconciliation": 1,
             "object_set_verified": False},
 }
 
 
-@pytest.mark.parametrize("state", ledger.STATES)
+@pytest.mark.parametrize("state", [s for s in ledger.STATES if s != "C12"])
 def test_every_evidence_predicate_refuses_a_bad_value_and_a_missing_key(directory, state):
     assert set(BAD[state]) == set(GOOD[state]), "the table must cover every key"
     _grant_all(directory)
+    observer = FakeObserver()
     if state != "C0":
-        _drive(directory, ledger.STATES[ledger.STATES.index(state) - 1])
+        _drive(directory, ledger.STATES[ledger.STATES.index(state) - 1], observer=observer)
+    if state == "C14":
+        _window(directory, observer, days=30)
     for key, bad in BAD[state].items():
         refused = _code(ledger.advance, directory, state, {**GOOD[state], key: bad})
         assert refused.startswith("EVIDENCE_"), (state, key, refused)
@@ -252,11 +338,223 @@ def test_the_deployed_commit_must_be_the_rehearsed_commit(directory):
         "COMMIT_NOT_THE_REHEARSED_ONE"
 
 
+def test_the_data_api_proof_at_c1_must_name_the_prod_project_gp0_named(directory):
+    _grant_all(directory)
+    _drive(directory, "C0")
+    assert _code(ledger.advance, directory, "C1", {**GOOD["C1"], "data_api_project_sha256": H["a"]}) == \
+        "DATA_API_NOT_THE_PROD_PROJECT"
+    assert ledger.advance(directory, "C1", GOOD["C1"])["state"] == "C1"
+
+
+def test_the_smokes_data_api_proof_must_name_the_project_qualified_at_c1(directory):
+    _grant_all(directory)
+    _drive(directory, "C9")
+    assert _code(ledger.advance, directory, "C10", {**GOOD["C10"], "data_api_project_sha256": H["a"]}) == \
+        "DATA_API_PROJECT_CHANGED"
+    assert ledger.advance(directory, "C10", GOOD["C10"])["state"] == "C10"
+
+
 def test_a_gate_does_not_cover_a_state_it_is_not_listed_for(directory):
     # GO opens users (C12); having it must not let C11 (mirror) be entered without its own gates.
     ledger.grant(directory, "GO", "m1")
     assert ledger.STATE_GATES["C11"] == ("GG1", "GG2", "GD2") and "GO" not in ledger.STATE_GATES["C11"]
     assert [s for s in ledger.STATES if "GO" in ledger.STATE_GATES[s]] == ["C12"]
+
+
+# ---- admission: closed until GO, and GO is the only opening (finding 1) -------------------------
+
+
+def test_admission_is_closed_in_every_state_before_the_opening_and_c12_is_never_typed(directory):
+    _grant_all(directory)
+    for state in ("C9", "C10", "C11"):
+        assert ledger._SCHEMA[state]["admission"]("CLOSED") and not ledger._SCHEMA[state]["admission"]("OPEN")
+    _drive(directory, "C11")
+    typed = {"reference_fingerprint_sha256": H["h"], "database_identity_sha256": IDENTITY,
+             "opened_at": "2026-11-01T09:00:00Z", "admission": "OPEN", "pre_open_backup_manifest_sha256": H["a"],
+             "backup_cadence_hours": 24, "rpo_hours": 24}
+    assert _code(ledger.advance, directory, "C12", typed) == "OPENING_NEEDS_THE_OPEN_COMMAND"
+
+
+def test_the_opening_needs_go_a_reference_taken_while_closed_and_admission_observed_open(directory, observer):
+    _grant_all(directory, ALL_GATES[:-1])  # everything but GO
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    assert _code(ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent,
+                 cadence_hours=24, observer=observer) == "GATE_NOT_GRANTED"
+    ledger.grant(directory, "GO", "m-go")
+    assert _code(ledger.open_admission, directory, observer=observer) == "REFERENCE_REQUIRED"
+    observer.admission_state = "open"  # users already admitted: too late for a reference
+    assert _code(ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent,
+                 cadence_hours=24, observer=observer) == "ADMISSION_NOT_CLOSED"
+    observer.admission_state = "closed"
+    entry = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
+    assert entry["type"] == "reference" and entry["admission"] == "CLOSED"
+    assert entry["reference_fingerprint_sha256"] == REFERENCE["fingerprint_sha256"]
+    written = json.loads(_reference_file(directory).read_text())
+    assert fp.validate(written)["fingerprint_sha256"] == REFERENCE["fingerprint_sha256"] and written["taken_at"]
+    assert _code(ledger.open_admission, directory, observer=observer) == "ADMISSION_NOT_OPEN"  # not lifted yet
+    observer.admission_state = "open"
+    opened = ledger.open_admission(directory, observer=observer)
+    assert opened["state"] == "C12"
+    assert opened["evidence"]["reference_fingerprint_sha256"] == REFERENCE["fingerprint_sha256"]
+    assert opened["evidence"]["admission"] == "OPEN" and opened["evidence"]["backup_cadence_hours"] == 24
+
+
+def test_a_reference_older_than_the_limit_is_refused_at_the_opening(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                          cadence_hours=24, observer=observer)
+    observer.admission_state = "open"
+    clock["now"] += timedelta(seconds=ledger.REFERENCE_MAX_AGE_SECONDS + 1)
+    assert _code(ledger.open_admission, directory, observer=observer) == "REFERENCE_STALE"
+
+
+def test_the_reference_and_the_opening_follow_c11_only_and_never_a_rollback(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C10", observer=observer)
+    take = (ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent)
+    assert _code(*take, cadence_hours=24, observer=observer) == "OUT_OF_ORDER"
+    assert _code(ledger.open_admission, directory, observer=observer) == "OUT_OF_ORDER"
+    ledger.advance(directory, "C11", GOOD["C11"])
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.rollback(directory, "OPERATOR_STOP")  # before any reference: a plain record
+    assert _code(*take, cadence_hours=24, observer=observer) == "ROLLED_BACK"
+    assert _code(ledger.open_admission, directory, observer=observer) == "ROLLED_BACK"
+
+
+# ---- backup before opening and through the window (finding 4) -----------------------------------
+
+
+def test_backups_are_recorded_from_c11_only_and_never_after_a_rollback(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C10", observer=observer)
+    assert _code(ledger.record_backup, directory, directory.parent, directory.parent,
+                 observer=observer) == "OUT_OF_ORDER"
+    ledger.advance(directory, "C11", GOOD["C11"])
+    entry = ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    assert entry["type"] == "backup" and entry["off_platform"] == "VERIFIED"
+    assert entry["manifest_sha256"] == _manifest(0) and observer.backup_calls == [False]
+    ledger.rollback(directory, "OPERATOR_STOP")
+    assert _code(ledger.record_backup, directory, directory.parent, directory.parent, observer=observer) == "ROLLED_BACK"
+
+
+def test_the_reference_needs_a_post_c11_backup_with_objects_proven_current_against_the_live_database(
+        directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    take = (ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent)
+    assert _code(*take, cadence_hours=24, observer=observer) == "PRE_OPEN_BACKUP_REQUIRED"
+    observer.generation = dict(observer.generation, object_set=None, object_set_digest=None)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    assert _code(*take, cadence_hours=24, observer=observer) == "PRE_OPEN_BACKUP_REQUIRED"  # no object set
+    observer.generation = dict(observer.generation, object_set="20261101T000000Z-auto-weekly",
+                               object_set_digest=H["g"])
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(99))  # a newer, unrecorded one
+    assert _code(*take, cadence_hours=24, observer=observer) == "BACKUP_NOT_THE_RECORDED_ONE"
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(0))
+    observer.matches = False
+    assert _code(*take, cadence_hours=24, observer=observer) == "BACKUP_NOT_CURRENT"
+    observer.matches = True
+    for bad in (0, 25, True):
+        assert _code(*take, cadence_hours=bad, observer=observer) == "CADENCE_INVALID"
+    entry = ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
+    assert entry["pre_open_backup_manifest_sha256"] == _manifest(0) and entry["rpo_hours"] == 24
+    assert observer.backup_calls[-1] is True  # the object set was compared with the live rows
+
+
+def test_the_reference_file_is_new_and_outside_the_repository(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    inside = Path(ledger.__file__).resolve().parents[1] / "reference-should-not-exist.json"
+    assert _code(ledger.take_reference, directory, inside, directory.parent, directory.parent, cadence_hours=24,
+                 observer=observer) == "OUTPUT_INSIDE_REPOSITORY"
+    existing = _reference_file(directory, "existing.json")
+    existing.write_text("{}")
+    assert _code(ledger.take_reference, directory, existing, directory.parent, directory.parent, cadence_hours=24,
+                 observer=observer) == "OUTPUT_EXISTS"
+    assert not inside.exists()
+
+
+def test_the_window_closes_only_after_ud4_days_from_the_ponr(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    _window(directory, observer, days=29)
+    assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(29)}) \
+        == "WINDOW_NOT_ELAPSED"
+
+
+@pytest.mark.parametrize("skip,code", [
+    ((10, 11), "BACKUP_CADENCE_BROKEN"),        # two nightly generations missing in the window
+    ((), None),
+])
+def test_the_backup_cadence_must_hold_over_the_whole_window(directory, observer, skip, code):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    _window(directory, observer, days=30, skip=skip)
+    if code:
+        assert _code(ledger.advance, directory, "C14", GOOD["C14"]) == code
+    else:
+        assert ledger.advance(directory, "C14", GOOD["C14"])["state"] == "C14"
+
+
+@pytest.mark.parametrize("missing,code", [
+    ((1, 2, 3), "BACKUP_CADENCE_BROKEN"),   # a gap between the opening and the PONR, made up before C13
+    ((), None),
+])
+def test_the_cadence_counts_from_the_opening_not_only_from_the_ponr(directory, observer, missing, code):
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    opened = ledger._CLOCK()
+    for day in range(1, 11):
+        if day in missing:
+            continue
+        _set_clock(opened + timedelta(days=day))
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(100 + day),
+                                   object_set=f"open-week-{day // 7}")
+        ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.advance(directory, "C13", GOOD["C13"])
+    _window(directory, observer, days=30)
+    if code:
+        assert _code(ledger.advance, directory, "C14", GOOD["C14"]) == code
+    else:
+        assert ledger.advance(directory, "C14", GOOD["C14"])["state"] == "C14"
+
+
+def test_the_window_is_counted_from_the_ponr_not_from_the_opening(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    opened = ledger._CLOCK()
+    for day in range(1, 6):  # five days pending, the cadence held
+        _set_clock(opened + timedelta(days=day))
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(200 + day))
+        ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.advance(directory, "C13", GOOD["C13"])
+    _window(directory, observer, days=29)  # 34 days after the opening, 29 after the PONR
+    assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(29)}) \
+        == "WINDOW_NOT_ELAPSED"
+
+
+def test_the_object_sets_must_be_taken_weekly_through_the_window(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    _window(directory, observer, days=30, objects_every_days=12)
+    assert _code(ledger.advance, directory, "C14", GOOD["C14"]) == "OBJECT_CADENCE_BROKEN"
+
+
+def test_the_restore_drill_must_be_of_a_generation_recorded_inside_the_window(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    _window(directory, observer, days=30)
+    before_ponr = {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(0)}
+    assert _code(ledger.advance, directory, "C14", before_ponr) == "RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION"
+
+
+# ---- rollback ---------------------------------------------------------------------------------------
 
 
 def test_rollback_is_recorded_before_the_point_of_no_return_and_ends_the_cutover(directory):
@@ -265,25 +563,135 @@ def test_rollback_is_recorded_before_the_point_of_no_return_and_ends_the_cutover
     entry = ledger.rollback(directory, "SMOKE_REGRESSION")
     assert entry["from_state"] == "C11"
     assert ledger.status(directory)["rolled_back"] is True
-    assert _code(ledger.advance, directory, "C12", GOOD["C12"]) == "ROLLED_BACK"
+    assert _code(ledger.advance, directory, "C13", GOOD["C13"]) == "ROLLED_BACK"
     assert _code(ledger.rollback, directory, "AGAIN") == "ALREADY_ROLLED_BACK"
 
 
-def test_a_rollback_from_the_opening_needs_proof_that_no_business_table_changed(directory):
+@pytest.mark.parametrize("state", ledger.STATES[: ledger.STATES.index("C12")])
+def test_a_rollback_is_recorded_from_every_state_before_the_opening(directory, state):
     _grant_all(directory)
-    _drive(directory, "C12")
-    assert _code(ledger.rollback, directory, "CHANGED_MIND") == "FINGERPRINT_REQUIRED"
-    assert _code(ledger.rollback, directory, "CHANGED_MIND", current_fingerprint="nope") == "FINGERPRINT_REQUIRED"
-    assert _code(ledger.rollback, directory, "CHANGED_MIND", current_fingerprint=H["i"]) == "FINGERPRINT_CHANGED"
-    entry = ledger.rollback(directory, "CHANGED_MIND", current_fingerprint=H["h"])  # equals the opening's
-    assert entry["from_state"] == "C12"
+    _drive(directory, state)
+    entry = ledger.rollback(directory, "OPERATOR_STOP")
+    assert entry["from_state"] == state
+    summary = ledger.status(directory)
+    assert summary["rolled_back"] is True and summary["state"] == state and summary["ponr_recorded"] is False
+    following = ledger.STATES[ledger.STATES.index(state) + 1]
+    if following != "C12":
+        assert _code(ledger.advance, directory, following, GOOD[following]) == "ROLLED_BACK"
+    assert ledger.read_ledger(directory)[-1]["type"] == "rollback"  # and the chain still verifies on read
 
 
-def test_after_the_ponr_is_recorded_rollback_is_refused(directory):
+def _opened(directory, observer):
     _grant_all(directory)
-    _drive(directory, "C13")
+    _drive(directory, "C12", observer=observer)
+    observer.admission_state = "closed"  # the operator stopped admitting users and redeployed
+    return str(_reference_file(directory))
+
+
+def test_a_rollback_from_the_opening_with_nothing_changed_is_recorded_after_observed_quiescence(
+        directory, observer, clock):
+    reference = _opened(directory, observer)
+    entry = ledger.rollback(directory, "OPERATOR_STOP", observer=observer, reference_path=reference)
+    assert entry["from_state"] == "C12" and entry["quiescence"] == "PROVEN" and entry["derived_classes"] == []
+    assert entry["current_fingerprint_sha256"] == REFERENCE["fingerprint_sha256"]
+    assert clock["slept"] == [ledger.QUIESCENCE_SECONDS]
+
+
+@pytest.mark.parametrize("setup,code", [
+    (lambda o: setattr(o, "admission_state", "open"), "ADMISSION_STILL_OPEN"),
+    (lambda o: setattr(o, "admission_state", "unknown"), "ADMISSION_STILL_OPEN"),
+    (lambda o: setattr(o, "scheduler", "enabled"), "SCHEDULER_STILL_ENABLED"),
+    (lambda o: setattr(o, "scheduler", "unknown"), "SCHEDULER_STILL_ENABLED"),
+    (lambda o: setattr(o, "jobs", 1), "EXTERNAL_TRIGGER_ACTIVE"),
+    (lambda o: setattr(o, "jobs", -1), "QUIESCENCE_UNVERIFIABLE"),
+    (lambda o: setattr(o, "identity", H["a"]), "DATABASE_NOT_THE_REFERENCE"),
+])
+def test_a_rollback_from_the_opening_refuses_until_production_is_proven_quiescent(directory, observer, setup, code):
+    reference = _opened(directory, observer)
+    setup(observer)
+    before = (directory / ledger.LEDGER_FILE).read_text()
+    assert _code(ledger.rollback, directory, "OPERATOR_STOP", observer=observer, reference_path=reference) == code
+    assert (directory / ledger.LEDGER_FILE).read_text() == before
+
+
+def test_a_rollback_from_the_opening_needs_the_observer_and_the_reference_file_the_ledger_recorded(
+        directory, observer):
+    reference = _opened(directory, observer)
+    assert _code(ledger.rollback, directory, "STOP") == "QUIESCENCE_PROOF_REQUIRED"
+    assert _code(ledger.rollback, directory, "STOP", observer=observer) == "QUIESCENCE_PROOF_REQUIRED"
+    other = _reference_file(directory, "other.json")
+    other.write_text(json.dumps(CHANGED))
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=str(other)) == \
+        "REFERENCE_FILE_MISMATCH"
+    tampered = json.loads(Path(reference).read_text())
+    tampered["tables"]["alunos"]["rows"] = 9
+    other.write_text(json.dumps(tampered))
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=str(other)) == "REFERENCE_INVALID"
+    other.write_text("not json")
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=str(other)) == \
+        "REFERENCE_UNREADABLE"
+
+
+def test_a_database_still_changing_between_the_two_observations_is_not_quiescent(directory, observer):
+    reference = _opened(directory, observer)
+    observer.verdicts = [
+        {"identical": True, "derived_classes": [], "refusal": None, "current": REFERENCE},
+        {"identical": False, "derived_classes": [], "refusal": "NOT_A_DERIVED_TABLE", "current": CHANGED},
+    ]
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=reference) == \
+        "QUIESCENCE_NOT_PROVEN"
+
+
+def test_any_change_the_fixed_classes_do_not_explain_refuses_the_rollback(directory, observer):
+    reference = _opened(directory, observer)
+    verdict = {"identical": False, "derived_classes": [], "refusal": "ROWS_ADDED_OR_REMOVED", "current": CHANGED}
+    observer.verdicts = [verdict, dict(verdict)]
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=reference,
+                 derived_classes=["REQUISICOES_STUDENT_SEEN"]) == "FINGERPRINT_CHANGED"
+    assert ledger.status(directory)["rolled_back"] is False
+
+
+@pytest.mark.parametrize("acknowledged", [
+    None, [], ["REQUISICOES_AUTO_REJECTION"],
+    ["REQUISICOES_AUTO_REJECTION", "REQUISICOES_STUDENT_SEEN", "USUARIO_CREDENCIAIS"],
+])
+def test_derived_classes_must_be_acknowledged_exactly_as_observed(directory, observer, acknowledged):
+    reference = _opened(directory, observer)
+    observed = ["REQUISICOES_AUTO_REJECTION", "REQUISICOES_STUDENT_SEEN"]
+    verdict = {"identical": False, "derived_classes": observed, "refusal": None, "current": CHANGED}
+    observer.verdicts = [verdict, dict(verdict)]
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=reference,
+                 derived_classes=acknowledged) == "DERIVED_CLASSES_NOT_ACKNOWLEDGED"
+
+
+def test_observed_derived_classes_acknowledged_exactly_allow_the_rollback_and_are_recorded(directory, observer):
+    reference = _opened(directory, observer)
+    observed = ["REQUISICOES_AUTO_REJECTION"]
+    verdict = {"identical": False, "derived_classes": observed, "refusal": None, "current": CHANGED}
+    observer.verdicts = [verdict, dict(verdict)]
+    entry = ledger.rollback(directory, "STOP", observer=observer, reference_path=reference,
+                            derived_classes=["REQUISICOES_AUTO_REJECTION", "REQUISICOES_AUTO_REJECTION"])
+    assert entry["derived_classes"] == observed and entry["current_fingerprint_sha256"] == CHANGED["fingerprint_sha256"]
+
+
+def test_once_a_reference_is_taken_a_rollback_from_c11_is_treated_as_from_the_opening(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                          cadence_hours=24, observer=observer)
+    # The admission control may already be lifted although `open` was not recorded: users may be in.
+    assert _code(ledger.rollback, directory, "STOP") == "QUIESCENCE_PROOF_REQUIRED"
+    entry = ledger.rollback(directory, "STOP", observer=observer, reference_path=str(_reference_file(directory)))
+    assert entry["from_state"] == "C11" and entry["quiescence"] == "PROVEN"
+
+
+def test_after_the_ponr_is_recorded_rollback_is_refused(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
     assert ledger.status(directory)["ponr_recorded"] is True
-    assert _code(ledger.rollback, directory, "CHANGED_MIND", current_fingerprint=H["h"]) == "PONR_RECORDED"
+    assert _code(ledger.rollback, directory, "CHANGED_MIND", observer=observer,
+                 reference_path=str(_reference_file(directory))) == "PONR_RECORDED"
 
 
 def test_a_rollback_reason_is_a_fixed_code(directory):
@@ -293,7 +701,7 @@ def test_a_rollback_reason_is_a_fixed_code(directory):
 def test_the_ponr_needs_a_fingerprint_that_differs_from_the_opening_and_a_write_class(directory):
     _grant_all(directory)
     _drive(directory, "C12")
-    same = {**GOOD["C13"], "current_fingerprint_sha256": H["h"]}
+    same = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"]}
     assert _code(ledger.advance, directory, "C13", same) == "NO_FINGERPRINT_DELTA"
     assert _code(ledger.advance, directory, "C13", {**GOOD["C13"], "write_class": "a request"}) == \
         "EVIDENCE_NOT_VALUE_FREE"
@@ -311,6 +719,20 @@ def test_a_gate_not_acting_on_prod_may_still_be_granted_after_the_ponr(directory
     _grant_all(directory)
     _drive(directory, "C13")
     assert ledger.grant(directory, "GA2", "late")["gate"] == "GA2"
+
+
+def test_a_forward_fix_deployment_gate_exists_only_after_the_ponr_and_is_repeatable(directory):
+    _grant_all(directory)
+    _drive(directory, "C12")
+    assert _code(ledger.grant, directory, "GF1", "m-fix-1") == "GATE_ONLY_AFTER_PONR"
+    ledger.advance(directory, "C13", GOOD["C13"])
+    ledger.grant(directory, "GF1", "m-fix-1")
+    assert _code(ledger.grant, directory, "GF1", "m-fix-1") == "GATE_ALREADY_GRANTED"  # one message, one use
+    ledger.grant(directory, "GF1", "m-fix-2")  # a second forward-fix deployment is a second message
+    assert _code(ledger.grant, directory, "GD1", "m-late") == "GATE_NOT_AVAILABLE_AFTER_PONR"
+
+
+# ---- the chain and the head --------------------------------------------------------------------------
 
 
 def test_an_edited_entry_breaks_the_chain(directory):
@@ -352,17 +774,17 @@ def test_a_self_consistent_forged_entry_that_does_not_follow_its_predecessor_is_
     assert _code(ledger.read_ledger, directory) == "LEDGER_CHAIN_BROKEN"
 
 
-def test_a_truncated_tail_is_caught_by_the_head_the_operator_last_saw(directory):
+def test_a_truncated_tail_is_caught_by_the_head_the_operator_last_saw(directory, observer):
     """The chain cannot see the removal of the last entries; the head binding can."""
     _grant_all(directory)
-    _drive(directory, "C13")
+    _drive(directory, "C13", observer=observer)
     seen = ledger.status(directory)["head"]
     path = directory / ledger.LEDGER_FILE
     lines = path.read_text().splitlines()
     path.write_text("\n".join(lines[:-1]) + "\n")  # the PONR record is gone: the chain still verifies
     assert ledger.status(directory)["state"] == "C12" and ledger.status(directory)["chain"] == "OK"
-    assert _code(ledger.rollback, directory, "CHANGED_MIND", expect_head=seen,
-                 current_fingerprint=H["h"]) == "HEAD_MISMATCH"
+    assert _code(ledger.rollback, directory, "CHANGED_MIND", expect_head=seen, observer=observer,
+                 reference_path=str(_reference_file(directory))) == "HEAD_MISMATCH"
     assert _code(ledger.advance, directory, "C13", GOOD["C13"], expect_head=seen) == "HEAD_MISMATCH"
     assert _code(ledger.grant, directory, "GA2", "m", expect_head=seen) == "HEAD_MISMATCH"
 
@@ -394,36 +816,6 @@ def test_the_ledger_refuses_to_live_inside_the_repository_and_not_to_be_recreate
     assert _code(ledger.init, directory) == "LEDGER_EXISTS"
 
 
-def test_the_command_line_binds_commands_to_the_head_and_never_echoes_evidence(tmp_path):
-    ledger_dir = str(tmp_path / "cli-ledger")
-    out, err = io.StringIO(), io.StringIO()
-    assert ledger.main(["init", "--ledger-dir", ledger_dir], out=out, err=err) == 0
-    head = json.loads(out.getvalue())["head"]
-    evidence = tmp_path / "e.json"
-    evidence.write_text(json.dumps({**GOOD["C0"], "commit": "not-a-commit"}))
-    err = io.StringIO()
-    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
-                        "--expect-head", head], out=io.StringIO(), err=err) == 1
-    assert err.getvalue().strip() == "cutover-ledger: refused: EVIDENCE_INVALID"
-    assert "not-a-commit" not in err.getvalue()
-    evidence.write_text(json.dumps(GOOD["C0"]))
-    err = io.StringIO()
-    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
-                        "--expect-head", "0" * 64], out=io.StringIO(), err=err) == 1
-    assert "HEAD_MISMATCH" in err.getvalue()
-    out = io.StringIO()
-    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
-                        "--expect-head", head], out=out, err=io.StringIO()) == 0
-    new_head = json.loads(out.getvalue())["head"]
-    out = io.StringIO()
-    assert ledger.main(["status", "--ledger-dir", ledger_dir], out=out, err=io.StringIO()) == 0
-    status = json.loads(out.getvalue())
-    assert status["state"] == "C0" and status["head"] == new_head
-    assert ledger.main(["advance", "--ledger-dir", ledger_dir], out=io.StringIO(), err=io.StringIO()) == 2
-    assert ledger.main(["status", "--ledger-dir", str(tmp_path / "missing")], out=io.StringIO(),
-                       err=io.StringIO()) == 1
-
-
 def test_evidence_limits_have_their_own_codes_and_nothing_is_written(directory):
     _grant_all(directory)
     _drive(directory, "C1")
@@ -450,124 +842,10 @@ def test_a_directory_without_a_ledger_is_missing_not_empty(tmp_path):
     assert ledger._ledger_dir(str(tmp_path / "empty"), must_exist=False) == (tmp_path / "empty").resolve()
 
 
-@pytest.mark.parametrize("state", ledger.STATES[: ledger.STATES.index("C13")])
-def test_a_rollback_is_recorded_from_every_state_before_the_ponr_and_never_after(directory, state):
-    _grant_all(directory)
-    _drive(directory, state)
-    extra = {"current_fingerprint": H["h"]} if state == "C12" else {}
-    entry = ledger.rollback(directory, "OPERATOR_STOP", **extra)
-    assert entry["from_state"] == state
-    summary = ledger.status(directory)
-    assert summary["rolled_back"] is True and summary["state"] == state and summary["ponr_recorded"] is False
-    following = ledger.STATES[ledger.STATES.index(state) + 1]
-    assert _code(ledger.advance, directory, following, GOOD[following]) == "ROLLED_BACK"
-    assert ledger.read_ledger(directory)[-1]["type"] == "rollback"  # and the chain still verifies on read
-
-
-# ---- review hardening: adjudicated rollback, snapshot proof, mandatory head, forward-fix gate ---------
-
-
-def test_a_rollback_from_the_opening_may_adjudicate_a_known_derived_write_and_records_it(directory):
-    _grant_all(directory)
-    _drive(directory, "C12")
-    changed = "e" * 64
-    assert _code(ledger.rollback, directory, "STOP", current_fingerprint=changed) == "FINGERPRINT_CHANGED"
-    for bad in ([], ["lower"], ["BAD CLASS"], [f"T{i}" for i in range(17)]):
-        assert _code(ledger.rollback, directory, "STOP", current_fingerprint=changed,
-                     derived_classes=bad) == "FINGERPRINT_CHANGED"
-    entry = ledger.rollback(directory, "STOP", current_fingerprint=changed,
-                            derived_classes=["USUARIO_CREDENCIAIS", "REQUISICOES", "REQUISICOES"])
-    assert entry["adjudicated_derived_classes"] == ["REQUISICOES", "USUARIO_CREDENCIAIS"]
-    assert entry["current_fingerprint_sha256"] == changed
-    assert ledger.status(directory)["rolled_back"] is True
-
-
 def test_a_class_name_may_be_as_long_as_the_longest_census_class_and_no_longer():
     longest = "REQUISICAO_ARQUIVOS_LOCAL_LEGACY_REPLACEMENT_CLEANUP_PENDING"
     assert len(longest) == 60 and ledger._CLASS.fullmatch(longest)
     assert ledger._CLASS.fullmatch("A" * 64) and not ledger._CLASS.fullmatch("A" * 65)
-
-
-def _cli(args, *, ok=True):
-    out, err = io.StringIO(), io.StringIO()
-    code = ledger.main(args, out=out, err=err)
-    assert (code == 0) is ok, err.getvalue()
-    return out.getvalue(), err.getvalue()
-
-
-def test_the_command_line_will_not_grant_advance_or_roll_back_without_the_head_it_last_saw(tmp_path):
-    ledger_dir = str(tmp_path / "cli-head")
-    out, _ = _cli(["init", "--ledger-dir", ledger_dir])
-    head = json.loads(out)["head"]
-    _, err = _cli(["grant", "--ledger-dir", ledger_dir, "--gate", "GP0", "--ref", "m1"], ok=False)
-    assert err.strip() == "cutover-ledger: refused: HEAD_REQUIRED"
-    evidence = tmp_path / "e.json"
-    evidence.write_text(json.dumps(GOOD["C0"]))
-    _, err = _cli(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence)], ok=False)
-    assert "HEAD_REQUIRED" in err
-    _, err = _cli(["rollback", "--ledger-dir", ledger_dir, "--reason", "STOP"], ok=False)
-    assert "HEAD_REQUIRED" in err
-    _cli(["grant", "--ledger-dir", ledger_dir, "--gate", "GP0", "--ref", "m1", "--expect-head", head])
-
-
-def _snapshot_file(tmp_path, name, tables, taken_at="2099-01-01T00:00:00Z"):
-    from tools import pg_fingerprint as fp
-
-    path = tmp_path / name
-    document = {"format": fp.FORMAT, "tables": tables, "fingerprint_sha256": fp._digest_of(tables)}
-    if taken_at is not None:
-        document["taken_at"] = taken_at
-    path.write_text(json.dumps(document), encoding="ascii")
-    return path
-
-
-def test_the_command_line_takes_the_rollback_proof_from_a_valid_fresh_snapshot_file(tmp_path):
-    import os
-    import time
-
-    from tools import pg_fingerprint as fp
-
-    ledger_dir = tmp_path / "cli-proof"
-    ledger.init(ledger_dir)
-    _grant_all(ledger_dir)
-    tables = {"alunos": {"rows": 1, "sha256": "d" * 64, "columns": ["id"], "row_hashes": {"1": ["h"]}}}
-    reference = fp._digest_of(tables)
-    _drive(ledger_dir, "C11")
-    ledger.advance(ledger_dir, "C12", {**GOOD["C12"], "reference_fingerprint_sha256": reference})
-    head = ledger.status(ledger_dir)["head"]
-    base = ["rollback", "--ledger-dir", str(ledger_dir), "--reason", "STOP", "--expect-head", head]
-    # a file that is not a snapshot, a tampered one and a stale one are refused before anything is written
-    junk = tmp_path / "junk.json"
-    junk.write_text("not json")
-    assert "SNAPSHOT_UNREADABLE" in _cli([*base, "--current-snapshot", str(junk)], ok=False)[1]
-    tampered = _snapshot_file(tmp_path, "tampered.json", tables)
-    document = json.loads(tampered.read_text())
-    document["tables"]["alunos"]["rows"] = 2
-    tampered.write_text(json.dumps(document))
-    assert "SNAPSHOT_INVALID" in _cli([*base, "--current-snapshot", str(tampered)], ok=False)[1]
-    stale = _snapshot_file(tmp_path, "stale.json", tables, taken_at="2020-01-01T00:00:00Z")
-    assert "SNAPSHOT_STALE" in _cli([*base, "--current-snapshot", str(stale)], ok=False)[1]
-    undated = _snapshot_file(tmp_path, "undated.json", tables, taken_at=None)
-    assert "SNAPSHOT_STALE" in _cli([*base, "--current-snapshot", str(undated)], ok=False)[1]
-    # A copy of an old snapshot keeps the time written into it: a new file mtime does not make it fresh.
-    copy = tmp_path / "copy.json"
-    copy.write_bytes(stale.read_bytes())
-    os.utime(copy, None)
-    assert "SNAPSHOT_STALE" in _cli([*base, "--current-snapshot", str(copy)], ok=False)[1]
-    good = _snapshot_file(tmp_path, "good.json", tables)
-    out, _ = _cli([*base, "--current-snapshot", str(good)])
-    assert json.loads(out)["from_state"] == "C12"
-
-
-def test_a_forward_fix_deployment_gate_exists_only_after_the_ponr_and_is_repeatable(directory):
-    _grant_all(directory)
-    _drive(directory, "C12")
-    assert _code(ledger.grant, directory, "GF1", "m-fix-1") == "GATE_ONLY_AFTER_PONR"
-    ledger.advance(directory, "C13", GOOD["C13"])
-    ledger.grant(directory, "GF1", "m-fix-1")
-    assert _code(ledger.grant, directory, "GF1", "m-fix-1") == "GATE_ALREADY_GRANTED"  # one message, one use
-    ledger.grant(directory, "GF1", "m-fix-2")  # a second forward-fix deployment is a second message
-    assert _code(ledger.grant, directory, "GD1", "m-late") == "GATE_NOT_AVAILABLE_AFTER_PONR"
 
 
 def test_an_evidence_file_that_is_not_one_json_object_is_refused_with_its_own_code(tmp_path):
@@ -602,3 +880,88 @@ def test_a_ledger_line_with_no_known_type_is_a_broken_chain_not_a_crash(director
     with open(directory / ledger.LEDGER_FILE, "a", encoding="ascii") as handle:
         handle.write(json.dumps(body, sort_keys=True, separators=(",", ":")) + "\n")
     assert _code(ledger.read_ledger, directory) == "LEDGER_CHAIN_BROKEN"
+
+
+# ---- the command line -------------------------------------------------------------------------------
+
+
+def _cli(args, *, ok=True):
+    out, err = io.StringIO(), io.StringIO()
+    code = ledger.main(args, out=out, err=err)
+    assert (code == 0) is ok, err.getvalue()
+    return out.getvalue(), err.getvalue()
+
+
+def test_the_command_line_binds_commands_to_the_head_and_never_echoes_evidence(tmp_path):
+    ledger_dir = str(tmp_path / "cli-ledger")
+    out, err = io.StringIO(), io.StringIO()
+    assert ledger.main(["init", "--ledger-dir", ledger_dir], out=out, err=err) == 0
+    head = json.loads(out.getvalue())["head"]
+    evidence = tmp_path / "e.json"
+    evidence.write_text(json.dumps({**GOOD["C0"], "commit": "not-a-commit"}))
+    err = io.StringIO()
+    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
+                        "--expect-head", head], out=io.StringIO(), err=err) == 1
+    assert err.getvalue().strip() == "cutover-ledger: refused: EVIDENCE_INVALID"
+    assert "not-a-commit" not in err.getvalue()
+    evidence.write_text(json.dumps(GOOD["C0"]))
+    err = io.StringIO()
+    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
+                        "--expect-head", "0" * 64], out=io.StringIO(), err=err) == 1
+    assert "HEAD_MISMATCH" in err.getvalue()
+    out = io.StringIO()
+    assert ledger.main(["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence),
+                        "--expect-head", head], out=out, err=io.StringIO()) == 0
+    new_head = json.loads(out.getvalue())["head"]
+    out = io.StringIO()
+    assert ledger.main(["status", "--ledger-dir", ledger_dir], out=out, err=io.StringIO()) == 0
+    status = json.loads(out.getvalue())
+    assert status["state"] == "C0" and status["head"] == new_head
+    assert ledger.main(["advance", "--ledger-dir", ledger_dir], out=io.StringIO(), err=io.StringIO()) == 2
+    assert ledger.main(["status", "--ledger-dir", str(tmp_path / "missing")], out=io.StringIO(),
+                       err=io.StringIO()) == 1
+
+
+def test_the_command_line_will_not_act_without_the_head_it_last_saw(tmp_path):
+    ledger_dir = str(tmp_path / "cli-head")
+    out, _ = _cli(["init", "--ledger-dir", ledger_dir])
+    head = json.loads(out)["head"]
+    evidence = tmp_path / "e.json"
+    evidence.write_text(json.dumps(GOOD["C0"]))
+    for args in (
+        ["grant", "--ledger-dir", ledger_dir, "--gate", "GP0", "--ref", "m1"],
+        ["advance", "--ledger-dir", ledger_dir, "--state", "C0", "--evidence", str(evidence)],
+        ["rollback", "--ledger-dir", ledger_dir, "--reason", "STOP"],
+        ["record-backup", "--ledger-dir", ledger_dir, "--backup-root", str(tmp_path), "--off-platform", str(tmp_path)],
+        ["reference", "--ledger-dir", ledger_dir, "--backup-root", str(tmp_path), "--off-platform", str(tmp_path),
+         "--out", str(tmp_path / "r.json"), "--backup-cadence-hours", "24"],
+        ["open", "--ledger-dir", ledger_dir],
+    ):
+        _, err = _cli(args, ok=False)
+        assert err.strip() == "cutover-ledger: refused: HEAD_REQUIRED", args[0]
+    _cli(["grant", "--ledger-dir", ledger_dir, "--gate", "GP0", "--ref", "m1", "--expect-head", head])
+
+
+def test_the_command_line_cannot_type_the_opening_and_cannot_roll_back_from_it_without_the_proof(tmp_path):
+    directory = tmp_path / "cli-open"
+    ledger.init(directory)
+    _grant_all(directory)
+    _drive(directory, "C12")
+    head = ledger.status(directory)["head"]
+    evidence = tmp_path / "c12.json"
+    evidence.write_text(json.dumps({"opened_at": "2026-11-01T09:00:00Z"}))
+    _, err = _cli(["rollback", "--ledger-dir", str(directory), "--reason", "STOP", "--expect-head", head], ok=False)
+    assert "QUIESCENCE_PROOF_REQUIRED" in err
+
+
+def test_the_cli_refuses_to_type_c12(tmp_path):
+    directory = tmp_path / "cli-c12"
+    ledger.init(directory)
+    _grant_all(directory)
+    _drive(directory, "C11")
+    head = ledger.status(directory)["head"]
+    evidence = tmp_path / "c12.json"
+    evidence.write_text(json.dumps({"opened_at": "2026-11-01T09:00:00Z"}))
+    _, err = _cli(["advance", "--ledger-dir", str(directory), "--state", "C12", "--evidence", str(evidence),
+                   "--expect-head", head], ok=False)
+    assert "OPENING_NEEDS_THE_OPEN_COMMAND" in err

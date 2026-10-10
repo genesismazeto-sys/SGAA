@@ -50,6 +50,8 @@ class _Children:
             if self.fail_at == "OBJECT_BACKUP":
                 return 4
             destination = Path(command[command.index("--destination") + 1])
+            if not destination.parent.is_dir() or destination.exists():
+                return 2  # the real tool: DESTINATION_INVALID / DESTINATION_EXISTS (it never creates parents)
             (destination / "objects" / "ab").mkdir(parents=True)
             (destination / "MANIFEST.json").write_bytes(b"{}")
             (destination / "objects" / "ab" / "abcd").write_bytes(b"bytes")
@@ -304,3 +306,127 @@ def test_a_lock_left_by_a_killed_run_goes_stale_but_a_fresh_one_still_blocks(dir
     children = _Children()
     assert _generation(dirs, children)["result"] == "GENERATION_COMPLETE" and children.calls
     assert not lock.exists()  # released by the run that took it
+
+
+# ---- verify_generation and the ledger record (R3 remediation, finding 4) -----------------------------
+
+
+class _Report:
+    def __init__(self, ok=True, result_code="OK", database=None, digest="9" * 64):
+        self.ok, self.result_code, self.database, self.objects_digest = ok, result_code, database, digest
+
+
+@pytest.fixture
+def verifiable(dirs, monkeypatch):
+    """One complete generation with objects; the Layer-2 and object verifiers scripted."""
+    from app.storage import object_backup
+    from tools import pg_backup
+
+    calls = {"artifact": [], "objects": []}
+    monkeypatch.setattr(pg_backup, "verify_artifact", lambda path, **k: calls["artifact"].append(path))
+    report = {"value": _Report()}
+
+    def verify_set(path, conn=None):
+        calls["objects"].append(conn)
+        return report["value"]
+
+    monkeypatch.setattr(object_backup, "verify_set", verify_set)
+    _generation(dirs, _Children(), objects=True)
+    return dirs, calls, report
+
+
+def test_the_newest_generation_is_reverified_from_disk_including_its_off_platform_copy(verifiable):
+    (root, off), calls, _report = verifiable
+    result = ob.verify_generation(root, off)
+    assert result["database_set"].startswith("sgaa-pg-") and len(result["manifest_sha256"]) == 64
+    assert result["object_set"] and result["object_set_digest"] == "9" * 64
+    assert len(calls["artifact"]) == 1 and calls["objects"] == [None]
+    marker = object()
+    ob.verify_generation(root, off, conn=marker)
+    assert calls["objects"][-1] is marker  # with a connection the object set is compared with the live rows
+
+
+def _drop_from_off_registry(off, kind):
+    registry = json.loads((off / ob.REGISTRY_FILE).read_text(encoding="ascii"))
+    registry[kind] = registry[kind][:-1]
+    (off / ob.REGISTRY_FILE).write_text(json.dumps(registry), encoding="ascii")
+
+
+@pytest.mark.parametrize("damage,code", [
+    (lambda root, off: next((off / "layer2").glob("*.dump")).write_bytes(b"other"), "OFF_PLATFORM_COPY_MISMATCH"),
+    (lambda root, off: next((off / "layer2").glob("*.dump")).unlink(), "OFF_PLATFORM_COPY_MISMATCH"),
+    (lambda root, off: next((off / "objects").rglob("abcd")).write_bytes(b"other"), "OFF_PLATFORM_COPY_MISMATCH"),
+    (lambda root, off: (off / ob.REGISTRY_FILE).write_text('{"database": [], "objects": []}'),
+     "OFF_PLATFORM_COPY_MISSING"),
+    (lambda root, off: _drop_from_off_registry(off, "database"), "OFF_PLATFORM_COPY_MISSING"),  # the set only
+    (lambda root, off: _drop_from_off_registry(off, "objects"), "OFF_PLATFORM_COPY_MISSING"),   # the objects only
+])
+def test_a_missing_or_different_off_platform_copy_is_refused(verifiable, damage, code):
+    (root, off), _calls, _report = verifiable
+    damage(root, off)
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == code
+
+
+def test_an_invalid_layer2_set_or_object_set_is_refused(verifiable, monkeypatch):
+    from tools import pg_backup
+
+    (root, off), _calls, report = verifiable
+    report["value"] = _Report(ok=False, result_code="SET_INVALID")
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "OBJECT_SET_INVALID"
+    report["value"] = _Report(ok=False, database={"missing": 1, "extra": 0, "changed": 0})
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off, conn=object())
+    assert caught.value.code == "OBJECT_SET_NOT_CURRENT"
+    report["value"] = _Report()
+
+    def broken(path, **kwargs):
+        raise pg_backup.Refused("ARTIFACT_SHA_MISMATCH", "x")
+
+    monkeypatch.setattr(pg_backup, "verify_artifact", broken)
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "DATABASE_SET_INVALID"
+
+
+def test_no_generation_yet_is_refused(dirs):
+    root, off = dirs
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "NO_GENERATION"
+
+
+def test_with_a_ledger_the_generation_is_recorded_after_it_completes_retrying_a_busy_ledger(tmp_path, monkeypatch):
+    from tools import cutover_ledger
+
+    seen = []
+
+    def record(ledger_dir, root, off_platform):
+        seen.append((ledger_dir, root, off_platform))
+        if len(seen) == 1:
+            raise cutover_ledger.Refused("LEDGER_BUSY")
+        return {"hash": "h" * 64}
+
+    monkeypatch.setattr(cutover_ledger, "record_backup", record)
+    monkeypatch.setattr(ob.time, "sleep", lambda seconds: None)
+    out = io.StringIO()
+    code = ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o"),
+                    "--ledger-dir", str(tmp_path / "ledger")], out=out, err=io.StringIO(), runner=_Children())
+    assert code == 0 and len(seen) == 2
+    assert json.loads(out.getvalue())["ledger"] == {"recorded": True, "head": "h" * 64}
+
+
+def test_a_ledger_that_refuses_the_record_fails_the_run_by_code(tmp_path, monkeypatch):
+    from tools import cutover_ledger
+
+    def record(ledger_dir, root, off_platform):
+        raise cutover_ledger.Refused("OUT_OF_ORDER")
+
+    monkeypatch.setattr(cutover_ledger, "record_backup", record)
+    err = io.StringIO()
+    code = ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o"),
+                    "--ledger-dir", str(tmp_path / "ledger")], out=io.StringIO(), err=err, runner=_Children())
+    assert code == 1 and "LEDGER_OUT_OF_ORDER" in err.getvalue()

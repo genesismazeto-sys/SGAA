@@ -11,18 +11,10 @@ Without ``SGAA_PG_TEST_URL`` the module skips (REAL-PG EVIDENCE: ABSENT).
 
 from __future__ import annotations
 
-import os
-import socket
-import subprocess
-import sys
-import time
-from pathlib import Path
-from types import SimpleNamespace
-
 import pytest
 
-from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, seed_admin
-from tests.storage_mp1_support import SEED_SQL
+from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry
+from tests.mp3_served_app import seed_admin_and_requests, served_app
 from tools import hosted_smoke, pg_fingerprint
 
 pytestmark = pytest.mark.skipif(
@@ -31,94 +23,26 @@ pytestmark = pytest.mark.skipif(
 
 pytest.importorskip("psycopg")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-_KEEP = ("SYSTEMROOT", "SystemDrive", "WINDIR", "COMSPEC", "PATHEXT", "PATH", "USERPROFILE", "OS")
-_SERVER = (
-    "import main; from werkzeug.serving import make_server; import sys;"
-    "s = make_server('127.0.0.1', int(sys.argv[1]), main.app, threaded=True);"
-    "print('READY', flush=True); s.serve_forever()"
-)
-
-
-_RETURNED_REQUEST = (
-    "UPDATE requisicoes SET status = 'Devolvida', data_processamento = '2020-01-01 00:00:00' WHERE id = 2"
-)
-
-
-def _seed(conn) -> None:
-    """The real administrator, plus a student with one pending and one returned (long overdue) request.
-
-    The returned request is the trap: its deadline has passed, so an administrator's dashboard view
-    would derive an automatic rejection.  The smoke must never open that view.
-    """
-    seed_admin(conn)
-    business = [
-        (sql, params) for sql, params in SEED_SQL
-        if not sql.startswith(("INSERT INTO cloud_accounts", "INSERT INTO usuarios(id,nome,email,senha,tipo) VALUES(1,"))
-    ]
-    for sql, params in business:
-        conn.execute(sql, params)
-    conn.execute(
-        "INSERT INTO requisicoes(id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,"
-        "status,regra_snapshot_json,turma_id_snapshot,turma_codigo_snapshot)"
-        " SELECT 2,aluno_id,atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,"
-        "status,regra_snapshot_json,turma_id_snapshot,turma_codigo_snapshot FROM requisicoes WHERE id = 1"
-    )
-    conn.execute(_RETURNED_REQUEST)
-    # The column default is the legacy 'administrativo'; accounts made by the production owner carry 'aluno'.
-    conn.execute("UPDATE usuarios SET nivel_acesso = 'aluno' WHERE id = 2")
 
 
 @pytest.fixture(scope="module")
 def registry():
     registry = Registry("smoke")
     try:
-        registry.provision_template(seed=_seed)
+        registry.provision_template(seed=seed_admin_and_requests)
         yield registry
     finally:
         assert registry.close() == 0
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 @pytest.fixture
 def served(registry, tmp_path):
-    """``main:app`` in production + hosted mode served on 127.0.0.1 by a child interpreter."""
-    from cryptography.fernet import Fernet
-
+    """``main:app`` in production + hosted mode (admission open) served by a child interpreter."""
     name, url = registry.create(template=registry.template)
-    env = {key: os.environ[key] for key in _KEEP if key in os.environ}
-    env.update({
-        "TEMP": str(tmp_path), "TMP": str(tmp_path), "TMPDIR": str(tmp_path),
-        "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
-        "DATABASE_URL": url, "SGAA_RUNTIME": "hosted", "APP_ENV": "production", "TRUST_PROXY_XFF": "1",
-        "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
-        "APP_PUBLIC_BASE_URL": "https://sgaa.example.test", "SUPABASE_URL": "https://example.supabase.co",
-        "SUPABASE_SECRET_KEY": "not-a-real-key-" + "x" * 20, "SGAA_STORAGE_BUCKET": "sgaa-documentos",
-        "GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": "",
-    })
-    port = _free_port()
-    child = subprocess.Popen(
-        [sys.executable, "-c", _SERVER, str(port)], cwd=REPO_ROOT, env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-    )
     try:
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            if child.stdout.readline().strip() == "READY":
-                break
-            if child.poll() is not None:
-                raise AssertionError("the application did not start")
-        else:
-            raise AssertionError("the application did not become ready")
-        yield SimpleNamespace(url=f"http://127.0.0.1:{port}", database=url)
+        with served_app(url, tmp_path) as app:
+            yield app
     finally:
-        child.kill()
-        child.wait(timeout=30)
         registry.drop(name)
 
 

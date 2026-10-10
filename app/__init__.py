@@ -168,6 +168,13 @@ def create_app(
     app = Flask(__name__, template_folder=templates_dir, static_folder=static_dir)
     app.config["APP_ENV"] = env
     app.config["IS_PRODUCTION"] = is_production
+    if hosted:
+        # The pre-opening admission gate is the FIRST before_request: while admission is
+        # ``operator`` nothing else -- CSRF, session hooks, views, the database -- runs for
+        # a request without the operator credential (app.web.admission_gate).
+        from app.web import admission_gate
+
+        admission_gate.install(app)
 
     # ----- Segurança / sessão -----
     # A hosted process has many instances: an ephemeral per-instance key would

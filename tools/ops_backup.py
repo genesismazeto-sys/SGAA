@@ -18,6 +18,13 @@ SEQUENCE (any failure stops the run; nothing is rotated unless every step passed
     4. rotate: keep the newest ``--generations`` (at least 2) generations THIS
        TOOL registered, in both places.
 
+RECORDING (``--ledger-dir``)
+    After a complete generation the tool re-verifies it from disk (``verify_generation``:
+    the newest registered Layer-2 set and object set, their off-platform copies byte for
+    byte) and appends a ``backup`` entry to the cutover ledger.  The ledger requires such
+    an entry, proven current against the live database, before the opening, and a
+    complete cadence of them through the rollback window (MP-3 SPEC amendment A15).
+
 WHAT IT MAY DELETE
     Only sets listed in the registry file the tool itself writes
     (``ops_backup_registry.json`` in each directory).  A set made by hand, a
@@ -264,6 +271,7 @@ def run_generation(
             object_set = object_root / object_name
             if object_set.exists():
                 raise Refused("OBJECT_SET_EXISTS")
+            object_root.mkdir(parents=True, exist_ok=True)  # the object tool refuses a missing parent
             step("OBJECT_BACKUP", [python, "-m", "app.storage.cli", "backup-objects", "--destination",
                                    str(object_set), "--label", full_label])
             step("OBJECT_VERIFY", [python, "-m", "app.storage.cli", "verify-backup", "--set", str(object_set),
@@ -288,6 +296,65 @@ def run_generation(
     }
 
 
+def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
+    """The newest registered generation, re-verified from disk; value-free.
+
+    The Layer-2 set (sidecar, size, SHA-256 and archive listing, through ``pg_backup``), the newest
+    registered object set (offline; with ``conn``, also against the live ``storage_objects`` rows), and
+    every file of both against its off-platform copy.  Refuses with a fixed code on any difference.
+    """
+    from tools import pg_backup
+
+    root, off_platform = Path(root), Path(off_platform)
+    registry, off_registry = _read_registry(root), _read_registry(off_platform)
+    if not registry["database"]:
+        raise Refused("NO_GENERATION")
+    base = registry["database"][-1]
+    if base not in off_registry["database"]:
+        raise Refused("OFF_PLATFORM_COPY_MISSING")
+    files = [root / "layer2" / (base + suffix) for suffix in (".manifest.json", ".dump", ".dump.sha256")]
+    try:
+        pg_backup.verify_artifact(str(files[0]))
+    except pg_backup.BackupToolError:
+        raise Refused("DATABASE_SET_INVALID") from None
+    for item in files:
+        copy = off_platform / "layer2" / item.name
+        if not copy.is_file() or _sha256(item) != _sha256(copy):
+            raise Refused("OFF_PLATFORM_COPY_MISMATCH")
+    result = {"database_set": base, "manifest_sha256": _sha256(files[0]), "manifest_path": str(files[0]),
+              "object_set": None, "object_set_digest": None}
+    if registry["objects"]:
+        from app.storage import object_backup
+
+        name = registry["objects"][-1]
+        if name not in off_registry["objects"]:
+            raise Refused("OFF_PLATFORM_COPY_MISSING")
+        set_dir = root / "objects" / name
+        report = object_backup.verify_set(str(set_dir), conn=conn)
+        if not report.ok:
+            raise Refused("OBJECT_SET_INVALID" if report.database is None or report.result_code != object_backup.RESULT_OK
+                          else "OBJECT_SET_NOT_CURRENT")
+        for item in sorted(p for p in set_dir.rglob("*") if p.is_file()):
+            copy = off_platform / "objects" / name / item.relative_to(set_dir)
+            if not copy.is_file() or _sha256(item) != _sha256(copy):
+                raise Refused("OFF_PLATFORM_COPY_MISMATCH")
+        result.update(object_set=name, object_set_digest=report.objects_digest)
+    return result
+
+
+def _record_in_ledger(ledger_dir: Path, root: Path, off_platform: Path, attempts: int = 5) -> dict:
+    from tools import cutover_ledger
+
+    for attempt in range(attempts):
+        try:
+            return cutover_ledger.record_backup(ledger_dir, root, off_platform)
+        except cutover_ledger.Refused as refusal:
+            if refusal.code != "LEDGER_BUSY" or attempt == attempts - 1:
+                raise Refused(f"LEDGER_{refusal.code}") from None
+            time.sleep(2)
+    raise Refused("LEDGER_LEDGER_BUSY")  # pragma: no cover - the loop returns or raises
+
+
 def main(argv=None, *, out=None, err=None, runner=_run) -> int:
     out = out or sys.stdout
     err = err or sys.stderr
@@ -298,6 +365,8 @@ def main(argv=None, *, out=None, err=None, runner=_run) -> int:
     parser.add_argument("--label", default="scheduled", help="[a-z0-9-], at most 32; never the baseline label")
     parser.add_argument("--generations", type=int, default=MIN_GENERATIONS)
     parser.add_argument("--objects", action="store_true", help="also take the object-byte set")
+    parser.add_argument("--ledger-dir", default=None,
+                        help="the cutover ledger: record the verified generation there (MP-3, C11 onward)")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -307,6 +376,9 @@ def main(argv=None, *, out=None, err=None, runner=_run) -> int:
             Path(args.root), label=args.label, generations=args.generations, objects=args.objects,
             off_platform=Path(args.off_platform), runner=runner,
         )
+        if args.ledger_dir:
+            entry = _record_in_ledger(Path(args.ledger_dir), Path(args.root), Path(args.off_platform))
+            result["ledger"] = {"recorded": True, "head": entry["hash"]}
     except Refused as refusal:
         detail = f" ({refusal.detail})" if refusal.detail else ""
         err.write(f"ops-backup: refused: {refusal.code}{detail}\n")

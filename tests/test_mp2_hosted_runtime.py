@@ -33,6 +33,7 @@ _UNSET = (
     "VERCEL", "AWS_LAMBDA_FUNCTION_NAME", "APP_UPLOAD_FOLDER", "APP_DOCUMENTOS_ALUNOS_FOLDER", "APP_LOG_DIR",
     "SGAA_RUNTIME", "CRON_SECRET", "TOKEN_ENCRYPTION_KEY", "SUPABASE_URL", "SUPABASE_SECRET_KEY",
     "SGAA_STORAGE_BUCKET", "APP_PUBLIC_BASE_URL", "FLASK_DEBUG", "DEBUG", "FLASK_SECRET_KEY",
+    "SGAA_ADMISSION", "SGAA_OPERATOR_TOKEN",
 )
 
 
@@ -85,6 +86,9 @@ def production_env(hosted_env, monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://abcdefghijklmnop.supabase.co")
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_" + "x" * 30)
     monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
+    # The MP-2 contracts are those of an opened deployment; the pre-opening gate is MP-3's
+    # (tests/test_mp3_admission_gate.py).
+    monkeypatch.setenv("SGAA_ADMISSION", "open")
     return hosted_env
 
 
@@ -175,6 +179,7 @@ def test_the_proxy_trust_decision_must_be_explicit(hosted_env, monkeypatch):
 
 
 def test_production_also_requires_the_canonical_storage_variables(hosted_env, monkeypatch):
+    monkeypatch.setenv("SGAA_ADMISSION", "open")  # the admission decision is pinned on its own
     assert hosting.startup_blockers(production=False) == ()
     blockers = hosting.startup_blockers(production=True)
     assert blockers == (

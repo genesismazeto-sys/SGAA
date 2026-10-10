@@ -19,11 +19,22 @@ CHECKS (each reports a fixed code, never a body, header value or address)
     STATIC          a static asset linked from the login page is served
     SCHEDULER       the scheduler route answers 401/404 without or with a wrong bearer
     NO_TRACEBACK    an unknown path answers 404 with no interpreter trace
-    DATA_API        (with --data-api-url and the publishable key) the platform data API
-                    does not serve: the valid key is refused like a bogus one
+    ADMISSION       (``--admission``) seen WITHOUT the operator credential: ``closed`` --
+                    every page and a credential POST answer 503 ``X-SGAA-Admission: closed``
+                    and set no cookie; ``open`` -- the login page is served
+    DATA_API        (with --data-api-url, --data-api-project-ref and the publishable key; alone
+                    with --data-api-only, for C1, before any deployment exists) the
+                    data API of THAT project is off: PostgREST answers 406 with exactly the
+                    PGRST106 body proven on DEV (``DATA_API_OFF_ANSWER``: only the empty
+                    placeholder schema of the override is exposed); a bogus key is refused (401)
     SIGN_IN         (with --email) the operator signs in and reads an authenticated
                     endpoint that writes nothing (``/csrf-token``; never the dashboard,
                     whose view writes alert receipts and derived status changes)
+
+Before the opening the deployment admits only the operator (``app.web.admission_gate``): the
+smoke then sends the operator credential (``SGAA_OPERATOR_TOKEN``, read from the process
+environment, never an argument) on every request to the application, and the ADMISSION check
+uses a separate client without it.
 
 Exit codes: 0 every check passed, 1 a check failed or the run was refused, 2 usage.
 """
@@ -54,6 +65,11 @@ REQUIRED_HEADERS = {
     "content-security-policy": None,
 }
 TIMEOUT_SECONDS = 20
+OPERATOR_HEADER = "X-SGAA-Operator-Token"
+ADMISSION_STATE_HEADER = "x-sgaa-admission"
+#: The provider address of a project; a module constant so the tests can point it at a local server.
+PROJECT_HOST_TEMPLATE = "{ref}.supabase.co"
+_PROJECT_REF = re.compile(r"[a-z0-9.]{8,40}")
 
 
 class Refused(Exception):
@@ -65,7 +81,7 @@ class Refused(Exception):
 class _Client:
     """One HTTP(S) endpoint; never follows redirects, keeps cookies by hand."""
 
-    def __init__(self, base_url: str, *, allow_insecure: bool) -> None:
+    def __init__(self, base_url: str, *, allow_insecure: bool, operator_token: str | None = None) -> None:
         parts = urlsplit(base_url)
         if parts.scheme not in {"https", "http"} or not parts.hostname or parts.username or parts.path.strip("/"):
             raise Refused("BASE_URL_INVALID")
@@ -76,6 +92,7 @@ class _Client:
         self.port = parts.port
         self.cookies: dict[str, str] = {}
         self._context = ssl.create_default_context()
+        self._operator = {OPERATOR_HEADER: operator_token} if operator_token else {}
 
     def request(self, method: str, path: str, *, headers=None, body: bytes | None = None, jar: bool = False):
         connection_class = http.client.HTTPSConnection if self.scheme == "https" else http.client.HTTPConnection
@@ -83,7 +100,7 @@ class _Client:
         if self.scheme == "https":
             kwargs["context"] = self._context
         connection = connection_class(self.host, self.port, **kwargs)
-        sent = {"User-Agent": "sgaa-hosted-smoke/1", "Accept": "*/*", **(headers or {})}
+        sent = {"User-Agent": "sgaa-hosted-smoke/1", "Accept": "*/*", **self._operator, **(headers or {})}
         if jar and self.cookies:
             sent["Cookie"] = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
         try:
@@ -100,34 +117,143 @@ class _Client:
             connection.close()
 
 
-PLACEHOLDER_SCHEMAS = frozenset({"pgrst_no_exposed_schemas", "pg_pgrst_no_exposed_schemas"})
-_EXPOSED_HINT = re.compile(r"Only the following schemas are exposed: ([A-Za-z0-9_, ]+)")
+#: The one answer accepted as "the Data API is off": PostgREST refuses the ``public`` profile and names
+#: the empty placeholder schema of the provider's documented override as the only schema it exposes.
+#: Recorded verbatim on Supabase DEV with the override in place (SPEC A15), where the same request
+#: with the override reset answered 404 PGRST205 and failed.  Compared as parsed JSON (key order and
+#: spacing do not matter) and exactly: another PostgREST wording, the toggle's own placeholder
+#: (``pg_pgrst_no_exposed_schemas``, a schema that does not exist), another schema list or an extra
+#: detail fails closed until it is proven on DEV the same way.
+DATA_API_OFF_ANSWER = {
+    "code": "PGRST106",
+    "details": None,
+    "hint": "Only the following schemas are exposed: pgrst_no_exposed_schemas",
+    "message": "Invalid schema: public",
+}
 
 
-def _only_placeholder_schema_exposed(status: int, body: bytes) -> bool:
-    """406 PGRST106 whose hint lists only the empty placeholder schema (the Data API is off)."""
+def _data_api_off(status: int, body: bytes) -> bool:
+    """406 with exactly the answer proven on DEV (``DATA_API_OFF_ANSWER``)."""
+    if status != 406:
+        return False
     try:
-        parsed = json.loads(body.decode("utf-8"))
+        return json.loads(body.decode("utf-8")) == DATA_API_OFF_ANSWER
     except ValueError:
         return False
-    if status != 406 or not isinstance(parsed, dict) or parsed.get("code") != "PGRST106":
-        return False
-    hint = parsed.get("hint")
-    found = _EXPOSED_HINT.fullmatch(hint) if isinstance(hint, str) else None
-    if not found:
-        return False
-    listed = {name.strip() for name in found.group(1).split(",") if name.strip()}
-    return bool(listed) and listed <= PLACEHOLDER_SCHEMAS
+
+
+def _jwt_claims(key: str) -> dict | None:
+    """The payload of a legacy JWT-shaped API key (read, never verified), or None for another shape."""
+    parts = key.split(".")
+    if len(parts) != 3 or not parts[0].startswith("eyJ"):
+        return None
+    import base64
+
+    try:
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except (ValueError, UnicodeError):
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def project_digest(project_ref: str) -> str:
+    return hashlib.sha256(project_ref.encode("ascii")).hexdigest()
+
+
+def probe_admission(base_url: str, *, allow_insecure: bool = False) -> str:
+    """``closed``, ``open`` or ``unknown``, seen without any credential (also the ledger's probe)."""
+    anonymous = _Client(base_url, allow_insecure=allow_insecure)
+    states = set()
+    for method, path, body, headers in (
+        ("GET", "/login", None, {}),
+        ("GET", "/admin/dashboard", None, {}),
+        ("POST", "/login", b"email=probe%40example.invalid&senha=x",
+         {"Content-Type": "application/x-www-form-urlencoded"}),
+    ):
+        status, seen, _data, cookies = anonymous.request(method, path, body=body, headers=headers)
+        if status == 503 and seen.get(ADMISSION_STATE_HEADER, "") == "closed" and not cookies:
+            states.add("closed")
+        elif ADMISSION_STATE_HEADER not in seen and status != 503:
+            states.add("open")
+        else:
+            states.add("unknown")
+    return states.pop() if len(states) == 1 else "unknown"
+
+
+def probe_scheduler_front(base_url: str, *, allow_insecure: bool = False) -> str:
+    """``disabled`` (404 with no bearer and with a wrong one), ``enabled`` (401) or ``unknown``."""
+    client = _Client(base_url, allow_insecure=allow_insecure)
+    statuses = {client.request("GET", SCHEDULER_ROUTE, headers=headers)[0]
+                for headers in ({}, {"Authorization": "Bearer " + "x" * 40})}
+    if statuses == {404}:
+        return "disabled"
+    if statuses == {401}:
+        return "enabled"
+    return "unknown"
 
 
 def _check(name: str, ok: bool, code: str = "OK") -> dict:
     return {"check": name, "ok": bool(ok), "code": "OK" if ok else (code if code != "OK" else "FAILED")}
 
 
+def check_data_api(data_api_url: str, publishable_key: str | None, project_ref: str | None, *,
+                   allow_insecure: bool = False, report: dict | None = None) -> dict:
+    """The DATA_API check: the data API of the named project answers exactly as proven off on DEV."""
+    report = {} if report is None else report
+    if not publishable_key:
+        # Without the key an enabled API answers 401 too: the check would prove nothing.
+        return _check("DATA_API", False, "DATA_API_KEY_REQUIRED")
+    if not project_ref or not _PROJECT_REF.fullmatch(project_ref):
+        return _check("DATA_API", False, "DATA_API_PROJECT_REQUIRED")
+    api = _Client(data_api_url, allow_insecure=allow_insecure)
+    # Bound to the intended project: its own address, and a JWT-shaped key of that project.
+    if (api.host or "").lower() != PROJECT_HOST_TEMPLATE.format(ref=project_ref):
+        return _check("DATA_API", False, "DATA_API_WRONG_PROJECT")
+    claims = _jwt_claims(publishable_key)
+    if claims is not None and (claims.get("ref") != project_ref or claims.get("role") != "anon"):
+        return _check("DATA_API", False, "DATA_API_KEY_WRONG_PROJECT")
+    report["data_api_project_sha256"] = project_digest(project_ref)
+    valid, _h, body, _c = api.request(
+        "GET", DATA_API_TABLE_PATH, headers={"apikey": publishable_key, "Accept-Profile": "public"})
+    control, _h, _b, _c = api.request(
+        "GET", DATA_API_TABLE_PATH, headers={"apikey": "x" * len(publishable_key), "Accept-Profile": "public"})
+    if control != 401:
+        # The gateway must refuse a bogus key, otherwise the answer to the valid key says nothing.
+        return _check("DATA_API", False, "DATA_API_CONTROL")
+    if valid == 401:
+        # The valid key refused like the bogus one: a wrong, rotated or foreign key, or a gateway
+        # that refuses everything -- the API state is unknown.
+        return _check("DATA_API", False, "DATA_API_KEY_REFUSED")
+    # Off, and only this: the answer proven on DEV.  Rows, a table missing from an exposed schema,
+    # revoked privileges, any other schema list or wording and a protection page are NOT proof, and
+    # fail (DATA_API_SERVES: "not proven off").
+    return _check("DATA_API", _data_api_off(valid, body), "DATA_API_SERVES")
+
+
+def run_data_api_only(data_api_url: str, *, publishable_key: str | None, project_ref: str | None,
+                      allow_insecure: bool = False) -> dict:
+    """C1's proof, before any deployment exists: the DATA_API check alone."""
+    extra: dict = {}
+    try:
+        checks = [check_data_api(data_api_url, publishable_key, project_ref, allow_insecure=allow_insecure,
+                                 report=extra)]
+    except ssl.SSLError:
+        checks = [_check("DATA_API", False, "TLS_VERIFICATION_FAILED")]
+    except (OSError, http.client.HTTPException):
+        checks = [_check("DATA_API", False, "UNREACHABLE")]
+    return {"result": "PASS" if all(c["ok"] for c in checks) else "FAIL", "checks": checks, **extra}
+
+
 def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None = None,
-        publishable_key: str | None = None, email: str | None = None, password: str | None = None) -> dict:
-    client = _Client(base_url, allow_insecure=allow_insecure)
+        publishable_key: str | None = None, email: str | None = None, password: str | None = None,
+        operator_token: str | None = None, admission: str | None = None,
+        data_api_project_ref: str | None = None) -> dict:
+    if admission not in (None, "closed", "open"):
+        raise Refused("ADMISSION_INVALID")
+    client = _Client(base_url, allow_insecure=allow_insecure, operator_token=operator_token)
     checks: list[dict] = []
+    report_extra: dict = {}
 
     def attempt(name, func):
         try:
@@ -218,29 +344,17 @@ def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None
 
     attempt("NO_TRACEBACK", no_traceback)
 
-    if data_api_url:
-        def data_api():
-            if not publishable_key:
-                # Without the key an enabled API answers 401 too: the check would prove nothing.
-                return _check("DATA_API", False, "DATA_API_KEY_REQUIRED")
-            api = _Client(data_api_url, allow_insecure=allow_insecure)
-            if not allow_insecure and not (api.host or "").endswith(".supabase.co"):
-                return _check("DATA_API", False, "DATA_API_URL_NOT_PROVIDER")
-            valid, _h, body, _c = api.request(
-                "GET", DATA_API_TABLE_PATH, headers={"apikey": publishable_key, "Accept-Profile": "public"})
-            control, _h, _b, _c = api.request(
-                "GET", DATA_API_TABLE_PATH,
-                headers={"apikey": "x" * len(publishable_key), "Accept-Profile": "public"})
-            if control != 401:
-                # The gateway must refuse a bogus key, otherwise the answer to the valid key says nothing.
-                return _check("DATA_API", False, "DATA_API_CONTROL")
-            # Off, and only this: PostgREST answers for the valid key and says that the one schema it
-            # exposes is the empty placeholder.  A refusal of the valid key (a wrong, rotated or foreign
-            # key, a protection page in front), rows, a table missing from an exposed schema, revoked
-            # privileges and any other schema list are NOT proof, and fail.
-            return _check("DATA_API", _only_placeholder_schema_exposed(valid, body), "DATA_API_SERVES")
+    if admission:
+        def admission_check():
+            seen = probe_admission(base_url, allow_insecure=allow_insecure)
+            return _check("ADMISSION", seen == admission,
+                          "ADMISSION_NOT_CLOSED" if admission == "closed" else "ADMISSION_NOT_OPEN")
 
-        attempt("DATA_API", data_api)
+        attempt("ADMISSION", admission_check)
+
+    if data_api_url:
+        attempt("DATA_API", lambda: check_data_api(data_api_url, publishable_key, data_api_project_ref,
+                                                   allow_insecure=allow_insecure, report=report_extra))
 
     if email:
         def sign_in():
@@ -267,6 +381,7 @@ def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None
         "result": "PASS" if checks and all(item["ok"] for item in checks) else "FAIL",
         "host_digest": hashlib.sha256(client.host.encode()).hexdigest()[:12],
         "checks": checks,
+        **report_extra,
     }
 
 
@@ -274,16 +389,51 @@ def main(argv=None, *, out=None, err=None, prompt=getpass.getpass) -> int:
     out = out or sys.stdout
     err = err or sys.stderr
     parser = argparse.ArgumentParser(prog="hosted_smoke", allow_abbrev=False)
-    parser.add_argument("--base-url", required=True, help="the public address, https only")
+    parser.add_argument("--base-url", default=None, help="the public address, https only")
+    parser.add_argument("--data-api-only", action="store_true",
+                        help="C1: only the data-API proof (no deployment exists yet); needs --data-api-url")
     parser.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
     parser.add_argument("--data-api-url", default=None, help="the platform project address, to prove its data API off")
     parser.add_argument("--publishable-key-env", default="SUPABASE_PUBLISHABLE_KEY",
                         help="environment variable holding the publishable key (never an argument)")
+    parser.add_argument("--data-api-project-ref", default=None,
+                        help="the project the data-API proof is bound to (its address must be that project's)")
     parser.add_argument("--email", default=None, help="an operator account for the read-only sign-in check")
+    parser.add_argument("--admission", default=None, choices=("closed", "open"),
+                        help="the admission state the deployment must be in (closed before the opening)")
+    parser.add_argument("--operator-token-env", default="SGAA_OPERATOR_TOKEN",
+                        help="environment variable holding the operator credential (never an argument)")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
+    if args.data_api_only:
+        if args.base_url or args.admission or args.email:
+            err.write("hosted-smoke: usage: --data-api-only takes no deployment arguments\n")
+            return 2
+        if not args.data_api_url or not args.data_api_project_ref:
+            err.write("hosted-smoke: refused: DATA_API_PROJECT_REQUIRED\n")
+            return 1
+        try:
+            result = run_data_api_only(args.data_api_url, project_ref=args.data_api_project_ref,
+                                       publishable_key=os.environ.get(args.publishable_key_env) or None,
+                                       allow_insecure=args.allow_insecure)
+        except Refused as refusal:
+            err.write(f"hosted-smoke: refused: {refusal.code}\n")
+            return 1
+        json.dump(result, out, sort_keys=True)
+        out.write("\n")
+        return 0 if result["result"] == "PASS" else 1
+    if not args.base_url or not args.admission:
+        err.write("hosted-smoke: usage: --base-url and --admission are required\n")
+        return 2
+    operator_token = os.environ.get(args.operator_token_env) or None
+    if args.admission == "closed" and not operator_token:
+        err.write("hosted-smoke: refused: OPERATOR_TOKEN_REQUIRED\n")
+        return 1
+    if args.data_api_url and not args.data_api_project_ref:
+        err.write("hosted-smoke: refused: DATA_API_PROJECT_REQUIRED\n")
+        return 1
     password = None
     if args.email:
         if args.allow_insecure:
@@ -294,13 +444,15 @@ def main(argv=None, *, out=None, err=None, prompt=getpass.getpass) -> int:
         result = run(
             args.base_url, allow_insecure=args.allow_insecure, data_api_url=args.data_api_url,
             publishable_key=os.environ.get(args.publishable_key_env) or None,
-            email=args.email, password=password,
+            email=args.email, password=password, operator_token=operator_token, admission=args.admission,
+            data_api_project_ref=args.data_api_project_ref,
         )
     except Refused as refusal:
         err.write(f"hosted-smoke: refused: {refusal.code}\n")
         return 1
     finally:
         password = None
+        operator_token = None
     json.dump(result, out, sort_keys=True)
     out.write("\n")
     return 0 if result["result"] == "PASS" else 1

@@ -8,8 +8,13 @@ WHY THIS EXISTS
     be entered, that the evidence for it is complete and VALUE-FREE, that every
     gate it needs was granted, and that the identities carried from state to
     state (frozen source, prepared copy, reference digest, deployed commit,
-    opening fingerprint) never change.  It executes nothing and talks to no
-    database or provider.
+    opening fingerprint) never change.  It writes nothing but its own file.
+    Where the SPEC forbids trusting the operator's word (the opening, a
+    rollback from it, the backups that must exist before and after it) the
+    ledger OBSERVES for itself, read-only: the public address without any
+    credential (``tools/hosted_smoke`` probes), the database in one read-only
+    snapshot (``tools/pg_fingerprint``) and the backup directories
+    (``tools/ops_backup.verify_generation``).
 
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
@@ -24,14 +29,25 @@ WHAT IT STORES
     ledger cannot verify the user.
 
 COMMANDS
-    init      create the ledger (the directory must not hold one)
-    grant     record that the user granted a gate (an opaque reference only)
-    advance   enter the next state with its evidence
-    rollback  record a rollback; refused once the point of no return is
-              recorded, and from C12 only with the current fingerprint equal
-              to the opening reference (proof that nothing was written)
-    status    current state, granted gates, head, chain verdict
-    verify    chain verdict and head only
+    init           create the ledger (the directory must not hold one)
+    grant          record that the user granted a gate (an opaque reference only)
+    advance        enter the next state with its evidence (never C12: see ``open``)
+    record-backup  verify the newest backup generation from disk and record it
+                   (C11 onward; ``ops_backup --ledger-dir`` calls it after every run)
+    reference      at C11, with GO granted: observe that admission is CLOSED,
+                   prove the recorded pre-opening backup current against the live
+                   database, take the reference fingerprint live, write it out
+    open           observe that admission is OPEN and enter C12 from the reference
+                   (which must be at most 30 minutes old)
+    rollback       record a rollback; refused once the point of no return is
+                   recorded.  From the opening (C12, or C11 once a reference was
+                   taken) only with quiescence OBSERVED -- admission closed, the
+                   scheduler front disabled, no external trigger -- and the current
+                   fingerprint taken live twice, a quiescence interval apart, equal
+                   to each other and either equal to the reference or different
+                   only by the fixed derived-write classes, acknowledged exactly
+    status         current state, granted gates, head, chain verdict
+    verify         chain verdict and head only
 
 Exit codes: 0 done, 1 refused (code on stderr), 2 usage.
 """
@@ -44,8 +60,9 @@ import json
 import os
 import re
 import sys
+import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 LEDGER_FILE = "ledger.jsonl"
@@ -55,7 +72,20 @@ MAX_EVIDENCE_BYTES = 8192
 STATES = (
     "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14",
 )
-ENTRY_TYPES = frozenset({"init", "advance", "grant", "rollback"})
+ENTRY_TYPES = frozenset({"init", "advance", "grant", "rollback", "reference", "backup"})
+#: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
+ROLLBACK_WINDOW_DAYS = 30
+#: Before a rollback from the opening is trusted, two live fingerprints this far apart must agree:
+#: longer than the longest request a deployment can still be serving (maxDuration 300 s).
+QUIESCENCE_SECONDS = 330
+#: The reference is taken immediately before the admission control is lifted.
+REFERENCE_MAX_AGE_SECONDS = 30 * 60
+#: Backup cadence (UD10): the Layer-2 cadence is declared at the reference (1..24 hours); object sets weekly.
+OBJECT_CADENCE_HOURS = 7 * 24
+CADENCE_TOLERANCE = 1.5
+#: Injectable for the tests; the command line uses the real clock and sleep.
+_CLOCK = lambda: datetime.now(timezone.utc)  # noqa: E731
+_SLEEP = time.sleep
 STATE_NAMES = {
     "C0": "REHEARSED", "C1": "PROD_QUALIFIED", "C2": "SNAPSHOT_CENSUSED", "C3": "SOURCE_FROZEN",
     "C4": "SOURCE_PREPARED", "C5": "CONVERGED", "C6": "SOURCE_CROSS_CHECKED", "C7": "TARGET_LOADED",
@@ -79,6 +109,7 @@ STATE_GATES = {
 # The first state a rollback is no longer allowed from, and the gates that act on PROD or on the
 # source and therefore cannot be granted once it is recorded (SPEC section 10.2: "before PONR").
 PONR_STATE = "C13"
+OPENING_STATE = "C12"
 PRE_PONR_ONLY_GATES = frozenset({"GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3", "GX1", "GD1"})
 
 _KEY = re.compile(r"[a-z][a-z0-9_]{0,48}")
@@ -187,10 +218,12 @@ def _exceptions_key(value):
 
 # Per state: required evidence keys and the predicate each value must satisfy.
 _SCHEMA = {
+    # ``prod_project_sha256``: the PROD project GP0 names (sha256 of its reference); every data-API proof binds to it.
     "C0": {"commit": _hex40, "runbook_sha256": _hex64, "rehearsal_index_sha256": _hex64,
-           "review_verdict": _equals("PASS")},
+           "review_verdict": _equals("PASS"), "prod_project_sha256": _hex64},
     "C1": {"pg_major": lambda v: _int(v) and v >= 15, "schema_current": _true, "rows": _zero, "objects": _zero,
-           "data_api_toggle_off": _true, "data_api_probe": _equals("NOT_SERVED"),
+           "data_api_toggle_off": _true, "data_api_override": _equals("APPLIED"),
+           "data_api_probe": _equals("NOT_SERVED"), "data_api_project_sha256": _hex64,
            "api_exposure_clean": _true, "capacity_ok": _true},
     "C2": {"database_bytes": _nonneg, "document_bytes": _nonneg, "census": _census},
     "C3": {"source_size": lambda v: _int(v) and v > 0, "source_sha256": _hex64, "wal_bytes": _zero},
@@ -207,15 +240,23 @@ _SCHEMA = {
     "C8": {"reference_digest": _hex64, "census_equal": _true, "baseline_manifest_sha256": _hex64,
            "object_set_digest": _hex64, "restore_drill": _equals("OK"), "verify_backup": _equals("OK"),
            "admin_bootstrap": lambda v: v in {"NOT_NEEDED", "DONE"}},
+    # The deployment admits only the operator from C9 to C11 (app.web.admission_gate); the tree that was
+    # uploaded is the reviewed export, re-proven immediately before the upload (deploy_audit verify).
     "C9": {"commit": _hex40, "readiness": _equals("READY"), "bundle_audit": _equals("CLEAN"),
-           "scheduler_front": _equals("DISABLED")},
-    "C10": {"smoke": _equals("PASS"), "write_set_ok": _true},
+           "deploy_verify": _equals("IDENTICAL"), "deploy_tree_sha256": _hex64,
+           "scheduler_front": _equals("DISABLED"), "admission": _equals("CLOSED")},
+    "C10": {"smoke": _equals("PASS"), "write_set_ok": _true, "admission": _equals("CLOSED"),
+            "data_api_project_sha256": _hex64},
     "C11": {"account_key_match": _true, "mirror_passes": lambda v: _nonneg(v) and v >= 1,
-            "reconciliation_required": _zero, "scheduler_front": _equals("ENABLED")},
-    "C12": {"reference_fingerprint_sha256": _hex64, "opened_at": _stamp},
+            "reconciliation_required": _zero, "scheduler_front": _equals("ENABLED"),
+            "admission": _equals("CLOSED")},
+    # Written only by ``open``: every value is the ledger's own observation or the reference's.
+    "C12": {"reference_fingerprint_sha256": _hex64, "database_identity_sha256": _hex64, "opened_at": _stamp,
+            "admission": _equals("OPEN"), "pre_open_backup_manifest_sha256": _hex64,
+            "backup_cadence_hours": lambda v: _int(v) and 1 <= v <= 24, "rpo_hours": lambda v: _int(v) and v >= 1},
     "C13": {"write_class": lambda v: isinstance(v, str) and bool(_CLASS.fullmatch(v)),
             "detected_at": _stamp, "current_fingerprint_sha256": _hex64, "adjudicated_by_operator": _true},
-    "C14": {"window_days": lambda v: _int(v) and v >= 1, "second_generation_restore": _equals("OK"),
+    "C14": {"restore_validated_manifest_sha256": _hex64, "restore_drill": _equals("OK"),
             "unresolved_reconciliation": _zero, "object_set_verified": _true},
 }
 
@@ -234,7 +275,11 @@ def _entry_hash(body: dict) -> str:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _CLOCK().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse(stamp: str) -> datetime:
+    return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 
 def _repository_root() -> Path:
@@ -321,17 +366,27 @@ def _summary(entries: list[dict]) -> dict:
     granted: dict[str, str] = {}
     rolled_back = False
     carried: dict[str, object] = {}
+    entered: dict[str, dict] = {}
+    reference = None  # the latest reference taken in the current state
+    backups: list[dict] = []
     for entry in entries:
         kind = entry["type"]
         if kind == "advance":
             state = entry["state"]
             rolled_back = False
             carried[entry["state"]] = entry["evidence"]
+            entered[entry["state"]] = entry
+            reference = None
         elif kind == "grant":
             granted[entry["gate"]] = entry["ref"]
         elif kind == "rollback":
             rolled_back = True
-    return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried}
+        elif kind == "reference":
+            reference = entry
+        elif kind == "backup":
+            backups.append(entry)
+    return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
+            "entered": entered, "reference": reference, "backups": backups}
 
 
 def _evidence_of(summary: dict, state: str) -> dict:
@@ -364,39 +419,88 @@ def _check_carried_identities(state: str, evidence: dict, summary: dict) -> None
         raise Refused("GATE_NOT_GRANTED", "GP3")
     if state == "C9" and evidence["commit"] != _evidence_of(summary, "C0").get("commit"):
         raise Refused("COMMIT_NOT_THE_REHEARSED_ONE")
+    if state == "C1" and evidence["data_api_project_sha256"] != _evidence_of(summary, "C0").get(
+        "prod_project_sha256"
+    ):
+        raise Refused("DATA_API_NOT_THE_PROD_PROJECT", "the data-API proof names another project than GP0's")
+    if state == "C10" and evidence["data_api_project_sha256"] != _evidence_of(summary, "C1").get(
+        "data_api_project_sha256"
+    ):
+        raise Refused("DATA_API_PROJECT_CHANGED", "the data-API proof names another project than C1's")
     if state == "C13" and evidence["current_fingerprint_sha256"] == _evidence_of(summary, "C12").get(
         "reference_fingerprint_sha256"
     ):
         raise Refused("NO_FINGERPRINT_DELTA", "a business write changes the fingerprint; this one equals the opening")
+    if state == "C14":
+        _check_window(summary, evidence)
+
+
+def _gaps_within(times: list[datetime], start: datetime, end: datetime, hours: float) -> bool:
+    """Every interval of [start, end] is shorter than ``hours`` between consecutive recorded times."""
+    points = [start] + sorted(t for t in times if start < t <= end) + [end]
+    limit = timedelta(hours=hours)
+    return all(later - earlier <= limit for earlier, later in zip(points, points[1:]))
+
+
+def _check_window(summary: dict, evidence: dict) -> None:
+    """C14: UD4's window elapsed since C13; the cadence held from the opening (C12) to now; the drill in the window."""
+    now = _CLOCK()
+    ponr_at = _parse(summary["entered"]["C13"]["at"])
+    if now - ponr_at < timedelta(days=ROLLBACK_WINDOW_DAYS):
+        raise Refused("WINDOW_NOT_ELAPSED", f"the rollback window is {ROLLBACK_WINDOW_DAYS} days from C13")
+    # The pre-open generation (recorded before C12) anchors both cadences.
+    start = _parse(summary["entered"]["C12"]["at"])
+    cadence = int(_evidence_of(summary, "C12")["backup_cadence_hours"])
+    database_times = [_parse(b["at"]) for b in summary["backups"]]
+    anchor = [t for t in database_times if t <= start]
+    if not _gaps_within(database_times, max(anchor) if anchor else start, now, cadence * CADENCE_TOLERANCE):
+        raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
+    object_times, seen = [], set()
+    for backup in summary["backups"]:
+        if backup["object_set_name"] != "NONE" and backup["object_set_name"] not in seen:
+            seen.add(backup["object_set_name"])
+            object_times.append(_parse(backup["at"]))
+    anchor = [t for t in object_times if t <= start]
+    if not _gaps_within(object_times, max(anchor) if anchor else start, now, OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
+        raise Refused("OBJECT_CADENCE_BROKEN", "an object set is missing from the window")
+    in_window = {b["manifest_sha256"] for b in summary["backups"] if _parse(b["at"]) > ponr_at}
+    if evidence["restore_validated_manifest_sha256"] not in in_window:
+        raise Refused("RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION")
 
 
 def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None) -> dict:
+    if state == OPENING_STATE:
+        raise Refused("OPENING_NEEDS_THE_OPEN_COMMAND", "C12 is entered by `open`, from an observed reference")
     with _locked(directory):
         entries = read_ledger(directory)
         _check_head(entries, expect_head)
-        summary = _summary(entries)
-        if state not in STATES:
-            raise Refused("UNKNOWN_STATE")
-        if summary["rolled_back"]:
-            raise Refused("ROLLED_BACK", "a rolled-back cutover is not continued; start a new ledger")
-        expected = _next_state(summary["state"])
-        if expected is None or state != expected:
-            raise Refused("OUT_OF_ORDER", f"the next state is {expected}")
-        missing = [gate for gate in STATE_GATES[state] if gate not in summary["granted"]]
-        if missing:
-            raise Refused("GATE_NOT_GRANTED", ",".join(missing))
-        _check_value_free(evidence)
-        if len(json.dumps(evidence, sort_keys=True)) > MAX_EVIDENCE_BYTES:
-            raise Refused("EVIDENCE_TOO_LARGE")
-        schema = _SCHEMA[state]
-        for key, predicate in schema.items():
-            if key not in evidence or not predicate(evidence[key]):
-                raise Refused("EVIDENCE_INVALID", key)
-        unexpected = sorted(set(evidence) - set(schema))
-        if unexpected:
-            raise Refused("EVIDENCE_UNEXPECTED_KEY", unexpected[0])
-        _check_carried_identities(state, evidence, summary)
-        return _append(directory, entries, {"type": "advance", "state": state, "evidence": evidence})
+        return _advance_locked(directory, entries, state, evidence)
+
+
+def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: dict) -> dict:
+    summary = _summary(entries)
+    if state not in STATES:
+        raise Refused("UNKNOWN_STATE")
+    if summary["rolled_back"]:
+        raise Refused("ROLLED_BACK", "a rolled-back cutover is not continued; start a new ledger")
+    expected = _next_state(summary["state"])
+    if expected is None or state != expected:
+        raise Refused("OUT_OF_ORDER", f"the next state is {expected}")
+    missing = [gate for gate in STATE_GATES[state] if gate not in summary["granted"]]
+    if missing:
+        raise Refused("GATE_NOT_GRANTED", ",".join(missing))
+    _check_value_free(evidence)
+    if len(json.dumps(evidence, sort_keys=True)) > MAX_EVIDENCE_BYTES:
+        raise Refused("EVIDENCE_TOO_LARGE")
+    schema = _SCHEMA[state]
+    for key, predicate in schema.items():
+        if key not in evidence or not predicate(evidence[key]):
+            raise Refused("EVIDENCE_INVALID", key)
+    unexpected = sorted(set(evidence) - set(schema))
+    if unexpected:
+        raise Refused("EVIDENCE_UNEXPECTED_KEY", unexpected[0])
+    _check_carried_identities(state, evidence, summary)
+    return _append(directory, entries, {"type": "advance", "state": state, "evidence": evidence})
 
 
 def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = None) -> dict:
@@ -422,11 +526,245 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
         return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
 
 
-def rollback(directory: Path, reason: str, *, expect_head: str | None = None,
-             current_fingerprint: str | None = None, derived_classes: list[str] | None = None) -> dict:
-    """Record the rollback.  From C12 it needs the current business fingerprint: equal to the opening's,
-    or -- when a known derived write (a re-hash, a derived rejection) changed it -- accompanied by the
-    operator's explicit, recorded adjudication naming the changed tables or classes."""
+class Observer:
+    """The ledger's read-only eyes: the public address (no credential), the database, the backups.
+
+    ``base_url``: the public address of the deployment.  The database is ``DATABASE_URL`` (direct
+    or session mode: one snapshot transaction; the transaction pooler is refused).  Every answer is
+    a fixed code, a count or a digest.
+    """
+
+    def __init__(self, base_url: str | None = None, *, allow_insecure: bool = False,
+                 database_url: str | None = None, scheduler_url: str | None = None) -> None:
+        self.base_url = base_url
+        self.allow_insecure = allow_insecure
+        self.database_url = database_url
+        # On the platform the scheduler front answers at the same public address (a rewrite to its own
+        # function); a rehearsal that serves it separately names its address here.
+        self.scheduler_url = scheduler_url
+
+    def _require_base(self) -> str:
+        if not self.base_url:
+            raise Refused("BASE_URL_REQUIRED")
+        return self.base_url
+
+    def admission(self) -> str:
+        from tools import hosted_smoke
+
+        try:
+            return hosted_smoke.probe_admission(self._require_base(), allow_insecure=self.allow_insecure)
+        except hosted_smoke.Refused as refusal:
+            raise Refused(refusal.code) from None
+        except OSError:
+            return "unknown"
+
+    def scheduler_front(self) -> str:
+        from tools import hosted_smoke
+
+        try:
+            return hosted_smoke.probe_scheduler_front(self.scheduler_url or self._require_base(),
+                                                      allow_insecure=self.allow_insecure)
+        except hosted_smoke.Refused as refusal:
+            raise Refused(refusal.code) from None
+        except OSError:
+            return "unknown"
+
+    @contextmanager
+    def _connection(self):
+        from tools import pg_backup
+
+        try:
+            url = pg_backup.require_url(self.database_url, "DATABASE_URL")
+            conn = pg_backup.connect(url)
+        except pg_backup.BackupToolError as exc:
+            raise Refused(exc.code) from None
+        except Exception:
+            raise Refused("DATABASE_UNREACHABLE") from None
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def database_identity(self) -> str:
+        from tools import pg_fingerprint
+
+        with self._connection() as conn:
+            return pg_fingerprint.database_identity_sha256(conn)
+
+    def fingerprint(self) -> dict:
+        from tools import pg_fingerprint
+
+        with self._connection() as conn:
+            return pg_fingerprint.snapshot(conn)
+
+    def classify(self, reference: dict) -> dict:
+        from tools import pg_fingerprint
+
+        with self._connection() as conn:
+            return pg_fingerprint.classify(conn, reference)
+
+    def external_trigger_jobs(self) -> int:
+        """Active ``pg_cron`` jobs (the free external trigger); -1 when they cannot be read."""
+        with self._connection() as conn:
+            try:
+                if conn.execute("SELECT to_regclass('cron.job')").fetchone()[0] is None:
+                    return 0
+                return int(conn.execute("SELECT count(*) FROM cron.job WHERE active").fetchone()[0])
+            except Exception:
+                return -1
+
+    def backup(self, root: Path, off_platform: Path, *, against_database: bool) -> dict:
+        from tools import ops_backup
+
+        try:
+            if not against_database:
+                return ops_backup.verify_generation(root, off_platform)
+            with self._connection() as conn:
+                return ops_backup.verify_generation(root, off_platform, conn=conn)
+        except ops_backup.Refused as refusal:
+            raise Refused(f"BACKUP_{refusal.code}") from None
+
+    def backup_matches(self, manifest_path: str, fingerprint: dict) -> bool:
+        """The Layer-2 set holds exactly the business state of ``fingerprint`` (table digests)."""
+        from tools import pg_fingerprint
+
+        try:
+            manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+            recorded = manifest["tables"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+        for table, entry in fingerprint["tables"].items():
+            stored = recorded.get(table) if isinstance(recorded, dict) else None
+            if not isinstance(stored, dict) or stored.get("rows") != entry["rows"]:
+                return False
+            if table not in pg_fingerprint.EXCLUDED_COLUMNS and stored.get("sha256") != entry["sha256"]:
+                return False
+        return True
+
+
+def _require_open_pending(summary: dict, *, allow_reference: bool) -> None:
+    if summary["rolled_back"]:
+        raise Refused("ROLLED_BACK", "a rolled-back cutover is not continued; start a new ledger")
+    if summary["state"] != "C11":
+        raise Refused("OUT_OF_ORDER", "the opening follows C11")
+    if "GO" not in summary["granted"]:
+        raise Refused("GATE_NOT_GRANTED", "GO")
+    if not allow_reference and summary["reference"] is None:
+        raise Refused("REFERENCE_REQUIRED", "take the reference with `reference` first")
+
+
+def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_head: str | None = None,
+                  observer: Observer | None = None) -> dict:
+    """Verify the newest backup generation from disk and record it (C11 onward, until C14)."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        state = summary["state"]
+        if state is None or STATES.index(state) < STATES.index("C11") or state == STATES[-1]:
+            raise Refused("OUT_OF_ORDER", "backups are recorded from C11 until the window closes")
+        generation = observer.backup(Path(root), Path(off_platform), against_database=False)
+        return _append(directory, entries, {
+            "type": "backup", "manifest_sha256": generation["manifest_sha256"],
+            "object_set_name": generation["object_set"] or "NONE",
+            "object_set_digest": generation["object_set_digest"] or "NONE",
+            "off_platform": "VERIFIED",
+        })
+
+
+def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *, cadence_hours: int,
+                   expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """The C12 reference, taken by the ledger itself while admission is still CLOSED."""
+    from tools import pg_fingerprint
+
+    observer = observer or Observer()
+    out = Path(out)
+    if not _int(cadence_hours) or not 1 <= cadence_hours <= 24:
+        raise Refused("CADENCE_INVALID", "the Layer-2 cadence is 1 to 24 hours (UD10: nightly)")
+    resolved = out.resolve()
+    if resolved == _repository_root().resolve() or _repository_root().resolve() in resolved.parents:
+        raise Refused("OUTPUT_INSIDE_REPOSITORY")
+    if out.exists():
+        raise Refused("OUTPUT_EXISTS")
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        _require_open_pending(summary, allow_reference=True)
+        if observer.admission() != "closed":
+            raise Refused("ADMISSION_NOT_CLOSED", "the reference is taken before anyone but the operator is admitted")
+        entered_c11 = summary["entered"]["C11"]["seq"]
+        recorded = [b for b in summary["backups"] if b["seq"] > entered_c11]
+        if not recorded or recorded[-1]["object_set_name"] == "NONE":
+            raise Refused("PRE_OPEN_BACKUP_REQUIRED", "a verified generation with objects, recorded after C11")
+        generation = observer.backup(Path(root), Path(off_platform), against_database=True)
+        if generation["manifest_sha256"] != recorded[-1]["manifest_sha256"] or \
+                generation["object_set"] != recorded[-1]["object_set_name"]:
+            raise Refused("BACKUP_NOT_THE_RECORDED_ONE")
+        fingerprint = observer.fingerprint()
+        if not observer.backup_matches(generation["manifest_path"], fingerprint):
+            raise Refused("BACKUP_NOT_CURRENT", "the pre-opening backup does not hold the current business state")
+        identity = observer.database_identity()
+        document = dict(fingerprint, taken_at=_now())
+        pg_fingerprint.validate(document)
+        out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")
+        return _append(directory, entries, {
+            "type": "reference", "reference_fingerprint_sha256": fingerprint["fingerprint_sha256"],
+            "database_identity_sha256": identity, "admission": "CLOSED",
+            "pre_open_backup_manifest_sha256": generation["manifest_sha256"],
+            "backup_cadence_hours": cadence_hours, "rpo_hours": cadence_hours,
+        })
+
+
+def open_admission(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """Enter C12: the reference is fresh and admission is now observed OPEN."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        _require_open_pending(summary, allow_reference=False)
+        reference = summary["reference"]
+        if (_CLOCK() - _parse(reference["at"])).total_seconds() > REFERENCE_MAX_AGE_SECONDS:
+            raise Refused("REFERENCE_STALE", "take a new reference immediately before lifting the admission control")
+        if observer.admission() != "open":
+            raise Refused("ADMISSION_NOT_OPEN")
+        evidence = {
+            "reference_fingerprint_sha256": reference["reference_fingerprint_sha256"],
+            "database_identity_sha256": reference["database_identity_sha256"],
+            "opened_at": _now(), "admission": "OPEN",
+            "pre_open_backup_manifest_sha256": reference["pre_open_backup_manifest_sha256"],
+            "backup_cadence_hours": reference["backup_cadence_hours"], "rpo_hours": reference["rpo_hours"],
+        }
+        return _advance_locked(directory, entries, OPENING_STATE, evidence)
+
+
+def _quiescent(observer: Observer) -> None:
+    if observer.admission() != "closed":
+        raise Refused("ADMISSION_STILL_OPEN", "stop admitting users (SGAA_ADMISSION=operator) before the proof")
+    if observer.scheduler_front() != "disabled":
+        raise Refused("SCHEDULER_STILL_ENABLED", "remove CRON_SECRET and redeploy before the proof")
+    jobs = observer.external_trigger_jobs()
+    if jobs < 0:
+        raise Refused("QUIESCENCE_UNVERIFIABLE", "the external trigger cannot be read")
+    if jobs:
+        raise Refused("EXTERNAL_TRIGGER_ACTIVE", "unschedule the external trigger before the proof")
+
+
+def rollback(directory: Path, reason: str, *, expect_head: str | None = None, observer: Observer | None = None,
+             reference_path: str | None = None, derived_classes: list[str] | None = None) -> dict:
+    """Record the rollback.  Before the opening, a record.  From the opening, only on observed proof.
+
+    From C12 -- or C11 once a reference was taken, when users may already be admitted -- the ledger
+    itself observes quiescence (admission closed, scheduler front disabled, no external trigger), then
+    takes the current fingerprint live twice, ``QUIESCENCE_SECONDS`` apart.  The two must agree; the
+    current one must equal the reference, or differ only by the fixed derived-write classes of
+    ``pg_fingerprint``, verified row by row, which the operator must name exactly.  Anything else is a
+    business write: no rollback, record the point of no return (C13).
+    """
     with _locked(directory):
         entries = read_ledger(directory)
         _check_head(entries, expect_head)
@@ -438,20 +776,44 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None,
             raise Refused("PONR_RECORDED", "after the point of no return the cutover is forward-fix only")
         if summary["rolled_back"]:
             raise Refused("ALREADY_ROLLED_BACK")
-        if current == "C12":
-            reference = _evidence_of(summary, "C12").get("reference_fingerprint_sha256")
-            if current_fingerprint is None or not _HEX64.fullmatch(current_fingerprint):
-                raise Refused("FINGERPRINT_REQUIRED", "from C12 a rollback needs the current fingerprint")
-            if current_fingerprint != reference:
-                classes = sorted(set(derived_classes or ()))
-                if not classes or len(classes) > 16 or not all(_CLASS.fullmatch(c or "") for c in classes):
-                    raise Refused("FINGERPRINT_CHANGED", "a business table changed since the opening: "
-                                  "record the PONR, or adjudicate the change as derived by naming its classes")
-                return _append(directory, entries, {
-                    "type": "rollback", "from_state": current, "reason": reason,
-                    "adjudicated_derived_classes": classes, "current_fingerprint_sha256": current_fingerprint,
-                })
-        return _append(directory, entries, {"type": "rollback", "from_state": current or "NONE", "reason": reason})
+        if current == OPENING_STATE:
+            reference_entry = _evidence_of(summary, OPENING_STATE)
+        elif current == "C11" and summary["reference"] is not None:
+            reference_entry = summary["reference"]
+        else:
+            return _append(directory, entries, {"type": "rollback", "from_state": current or "NONE", "reason": reason})
+        if observer is None or not reference_path:
+            raise Refused("QUIESCENCE_PROOF_REQUIRED", "from the opening the ledger observes the rollback itself")
+        from tools import pg_fingerprint
+
+        try:
+            reference = pg_fingerprint.validate(json.loads(Path(reference_path).read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            raise Refused("REFERENCE_UNREADABLE") from None
+        except pg_fingerprint.Refused:
+            raise Refused("REFERENCE_INVALID") from None
+        if reference["fingerprint_sha256"] != reference_entry["reference_fingerprint_sha256"]:
+            raise Refused("REFERENCE_FILE_MISMATCH", "not the reference the ledger recorded")
+        _quiescent(observer)
+        if observer.database_identity() != reference_entry["database_identity_sha256"]:
+            raise Refused("DATABASE_NOT_THE_REFERENCE", "the database is not the one the reference was taken from")
+        first = observer.classify(reference)
+        _SLEEP(QUIESCENCE_SECONDS)
+        _quiescent(observer)
+        verdict = observer.classify(reference)
+        if first["current"]["fingerprint_sha256"] != verdict["current"]["fingerprint_sha256"]:
+            raise Refused("QUIESCENCE_NOT_PROVEN", "the database still changed; repeat once it is quiescent")
+        if verdict["refusal"]:
+            raise Refused("FINGERPRINT_CHANGED", f"{verdict['refusal']}: record the point of no return (C13)")
+        acknowledged = sorted(set(derived_classes or ()))
+        if acknowledged != verdict["derived_classes"]:
+            raise Refused("DERIVED_CLASSES_NOT_ACKNOWLEDGED",
+                          "name exactly the derived classes the ledger observed: " + ",".join(verdict["derived_classes"]))
+        return _append(directory, entries, {
+            "type": "rollback", "from_state": current, "reason": reason, "quiescence": "PROVEN",
+            "current_fingerprint_sha256": verdict["current"]["fingerprint_sha256"],
+            "derived_classes": verdict["derived_classes"],
+        })
 
 
 def init(directory: Path) -> dict:
@@ -495,27 +857,6 @@ def _load_evidence(path: str) -> dict:
     return data
 
 
-def _snapshot_digest(path: str, directory: Path) -> str:
-    """The fingerprint digest of a snapshot FILE: a valid, untampered snapshot taken after the last entry."""
-    from tools import pg_fingerprint
-
-    try:
-        document = json.loads(Path(path).read_text(encoding="utf-8"))
-        pg_fingerprint.validate(document)
-    except (OSError, ValueError):
-        raise Refused("SNAPSHOT_UNREADABLE") from None
-    except pg_fingerprint.Refused:
-        raise Refused("SNAPSHOT_INVALID") from None
-    # The time the snapshot tool wrote into the file (a copy keeps it, so an old reference cannot pass).
-    taken_at = document.get("taken_at")
-    if not isinstance(taken_at, str) or not _STAMP.fullmatch(taken_at):
-        raise Refused("SNAPSHOT_STALE", "the snapshot carries no time of its own; take a new one")
-    entries = read_ledger(directory)
-    if entries and taken_at < entries[-1]["at"]:  # fixed-width UTC stamps order as text
-        raise Refused("SNAPSHOT_STALE", "take the snapshot after the last ledger entry")
-    return document["fingerprint_sha256"]
-
-
 def main(argv=None, *, out=None, err=None) -> int:
     out = out or sys.stdout
     err = err or sys.stderr
@@ -523,45 +864,61 @@ def main(argv=None, *, out=None, err=None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
-    for name in ("grant", "advance", "rollback"):
+    bound = ("grant", "advance", "rollback", "record-backup", "reference", "open")
+    for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
         sub.add_argument("--expect-head", default=None,
                          help="the head printed by the previous command; refuses a truncated ledger")
+        if name in {"rollback", "reference", "open"}:
+            sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
+            sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
+        if name in {"record-backup", "reference"}:
+            sub.add_argument("--backup-root", required=True, help="the ops_backup primary directory")
+            sub.add_argument("--off-platform", required=True, help="the ops_backup off-platform directory")
         if name == "grant":
             sub.add_argument("--gate", required=True)
             sub.add_argument("--ref", required=True)
         elif name == "advance":
             sub.add_argument("--state", required=True)
             sub.add_argument("--evidence", required=True, help="a JSON file of value-free evidence")
-        else:
+        elif name == "reference":
+            sub.add_argument("--out", required=True, help="a new file in the custody directory")
+            sub.add_argument("--backup-cadence-hours", required=True, type=int)
+        elif name == "rollback":
             sub.add_argument("--reason", required=True, help="a fixed code, e.g. SMOKE_FAILED")
-            sub.add_argument("--current-snapshot", default=None,
-                             help="from C12: a fingerprint snapshot file taken after the last entry "
-                                  "(its digest must equal the opening's)")
+            sub.add_argument("--reference", default=None, help="from the opening: the reference fingerprint file")
             sub.add_argument("--derived-class", action="append", default=None,
-                             help="from C12: adjudicate a changed fingerprint as a known derived write; "
-                                  "repeat for each changed table (recorded in the ledger)")
+                             help="from the opening: each derived-write class the ledger observed, named exactly")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
-    if args.command in {"grant", "advance", "rollback"} and not args.expect_head:
+    if args.command in bound and not args.expect_head:
         # The head printed by the previous command is what makes a truncated or replaced ledger visible.
         err.write("cutover-ledger: refused: HEAD_REQUIRED\n")
         return 1
     try:
         directory = _ledger_dir(args.ledger_dir, must_exist=args.command != "init")
+        observer = Observer(getattr(args, "base_url", None), allow_insecure=getattr(args, "allow_insecure", False))
         if args.command == "init":
             result = init(directory)
         elif args.command == "grant":
             result = grant(directory, args.gate, args.ref, expect_head=args.expect_head)
         elif args.command == "advance":
             result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head)
+        elif args.command == "record-backup":
+            result = record_backup(directory, Path(args.backup_root), Path(args.off_platform),
+                                   expect_head=args.expect_head, observer=observer)
+        elif args.command == "reference":
+            result = take_reference(directory, Path(args.out), Path(args.backup_root), Path(args.off_platform),
+                                    cadence_hours=args.backup_cadence_hours, expect_head=args.expect_head,
+                                    observer=observer)
+        elif args.command == "open":
+            result = open_admission(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "rollback":
-            fingerprint = _snapshot_digest(args.current_snapshot, directory) if args.current_snapshot else None
-            result = rollback(directory, args.reason, expect_head=args.expect_head,
-                              current_fingerprint=fingerprint, derived_classes=args.derived_class)
+            result = rollback(directory, args.reason, expect_head=args.expect_head, observer=observer,
+                              reference_path=args.reference, derived_classes=args.derived_class)
         elif args.command == "status":
             result = status(directory)
         else:

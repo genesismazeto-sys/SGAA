@@ -20,6 +20,14 @@ WHY THIS EXISTS
                 file is read to the end (up to ``MAX_FILE_BYTES``); a larger
                 file is itself a finding.
 
+    ``verify``  immediately before the upload, re-proves that the directory IS the
+                reviewed export: exactly the commit's allowlisted files, each with
+                the commit's blob id; the only other files allowed are the two the
+                platform link writes (``.vercel/project.json``, ``.vercel/README.txt``).
+                An added, removed or changed deployable file -- or a link, or
+                anything else under ``.vercel/`` -- refuses.  Its digest of the
+                (path, blob) list is the deployment identity recorded at C9.
+
     The audit is the control; ``.vercelignore`` is defence in depth.
 
 OUTPUT
@@ -124,13 +132,7 @@ def _blob_id(data: bytes) -> str:
     return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\x00" + data).hexdigest()
 
 
-def export(commit: str, out: Path, *, repo: Path = REPO_ROOT) -> dict:
-    """Write the allowlisted tree of ``commit`` into the new directory ``out``, byte for byte."""
-    out = Path(out)
-    if _inside(out, repo):
-        raise Refused("OUTPUT_INSIDE_REPOSITORY", "the upload directory lives outside the repository")
-    if out.exists() and (not out.is_dir() or any(out.iterdir())):
-        raise Refused("OUTPUT_NOT_EMPTY")
+def _resolve_commit(commit: str, repo: Path) -> str:
     try:
         resolved = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"],
@@ -140,6 +142,11 @@ def export(commit: str, out: Path, *, repo: Path = REPO_ROOT) -> dict:
         raise Refused("COMMIT_NOT_FOUND") from None
     if not re.fullmatch(r"[0-9a-f]{40}", resolved):
         raise Refused("COMMIT_NOT_FOUND")
+    return resolved
+
+
+def _committed_blobs(resolved: str, repo: Path) -> dict:
+    """``{path: blob id}`` of the commit's regular files (a link is never exported)."""
     tree = _git(repo, "ls-tree", "-r", "-z", "--full-tree", resolved, text=False)
     if tree.returncode != 0:
         raise Refused("ARCHIVE_FAILED")
@@ -149,8 +156,20 @@ def export(commit: str, out: Path, *, repo: Path = REPO_ROOT) -> dict:
             continue
         meta, _, name = entry.partition(b"\t")
         mode, kind, blob = meta.decode("ascii").split()
-        if kind == "blob" and mode in {"100644", "100755"}:  # regular files; a link is not exported
+        if kind == "blob" and mode in {"100644", "100755"}:
             blobs[name.decode("utf-8", "surrogateescape")] = blob
+    return blobs
+
+
+def export(commit: str, out: Path, *, repo: Path = REPO_ROOT) -> dict:
+    """Write the allowlisted tree of ``commit`` into the new directory ``out``, byte for byte."""
+    out = Path(out)
+    if _inside(out, repo):
+        raise Refused("OUTPUT_INSIDE_REPOSITORY", "the upload directory lives outside the repository")
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        raise Refused("OUTPUT_NOT_EMPTY")
+    resolved = _resolve_commit(commit, repo)
+    blobs = _committed_blobs(resolved, repo)
     archive = _git(repo, "archive", "--format=tar", resolved, text=False)
     if archive.returncode != 0:
         raise Refused("ARCHIVE_FAILED")
@@ -337,6 +356,57 @@ def _report(result: dict, *, show_paths: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# verify: the upload directory IS the reviewed export
+# ---------------------------------------------------------------------------
+
+#: What ``vercel link`` legitimately writes into the directory; nothing else may differ.
+PLATFORM_METADATA = frozenset({".vercel/project.json", ".vercel/README.txt"})
+
+
+def tree_digest(files: dict) -> str:
+    """SHA-256 of the sorted ``path NUL blob`` list: the deployment identity of a set of files."""
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        digest.update(path.encode("utf-8", "surrogatepass") + b"\x00" + files[path].encode("ascii") + b"\n")
+    return digest.hexdigest()
+
+
+def verify(directory: Path, commit: str, *, repo: Path = REPO_ROOT) -> dict:
+    """Refuse unless ``directory`` holds exactly the commit's allowlisted files, byte for byte."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise Refused("DIRECTORY_MISSING")
+    resolved = _resolve_commit(commit, repo)
+    expected = {name: blob for name, blob in _committed_blobs(resolved, repo).items() if _allowed(name)}
+    actual: dict[str, str] = {}
+    metadata = 0
+    for current, dirs, names in os.walk(directory):
+        for name in list(dirs):
+            full = Path(current) / name
+            if full.is_symlink() or _is_reparse_point(full):
+                raise Refused("LINK_IN_UPLOAD")
+        for name in names:
+            full = Path(current) / name
+            relative = _relative(full, directory)
+            if full.is_symlink() or _is_reparse_point(full):
+                raise Refused("LINK_IN_UPLOAD")
+            if relative in PLATFORM_METADATA:
+                metadata += 1
+                continue
+            actual[relative] = _blob_id(full.read_bytes())
+    added = sorted(set(actual) - set(expected))
+    removed = sorted(set(expected) - set(actual))
+    changed = sorted(path for path in set(actual) & set(expected) if actual[path] != expected[path])
+    if added or removed or changed:
+        raise Refused("DEPLOY_TREE_DIFFERS",
+                      f"added={len(added)} removed={len(removed)} changed={len(changed)}")
+    if not actual:
+        raise Refused("NOTHING_EXPORTED")
+    return {"commit": resolved, "files": len(actual), "platform_metadata_files": metadata,
+            "deploy_tree_sha256": tree_digest(actual), "result": "IDENTICAL"}
+
+
+# ---------------------------------------------------------------------------
 # command line
 # ---------------------------------------------------------------------------
 
@@ -353,11 +423,18 @@ def main(argv=None, *, out=None, err=None) -> int:
     audit_parser.add_argument("--dir", required=True)
     audit_parser.add_argument("--sentinels", default=None, help="a file with one sentinel token per line")
     audit_parser.add_argument("--show-paths", action="store_true")
+    verify_parser = commands.add_parser("verify", allow_abbrev=False)
+    verify_parser.add_argument("--dir", required=True)
+    verify_parser.add_argument("--commit", required=True)
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
     try:
+        if args.command == "verify":
+            json.dump(verify(Path(args.dir), args.commit), out, sort_keys=True)
+            out.write("\n")
+            return 0
         if args.command == "export":
             result = export(args.commit, Path(args.out))
             audited = audit(Path(args.out))
@@ -371,7 +448,8 @@ def main(argv=None, *, out=None, err=None) -> int:
         out.write("\n")
         return 0 if report["result"] == "CLEAN" else 1
     except Refused as refusal:
-        err.write(f"deploy-audit: refused: {refusal.code}\n")
+        detail = f" ({refusal.detail})" if refusal.code == "DEPLOY_TREE_DIFFERS" else ""
+        err.write(f"deploy-audit: refused: {refusal.code}{detail}\n")
         return 1
 
 

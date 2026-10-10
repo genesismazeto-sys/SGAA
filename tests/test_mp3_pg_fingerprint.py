@@ -103,6 +103,14 @@ def test_a_tampered_or_foreign_fingerprint_is_refused():
         assert caught.value.code == "FINGERPRINT_INVALID"
 
 
+def test_a_derived_table_whose_column_list_changed_is_never_excused():
+    """A reference taken by another code version (another column list) proves nothing about the rows."""
+    reference = {"requisicoes": dict(_entry(1, columns=("id", "status")), sha256="1" * 64)}
+    current = {"requisicoes": dict(_entry(1, columns=("id", "observacao")), sha256="2" * 64)}
+    verdict = fp._classify(reference, current, {"requisicoes": []})
+    assert verdict["refusal"] == "SHAPE_CHANGED" and verdict["derived_classes"] == []
+
+
 def test_the_command_line_compares_files_and_reports_only_names_and_counts(tmp_path):
     reference = tmp_path / "a.json"
     current = tmp_path / "b.json"
@@ -200,3 +208,157 @@ def test_the_snapshot_command_writes_a_file_outside_the_repository_and_never_a_r
     err = io.StringIO()
     assert fp.main(["snapshot", "--out", str(target)], out=io.StringIO(), err=err) == 1
     assert "OUTPUT_EXISTS" in err.getvalue()
+
+
+# ---- the fixed derived-write classes (R3 remediation, finding 2) -------------------------------------
+
+
+def _prepare(url, *statements):
+    conn = adapter(url)
+    try:
+        from app.db import ensure_app_settings_schema
+
+        ensure_app_settings_schema(conn)  # the defaults a running deployment seeded long before the opening
+        conn.execute("INSERT INTO configuracoes_app(chave, valor) VALUES('auto_indefer_devolvida', '1')"
+                     " ON CONFLICT (chave) DO UPDATE SET valor = '1'")
+        conn.execute("INSERT INTO usuario_credenciais(usuario_id, estado) VALUES(1, 'personal')"
+                     " ON CONFLICT DO NOTHING")
+        for statement in statements:
+            conn.execute(statement)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _act(url, action):
+    conn = adapter(url)
+    try:
+        action(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _classify(url, reference):
+    conn = adapter(url).raw_connection
+    try:
+        conn.autocommit = True
+        return fp.classify(conn, reference)
+    finally:
+        conn.close()
+
+
+_RETURNED = ("UPDATE requisicoes SET status = 'Devolvida', observacao = 'Corrigir o certificado.',"
+             " data_processamento = '2020-01-01 00:00:00' WHERE id = 1")
+_NOTIFIED = "UPDATE requisicoes SET aluno_update_notified_at = '2026-10-01 10:00:00', aluno_update_seen_at = NULL WHERE id = 1"
+
+
+def _auto_reject(conn):
+    from app.requisitions import auto_indefer_devolvidas
+
+    assert auto_indefer_devolvidas(conn) == 1
+
+
+def _seen(conn):
+    from app.requisitions import mark_student_request_updates_seen
+
+    mark_student_request_updates_seen(conn, [1])
+
+
+@NEEDS_PG
+def test_nothing_changed_is_identical_and_names_no_class(database):
+    _prepare(database)
+    verdict = _classify(database, _snapshot(database))
+    assert verdict["identical"] is True and verdict["refusal"] is None and verdict["derived_classes"] == []
+
+
+@NEEDS_PG
+@pytest.mark.parametrize("setup,actions,classes", [
+    ((_RETURNED,), (_auto_reject,), ["REQUISICOES_AUTO_REJECTION"]),
+    (("UPDATE requisicoes SET status = 'Devolvida', observacao = NULL,"
+      " data_processamento = '2020-01-01 00:00:00' WHERE id = 1",), (_auto_reject,), ["REQUISICOES_AUTO_REJECTION"]),
+    ((_NOTIFIED,), (_seen,), ["REQUISICOES_STUDENT_SEEN"]),
+    ((_RETURNED, _NOTIFIED), (_seen, _auto_reject), ["REQUISICOES_AUTO_REJECTION", "REQUISICOES_STUDENT_SEEN"]),
+])
+def test_the_real_derived_writes_are_classified_exactly(database, setup, actions, classes):
+    _prepare(database, *setup)
+    reference = _snapshot(database)
+    for action in actions:
+        _act(database, action)
+    verdict = _classify(database, reference)
+    assert verdict["refusal"] is None, verdict
+    assert verdict["identical"] is False and verdict["derived_classes"] == classes
+    assert verdict["changed_tables"] == ["REQUISICOES"]
+
+
+@NEEDS_PG
+@pytest.mark.parametrize("setup,write,refusal", [
+    # a human rejection: the status alone, or with the processing columns -- not the derived shape
+    ((_RETURNED,), "UPDATE requisicoes SET status = 'Indeferida' WHERE id = 1", "COLUMNS_NOT_DERIVED"),
+    ((_RETURNED,), "UPDATE requisicoes SET status = 'Indeferida', observacao = 'Sem documento.',"
+                   " data_processamento = '2026-11-01 10:00:00', admin_id = 1 WHERE id = 1", "COLUMNS_NOT_DERIVED"),
+    # the right columns, but the note is not the reference note plus the automatic marker
+    ((_RETURNED,), "UPDATE requisicoes SET status = 'Indeferida', observacao = 'Outra coisa.' || chr(10) ||"
+                   " '[Indeferida automaticamente: prazo de adequa\u00e7\u00e3o de 30 dias expirado.]' WHERE id = 1",
+     "DERIVED_VALUE_NOT_REPRODUCED"),
+    # the reference note already holds a marker; the change replaces nothing with the marker but appends
+    # other text of the marker's length: only an end-anchored marker after the reference note is derived
+    (("UPDATE requisicoes SET status = 'Devolvida', data_processamento = '2020-01-01 00:00:00', observacao ="
+      " '[Indeferida automaticamente: prazo de adequa\u00e7\u00e3o de 30 dias expirado.]' WHERE id = 1",),
+     "UPDATE requisicoes SET status = 'Indeferida', observacao = observacao || chr(10) ||"
+     " repeat('x', char_length(observacao)) WHERE id = 1", "DERIVED_VALUE_NOT_REPRODUCED"),
+    # the marker, but the request was never a returned one
+    ((), "UPDATE requisicoes SET status = 'Indeferida', observacao = '[Indeferida automaticamente: prazo de"
+         " adequa\u00e7\u00e3o de 30 dias expirado.]' WHERE id = 1", "DERIVED_VALUE_NOT_REPRODUCED"),
+    # a seen mark rewritten (it was already set): not the empty-to-set transition
+    (("UPDATE requisicoes SET aluno_update_seen_at = '2026-10-02 10:00:00' WHERE id = 1",),
+     "UPDATE requisicoes SET aluno_update_seen_at = '2026-11-02 10:00:00' WHERE id = 1", "DERIVED_VALUE_NOT_REPRODUCED"),
+    # a seen mark cleared: a human action (new notification), not the student's view
+    ((_NOTIFIED, "UPDATE requisicoes SET aluno_update_seen_at = '2026-10-02 10:00:00' WHERE id = 1"),
+     "UPDATE requisicoes SET aluno_update_seen_at = NULL WHERE id = 1", "DERIVED_VALUE_NOT_REPRODUCED"),
+    # an added request, a removed one, any other table
+    ((), "INSERT INTO requisicoes(id,aluno_id,atividade_versao_id,data_solicitacao,data_evento,horas_solicitadas,"
+         "status,regra_snapshot_json,turma_id_snapshot,turma_codigo_snapshot) SELECT 7,aluno_id,atividade_versao_id,"
+         "data_solicitacao,data_evento,horas_solicitadas,status,regra_snapshot_json,turma_id_snapshot,"
+         "turma_codigo_snapshot FROM requisicoes WHERE id = 1", "ROWS_ADDED_OR_REMOVED"),
+    ((), "UPDATE alunos SET nome = 'Outro Nome' WHERE id = 1", "NOT_A_DERIVED_TABLE"),
+    ((), "UPDATE usuario_credenciais SET auth_version = auth_version + 1, atualizado_em = '2026-11-01 10:00:00'"
+         " WHERE usuario_id = 1", "NOT_A_DERIVED_TABLE"),
+])
+def test_anything_else_is_not_derived_and_says_why(database, setup, write, refusal):
+    _prepare(database, *setup)
+    reference = _snapshot(database)
+    _act(database, lambda conn: conn.execute(write))
+    verdict = _classify(database, reference)
+    assert verdict["refusal"] == refusal, verdict
+    assert verdict["derived_classes"] == []
+
+
+@NEEDS_PG
+def test_a_password_rehash_is_never_derived_it_is_indistinguishable_from_a_password_change(database):
+    from app.user_accounts import rehash_usuario_password
+
+    _prepare(database)
+    reference = _snapshot(database)
+    _act(database, lambda conn: rehash_usuario_password(conn, 1, "pbkdf2:sha256:600000$abc$def"))
+    assert _classify(database, reference)["refusal"] == "NOT_A_DERIVED_TABLE"
+
+
+@NEEDS_PG
+def test_the_database_identity_is_stable_and_names_the_database(database, registry):
+    from tools import pg_backup
+
+    def identity(url):
+        conn = pg_backup.connect(url)
+        try:
+            return fp.database_identity_sha256(conn)
+        finally:
+            conn.close()
+
+    first = identity(database)
+    assert first == identity(database) and len(first) == 64
+    other_name, other = registry.create(template=registry.template)
+    try:
+        assert identity(other) != first  # a copy is another database
+    finally:
+        registry.drop(other_name)

@@ -26,21 +26,45 @@ that would cost money is not performed; stop and say so.
   address, a row or a log line never goes into evidence, a report or a chat.
 - **Custody directory.** One encrypted directory outside the repository holds the frozen
   copy, the converged copy, backup sets and reports. It is personal data; treat it so.
-- **Secrets.** A production secret is placed in the platform by the user (GP2) or typed into
-  one process environment for one gated command; never in a file, a history line or an
-  argument. Database passwords come from the libpq password file.
+- **Secrets (SPEC P6, A15).** The user enters every production value; the executor never
+  receives, reads back or prints one, and none ever lands in a file:
+  - platform values (GP2, GD2, GO): the Vercel dashboard (Settings, Environment Variables,
+    Sensitive, Production), or the CLI's own interactive prompt
+    `vercel env add <NAME> production --sensitive` with nothing piped or redirected into it.
+    There is no `< file` or `type <file> |` path;
+  - a value one command on the operator machine needs (`PGPASSWORD` for the PROD database,
+    `SUPABASE_SECRET_KEY` for an object set or a convergence, `SGAA_OPERATOR_TOKEN` for the
+    smoke): typed by the user at a hidden prompt into one terminal's environment and removed
+    after the command. Such a command is marked **(user terminal)**: the user runs it and the
+    executor receives only its value-free output. In PowerShell:
+
+    ```powershell
+    $s = Read-Host -AsSecureString 'PGPASSWORD'
+    $env:PGPASSWORD = [System.Net.NetworkCredential]::new('', $s).Password
+    # ... the command ...
+    Remove-Item Env:PGPASSWORD
+    ```
+
+  - the bearer of the external trigger: Supabase Vault (C11).
+
+  The libpq password file serves DEV only. A value never goes into a file, a pipe, an
+  argument, a history line, the ledger, a report or a chat. Every command that reads PROD
+  (database or bucket) or carries the operator token is a user-terminal command.
 - **Never** run a tool against the live workstation database. The only touch of the live
   file is the read-only snapshot of GR0 and the byte copy of the stopped runtime of GR1.
 
 ## 1. Before C0 (rehearsal and review)
 
-1. The dress rehearsal (SPEC slice 6) ran C1–C14 on DEV with fault injection and a rollback
+1. The dress rehearsal (SPEC slice 6) ran C1–C13 on DEV (C14 refused before its window) with fault injection and a rollback
    from every state before C13. Its index and the measured end-to-end time exist.
 2. This runbook is amended with the measured numbers and its SHA-256 is frozen.
 3. The final-candidate R3 review passed; the commit to deploy is the reviewed one.
 4. `python tools/cutover_ledger.py init --ledger-dir <ledger>`; then `advance --state C0
    --evidence <json>` with `commit`, `runbook_sha256`, `rehearsal_index_sha256`,
-   `review_verdict` (`PASS`).
+   `review_verdict` (`PASS`) and `prod_project_sha256`: the SHA-256 of the PROD project
+   reference GP0 names (`python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" <ref>`).
+   Every data-API proof is bound to it (C1 `DATA_API_NOT_THE_PROD_PROJECT`, C10
+   `DATA_API_PROJECT_CHANGED`).
 
 ## 1b. Measured numbers (DEV dress rehearsal, synthetic production-shaped data)
 
@@ -63,21 +87,60 @@ that would cost money is not performed; stop and say so.
 ### C1 PROD_QUALIFIED — gates GP0, GP1, GP2
 
 1. GP0: read the PROD project's metadata (major, region, usage against the Free limits,
-   Data API and Storage settings). Record the major; qualify it if it is not 17.
+   Data API and Storage settings, and the PostgREST version in Settings, Infrastructure).
+   Record the major; qualify it if it is not 17. The data-API answer accepted below was
+   proven on DEV (SPEC A15) with the override in place while DEV's toggle was still on.
+   Before GP1 relies on it, DEV is put in PROD's target configuration -- the user turns DEV's
+   toggle off (GA4), the override stays -- and `hosted_smoke --data-api-only` against DEV must
+   PASS again; if PROD's PostgREST version differs from DEV's, the proof is repeated on DEV at
+   PROD's version. Until both hold, C1 waits.
 2. GP1, as the schema-owning role, in this order: the revocation statements of
    `docs/HOSTED_RUNTIME.md` §11; `python -m app.pg_schema provision`; `… validate`; the
    revocation again; create the private bucket; one synthetic canary object written, read
    back and removed; `python -m app.hosting_cli check --database` (direct or session
-   address) must report `api_exposure.clean: true`. The Data API toggle is off (user).
-3. Capacity: the projected database size, storage bytes and monthly egress are below the
+   address) must report `api_exposure.clean: true`.
+3. GP1, the Data API, in this order. These are the only PROD writes of this step and they
+   are named here so that none is improvised:
+   1. the user turns **Enable Data API** off (Dashboard, Integrations, Data API);
+   2. the provider's documented override (Supabase troubleshooting, "schema
+      pg_pgrst_no_exposed_schemas does not exist"), run exactly as written in the PROD SQL
+      editor, by the user or by the executor under GP1:
+
+      ```sql
+      create schema if not exists pgrst_no_exposed_schemas;
+      alter role authenticator set pgrst.db_schemas = 'pgrst_no_exposed_schemas';
+      notify pgrst;
+      ```
+
+      It is reversed with `alter role authenticator reset pgrst.db_schemas; notify pgrst;`
+      before the toggle is ever turned on again. Nothing else on `authenticator` changes;
+   3. `python tools/hosted_smoke.py --data-api-only --data-api-url https://<ref>.supabase.co
+      --data-api-project-ref <ref>` with `SUPABASE_PUBLISHABLE_KEY` in the process
+      environment: PASS. It passes only on 406 with exactly the body proven on DEV,
+      compared as JSON: `{"code":"PGRST106","details":null,"hint":"Only the following
+      schemas are exposed: pgrst_no_exposed_schemas","message":"Invalid schema: public"}`,
+      with a bogus-key control refused 401, the project's own address and a key the
+      gateway accepts. Everything else fails: rows, 404 `PGRST205`, 401 `42501`, a valid
+      key refused (`DATA_API_KEY_REFUSED`: a wrong, rotated or foreign key), another schema
+      list or wording, the toggle's own placeholder without the override, a schema-cache
+      error and a protection page (`DATA_API_SERVES`, "not proven off"); another address
+      (`DATA_API_WRONG_PROJECT`). A failure blocks C1; the check is never weakened. Its
+      positive control (the same check on DEV with the override reset) FAILED as it must
+      (SPEC A15); rerun it if the tool changes.
+4. Capacity: the projected database size, storage bytes and monthly egress are below the
    Free limits with headroom; project pause is avoided by the daily scheduler pass and use.
-4. GP2: the user places `APP_SECRET_KEY`, `TOKEN_ENCRYPTION_KEY`, `DATABASE_URL`
+5. GP2: the user places `APP_SECRET_KEY`, `TOKEN_ENCRYPTION_KEY`, `DATABASE_URL`
    (transaction pooler), `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET`,
    `SUPABASE_PUBLISHABLE_KEY`, `APP_PUBLIC_BASE_URL`, `APP_ENV=production`,
-   `SGAA_RUNTIME=hosted`, `TRUST_PROXY_XFF=1` and the Google client values in the platform.
-   `CRON_SECRET` is NOT set yet (the scheduler front stays disabled).
-5. Ledger C1 evidence: `pg_major`, `schema_current`, `rows` 0, `objects` 0,
-   `data_api_toggle_off`, `data_api_probe` NOT_SERVED, `api_exposure_clean`, `capacity_ok`.
+   `SGAA_RUNTIME=hosted`, `TRUST_PROXY_XFF=1`, `SGAA_ADMISSION=operator`,
+   `SGAA_OPERATOR_TOKEN` (at least 32 random characters, generated by the user) and the
+   Google client values in the platform, by the dashboard or the interactive prompt (ground
+   rules). `CRON_SECRET` is NOT set yet (the scheduler front stays disabled). A production
+   deployment without `SGAA_ADMISSION` does not start (`HOSTED_ADMISSION_UNDECIDED`).
+6. Ledger C1 evidence: `pg_major`, `schema_current`, `rows` 0, `objects` 0,
+   `data_api_toggle_off`, `data_api_override` APPLIED, `data_api_probe` NOT_SERVED (the
+   smoke's PASS), `data_api_project_sha256` (printed by the smoke; it must equal C0's
+   `prod_project_sha256`), `api_exposure_clean`, `capacity_ok`.
 
 ### C2 SNAPSHOT_CENSUSED — gate GR0
 
@@ -152,107 +215,178 @@ that would cost money is not performed; stop and say so.
 
 ### C9 DEPLOYED_DARK — gate GD1
 
+From here until the opening the deployment admits only the operator
+(`SGAA_ADMISSION=operator`, `docs/HOSTED_RUNTIME.md` §2a): every request without the operator
+credential is refused with 503 before any session, view or database access. "Not announced" is
+not the control; this is. Vercel Authentication is not relied on (SPEC A15); switch it off for
+the production project as rehearsed, so the gate is what the probes observe.
+
 1. `python tools/deploy_audit.py export --commit <reviewed commit> --out <new empty dir>`
-   (committed content only, runtime allowlist) and `audit --dir <that dir>`: CLEAN.
-2. Deploy that directory to the production project with the user-authenticated CLI, DARK:
-   `npx vercel@<pinned> deploy --prod --skip-domain --yes` from the exported directory (linked
-   with `vercel link`; delete the `.env.local` and `.gitignore` the link writes before the
-   upload and re-run the audit). The platform does not validate a descriptor: a rewrite to a
-   service that does not exist deploys READY and, without `--skip-domain`, takes the public
-   alias (rehearsed: every page answered 404). The daily cron entry is in `vercel.json` but
-   the scheduler front is disabled while `CRON_SECRET` is unset. Publish the one Hobby
-   rate-limit rule (below). Environment values are written without a trailing line ending
-   (`type <file> | vercel env add NAME production --sensitive`; a value from a PowerShell pipe
-   carries CRLF and a `CRON_SECRET` with whitespace fails the build).
-   The one rate-limit rule, per address, counted over 600 s across the four credential POSTs:
+   (committed content only, runtime allowlist) and `audit --dir <that dir>`: CLEAN. The
+   export verifies every file against the commit's blob id and normalizes line endings
+   itself (`core.autocrlf` of the workstation does not matter); `EXPORT_NOT_THE_COMMIT` means
+   the bytes do not match the reviewed commit and nothing is deployed. Plant the sentinel
+   file of the rehearsal in the audit (`audit --dir <dir> --sentinels <file>`) when you have one.
+2. `vercel link` in that directory, then delete the `.env.local` (an OIDC token) and
+   `.gitignore` the link writes.
+3. Immediately before the upload, with nothing in between:
+   `python tools/deploy_audit.py verify --dir <that dir> --commit <reviewed commit>` must print
+   `IDENTICAL`: the directory holds exactly the commit's allowlisted files with the commit's
+   blob ids, and the only extra files are `.vercel/project.json` and `.vercel/README.txt`.
+   An added, removed or changed deployable file, a link, or any other extra file refuses
+   (`DEPLOY_TREE_DIFFERS`, counts only; `LINK_IN_UPLOAD`) and nothing is deployed. Keep its
+   `deploy_tree_sha256` for C9; if anything touched the directory after it, run it again.
+4. Deploy that directory to the production project with the user-authenticated CLI, DARK:
+   `npx vercel@<pinned> deploy --prod --skip-domain --yes` from the exported directory. The
+   platform does not validate a descriptor: a rewrite to a service that does not exist deploys
+   READY and, without `--skip-domain`, takes the public alias (rehearsed: every page answered
+   404). The daily cron entry is in `vercel.json` but the scheduler front is disabled while
+   `CRON_SECRET` is unset. Publish the one Hobby rate-limit rule:
    method `POST`, path matching `^/(login|esqueci-minha-senha|primeiro-acesso|redefinir-senha)$`,
    fixed window 600 s, limit 100, key `ip`, mitigation `rate_limit` with `rateLimit.action`
    `rate_limit` (the response is 429; `deny` answers 403). Rehearsed: the 101st request in a
    window is refused, a GET of the login page is not counted, and a window that keeps
    receiving requests stays refused.
-   The public alias is then taken only after the dark deployment's own address passes the
-   smoke (section C10) and the operator promotes it (`vercel promote <deployment id> --yes`,
-   about 4 s; the same command with the previous deployment id is the rollback).
-3. `python -m app.hosting_cli check --database` with the production environment: ready.
-   The export verifies every file against the commit's blob id and normalizes line endings
-   itself (`core.autocrlf` of the workstation does not matter); `EXPORT_NOT_THE_COMMIT` means
-   the bytes do not match the reviewed commit and nothing is deployed. Plant the sentinel
-   file of the rehearsal in the audit (`audit --dir <dir> --sentinels <file>`) when you have one.
-4. Ledger C9: `commit`, `readiness` READY, `bundle_audit` CLEAN, `scheduler_front` DISABLED.
+5. **(user terminal)** `python -m app.hosting_cli check --database` with the production
+   environment: ready, and the report names `admission` `operator`.
+6. **(user terminal**, `SGAA_OPERATOR_TOKEN` at the hidden prompt**)**
+   `python tools/hosted_smoke.py --base-url <deployment address> --admission closed`: its
+   ADMISSION check (a client WITHOUT the credential: two pages and a credential POST each
+   503 `X-SGAA-Admission: closed`, no cookie) is the C9 observation.
+7. Ledger C9: `commit`, `readiness` READY, `bundle_audit` CLEAN, `deploy_verify` IDENTICAL,
+   `deploy_tree_sha256`, `scheduler_front` DISABLED, `admission` CLOSED.
+
+Every later redeploy of the same commit (GD2, the lift at GO, a rollback) repeats steps 1–4
+from a fresh export, `verify` included.
 
 ### C10 SMOKED
 
-`python tools/hosted_smoke.py --base-url <public address> --data-api-url <project address>`
-with `SUPABASE_PUBLISHABLE_KEY` in the process environment (the data-API check needs the key:
-without it the check refuses rather than passing on a 401) and, for the sign-in check,
-`--email <operator>` (password at the hidden prompt; refused over plain http). PASS required.
-The data-API check asks one application table in the `public` schema (`Accept-Profile: public`)
-with the valid key, and with a bogus key as the control (the gateway must answer 401, else
-`DATA_API_CONTROL`). It passes only on 406 `PGRST106` whose hint lists no schema but the empty
-placeholder (`pgrst_no_exposed_schemas` / `pg_pgrst_no_exposed_schemas`). Rows, 404 `PGRST205`,
-401 `42501`, a PGRST106 that lists another schema, a valid key refused like the bogus one and a
-protection page all fail (`DATA_API_SERVES`): none of them proves the API off. The data-API
-address must be the provider's (`*.supabase.co`, `DATA_API_URL_NOT_PROVIDER`). The schema root
-is not asked: it answers 401 to every publishable key whatever the state. Its positive control is run once
-before C10 against a project whose API is on and must FAIL; a check that cannot fail proves
-nothing.
+**(user terminal**, `SGAA_OPERATOR_TOKEN` and, for the sign-in, the operator password at
+hidden prompts**)** `python tools/hosted_smoke.py --base-url <deployment address> --admission
+closed --data-api-url https://<ref>.supabase.co --data-api-project-ref <ref> [--email
+<operator>]` with `SUPABASE_PUBLISHABLE_KEY` in the environment. The smoke sends the operator
+credential on every application request and proves, with a separate anonymous client, that
+everyone else is still refused (ADMISSION). The DATA_API check is C1's. PASS required.
+
+The public alias is then taken only after the dark deployment's own address passes the
+smoke and the operator promotes it (`vercel promote <deployment id> --yes`, about 4 s; the
+same command with the previous deployment id is the rollback); the ADMISSION check is rerun
+on the public address (`--base-url <public address> --admission closed`).
 
 The smoke reads `/csrf-token`, never the dashboard (its view writes alert receipts and may
 derive a rejection). Its only application write is the sign-in. Prove that, do not assume it:
-`python tools/pg_fingerprint.py snapshot --out <before>` and `--out <after>` around the smoke
-(`DATABASE_URL` = the direct or session address; a snapshot needs a read-only snapshot
-transaction, which the transaction pooler does not give), then `compare`. Identical is
-`write_set_ok` true. The first sign-in may rewrite student rows that kept the legacy access
-level `administrativo` (the application normalizes them): `changed_tables` USUARIOS with
-`changed_columns` nivel_acesso only is that known, once-only derived write; adjudicate it and
-take the reference after it (section C12). Anything else is investigated before C10.
-Ledger C10: `smoke` PASS, `write_set_ok`.
+**(user terminal)** `python tools/pg_fingerprint.py snapshot --out <before>` and `--out
+<after>` around the smoke (`DATABASE_URL` = the direct or session address; a snapshot needs a
+read-only snapshot transaction, which the transaction pooler does not give), then `compare`.
+Identical is `write_set_ok` true. The first sign-in may rewrite student rows that kept the
+legacy access level `administrativo` (the application normalizes them): `changed_tables`
+USUARIOS with `changed_columns` nivel_acesso only is that known, once-only derived write;
+adjudicate it before C10 (the reference of the opening is taken later and includes it).
+Anything else is investigated before C10.
+Ledger C10: `smoke` PASS, `write_set_ok`, `admission` CLOSED, `data_api_project_sha256`
+(must equal C1's).
 
 ### C11 MIRROR_PROVEN — gates GG1, GG2, GD2
 
-1. GG1: the callback is registered on the legacy OAuth client (user, in the Google console);
-   the administrator connects Google through the hosted page. The consent screen is in
-   production status. Compare the logical account key with the source's (census).
-2. GG2: from the operator machine, `python -m app.storage.cli mirror-run --limit 1 --passes
-   1`, then raise the batch; `verify --drive`. Anything `reconciliation_required` is
-   understood before going on (`mirror-requeue` only after the cause is fixed).
-3. GD2: the user sets `CRON_SECRET` (at least 32 characters) and the deployment is redone;
-   the daily pass is observed. If the backlog needs a higher cadence, the external trigger
-   (a Supabase `pg_cron` job with `pg_net`, bearer only) is created under the same gate.
-4. Ledger C11: `account_key_match`, `mirror_passes`, `reconciliation_required` 0,
-   `scheduler_front` ENABLED.
+1. GG1: the callback is registered on the legacy OAuth client (user, in the Google console).
+   The administrator opens `<public address>/operator-admission`, presents the operator
+   credential once (an HttpOnly cookie admits that browser for eight hours), signs in and
+   connects Google through the hosted page. The consent screen is in production status.
+   Compare the logical account key with the source's (census).
+2. GG2: **(user terminal)** `python -m app.storage.cli mirror-run --limit 1 --passes 1`, then
+   raise the batch; `verify --drive`. Anything `reconciliation_required` is understood before
+   going on (`mirror-requeue` only after the cause is fixed).
+3. GD2: the user sets `CRON_SECRET` (at least 32 characters; dashboard or interactive prompt)
+   and the same commit is redeployed (C9 steps 1–4, admission still `operator`); the daily
+   pass is observed. If the backlog needs a higher cadence, the external trigger is created
+   under the same gate, with no secret in it:
+   1. the user stores the same bearer value in Supabase Vault through the dashboard's Vault
+      page, named `sgaa_scheduler_bearer` (not in the SQL editor, which keeps query history);
+   2. the job, created as `postgres` in the SQL editor (it holds no value):
 
-### C12 OPEN_PONR_PENDING — gate GO
+      ```sql
+      select cron.schedule('sgaa-mirror', '*/30 * * * *', $job$
+        select net.http_get(
+          url := 'https://<public host>/internal/scheduler/mirror',
+          headers := jsonb_build_object('Authorization', 'Bearer ' ||
+            (select decrypted_secret from vault.decrypted_secrets where name = 'sgaa_scheduler_bearer')));
+      $job$);
+      ```
 
-1. Take the reference fingerprint AFTER the smoke (C10) and the mirror proof (C11), with the
-   direct or session address: `python tools/pg_fingerprint.py snapshot --out <ref>`. Keep the
-   file in the custody directory; it holds digests and counts only.
-2. Admit users (announcement). The local runtime stays stopped and protected.
-3. Ledger C12: `reference_fingerprint_sha256` (the value the snapshot printed), `opened_at`.
-4. While pending, rollback is available (section 3).
+      Rotation updates the platform value and the Vault entry together.
+4. The ADMISSION check again (C9 step 6, public address): still closed.
+5. Ledger C11: `account_key_match`, `mirror_passes`, `reconciliation_required` 0,
+   `scheduler_front` ENABLED, `admission` CLOSED.
+
+### C11 → C12 THE OPENING — gate GO
+
+The order is binding and the ledger enforces it: no ordinary user can write before the
+reference exists, because the deployment refuses them until the lift and the lift comes
+after the reference.
+
+1. Pre-opening generation, **(user terminal**, `PGPASSWORD` and `SUPABASE_SECRET_KEY` at
+   hidden prompts; `DATABASE_URL` the direct or session address**)**:
+   `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> --objects
+   --label pre-open --ledger-dir <ledger>`. The Layer-2 set and the object set are taken and
+   verified, the off-platform copy is compared file by file, and the ledger records the
+   generation only after re-verifying it (`backup` entry, value-free).
+2. The reference, **(user terminal**, `PGPASSWORD`**)**: `python tools/cutover_ledger.py
+   reference --ledger-dir <ledger> --expect-head <head> --base-url <public address>
+   --backup-root <primary dir> --off-platform <second dir> --out <custody>/reference.json
+   --backup-cadence-hours <h>` (UD10: `24`, at most 24). The ledger refuses unless the state
+   is C11 with GO granted, the deployment is observed CLOSED without any credential, the last
+   recorded backup is after C11 and includes an object set, that generation re-verifies from
+   both directories and is current (its Layer-2 table digests equal the live fingerprint and
+   its object set equals the live references). It then takes the fingerprint itself, writes the
+   reference file (digests and counts only) and records the reference, the database identity,
+   the cadence and the RPO (= the cadence).
+3. The lift (GO): the user sets `SGAA_ADMISSION=open` and the same commit is redeployed (C9
+   steps 1–4). Keep `SGAA_OPERATOR_TOKEN` in the platform until C14: a rollback closes
+   admission again with it. Steps 2 to 4 take less than 30 minutes; otherwise `open` refuses
+   `REFERENCE_STALE` and admission is closed again, then steps 1–2 are repeated.
+4. `python tools/cutover_ledger.py open --ledger-dir <ledger> --expect-head <head> --base-url
+   <public address>`: the ledger observes admission OPEN and writes C12 from the reference
+   (`reference_fingerprint_sha256`, `database_identity_sha256`, `opened_at`, `admission` OPEN,
+   `pre_open_backup_manifest_sha256`, `backup_cadence_hours`, `rpo_hours`); `advance --state
+   C12` is refused (`OPENING_NEEDS_THE_OPEN_COMMAND`).
+5. Announce. The local runtime stays stopped and protected.
+
+### C12 OPEN_PONR_PENDING
+
+- The cadence recorded at the opening is in force until C14: **(user terminal)**
+  `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects]
+  --ledger-dir <ledger>` every `h` hours, with `--objects` at least weekly. A Layer-2 gap longer
+  than 1.5 × `h`, or an object-set gap longer than 1.5 weeks, anywhere from the opening to C14
+  refuses C14 (`BACKUP_CADENCE_BROKEN`, `OBJECT_CADENCE_BROKEN`). A scheduled task is not
+  used for PROD: it would need a stored PROD secret (P6).
+- While pending, rollback is available (section 3).
 
 ### C13 PONR_RECORDED
 
-Periodically, and after any report of a user action: `python tools/pg_fingerprint.py
-snapshot --out <now>` then `compare --reference <ref> --current <now>`. The report names the
-changed tables and columns and counts rows added, removed and changed; it never prints a
-value. A difference is a CANDIDATE: the operator adjudicates it (the detector over-reports on
-purpose). Known derived writes that remain included are the automatic rejection of an overdue
-returned request that an administrator's dashboard view triggers and the student "seen" mark;
-the credential-version bump of a legacy-hash re-hash (USUARIO_CREDENCIAIS, columns
-`auth_version` and `atualizado_em` only; a real password change has the same signature);
-a changed table or column that is not one of them, or one the operator cannot explain, is a
-business write. Record it: `advance --state C13` with `write_class` (the changed table name as
-printed), `detected_at`, `current_fingerprint_sha256` (the snapshot that showed it; it must
-differ from the reference) and `adjudicated_by_operator` true. From here the cutover is
-forward-fix only (SPEC §3.4), gates that only serve rollback are refused, and window W starts.
+Periodically, and after any report of a user action: **(user terminal)** `python
+tools/pg_fingerprint.py snapshot --out <now>` then `compare --reference <ref> --current <now>`.
+The report names the changed tables and columns and counts rows added, removed and changed; it
+never prints a value. A difference is a CANDIDATE. Only two derived classes can ever be excused,
+and only by the ledger's rollback proof (section 3), never by an operator's reading: the
+automatic rejection of an overdue returned request that a dashboard view triggers
+(`REQUISICOES_AUTO_REJECTION`) and the student "seen" mark (`REQUISICOES_STUDENT_SEEN`). Every
+other change -- including the credential-version bump of a legacy-hash re-hash, which looks
+exactly like a password change -- is a business write. Record it: `advance --state C13` with
+`write_class` (the changed table name as printed), `detected_at`, `current_fingerprint_sha256`
+(the snapshot that showed it; it must differ from the reference) and `adjudicated_by_operator`
+true. From here the cutover is forward-fix only (SPEC §3.4), gates that only serve rollback are
+refused, and the window starts.
 
 ### C14 WINDOW_CLOSED
 
-After W days: no unresolved reconciliation, a later Layer-2 generation restore-validated,
-the object set verified. Ledger C14: `window_days`, `second_generation_restore` OK,
-`unresolved_reconciliation` 0, `object_set_verified`. The window report lists them; MP-4
-may then be chartered.
+After UD4's 30 days from C13, with the cadence held: a generation recorded after C13 restored
+into scratch PostgreSQL of the PROD major (`restore`, `verify --restored`), no unresolved
+reconciliation, the object set verified. Ledger C14: `restore_validated_manifest_sha256` (that
+generation's manifest digest, as recorded), `restore_drill` OK, `unresolved_reconciliation` 0,
+`object_set_verified`. The ledger refuses before 30 days from C13 (`WINDOW_NOT_ELAPSED`), on a
+cadence gap since the opening, and on a drill of a generation not recorded after C13
+(`RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION`). The window report lists them; MP-4 may then
+be chartered.
 
 ## 3. Rollback (before C13)
 
@@ -260,8 +394,21 @@ may then be chartered.
 |---|---|---|
 | C1–C4 | stop; restart the workstation runtime if frozen | `cutover_ledger rollback --reason <CODE>` |
 | C5–C6 | as above | bucket objects stay as additive orphans; removal only under GX1 |
-| C7–C11 | as above; take the deployment down or pause it; remove the scheduler secret | the PROD database is a copy; emptying it needs GX1 |
-| C12 | stop admitting users; take a fresh snapshot AFTER the last ledger entry (the file records its own time; a copy of an older one is refused) and pass it as `rollback --current-snapshot <file>` (its digest must equal the opening's; a changed one is a business write, go to C13 -- unless the only differences are the known derived writes of C13, which the operator may adjudicate with `--derived-class <TABLE>` per changed table, recorded in the ledger); pause the deployment; restart the workstation runtime | mirror files already in the Drive stay (additive) |
+| C7–C11 (no reference taken) | as above; admission is still closed; take the deployment down or pause it; remove `CRON_SECRET`; `select cron.unschedule('sgaa-mirror')` and delete the Vault entry if they exist | the PROD database is a copy; emptying it needs GX1 |
+| C12, or C11 once a reference exists | in this order: (1) close admission: `SGAA_ADMISSION=operator` and redeploy the same commit (C9 steps 1–4); (2) stop system writes: remove `CRON_SECRET` and redeploy (the scheduler front answers 404), `select cron.unschedule('sgaa-mirror')`; (3) **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py rollback --ledger-dir <ledger> --expect-head <head> --reason <CODE> --base-url <public address> --reference <custody>/reference.json [--derived-class <CLASS> ...]`; (4) pause the deployment; restart the workstation runtime | see below |
+
+The C12 rollback is decided by the ledger, not by the operator. It observes, without any
+credential, that admission is closed, that the scheduler front is disabled and that no
+`pg_cron` job is active, and that the database is the reference's; it then takes the
+fingerprint live in one read-only snapshot, waits 330 s, observes quiescence again and takes it
+again: the two must agree (`QUIESCENCE_NOT_PROVEN`). Equal to the reference: recorded. Unequal:
+refused `FINGERPRINT_CHANGED` -- go to C13 -- unless every changed table and column belongs to
+the fixed derived classes, no row was added or removed, each changed row reproduces the derived
+value from the reference row (`REQUISICOES_AUTO_REJECTION`: a returned request now rejected
+with its note extended by the fixed automatic-rejection marker; `REQUISICOES_STUDENT_SEEN`: an
+empty "seen" mark now set), and the operator's `--derived-class` list equals the observed
+classes exactly (`DERIVED_CLASSES_NOT_ACKNOWLEDGED`). A file, a timestamp or a fingerprint typed
+by the operator is never the evidence. Mirror files already in the Drive stay (additive).
 
 After C13 there is no rollback: use the latest Layer-2 generation and the frozen source for
 manual reconciliation. Never improvise a reverse migration. A forward-fix deployment is the
@@ -271,12 +418,14 @@ the first deployment are refused).
 
 ## 4. Routine after cutover
 
-- Backups: `python tools/ops_backup.py --root <primary dir> --off-platform <second dir>
-  [--objects]` on the cadence of UD10 (database from `DATABASE_URL`, direct or session
-  address): two generations kept, the copy to the off-platform directory verified, restore
-  verification; a periodic restore drill into scratch PostgreSQL. Rotation deletes only
+- Backups: until C14 as in C12 (with `--ledger-dir`); afterwards **(user terminal)** `python
+  tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects]` on the
+  cadence of UD10 (database from `DATABASE_URL`, direct or session address, `PGPASSWORD` at the
+  hidden prompt): two generations kept, the copy to the off-platform directory verified,
+  restore verification; a periodic restore drill into scratch PostgreSQL. Rotation deletes only
   generations the tool itself registered; the cutover baseline is never rotated.
 - Watch the Free limits (database 500 MB, storage 1 GB, egress 5 GB a month, Hobby
   invocations and active CPU, seven days of inactivity) before they bind.
-- Secret rotation: `CRON_SECRET` by redeploy; `APP_SECRET_KEY` ends sessions and clears
-  throttle windows; `TOKEN_ENCRYPTION_KEY` needs a Google reconnect.
+- Secret rotation: `CRON_SECRET` by redeploy and the Vault entry; `APP_SECRET_KEY` ends
+  sessions and clears throttle windows; `TOKEN_ENCRYPTION_KEY` needs a Google reconnect;
+  `SGAA_OPERATOR_TOKEN` is removed after C14 (an open deployment does not read it).

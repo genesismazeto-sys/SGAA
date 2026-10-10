@@ -5,7 +5,7 @@ would start and, with ``--database``, whether the connected PostgreSQL schema is
 the code's target and whether the platform's HTTP-API roles can reach any SGAA
 object.  One value-free JSON line on stdout: the mode, the blockers by code and
 variable name (or the class of an unexpected startup error), the scheduler
-state, the schema versions, the connection kind and the API exposure counts.  It
+state, the admission mode, the schema versions, the connection kind and the API exposure counts.  It
 builds the application exactly as
 a start does, so a local-mode check creates the local directories a local start
 creates; it opens no SQLite file: ``--database`` needs PostgreSQL
@@ -74,6 +74,8 @@ def check(*, database: bool) -> tuple[int, dict]:
         return 1, report
     report["startup"] = "OK"
     report["production"] = bool(flask_app.config.get("IS_PRODUCTION"))
+    if flask_app.config.get("SGAA_ADMISSION"):
+        report["admission"] = flask_app.config["SGAA_ADMISSION"]
     if not database:
         return 0, report
     from app import db as app_db

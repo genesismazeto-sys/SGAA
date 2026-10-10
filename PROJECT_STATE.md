@@ -59,7 +59,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   runbook, DEV rehearsal). GA1 was granted and the Vercel Hobby rehearsal qualification is done
   (SPEC A12); GA4 was granted and the DEV Data API is off (A13); cryptography 50.0.2 and msal 1.37.0
   are applied; the database lanes ran on Supabase DEV (A14: pooler and session lanes, DR1, DR3, RTO).
-  Pending: the R3 blind review (and, optionally, GA2 for the Google OAuth rehearsal). No PROD gate granted.
+  The first R3 review returned FAIL (five material findings); the remediation is A15: an
+  operator-only admission switch until GO (`SGAA_ADMISSION`, HOSTED_RUNTIME §2a), the opening and
+  the C12 rollback observed by the ledger itself (reference while closed, quiescence, fixed
+  derived-write allowlist), P6 secret custody with the deploy tree re-verified before the upload,
+  a verified pre-opening backup with the cadence held to C14, and the Data API proof accepting only
+  the answer proven on DEV. Pending: the R3 re-review of the remediated candidate (and, optionally,
+  GA2 for the Google OAuth rehearsal). GP0 is not authorized; no PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -74,7 +80,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
     `maxDuration`, the daily cron entry, the one Hobby rate-limit rule in front of
     the login (a flood of distinct keys still writes a throttle row per request);
   - Supabase PostgreSQL 17 and empty-target qualification, cross-environment
-    backup/restore proof (Layer-1 backup / PITR is paid and out), `SUPABASE_DATA_API_DISABLED`;
+    backup/restore proof (Layer-1 backup / PITR is paid and out), the PROD Data API off by the
+    user's toggle and the override named in GP1;
   - real-data census and legacy convergence, including decisions on terminal
     legacy rows and unsupported legacy content;
   - a first supervised live Drive mirror run (no DEV Google environment exists);
@@ -122,5 +129,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — database lanes done on DEV; R3 review pending; no PROD gate granted |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — first R3 FAIL remediated (SPEC A15); R3 re-review pending; no PROD gate granted |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |

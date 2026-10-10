@@ -436,3 +436,96 @@ def test_a_refused_export_leaves_nothing_behind(tmp_path, monkeypatch):
     with pytest.raises(da.Refused):
         da.export(_head(), empty)
     assert empty.is_dir() and list(empty.iterdir()) == []  # a directory the operator made stays, emptied
+
+
+# ---- verify: the upload directory IS the reviewed export (R3 remediation, finding 3) ----------------
+
+
+@pytest.fixture
+def fresh_export(tmp_path):
+    out = tmp_path / "upload"
+    da.export(_head(), out)
+    return out
+
+
+def test_an_untouched_export_verifies_identical_with_a_stable_tree_digest(fresh_export, tmp_path):
+    first = da.verify(fresh_export, _head())
+    assert first["result"] == "IDENTICAL" and first["commit"] == _head() and first["files"] > 50
+    again = tmp_path / "again"
+    da.export(_head(), again)
+    assert da.verify(again, _head())["deploy_tree_sha256"] == first["deploy_tree_sha256"]
+
+
+def test_the_platform_link_files_are_the_only_allowed_difference(fresh_export):
+    vercel = fresh_export / ".vercel"
+    vercel.mkdir()
+    (vercel / "project.json").write_text('{"projectId":"prj_x"}')
+    (vercel / "README.txt").write_text("linked")
+    result = da.verify(fresh_export, _head())
+    assert result["result"] == "IDENTICAL" and result["platform_metadata_files"] == 2
+
+
+@pytest.mark.parametrize("tamper", [
+    lambda d: (d / ".env.local").write_text("VERCEL_OIDC_TOKEN=x"),         # what `vercel link` also writes
+    lambda d: (d / ".gitignore").write_text(".env*"),
+    lambda d: (d / ".vercel").mkdir() or (d / ".vercel" / "output.json").write_text("{}"),
+    lambda d: (d / "app" / "extra.py").write_text("print('added')"),          # an added deployable file
+    lambda d: (d / "main.py").unlink(),                                        # a removed one
+    lambda d: (d / "vercel.json").write_text((d / "vercel.json").read_text().replace("17 4", "17 15")),  # changed
+    lambda d: (d / "main.py").write_bytes((d / "main.py").read_bytes().replace(b"\n", b"\r\n")),  # line endings
+])
+def test_any_added_removed_or_changed_file_refuses_the_upload(fresh_export, tamper):
+    tamper(fresh_export)
+    with pytest.raises(da.Refused) as caught:
+        da.verify(fresh_export, _head())
+    assert caught.value.code == "DEPLOY_TREE_DIFFERS"
+
+
+def test_a_link_in_the_upload_directory_refuses_and_a_missing_directory_or_commit_is_refused(fresh_export, tmp_path):
+    try:
+        os.symlink(fresh_export / "main.py", fresh_export / "app" / "alias.py")
+    except (OSError, NotImplementedError):
+        pytest.skip("symbolic links are not available to this account")
+    with pytest.raises(da.Refused) as caught:
+        da.verify(fresh_export, _head())
+    assert caught.value.code == "LINK_IN_UPLOAD"
+
+
+@pytest.mark.parametrize("alias", ["main.py", "templates"])  # a file alias, a directory junction
+def test_an_alias_in_the_upload_directory_refuses_even_without_the_symlink_privilege(fresh_export, monkeypatch, alias):
+    monkeypatch.setattr(da, "_is_reparse_point", lambda path: path.name == alias and path.parent.name == "upload")
+    with pytest.raises(da.Refused) as caught:
+        da.verify(fresh_export, _head())
+    assert caught.value.code == "LINK_IN_UPLOAD"
+
+
+def test_a_commit_with_nothing_deployable_verifies_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(da, "_committed_blobs", lambda resolved, repo: {"docs/readme.md": "0" * 40})
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(da.Refused) as caught:
+        da.verify(tmp_path / "empty", _head())
+    assert caught.value.code == "NOTHING_EXPORTED"
+
+
+def test_verify_refuses_a_missing_directory_an_unknown_commit_and_an_empty_one(tmp_path):
+    with pytest.raises(da.Refused) as caught:
+        da.verify(tmp_path / "missing", _head())
+    assert caught.value.code == "DIRECTORY_MISSING"
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(da.Refused) as caught:
+        da.verify(tmp_path / "empty", "0" * 40)
+    assert caught.value.code == "COMMIT_NOT_FOUND"
+    with pytest.raises(da.Refused) as caught:
+        da.verify(tmp_path / "empty", _head())
+    assert caught.value.code == "DEPLOY_TREE_DIFFERS"  # every committed file is missing
+
+
+def test_the_command_line_reports_the_identity_or_the_difference_by_counts_only(fresh_export):
+    out = io.StringIO()
+    assert da.main(["verify", "--dir", str(fresh_export), "--commit", _head()], out=out, err=io.StringIO()) == 0
+    assert json.loads(out.getvalue())["result"] == "IDENTICAL"
+    (fresh_export / "app" / "student-file.py").write_text("x")
+    err = io.StringIO()
+    assert da.main(["verify", "--dir", str(fresh_export), "--commit", _head()], out=io.StringIO(), err=err) == 1
+    assert "DEPLOY_TREE_DIFFERS (added=1 removed=0 changed=0)" in err.getvalue()
+    assert "student-file" not in err.getvalue()

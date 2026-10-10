@@ -31,6 +31,15 @@ LOG_DIR_ENV = "APP_LOG_DIR"
 CRON_SECRET_ENV = "CRON_SECRET"
 CRON_SECRET_MIN_LENGTH = 32
 SCRATCH_DIRNAME = "sgaa-scratch"
+#: Who a hosted process admits.  ``operator``: only requests that present the operator credential
+#: (``app.web.admission_gate``); everyone else is refused before any view or database access.
+#: ``open``: everyone the application's own authentication admits.  Production must decide
+#: explicitly; lifting ``operator`` to ``open`` is the opening (MP-3 gate GO).
+ADMISSION_ENV = "SGAA_ADMISSION"
+ADMISSION_OPERATOR = "operator"
+ADMISSION_OPEN = "open"
+OPERATOR_TOKEN_ENV = "SGAA_OPERATOR_TOKEN"
+OPERATOR_TOKEN_MIN_LENGTH = 32
 
 _SERVERLESS_MARKERS = ("VERCEL", "AWS_LAMBDA_FUNCTION_NAME")
 _BOOLEAN_WORDS = frozenset({"0", "1", "true", "false", "yes", "no", "on", "off"})
@@ -43,6 +52,8 @@ HOSTED_STORAGE_CONFIG_REQUIRED = "HOSTED_STORAGE_CONFIG_REQUIRED"
 HOSTED_SECRET_KEY_REQUIRED = "HOSTED_SECRET_KEY_REQUIRED"
 HOSTED_TOKEN_KEY_REQUIRED = "HOSTED_TOKEN_KEY_REQUIRED"
 HOSTED_PUBLIC_URL_INVALID = "HOSTED_PUBLIC_URL_INVALID"
+HOSTED_ADMISSION_UNDECIDED = "HOSTED_ADMISSION_UNDECIDED"
+HOSTED_OPERATOR_TOKEN_REQUIRED = "HOSTED_OPERATOR_TOKEN_REQUIRED"
 
 
 @dataclass(frozen=True)
@@ -133,6 +144,28 @@ def scheduler_secret_configured(environ=None) -> bool:
     return cron_secret(environ) is not None
 
 
+def admission_mode(environ=None, *, production: bool) -> str | None:
+    """``operator`` or ``open``; ``None`` when production has not decided (a startup blocker).
+
+    Outside production an undeclared value means ``open``: a non-production process never serves
+    the institution's users.  An unknown value is never guessed in either direction.
+    """
+    raw = str(_environ(environ).get(ADMISSION_ENV) or "").strip().lower()
+    if raw in (ADMISSION_OPERATOR, ADMISSION_OPEN):
+        return raw
+    if not raw and not production:
+        return ADMISSION_OPEN
+    return None
+
+
+def operator_token(environ=None) -> str | None:
+    """The operator credential while admission is ``operator``: printable ASCII, at least 32 characters."""
+    token = str(_environ(environ).get(OPERATOR_TOKEN_ENV) or "").strip()
+    if len(token) < OPERATOR_TOKEN_MIN_LENGTH or not token.isascii() or not token.isprintable():
+        return None
+    return token
+
+
 SUPABASE_POOLER_SUFFIX = ".pooler.supabase.com"
 SUPABASE_TRANSACTION_PORT = 6543
 
@@ -206,6 +239,11 @@ def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
         except CanonicalStoreError as exc:
             names = tuple(name for name in exc.detail.split(",") if name)
             found.append(Blocker(HOSTED_STORAGE_CONFIG_REQUIRED, names))
+    admission = admission_mode(env, production=production)
+    if admission is None:
+        found.append(Blocker(HOSTED_ADMISSION_UNDECIDED, (ADMISSION_ENV,)))
+    elif admission == ADMISSION_OPERATOR and operator_token(env) is None:
+        found.append(Blocker(HOSTED_OPERATOR_TOKEN_REQUIRED, (OPERATOR_TOKEN_ENV,)))
     return tuple(found)
 
 
@@ -221,7 +259,16 @@ if __name__ == "__main__":
 
 
 __all__ = [
+    "ADMISSION_ENV",
+    "ADMISSION_OPEN",
+    "ADMISSION_OPERATOR",
     "Blocker",
+    "HOSTED_ADMISSION_UNDECIDED",
+    "HOSTED_OPERATOR_TOKEN_REQUIRED",
+    "OPERATOR_TOKEN_ENV",
+    "OPERATOR_TOKEN_MIN_LENGTH",
+    "admission_mode",
+    "operator_token",
     "CRON_SECRET_ENV",
     "CRON_SECRET_MIN_LENGTH",
     "SUPABASE_POOLER_SUFFIX",

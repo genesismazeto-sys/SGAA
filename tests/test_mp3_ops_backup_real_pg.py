@@ -83,3 +83,30 @@ def test_the_command_line_reports_a_failed_backup_by_code_when_the_database_is_u
     code = ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o")], out=out, err=err)
     assert code == 1 and "STEP_FAILED_DATABASE_BACKUP" in err.getvalue()
     assert out.getvalue() == "" and not list((tmp_path / "o").rglob("*"))
+
+
+def test_the_verified_generation_holds_exactly_the_live_business_state_until_a_write(database, tmp_path, monkeypatch):
+    """The opening's proof that the pre-opening backup is current: Layer-2 digests == live fingerprint."""
+    from tests.mp2_pg_support import adapter
+    from tools import cutover_ledger
+
+    name, url = database
+    monkeypatch.setenv("DATABASE_URL", url)
+    root, off = tmp_path / "primary", tmp_path / "off"
+    ob.run_generation(root, label="pre-open", generations=2, objects=False, off_platform=off)
+    generation = ob.verify_generation(root, off)
+    observer = cutover_ledger.Observer(database_url=url)
+    assert observer.backup_matches(generation["manifest_path"], observer.fingerprint()) is True
+    conn = adapter(url)
+    try:
+        conn.execute("INSERT INTO cursos(nome, codigo, duracao_periodos) VALUES('Outro', 'OUT', 8)")
+        conn.commit()
+    finally:
+        conn.close()
+    assert observer.backup_matches(generation["manifest_path"], observer.fingerprint()) is False
+    # and a damaged primary set is not a generation
+    dump = next((root / "layer2").glob("*.dump"))
+    dump.write_bytes(dump.read_bytes()[:-10])
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "DATABASE_SET_INVALID"

@@ -33,12 +33,22 @@ WHICH TABLES AND COLUMNS
     intents, worker status, cloud accounts, backup settings and schema metadata
     are machine state and are never included.
 
-    Known derived writes that remain INCLUDED and are adjudicated by the
-    operator: the automatic return-to-rejected transition of a ``requisicoes``
-    row that an administrator's dashboard view triggers once its deadline has
-    passed (the workstation runtime derives the same transition from dates and
-    configuration, so rolling back loses nothing), the student "seen" mark, and
-    the credential-version bump of a legacy-hash re-hash (above).
+    Known derived writes stay INCLUDED in the fingerprint.  Two of them -- and only
+    these, a fixed list reviewed with the SPEC (``DERIVED_WRITE_CLASSES``) -- may be
+    classified as derived by ``classify``, row by row, against the LIVE row:
+
+    * ``REQUISICOES_AUTO_REJECTION``: an overdue returned request that an
+      administrator's dashboard view turned into a rejection.  Exactly the columns
+      ``status`` and ``observacao``; the reference status was ``Devolvida``, the
+      current one is ``Indeferida``, and the current note is the reference note
+      with the automatic marker appended (the workstation derives the same
+      transition from dates and configuration, so rolling back loses nothing);
+    * ``REQUISICOES_STUDENT_SEEN``: exactly ``aluno_update_seen_at``, from empty
+      to a time (the student's "seen" mark).
+
+    Anything else -- another table or column, an added or removed row, a value the
+    verification does not reproduce, the credential-version bump of a password
+    re-hash (indistinguishable from a real password change) -- is not derived.
 
 OUTPUT
     Table and column names, counts and digests only; never a row value.  The
@@ -47,7 +57,8 @@ OUTPUT
     personal data and stays in the encrypted custody directory.
 
 Commands: ``snapshot --out FILE`` (source: ``DATABASE_URL``) and
-``compare --reference FILE --current FILE``.  Exit codes: 0 done / identical,
+``compare --reference FILE --current FILE``.  ``classify`` is the ledger's (the rollback
+from the opening takes the current fingerprint itself, live, and never trusts a file).  Exit codes: 0 done / identical,
 1 changed or refused, 2 usage.
 """
 
@@ -56,6 +67,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,6 +84,14 @@ FORMAT = 2
 EXCLUDED_BUSINESS_TABLES = frozenset({"storage_objects", "requisicao_alerta_receipts"})
 # Columns rewritten by the system with no change of meaning.
 EXCLUDED_COLUMNS = {"usuarios": frozenset({"senha"})}
+#: The ONLY writes a rollback from the opening may treat as derived (reviewed with the SPEC, A15).
+DERIVED_WRITE_CLASSES = {
+    "REQUISICOES_AUTO_REJECTION": ("requisicoes", frozenset({"status", "observacao"})),
+    "REQUISICOES_STUDENT_SEEN": ("requisicoes", frozenset({"aluno_update_seen_at"})),
+}
+_AUTO_REJECTION_MARKER = re.compile(
+    r"\[Indeferida automaticamente: prazo de adequa\u00e7\u00e3o de [0-9]{1,4} dias expirado\.\]\Z"
+)
 
 
 class Refused(Exception):
@@ -121,17 +141,156 @@ def _table_entry(table: str, rows) -> dict:
     }
 
 
+def _read(conn) -> tuple[dict, dict]:
+    """Fingerprint entries and the raw rows they were made from, inside the caller's snapshot."""
+    raw = {table: pathb.read_target_rows(conn, table) for table in business_tables()}
+    return {table: _table_entry(table, rows) for table, rows in raw.items()}, raw
+
+
 def snapshot(conn) -> dict:
     """The fingerprint of the connected database, from one read-only snapshot."""
     conn.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
     try:
-        tables = {table: _table_entry(table, pathb.read_target_rows(conn, table)) for table in business_tables()}
+        tables, _raw = _read(conn)
     finally:
         try:
             conn.execute("ROLLBACK")
         except Exception:  # pragma: no cover - a broken connection ends the transaction anyway
             pass
     return {"format": FORMAT, "tables": tables, "fingerprint_sha256": _digest_of(tables)}
+
+
+def _column_hash(table: str, row: tuple, column: str, value) -> str:
+    """The short hash a row would carry for ``column`` holding ``value`` (the fingerprint's normalization)."""
+    columns = pathb._columns(table)
+    candidate = list(row)
+    candidate[columns.index(column)] = value
+    normalized = next(iter(pathb.normalize_rows(table, [tuple(candidate)]).values()))
+    return _short(normalized[columns.index(column)])
+
+
+def _verify_auto_rejection(row: tuple, before: dict, columns: list) -> bool:
+    table = "requisicoes"
+    current = dict(zip(columns, row))
+    if current["status"] != "Indeferida" or before["status"] != _column_hash(table, row, "status", "Devolvida"):
+        return False
+    note = current["observacao"]
+    if not isinstance(note, str) or not _AUTO_REJECTION_MARKER.search(note):
+        return False
+    marker = _AUTO_REJECTION_MARKER.search(note).group(0)
+    if note == marker:  # the reference note was empty
+        return before["observacao"] in {_column_hash(table, row, "observacao", None),
+                                        _column_hash(table, row, "observacao", "")}
+    prefix = note[: -len(marker)]
+    if not prefix.endswith("\n"):
+        return False
+    return before["observacao"] == _column_hash(table, row, "observacao", prefix[:-1])
+
+
+def _verify_student_seen(row: tuple, before: dict, columns: list) -> bool:
+    current = dict(zip(columns, row))
+    return current["aluno_update_seen_at"] is not None and \
+        before["aluno_update_seen_at"] == _column_hash("requisicoes", row, "aluno_update_seen_at", None)
+
+
+_VERIFIERS = {
+    "REQUISICOES_AUTO_REJECTION": _verify_auto_rejection,
+    "REQUISICOES_STUDENT_SEEN": _verify_student_seen,
+}
+
+
+def _classes_for(changed: frozenset) -> list[str] | None:
+    """The derived classes whose column sets, together, are EXACTLY ``changed`` (None when none do)."""
+    from itertools import combinations
+
+    names = sorted(DERIVED_WRITE_CLASSES)
+    for size in range(1, len(names) + 1):
+        for combo in combinations(names, size):
+            union = frozenset().union(*(DERIVED_WRITE_CLASSES[name][1] for name in combo))
+            if union == changed and len({DERIVED_WRITE_CLASSES[name][0] for name in combo}) == 1:
+                return list(combo)
+    return None
+
+
+def _classify(reference_tables: dict, current_tables: dict, raw: dict) -> dict:
+    """Identical, every change verified as a fixed derived class, or the first reason it is not."""
+    derived: set[str] = set()
+    changed_tables = sorted(name for name in set(reference_tables) | set(current_tables)
+                            if reference_tables.get(name) != current_tables.get(name))
+    if not changed_tables:
+        return {"identical": True, "derived_classes": [], "refusal": None, "changed_tables": []}
+
+    def refused(code):
+        return {"identical": False, "derived_classes": [], "refusal": code,
+                "changed_tables": [name.upper() for name in changed_tables]}
+
+    allowed_tables = {table for table, _columns in DERIVED_WRITE_CLASSES.values()}
+    for table in changed_tables:
+        before, after = reference_tables.get(table), current_tables.get(table)
+        if table not in allowed_tables or not before or not after:
+            return refused("NOT_A_DERIVED_TABLE")
+        if before["columns"] != after["columns"]:
+            return refused("SHAPE_CHANGED")
+        old, new = before["row_hashes"], after["row_hashes"]
+        if set(old) != set(new):
+            return refused("ROWS_ADDED_OR_REMOVED")
+        columns = pathb._columns(table)
+        live = {}
+        for record in raw[table]:
+            values = tuple(record)
+            normalized_key = next(iter(pathb.normalize_rows(table, [values])))
+            live["|".join(str(part) for part in normalized_key)] = values
+        for key in sorted(old):
+            if old[key] == new[key]:
+                continue
+            changed = frozenset(name for name, left, right in zip(after["columns"], old[key], new[key]) if left != right)
+            classes = _classes_for(changed)
+            if classes is None:
+                return refused("COLUMNS_NOT_DERIVED")
+            row = live.get(key)
+            if row is None:
+                return refused("ROW_NOT_READ")
+            before_hashes = dict(zip(before["columns"], old[key]))
+            for name in classes:
+                if not _VERIFIERS[name](row, before_hashes, columns):
+                    return refused("DERIVED_VALUE_NOT_REPRODUCED")
+            derived.update(classes)
+    return {"identical": False, "derived_classes": sorted(derived), "refusal": None,
+            "changed_tables": [name.upper() for name in changed_tables]}
+
+
+def classify(conn, reference: dict) -> dict:
+    """Take the CURRENT fingerprint live and classify every difference from ``reference``.
+
+    One REPEATABLE READ READ ONLY transaction: the current fingerprint and the rows the derived
+    classes are verified against are the same snapshot.  Returns ``current`` (a fingerprint),
+    ``identical``, ``derived_classes`` and ``refusal`` (None, or why the difference is not derived).
+    """
+    reference = validate(reference)
+    conn.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+    try:
+        tables, raw = _read(conn)
+    finally:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:  # pragma: no cover
+            pass
+    verdict = _classify(reference["tables"], tables, raw)
+    verdict["current"] = {"format": FORMAT, "tables": tables, "fingerprint_sha256": _digest_of(tables)}
+    return verdict
+
+
+def database_identity_sha256(conn) -> str:
+    """Which database this is, as a digest: the server's system identifier when readable, else its address.
+
+    Read on an autocommit connection (``tools.pg_backup.connect``).  The reference and every later
+    observation must come from the same database, not from a copy of it.
+    """
+    from tools import pg_backup
+
+    identity = pg_backup.database_identity(conn)
+    basis = [identity.database, identity.user, identity.system_identifier or f"{identity.host}:{identity.port}"]
+    return hashlib.sha256(json.dumps(basis).encode("utf-8")).hexdigest()
 
 
 def validate(fingerprint) -> dict:

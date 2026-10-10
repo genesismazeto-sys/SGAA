@@ -54,10 +54,12 @@ Two procedures are kept apart throughout:
 
 ## B. Credential handling
 
-* Preferred: libpq password file — Windows `%APPDATA%\postgresql\pgpass.conf`,
+* DEV and local: libpq password file — Windows `%APPDATA%\postgresql\pgpass.conf`,
   POSIX `~/.pgpass` (mode 0600): `host:port:database:user:password`.
-* Fallback: `PGPASSWORD` set in the operator's shell for that session only;
-  the native tools inherit it from the environment.
+* PROD (MP-3 SPEC P6, A15): never the password file. The user types the
+  password at a hidden prompt into `PGPASSWORD` for one shell session and
+  removes it afterwards (`docs/PRODUCTION_CUTOVER_RUNBOOK.md` §0); the native
+  tools inherit it from the environment.
 * Never: a password or other secret in `DATABASE_URL` /
   `SGAA_RESTORE_TARGET_URL` (userinfo, `password=`, `sslpassword=`,
   `oauth_client_secret=`, `scram_client_key=`, `scram_server_key=`, any
@@ -439,9 +441,10 @@ sets in both places. Any step failing stops the run before anything is copied or
 deleted. Sets the tool did not create (including the `cutover-baseline` set) are never
 deleted. Both directories must be encrypted storage the operator controls (the sets
 are personal data); the tool states that it cannot verify this. `DATABASE_URL` is the
-direct or session-mode address and the password comes from the libpq password file.
-Schedule it with the operator machine's own scheduler (the Windows task scheduler stays
-until MP-4) and run a restore drill into scratch PostgreSQL on a calendar (section F-H).
+direct or session-mode address; for PROD the password is typed at a hidden prompt (section B),
+so the operator starts each run (a scheduled task would need a stored PROD password); from the
+cutover's C11 to C14 each run also records itself in the cutover ledger (`--ledger-dir`). Run a
+restore drill into scratch PostgreSQL on a calendar (section F-H).
 The achievable RPO is the interval between runs.
 
 ## Exit codes

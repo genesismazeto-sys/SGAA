@@ -1,0 +1,236 @@
+# coding: utf-8
+"""MP-3 R3 remediation, finding 1: the hosted pre-opening admission gate (``app.web.admission_gate``).
+
+Unit part: the contract of ``app.hosting`` (production must decide; ``operator`` needs a credential;
+nothing is echoed).  Real-application part (opt-in, ``SGAA_PG_TEST_URL``): ``main:app`` served by a
+fresh interpreter in hosted production mode over a disposable PostgreSQL database.
+
+* Before the opening a stranger -- even one who knows a valid administrator password -- is refused
+  every page and every credential POST with 503 ``X-SGAA-Admission: closed``, no cookie, and the
+  database does not change by a single row (business, throttle or any other table).
+* The operator passes with the credential: the public smoke (header) and a browser (the admission
+  form, then an HMAC cookie) both work; a forged cookie or a wrong token does not.
+* Opening is the only switch: the same database served with ``SGAA_ADMISSION=open`` admits everyone
+  and has no admission route.
+"""
+
+from __future__ import annotations
+
+import http.client
+import re
+from urllib.parse import urlencode, urlsplit
+
+import pytest
+
+from app import hosting
+from app.hosting import Blocker
+from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, adapter
+from tests.mp3_served_app import seed_admin_and_requests, served_app
+from tools import hosted_smoke
+
+NEEDS_PG = pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT")
+TOKEN = "operator-" + "Q7" * 20
+SENTINEL = "SENTINEL-ADMISSION-VALUE-0123456789"
+
+
+# ---- the contract -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw,production,expected", [
+    ("operator", True, "operator"), ("OPEN", True, "open"), (" open ", False, "open"),
+    ("", True, None), ("", False, "open"), ("closed", True, None), ("closed", False, None),
+    ("yes", False, None),
+])
+def test_production_must_decide_and_nothing_is_guessed(raw, production, expected):
+    assert hosting.admission_mode({"SGAA_ADMISSION": raw}, production=production) == expected
+
+
+@pytest.mark.parametrize("token,ok", [
+    ("a" * 32, True), ("a" * 31, False), ("", False), ("é" * 40, False), ("a" * 31 + "\n", False),
+    ("a\x00" + "b" * 40, False),
+])
+def test_the_operator_credential_has_a_minimum_shape(token, ok):
+    assert (hosting.operator_token({"SGAA_OPERATOR_TOKEN": token}) is not None) is ok
+
+
+def _blockers(env, monkeypatch, *, production):
+    import app.db as app_db
+
+    monkeypatch.setattr(app_db, "DATABASE_URL", "postgresql://sgaa@127.0.0.1:1/none")
+    base = {"TRUST_PROXY_XFF": "1", "SUPABASE_URL": "https://abcdefghijklmnop.supabase.co",
+            "SUPABASE_SECRET_KEY": "sb_secret_" + "x" * 30, "SGAA_STORAGE_BUCKET": "sgaa-documentos"}
+    return hosting.startup_blockers({**base, **env}, production=production)
+
+
+def test_a_production_start_refuses_without_an_admission_decision_or_without_the_credential(monkeypatch):
+    assert _blockers({}, monkeypatch, production=True) == (Blocker("HOSTED_ADMISSION_UNDECIDED", ("SGAA_ADMISSION",)),)
+    assert _blockers({"SGAA_ADMISSION": SENTINEL}, monkeypatch, production=True) == (
+        Blocker("HOSTED_ADMISSION_UNDECIDED", ("SGAA_ADMISSION",)),)
+    assert _blockers({"SGAA_ADMISSION": "operator"}, monkeypatch, production=True) == (
+        Blocker("HOSTED_OPERATOR_TOKEN_REQUIRED", ("SGAA_OPERATOR_TOKEN",)),)
+    short = _blockers({"SGAA_ADMISSION": "operator", "SGAA_OPERATOR_TOKEN": "x" * 31}, monkeypatch, production=True)
+    assert [b.code for b in short] == ["HOSTED_OPERATOR_TOKEN_REQUIRED"]
+    assert _blockers({"SGAA_ADMISSION": "operator", "SGAA_OPERATOR_TOKEN": TOKEN}, monkeypatch, production=True) == ()
+    assert _blockers({"SGAA_ADMISSION": "open"}, monkeypatch, production=True) == ()
+    assert _blockers({}, monkeypatch, production=False) == ()  # non-production never serves real users
+    assert SENTINEL not in repr(_blockers({"SGAA_ADMISSION": SENTINEL}, monkeypatch, production=True))
+
+
+# ---- the real application -------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def registry():
+    registry = Registry("admission")
+    try:
+        registry.provision_template(seed=seed_admin_and_requests)
+        yield registry
+    finally:
+        assert registry.close() == 0
+
+
+@pytest.fixture
+def database(registry):
+    name, url = registry.create(template=registry.template)
+    yield url
+    registry.drop(name)
+
+
+def _whole_database(url) -> dict:
+    """Every row of every table in ``public``, digested: any write at all changes it."""
+    conn = adapter(url)
+    try:
+        tables = [row[0] for row in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename").fetchall()]
+        state = {}
+        for table in tables:
+            state[table] = tuple(conn.execute(
+                f'SELECT count(*), md5(coalesce(string_agg(t::text, \'|\' ORDER BY t::text), \'\')) FROM public."{table}" t'
+            ).fetchone())
+        conn.rollback()
+        return state
+    finally:
+        conn.close()
+
+
+def _request(base, method, path, *, body=None, headers=None):
+    parts = urlsplit(base)
+    conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=30)
+    try:
+        conn.request(method, path, body=body, headers=headers or {})
+        response = conn.getresponse()
+        data = response.read()
+        return response.status, {k.lower(): v for k, v in response.getheaders()}, data, \
+            response.msg.get_all("Set-Cookie") or []
+    finally:
+        conn.close()
+
+
+_FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+STRANGER_REQUESTS = (
+    ("GET", "/", None, {}),
+    ("GET", "/login", None, {}),
+    ("GET", "/admin/dashboard", None, {}),
+    ("GET", "/csrf-token", None, {}),
+    ("GET", "/primeiro-acesso", None, {}),
+    ("POST", "/login", urlencode({"email": ADMIN_EMAIL, "senha": ADMIN_PASSWORD}).encode(), _FORM),
+    ("POST", "/login", urlencode({"email": "aluno@example.invalid", "senha": "x" * 12}).encode(), _FORM),
+    ("POST", "/esqueci-minha-senha", urlencode({"email": ADMIN_EMAIL}).encode(), _FORM),
+    ("POST", "/redefinir-senha/abc", urlencode({"senha": "y" * 12}).encode(), _FORM),
+    ("GET", "/login", None, {"X-SGAA-Operator-Token": "wrong-" + "x" * 40}),
+    ("GET", "/login", None, {"Cookie": "sgaa_operator=" + "0" * 64}),
+)
+
+
+@NEEDS_PG
+def test_before_the_opening_a_stranger_is_refused_everything_and_writes_nothing(database, tmp_path):
+    before = _whole_database(database)
+    with served_app(database, tmp_path, SGAA_ADMISSION="operator", SGAA_OPERATOR_TOKEN=TOKEN) as app:
+        for method, path, body, headers in STRANGER_REQUESTS:
+            status, seen, data, cookies = _request(app.url, method, path, body=body, headers=headers)
+            assert (status, seen.get("x-sgaa-admission"), cookies) == (503, "closed", []), (method, path)
+            assert b"csrf" not in data.lower() and ADMIN_EMAIL.encode() not in data
+        assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "closed"
+        # Reachable without the credential: the health check (read-only) and static files.
+        assert _request(app.url, "GET", "/health")[0] == 200
+        assert _request(app.url, "GET", "/static/css/modern-style.css")[0] == 200
+        # A wrong token at the admission form is refused and sets no admission cookie.
+        status, _seen, form, cookies = _request(app.url, "GET", "/operator-admission")
+        csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', form).group(1).decode()
+        session_cookie = "; ".join(c.split(";", 1)[0] for c in cookies)
+        status, _seen, _data, cookies = _request(
+            app.url, "POST", "/operator-admission", headers={**_FORM, "Cookie": session_cookie},
+            body=urlencode({"csrf_token": csrf, "token": "wrong-" + "z" * 40}).encode())
+        assert status == 403 and not any(c.startswith("sgaa_operator=") for c in cookies)
+    assert _whole_database(database) == before  # not one row, in any table
+
+
+@NEEDS_PG
+def test_before_the_opening_the_operator_smoke_passes_with_the_credential(database, tmp_path):
+    with served_app(database, tmp_path, SGAA_ADMISSION="operator", SGAA_OPERATOR_TOKEN=TOKEN) as app:
+        report = hosted_smoke.run(app.url, allow_insecure=True, operator_token=TOKEN, admission="closed",
+                                  email=ADMIN_EMAIL, password=ADMIN_PASSWORD)
+        failed = [(c["check"], c["code"]) for c in report["checks"] if not c["ok"]]
+        assert report["result"] == "PASS", failed
+        assert {c["check"] for c in report["checks"]} >= {"ADMISSION", "SIGN_IN", "LOGIN_PAGE", "HEADERS"}
+
+
+@NEEDS_PG
+def test_before_the_opening_a_browser_enters_once_with_the_token_and_then_carries_only_an_hmac(database, tmp_path):
+    with served_app(database, tmp_path, SGAA_ADMISSION="operator", SGAA_OPERATOR_TOKEN=TOKEN) as app:
+        _status, _seen, form, cookies = _request(app.url, "GET", "/operator-admission")
+        csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', form).group(1).decode()
+        session_cookie = "; ".join(c.split(";", 1)[0] for c in cookies)
+        status, seen, _data, cookies = _request(
+            app.url, "POST", "/operator-admission", headers={**_FORM, "Cookie": session_cookie},
+            body=urlencode({"csrf_token": csrf, "token": TOKEN}).encode())
+        assert status == 303 and seen["location"].endswith("/login")
+        admission = [c for c in cookies if c.startswith("sgaa_operator=")]
+        assert len(admission) == 1 and TOKEN not in admission[0]
+        assert re.search(r";\s*httponly", admission[0], re.I) and re.search(r";\s*secure", admission[0], re.I)
+        carried = admission[0].split(";", 1)[0]
+        assert _request(app.url, "GET", "/login", headers={"Cookie": carried})[0] == 200
+        # The CSRF protection still guards the form: without its token the right credential is refused.
+        assert _request(app.url, "POST", "/operator-admission", headers=_FORM,
+                        body=urlencode({"token": TOKEN}).encode())[0] in {400, 403}
+
+
+@NEEDS_PG
+def test_opening_is_the_switch_the_same_database_served_open_admits_everyone(database, tmp_path):
+    before = _whole_database(database)
+    with served_app(database, tmp_path, SGAA_ADMISSION="open") as app:
+        status, seen, page, cookies = _request(app.url, "GET", "/login")
+        assert status == 200 and "x-sgaa-admission" not in seen
+        assert _request(app.url, "GET", "/operator-admission")[0] == 404
+        assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "open"
+        # Control for the "writes nothing" witness: once open, a stranger's failed sign-in IS a write.
+        csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', page).group(1).decode()
+        session_cookie = "; ".join(c.split(";", 1)[0] for c in cookies)
+        _request(app.url, "POST", "/login", headers={**_FORM, "Cookie": session_cookie},
+                 body=urlencode({"csrf_token": csrf, "email": ADMIN_EMAIL, "senha": "wrong-" + "p" * 12}).encode())
+    after = _whole_database(database)
+    assert after != before and after["auth_throttle_events"] != before["auth_throttle_events"]
+
+
+@NEEDS_PG
+def test_a_production_deployment_without_an_admission_decision_does_not_start(database, tmp_path):
+    from tests.mp3_served_app import hosted_environment
+
+    env = hosted_environment(database, tmp_path)
+    env.pop("SGAA_ADMISSION")
+    import subprocess
+    import sys
+
+    from tests.mp3_served_app import REPO_ROOT
+
+    done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert done.returncode == 1 and "HOSTED_ADMISSION_UNDECIDED" in done.stdout
+    env["SGAA_ADMISSION"] = "operator"
+    done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert done.returncode == 1 and "HOSTED_OPERATOR_TOKEN_REQUIRED" in done.stdout
+    env["SGAA_OPERATOR_TOKEN"] = TOKEN
+    done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert done.returncode == 0 and '"admission": "operator"' in done.stdout and TOKEN not in done.stdout
