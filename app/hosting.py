@@ -118,8 +118,19 @@ def apply_hosted_defaults(environ=None) -> None:
         env[LOG_DIR_ENV] = os.path.join(scratch_root(), "logs")
 
 
+def cron_secret(environ=None) -> str | None:
+    """The scheduler credential, or ``None`` when the front is disabled.
+
+    One rule for the front and the readiness report: surrounding whitespace is
+    ignored, at least ``CRON_SECRET_MIN_LENGTH`` characters, ASCII only (an HTTP
+    header cannot carry anything else faithfully).
+    """
+    secret = str(_environ(environ).get(CRON_SECRET_ENV) or "").strip()
+    return secret if len(secret) >= CRON_SECRET_MIN_LENGTH and secret.isascii() else None
+
+
 def scheduler_secret_configured(environ=None) -> bool:
-    return len(str(_environ(environ).get(CRON_SECRET_ENV) or "").strip()) >= CRON_SECRET_MIN_LENGTH
+    return cron_secret(environ) is not None
 
 
 def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
@@ -169,6 +180,7 @@ __all__ = [
     "Blocker",
     "CRON_SECRET_ENV",
     "CRON_SECRET_MIN_LENGTH",
+    "cron_secret",
     "HOSTED_POSTGRES_REQUIRED",
     "HOSTED_PROXY_TRUST_UNDECIDED",
     "HOSTED_PUBLIC_URL_INVALID",

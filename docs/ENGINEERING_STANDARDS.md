@@ -34,7 +34,7 @@ appending a change would make an owner worse, a proportional local refactor
 | Ephemeral-state schema (v16) | `app/prod1_ephemeral_state_ddl.py` + `app/prod1_ephemeral_state_v16.py`; PostgreSQL in `app/pg_schema.py` |
 | RBAC requirements | `app/auth.py` (`get_admin_permission_requirement`, `classify_governed_admin_request`) |
 | User-facing messages | `utils/messages.py` (`flash`, `resolve_user_message`, `_iter_backend_files`) |
-| Storage | `app/storage/`, one module per concern: `contracts` (error hierarchy), `custody_common` (shared custody primitives), `upload_intents`, `mirror_outbox`, `object_store`, `supabase_store`, `google_drive`, `google_connection`, `request_documents`, `arquivo_documents`, `drive_mirror` (Drive mirror worker), `legacy_convergence` (legacy eligibility and convergence), `storage_audit` (census and convergence cross-check), `cli` (operator command line, `python -m app.storage.cli`; never imported by the web runtime) |
+| Storage | `app/storage/`, one module per concern: `contracts` (error hierarchy), `custody_common` (shared custody primitives), `upload_intents`, `mirror_outbox`, `object_store`, `supabase_store`, `google_drive`, `google_connection`, `request_documents`, `arquivo_documents`, `drive_mirror` (Drive mirror worker), `legacy_convergence` (legacy eligibility and convergence), `storage_audit` (census and convergence cross-check), `scheduler` (authenticated WSGI front for scheduled jobs, `app.storage.scheduler:application`; its own function, never imported by the web runtime), `cli` (operator command line, `python -m app.storage.cli`; never imported by the web runtime) |
 
 Domain modules elsewhere in `app/` state their single responsibility in their
 module docstring.

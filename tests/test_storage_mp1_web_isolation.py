@@ -22,6 +22,7 @@ BACKGROUND = frozenset({
     "app.storage.cli",
     "app.storage.drive_mirror",
     "app.storage.legacy_convergence",
+    "app.storage.scheduler",
     "app.storage.storage_audit",
 })
 
@@ -89,6 +90,10 @@ def test_scanner_negative_control_detects_every_import_form():
         ("from .storage_audit import census", "app.storage.request_documents"),
         ("from ..storage import cli", "app.views.files"),
         ("importlib.import_module('app.storage.drive_mirror')", ""),
+        ("from app.storage import scheduler", ""),
+        ("from app.storage.scheduler import application", ""),
+        ("import app.storage.scheduler", ""),
+        ("from . import scheduler", "app.storage.request_documents"),
     ):
         assert background_imports(source, module), source
     assert background_imports("from . import drive_mirror", "app.storage", is_package=True)
@@ -105,3 +110,14 @@ def test_scanner_negative_control_detects_every_import_form():
 def test_scanner_sees_the_actual_background_importers():
     cli = (ROOT / "app" / "storage" / "cli.py").read_text(encoding="utf-8-sig")
     assert "app.storage.drive_mirror" in background_imports(cli, "app.storage.cli")
+    scheduler = (ROOT / "app" / "storage" / "scheduler.py").read_text(encoding="utf-8-sig")
+    assert "app.storage.drive_mirror" in background_imports(scheduler, "app.storage.scheduler")
+
+
+def test_the_scheduler_front_is_unreachable_from_the_web_runtime_and_a_module_that_is_not_background_is_caught():
+    """The new background member is protected: a runtime module importing it is an offender;
+    the same import from a BACKGROUND member is not (and the scheduler really is one)."""
+    assert "app.storage.scheduler" in BACKGROUND
+    importer = "from app.storage import scheduler"
+    assert background_imports(importer, "app.views.admin.banco_dados") == {"app.storage.scheduler"}
+    assert _module_name(ROOT / "app" / "storage" / "scheduler.py") in BACKGROUND

@@ -20,6 +20,7 @@ override. An unknown value is refused (`RUNTIME_MODE_INVALID`).
 | Process | Entrypoint | Notes |
 |---|---|---|
 | web application | `main:app` | `main` registers the authorization gate and error handlers, so it is the full application. A WSGI host never runs `init_db`; use the readiness check below |
+| scheduled jobs | `app.storage.scheduler:application` | its own function (section 9); authenticated by `CRON_SECRET`; never loaded by the web function |
 | operator tools | `python -m app.storage.cli`, `python -m app.hosting_cli`, `tools/pg_backup.py` | run from an operator machine or CI with the environment of the target |
 
 ## 2. Startup blockers (hosted)
@@ -59,6 +60,8 @@ either bypassable or locks every user out together.
 | `TOKEN_ENCRYPTION_KEY` | Fernet key for `cloud_accounts.token_json` | yes |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth application (also the Picker values `GOOGLE_PICKER_API_KEY`, `GOOGLE_APP_ID`) | secret / no |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY` | canonical document storage | secret key only |
+| `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
+| `SCHEDULER_MIRROR_BATCH`, `SCHEDULER_MIRROR_LEASE_SECONDS` | objects per mirror invocation (default 5, at most 25) and lease length (default 300) | no |
 | `APP_LOG_DIR` | optional; defaults to `<scratch>/logs` when hosted, because `main` creates its log directory at import, before the factory runs. Logs also go to the platform stream (both the `app` and `main` channels) | no |
 
 Hosted mode never reads or writes the DPAPI machine store; the Banco de dados page
@@ -143,3 +146,39 @@ protected by its provider and the documented operational procedure
 (`docs/PG_BACKUP_RESTORE_RUNBOOK.md`), and the Google Drive and OneDrive account
 cards (connect, test, disconnect), because the Drive mirror uses the connected
 account. Nothing is listed from the local disk and the Windows task is not queried.
+
+## 9. Scheduled jobs
+
+The Drive mirror needs something to call it. The scheduler is a separate WSGI
+callable, `app.storage.scheduler:application`, deployed as its own function: the
+web application never loads it, so the web function does not carry the Drive
+worker and the web route, RBAC and CSRF inventories do not grow.
+
+| Request | Effect |
+|---|---|
+| `GET` or `POST /internal/scheduler/mirror` with `Authorization: Bearer <CRON_SECRET>` | one bounded mirror pass |
+
+Answers are value-free JSON: `200` the pass ran (including "nothing due"), `503` the
+canonical store or Drive is not runnable (`result_code`), `500` an unexpected failure
+(a fixed code, never exception text), `401` missing or wrong credential, `405` other
+method, `404` any other path or a disabled front.
+
+- `CRON_SECRET` (at least 32 ASCII characters, surrounding whitespace ignored) enables
+  the front; without it every request is a `404` (so a caller can tell "not configured"
+  from "wrong credential"). It is compared in constant time over SHA-256 digests; nothing is read
+  from the query string, no session or cookie is consulted, and no application,
+  database or provider is touched before the credential is accepted.
+- `SCHEDULER_MIRROR_BATCH` (default 5, at most 25) bounds the objects per
+  invocation; `SCHEDULER_MIRROR_LEASE_SECONDS` (default 300, from 120 to 3600) sizes the
+  lease. Keep the lease at or above the function's maximum duration plus a margin: a
+  function killed mid-pass leaves its claims `syncing` until the lease expires, then MP-1
+  releases them into `retry` (each such kill uses one of an object's attempts).
+- Platform cron is at-least-once and may overlap (Vercel Cron documentation, read
+  2026-10-09: `GET` with `Authorization: Bearer $CRON_SECRET`, no retry on failure,
+  Hobby plans run at most daily). The MP-1 leases, fences and find-by-operation make
+  duplicate and overlapping invocations safe: a claimed object is owned by one pass, and
+  a pass that loses its lease ends as `lost` and is adopted by the next one rather than
+  uploading a second copy.
+- Only the mirror pass is scheduled. Convergence, requeue and object backup remain
+  operator decisions (`python -m app.storage.cli`).
+- Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`.

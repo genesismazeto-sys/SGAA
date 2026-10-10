@@ -297,7 +297,7 @@ Open decisions (product or architecture): none.
 | 1 | Hosted runtime: mode, blockers, scratch, env-only secrets (and the read-only credential forms), connect timeout, health, `hosting_cli` | `hosting`, `hosting_cli`, `__init__`, `machine_secrets`, `cloud_credentials`, `banco_dados` (context flag), template, `db`, tests | T1–T4; E-PG1 hosted smoke; tripwire; R2 | done |
 | 2 | PostgreSQL-coherent backup/admin | `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | done |
 | 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | done |
-| 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | pending |
+| 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | done |
 | 5 | Object backup/verify/restore, CLI, runbooks, closure | `object_backup`, `cli`, `docs/HOSTED_RUNTIME.md`, runbook, ES §2, PROJECT_STATE, this SPEC | T1–T4; E-LIVE DEV; T5; R2; closure | pending |
 
 ## 13. Acceptance criteria
@@ -398,6 +398,14 @@ Open decisions (product or architecture): none.
   destination folder, "send backup" and "include in automatic backup" controls and their form
   markers, so a card save writes only the credentials it shows; (d) the carried S1-NM1 report
   description cap is withdrawn (see §15). Not material.
+- A6 2026-10-09 — Slice-4 review amendments (R2, no material finding): the enable rule lives once in
+  `hosting.cron_secret` (stripped, at least 32 ASCII characters) and serves both the front and the
+  readiness report; the presented token is encoded latin-1 as WSGI decodes headers, so a non-ASCII
+  header is a 401, never an error; the lease floor is `2 * LEASE_SAFETY_SECONDS` (the CLI's), because
+  below it only the first claimed object of a pass can clear the worker's safety margin; the default
+  lease is `mirror_outbox.DEFAULT_LEASE_SECONDS`; the documented numbers are pinned by literal tests;
+  the docs say what MP-1 actually guarantees on overlap and that a lease should cover the function
+  duration. Not material.
 
 ## 17. Closure
 
