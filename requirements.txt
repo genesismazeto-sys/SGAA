@@ -12,8 +12,8 @@ google-auth-oauthlib==1.2.2
 google-auth-httplib2==0.2.0
 python-dotenv==1.2.2
 requests==2.33.0
-msal==1.31.1
-cryptography==45.0.7
+msal==1.37.0
+cryptography==50.0.2
 PyYAML==6.0.2
 Pillow==12.3.0
 pypdf==6.19.0

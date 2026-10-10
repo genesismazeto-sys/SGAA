@@ -343,11 +343,11 @@ links); runtime logs on Hobby are kept for one hour, so a leak is looked for at 
 and the platform's log drains are not enabled for personal data.
 
 **Dependencies.** The pinned runtime dependencies were checked against published
-advisories (read-only). Same-major fixes are applied. `cryptography` 45.0.7 is outside
-that bound: its fixed releases (46.0.5 and later, with `msal` 1.32 or later) were not
-applied in MP-3; the advisories concern X.509 chain validation, PKCS7 decryption, EC public
-key loading from numbers, non-contiguous buffers and the OpenSSL linked into wheels, none of
-which the application calls. Bump `cryptography` and `msal` together in a hardening change.
+advisories (read-only). Same-major fixes were applied first; `cryptography` was then bumped
+with `msal` by the user's decision (MP-3 SPEC A13): `cryptography` 50.0.2 and `msal` 1.37.0
+(the smallest `msal` that resolves with the fixed `cryptography`). The application uses
+`cryptography` through Fernet (the OAuth token store and the machine secret) and `msal`
+through the OneDrive client; both surfaces were requalified.
 
 ## 13. Deployment on Vercel Hobby
 
