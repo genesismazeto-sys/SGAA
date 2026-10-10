@@ -18,6 +18,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_schema import canonical_prod1_pre_v15_object_sql
+from tests.prod1_v16_support import revert_prod1_v16_to_v15
 
 _REQUEST_TRIGGERS = ("trg_requisicao_arquivos_custody_insert", "trg_requisicao_arquivos_custody_update")
 _ARQUIVOS_INDEXES = (
@@ -31,7 +32,12 @@ _ARQUIVOS_TRIGGERS = (
 
 
 def revert_prod1_v15_to_v14(conn: sqlite3.Connection) -> None:
-    """Restore the v14 request triggers and ``admin_arquivos`` DDL and marker 14."""
+    """Restore the v14 request triggers and ``admin_arquivos`` DDL and marker 14.
+
+    Handed the bootstrapped head (v16), it reverts v16 first.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 16:
+        revert_prod1_v16_to_v15(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 15
     for table in ("requisicao_arquivos", "admin_arquivos"):
         assert conn.execute(f"SELECT count(*) FROM {table} WHERE provider='supabase'").fetchone()[0] == 0, table

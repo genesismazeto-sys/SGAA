@@ -183,6 +183,10 @@ SOURCE_TABLE_POLICIES = {
     "storage_upload_intents": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
     # Mirror-worker health of the source machine; empty target = never ran.
     "storage_worker_status": TablePolicy(RECREATE_TARGET_SIDE, (RESET_OPERATIONAL_STATE,)),
+    # v16 short-lived cross-request state (throttle windows, pending previews):
+    # meaningless after a cutover, so the target starts with both empty.
+    "auth_throttle_events": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
+    "admin_import_previews": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
     SQLITE_SEQUENCE_TABLE: TablePolicy(OMIT_EPHEMERAL, (OMITTED_SQLITE_INTERNAL,)),
 }
 

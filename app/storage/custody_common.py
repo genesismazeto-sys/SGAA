@@ -42,8 +42,21 @@ def require_utc_text(value) -> str:
     return value
 
 
+def utc_now() -> datetime.datetime:
+    """Naive UTC now at second precision (the arithmetic form of :func:`utc_now_text`)."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0)
+
+
+def utc_text(moment: datetime.datetime) -> str:
+    return moment.strftime(_FORMAT)
+
+
+def parse_utc_text(value: str) -> datetime.datetime:
+    return datetime.datetime.strptime(require_utc_text(value), _FORMAT)
+
+
 def utc_now_text() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).strftime(_FORMAT)
+    return utc_text(utc_now())
 
 
 def add_seconds(value: str, seconds: int) -> str:
@@ -95,10 +108,13 @@ __all__ = [
     "is_drive_id",
     "is_postgres",
     "new_lease_token",
+    "parse_utc_text",
     "positive_limit",
     "require_lease_token",
     "require_utc_text",
     "require_write_transaction",
     "sanitize_error_code",
+    "utc_now",
     "utc_now_text",
+    "utc_text",
 ]

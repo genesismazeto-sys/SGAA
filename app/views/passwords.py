@@ -13,13 +13,10 @@ from flask import (
     url_for,
 )
 
+from app import auth_throttle
 from app.auth import _client_ip
 from app.db import get_db_connection
 from app.password_email import issue_and_send_password_email
-from app.password_recovery_limiter import (
-    password_recovery_rate_limited,
-    register_password_recovery_attempt,
-)
 from app.password_tokens import (
     PURPOSE_FIRST_ACCESS,
     PURPOSE_PASSWORD_RESET,
@@ -68,13 +65,13 @@ def forgot_password():
         email = (request.form.get("email") or "").strip()
         submitted = True
         ip = _client_ip()
-        blocked, _retry_in = password_recovery_rate_limited(
+        blocked, _retry_in = auth_throttle.recovery_blocked(
             current_app,
             ip,
             email,
         )
         if not blocked:
-            register_password_recovery_attempt(ip, email)
+            auth_throttle.recovery_attempted(ip, email)
             conn = get_db_connection()
             user = _eligible_recovery_user(conn, email)
             if user is not None:

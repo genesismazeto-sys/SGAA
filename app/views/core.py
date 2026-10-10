@@ -2,13 +2,11 @@ import logging
 
 from flask import current_app, redirect, render_template, request, session, url_for
 
+from app import auth_throttle
 from app.auth import (
     ACCESS_LEVEL_META,
-    _clear_login_attempts,
     _clear_login_feedback_flashes,
     _client_ip,
-    _login_rate_limited,
-    _register_login_attempt,
     access_level_label,
     access_level_to_user_type,
     canonicalize_access_level,
@@ -64,14 +62,16 @@ def login():
         context["email_value"] = email
         context["remember_checked"] = remember_me
 
-        blocked, retry_in = _login_rate_limited(current_app, ip, account=email)
+        blocked, retry_in = auth_throttle.login_blocked(current_app, ip, account=email)
         if blocked:
             _clear_login_feedback_flashes()
             flash(f"Muitas tentativas. Tente novamente em ~{retry_in//60} min.", "error")
             return render_template("login.html", **context), 429
         conn = get_db_connection()
         # Apenas leitura aqui: evitamos writes em endpoints de pre-autentica\u00e7\u00e3o
-        # para n\u00e3o virarem vetor de DoS / contention.
+        # para n\u00e3o virarem vetor de DoS / contention. A unica excecao e o contador
+        # de tentativas falhas do runtime hospedado (app.auth_throttle), gravado so em
+        # falha e nunca em tentativa ja bloqueada.
         user = conn.execute("SELECT * FROM usuarios WHERE email = ?", (email,)).fetchone()
 
         password_matches = bool(user and check_password(user["senha"], senha))
@@ -154,12 +154,12 @@ def login():
             if foto_marker:
                 session["foto_perfil"] = foto_marker
 
-            _clear_login_attempts(ip=ip, account=email)
+            auth_throttle.login_succeeded(ip, account=email)
             if user_type == "admin":
                 return redirect(url_for("admin_dashboard"))
             return redirect(aluno_url("aluno_dashboard"))
 
-        _register_login_attempt(ip, account=email)
+        auth_throttle.login_failed(ip, account=email)
         # Loga apenas hash do email para n\u00e3o vazar PII no log
         try:
             import hashlib as _hashlib

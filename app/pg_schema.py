@@ -67,6 +67,11 @@ from app.prod1_document_custody_ddl import (
     DOCUMENT_CUSTODY_V15_DETAILS_JSON,
     LEGACY_LOCAL_LOCATOR_MAX_LENGTH,
 )
+from app.prod1_ephemeral_state_ddl import (
+    AUTH_THROTTLE_SCOPES,
+    EPHEMERAL_STATE_V16_DETAILS_JSON,
+    IMPORT_PREVIEW_PAYLOAD_MAX_BYTES,
+)
 from app.prod1_storage_ddl import (
     BUSINESS_DOCUMENT_MAX_BYTES,
     BUSINESS_DOCUMENT_MIME_TYPES,
@@ -91,7 +96,7 @@ from app.prod1_storage_ddl import (
 )
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 15
+PG_SCHEMA_VERSION = 16
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -499,6 +504,50 @@ def _storage_upload_intents_spec():
     )
 
 
+def _auth_throttle_events_spec():
+    """v16 ephemeral throttle events; same constraints as ``app.prod1_ephemeral_state_ddl``."""
+    t = "auth_throttle_events"
+    return _spec(
+        [
+            _identity("id"),
+            _text("scope", not_null=True),
+            _text("key_digest", not_null=True),
+            _text("occurred_at", not_null=True),
+        ],
+        _pk(t, "id"),
+        checks=[
+            _ck(t, "scope", f"scope IN ({_in_list(AUTH_THROTTLE_SCOPES)})"),
+            _ck(t, "key_digest", "key_digest ~ '^[0-9a-f]{64}$'"),
+            _ck(t, "occurred_at", _ts_check("occurred_at")),
+        ],
+    )
+
+
+def _admin_import_previews_spec():
+    """v16 ephemeral administrator import previews; same constraints as ``app.prod1_ephemeral_state_ddl``."""
+    t = "admin_import_previews"
+    return _spec(
+        [
+            _text("token_digest", not_null=True),
+            _integer("usuario_id", not_null=True),
+            _text("payload", not_null=True),
+            _text("created_at", not_null=True),
+            _text("expires_at", not_null=True),
+        ],
+        _pk(t, "token_digest"),
+        checks=[
+            _ck(t, "token_digest", "token_digest ~ '^[0-9a-f]{64}$'"),
+            _ck(t, "payload", f"octet_length(payload) BETWEEN 2 AND {IMPORT_PREVIEW_PAYLOAD_MAX_BYTES}"),
+            _ck(t, "created_at", _ts_check("created_at")),
+            _ck(t, "expires_at", _ts_check("expires_at")),
+            _ck(t, "expiry_order", "expires_at > created_at"),
+        ],
+        foreign_keys=[
+            _fk(t, ["usuario_id"], "usuarios", ["id"], on_delete="CASCADE"),
+        ],
+    )
+
+
 def _storage_worker_status_spec():
     """v14 mirror-worker health: at most one row; no row means "never ran"."""
     t = "storage_worker_status"
@@ -572,6 +621,8 @@ PG_APPLICATION_TABLES = (
     "reportes_captura",
     "storage_upload_intents",
     "storage_worker_status",
+    "auth_throttle_events",
+    "admin_import_previews",
 )
 
 PG_SCHEMA_TABLES = PG_APPLICATION_TABLES + (PG_SCHEMA_META_TABLE,)
@@ -1519,6 +1570,8 @@ PG_TABLE_SPECS = {
     "storage_objects": _storage_objects_spec(),
     "storage_upload_intents": _storage_upload_intents_spec(),
     "storage_worker_status": _storage_worker_status_spec(),
+    "auth_throttle_events": _auth_throttle_events_spec(),
+    "admin_import_previews": _admin_import_previews_spec(),
     PG_SCHEMA_META_TABLE: _spec(
         [
             _integer("id", not_null=True),
@@ -1725,6 +1778,13 @@ PG_EXPLICIT_INDEXES = {
             "storage_upload_intents",
             ["state", "expires_at"],
         ),
+        _index(
+            "idx_auth_throttle_events_lookup",
+            "auth_throttle_events",
+            ["scope", "key_digest", "occurred_at"],
+        ),
+        _index("idx_auth_throttle_events_expiry", "auth_throttle_events", ["occurred_at"]),
+        _index("idx_admin_import_previews_expiry", "admin_import_previews", ["expires_at"]),
         _index(
             "ux_req_arquivos_storage_object",
             "requisicao_arquivos",
@@ -2231,6 +2291,7 @@ PG_SCHEMA_MIGRATIONS_SEED = (
         '"backfill":"none","runtime_switch":"none"}',
     ),
     (15, "canonical_document_custody", DOCUMENT_CUSTODY_V15_DETAILS_JSON),
+    (16, "ephemeral_state", EPHEMERAL_STATE_V16_DETAILS_JSON),
 )
 
 

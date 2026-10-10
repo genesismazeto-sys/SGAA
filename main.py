@@ -292,8 +292,6 @@ from utils.messages import (
 )
 from app.views.admin.atividades import (
     ATIVIDADES_IMPORT_REQUIRED_HEADERS,
-    _atividades_import_preview_dir,
-    _atividades_import_preview_path,
     _build_atividades_import_preview,
     _build_grupo_label,
     _canonicalize_tipo_atividade,

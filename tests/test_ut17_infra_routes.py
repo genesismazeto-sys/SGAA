@@ -635,8 +635,8 @@ def test_green_6_message_catalog_stays_canonical():
 def test_green_7_schema_version_four_and_forbidden_layers_absent():
     from app.db_maintenance import SCHEMA_MIGRATIONS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 15, f"prod-1 SCHEMA_VERSION must be 15, got {SCHEMA_VERSION}"
-    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == set(range(1, 16)), (
+    assert SCHEMA_VERSION == 16, f"prod-1 SCHEMA_VERSION must be 16, got {SCHEMA_VERSION}"
+    assert {version for version, _name, _fn in SCHEMA_MIGRATIONS} == set(range(1, 17)), (
         "prod-1 registry contains only its baseline bootstrap"
     )
     assert not (PROJECT_ROOT / "app" / "db").exists(), "app/db package is prohibited"

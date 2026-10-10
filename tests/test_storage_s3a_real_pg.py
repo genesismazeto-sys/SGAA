@@ -177,8 +177,8 @@ def _pg_verdict(conn, table, row, index):
 def test_pg_authority_is_v15(db):
     conn = _raw(db)
     try:
-        assert pg_schema.PG_SCHEMA_VERSION == 15
-        assert pg_schema.validate_pg_schema(conn)["schema_version"] == 15
+        assert pg_schema.PG_SCHEMA_VERSION == 16
+        assert pg_schema.validate_pg_schema(conn)["schema_version"] == 16
     finally:
         conn.close()
 

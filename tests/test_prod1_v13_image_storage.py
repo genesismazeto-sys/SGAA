@@ -94,8 +94,8 @@ def test_fresh_bootstrap_is_v13_with_exactly_the_three_image_tables():
     status = validate_prod1_schema(conn)
     # v14 only adds the canonical-storage objects and v15 only the canonical
     # document custody; without them the head is v13 exactly.
-    assert SCHEMA_VERSION == status["schema_version"] == 15
-    assert status["table_count"] == 36
+    assert SCHEMA_VERSION == status["schema_version"] == 16
+    assert status["table_count"] == 38
     assert set(IMAGES_V13_TABLES) <= EXPECTED_TABLES
     shape = _head()
     revert_prod1_v14_to_v13(shape)
@@ -132,7 +132,7 @@ def test_v13_migration_is_idempotent_through_the_dispatcher_and_refuses_non_v12(
     first = bootstrap_prod1_schema(conn)
     snapshot = _dump(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 15
+    assert first["schema_version"] == second["schema_version"] == 16
     assert _dump(conn) == snapshot
     with pytest.raises(Prod1SchemaError, match="prod-1/v12"):
         migrate_prod1_v12_to_v13(conn)
@@ -272,7 +272,7 @@ def test_pg_contract_declares_the_same_tables_and_bytea():
         [fk] = spec["foreign_keys"]
         assert (fk["on_delete"], fk["on_update"], fk["references_columns"]) == ("CASCADE", "CASCADE", ["id"])
         assert not any(c["identity"] for c in spec["columns"])
-    assert pg_schema.PG_SCHEMA_VERSION == SCHEMA_VERSION == 15
+    assert pg_schema.PG_SCHEMA_VERSION == SCHEMA_VERSION == 16
     assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[12][:2] == (13, IMAGE_STORAGE_MARKER)
     assert pg_schema.PG_SCHEMA_MIGRATIONS_SEED[12][2] == _V13_DETAILS_JSON
 

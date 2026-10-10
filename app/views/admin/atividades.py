@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-import secrets
 
 from flask import (
     Blueprint,
@@ -14,10 +13,11 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
-from werkzeug.utils import secure_filename
 
+from app import import_previews
 from app.activity_catalog import (
     _build_grupo_label,
     _canonicalize_tipo_limitacao,
@@ -180,39 +180,30 @@ def _upsert_grupo_definition(conn, tipo_atividade: str, grupo_numero: str, grupo
         )
 
 
-def _atividades_import_preview_dir() -> str:
-    path = os.path.join(current_app.config["UPLOAD_FOLDER"], "atividades_import_previews")
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-def _atividades_import_preview_path(preview_key: str) -> str:
-    safe_key = secure_filename(preview_key)
-    return os.path.join(_atividades_import_preview_dir(), f"{safe_key}.json")
-
-
 def _store_atividades_import_preview(payload: dict) -> str:
-    preview_key = secrets.token_urlsafe(16)
-    with open(_atividades_import_preview_path(preview_key), "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False)
-    return preview_key
+    return import_previews.store(get_db_connection(), usuario_id=session["user_id"], payload=payload)
 
 
 def _load_atividades_import_preview(preview_key: str) -> dict | None:
-    path = _atividades_import_preview_path(preview_key)
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+    return import_previews.load(get_db_connection(), usuario_id=session["user_id"], token=preview_key)
 
 
 def _delete_atividades_import_preview(preview_key: str) -> None:
-    path = _atividades_import_preview_path(preview_key)
+    """Best effort: the import it follows has already been decided, so a failure here
+    (the preview then simply expires) never turns that outcome into an error page."""
     try:
-        if os.path.exists(path):
-            os.remove(path)
-    except OSError:
-        pass
+        import_previews.discard(get_db_connection(), usuario_id=session["user_id"], token=preview_key)
+    except Exception as exc:
+        logging.warning("Falha ao descartar o preview de importacao (%s)", type(exc).__name__)
+
+
+class _PreviewAlreadyConsumed(Exception):
+    """The import's own transaction found the preview already applied (or gone)."""
+
+
+def _claim_atividades_import_preview(conn, preview_key: str) -> bool:
+    """Consume the preview inside the import transaction (see ``import_previews.claim``)."""
+    return import_previews.claim(conn, usuario_id=session["user_id"], token=preview_key)
 
 
 def _delete_upload_relpath(rel_path: str | None) -> None:
@@ -414,7 +405,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
     }, None)
 
 
-def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: str) -> tuple[dict, dict | None]:
+def _build_atividades_import_preview(csv_abspath: str, mode: str) -> tuple[dict, dict | None]:
     conn = get_db_connection()
     existing_rows = conn.execute("SELECT id, nome_conceito AS nome FROM atividade_base").fetchall()
     existing_by_name = {str(row["nome"]): row["id"] for row in existing_rows}
@@ -542,7 +533,6 @@ def _build_atividades_import_preview(csv_abspath: str, csv_relpath: str, mode: s
 
     storage_payload = {
         "mode": mode,
-        "csv_relpath": csv_relpath,
         "rows": action_rows,
     }
     return preview, storage_payload
@@ -949,12 +939,19 @@ def admin_atividades_importar_preview():
             return render_template("admin_importar_atividades.html", preview=None, preview_key="", mode=mode)
 
         abs_path = os.path.join(current_app.config["UPLOAD_FOLDER"], rel_path)
-        preview, storage_payload = _build_atividades_import_preview(abs_path, rel_path, mode)
+        # The uploaded file lives for this request only: the preview state that
+        # survives to the confirmation is the parsed payload, held in the database.
+        try:
+            preview, storage_payload = _build_atividades_import_preview(abs_path, mode)
+        finally:
+            _delete_upload_relpath(rel_path)
         preview_key = ""
         if storage_payload is not None:
-            preview_key = _store_atividades_import_preview(storage_payload)
-        else:
-            _delete_upload_relpath(rel_path)
+            try:
+                preview_key = _store_atividades_import_preview(storage_payload)
+            except import_previews.PreviewTooLarge:
+                flash("Envie um arquivo CSV válido.", "error")
+                return render_template("admin_importar_atividades.html", preview=None, preview_key="", mode=mode)
         return render_template("admin_importar_atividades.html", preview=preview, preview_key=preview_key, mode=mode)
     return render_template("admin_importar_atividades.html", preview=None, preview_key="", mode=mode)
 
@@ -970,7 +967,6 @@ def admin_atividades_importar_confirmar():
     conn = get_db_connection()
     created = 0
     updated = 0
-    csv_relpath = payload.get("csv_relpath")
     try:
         rows = list(payload.get("rows", []))
         # Preserve last-description-wins and payload processing order separately
@@ -985,6 +981,10 @@ def admin_atividades_importar_confirmar():
             int(row["existing_id"]) for row in rows if row.get("action") == "update"
         })
         with write_transaction(conn):
+            # One-shot under contention: the preview is consumed by the transaction that
+            # applies it, so a second simultaneous confirmation finds nothing to apply.
+            if not _claim_atividades_import_preview(conn, preview_key):
+                raise _PreviewAlreadyConsumed()
             for (tipo, numero), descricao in sorted(groups.items()):
                 _upsert_grupo_definition(conn, tipo, numero, descricao)
             for base_id in base_ids:
@@ -1014,16 +1014,16 @@ def admin_atividades_importar_confirmar():
                     except ValueError as exc:
                         raise DatabaseIntegrityError(str(exc)) from exc
                     updated += 1
+    except _PreviewAlreadyConsumed:
+        flash("Preview de importação não encontrado ou expirado. Gere um novo preview.", "error")
+        return redirect(url_for("admin_atividades", import_csv=1))
     except Exception as exc:
         if not is_integrity_error(exc):
             raise
         flash(f"Falha ao confirmar importação: {exc}", "error")
         _delete_atividades_import_preview(preview_key)
-        _delete_upload_relpath(csv_relpath)
         return redirect(url_for("admin_atividades", import_csv=1))
 
-    _delete_atividades_import_preview(preview_key)
-    _delete_upload_relpath(csv_relpath)
     flash(f"Importação concluída. Criadas: {created}. Atualizadas: {updated}.", "success")
     return redirect(url_for("admin_atividades"))
 
@@ -2172,11 +2172,10 @@ __all__ = [
     '_format_preview_limitacao',
     '_ensure_grupos_def_table',
     '_upsert_grupo_definition',
-    '_atividades_import_preview_dir',
-    '_atividades_import_preview_path',
     '_store_atividades_import_preview',
     '_load_atividades_import_preview',
     '_delete_atividades_import_preview',
+    '_claim_atividades_import_preview',
     '_delete_upload_relpath',
     '_build_atividades_import_preview',
     'admin_atividades',

@@ -88,3 +88,43 @@ a SQLite file). Exit 0 ready, 1 not ready, 2 usage. It builds the application as
 a start does, so a local-mode check creates the local directories a local start
 creates. Run it with the target environment before promoting a deployment. `/health` additionally fails when the
 hosted database is not at the code's schema version.
+
+## 6. Login and password-recovery throttling
+
+A single process throttles in memory; a hosted runtime is many instances, so the
+same limits would never trip. When hosted, the counters live in the database
+(`auth_throttle_events`, schema v16), with the same thresholds and windows:
+`LOGIN_MAX_ATTEMPTS` per address, `LOGIN_ACCOUNT_MAX_ATTEMPTS` per account,
+`LOGIN_WINDOW_SECONDS`, and the `PASSWORD_RESET_*` equivalents.
+
+- Only a keyed digest is stored: `HMAC-SHA-256(APP_SECRET_KEY, scope | value)`.
+  No address or e-mail can be read back. Rotating `APP_SECRET_KEY` therefore also
+  clears every window, which is harmless.
+- A failed login (and every recovery request) writes one row per key. A request
+  that is already blocked writes nothing; a successful login clears its keys.
+- Each write prunes the key's expired events and a bounded batch of the expired
+  events of the scopes it wrote, with that scope family's window (rows another
+  writer holds are skipped, never waited for).
+- The limits are the configuration `create_app` always sets; a missing value
+  fails the request (closed) instead of falling back to a second set of
+  defaults. A store that cannot be read refuses the attempt (no fallback to
+  memory, no pass-through).
+- The check and the failure record are separated by the password hash, so a
+  parallel burst is allowed about as many guesses as it has requests before
+  any event lands; platform rate limiting is the complement.
+- Residual: a flood of *distinct* keys still writes one row per request. Put the
+  platform's rate limiting (Vercel Firewall) in front as defence in depth; it is
+  a project setting, not code.
+- Locally the in-memory limiters are unchanged.
+
+## 7. Import previews
+
+The activity-import preview (upload, review, confirm) keeps its state in
+`admin_import_previews` instead of a file: the browser holds an unguessable key,
+the table holds its SHA-256, the parsed payload and the owning administrator. A
+preview expires after one hour, is visible only to the administrator who made it,
+and is consumed by the transaction that applies it: two simultaneous
+confirmations apply once, and an import that rolls back keeps its preview. The
+uploaded CSV itself lives for the one request that parses it. A preview too
+large to hold (8 MiB of payload) is refused like an invalid CSV. This applies in
+every mode.

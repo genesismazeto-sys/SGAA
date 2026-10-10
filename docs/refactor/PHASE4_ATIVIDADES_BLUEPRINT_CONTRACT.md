@@ -65,13 +65,16 @@ Matrizes and Requisições routes remain physically in `main.py` in B3. Their ex
 
 The Atividades blueprint owns its CSV header normalization, row validation, preview persistence, preview cleanup, group-definition upsert and confirmation flow. The physical upload helper has the neutral owner `app.uploads`, uses the active Flask application's configured upload root, and remains re-exported from `main.py` for other current consumers.
 
-Filesystem and transaction behavior remains unchanged:
+Filesystem and transaction behavior remains unchanged, except where MP-2 slice 3 superseded it
+(the preview state moved from a JSON file to the `admin_import_previews` table; the uploaded CSV is
+deleted in the request that parses it; confirmation consumes the preview inside its own
+transaction):
 
-- preview uploads stay below `UPLOAD_FOLDER/atividades_imports`;
-- preview JSON stays below `UPLOAD_FOLDER/atividades_import_previews`;
+- preview uploads stay below `UPLOAD_FOLDER/atividades_imports`, for one request;
+- the preview payload is a database row, not a file under `atividades_import_previews`;
 - invalid previews delete the uploaded CSV;
 - confirmation commits the activity/group changes as before;
-- integrity failure rolls back and removes preview/upload artifacts;
+- integrity failure rolls back and removes the preview (best effort) and the upload;
 - no canonical database or migration is opened or modified by the extraction itself.
 
 `save_upload` had its defining body in baseline `main.py` and has current non-B3 consumers in

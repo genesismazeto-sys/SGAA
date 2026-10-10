@@ -38,6 +38,7 @@ from app.prod1_schema import (
     migrate_prod1_v12_to_v13,
     migrate_prod1_v13_to_v14,
     migrate_prod1_v14_to_v15,
+    migrate_prod1_v15_to_v16,
 )
 from app.storage.contracts import RemoteObject, StorageTransientError
 from tests.hermetic_prod1_fixtures import build_canonical_v2_database
@@ -207,7 +208,7 @@ def _create(conn, content=PDF, name="arquivo.pdf", operation="operation-1") -> i
 def test_clean_v5_bootstrap_has_single_arquivos_contract():
     conn = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 15
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
     columns = {row[1] for row in conn.execute("PRAGMA table_info(admin_arquivos)")}
     assert {
         "provider", "remote_file_id", "remote_parent_id", "mime_type", "size_bytes",
@@ -226,7 +227,7 @@ def test_v5_bootstrap_and_migration_consume_single_arquivos_ddl_authority():
     assert authority_source.count("CREATE TABLE admin_arquivos") == 1
     # The v5 rebuild predates v14 (and v15): same authority minus both additions.
     assert "canonical_prod1_pre_v14_object_sql" in migration_source
-    assert "_PRE_V15_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(DOCUMENT_CUSTODY_V15_SCHEMA_OBJECTS_SQL" in schema_source
+    assert "_PRE_V15_SCHEMA_SQL = _PRE_V16_SCHEMA_SQL.replace(DOCUMENT_CUSTODY_V15_SCHEMA_OBJECTS_SQL" in schema_source
     assert "_PRE_V14_SCHEMA_SQL = _PRE_V15_SCHEMA_SQL.replace(STORAGE_V14_SCHEMA_OBJECTS_SQL" in schema_source
     # v15 (S3-A) rebuilds the table once more, from its own single authority.
     custody_source = (root / "app" / "prod1_document_custody_ddl.py").read_text(encoding="utf-8")
@@ -260,6 +261,7 @@ def test_v4_to_v5_preserves_legacy_row_and_matches_clean_bootstrap():
     migrate_prod1_v12_to_v13(conn)
     migrate_prod1_v13_to_v14(conn)
     migrate_prod1_v14_to_v15(conn)
+    migrate_prod1_v15_to_v16(conn)
     expected = sqlite3.connect(":memory:")
     bootstrap_prod1_schema(expected)
     assert _physical_schema_signature(conn) == _physical_schema_signature(expected)

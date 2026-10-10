@@ -93,6 +93,7 @@ STORAGE_OBJECTS = (
 EXPECTED_IDENTITIES = {
     **{table: (high_water + 1, False) for table, high_water in HIGH_WATER.items()},
     "backup_logs": (1, True),
+    "auth_throttle_events": (1, True),
     **{t: (1, False) for t in ("senha_tokens", "cloud_drive_settings",
                                "requisicao_email_eventos")},
 }
@@ -278,6 +279,10 @@ def populate_source(conn):
       issued_at=TS, expires_at="2099-01-01 00:00:00", sweep_after="2099-01-02 00:00:00")
     i("storage_worker_status", id=1, last_started_at=TS, last_finished_at=TS, last_result_code="OK",
       last_claimed_count=3, last_synced_count=1, last_retry_count=1)
+    # v16 short-lived state: present in the source, never in an archive.
+    i("auth_throttle_events", scope="login_ip", key_digest="e" * 64, occurred_at=TS)
+    i("admin_import_previews", token_digest="f" * 64, usuario_id=3, payload="{}", created_at=TS,
+      expires_at="2026-01-02 03:19:05")
     for table, high_water in HIGH_WATER.items():
         conn.execute(f"ALTER TABLE {table} ALTER COLUMN id RESTART WITH {high_water + 1}")
     # Historical identity state on an empty table.
@@ -458,24 +463,27 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION
     assert manifest["schema"]["contract_sha256"] == pg_schema.PG_CONTRACT_SHA256
-    assert manifest["schema"]["latest_migration"]["version"] == 15  # the v15 head (STORAGE S3-A)
+    assert manifest["schema"]["latest_migration"]["version"] == 16  # the v16 head (MP-2 ephemeral state)
     schema_only = set(tool.SCHEMA_ONLY_TABLE_POLICIES)
     assert {t: v for t, v in manifest["tables"].items() if t not in schema_only} == {
         t: v for t, v in backup_set["before"].tables.items() if t not in schema_only
     }
-    assert len(manifest["tables"]) == 37
+    assert len(manifest["tables"]) == 39
     # v14: schema-only tables are recorded as what a restore yields -- empty --
     # with their policy and a value-free source census.
     for table in schema_only:
         assert manifest["tables"][table] == tool._EMPTY_TABLE[table]
     assert {t: backup_set["before"].tables[t]["rows"] for t in schema_only} == {
         "storage_upload_intents": 2, "storage_worker_status": 1,
+        "auth_throttle_events": 1, "admin_import_previews": 1,
     }
     assert manifest["table_data_policy"] == {
         "storage_upload_intents": {"policy": "EPHEMERAL_OMITTED", "restored_rows": 0,
                                    "source": {"rows_by_state": {"consumed": 1, "issued": 1}}},
         "storage_worker_status": {"policy": "TARGET_SIDE_RECREATED", "restored_rows": 0,
                                   "source": {"rows": 1}},
+        "auth_throttle_events": {"policy": "EPHEMERAL_OMITTED", "restored_rows": 0, "source": {"rows": 1}},
+        "admin_import_previews": {"policy": "EPHEMERAL_OMITTED", "restored_rows": 0, "source": {"rows": 1}},
     }
     storage = manifest["storage"]
     assert (storage["objects"], storage["total_size_bytes"]) == (3, 4096 + 77 + 1000)
@@ -496,15 +504,15 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["identities"]["backup_logs"]["predicted_next_id"] == 2
     assert manifest["identities"]["backup_logs"]["max_id"] == 0
     assert manifest["toc"]["classes"] == {
-        "CONSTRAINT": 58, "FK CONSTRAINT": 40, "FUNCTION": 15, "INDEX": 56, "SEQUENCE": 22,
-        "SEQUENCE SET": 22, "TABLE": 37, "TABLE DATA": 35, "TRIGGER": 17,
+        "CONSTRAINT": 60, "FK CONSTRAINT": 41, "FUNCTION": 15, "INDEX": 59, "SEQUENCE": 23,
+        "SEQUENCE SET": 23, "TABLE": 39, "TABLE DATA": 35, "TRIGGER": 17,
     }
     # The omission is proven from the archive itself.
     _listing, entries = tool.read_toc(tool.discover_native_tools(), dump)
     data_tags = {entry.tag for entry in entries if entry.desc == "TABLE DATA"}
     assert "storage_objects" in data_tags and not data_tags & schema_only
     assert manifest["toc"]["public_schema_entries"] == 2
-    assert manifest["domain_validation"]["checks"] == 63 and manifest["domain_validation"]["failing"] == 0
+    assert manifest["domain_validation"]["checks"] == 64 and manifest["domain_validation"]["failing"] == 0
     assert manifest["triggers"] == {"expected": 17, "enabled": 17}
     assert manifest["accounts"]["usuarios"] == 2 and manifest["accounts"]["full_admins"] == 1
     assert manifest["tool"]["sha256"] == tool.file_sha256(Path(tool.__file__))[1]
@@ -563,6 +571,8 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
             "SELECT drive_account_key FROM storage_objects WHERE id = 9").fetchone()[0] == DRIVE_ACCOUNT_KEY
         assert observer.execute("SELECT count(*) FROM storage_upload_intents").fetchone()[0] == 0
         assert observer.execute("SELECT count(*) FROM storage_worker_status").fetchone()[0] == 0
+        for table in ("auth_throttle_events", "admin_import_previews"):
+            assert observer.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
     finally:
         observer.close()
     restored_identities = _identity_states(target_url)
@@ -587,7 +597,7 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
         ).fetchone()[0]
     finally:
         observer.close()
-    assert fks == 40 and enabled == 17
+    assert fks == 41 and enabled == 17
     # Binary content survives byte for byte, not only by digest.
     assert _image_contents(target_url) == _image_contents(source_url) == {
         table: content for table, (_owner, _mime, content) in IMAGE_BLOBS.items()

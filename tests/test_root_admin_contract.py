@@ -364,7 +364,7 @@ def test_master_key_login_is_rate_limited_like_any_other(tmp_path):
     login = re.search(r"def login\(\):(.*?)\ndef logout\(\)", source, re.S)
     assert login, "login handler disappeared"
     body = login.group(1)
-    limiter = body.index("_login_rate_limited")
+    limiter = body.index("auth_throttle.login_blocked")
     master = body.index("master_key_login")
     assert limiter < master, (
         "the master-key branch runs before the rate limiter, so it is not "

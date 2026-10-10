@@ -1213,12 +1213,12 @@ def test_G1_no_flow_writes_an_illegal_canonical_state(env):
     assert env["google_calls"] == []
 
 
-def test_G2_control_schema_head_remains_v15():
+def test_G2_control_schema_authorities_move_together_and_v15_stays_published():
     from app import pg_schema, prod1_schema
 
-    assert prod1_schema.SCHEMA_VERSION == 15
-    assert pg_schema.PG_SCHEMA_VERSION == 15
-    assert not [p.name for p in (ROOT / "app").glob("prod1_*v16*.py")]
+    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION == 16
+    assert (ROOT / "app" / "prod1_document_custody_v15.py").exists()
+    assert not [p.name for p in (ROOT / "app").glob("prod1_*v17*.py")]
 
 
 def test_G3_no_s4_mirror_behaviour_on_canonical_paths(env):

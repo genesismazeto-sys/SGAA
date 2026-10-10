@@ -104,7 +104,7 @@ def _dump(conn) -> dict:
 def test_head_schema_and_constants_default_extension_to_160():
     conn = _head()
     # v13 only adds the image tables; without them the head is v12 exactly.
-    assert SCHEMA_VERSION == 15
+    assert SCHEMA_VERSION == 16
     shape = _head()
     revert_prod1_v13_to_v12(shape)
     assert _physical_schema_digest(shape) == _PROD1_V12_SIGNATURE_SHA256
@@ -226,9 +226,9 @@ def test_migration_is_idempotent_through_the_dispatcher():
     first = bootstrap_prod1_schema(conn)
     snapshot = _dump(conn)
     second = bootstrap_prod1_schema(conn)
-    assert first["schema_version"] == second["schema_version"] == 15
+    assert first["schema_version"] == second["schema_version"] == 16
     assert _dump(conn) == snapshot
-    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 15
+    assert len(conn.execute("SELECT * FROM schema_migrations").fetchall()) == 16
     with pytest.raises(Prod1SchemaError, match="prod-1/v11"):
         migrate_prod1_v11_to_v12(conn)
 
@@ -253,7 +253,7 @@ def test_a_failed_migration_leaves_v11_untouched(monkeypatch):
 
 def test_bootstrap_and_migration_record_the_same_marker_text():
     assert _V12_DETAILS_JSON in PROD1_SCHEMA_SQL
-    assert validate_prod1_schema(_head())["schema_version"] == 15
+    assert validate_prod1_schema(_head())["schema_version"] == 16
 
 
 # --- D. no application path falls back to 80 -------------------------------------

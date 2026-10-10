@@ -257,6 +257,7 @@ def test_policy_manifest_covers_every_table_exactly_once():
         "schema_migrations", "senha_tokens", "configuracoes_backup", "cloud_accounts",
         "backup_logs", "cloud_drive_settings", "sqlite_sequence",
         "storage_upload_intents", "storage_worker_status",
+        "auth_throttle_events", "admin_import_previews",
     }
 
 

@@ -468,7 +468,7 @@ def test_security_links_use_the_configured_authority_not_the_request_host(tmp_pa
     monkeypatch.setattr(password_email, "get_public_base_url", lambda: "https://sgaa.example.org")
     monkeypatch.setattr(password_email, "send_text_email", lambda _conn, message: sent.append(message))
     monkeypatch.setattr(
-        password_views, "password_recovery_rate_limited", lambda *a, **k: (False, 0)
+        password_views.auth_throttle, "recovery_blocked", lambda *a, **k: (False, 0)
     )
 
     with isolated_versioned_app_env(tmp_path, "trusted-authority.db") as env:

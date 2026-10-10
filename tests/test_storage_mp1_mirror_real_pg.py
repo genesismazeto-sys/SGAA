@@ -222,6 +222,33 @@ def test_stale_worker_is_fenced_after_a_rival_reclaims(env):
     env["conn"].commit()
 
 
+def test_a_claim_never_waits_on_rows_another_transaction_holds(env):
+    """Deterministic: a holder of every due row must not stall a claiming worker (SKIP LOCKED)."""
+    ids = _seed_requests(env, 3)
+    holder, claimer = env["connect"](), env["connect"]()
+    try:
+        held = holder.execute(
+            "SELECT id FROM storage_objects WHERE id IN (?, ?, ?) ORDER BY id FOR UPDATE", tuple(ids)
+        ).fetchall()
+        assert len(held) == 3
+        done = []
+
+        def claim():
+            with env["app"].app_context():
+                with write_transaction(claimer):
+                    done.append(outbox.claim_due_mirror_work(
+                        claimer, limit=5, worker_token=custody_common.new_lease_token(), now=T0))
+
+        thread = threading.Thread(target=claim)
+        thread.start()
+        thread.join(20)
+        assert done == [[]], "the claim queued behind rows it could have skipped"
+        holder.rollback()
+    finally:
+        holder.close()
+        claimer.close()
+
+
 def test_concurrent_requeues_requeue_each_object_once(env):
     ids = _seed_requests(env, 8)
     conn = env["conn"]

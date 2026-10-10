@@ -70,16 +70,19 @@ _CANONICAL_PARTIAL_UNIQUE_INDEXES = {
     "ux_admin_arquivos_storage_object",
 }
 
-#: STORAGE S2 (v14) adds storage_objects, the only new identity table.
-_IDENTITY_PK_COUNT = 22
+#: STORAGE S2 (v14) adds storage_objects, the only new identity table; v16 adds
+#: auth_throttle_events (admin_import_previews is keyed by its token digest).
+_IDENTITY_PK_COUNT = 23
 #: 30 application tables through v12; STORAGE S1 (v13) adds the three
 #: one-to-one image side tables, which have no identity column; STORAGE S2
-#: (v14) adds storage_objects, storage_upload_intents, storage_worker_status.
-_CANONICAL_APP_TABLE_COUNT = 36
+#: (v14) adds storage_objects, storage_upload_intents, storage_worker_status;
+#: v16 adds auth_throttle_events and admin_import_previews.
+_CANONICAL_APP_TABLE_COUNT = 38
 #: v14: +2 storage_objects, +1 storage_upload_intents, +2 business
 #: storage_object_id partial uniques, +1 Drive file partial unique, +1
-#: cloud_accounts logical-identity (credential resolution) index.
-_CANONICAL_EXPLICIT_INDEX_COUNT = 56
+#: cloud_accounts logical-identity (credential resolution) index; v16: +2
+#: auth_throttle_events (lookup, expiry), +1 admin_import_previews (expiry).
+_CANONICAL_EXPLICIT_INDEX_COUNT = 59
 #: v14: +4 storage-object exclusivity triggers, +1 intent transition trigger,
 #: +1 bound-Drive-account trigger.
 _CANONICAL_TRIGGER_COUNT = 17
@@ -668,7 +671,7 @@ def test_sqlite_v12_authority_is_unchanged():
     conn = _canonical_sqlite()
     status = validate_prod1_schema(conn)
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert status["schema_version"] == SCHEMA_VERSION == 15
+    assert status["schema_version"] == SCHEMA_VERSION == 16
     assert len(_sqlite_explicit_indexes(conn)) == _CANONICAL_EXPLICIT_INDEX_COUNT
     assert len(_sqlite_triggers(conn)) == _CANONICAL_TRIGGER_COUNT
     tables = {

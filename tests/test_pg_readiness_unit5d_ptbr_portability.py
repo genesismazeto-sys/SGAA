@@ -142,6 +142,7 @@ U5A_CURRENT_STATE_SHA256 = "dc66f9b0b4c20eaa45d922f657bd4d3972ccea57e0515fa24943
 LATER_ADDED_TABLES = (
     "usuarios_foto", "alunos_foto", "reportes_captura",
     "storage_objects", "storage_upload_intents", "storage_worker_status",
+    "auth_throttle_events", "admin_import_previews",
 )
 #: ``table: (column, foreign key or None, check or None)``.
 LATER_ADDED_COLUMNS = {
@@ -153,13 +154,15 @@ LATER_ADDED_INDEXES = (
     "idx_storage_objects_drive_due", "idx_storage_objects_uploader", "ux_storage_objects_drive_file",
     "idx_storage_upload_intents_state_expires", "ux_req_arquivos_storage_object",
     "ux_admin_arquivos_storage_object", "idx_cloud_accounts_provider_account_key",
+    "idx_auth_throttle_events_lookup", "idx_auth_throttle_events_expiry",
+    "idx_admin_import_previews_expiry",
 )
 LATER_ADDED_TRIGGERS = (
     "trg_requisicao_arquivos_storage_object_insert", "trg_requisicao_arquivos_storage_object_update",
     "trg_admin_arquivos_storage_object_insert", "trg_admin_arquivos_storage_object_update",
     "trg_storage_upload_intents_transition", "trg_storage_objects_drive_account_bound",
 )
-LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15)
+LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15, 16)
 #: ``(table, check name): (U5-A expression, later expression)`` -- a later unit's
 #: declared change of an existing CHECK, reverted before the digest.
 LATER_CHANGED_CHECKS = {

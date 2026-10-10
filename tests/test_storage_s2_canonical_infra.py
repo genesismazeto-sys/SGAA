@@ -34,7 +34,7 @@ from app.db import write_transaction
 from app.prod1_schema import (
     _PROD1_V13_SIGNATURE_SHA256,
     _PROD1_V14_SIGNATURE_SHA256,
-    _PROD1_V15_SIGNATURE_SHA256,
+    _PROD1_V16_SIGNATURE_SHA256,
     CANONICAL_STORAGE_MARKER,
     PROD1_SCHEMA_SQL,
     SCHEMA_VERSION,
@@ -122,8 +122,8 @@ def test_fresh_bootstrap_carries_v14_with_empty_storage_objects():
     """The v15 head (STORAGE S3-A) still carries the v14 storage contract unchanged."""
     conn = _head()
     status = validate_prod1_schema(conn)
-    assert SCHEMA_VERSION == status["schema_version"] == 15 and status["table_count"] == 36
-    assert _physical_schema_digest(conn) == _PROD1_V15_SIGNATURE_SHA256
+    assert SCHEMA_VERSION == status["schema_version"] == 16 and status["table_count"] == 38
+    assert _physical_schema_digest(conn) == _PROD1_V16_SIGNATURE_SHA256
     assert conn.execute("SELECT name,details_json FROM schema_migrations WHERE version=14").fetchone() == (
         CANONICAL_STORAGE_MARKER, _V14_DETAILS_JSON
     )
@@ -179,7 +179,7 @@ def test_v14_dispatch_is_idempotent_and_refuses_non_v13():
     conn = _v13_with_rows()
     first = bootstrap_prod1_schema(conn)  # migrates v13 -> v14 -> v15 (the v15 report)
     snapshot = _dump(conn)
-    assert first["schema_version"] == 15
+    assert first["schema_version"] == 16
     assert bootstrap_prod1_schema(conn) == validate_prod1_schema(conn)  # second call: validate only
     assert _dump(conn) == snapshot
     with pytest.raises(Prod1SchemaError, match="prod-1/v13"):

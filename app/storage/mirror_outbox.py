@@ -50,10 +50,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.cloud_account_identity import AccountIdentityError, require_provider_account_key
+from app.db import skip_locked
 from app.storage.custody_common import (
     CustodyError,
     add_seconds,
-    is_postgres,
     new_lease_token,
     positive_limit,
     require_lease_token,
@@ -122,7 +122,7 @@ def claim_due_mirror_work(
     require_utc_text(now)
     expires = add_seconds(now, _lease_seconds(lease_seconds))
     require_write_transaction(conn)
-    lock = " FOR UPDATE SKIP LOCKED" if is_postgres(conn) else ""
+    lock = skip_locked(conn)
     ids = [
         int(row[0])
         for row in conn.execute(
@@ -263,7 +263,7 @@ def release_expired_leases(conn, *, now: str, limit: int) -> int:
     positive_limit(limit, MAX_CLAIM_BATCH)
     require_utc_text(now)
     require_write_transaction(conn)
-    lock = " FOR UPDATE SKIP LOCKED" if is_postgres(conn) else ""
+    lock = skip_locked(conn)
     ids = [
         int(row[0])
         for row in conn.execute(

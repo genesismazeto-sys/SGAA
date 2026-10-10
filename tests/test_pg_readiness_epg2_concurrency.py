@@ -1012,17 +1012,21 @@ def route_app(env, password_hashes, monkeypatch):
         return test_client
 
     try:
-        yield {"app": main.app, "client": client}
+        yield {"app": main.app, "client": client, "usuario_id": usuario_id}
     finally:
         with main.app.app_context():
             app_db.close_db_connection(None)
 
 
-def _store_preview(app, rows):
+def _store_preview(route_app, rows):
+    """Store a preview owned by the administrator the route clients act as (previews are user-bound)."""
+    from flask import session
+
     from app.views.admin.atividades import _store_atividades_import_preview
 
-    with app.test_request_context():
-        return _store_atividades_import_preview({"rows": rows, "csv_relpath": None})
+    with route_app["app"].test_request_context():
+        session["user_id"] = route_app["usuario_id"]
+        return _store_atividades_import_preview({"rows": rows})
 
 
 def _post_import(client, preview_key):
@@ -1036,8 +1040,8 @@ def test_p7_opposite_payload_orders_lock_bases_in_one_global_order(env, route_ap
     base_a, (a1,) = _seed_base(env, ["ativa"])
     base_b, (b1,) = _seed_base(env, ["ativa"])
     assert base_a < base_b
-    key_ab = _store_preview(route_app["app"], [_import_row(base_a, 91), _import_row(base_b, 91)])
-    key_ba = _store_preview(route_app["app"], [_import_row(base_b, 92), _import_row(base_a, 92)])
+    key_ab = _store_preview(route_app, [_import_row(base_a, 91), _import_row(base_b, 91)])
+    key_ba = _store_preview(route_app, [_import_row(base_b, 92), _import_row(base_a, 92)])
 
     # Hold the lower base A: with the global ascending order both workers must
     # queue on A while B stays free.  A payload-ordered worker 2 would own B

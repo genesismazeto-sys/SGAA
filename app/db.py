@@ -505,6 +505,16 @@ def lock_requisicao_arquivo(connection, attachment_id: int) -> bool:
     return row is not None
 
 
+def skip_locked(connection) -> str:
+    """Row-lock suffix for a bounded housekeeping subquery that must never wait.
+
+    PostgreSQL: `` FOR UPDATE SKIP LOCKED`` -- a concurrent pruner that already
+    holds a row leaves it to its holder, so two pruners cannot deadlock on
+    overlapping batches.  SQLite serializes writers already: empty.
+    """
+    return " FOR UPDATE SKIP LOCKED" if database_engine(connection) == _BACKEND_POSTGRES else ""
+
+
 def lock_request_attachments(connection, request_id: int) -> None:
     """Lock every comprovante row of one request, in id order (PostgreSQL).
 

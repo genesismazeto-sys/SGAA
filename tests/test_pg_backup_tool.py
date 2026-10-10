@@ -438,13 +438,13 @@ def test_contract_toc_is_accepted_with_census():
     specs = pg_schema.PG_TABLE_SPECS
     assert census["classes"] == {
         "CONSTRAINT": sum(1 + len(specs[t]["uniques"]) for t in pg_schema.PG_SCHEMA_TABLES),
-        "FK CONSTRAINT": 40,
+        "FK CONSTRAINT": 41,
         "FUNCTION": 15,
         "INDEX": len(pg_schema.PG_EXPLICIT_INDEXES),
-        "SEQUENCE": 22,
-        "SEQUENCE SET": 22,
-        "TABLE": 37,
-        # v14: storage_upload_intents / storage_worker_status are schema-only.
+        "SEQUENCE": 23,
+        "SEQUENCE SET": 23,
+        "TABLE": 39,
+        # v14 / v16: the intents, worker health, throttle events and import previews are schema-only.
         "TABLE DATA": 35,
         "TRIGGER": 17,
     }
@@ -460,8 +460,11 @@ def test_schema_only_tables_carry_no_table_data_in_the_contract():
     """v14: intents / worker health are archived schema-only, proven from the TOC."""
     assert "--exclude-table-data=public.storage_upload_intents" in tool.PG_DUMP_OPTIONS
     assert "--exclude-table-data=public.storage_worker_status" in tool.PG_DUMP_OPTIONS
+    assert "--exclude-table-data=public.auth_throttle_events" in tool.PG_DUMP_OPTIONS
+    assert "--exclude-table-data=public.admin_import_previews" in tool.PG_DUMP_OPTIONS
     assert tool.SCHEMA_ONLY_TABLE_POLICIES == {
         "storage_upload_intents": "EPHEMERAL_OMITTED", "storage_worker_status": "TARGET_SIDE_RECREATED",
+        "auth_throttle_events": "EPHEMERAL_OMITTED", "admin_import_previews": "EPHEMERAL_OMITTED",
     }
     for table in tool.SCHEMA_ONLY_TABLE_POLICIES:
         leaked = _listing(extra=[f"999; 0 0 TABLE DATA public {table} sgaa_qual"])

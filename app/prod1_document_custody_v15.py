@@ -38,11 +38,12 @@ from app.prod1_storage_v14 import _columns, _data_digest, _sequences, _table_nam
 
 def migrate_prod1_v14_to_v15(conn: sqlite3.Connection) -> dict[str, object]:
     from app.prod1_schema import (
+        BASELINE_MARKER,
         CANONICAL_DOCUMENT_CUSTODY_MARKER,
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v14_schema,
-        validate_prod1_schema,
+        _validate_prod1_v15_schema,
     )
 
     if conn.in_transaction:
@@ -87,7 +88,7 @@ def migrate_prod1_v14_to_v15(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v15 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v15_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
@@ -96,9 +97,12 @@ def migrate_prod1_v14_to_v15(conn: sqlite3.Connection) -> dict[str, object]:
     finally:
         conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys_enabled else 'OFF'}")
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v15_schema(conn)
     return {
-        **status,
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 15,
+        "baseline_marker": BASELINE_MARKER,
+        "table_count": len(_table_names(conn)),
         "canonical_provider": "supabase",
         "rows_preserved": {table: rows for table, (rows, _digest) in data_before.items()},
     }

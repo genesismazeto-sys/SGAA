@@ -292,6 +292,7 @@ def _run_order_route(real, monkeypatch, graph, *, rows=None, group=1, axis="AAC"
         payload = {"rows": rows, "csv_relpath": None}
         monkeypatch.setattr(atividades_module, "_load_atividades_import_preview", lambda _key: payload)
         monkeypatch.setattr(atividades_module, "_delete_atividades_import_preview", lambda _key: None)
+        monkeypatch.setattr(atividades_module, "_claim_atividades_import_preview", lambda _conn, _key: True)
         monkeypatch.setattr(atividades_module, "_delete_upload_relpath", lambda _path: None)
         with main.app.test_request_context(method="POST", data={"preview_key": "order"}):
             _install_fake_connection(monkeypatch, pg, atividades_module)
@@ -405,6 +406,7 @@ def test_nonoverlapping_imports_keep_groups_and_bases_independent(tmp_path, monk
             monkeypatch.setattr(atividades_module, "_load_atividades_import_preview",
                                 lambda _key, row=_import_row(base_id, group): {"rows": [row]})
             monkeypatch.setattr(atividades_module, "_delete_atividades_import_preview", lambda _key: None)
+            monkeypatch.setattr(atividades_module, "_claim_atividades_import_preview", lambda _conn, _key: True)
             monkeypatch.setattr(atividades_module, "_delete_upload_relpath", lambda _path: None)
             with main.app.test_request_context(method="POST", data={"preview_key": "independent"}):
                 _install_fake_connection(monkeypatch, pg, atividades_module)
@@ -1493,6 +1495,9 @@ def test_sqlite_importar_confirmar_route_uses_write_transaction(
                 atividades_module,
                 "_delete_atividades_import_preview",
                 lambda key: None,
+            )
+            monkeypatch.setattr(
+                atividades_module, "_claim_atividades_import_preview", lambda _conn, _key: True
             )
             monkeypatch.setattr(
                 atividades_module, "_delete_upload_relpath", lambda relpath: None

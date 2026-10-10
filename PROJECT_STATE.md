@@ -16,7 +16,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 - Flask; composition root `app/__init__.py::create_app`; `main.py` is a frozen
   compatibility facade. Structural refactor complete.
-- Logical schema `prod-1` v15 on SQLite and PostgreSQL.
+- Logical schema `prod-1` v16 on SQLite and PostgreSQL (v16 adds two empty, ephemeral tables:
+  `auth_throttle_events`, `admin_import_previews`).
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. Two tools are qualified on local PostgreSQL 15 but not cut over: the
   Path-B cutover tool (which accepts converged legacy rows) and the Layer-2

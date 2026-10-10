@@ -15,8 +15,8 @@ Tests: `tests/test_pg_backup_tool.py` (no database),
 
 Layer 2 is **mandatory** even when Layer 1 exists. A Layer-2 artifact is an
 **SGAA application backup**: the SGAA objects in schema `public` only
-(37 tables incl. `pg_schema_meta`, 22 identity sequences, 15 functions,
-constraints, 56 explicit indexes, 17 triggers; all rows except the two v14
+(39 tables incl. `pg_schema_meta`, 23 identity sequences, 15 functions,
+constraints, 59 explicit indexes, 17 triggers; all rows except the four
 schema-only tables, see §D2). It is **not** a
 cluster dump and **not** a Supabase platform dump: roles, ownership,
 privileges, `auth`, `storage`, `vault`, `extensions`, `realtime` and every
@@ -45,8 +45,8 @@ Two procedures are kept apart throughout:
    environment.
 3. `DATABASE_URL` naming the source database **without a password**.
 4. The source is the SGAA contract: `validate_pg_schema` CURRENT (epoch
-   `prod-1`, v14, contract digest), `schema_migrations` = provisioner baseline,
-   17 triggers enabled, no extension-owned objects in `public`, the 63 Path-B
+   `prod-1`, v16, contract digest), `schema_migrations` = provisioner baseline,
+   17 triggers enabled, no extension-owned objects in `public`, the 64 Path-B
    domain checks green. Anything else is refused; the tool never repairs.
 5. An output directory **outside the repository** (refused inside it:
    `OUTPUT_INSIDE_REPOSITORY`) on encrypted storage, with no leftover
@@ -131,17 +131,17 @@ pg_dump options, sanitized source identity (backend, host, port, database,
 user, server version, cluster system identifier), server version/major/
 encoding/collation, pg_dump and pg_restore versions, artifact file/size/
 SHA-256, consistency mode, schema epoch/version/contract digest/latest
-migration, per-table row count + normalized digest (37 tables; image `bytea`
-content enters the digest as length + SHA-256, never as bytes; the two
-schema-only tables are recorded as the empty state a restore yields), 22
+migration, per-table row count + normalized digest (39 tables; image `bytea`
+content enters the digest as length + SHA-256, never as bytes; the four
+schema-only tables are recorded as the empty state a restore yields), 23
 identity records (`last_value`, `is_called`, `predicted_next_id`, `max_id`,
-in-snapshot observation), TOC census + digest, 63 domain-check results,
+in-snapshot observation), TOC census + digest, 64 domain-check results,
 triggers enabled, account/credential cardinality, `table_data_policy`,
 the canonical-storage census (`storage`), tool git SHA + file SHA-256,
 `result: ok`. No password, URL, token, configuration value, row value or
-personal data. Manifest `format_version` 2 (prod-1/v14).
+personal data. Manifest `format_version` 2 (prod-1/v16).
 
-### D2. v14 table-data policy (canonical storage)
+### D2. Table-data policy (canonical storage, ephemeral state)
 
 | Table | Archive | Restored state |
 |---|---|---|
@@ -149,6 +149,8 @@ personal data. Manifest `format_version` 2 (prod-1/v14).
 | `requisicao_arquivos.storage_object_id`, `admin_arquivos.storage_object_id` | schema + data | exactly the source references |
 | `storage_upload_intents` | **schema only** (`EPHEMERAL_OMITTED`) | empty -- signed-upload workflow state is never restored; a client whose intent vanished uploads again |
 | `storage_worker_status` | **schema only** (`TARGET_SIDE_RECREATED`) | empty = the authoritative "mirror worker never ran" state |
+| `auth_throttle_events` (v16) | **schema only** (`EPHEMERAL_OMITTED`) | empty -- throttle windows are minutes of state; a restored database starts with every limit clear |
+| `admin_import_previews` (v16) | **schema only** (`EPHEMERAL_OMITTED`) | empty -- a pending import preview is simply generated again |
 
 The omission is enforced by `pg_dump --exclude-table-data` and by the TOC
 contract (no `TABLE DATA` entry may exist for either table), not assumed from
@@ -245,10 +247,10 @@ python tools/pg_backup.py verify --manifest <...>.manifest.json --restored
 
 Read-only (`REPEATABLE READ READ ONLY`, rolled back; no `nextval`): §D
 artifact checks, then `validate_pg_schema` CURRENT (tables, columns, types,
-nullability, identity, PK/unique/check/FK incl. the 40 FKs and their actions,
+nullability, identity, PK/unique/check/FK incl. the 41 FKs and their actions,
 explicit/partial indexes, the 17 triggers, required functions,
 `pg_schema_meta`), `schema_migrations` baseline, every table's row count and
-normalized digest, all 22 identity states, 63 domain checks, 17 triggers
+normalized digest, all 23 identity states, 64 domain checks, 17 triggers
 enabled, account/credential cardinality, the canonical-storage census, and
 both schema-only tables EMPTY (`SCHEMA_ONLY_TABLE_NOT_EMPTY` otherwise) — each
 compared with the manifest. Differences print `category=<C> object=<table>`
@@ -259,7 +261,7 @@ restore yields, not the source) and nothing else.
 ## H. Sequence verification
 
 `verify --restored` compares `last_value`, `is_called` and the predicted next
-id of all 22 identities with the manifest and checks next id > max(id). To
+id of all 23 identities with the manifest and checks next id > max(id). To
 exercise real allocation **without touching the evidence database**, clone it:
 
 ```

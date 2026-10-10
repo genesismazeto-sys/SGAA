@@ -40,6 +40,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
+from app.db import skip_locked
 from app.prod1_storage_ddl import (
     BUSINESS_DOCUMENT_MAX_BYTES,
     BUSINESS_DOCUMENT_MIME_TYPES,
@@ -328,7 +329,7 @@ def expire_intents(conn, *, now: str, limit: int = MAX_SWEEP_BATCH) -> int:
     positive_limit(limit, MAX_SWEEP_BATCH)
     require_utc_text(now)
     require_write_transaction(conn)
-    lock = " FOR UPDATE SKIP LOCKED" if is_postgres(conn) else ""
+    lock = skip_locked(conn)
     ids = [
         str(row[0])
         for row in conn.execute(

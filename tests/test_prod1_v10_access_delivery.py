@@ -105,14 +105,15 @@ def _seed_token(conn: sqlite3.Connection, label: str, **columns) -> int:
 
 
 def test_v10_precedes_v11_on_the_chain_to_the_v15_head():
-    assert SCHEMA_VERSION == 15
+    assert SCHEMA_VERSION == 16
     assert db_maintenance.SCHEMA_MIGRATIONS[9][:2] == (10, ACCESS_DELIVERY_MARKER)
     assert db_maintenance.SCHEMA_MIGRATIONS[10][:2] == (11, CREDENTIAL_PENDING_MARKER)
     assert db_maintenance.SCHEMA_MIGRATIONS[11][:2] == (12, EXTENSION_HOURS_DEFAULT_MARKER)
     assert db_maintenance.SCHEMA_MIGRATIONS[12][:2] == (13, IMAGE_STORAGE_MARKER)
     assert db_maintenance.SCHEMA_MIGRATIONS[13][:2] == (14, "canonical_storage")
-    assert db_maintenance.SCHEMA_MIGRATIONS[-1][:2] == (15, "canonical_document_custody")
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 15
+    assert db_maintenance.SCHEMA_MIGRATIONS[14][:2] == (15, "canonical_document_custody")
+    assert db_maintenance.SCHEMA_MIGRATIONS[-1][:2] == (16, "ephemeral_state")
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 16
 
 
 def test_schema_epoch_is_unchanged_by_v10():
@@ -122,7 +123,7 @@ def test_schema_epoch_is_unchanged_by_v10():
 def test_fresh_bootstrap_carries_the_v10_marker_and_v10_is_recognisable():
     conn = _connect()
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 15
+    assert status["schema_version"] == 16
     assert conn.execute(
         "SELECT name FROM schema_migrations WHERE version=10"
     ).fetchone()[0] == ACCESS_DELIVERY_MARKER
@@ -153,12 +154,12 @@ def test_bootstrap_migrates_a_v9_database_to_the_head():
     conn = _connect()
     _build_v9(conn)
     status = bootstrap_prod1_schema(conn)
-    assert status["schema_version"] == 15
+    assert status["schema_version"] == 16
     assert [
         int(row[0]) for row in conn.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
-    ] == list(range(1, 16))
+    ] == list(range(1, 17))
 
 
 # ----------------------------------------------------------------- MIGRATION

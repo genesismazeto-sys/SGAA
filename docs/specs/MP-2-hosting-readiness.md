@@ -100,13 +100,15 @@ with the mode undeclared refuses to start; `SGAA_RUNTIME=local` overrides.
 Throttle: the keys are `HMAC-SHA256(secret key, scope|value)` digests, with scopes
 `login_ip`, `login_account`, `recovery_ip`, `recovery_account`. Thresholds and windows are
 the existing `LOGIN_*` / `PASSWORD_RESET_*` configuration. A failed attempt appends an event
-and prunes that key's expired events and a bounded batch of globally expired ones inside
-`write_transaction`; a blocked attempt writes nothing; success clears the key. When not
+and prunes that key's expired events and a bounded batch of the expired ones of the scopes written
+(with that scope family's window) inside `write_transaction`; a blocked attempt writes nothing; success clears the key. When not
 hosted the views keep using the in-memory limiters unchanged.
 
 Preview: `store` returns a random token (only its SHA-256 is stored) bound to the session
-user, kind and a one-hour expiry; `load` requires the same user and an unexpired row;
-`discard` is one-shot. `atividades.py` keeps its `_store_/_load_/_delete_atividades_import_preview`
+user and a one-hour expiry (one consumer exists, so there is no `kind` column: a second consumer
+adds one additively); `load` requires the same user and an unexpired row; `claim` is the one-shot,
+a `DELETE ... RETURNING` inside the confirming transaction. `atividades.py` keeps its
+`_store_/_load_/_delete_atividades_import_preview` (plus `_claim_...`)
 seams as thin delegates and drops the file path code.
 
 Scheduler front: `application(environ, start_response)`. `GET` or `POST` on
@@ -228,7 +230,7 @@ Open decisions (product or architecture): none.
 - prod-1 v15 → v16 on SQLite and PostgreSQL, same slice, parity tests, migration registry
   updated. Two new empty tables, no backfill, no existing column touched:
   `auth_throttle_events(id, scope, key_digest, occurred_at)` and
-  `admin_import_previews(token_digest, kind, usuario_id → usuarios, payload, created_at,
+  `admin_import_previews(token_digest, usuario_id → usuarios, payload, created_at,
   expires_at)` with the indexes the queries need.
 - Path-B: both tables `OMIT_EPHEMERAL`. Layer-2: both schema-only (`EPHEMERAL_OMITTED`); the
   manifest contract and TOC census follow. Real-PG nodes prove both.
@@ -252,7 +254,9 @@ Open decisions (product or architecture): none.
 - Local Windows behaviour is unchanged: the mode defaults to local, the in-memory limiters,
   DPAPI store, directory creation and file logging stay.
 - Hosted behaviour is new and inert until `SGAA_RUNTIME=hosted` is set.
-- Rollback: v16 tables are inert in local mode; the code can be reverted by a new commit.
+- Rollback: v16 tables are inert in local mode, but the step is forward-only like every schema
+  step: v15 code refuses a v16 database, so reverting the code needs the pre-migration backup
+  (the v16 tables hold only ephemeral state, nothing to preserve).
 
 ## 10. External boundaries / environment permissions
 
@@ -292,7 +296,7 @@ Open decisions (product or architecture): none.
 |---|---|---|---|---|
 | 1 | Hosted runtime: mode, blockers, scratch, env-only secrets (and the read-only credential forms), connect timeout, health, `hosting_cli` | `hosting`, `hosting_cli`, `__init__`, `machine_secrets`, `cloud_credentials`, `banco_dados` (context flag), template, `db`, tests | T1–T4; E-PG1 hosted smoke; tripwire; R2 | done |
 | 2 | PostgreSQL-coherent backup/admin | `capability`, `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | pending |
-| 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | pending |
+| 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | done |
 | 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | pending |
 | 5 | Object backup/verify/restore, CLI, runbooks, closure | `object_backup`, `cli`, `docs/HOSTED_RUNTIME.md`, runbook, ES §2, PROJECT_STATE, this SPEC | T1–T4; E-LIVE DEV; T5; R2; closure | pending |
 
@@ -333,6 +337,9 @@ Open decisions (product or architecture): none.
 - Scheduled object backup; object restore from the Drive mirror; independent off-platform
   object copy beyond the operator set.
 - A flood of distinct login keys writes one throttle row per request.
+- The throttle check and the failure record are separated by the password hash, so a parallel
+  burst of N requests is allowed about N guesses before any event lands (the in-memory limiter
+  has the same shape, narrower on one process). A platform rate limit is the complement (MP-3).
 - `main.py` still attaches a file handler when its directory is writable; harmless when
   hosted and frozen by the facade rule.
 - Legacy local documents are unavailable when hosted until MP-3 converges them.
@@ -353,6 +360,29 @@ Open decisions (product or architecture): none.
   because `python -m app.hosting` loaded the module twice and lost the blocker identity. The
   storage-variable rule is the adapter's own reader. `/health` calls `get_schema_status`, which
   raises on version skew. Not material.
+- A3 2026-10-09 — Slice-3 implementation details: (a) the bounded pruning subqueries take
+  `FOR UPDATE SKIP LOCKED` through `app.db.skip_locked` (the U5-C guard keeps lock clauses out of
+  `sql_dialect`), so concurrent writers cannot deadlock on overlapping batches; (b) the v14 -> v15
+  migration validated "the head"; it now validates the frozen v15 shape (`_validate_prod1_v15_schema`)
+  so a further version does not break it; (c) the uploaded CSV of an import is deleted in the request
+  that parses it (the payload no longer carries `csv_relpath`), and `main.py` stops re-exporting the two
+  removed preview-file helpers (code leaving the facade); (d) `PG_SCHEMA_VERSION` and the
+  Layer-2 / Path-B census literals move with the declared contract change; the v15 head pins in
+  existing tests become v16 pins (`test_G2_control...` keeps asserting both authorities move together).
+  Not material.
+- A4 2026-10-09 — Slice-3 review amendments (R2 review, all closed in the slice): (a) the global
+  prune of the throttle table is limited to the scopes the write touched, with that write's window,
+  because the login and recovery families have independent windows and a login failure must not
+  delete recovery events still inside theirs; (b) the preview is consumed by `claim`, a
+  `DELETE ... RETURNING` inside the import transaction, so two simultaneous confirmations apply once
+  and a rolled-back import keeps the preview; the post-failure `discard` is best effort; (c) there is
+  no `kind` column (one consumer; a second adds it additively); (d) the durable limits read the
+  configuration `create_app` always sets and fail closed when it is absent, instead of keeping a
+  second set of defaults; a limit of zero blocks outright as the memory limiter does; a failed
+  clear after a successful login is logged, a failed record is an error; (e) one owner of the UTC
+  text convention (`custody_common.utc_now/utc_text`), one scope list (the DDL's), one
+  `skip_locked` (the mirror outbox delegates to `app.db`); (f) an oversized preview answers with
+  the existing neutral CSV refusal. Not material to the design.
 
 ## 17. Closure
 

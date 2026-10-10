@@ -56,6 +56,10 @@ TABLE DATA POLICY (prod-1 v14 / v15)
       state is never restored; a restored database has no live intent.
     * ``storage_worker_status`` -- TARGET_SIDE_RECREATED: stale scheduler
       health is never restored; no row is the authoritative "never ran" state.
+    * ``auth_throttle_events`` and ``admin_import_previews`` (v16) --
+      EPHEMERAL_OMITTED: throttle windows and pending import previews are
+      minutes-to-hours state; a restored database starts with every limit
+      clear and no preview, which is correct.
 
     ``storage_objects`` and the business ``storage_object_id`` references are
     archived in full -- including the v15 canonical request rows
@@ -144,6 +148,8 @@ PROTECTED_DATABASES = frozenset({"postgres", "template0", "template1", "sgaa_qua
 SCHEMA_ONLY_TABLE_POLICIES = {
     "storage_upload_intents": "EPHEMERAL_OMITTED",
     "storage_worker_status": "TARGET_SIDE_RECREATED",
+    "auth_throttle_events": "EPHEMERAL_OMITTED",
+    "admin_import_previews": "EPHEMERAL_OMITTED",
 }
 PG_DUMP_OPTIONS = (
     "--format=custom", "--schema=public", "--no-owner", "--no-privileges",
@@ -882,6 +888,13 @@ def read_state(conn) -> DatabaseState:
         },
         "storage_worker_status": {
             "rows": int(conn.execute("SELECT count(*) FROM storage_worker_status").fetchone()[0])
+        },
+        # v16 short-lived state: only the volume is recorded, never a key or a payload.
+        "auth_throttle_events": {
+            "rows": int(conn.execute("SELECT count(*) FROM auth_throttle_events").fetchone()[0])
+        },
+        "admin_import_previews": {
+            "rows": int(conn.execute("SELECT count(*) FROM admin_import_previews").fetchone()[0])
         },
     }
     return state

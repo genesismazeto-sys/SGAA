@@ -244,7 +244,7 @@ def test_student_photo_and_domain_checks_on_postgresql(env):
     assert _login(env, OTHER_EMAIL).get("/perfil/foto").status_code == 404
     results = pathb.run_domain_checks(env.observer)
     assert {name: count for name, count in results.items() if count} == {}
-    assert len(results) == 63  # v13: 49; v14 adds 7 storage checks and 7 net FK-orphan checks
+    assert len(results) == 64  # v13: 49; v14 adds 7 storage checks and 7 net FK-orphan checks; v16: +1 FK orphan
     env.observer.execute("DELETE FROM alunos WHERE id=%s", (env.alunos[STUDENT_EMAIL],))
     assert env.observer.execute("SELECT count(*) FROM alunos_foto").fetchone()[0] == 0
     assert env.sqlite_calls == []
