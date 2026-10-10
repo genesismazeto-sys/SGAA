@@ -442,10 +442,13 @@ def _refuse_unsupported_sqlite_maintenance():
 
 
 def _build_database_admin_context(conn):
+    # File backup (snapshots, the Windows task) exists only for a SQLite file:
+    # under any other backend nothing is listed and no task is queried.
+    file_backup = sqlite_maintenance_supported()
     settings = _get_runtime_backup_settings(conn)
     oauth_context = _build_oauth_redirect_context()
     schema_status = get_schema_status(conn)
-    backups = list_database_backups(_database_backup_locations(settings))
+    backups = list_database_backups(_database_backup_locations(settings)) if file_backup else []
     for backup in backups:
         backup["size_label"] = _format_bytes_label(backup.get("size_bytes"))
         backup["schema_version"] = (backup.get("schema_status") or {}).get("schema_version")
@@ -558,10 +561,12 @@ def _build_database_admin_context(conn):
     # loaded by the app package when runpy executes it.
     from app.backup import task_scheduler as _task_scheduler
 
-    automatic_backup_status = _task_scheduler.automatic_backup_status(settings, app_db.DATABASE)
+    automatic_backup_status = (
+        _task_scheduler.automatic_backup_status(settings, app_db.DATABASE) if file_backup else None
+    )
     return {
         # U5-E: SQLite file backup/restore is unavailable for other backends.
-        "sqlite_maintenance_supported": sqlite_maintenance_supported(),
+        "sqlite_maintenance_supported": file_backup,
         "schema_status": schema_status,
         "backups": backups,
         "backup_settings": settings,
@@ -1514,6 +1519,9 @@ def admin_backup_cloud_folder(provider):
 
 @admin_required
 def admin_banco_dados_configuracoes():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     conn = get_db_connection()
     try:
         save_backup_settings(
@@ -1537,6 +1545,9 @@ def admin_banco_dados_configuracoes():
 
 @admin_required
 def admin_banco_dados_retencao():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     conn = get_db_connection()
     try:
         save_retention_policy(conn, request.form.to_dict())
@@ -1785,6 +1796,9 @@ def admin_banco_dados_backup():
 
 @admin_required
 def admin_banco_dados_download():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     manifest_path = _resolve_allowed_backup_manifest_path(request.args.get("manifest_path") or "")
     if not manifest_path or not os.path.exists(manifest_path):
         flash("Snapshot solicitado não está disponível para download.", "error")
@@ -1806,6 +1820,9 @@ def admin_banco_dados_download():
 
 @admin_required
 def admin_banco_dados_excluir():
+    refused = _refuse_unsupported_sqlite_maintenance()
+    if refused is not None:
+        return refused
     manifest_path = _resolve_allowed_backup_manifest_path(request.form.get("manifest_path") or "")
     if not manifest_path or not os.path.exists(manifest_path):
         flash("Snapshot selecionado não está disponível para exclusão.", "error")

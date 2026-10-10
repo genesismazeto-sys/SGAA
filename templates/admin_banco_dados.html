@@ -576,10 +576,19 @@
 {% endblock %}
 
 {% block content %}
+{# MP-2 S2: file backup (snapshots, restore, retention, local/synced folders, the
+   Windows task) exists only for a SQLite file.  Under PostgreSQL the page keeps the
+   schema state and the cloud ACCOUNTS (the Drive mirror uses the connected account)
+   and says where database protection lives instead. #}
+{% set file_backup = sqlite_maintenance_supported is not sameas false %}
 <section class="db-admin-grid">
   <header>
     <h1 class="main-title">Banco de dados</h1>
+    {% if file_backup %}
     <p class="db-note">O sistema mantém o schema versionado para upgrades futuros e gera snapshots consistentes do SQLite. A restauração cobre os dados básicos do banco; anexos enviados ficam fora desse escopo.</p>
+    {% else %}
+    <p class="db-note">O sistema mantém o schema versionado para upgrades futuros. Os documentos enviados ficam no armazenamento de objetos, fora do banco.</p>
+    {% endif %}
     {# U5-E: SQLite file backup/restore is unavailable for a PostgreSQL backend. #}
     {% if sqlite_maintenance_supported is sameas false %}
       <p class="db-cloud-store-warning" role="status">O banco de dados configurado é PostgreSQL: backup, restauração e envio do arquivo SQLite estão indisponíveis e não são executados por esta tela.</p>
@@ -596,6 +605,7 @@
       </div>
     </article>
 
+    {% if file_backup %}
     <article class="db-card">
       <h2>Backup local</h2>
       <p>Snapshots versionados são salvos em uma pasta local controlada pelo sistema antes de qualquer restauração.</p>
@@ -603,10 +613,17 @@
         <div><strong>Pasta:</strong> {{ local_backup_dir }}</div>
       </div>
     </article>
+    {% else %}
+    <article class="db-card" data-database-protection="postgresql">
+      <h2>Proteção do banco</h2>
+      <p>O banco de dados é PostgreSQL. A cópia e a recuperação do banco são feitas fora desta tela, pela proteção do próprio provedor do banco e pelo procedimento operacional documentado.</p>
+    </article>
+    {% endif %}
 
     <article class="db-card">
-      <h2>Destinos em nuvem e externos</h2>
+      <h2>{% if file_backup %}Destinos em nuvem e externos{% else %}Contas em nuvem{% endif %}</h2>
         <div class="db-meta">
+        {% if file_backup %}
           <div>
             <strong>Pasta sincronizada/local institucional (opcional):</strong>
           {% if cloud_backup_dir %}
@@ -617,6 +634,7 @@
         </div>
         {% if latest_cloud_backup %}
           <div><strong>Último snapshot:</strong> {{ latest_cloud_backup.created_at }}</div>
+        {% endif %}
         {% endif %}
         <div>
           <strong>Google Drive:</strong>
@@ -668,7 +686,9 @@
     <div class="db-card-head">
       <span class="db-section-label">Destinos e sincronização</span>
       <div class="db-chips">
+        {% if file_backup %}
         <span class="db-chip {% if cloud_backup_dir %}is-active{% endif %}">Pasta sincronizada</span>
+        {% endif %}
         <span class="db-chip {% if gdrive_connected %}is-active{% endif %}">Google Drive</span>
         {% if onedrive_ui_enabled %}
           <span class="db-chip {% if onedrive_connected %}is-active{% endif %}">OneDrive</span>
@@ -677,14 +697,21 @@
             current, this user's account, this database) -- never merely
             configured. Same chip owner as the destinations beside it: blue
             `.is-active` when active, the neutral chip otherwise. -#}
+        {% if file_backup %}
         {% if (automatic_backup_status or {}).active %}
           <span class="db-chip is-active" role="status" data-automatic-backup-status="active">Backup automático</span>
         {% else %}
           <span class="db-chip" role="status" data-automatic-backup-status="inactive">Backup automático</span>
         {% endif %}
+        {% endif %}
       </div>
     </div>
+    {% if file_backup %}
     <p>Configure onde os snapshots serão salvos e enviados. O Google Drive é o provedor em nuvem ativo desta entrega.</p>
+    {% else %}
+    <p>Contas em nuvem conectadas a esta instalação. O envio do backup do banco por arquivo não se aplica ao PostgreSQL.</p>
+    {% endif %}
+    {% if file_backup %}
     {% if auth_can('banco_dados', 'edit') %}
       <form method="post" action="{{ url_for('admin_banco_dados_configuracoes') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -742,8 +769,11 @@
         <div><strong>Servidor externo:</strong> {{ backup_settings.external_backup_url or 'Não configurado' }}</div>
       </div>
     {% endif %}
+    {% endif %}
 
+    {% if file_backup %}
     <div class="db-drive-sep"></div>
+    {% endif %}
     {#
       UI-C10. "Incluir no backup automático" and "Enviar backup agora" are two
       independent concepts. The switch only decides whether the provider takes
@@ -825,10 +855,12 @@
               <span>Não conectado</span>
             </div>
           {% endif %}
+          {% if file_backup %}
           <div class="db-provider-line">
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ google_folder_label or 'Backups/sistema' }}">{{ google_folder_label or 'Backups/sistema' }}</span>
           </div>
+          {% endif %}
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
@@ -854,12 +886,13 @@
           it renders in the state-driven note region both cards already share
           with "Último upload"/"Falha" -- never as a common metadata row.
         #}
-        {% if drive_settings.gdrive_last_upload_error %}
+        {% if not file_backup %}
+        {% elif drive_settings.gdrive_last_upload_error %}
           <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.gdrive_last_upload_error[:120] }}</p>
         {% elif gdrive_last_upload_label %}
           <p class="db-provider-note"><strong>Último upload:</strong> {{ gdrive_last_upload_label }}</p>
         {% endif %}
-        {% if gdrive_connected and not google_picker_configured %}
+        {% if file_backup and gdrive_connected and not google_picker_configured %}
           <p class="db-provider-note is-warning" data-google-picker-missing>Seleção de pasta indisponível: informe a Chave de API do Google Picker e o ID do aplicativo abaixo.</p>
         {% endif %}
 
@@ -880,6 +913,7 @@
                   <i class="lucide" data-lucide="circle-check"></i>Testar conexão
                 </button>
               {% endif %}
+              {% if file_backup %}
               <button
                 type="button"
                 class="btn"
@@ -896,6 +930,7 @@
               >
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
+              {% endif %}
 
               <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
                 <i class="lucide" data-lucide="refresh-cw"></i>Conectar
@@ -917,15 +952,21 @@
             </div>
           </div>
 
+          {% if file_backup %}
           {{ provider_backup_now_target('gdrive-backup-now', gdrive_connected, url_for('admin_backup_google_upload')) }}
+          {% endif %}
 
           {% if not cloud_store_unavailable and not cloud_credentials_environment_managed %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="provider" value="google">
               <input type="hidden" name="action" value="save_credentials">
+              {# Destination fields are submitted only where they are shown: the handler
+                 writes exactly what arrives, so a PostgreSQL page leaves them untouched. #}
+              {% if file_backup %}
               <input type="hidden" name="gdrive_dest_folder" value="{{ google_folder_label or drive_settings.gdrive_dest_folder or 'Backups/sistema' }}">
               <input type="hidden" name="gdrive_enabled_submitted" value="1">
+              {% endif %}
 
               <div class="db-field">
                 <label for="google_app_public_base_url">APP_PUBLIC_BASE_URL</label>
@@ -956,6 +997,7 @@
               </div>
 
               <div class="db-provider-config-footer">
+                {% if file_backup %}
                 <div class="db-provider-config-toggle">
                   <span class="db-provider-toggle-label">Incluir no backup automático</span>
                   <label class="toggle-switch" aria-label="Incluir Google Drive no backup automático">
@@ -963,15 +1005,18 @@
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>
+                {% endif %}
                 <div class="db-provider-footer-actions">
+                  {% if file_backup %}
                   {{ provider_backup_now_button('gdrive-backup-now', gdrive_connected, 'Enviar backup para Google Drive', 'Conecte o Google Drive para enviar backups') }}
+                  {% endif %}
                   <button type="submit" class="btn primary">
                     <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
                   </button>
                 </div>
               </div>
             </form>
-          {% else %}
+          {% elif file_backup %}
             {# Machine store unreadable: no credential form, so the footer stands
                alone and still carries the card's backup action. #}
             <div class="db-provider-config-footer">
@@ -1055,16 +1100,19 @@
               <span>Não conectado</span>
             </div>
           {% endif %}
+          {% if file_backup %}
           <div class="db-provider-line">
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_folder_label or 'SGAA - Backups' }}">{{ onedrive_folder_label or 'SGAA - Backups' }}</span>
           </div>
+          {% endif %}
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
         </div>
 
-        {% if drive_settings.onedrive_last_upload_error %}
+        {% if not file_backup %}
+        {% elif drive_settings.onedrive_last_upload_error %}
           <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.onedrive_last_upload_error[:120] }}</p>
         {% elif onedrive_last_upload_label %}
           <p class="db-provider-note"><strong>Último upload:</strong> {{ onedrive_last_upload_label }}</p>
@@ -1077,6 +1125,7 @@
                 <i class="lucide" data-lucide="circle-check"></i>Testar conexão
               </button>
 
+              {% if file_backup %}
               <button
                 type="button"
                 class="btn"
@@ -1093,6 +1142,7 @@
               >
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
+              {% endif %}
 
               {% if onedrive_connection_status == 'not_configured' %}
                 <button type="button" class="btn" disabled aria-disabled="true" title="Disponível após configurar as credenciais Microsoft desta máquina">
@@ -1120,15 +1170,19 @@
             </div>
           </div>
 
+          {% if file_backup %}
           {{ provider_backup_now_target('onedrive-backup-now', onedrive_connected, url_for('admin_backup_onedrive_upload')) }}
+          {% endif %}
 
           {% if not cloud_store_unavailable and not cloud_credentials_environment_managed %}
             <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}" class="db-provider-config">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="provider" value="onedrive">
               <input type="hidden" name="action" value="save_credentials">
+              {% if file_backup %}
               <input type="hidden" name="onedrive_dest_folder" value="{{ onedrive_folder_label or drive_settings.onedrive_dest_folder or 'SGAA - Backups' }}">
               <input type="hidden" name="onedrive_enabled_submitted" value="1">
+              {% endif %}
 
               <div class="db-field">
                 <label for="onedrive_app_public_base_url">APP_PUBLIC_BASE_URL</label>
@@ -1149,6 +1203,7 @@
               </div>
 
               <div class="db-provider-config-footer">
+                {% if file_backup %}
                 <div class="db-provider-config-toggle">
                   <span class="db-provider-toggle-label">Incluir no backup automático</span>
                   <label class="toggle-switch" aria-label="Incluir OneDrive no backup automático">
@@ -1156,15 +1211,18 @@
                     <span class="toggle-switch-slider" aria-hidden="true"></span>
                   </label>
                 </div>
+                {% endif %}
                 <div class="db-provider-footer-actions">
+                  {% if file_backup %}
                   {{ provider_backup_now_button('onedrive-backup-now', onedrive_connected, 'Enviar backup para OneDrive', 'Conecte o OneDrive para enviar backups') }}
+                  {% endif %}
                   <button type="submit" class="btn primary">
                     <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar
                   </button>
                 </div>
               </div>
             </form>
-          {% else %}
+          {% elif file_backup %}
             {# Machine store unreadable: no credential form, so the footer stands
                alone and still carries the card's backup action. #}
             <div class="db-provider-config-footer">
@@ -1224,6 +1282,7 @@
     {% endif %}
   </article>
 
+  {% if file_backup %}
   {# ────────── Operações ────────── #}
   <article class="db-card">
     <div class="db-card-head">
@@ -1497,6 +1556,7 @@
       <p class="db-note">Nenhum snapshot foi gerado ainda.</p>
     {% endif %}
   </article>
+  {% endif %}
 
   <div id="cloud-folder-modal" class="db-folder-modal" hidden>
     <div class="db-folder-modal-backdrop" data-cloud-folder-close></div>
@@ -1530,6 +1590,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
+  {# The scripts below serve the file-backup surfaces only (cloud-folder picker, Google
+     Picker, restore upload cards): a PostgreSQL page renders none of their targets. #}
+  {% if sqlite_maintenance_supported is not sameas false %}
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
@@ -2327,4 +2390,5 @@
       }
     })();
   </script>
+  {% endif %}
 {% endblock %}

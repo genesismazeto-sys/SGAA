@@ -128,3 +128,18 @@ confirmations apply once, and an import that rolls back keeps its preview. The
 uploaded CSV itself lives for the one request that parses it. A preview too
 large to hold (8 MiB of payload) is refused like an invalid CSV. This applies in
 every mode.
+
+## 8. The Banco de dados page under PostgreSQL
+
+The page and its routes follow the configured backend. Under PostgreSQL there is no
+SQLite file to protect, so every file-maintenance route refuses before any effect
+(manual backup, restore from snapshot or upload, provider uploads, destination
+settings, retention, snapshot download and delete) and the page drops the surfaces
+that only work on a file: the local-backup and destination-folder cards, the
+operations, retention and snapshot cards, the automatic-backup chip, the folder
+picker with its Google scripts, and each provider's destination and "send backup"
+controls. What remains is the schema state, a card stating that the database is
+protected by its provider and the documented operational procedure
+(`docs/PG_BACKUP_RESTORE_RUNBOOK.md`), and the Google Drive and OneDrive account
+cards (connect, test, disconnect), because the Drive mirror uses the connected
+account. Nothing is listed from the local disk and the Windows task is not queried.

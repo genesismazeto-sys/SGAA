@@ -295,7 +295,7 @@ Open decisions (product or architecture): none.
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
 | 1 | Hosted runtime: mode, blockers, scratch, env-only secrets (and the read-only credential forms), connect timeout, health, `hosting_cli` | `hosting`, `hosting_cli`, `__init__`, `machine_secrets`, `cloud_credentials`, `banco_dados` (context flag), template, `db`, tests | T1–T4; E-PG1 hosted smoke; tripwire; R2 | done |
-| 2 | PostgreSQL-coherent backup/admin | `capability`, `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | pending |
+| 2 | PostgreSQL-coherent backup/admin | `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | done |
 | 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | done |
 | 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | pending |
 | 5 | Object backup/verify/restore, CLI, runbooks, closure | `object_backup`, `cli`, `docs/HOSTED_RUNTIME.md`, runbook, ES §2, PROJECT_STATE, this SPEC | T1–T4; E-LIVE DEV; T5; R2; closure | pending |
@@ -337,6 +337,10 @@ Open decisions (product or architecture): none.
 - Scheduled object backup; object restore from the Drive mirror; independent off-platform
   object copy beyond the operator set.
 - A flood of distinct login keys writes one throttle row per request.
+- A report's `descricao` is bounded only by the request size (16 MiB application limit, 4.5 MB
+  platform limit). An application cap needs a catalogued message and therefore a baseline ledger
+  term and index shifts across governance tests; withdrawn from slice 2 as not worth that for a
+  non-material note (no hosting impact).
 - The throttle check and the failure record are separated by the password hash, so a parallel
   burst of N requests is allowed about N guesses before any event lands (the in-memory limiter
   has the same shape, narrower on one process). A platform rate limit is the complement (MP-3).
@@ -383,6 +387,17 @@ Open decisions (product or architecture): none.
   text convention (`custody_common.utc_now/utc_text`), one scope list (the DDL's), one
   `skip_locked` (the mirror outbox delegates to `app.db`); (f) an oversized preview answers with
   the existing neutral CSV refusal. Not material to the design.
+
+- A5 2026-10-09 — Slice-2 decisions: (a) D8's `backup_posture()` was not needed: the page context
+  already carries the capability flag (`sqlite_maintenance_supported`), and the template derives one
+  switch from it, so no new function or top-level helper was added to the mixed `banco_dados` module
+  (the U5-E refusal helper is the one owner and now guards every file-maintenance route); (b) the
+  posture card states the protection of a PostgreSQL database in words, with no new catalogued
+  message (template copy is not part of the message catalog); (c) under PostgreSQL the provider
+  cards keep connect / test / disconnect (the Drive mirror needs the account) and drop the
+  destination folder, "send backup" and "include in automatic backup" controls and their form
+  markers, so a card save writes only the credentials it shows; (d) the carried S1-NM1 report
+  description cap is withdrawn (see §15). Not material.
 
 ## 17. Closure
 
