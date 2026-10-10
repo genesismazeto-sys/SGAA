@@ -10,10 +10,19 @@ stderr; no secret, URL, locator, file name or person data is ever printed):
                      canonical objects, the bucket and (``--drive``) Drive mirrors
     converge         legacy -> canonical convergence (``app.storage.legacy_convergence``);
                      a dry run unless ``--apply``
+    backup-objects   write a sealed, self-checking set of every canonical object to a
+                     NEW directory (``app.storage.object_backup``); read-only on storage
+    verify-backup    prove a set offline (seal, counts, every file); with ``--database``
+                     also compare it with the current object rows
+    restore-objects  put a set's objects into a bucket without overwriting or deleting;
+                     adopts matching objects, reports conflicts, reads everything back
 
 The commands run under an application context of ``create_app()`` -- the
 ``python -m app.backup.sync`` precedent -- and never under a request.  This
 module parses, calls the owner and reports; the logic lives in the owners.
+``verify-backup`` (offline) and ``restore-objects`` need neither the database nor
+the application: they start nothing and read only the set and the storage
+environment (``SUPABASE_URL``, ``SUPABASE_SECRET_KEY``, ``SGAA_STORAGE_BUCKET``).
 
 Exit codes:
     0  done (including "nothing to do")
@@ -21,7 +30,12 @@ Exit codes:
     2  usage error or application startup failure
     3  not runnable: the canonical store or the Drive connection is unavailable
     4  verify: a check failed (not converged, unclean bucket or unverified mirrors);
-       converge: some row did not converge (its outcome class says why)
+       converge: some row did not converge (its outcome class says why);
+       backup-objects: an object was unreadable, the space or object bound was
+       exceeded, or the finished set could not be promoted (no set was promoted
+       except a failed promotion, whose directory is named in the report);
+       verify-backup: the set is invalid or differs from the database;
+       restore-objects: a conflict, a failure or a read-back mismatch
 """
 
 from __future__ import annotations
@@ -92,6 +106,24 @@ def _parser() -> argparse.ArgumentParser:
     converge.add_argument("--table", choices=legacy_convergence.TABLES, default=None)
     converge.add_argument("--after-id", type=_bounded_int(0, 2**62), default=0,
                           help="with --table: start after this row id (a previous report's last_row_id)")
+    backup_objects = commands.add_parser(
+        "backup-objects", help="write a sealed set of every canonical object to a new directory"
+    )
+    backup_objects.add_argument("--destination", required=True,
+                                help="a directory that does not exist yet, outside the repository")
+    backup_objects.add_argument("--label", default="", help="operator label ([A-Za-z0-9._-], at most 64)")
+
+    verify_backup = commands.add_parser("verify-backup", help="prove an object backup set")
+    verify_backup.add_argument("--set", dest="set_dir", required=True, help="the set directory")
+    verify_backup.add_argument("--database", action="store_true",
+                               help="also compare the set with the database's object rows")
+
+    restore_objects = commands.add_parser(
+        "restore-objects", help="restore a set into a bucket (never overwrites or deletes)"
+    )
+    restore_objects.add_argument("--set", dest="set_dir", required=True, help="the set directory")
+    restore_objects.add_argument("--bucket", default=None,
+                                 help="target bucket (default: each object's recorded bucket)")
     return parser
 
 
@@ -195,7 +227,62 @@ def _converge(conn, args) -> tuple[int, dict]:
     return (EXIT_OK if report.clean else EXIT_NOT_CONVERGED), report.as_dict()
 
 
+def _store():
+    """The canonical store: the injected one under an application, else the environment's."""
+    from flask import has_app_context
+
+    from app.storage import request_documents
+    from app.storage.supabase_store import SupabaseObjectStore
+
+    if has_app_context():
+        return request_documents.canonical_store()
+    return SupabaseObjectStore.from_environment()
+
+
+def _backup_objects(conn, args) -> tuple[int, dict]:
+    from app.storage import object_backup
+    from app.storage.object_store import CanonicalStoreError
+
+    try:
+        store = _store()
+    except CanonicalStoreError as exc:
+        return EXIT_NOT_RUNNABLE, {"result_code": exc.code}
+    try:
+        report = object_backup.backup(conn, store, args.destination, label=args.label)
+    except object_backup.SetInvalid as exc:
+        raise _UsageError(exc.code) from None
+    return (EXIT_OK if report.ok else EXIT_NOT_CONVERGED), report.as_dict()
+
+
+def _verify_backup(conn, args) -> tuple[int, dict]:
+    from app.storage import object_backup
+
+    report = object_backup.verify_set(args.set_dir, conn=conn if args.database else None)
+    return (EXIT_OK if report.ok else EXIT_NOT_CONVERGED), report.as_dict()
+
+
+def _restore_objects(conn, args) -> tuple[int, dict]:
+    from app.storage import object_backup
+    from app.storage.object_store import CanonicalStoreError
+
+    try:
+        store = _store()
+    except CanonicalStoreError as exc:
+        return EXIT_NOT_RUNNABLE, {"result_code": exc.code}
+    report = object_backup.restore(args.set_dir, store, bucket=args.bucket)
+    return (EXIT_OK if report.ok else EXIT_NOT_CONVERGED), report.as_dict()
+
+
+#: Commands that need neither the application nor a database connection (unless ``--database``).
+_OFFLINE = {
+    "verify-backup": lambda args: not args.database,
+    "restore-objects": lambda args: True,
+}
+
 _COMMANDS = {
+    "backup-objects": _backup_objects,
+    "verify-backup": _verify_backup,
+    "restore-objects": _restore_objects,
     "mirror-run": _mirror_run,
     "mirror-requeue": _mirror_requeue,
     "census": _census,
@@ -215,6 +302,20 @@ def main(argv=None, *, app=None, out=None) -> int:
         args = _parser().parse_args(argv)
     except SystemExit as exc:
         return EXIT_OK if exc.code == 0 else EXIT_USAGE
+    offline = app is None and _OFFLINE.get(args.command, lambda _args: False)(args)
+    if offline:
+        # No application, no database: the set and the storage environment only.
+        try:
+            code, report = _COMMANDS[args.command](None, args)
+        except _UsageError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        except Exception as exc:
+            logger.error("storage command %s failed (%s)", args.command, type(exc).__name__)
+            return EXIT_RUNTIME_FAILURE
+        json.dump({"command": args.command, **report}, out, sort_keys=True)
+        out.write("\n")
+        return code
     if app is None:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
         try:

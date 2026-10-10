@@ -22,6 +22,7 @@ BACKGROUND = frozenset({
     "app.storage.cli",
     "app.storage.drive_mirror",
     "app.storage.legacy_convergence",
+    "app.storage.object_backup",
     "app.storage.scheduler",
     "app.storage.storage_audit",
 })
@@ -112,6 +113,23 @@ def test_scanner_sees_the_actual_background_importers():
     assert "app.storage.drive_mirror" in background_imports(cli, "app.storage.cli")
     scheduler = (ROOT / "app" / "storage" / "scheduler.py").read_text(encoding="utf-8-sig")
     assert "app.storage.drive_mirror" in background_imports(scheduler, "app.storage.scheduler")
+
+
+def test_the_object_backup_is_unreachable_from_the_web_runtime_and_its_real_importer_is_seen():
+    """MP-2 slice 5: the operator object backup is a BACKGROUND member; only the CLI reaches it."""
+    assert "app.storage.object_backup" in BACKGROUND
+    for importer in (
+        "from app.storage import object_backup",
+        "from app.storage.object_backup import backup",
+        "import app.storage.object_backup",
+    ):
+        assert background_imports(importer, "app.views.admin.banco_dados") == {"app.storage.object_backup"}
+    assert background_imports("from . import object_backup", "app.storage.request_documents") == {
+        "app.storage.object_backup"
+    }
+    assert _module_name(ROOT / "app" / "storage" / "object_backup.py") in BACKGROUND
+    cli = (ROOT / "app" / "storage" / "cli.py").read_text(encoding="utf-8-sig")
+    assert "app.storage.object_backup" in background_imports(cli, "app.storage.cli")
 
 
 def test_the_scheduler_front_is_unreachable_from_the_web_runtime_and_a_module_that_is_not_background_is_caught():

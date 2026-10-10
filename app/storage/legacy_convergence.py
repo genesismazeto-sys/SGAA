@@ -58,7 +58,7 @@ from app.storage.object_store import (
     STORAGE_INTEGRITY_MISMATCH,
     STORAGE_OBJECT_TOO_LARGE,
     CanonicalStoreError,
-    read_verified,
+    verify_existing,
 )
 from app.student_documents import resolve_student_document_path
 
@@ -345,16 +345,14 @@ def _store_target(store, bucket: str, key: str, source: _Source) -> bool:
             raise _Skip(TARGET_UNAVAILABLE) from None
         adopted = True  # an interrupted earlier run's upload, if the bytes prove identical
     try:
-        _content, stat = read_verified(
+        verify_existing(
             store, bucket, key, expected_size=len(source.content), expected_sha256=source.sha256,
-            max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
+            expected_mime_type=source.mime_type, max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
         )
     except CanonicalStoreError as exc:
         if exc.code in (STORAGE_INTEGRITY_MISMATCH, STORAGE_OBJECT_TOO_LARGE):
             raise _Skip(TARGET_CONFLICT) from None
         raise _Skip(TARGET_UNAVAILABLE) from None
-    if stat.mime_type is not None and stat.mime_type != source.mime_type:
-        raise _Skip(TARGET_CONFLICT)
     return adopted
 
 

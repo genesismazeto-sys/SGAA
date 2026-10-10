@@ -158,9 +158,13 @@ empty tables. The manifest's `storage` census holds counts by lifecycle and
 mirror state, the total size, a digest over id / bucket / key / SHA-256 / size
 and the business-reference counts + digest -- no filename and no person.
 **Object bytes are not in a Layer-2 archive**: they live in the canonical
-Supabase bucket, whose independent backup is a later unit. S2 restore does not
-check that the referenced objects exist in Storage (no live Storage in scope);
-inside the database every reference is FK-checked and domain-checked.
+Supabase bucket. Their backup is the operator object set
+(`python -m app.storage.cli backup-objects`, `docs/HOSTED_RUNTIME.md` §10), taken
+with the database backup and kept with it under the policy of §E. A database
+restore does not check that the referenced objects exist in Storage; inside the
+database every reference is FK-checked and domain-checked, and
+`verify-backup --set <set> --database` run against the restored database reports
+the references that differ from the set (missing, extra, changed).
 
 ## E. Off-platform storage requirement (retention policy)
 
@@ -173,6 +177,10 @@ by this runbook):
   storage credentials;
 * the three files are kept together; a set without its manifest is not a
   backup;
+* the object-byte set (`backup-objects`) is personal data and follows the same
+  policy: outside the repository, encrypted, off-platform, and verified
+  (`verify-backup`) before it is trusted. Its seal is an integrity check, not
+  authenticity: keep the set where nobody else can alter it;
 * **at least two generations** retained;
 * the **cutover baseline** (§P) is kept until a later generation has itself
   passed a restore validation (§F/§G);

@@ -124,18 +124,19 @@ anything else. Overlapping and duplicate invocations are safe through the MP-1 l
 fences.
 
 Object backup (`python -m app.storage.cli backup-objects | verify-backup | restore-objects`):
-- backup reads every `storage_objects` row (active and retired) of the configured bucket
-  through `read_verified` against the recorded size and SHA-256, and writes a staging
+- backup reads every `storage_objects` row (active and retired), each from its recorded
+  bucket, through `read_verified` against the recorded size and SHA-256, and writes a staging
   directory of content-addressed files (`objects/<sha[:2]>/<sha256>`) plus a sealed
   manifest (format version, label, counts, per-object id / bucket / key / size / SHA-256 /
-  MIME / lifecycle, the `reference_digest`). The set is promoted by rename only when
-  complete, never replaces an existing set, and is refused inside the repository;
+  MIME / lifecycle, the `objects_digest`). The set is promoted by rename only when
+  complete, never replaces an existing set, and is refused inside the repository (by path
+  or through a link or junction);
 - verify (offline) checks the seal, every file's size and SHA-256 and the counts;
   `--database` also compares the manifest with the current references (missing,
   extra, changed);
 - restore verifies the set, then uploads each object to the target bucket with no upsert,
-  adopting an existing object only after a size and SHA-256 match (`TARGET_CONFLICT`
-  otherwise), and finally reads every restored object back. It never deletes anything.
+  adopting an existing object only after a size, SHA-256 and MIME match (`TARGET_CONFLICT`
+  otherwise), and finally reads every uploaded object back. It never deletes anything.
 
 PostgreSQL-coherent admin: every SQLite-maintenance route (settings, retention, backup,
 download, delete, restore, restore-upload, provider uploads) refuses before any effect
@@ -298,7 +299,7 @@ Open decisions (product or architecture): none.
 | 2 | PostgreSQL-coherent backup/admin | `banco_dados`, template, tests | T1–T4; route tests on both engines; E-PG1 page; R1 | done |
 | 3 | Schema v16, durable throttle, DB-backed preview | ddl/migration modules, `pg_schema`, Path-B, `pg_backup`, `auth_throttle`, `import_previews`, views, tests | T1–T4; parity; E-PG1/E-PG2; Path-B and Layer-2 real PG; R2 | done |
 | 4 | Scheduler front, I3 guard extension | `scheduler`, guard test, tests | T1–T4; E-PG2 overlap; DEV canonical reads with a fake Drive; R2 | done |
-| 5 | Object backup/verify/restore, CLI, runbooks, closure | `object_backup`, `cli`, `docs/HOSTED_RUNTIME.md`, runbook, ES §2, PROJECT_STATE, this SPEC | T1–T4; E-LIVE DEV; T5; R2; closure | pending |
+| 5 | Object backup/verify/restore, CLI, runbooks, closure | `object_backup`, `cli`, `docs/HOSTED_RUNTIME.md`, runbook, ES §2, PROJECT_STATE, this SPEC | T1–T4; E-LIVE DEV; T5; R2; closure | done |
 
 ## 13. Acceptance criteria
 
@@ -406,6 +407,14 @@ Open decisions (product or architecture): none.
   lease is `mirror_outbox.DEFAULT_LEASE_SECONDS`; the documented numbers are pinned by literal tests;
   the docs say what MP-1 actually guarantees on overlap and that a lease should cover the function
   duration. Not material.
+- A7 2026-10-09 — Slice-5 review amendments (R2; the one material finding, a repository guard
+  that a junction or symlink alias defeated, is fixed by resolving links before comparing and
+  by refusing reparse points inside a set): the manifest's identity digest is `objects_digest`
+  (it is not storage_audit's `reference_digest`); the adopt rule (size, SHA-256, MIME) lives once
+  in `object_store.verify_existing`, used by convergence and by restore; a failed promotion keeps
+  the complete staging directory and names it; a backup ends its read transaction before copying
+  (a held `ACCESS SHARE` would block DDL on PostgreSQL); a restore that meets a file changed after
+  verification still reads back what it placed. Not material to the design.
 
 ## 17. Closure
 

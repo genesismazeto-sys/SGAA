@@ -175,6 +175,30 @@ def read_verified(
     return content, stat
 
 
+def verify_existing(
+    store: CanonicalObjectStore,
+    bucket: str,
+    key: str,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+    expected_mime_type: str,
+    max_bytes: int,
+) -> ObjectStat:
+    """Prove that an object which ALREADY exists is exactly the expected one.
+
+    Size and SHA-256 as :func:`read_verified`, and the MIME type when the provider
+    reports one.  A difference is ``STORAGE_INTEGRITY_MISMATCH``: the caller adopts
+    nothing it has not proved (convergence and object restore share this rule).
+    """
+    _content, stat = read_verified(
+        store, bucket, key, expected_size=expected_size, expected_sha256=expected_sha256, max_bytes=max_bytes
+    )
+    if stat.mime_type is not None and stat.mime_type != expected_mime_type:
+        raise CanonicalStoreError(STORAGE_INTEGRITY_MISMATCH, "mime")
+    return stat
+
+
 def verify_object(
     store: CanonicalObjectStore,
     bucket: str,
@@ -209,5 +233,6 @@ __all__ = [
     "SignedUpload",
     "VerifiedContent",
     "read_verified",
+    "verify_existing",
     "verify_object",
 ]

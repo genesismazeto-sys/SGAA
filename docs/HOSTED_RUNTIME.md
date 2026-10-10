@@ -182,3 +182,49 @@ method, `404` any other path or a disabled front.
 - Only the mirror pass is scheduled. Convergence, requeue and object backup remain
   operator decisions (`python -m app.storage.cli`).
 - Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`.
+
+## 10. Object backup
+
+The database backup (Layer-2) holds rows and no object bytes. The object backup is
+the other half: a self-checking set of every canonical object, written by an operator
+to storage they control and encrypt (the set is personal data), outside the
+repository.
+
+```
+python -m app.storage.cli backup-objects  --destination <new directory> [--label <text>]
+python -m app.storage.cli verify-backup   --set <directory> [--database]
+python -m app.storage.cli restore-objects --set <directory> [--bucket <name>]
+```
+
+| Command | Needs | Does |
+|---|---|---|
+| `backup-objects` | database, storage variables | reads every `storage_objects` row (active and retired) through the verified read and writes the set; never writes to storage |
+| `verify-backup` | nothing (`--database`: database) | offline proof of the set; with `--database` also compares it with the current rows (missing / extra / changed) |
+| `restore-objects` | storage variables only | puts the set's objects into the bucket without overwriting or deleting; adopts an existing object only when its size, SHA-256 and MIME type match |
+
+Set layout: `MANIFEST.json` (per-object id, bucket, key, size, SHA-256, MIME,
+lifecycle; the counts; the `objects_digest` and the `seal`) and
+`objects/<sha256[:2]>/<sha256>`. The seal detects corruption and truncation; it is
+an integrity check, not authenticity, so keep the set where it cannot be altered.
+
+- A backup is complete or it does not exist: it is written to a staging directory and
+  promoted by rename only when every object read back correctly; one unreadable
+  object aborts it (exit 4) and names the ids and fixed codes.
+- The destination must not exist and must lie outside the repository, by its path
+  or through any link or junction. A promotion that fails after the set is
+  complete (a lock, a permission) keeps the staging directory and names it
+  (`PROMOTE_FAILED`, `staged_as`); `verify-backup` accepts it as it is. A killed
+  run can leave `<destination>.partial-*`: it holds personal data, delete it.
+  Files take the operator's default permissions: write the set to a protected
+  location.
+- Restore verifies the set first and refuses an invalid one before any storage call.
+  An existing object is adopted only when its size, SHA-256 and MIME type match; a
+  conflicting one is reported (`TARGET_CONFLICT`, exit 4) and never replaced;
+  everything uploaded is read back. `--bucket` restores into another bucket under the
+  same keys; without it each object goes to its recorded bucket. Re-pointing database
+  references to a different bucket is a deliberate, separate step. Restore does not
+  compare the set with the database: run `verify-backup --set <set> --database`
+  first.
+- Reports carry counts, ids and fixed codes only: no key, URL, file name or byte.
+- Residual: scheduled object backup and restore from the Drive mirror are not
+  provided; the operator set is the only copy beyond the provider's own protection.

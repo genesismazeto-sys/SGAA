@@ -247,6 +247,19 @@ def test_different_bytes_at_the_key_are_refused_never_overwritten(env):
     assert _link(env, "admin_arquivos", row_id) is None
 
 
+def test_the_same_bytes_under_another_media_type_are_a_conflict_not_an_adoption(env):
+    row_id = _local_arquivo(env, PDF)
+    env.conn.commit()
+    key = (BUCKET, f"legacy/arquivos/{row_id}")
+    env.store.objects[key] = (PDF, "image/png")
+
+    report = _converge(env)
+
+    assert report.as_dict()["totals"] == {"TARGET_CONFLICT": 1} and not report.clean
+    assert env.store.objects[key] == (PDF, "image/png")
+    assert _link(env, "admin_arquivos", row_id) is None
+
+
 # ---------------------------------------------------------------------------
 # source classes
 # ---------------------------------------------------------------------------
