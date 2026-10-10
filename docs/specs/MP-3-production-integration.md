@@ -599,6 +599,14 @@ Executor amendments (consequences of the above; not material beyond what the use
   conflicting `X-Frame-Options`); the smoke now also requires the CSP header; the rate-limit rule is
   sized against the login and recovery limits together, and `/primeiro-acesso` and `/redefinir-senha`
   are named as not throttled by the application (covered only by the platform rule). Not material.
+- A9 2026-10-10 — Slice 4. `tools/ops_backup.py` sequences the existing tools (Layer-2 backup and verify,
+  object set and verify, a byte-compared off-platform copy, rotation that never deletes the cutover
+  baseline or a set it did not create). The Supabase restore profile and DR3 are in the same slice.
+  Review-driven hardening (2026-10-10): rotation deletes only generations recorded in a per-directory
+  registry, in creation order, and a nested or overlapping directory pair, a run already in progress
+  (`RUN_IN_PROGRESS`) and the baseline label are refused; the restore profile admits the provider's
+  `postgres` database only under `--target-profile supabase` (a restore target on a managed provider),
+  never by default. Not material.
 
 ## 17. Closure
 

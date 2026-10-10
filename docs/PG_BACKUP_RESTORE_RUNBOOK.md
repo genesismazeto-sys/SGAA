@@ -399,10 +399,18 @@ database (behaviour probes run on clones).
 * **Identity**: if `pg_control_system()` is not readable there, target/source
   identity falls back to normalized host/port/database.
 * **Restore targets**: a new Supabase project is not EMPTY under the plain-PG
-  definition (provider schemas and extensions exist), so the tool refuses it.
-  The Supabase EMPTY definition must be adjudicated and qualified before any
-  restore into Supabase; until then restore drills target plain PostgreSQL of
-  a major ≥ the source.
+  definition (provider schemas, default extensions and API event triggers exist), so
+  the plain restore refuses it. `restore --target-profile supabase` (explicit, never
+  inferred from the address) allows exactly what a fresh project holds -- the schemas
+  `auth`, `extensions`, `graphql`, `graphql_public`, `pgbouncer`, `realtime`,
+  `storage`, `vault`; the extensions `plpgsql`, `pg_stat_statements`, `pgcrypto`,
+  `uuid-ossp`, `supabase_vault`, `pg_graphql`; the six API event triggers -- and still
+  refuses a used project (rows in `auth.users`, `storage.buckets`, `storage.objects`),
+  any other schema or extension, and anything in `public`. After a restore into a
+  managed project, the revocation of `docs/HOSTED_RUNTIME.md` §11 is applied again
+  (a dump carries no privileges) and `hosting_cli check --database` must be clean
+  before the application opens. The profile is proven on a target shaped like a fresh
+  project; the managed-target proof on the real provider is DR3 of the MP-3 SPEC.
 * **Cross-environment proof (required before production)**: take a Layer-2
   artifact **from the actual Supabase project**, verify it, restore it into a
   new database, `verify --restored`, clone probes, smoke.
@@ -410,6 +418,27 @@ database (behaviour probes run on clones).
   on the Free plan; Layer 2, the object set (`docs/HOSTED_RUNTIME.md` §10),
   at least two generations, an encrypted off-platform copy and restore drills
   are the recovery posture, and the achievable RPO is the backup cadence.
+
+## R. Scheduled generations (`tools/ops_backup.py`)
+
+On the Free plans there is no provider backup, so the operator's sets are the recovery
+assets and this tool sequences them; it adds no backup logic of its own.
+
+```
+python tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects] [--generations N] [--label <text>]
+```
+
+One run: `pg_backup backup` and `verify`; with `--objects`, `backup-objects` and
+`verify-backup --database`; a copy of the new generation to the second directory with
+every file compared by SHA-256; then rotation to the newest N (at least 2) automatic
+sets in both places. Any step failing stops the run before anything is copied or
+deleted. Sets the tool did not create (including the `cutover-baseline` set) are never
+deleted. Both directories must be encrypted storage the operator controls (the sets
+are personal data); the tool states that it cannot verify this. `DATABASE_URL` is the
+direct or session-mode address and the password comes from the libpq password file.
+Schedule it with the operator machine's own scheduler (the Windows task scheduler stays
+until MP-4) and run a restore drill into scratch PostgreSQL on a calendar (section F-H).
+The achievable RPO is the interval between runs.
 
 ## Exit codes
 

@@ -280,7 +280,7 @@ def _stub_pinned_restore(monkeypatch, tmp_path, hostaddr):
 
     monkeypatch.setattr(tool, "verify_artifact", lambda *args, **kwargs: loaded)
     monkeypatch.setattr(tool, "connect", fake_connect)
-    monkeypatch.setattr(tool, "_check_target", lambda conn, manifest, tools: tool.TargetIdentity(
+    monkeypatch.setattr(tool, "_check_target", lambda conn, manifest, tools, profile="plain": tool.TargetIdentity(
         "postgresql", "db.example.test", "6543", "sgaa_restore", "sgaa", "15.19", "7001"))
     monkeypatch.setattr(tool.subprocess, "run", fake_run)
     monkeypatch.setattr(tool, "verify_database", lambda manifest, url, announce=None: "verified")

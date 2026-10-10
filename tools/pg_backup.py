@@ -144,6 +144,13 @@ MANIFEST_SUFFIX = ".manifest.json"
 STAGING_SUFFIX = ".sgaa-pgbackup-staging"
 
 PROTECTED_DATABASES = frozenset({"postgres", "template0", "template1", "sgaa_qual"})
+#: A managed Supabase project's one application database IS named ``postgres``; under the explicit
+#: supabase profile (and only there) it is the target, and the emptiness profile guards it.
+PROFILE_UNPROTECTED = {"plain": frozenset(), "supabase": frozenset({"postgres"})}
+
+
+def protected_databases(profile: str = "plain") -> frozenset:
+    return PROTECTED_DATABASES - PROFILE_UNPROTECTED.get(profile, frozenset())
 #: Tables archived schema-only, with the manifest policy recorded for each.
 SCHEMA_ONLY_TABLE_POLICIES = {
     "storage_upload_intents": "EPHEMERAL_OMITTED",
@@ -1391,18 +1398,85 @@ EMPTY_TARGET_CHECKS = {
 }
 
 
-def target_occupancy(conn) -> dict:
+#: What a NEW managed Supabase project already holds besides ``public`` (read from a fresh project,
+#: MP-3 S1): its provider schemas, the extensions it installs by default and its API event triggers.
+#: The profile is explicit (``--target-profile supabase``), never inferred from the address.
+TARGET_PROFILES = ("plain", "supabase")
+SUPABASE_PROFILE_SCHEMAS = (
+    "public", "pg_catalog", "information_schema", "pg_toast", "auth", "extensions", "graphql",
+    "graphql_public", "pgbouncer", "realtime", "storage", "vault",
+)
+SUPABASE_PROFILE_EXTENSIONS = (
+    "plpgsql", "pg_stat_statements", "pgcrypto", "uuid-ossp", "supabase_vault", "pg_graphql",
+)
+SUPABASE_PROFILE_EVENT_TRIGGERS = (
+    "issue_graphql_placeholder", "issue_pg_cron_access", "issue_pg_graphql_access",
+    "issue_pg_net_access", "pgrst_ddl_watch", "pgrst_drop_watch",
+)
+#: A project that has been used holds rows here; a new one holds none.
+SUPABASE_PROVIDER_TABLES = ("auth.users", "storage.buckets", "storage.objects")
+
+
+def _quoted_list(values) -> str:
+    return ", ".join("'" + value.replace("'", "''") + "'" for value in values)
+
+
+def empty_target_checks(profile: str = "plain") -> dict:
+    """The occupancy counts that must all be zero for ``profile``."""
+    if profile == "plain":
+        return dict(EMPTY_TARGET_CHECKS)
+    if profile != "supabase":
+        raise Refused("TARGET_PROFILE_UNKNOWN", "the target profile is plain or supabase")
+    checks = dict(EMPTY_TARGET_CHECKS)
+    checks["schemas"] = (
+        f"SELECT count(*) FROM pg_namespace WHERE nspname NOT IN ({_quoted_list(SUPABASE_PROFILE_SCHEMAS)}) "
+        "AND nspname !~ '^pg_(toast_)?temp_[0-9]+$'"
+    )
+    checks["extensions"] = (
+        f"SELECT count(*) FROM pg_extension WHERE extname NOT IN ({_quoted_list(SUPABASE_PROFILE_EXTENSIONS)})"
+    )
+    checks["event_triggers"] = (
+        f"SELECT count(*) FROM pg_event_trigger WHERE evtname NOT IN ({_quoted_list(SUPABASE_PROFILE_EVENT_TRIGGERS)})"
+    )
+    return checks
+
+
+def target_occupancy(conn, profile: str = "plain") -> dict:
     if conn.execute("SELECT to_regnamespace('public')").fetchone()[0] is None:
         raise Refused("TARGET_PUBLIC_SCHEMA_MISSING", "the target has no public schema")
-    return {name: int(conn.execute(sql).fetchone()[0]) for name, sql in EMPTY_TARGET_CHECKS.items()}
+    counts = {name: int(conn.execute(sql).fetchone()[0]) for name, sql in empty_target_checks(profile).items()}
+    if profile == "supabase":
+        rows = 0
+        for table in SUPABASE_PROVIDER_TABLES:
+            if conn.execute("SELECT to_regclass(%s)", (table,)).fetchone()[0] is not None:
+                rows += int(conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+        counts["provider_rows"] = rows
+    return counts
 
 
-def _check_target(conn, manifest, tools) -> TargetIdentity:
+MANAGED_PROJECT_SCHEMAS = frozenset({"auth", "storage", "extensions"})
+
+
+def require_managed_project(conn) -> None:
+    """Positive evidence that ``postgres`` is a managed project's database, not a bare cluster's.
+
+    A managed project names its one application database ``postgres`` and carries the provider's own
+    schemas; an empty ``postgres`` of any other cluster has none of them.
+    """
+    present = {row[0] for row in conn.execute(
+        "SELECT nspname FROM pg_namespace WHERE nspname IN ('auth', 'storage', 'extensions')").fetchall()}
+    if not MANAGED_PROJECT_SCHEMAS <= present:
+        raise Refused("TARGET_PROTECTED", "'postgres' is a restore target only in a managed provider project")
+
+
+def _check_target(conn, manifest, tools, profile: str = "plain") -> TargetIdentity:
     identity = database_identity(conn)
-    if identity.database in PROTECTED_DATABASES:
+    if identity.database in protected_databases(profile):
         raise Refused("TARGET_PROTECTED", f"never restore into {identity.database!r}")
     if conn.execute("SELECT datistemplate FROM pg_database WHERE datname = current_database()").fetchone()[0]:
         raise Refused("TARGET_PROTECTED", "the target is a template database")
+    if profile == "supabase" and identity.database == "postgres":
+        require_managed_project(conn)
     if same_database(identity, TargetIdentity.from_dict(manifest["source"])):
         raise Refused("TARGET_IS_SOURCE", "the target is the database this backup was taken from")
     encoding = str(conn.execute("SHOW server_encoding").fetchone()[0])
@@ -1417,7 +1491,7 @@ def _check_target(conn, manifest, tools) -> TargetIdentity:
     require_client_not_older(tools, target_major)
     if not conn.execute("SELECT has_schema_privilege('public', 'CREATE')").fetchone()[0]:
         raise Refused("TARGET_PUBLIC_NOT_WRITABLE", "the restoring role cannot create objects in public")
-    occupied = {name: count for name, count in target_occupancy(conn).items() if count}
+    occupied = {name: count for name, count in target_occupancy(conn, profile).items() if count}
     if occupied:
         raise Refused(
             "TARGET_NOT_EMPTY",
@@ -1451,9 +1525,9 @@ def _refuse_service_routing() -> None:
         )
 
 
-def _refuse_before_connecting(url) -> None:
+def _refuse_before_connecting(url, profile: str = "plain") -> None:
     database = url_database(url)
-    if database in PROTECTED_DATABASES:
+    if database in protected_databases(profile):
         raise Refused("TARGET_PROTECTED", f"never restore into {database!r}")
     configured = (os.environ.get(SOURCE_URL_ENV) or "").strip()
     if configured.startswith(("postgres://", "postgresql://")):
@@ -1464,13 +1538,13 @@ def _refuse_before_connecting(url) -> None:
             pass
 
 
-def _target_still_empty(url) -> bool | None:
+def _target_still_empty(url, profile: str = "plain") -> bool | None:
     try:
         conn = connect(url)
     except Exception:
         return None
     try:
-        return not any(target_occupancy(conn).values())
+        return not any(target_occupancy(conn, profile).values())
     except Exception:
         return None
     finally:
@@ -1493,16 +1567,18 @@ def _restored_but_unverified(exc: BaseException) -> NeedsReconciliation:
     )
 
 
-def restore(manifest_path, *, target_url=None, announce=lambda line: None) -> DatabaseState:
+def restore(manifest_path, *, target_url=None, profile="plain", announce=lambda line: None) -> DatabaseState:
+    if profile not in TARGET_PROFILES:
+        raise Refused("TARGET_PROFILE_UNKNOWN", "the target profile is plain or supabase")
     loaded = verify_artifact(manifest_path, announce=announce)
     manifest = loaded.manifest
     url = require_url(target_url, TARGET_URL_ENV)
     require_single_target_route(url)
     _refuse_service_routing()
-    _refuse_before_connecting(url)
+    _refuse_before_connecting(url, profile)
     conn = connect(url)
     try:
-        identity = _check_target(conn, manifest, loaded.tools)
+        identity = _check_target(conn, manifest, loaded.tools, profile)
         hostaddr = checked_hostaddr(conn)
     finally:
         conn.close()
@@ -1520,7 +1596,7 @@ def restore(manifest_path, *, target_url=None, announce=lambda line: None) -> Da
                 committed = True
             except NativeToolError as exc:
                 # pg_restore ended on its own: its single transaction never committed.
-                if _target_still_empty(url):
+                if _target_still_empty(url, profile):
                     raise Failed("RESTORE_FAILED", f"{exc.detail}; single transaction rolled back, "
                                  "target verified still empty") from exc
                 raise NeedsReconciliation("RESTORE_OUTCOME_UNCERTAIN", f"{exc.detail}; the target is "
@@ -1576,6 +1652,10 @@ def _parser() -> argparse.ArgumentParser:
         "restore", allow_abbrev=False, help="restore into the new empty SGAA_RESTORE_TARGET_URL"
     )
     restore_parser.add_argument("--manifest", required=True)
+    restore_parser.add_argument(
+        "--target-profile", choices=TARGET_PROFILES, default="plain",
+        help="what an empty target may already hold: plain PostgreSQL (default) or a new managed Supabase project",
+    )
     verify_parser = commands.add_parser("verify", allow_abbrev=False, help="verify an artifact set")
     verify_parser.add_argument("--manifest", required=True)
     verify_parser.add_argument(
@@ -1615,7 +1695,7 @@ def main(argv=None) -> int:
             else:
                 announce("result: VERIFY_OK (artifact)")
         else:
-            restore(options.manifest, announce=announce)
+            restore(options.manifest, profile=options.target_profile, announce=announce)
             announce("result: RESTORE_OK")
         return EXIT_OK
     except BackupToolError as exc:
