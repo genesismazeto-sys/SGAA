@@ -1,6 +1,6 @@
 # SPEC MP-2 — Hosting readiness
 
-Status: FROZEN 2026-10-09
+Status: CLOSED 2026-10-09
 Charter: "Make SGAA able to run correctly without depending on the Windows workstation
 or durable local filesystem, preparing the already-decided Vercel + Supabase architecture
 for the later production cutover. MP-1 contracts and invariants are binding and must not
@@ -418,4 +418,67 @@ Open decisions (product or architecture): none.
 
 ## 17. Closure
 
-Filled in the last slice.
+Closed 2026-10-09. Five slices, each fast-forward published to the development
+branch (subjects; Git holds the SHAs):
+
+1. `feat: add the hosted runtime contract (MP-2 S1)`
+2. `feat: add durable login throttling and database-backed import previews (MP-2 S3)`
+3. `feat: make the database administration page and routes PostgreSQL-coherent (MP-2 S2)`
+4. `feat: add the authenticated scheduler front for the Drive mirror (MP-2 S4)`
+5. `feat: add the operator object backup, verification and restore (MP-2 S5)`
+
+Landing order was 1, 3, 2, 4, 5 (slices 2 and 3 are independent), followed by
+`fix: keep the destinations separator adjacent to its form in the database page (MP-2 S2)`,
+which the full-suite run found: a structural pin on the template that the slice-2 verification
+selection had not included.
+
+Acceptance (evidence pointers; run reports are outside the repository):
+
+- AC1 met. `tests/test_mp2_hosted_runtime.py` (blockers by fixed code, scratch-only writes under a
+  write tripwire with its negative control, fresh-interpreter `import main`) and
+  `tests/test_mp2_hosted_real_pg.py` (login, admin dashboard and the Banco de dados page on real
+  PostgreSQL with zero writes outside scratch).
+- AC2 met. Same files: hosted secrets resolve from the environment, the machine store is neither
+  read nor written, the credential forms are read-only; local behaviour is unchanged.
+- AC3 met. `tests/test_mp2_pg_admin_page.py`: every file-maintenance route refuses before any effect
+  and the page lists nothing from disk and queries no task, with SQLite control arms.
+- AC4 met. `tests/test_mp2_auth_throttle.py` and `tests/test_mp2_throttle_real_pg.py`: two
+  independent hosted instances share the limit (the in-process memory limiter emptied first), a
+  blocked attempt writes nothing, success clears, pruning is scoped, bounded and never waits.
+- AC5 met. `tests/test_mp2_import_previews.py` and the real-PG contention test: no file, user-bound,
+  expiring, consumed by the import transaction (exactly one of six simultaneous confirmations applies).
+- AC6 met. `tests/test_mp2_schema_v16.py` (parity, v15 -> v16 chain, constraints) and the Path-B and
+  Layer-2 real-PG nodes.
+- AC7 met. `tests/test_mp2_scheduler.py`, `tests/test_mp2_scheduler_real_pg.py` (overlapping
+  invocations mirror each object once; a live lease is never taken) and the DEV rehearsal with the
+  real canonical adapter and a fake Drive (bounded passes, exact bytes, clean responses).
+- AC8 met. `tests/test_mp2_object_backup.py`, `tests/test_mp2_object_backup_real_pg.py` and the DEV
+  rehearsal: backup, offline and database verification, restore into a second run-owned bucket,
+  adoption, a conflict left untouched, corrupted byte / deleted file / extra file / truncated manifest /
+  missing and swapped source object each detected, CLI exit codes, leak audit clean, every bucket
+  removed.
+- AC9 met. Self-audit in the phase report; MP-1 I1-I5 hold (the I3 guard only gained members).
+
+Reviews: S1, S3, S4 and S5 each had an independent fresh-context R2 review and a targeted recheck
+after fixes; S2 had the R1 structured self-review. Slice 1 and slice 3 each had material findings
+(S3: a prune that ignored scope and window, four re-pinned guards), slice 5 had one (a repository
+guard defeated by a junction alias); all were fixed before landing. Mutation probes ran before every
+review and again after fixes (all killed, the survivors each answered with a discriminating test).
+
+Full suite (T5), detached once on the candidate tree (the commit that published slice 5): 5,227
+passed, 138 skipped (opt-in browser/visual contracts and two current-data rehearsals), 3 failed and
+6 collection errors. The 6 errors are the known `xlwt` baseline and 2 of the 3 failures are the
+recorded baseline (`TestSentinelSurvival`, the MX3 catalogue delta); the third was the template
+structure pin above, fixed and re-qualified by the 13 test files that read the template and the
+PostgreSQL page tests. Real-PG lanes ran (none skipped for a missing server).
+
+Residuals carried to `PROJECT_STATE.md`:
+
+- Vercel project, descriptor files, environment wiring, `maxDuration`, cron entry and platform rate
+  limiting (MP-3); Supabase PostgreSQL qualification, PITR, cross-environment proof (MP-3);
+- no live Google proof (D15 of MP-1) and no real census or convergence yet (MP-3);
+- scheduled object backup and an independent off-platform object copy;
+- a flood of distinct login keys writes one throttle row per request; the throttle check and the
+  failure record are separated by the password hash;
+- `main.py` still attaches a file handler when its directory is writable; the scratch path is
+  predictable on a shared POSIX temp directory; a report description is bounded only by the request size.
