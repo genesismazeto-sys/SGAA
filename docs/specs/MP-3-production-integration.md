@@ -751,7 +751,10 @@ PostgreSQL 17 lanes on; TEP trigger D after the dependency bump): 5,506 passed, 
 recorded baseline (`TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 -- it fails
 identically on the MP-2 closure `0287f94` -- and the backup-package test that needs the gitignored
 `database.db`). The earlier run on `d42a453` (before the bump) had 5,495 passed with the same
-three failures and six errors.
+three failures and six errors. Delta since that run (A14: the restore profile's placeholder schema, the
+live database module, records) touches no TEP section 7 invalidator and is qualified per section 6: the
+changed and consuming files were rerun (152 passed, 12 skipped without the live environment) and the
+live module ran 11 of 11 on Supabase DEV.
 
 Reviews: S1, S2, S3, S4 and S5 each had an independent fresh-context R2 review with a targeted
 recheck after fixes (S2 failed its first review on three findings and its recheck on one more, a
