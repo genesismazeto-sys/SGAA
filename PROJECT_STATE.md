@@ -52,9 +52,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- MP-3 production integration / cutover: ACTIVE, SPEC FROZEN and acknowledged with binding
-  amendments (`docs/specs/MP-3-production-integration.md`): zero recurring cost, Vercel Hobby,
-  Supabase Free, no paid backup. No PROD gate granted; E0/E1 preparation in progress.
+- MP-3 production integration / cutover: PREPARED_WITH_BLOCKERS
+  (`docs/specs/MP-3-production-integration.md` §17): zero recurring cost, Vercel Hobby, Supabase
+  Free, no paid backup. Executor scope landed (descriptors and deployment audit, fail-closed
+  authorization, restore profile and scheduled backups, cutover ledger, smoke, PONR detector,
+  runbook, DEV rehearsal). Pending: the R3 blind review and the user's inputs for the live lanes
+  (GA1 rehearsal project, GA4 DEV database credential). No PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -94,8 +97,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   it is a user gate.
 - The DEV rehearsal credential is still active outside the repository; the user
   revokes it when rehearsals end.
-- Real-PG lanes need `SGAA_PG_TEST_URL` (local PostgreSQL 15); without it they
-  skip and real-PG evidence is ABSENT. Full suite: ~5,000 tests, ~36 min; run
+- Real-PG lanes need `SGAA_PG_TEST_URL` (local PostgreSQL 15 or 17; the PROD major is 17);
+  without it they skip and real-PG evidence is ABSENT. Native client tools: `SGAA_PG_BIN_DIR`.
+  The live DEV rehearsal is opt-in: `SGAA_MP3_REHEARSAL=1` plus the DEV credential file. Full suite: ~5,000 tests, ~36 min; run
   detached with ≥5 GB free RAM, from a clean checkout (the project-root
   isolation guard fails the session when another process writes there).
 
@@ -116,5 +120,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | ACTIVE — SPEC FROZEN and acknowledged; E0/E1 preparation, no gate granted |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED_WITH_BLOCKERS — R3 review and GA1/GA4 inputs pending; no gate granted |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |

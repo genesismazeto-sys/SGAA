@@ -1,6 +1,7 @@
 # SPEC MP-3 — Production integration and cutover
 
-Status: FROZEN 2026-10-10; amended by the user's acknowledgement of the same day (§16)
+Status: FROZEN 2026-10-10; amended by the user's acknowledgement of the same day (§16);
+executor preparation complete, R3 review and the user's gates pending (§17)
 Charter: "Take the hosting-ready SGAA from qualified DEV architecture to a fully rehearsed,
 recoverable and production-ready Vercel + Supabase deployment, including the real-data
 cutover plan and the first live Drive mirror operation. MP-1 and MP-2 contracts and
@@ -459,12 +460,12 @@ money, is hard stop H3.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | planned |
-| 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | planned |
-| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | planned |
-| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | planned |
-| 5 | Cutover tooling and runbook: ledger, smoke, generator and harness, PROD qualification checklist, first-mirror procedure | `tools/cutover_ledger.py`, `tools/hosted_smoke.py`, runbook, tests | T1–T4; ledger mutation probes; R2 | planned |
-| 6 | Full DEV dress rehearsal and final candidate: S6 evidence plan, runbook amended with measured numbers, packet for R3, T5 | tests, runbook, docs | rehearsal index; T5; R3 PASS | planned |
+| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes BLOCKED on the DEV database credential (GA4) |
+| 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | landed (03cc05b); live Services qualification P1-P5 BLOCKED on GA1 |
+| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live negative probes BLOCKED on GA1 |
+| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 BLOCKED on the DEV database credential (GA4) |
+| 5 | Cutover tooling and runbook: ledger, smoke, generator and harness, PROD qualification checklist, first-mirror procedure | `tools/cutover_ledger.py`, `tools/hosted_smoke.py`, runbook, tests | T1–T4; ledger mutation probes; R2 | landed (646a6d0) |
+| 6 | Full DEV dress rehearsal and final candidate: S6 evidence plan, runbook amended with measured numbers, packet for R3, T5 | tests, runbook, docs | rehearsal index; T5; R3 PASS | landed; rehearsal on local PostgreSQL 17 + real DEV Storage; R3 pending |
 | 7 | Gated production execution C1–C14 | none in code; ledger and runbook | gate-by-gate evidence | gated |
 
 S1, S4 and S5 do not depend on GA1; a missing GA1 is a BLOCKER for S2/S6 only. Landing order S1, S4,
@@ -650,4 +651,47 @@ Executor amendments (consequences of the above; not material beyond what the use
 
 ## 17. Closure
 
-Filled in the last slice.
+Level reached: **PREPARED_WITH_BLOCKERS** -- every executor-side deliverable is landed and
+evidenced; the closure level *Prepared* of §13 additionally needs the R3 PASS and the lanes below
+that only the user's inputs can unblock. No gate was granted or performed; nothing touched PROD,
+the institution's Drive or real student data; no cost was incurred.
+
+Slices (landing order 1, 3, 2, 4, 5, 6): S1 `ff3c2ff`, S3 `b22a7b9`, S2 `03cc05b`, S4 `4a1940f`,
+S5 `646a6d0`, S6 the rehearsal harness and this closure.
+
+Acceptance:
+
+| AC | State | Evidence / what is missing |
+|---|---|---|
+| AC1 | PARTIAL | Export and audit with negative controls (`tests/test_mp3_deploy_audit.py`, descriptor tests). BLOCKED: running the web and scheduler functions on a Hobby rehearsal project (P1-P5) needs the user's rehearsal project (GA1). |
+| AC2 | PARTIAL | PostgreSQL 17.11 passes the real-PG families locally and the probe shows the DEV Data API behaviour. BLOCKED: pooler and session lanes against Supabase DEV need its database credential (GA4). |
+| AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels. BLOCKED: the live rate-limit and scheduler probes (GA1); R3 verdict pending. |
+| AC4 | PARTIAL | Layer-2 and object-set backup, verify and restore, the Supabase restore profile on a project-shaped target, `ops_backup` sequencing with registry rotation, corrupted-backup refusal (`test_mp3_rehearsal_live.py`). BLOCKED: restore of a set taken on the managed platform into another environment (DR1) and of a foreign set into the managed DEV target (DR3) need GA4; RTO on the platform is therefore not measured. |
+| AC5 | MET | `test_mp3_cutover_ledger.py` (order, gates, identities, rollback from every state before C13 including C12, PONR, head binding), `test_mp3_rehearsal_live.py` (C0..C14 end to end on real DEV Storage and PostgreSQL 17, a killed converge resumed, a foreign object at a key never overwritten and refused by the ledger, a corrupted backup refused, an offline v15 -> v16 upgrade), `test_mp3_smoke_real_app.py` (the smoke writes no business row on the real application), `test_mp2_scheduler_real_pg.py` (duplicate invocations). Not injected live: unavailable Drive and wrong secret (covered at unit level by MP-1/MP-2 and the scheduler's 401), failed deployment and commit-uncertain (unit level: `COMMIT_UNCERTAIN_NOT_RESOLVED`). |
+| AC6 | GATED | S7 is executed only through the gates. |
+| AC7 | MET | Self-audit in the phase report. |
+
+Measured (workstation to DEV Storage, us-east-1; synthetic, production-shaped, 11 documents):
+convergence 1.5 s per object including upload, byte verification and link; the whole C0..C14
+rehearsal under one minute. The maintenance window of C2 is twice `objects x 1.5 s` plus the
+fixed steps. Real data will change these numbers; the census at C2 re-derives them.
+
+Reviews: S1, S2, S3, S4 and S5 each had an independent fresh-context R2 review with a targeted
+recheck after fixes (S2 failed its first review on three findings and its recheck on one more, a
+sentinel file written with a BOM; all fixed with tests before landing; S4 and S5 passed the recheck
+with non-material items, which were fixed too). Mutation: probes before every review; a final
+guard-neutralisation sweep over `cutover_ledger`, `ops_backup` and `deploy_audit` killed every
+mutant (it found eleven untested refusals and, through a new test, one real defect: a ledger line
+holding a JSON list crashed instead of failing as a broken chain). R3 (blind cross-family review)
+is run by the user from the packet and is pending.
+
+Findings of this phase worth carrying: a fresh Supabase project exposes every public object to the
+Data API roles and PostgreSQL grants `EXECUTE` on new functions to PUBLIC (HOSTED_RUNTIME §11);
+the Supabase schema root is closed to publishable keys, so a root-only Data API check passes on an
+enabled API; the first sign-in rewrites legacy-level student rows and a legacy-hash login bumps the
+credential version (known derived writes the PONR detector reports and the operator adjudicates).
+
+Inputs the user must provide to unblock the PARTIAL lanes (none is a gate by itself): a Vercel
+Hobby rehearsal project (GA1), the DEV database credential through the libpq password file (GA4),
+and a decision on bumping `cryptography` with `msal` together (A8).
+

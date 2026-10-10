@@ -42,6 +42,16 @@ that would cost money is not performed; stop and say so.
    --evidence <json>` with `commit`, `runbook_sha256`, `rehearsal_index_sha256`,
    `review_verdict` (`PASS`).
 
+## 1b. Measured numbers (DEV dress rehearsal, synthetic production-shaped data)
+
+- Convergence into Supabase Storage from the workstation: 1.5 s per object (11 documents in
+  16.6 s: read, upload, byte verification, link). The window of C2 is twice
+  `objects x 1.5 s` plus the fixed steps; the census at C2 gives `objects`.
+- The whole C0..C14 rehearsal, including a real restore drill into scratch PostgreSQL, runs in
+  under one minute at this size; the data-dependent steps are convergence, Path-B and the
+  restore drill, which scale with rows and bytes.
+- These are lower bounds from a small synthetic set: record the real figures from C5 and C8.
+
 ## 2. States
 
 ### C1 PROD_QUALIFIED — gates GP0, GP1, GP2
