@@ -724,11 +724,14 @@ convergence 1.5 s per object including upload, byte verification and link; the w
 rehearsal under one minute. The maintenance window of C2 is twice `objects x 1.5 s` plus the
 fixed steps. Real data will change these numbers; the census at C2 re-derives them.
 
-Full suite (T5), chunked in six fresh interpreters from a clean checkout of the candidate (`d42a453`,
-bumped dependencies, PostgreSQL 17 lanes on): 5,495 passed, 149 skipped, 3 failed, 6 collection
-errors. The 6 errors are the `xlwt` baseline and the 3 failures are the recorded baseline
-(`TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 -- it fails identically on the MP-2
-closure `0287f94` -- and the backup-package test that needs the gitignored `database.db`).
+Full suite (T5), chunked in six fresh interpreters from a clean checkout of the candidate `5786459`
+(clean virtual environment from `requirements.txt` with `cryptography` 50.0.2 and `msal` 1.37.0,
+PostgreSQL 17 lanes on; TEP trigger D after the dependency bump): 5,506 passed, 149 skipped,
+3 failed, 6 collection errors. The 6 errors are the `xlwt` baseline and the 3 failures are the
+recorded baseline (`TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 -- it fails
+identically on the MP-2 closure `0287f94` -- and the backup-package test that needs the gitignored
+`database.db`). The earlier run on `d42a453` (before the bump) had 5,495 passed with the same
+three failures and six errors.
 
 Reviews: S1, S2, S3, S4 and S5 each had an independent fresh-context R2 review with a targeted
 recheck after fixes (S2 failed its first review on three findings and its recheck on one more, a
