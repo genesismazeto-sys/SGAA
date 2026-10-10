@@ -52,9 +52,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- MP-3 production integration / cutover: ACTIVE, SPEC FROZEN
-  (`docs/specs/MP-3-production-integration.md`), awaiting the R3 SPEC acknowledgement.
-  No implementation and no PROD action before it.
+- MP-3 production integration / cutover: ACTIVE, SPEC FROZEN and acknowledged with binding
+  amendments (`docs/specs/MP-3-production-integration.md`): zero recurring cost, Vercel Hobby,
+  Supabase Free, no paid backup. No PROD gate granted; E0/E1 preparation in progress.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -65,11 +65,11 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - Production web runtime: DEFERRED. The application is hosting-ready in code and
   rehearsed on DEV; nothing is deployed.
 - Open before production, assigned in the roadmap (MP-3 unless stated):
-  - Vercel project and descriptor files, environment wiring, region and
-    `maxDuration`, the cron entry, platform rate limiting / WAF in front of the
-    login (a flood of distinct keys still writes a throttle row per request);
-  - Supabase PostgreSQL version and empty-target qualification, Layer-1 backup /
-    PITR, cross-environment backup/restore proof, `SUPABASE_DATA_API_DISABLED`;
+  - Vercel Hobby project and descriptor files, environment wiring, region and
+    `maxDuration`, the daily cron entry, the one Hobby rate-limit rule in front of
+    the login (a flood of distinct keys still writes a throttle row per request);
+  - Supabase PostgreSQL 17 and empty-target qualification, cross-environment
+    backup/restore proof (Layer-1 backup / PITR is paid and out), `SUPABASE_DATA_API_DISABLED`;
   - real-data census and legacy convergence, including decisions on terminal
     legacy rows and unsupported legacy content;
   - a first supervised live Drive mirror run (no DEV Google environment exists);
@@ -116,5 +116,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | ACTIVE — SPEC FROZEN, awaiting acknowledgement |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | ACTIVE — SPEC FROZEN and acknowledged; E0/E1 preparation, no gate granted |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |

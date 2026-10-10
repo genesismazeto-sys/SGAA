@@ -10,10 +10,10 @@ Tests: `tests/test_pg_backup_tool.py` (no database),
 
 | Layer | What | Owner | Status |
 |---|---|---|---|
-| 1 | Provider-managed backups / PITR (Supabase) | provider configuration | production configuration pending |
+| 1 | Provider-managed backups / PITR (Supabase) | provider configuration | not available on the Free plan the deployment uses (paid feature); not an acceptance requirement |
 | 2 | Operator-controlled logical backup of SGAA-owned objects, retained independently of the provider | this runbook | implemented, restore proven locally |
 
-Layer 2 is **mandatory** even when Layer 1 exists. A Layer-2 artifact is an
+Layer 2 is **mandatory** and, on the Supabase Free plan, the only database backup (Layer 1 does not exist there). A Layer-2 artifact is an
 **SGAA application backup**: the SGAA objects in schema `public` only
 (39 tables incl. `pg_schema_meta`, 23 identity sequences, 15 functions,
 constraints, 59 explicit indexes, 17 triggers; all rows except the four
@@ -400,8 +400,10 @@ database (behaviour probes run on clones).
 * **Cross-environment proof (required before production)**: take a Layer-2
   artifact **from the actual Supabase project**, verify it, restore it into a
   new database, `verify --restored`, clone probes, smoke.
-* Layer 1 (provider backups / PITR) is configured separately; it does not
-  replace this runbook.
+* Layer 1 (provider backups / PITR) is a paid provider feature and is not used
+  on the Free plan; Layer 2, the object set (`docs/HOSTED_RUNTIME.md` §10),
+  at least two generations, an encrypted off-platform copy and restore drills
+  are the recovery posture, and the achievable RPO is the backup cadence.
 
 ## Exit codes
 
