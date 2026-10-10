@@ -52,7 +52,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- Next: MP-3 production integration — awaits its charter.
+- MP-3 production integration / cutover: ACTIVE, SPEC FROZEN
+  (`docs/specs/MP-3-production-integration.md`), awaiting the R3 SPEC acknowledgement.
+  No implementation and no PROD action before it.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -114,5 +116,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | NOT STARTED |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | ACTIVE — SPEC FROZEN, awaiting acknowledgement |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
