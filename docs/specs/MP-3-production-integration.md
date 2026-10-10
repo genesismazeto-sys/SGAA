@@ -607,6 +607,46 @@ Executor amendments (consequences of the above; not material beyond what the use
   (`RUN_IN_PROGRESS`) and the baseline label are refused; the restore profile admits the provider's
   `postgres` database only under `--target-profile supabase` (a restore target on a managed provider),
   never by default. Not material.
+- A10 2026-10-10 — Slice 5. The PONR reference fingerprint is taken at C12 (the opening), not C8: the
+  Drive connection and the first mirror passes of C11 change PROD without being business writes. The
+  detector is `tools/pg_fingerprint.py` (business tables = Path-B MIGRATE_EXACT minus `storage_objects`,
+  whose mirror columns change on their own; the digests are the Layer-2 table digests). `hosted_smoke`
+  and `cutover_ledger` are operator tools like the others. Review-driven revisions (2026-10-10): the
+  fingerprint (format 2) also excludes `requisicao_alerta_receipts` (written when an administrator only
+  views the dashboard) and the column `usuarios.senha` (re-hashed on login; a real password change also
+  changes `usuario_credenciais`, which is included), and reports per table and column the rows added,
+  removed and changed -- names and counts, never a value; a delta is a candidate that the OPERATOR
+  adjudicates (C13 evidence `adjudicated_by_operator`, `current_fingerprint_sha256`), never proof. The
+  ledger binds every command to the chain head (`--expect-head`, `HEAD_MISMATCH`), serializes writers
+  (`LEDGER_BUSY`), requires, to roll back from C12, a current fingerprint equal to the opening one, and
+  refuses rollback-only gates after C13. The smoke signs in against `/csrf-token`, never the dashboard
+  (whose view writes receipts and may derive a rejection), requires the publishable key for the Data API
+  check and compares the valid-key answer with a bogus-key control. `deploy_audit export` verifies every
+  file against the commit's blob id (`EXPORT_NOT_THE_COMMIT`) with line-ending conversion off, so the
+  deployed bytes are the reviewed ones whatever the workstation's `core.autocrlf`. Observed on the real
+  application (PG17): the first sign-in normalizes student rows that kept the legacy access level, a
+  derived write that C10 precedes and C12 follows. Not material.
+- A11 2026-10-10 — Slices 2/4/5 recheck. (1) The sentinel file may be UTF-8 with or without a BOM or
+  UTF-16 (the Windows shells write all three) and each token is searched in UTF-8 and both UTF-16 byte
+  orders; the export fails (`EXPORT_INCOMPLETE`) when an allowlisted committed file is not in the archive
+  (an `export-ignore` attribute would otherwise ship a smaller tree). (2) A damaged generation registry is
+  refused before any step runs (it is never read as empty), a lock older than six hours is taken over,
+  and the provider's `postgres` database is a restore target under the supabase profile only with the
+  provider's `auth`, `storage` and `extensions` schemas present. (3) The legacy-hash re-hash also changes
+  `usuario_credenciais.auth_version`/`atualizado_em`, which the fingerprint includes: it is a known
+  derived write the operator adjudicates (a real password change has the same signature); the
+  fingerprint file holds per-cell digests and is personal data in custody. (4) The ledger command line
+  refuses `grant`, `advance` and `rollback` without `--expect-head` (`HEAD_REQUIRED`); the C12 rollback
+  proof is a snapshot FILE (valid, untampered, carrying its own time of taking, later than the last
+  entry), and a changed fingerprint
+  may be rolled back only with the operator's recorded adjudication naming the derived classes. (5) One
+  gate is added for what the PONR leaves possible: `GF1`, a forward-fix deployment, valid only after C13
+  and once per user message (it grants nothing by itself). (6) The data-API check asks the schema root
+  and one table, and its positive control (a project with the API on must FAIL it) is part of the
+  runbook; observed on the DEV project (API on): the schema root answers 401 to the valid and to a
+  bogus key alike (it is closed to publishable keys, so a root-only check passes on an enabled API),
+  while a table answers 404 to the valid key and 401 to the bogus one -- the check fails there, as it must. (7) The derived `unconverged` class names reach 60 characters, so the class cap is 64.
+  Not material.
 
 ## 17. Closure
 

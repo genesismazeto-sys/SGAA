@@ -38,9 +38,12 @@ explicitly authorized governance change.
 ## Current reference documents (accurate for their subsystem)
 
 - `docs/HOSTED_RUNTIME.md` — hosted-runtime contract: mode, startup blockers,
-  variables, filesystem rules, readiness check (owner: `app/hosting.py`).
+  variables, filesystem rules, readiness check, platform exposure, security
+  posture and deployment on Vercel Hobby (owner: `app/hosting.py`).
 - `docs/PG_BACKUP_RESTORE_RUNBOOK.md` — PostgreSQL Layer-2 backup/restore
-  operator runbook.
+  operator runbook, the Supabase restore profile and scheduled generations.
+- `docs/PRODUCTION_CUTOVER_RUNBOOK.md` — the MP-3 cutover procedure: states,
+  gates, rollback and the point of no return (authority: its SPEC).
 - `docs/PRE_GO_LIVE_PROD1_RESET_CUTOVER_RECORD.md` — PROD-1 database reset
   record; Phase C (production web runtime) deferral.
 - `docs/refactor/PYTEST_CUSTODY_EXTERNAL_WRITER_CONTRACT.md` — full-suite
