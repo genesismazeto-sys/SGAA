@@ -51,7 +51,7 @@ either bypassable or locks every user out together.
 | Variable | Hosted use | Secret |
 |---|---|---|
 | `SGAA_RUNTIME` | `hosted` | no |
-| `DATABASE_URL` | Supabase pooler or direct URL; no password in logs | yes |
+| `DATABASE_URL` | the web and scheduler functions use the Supabase **transaction pooler** (port 6543; the application disables prepared statements and keeps no session state). Operator tools that need one session (Layer-2 backup and restore, Path-B, convergence runs) use the direct or the session-pooler address and a libpq password file; Layer-2 refuses a transaction-pooler address. No password in logs | yes |
 | `SGAA_PG_CONNECT_TIMEOUT` | seconds, default 10; ignored when the URL carries `connect_timeout` or `PGCONNECT_TIMEOUT` is set | no |
 | `APP_SECRET_KEY` | session and CSRF signing; at least 24 characters, not a published value | yes |
 | `TRUST_PROXY_XFF` | `0` or `1` | no |
@@ -87,7 +87,10 @@ Prints one value-free JSON report: the mode, whether the process would start (th
 blockers by code and variable name, or the class of an unexpected startup error),
 the scheduler state, and with `--database` the connected schema version against
 the code's target (`--database` needs a PostgreSQL `DATABASE_URL` and never opens
-a SQLite file). Exit 0 ready, 1 not ready, 2 usage. It builds the application as
+a SQLite file). With `--database` the report also names the connection kind
+(`direct`, `pooler_session`, `pooler_transaction`; never the host) and the API
+exposure of the schema (section 11); exposure that is not clean is "not ready".
+Exit 0 ready, 1 not ready, 2 usage. It builds the application as
 a start does, so a local-mode check creates the local directories a local start
 creates. Run it with the target environment before promoting a deployment. `/health` additionally fails when the
 hosted database is not at the code's schema version.
@@ -228,3 +231,53 @@ an integrity check, not authenticity, so keep the set where it cannot be altered
 - Reports carry counts, ids and fixed codes only: no key, URL, file name or byte.
 - Residual: scheduled object backup and restore from the Drive mirror are not
   provided; the operator set is the only copy beyond the provider's own protection.
+
+## 11. Platform exposure (managed PostgreSQL with an HTTP data API)
+
+SGAA reaches its database only through PostgreSQL connections as the schema
+owner. A managed platform also maps an HTTP data API onto its own roles (on Supabase
+`anon`, `authenticated`, `service_role`) and, by default, grants those roles every
+new table, sequence and function. The API being switched off is not the only
+defence: the grants are removed as well, so re-enabling the API by mistake exposes
+nothing.
+
+Three proofs, all recorded before real data is loaded:
+
+1. the project's Data API toggle is off (a user action in the provider dashboard);
+2. the API endpoint answers "not served" to a request with the publishable key;
+3. `python -m app.hosting_cli check --database` reports `api_exposure.clean: true`:
+   no table (including a column-level grant), sequence or non-trigger function is
+   reachable by a probed role, no default-privilege entry would hand it a future
+   object, and a new function is not executable by PUBLIC by default.
+
+The probe names the roles in `pg_schema.API_ROLES` (the Supabase API roles); a
+platform whose API roles are named otherwise needs them added, and a cluster
+without those roles reports nothing probed.
+
+Procedure, as the schema-owning role, before `python -m app.pg_schema provision`
+and again after it (a clean probe is the acceptance, not the statements):
+
+```
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES    FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated, service_role;
+```
+
+The fourth statement is the global form on purpose: PostgreSQL grants EXECUTE on a
+new function to PUBLIC by built-in default, and a per-schema entry can only add to
+the global defaults, never remove that grant. It applies to functions the current
+role creates later. Run the statements as the schema-owning role (the one that
+provisions). The platform also keeps default-privilege entries for its own roles
+(`supabase_admin`); they apply to objects those roles create, cannot reach objects the
+owner creates, and the probe counts only the connected role's entries.
+
+The owner keeps its own privileges, so the runtime, the triggers and the schema
+contract are unaffected (`tests/test_mp3_api_exposure_real_pg.py`). The recipe
+protects the objects that exist and those the owner creates afterwards; the probe,
+not the statements, is the acceptance. Layer-2 dumps with `--no-privileges`, so a
+restore into a managed project needs this procedure again before the application
+opens.

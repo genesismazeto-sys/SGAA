@@ -133,6 +133,50 @@ def scheduler_secret_configured(environ=None) -> bool:
     return cron_secret(environ) is not None
 
 
+SUPABASE_POOLER_SUFFIX = ".pooler.supabase.com"
+SUPABASE_TRANSACTION_PORT = 6543
+
+
+def connection_kind(url: str) -> str:
+    """``direct``, ``pooler_session``, ``pooler_transaction`` or ``unknown`` -- never the host.
+
+    A managed platform's shared pooler serves a transaction-mode port beside a
+    session-mode one.  Transaction mode keeps no session state and no prepared
+    statements: right for the web and scheduler functions, wrong for a tool that
+    needs one session (a snapshot dump, a restore), which accepts only ``direct``
+    and ``pooler_session``.  The address is read as libpq reads it (query
+    overrides, percent-encoding); a list of hosts is ``unknown``.
+    """
+    try:
+        from psycopg.conninfo import conninfo_to_dict
+
+        info = conninfo_to_dict(str(url or ""))
+    except Exception:
+        # No parser (or an unparseable value) is never "direct": callers that need
+        # one session refuse `unknown`.
+        return "unknown"
+    host = str(info.get("host") or "").strip().lower().rstrip(".")
+    port = str(info.get("port") or "").strip()
+    if not host or "," in host or "," in port or "service" in info or "hostaddr" in info:
+        # A host taken from the environment, a service file or a pinned address is not
+        # the address the URL shows.
+        return "unknown"
+    if not port and os.environ.get("PGPORT"):
+        return "unknown"  # the port would come from the environment, not from the URL
+    if port:
+        try:
+            number = int(port)  # libpq reads ``06543`` and ``+6543`` as 6543
+        except ValueError:
+            return "unknown"
+        if not 1 <= number <= 65535:
+            return "unknown"
+    else:
+        number = 5432
+    if not host.endswith(SUPABASE_POOLER_SUFFIX):
+        return "direct"
+    return "pooler_transaction" if number == SUPABASE_TRANSACTION_PORT else "pooler_session"
+
+
 def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
     """Hosted-only conditions that make starting wrong.
 
@@ -180,6 +224,9 @@ __all__ = [
     "Blocker",
     "CRON_SECRET_ENV",
     "CRON_SECRET_MIN_LENGTH",
+    "SUPABASE_POOLER_SUFFIX",
+    "SUPABASE_TRANSACTION_PORT",
+    "connection_kind",
     "cron_secret",
     "HOSTED_POSTGRES_REQUIRED",
     "HOSTED_PROXY_TRUST_UNDECIDED",

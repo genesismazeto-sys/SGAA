@@ -379,14 +379,20 @@ database (behaviour probes run on clones).
   data is loaded: **`SUPABASE_DATA_API_DISABLED`**, unless a future
   architecture explicitly introduces Data API access with its own
   authorization/RLS review. RLS is not implemented across SGAA for an unused
-  API surface.
+  API surface. The proof is the three-part check of `docs/HOSTED_RUNTIME.md`
+  §11 (toggle, endpoint probe, privileges revoked and `hosting_cli check
+  --database` clean): the platform's default privileges hand the API roles every
+  new SGAA object, so the revocation is part of provisioning.
 * **Major version**: do not assume PG15 or PG17. Read `server_version_num`;
   use native clients with major ≥ server major; re-run the materially
   relevant PG qualification (schema authority, E-PG1/E-PG2, route smoke,
   Path-B, this module) on that major.
 * **Connection**: use a direct (or session-mode) connection for backup and
   restore; `pg_export_snapshot` / `--snapshot` need one session held for the
-  whole dump, which transaction-mode pooling does not give.
+  whole dump, which transaction-mode pooling does not give. The tool refuses a
+  transaction-mode pooler address however it is spelled (`SOURCE_TRANSACTION_POOLER`,
+  `TARGET_TRANSACTION_POOLER`; the address is read as libpq reads it) and a list of
+  hosts.
 * **Same contract**: `--schema=public`, `--no-owner`, `--no-privileges`;
   provider schemas are never dumped; the TOC check refuses anything else
   (including extension objects created in `public`).

@@ -24,10 +24,10 @@ appending a change would make an owner worse, a proportional local refactor
 | Connections, transactions, lock helpers (incl. `skip_locked`), database-error classification | `app/db.py` (`get_db_connection`, `write_transaction`, `lock_*`, `classify_database_error`) |
 | SQL that differs between SQLite and PostgreSQL | `app/sql_dialect.py` |
 | SQLite schema and migrations | `app/prod1_schema.py` + `app/prod1_<topic>_ddl.py` / `app/prod1_<topic>_vNN.py` |
-| PostgreSQL schema | `app/pg_schema.py` |
+| PostgreSQL schema, including the read-only provider API-role exposure probe (`api_role_exposure`) | `app/pg_schema.py` |
 | SQLite → PostgreSQL cutover; PostgreSQL logical backup | `app/pg_migrate_from_sqlite.py`; `tools/pg_backup.py` (operator tool, never imported by `app/`) |
 | SQLite file backup | `app/backup/` (`capability.py` decides whether it applies) |
-| Hosted-runtime mode, scratch space, startup blockers | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |
+| Hosted-runtime mode, scratch space, startup blockers, the connection-kind classifier | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |
 | Machine-local secrets (DPAPI store); environment-only when hosted | `app/machine_secrets.py` (consulted through `app/cloud_config.py`; `app/cloud_credentials.py` is the product-level write path) |
 | Login / recovery throttling (hosted: durable) | `app/auth_throttle.py` selects the store; the in-memory limiters stay in `app/auth.py` and `app/password_recovery_limiter.py`; hosted rows in `auth_throttle_events` |
 | Short-lived administrator import-preview state | `app/import_previews.py` (`admin_import_previews`) |

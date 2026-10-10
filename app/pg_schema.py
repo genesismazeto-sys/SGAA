@@ -3283,6 +3283,115 @@ def pg_schema_status(connection):
 
 
 # ---------------------------------------------------------------------------
+# read-only provider API exposure probe
+# ---------------------------------------------------------------------------
+
+# Roles a managed PostgreSQL platform maps its HTTP data API onto.  SGAA only
+# ever connects as the schema owner, so none of them needs any privilege on the
+# SGAA objects; a platform's default privileges hand them everything.
+API_ROLES = ("anon", "authenticated", "service_role")
+_ROLE_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}")
+
+
+def _scalar(connection, sql):
+    return _fetch(connection, sql)[0][0]
+
+
+def _count_relations(connection, relkinds, predicate):
+    # The privilege functions raise for a relation of the wrong kind and the planner
+    # may evaluate them before the kind filter, so the kind is tested inside a CASE.
+    kinds = ",".join(f"'{kind}'" for kind in relkinds)
+    return int(_scalar(
+        connection,
+        "SELECT count(*) FROM pg_catalog.pg_class c "
+        "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+        f"WHERE n.nspname = current_schema() AND CASE WHEN c.relkind IN ({kinds}) "
+        f"THEN {predicate} ELSE false END",
+    ))
+
+
+def api_role_exposure(connection, roles=None):
+    """Which SGAA relations and functions the platform's API roles can reach.
+
+    Read-only and value-free.  For every probed role that exists in the cluster:
+    the tables (a table or any column privilege), sequences and non-trigger
+    functions it can use today, and the default-privilege entries that would
+    hand it every FUTURE object (only entries of the connected role count: it is
+    the role that creates SGAA objects, and another role's defaults cannot reach
+    them).  ``function_default_public_execute`` reports
+    PostgreSQL's built-in default (a new function is executable by PUBLIC),
+    which no per-schema entry can remove.  ``clean`` means none of it.
+
+    Limits: only the roles named in ``API_ROLES`` are probed, and a role absent
+    from the cluster (plain PostgreSQL) is not probed -- a platform whose API
+    roles have other names needs them listed.  ``roles`` exists for tests; the
+    pseudo-role ``public`` is probed by name.
+    """
+    requested = tuple(API_ROLES if roles is None else roles)
+    for role in requested:
+        if not _ROLE_NAME.fullmatch(role):
+            raise PostgresSchemaError("API role names must be plain lower-case identifiers")
+    _current_schema(connection)
+    existing = {str(row[0]) for row in _fetch(connection, "SELECT rolname FROM pg_catalog.pg_roles")}
+    existing.add("public")
+    probed = [role for role in requested if role in existing]
+    table_privileges = "SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER"
+    if int(_scalar(connection, "SELECT current_setting('server_version_num')::int")) >= 170000:
+        table_privileges += ",MAINTAIN"
+    exposed = {}
+    for role in probed:
+        grantee = "0" if role == "public" else f"(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = '{role}')"
+        exposed[role] = {
+            "tables": _count_relations(
+                connection, "rpmv",
+                f"(pg_catalog.has_table_privilege('{role}', c.oid, '{table_privileges}') "
+                f"OR pg_catalog.has_any_column_privilege('{role}', c.oid, 'SELECT,INSERT,UPDATE,REFERENCES'))",
+            ),
+            "sequences": _count_relations(
+                connection, "S",
+                f"pg_catalog.has_sequence_privilege('{role}', c.oid, 'USAGE,SELECT,UPDATE')",
+            ),
+            # Trigger functions cannot be called as RPC; every other function can
+            # when the API reaches the schema.
+            "functions": int(_scalar(
+                connection,
+                "SELECT count(*) FROM pg_catalog.pg_proc p "
+                "JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace "
+                "WHERE n.nspname = current_schema() "
+                "AND p.prorettype <> 'pg_catalog.trigger'::regtype "
+                f"AND pg_catalog.has_function_privilege('{role}', p.oid, 'EXECUTE')",
+            )),
+            "default_privileges": int(_scalar(
+                connection,
+                "SELECT count(*) FROM pg_catalog.pg_default_acl d "
+                "LEFT JOIN pg_catalog.pg_namespace n ON n.oid = d.defaclnamespace "
+                "WHERE (d.defaclnamespace = 0 OR n.nspname = current_schema()) "
+                "AND d.defaclobjtype IN ('r','S','f') "
+                "AND d.defaclrole = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user) "
+                "AND EXISTS (SELECT 1 FROM pg_catalog.aclexplode(d.defaclacl) a "
+                f"WHERE a.grantee = {grantee})",
+            )),
+        }
+    public_execute_default = True
+    if probed:
+        revoked = int(_scalar(
+            connection,
+            "SELECT count(*) FROM pg_catalog.pg_default_acl d "
+            "WHERE d.defaclnamespace = 0 AND d.defaclobjtype = 'f' "
+            "AND d.defaclrole = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user) "
+            "AND NOT EXISTS (SELECT 1 FROM pg_catalog.aclexplode(d.defaclacl) a WHERE a.grantee = 0)",
+        ))
+        public_execute_default = revoked == 0
+    return {
+        "roles_probed": probed,
+        "exposed": exposed,
+        "function_default_public_execute": public_execute_default if probed else False,
+        "clean": all(not any(counts.values()) for counts in exposed.values())
+        and not (probed and public_execute_default),
+    }
+
+
+# ---------------------------------------------------------------------------
 # explicit provisioning
 # ---------------------------------------------------------------------------
 

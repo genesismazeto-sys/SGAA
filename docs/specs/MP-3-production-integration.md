@@ -316,7 +316,8 @@ recommended defaults and are batched with the gates in §10.
 ## 6. Scope
 
 - Allowed: root deployment descriptors; `tools/` (the four new tools of §3.2 and `pg_backup`);
-  `app/web/authz_gate.py`; `app/hosting_cli.py`; deployment-facing parts of `app/__init__.py` if a
+  `app/web/authz_gate.py`; `app/hosting_cli.py`; `app/hosting.py` and `app/pg_schema.py`
+  (read-only probe and classifier, A6); deployment-facing parts of `app/__init__.py` if a
   qualification proves them necessary; `docs/` governance, runbooks and `HOSTED_RUNTIME`;
   `ENGINEERING_STANDARDS.md` §2 owner facts; `PROJECT_STATE.md`; `tests/` (new `mp3` modules and
   support; existing guards only where §3.6 declares a change).
@@ -557,6 +558,18 @@ Executor amendments (consequences of the above; not material beyond what the use
 - A4 2026-10-10 — A capacity and pause precondition is added at C1 and C2 (§3.3, D16).
 - A5 2026-10-10 — `docs/PG_BACKUP_RESTORE_RUNBOOK.md` (Layer 1 and §Q) is reconciled with the Free
   plan in the same change: provider backups and PITR are not available and not required.
+- A6 2026-10-10 — Slice 1. (a) The engine SQL of the exposure probe lives in `app/pg_schema.py`
+  (the schema owner, ES §5) and the connection classifier in `app/hosting.py`; §6 and slice 1 are
+  widened to both files, read-only, no contract change (R2 review M2). (b) The Supabase DEV default
+  ACLs (read through the provider API) grant `anon`, `authenticated` and `service_role` every
+  privilege on new tables, sequences and functions in `public`, so the revocation recipe is part of
+  provisioning and `hosting_cli check --database` is not ready while those roles reach the schema,
+  including column grants, future-object default entries and PostgreSQL's built-in PUBLIC EXECUTE on
+  new functions (review M1, N3). (c) PostgreSQL 17.11 passes the real-PG families (the two failures
+  were pins of the major, now major-aware); the PG15 lane stays. (d) Layer-2 refuses a
+  transaction-pooler address and a list of hosts. (e) The real-PG lanes against the Supabase DEV
+  database (pooler and session modes) need the DEV database credential, a user-only input recorded as
+  a BLOCKER for that sub-lane; every other S1 lane ran. Not material.
 
 ## 17. Closure
 

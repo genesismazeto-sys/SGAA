@@ -458,7 +458,9 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["source"]["database"] == source and manifest["source"]["system_identifier"]
     assert set(manifest["source"]) == {"backend", "host", "port", "database", "user", "server_version",
                                        "system_identifier"}
-    assert manifest["server"]["major"] == manifest["native_tools"]["pg_dump"]["major"] == 15
+    # The native client matches the server (the tool refuses an older client); 15 is the
+    # persistent local lane and 17 the managed platform's major (MP-3 S1).
+    assert manifest["server"]["major"] == manifest["native_tools"]["pg_dump"]["major"] in (15, 17)
     assert manifest["consistency"]["mode"] == "exported_snapshot"
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION

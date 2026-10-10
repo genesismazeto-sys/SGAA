@@ -127,7 +127,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from app import pg_migrate_from_sqlite as pathb  # noqa: E402
-from app import pg_schema  # noqa: E402
+from app import hosting, pg_schema  # noqa: E402
 
 MANIFEST_FORMAT = "sgaa-pg-logical-backup"
 MANIFEST_FORMAT_VERSION = 2
@@ -269,6 +269,15 @@ def require_url(value, env_name) -> str:
         )
     if not unquote(parts.path.lstrip("/")):
         raise Refused(f"{role}_URL_INVALID", f"{env_name} must name a database explicitly")
+    kind = hosting.connection_kind(url)
+    if kind == "pooler_transaction":
+        # A snapshot dump and a single-transaction restore each need one backend session.
+        raise Refused(
+            f"{role}_TRANSACTION_POOLER",
+            f"{env_name} reaches a transaction-mode pooler; use the direct or the session-mode address",
+        )
+    if kind not in {"direct", "pooler_session"}:
+        raise Refused(f"{role}_URL_AMBIGUOUS", f"{env_name} must name exactly one host and port")
     return url
 
 

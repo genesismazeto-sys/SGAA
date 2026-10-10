@@ -2,9 +2,11 @@
 
 ``check [--database]`` reports whether a process with the CURRENT environment
 would start and, with ``--database``, whether the connected PostgreSQL schema is
-the code's target.  One value-free JSON line on stdout: the mode, the blockers
-by code and variable name (or the class of an unexpected startup error), the
-scheduler state, and the schema versions.  It builds the application exactly as
+the code's target and whether the platform's HTTP-API roles can reach any SGAA
+object.  One value-free JSON line on stdout: the mode, the blockers by code and
+variable name (or the class of an unexpected startup error), the scheduler
+state, the schema versions, the connection kind and the API exposure counts.  It
+builds the application exactly as
 a start does, so a local-mode check creates the local directories a local start
 creates; it opens no SQLite file: ``--database`` needs PostgreSQL
 (``DATABASE_REQUIRES_POSTGRES``).
@@ -23,14 +25,18 @@ from app import hosting
 
 
 def _database_report(app_db) -> dict:
+    from app import pg_schema
     from app.db_maintenance import get_schema_status
 
     conn = app_db.get_db_connection()
     try:
         status = get_schema_status(conn)
         version, target = int(status["schema_version"]), int(status["target_schema_version"])
+        exposure = pg_schema.api_role_exposure(conn)
         return {"backend": "postgres", "schema_version": version,
-                "target_schema_version": target, "current": version == target}
+                "target_schema_version": target, "current": version == target,
+                "connection_kind": hosting.connection_kind(app_db.DATABASE_URL or ""),
+                "api_exposure": exposure}
     finally:
         conn.rollback()
         app_db.close_db_connection(None)
@@ -78,14 +84,17 @@ def check(*, database: bool) -> tuple[int, dict]:
         except Exception as exc:
             report["database"] = {"error_type": type(exc).__name__}
             return 1, report
-    return (0 if report["database"]["current"] else 1), report
+    database_report = report["database"]
+    return (0 if database_report["current"] and database_report["api_exposure"]["clean"] else 1), report
 
 
 def main(argv=None, *, out=None) -> int:
     out = out or sys.stdout
     parser = argparse.ArgumentParser(prog="python -m app.hosting_cli")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("check", help="would this process start; with --database, is the schema current").add_argument(
+    commands.add_parser(
+        "check", help="would this process start; with --database, is the schema current and unexposed"
+    ).add_argument(
         "--database", action="store_true"
     )
     try:

@@ -246,14 +246,18 @@ def _count_named(inspector, nome):
 
 
 # ===========================================================================
-# M8 -- version floor (first: everything else is meaningless off PG15)
+# M8 -- version floor (first: everything else is meaningless off a qualified major)
 # ===========================================================================
 
 
-def test_m8_server_is_postgresql_15(conn):
+# 15: the persistent local lane.  17: the major the managed platform runs (MP-3 S1).
+QUALIFIED_MAJORS = (15, 17)
+
+
+def test_m8_server_is_a_qualified_postgresql_major(conn):
     version_num = int(conn.execute("SHOW server_version_num").fetchone()[0])
     assert version_num >= 150000, version_num
-    assert version_num < 160000, f"qualification lane expects PG15, got {version_num}"
+    assert version_num // 10000 in QUALIFIED_MAJORS, f"lane expects one of {QUALIFIED_MAJORS}, got {version_num}"
     assert int(
         conn.execute("SELECT current_setting('server_version_num')").fetchone()[0]
     ) == version_num
@@ -576,7 +580,7 @@ def test_m4_engine_row_access_semantics(conn):
 
 
 # ===========================================================================
-# M5 -- SQL dialect fragments and upserts on PG15
+# M5 -- SQL dialect fragments and upserts on a qualified PostgreSQL major
 # ===========================================================================
 
 _M5_DATES = [

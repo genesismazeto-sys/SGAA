@@ -38,6 +38,33 @@ def _codes(func, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
+def test_a_transaction_mode_pooler_is_refused_however_the_address_is_spelled():
+    pooler = "aws-0-us-east-1.pooler.supabase.com"
+    refused = [
+        f"postgresql://postgres.ref@{pooler}:6543/postgres",
+        f"postgresql://postgres.ref@{pooler}.:6543/postgres",            # trailing dot
+        f"postgresql://postgres.ref@{pooler}:5432/postgres?port=6543",   # libpq query override
+        f"postgresql://postgres.ref@/postgres?host={pooler}&port=6543",  # host only in the query
+        f"postgresql://postgres.ref@aws-0-us-east-1%2Epooler.supabase.com:6543/postgres",
+        f"postgresql://postgres.ref@{pooler}:06543/postgres",            # port spelled with a zero
+        f"postgresql://postgres.ref@{pooler}:+6543/postgres",            # ... or a sign
+        f"postgresql://postgres.ref@{pooler}/postgres?port=06543",
+    ]
+    for env_name, role in ((tool.SOURCE_URL_ENV, "SOURCE"), (tool.TARGET_URL_ENV, "TARGET")):
+        for url in refused:
+            error = _codes(tool.require_url, url, env_name)
+            assert error.code == f"{role}_TRANSACTION_POOLER"
+            assert "supabase" not in str(error) and "6543" not in str(error)
+        # Session mode and a direct address are what a snapshot dump needs.
+        assert tool.require_url(f"postgresql://postgres.ref@{pooler}:5432/postgres", env_name)
+        assert tool.require_url("postgresql://postgres@db.ref.supabase.co:5432/postgres", env_name)
+    # A list of hosts is not one address: refused, not guessed.
+    for url in (f"postgresql://u@a.example:5432,{pooler}:6543/db", "postgresql://u@/db",
+                f"postgresql://u@{pooler}/db?service=prod", f"postgresql://u@{pooler}:5432/db?hostaddr=10.0.0.1"):
+        error = _codes(tool.require_url, url, tool.SOURCE_URL_ENV)
+        assert error.code == "SOURCE_URL_AMBIGUOUS", url
+
+
 def test_password_urls_are_refused_without_echo(monkeypatch):
     cases = {
         f"postgresql://sgaa:{SENTINEL}@db.example.test:5432/sgaa": "SOURCE_URL_CONTAINS_PASSWORD",
