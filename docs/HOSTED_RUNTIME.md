@@ -377,6 +377,26 @@ set, so one commit is rehearsed, deployed and promoted. A higher mirror cadence 
 free external trigger that sends the same bearer (a Supabase `pg_cron` job with `pg_net`,
 which is also database activity that keeps a Free project from pausing).
 
+Observed on the rehearsal project (Hobby, 2026-10-10, Vercel CLI 63.1.2; MP-3 SPEC section 17):
+
+- Services accepted the descriptor as written: `web` (`main.py`, handler `app`) and
+  `scheduler` (`app/storage/scheduler.py`, handler `application`) are two Python functions in
+  the same region (iad1) with `maxDuration` 60 and 300; the scheduler rewrite wins over the
+  catch-all; the cron definition is bound to the production deployment (and follows
+  `vercel promote`).
+- The platform does not validate rewrites: a destination service that does not exist deploys
+  READY and answers 404 on every path, and it takes the alias unless `--skip-domain` is used.
+- Static files are served by Flask from the function (`cache-control: no-cache`, no CDN hit):
+  the `public/static` copy of `buildCommand` has no effect behind the catch-all rewrite, so a
+  page's assets each cost an invocation.
+- Anonymous requests reach the deployment only with Vercel Authentication off (it is on by
+  default for every `*.vercel.app` address of a project). Application pages carry HSTS, CSP,
+  frame, referrer and permissions headers and a `Secure; HttpOnly; SameSite=Lax` session cookie;
+  an anonymous page is labelled `public, max-age=0, must-revalidate` by the platform (never a
+  cache hit; `Vary: Cookie`), authenticated HTML is `no-store` from the application.
+- A request that the scheduler cannot serve without the database answers 500 with the fixed
+  code `SCHEDULER_JOB_FAILED`; the log line carries only the exception class.
+
 Limits the deployment lives with (Hobby, read 2026-10-10): `maxDuration` 300 s, a 4.5 MB
 request or response body, one hour of runtime logs, one rate-limit rule per project, and a
 monthly ceiling on invocations and active CPU after which usage stops rather than bills.

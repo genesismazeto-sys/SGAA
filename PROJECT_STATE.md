@@ -56,8 +56,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   (`docs/specs/MP-3-production-integration.md` §17): zero recurring cost, Vercel Hobby, Supabase
   Free, no paid backup. Executor scope landed (descriptors and deployment audit, fail-closed
   authorization, restore profile and scheduled backups, cutover ledger, smoke, PONR detector,
-  runbook, DEV rehearsal). Pending: the R3 blind review and the user's inputs for the live lanes
-  (GA1 rehearsal project, GA4 DEV database credential). No PROD gate granted.
+  runbook, DEV rehearsal). GA1 was granted and the Vercel Hobby rehearsal qualification is done
+  (SPEC A12). Pending: the R3 blind review and the user's DEV database credential (GA4) for the
+  database-backed live lanes. No PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 

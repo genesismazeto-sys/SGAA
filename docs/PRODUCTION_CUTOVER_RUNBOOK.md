@@ -148,9 +148,25 @@ that would cost money is not performed; stop and say so.
 
 1. `python tools/deploy_audit.py export --commit <reviewed commit> --out <new empty dir>`
    (committed content only, runtime allowlist) and `audit --dir <that dir>`: CLEAN.
-2. Deploy that directory to the production project with the user-authenticated CLI. The
-   daily cron entry is in `vercel.json` but the scheduler front is disabled while
-   `CRON_SECRET` is unset. Publish the one Hobby rate-limit rule (login and recovery POSTs).
+2. Deploy that directory to the production project with the user-authenticated CLI, DARK:
+   `npx vercel@<pinned> deploy --prod --skip-domain --yes` from the exported directory (linked
+   with `vercel link`; delete the `.env.local` and `.gitignore` the link writes before the
+   upload and re-run the audit). The platform does not validate a descriptor: a rewrite to a
+   service that does not exist deploys READY and, without `--skip-domain`, takes the public
+   alias (rehearsed: every page answered 404). The daily cron entry is in `vercel.json` but
+   the scheduler front is disabled while `CRON_SECRET` is unset. Publish the one Hobby
+   rate-limit rule (below). Environment values are written without a trailing line ending
+   (`type <file> | vercel env add NAME production --sensitive`; a value from a PowerShell pipe
+   carries CRLF and a `CRON_SECRET` with whitespace fails the build).
+   The one rate-limit rule, per address, counted over 600 s across the four credential POSTs:
+   method `POST`, path matching `^/(login|esqueci-minha-senha|primeiro-acesso|redefinir-senha)$`,
+   fixed window 600 s, limit 100, key `ip`, mitigation `rate_limit` with `rateLimit.action`
+   `rate_limit` (the response is 429; `deny` answers 403). Rehearsed: the 101st request in a
+   window is refused, a GET of the login page is not counted, and a window that keeps
+   receiving requests stays refused.
+   The public alias is then taken only after the dark deployment's own address passes the
+   smoke (section C10) and the operator promotes it (`vercel promote <deployment id> --yes`,
+   about 4 s; the same command with the previous deployment id is the rollback).
 3. `python -m app.hosting_cli check --database` with the production environment: ready.
    The export verifies every file against the commit's blob id and normalizes line endings
    itself (`core.autocrlf` of the workstation does not matter); `EXPORT_NOT_THE_COMMIT` means

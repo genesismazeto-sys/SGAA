@@ -461,8 +461,8 @@ money, is hard stop H3.
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
 | 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes BLOCKED on the DEV database credential (GA4) |
-| 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | landed (03cc05b); live Services qualification P1-P5 BLOCKED on GA1 |
-| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live negative probes BLOCKED on GA1 |
+| 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | landed (03cc05b); live Services qualification P1-P5 DONE on the GA1 rehearsal project (A12) |
+| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live probes DONE on the GA1 rehearsal project (A12); database-dependent probes need GA4 |
 | 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 BLOCKED on the DEV database credential (GA4) |
 | 5 | Cutover tooling and runbook: ledger, smoke, generator and harness, PROD qualification checklist, first-mirror procedure | `tools/cutover_ledger.py`, `tools/hosted_smoke.py`, runbook, tests | T1–T4; ledger mutation probes; R2 | landed (646a6d0) |
 | 6 | Full DEV dress rehearsal and final candidate: S6 evidence plan, runbook amended with measured numbers, packet for R3, T5 | tests, runbook, docs | rehearsal index; T5; R3 PASS | landed; rehearsal on local PostgreSQL 17 + real DEV Storage; R3 pending |
@@ -649,6 +649,29 @@ Executor amendments (consequences of the above; not material beyond what the use
   while a table answers 404 to the valid key and 401 to the bogus one -- the check fails there, as it must. (7) The derived `unconverged` class names reach 60 characters, so the class cap is 64.
   Not material.
 
+- A12 2026-10-10 -- GA1 granted by the user (rehearsal project `sgaa-mp3-rehearsal`, Hobby, Git integration
+  off, no domain); slice 2 live qualification run on it with Vercel CLI 63.1.2 (`npx`, pinned), the commit
+  `162760d` exported and audited CLEAN (265 files). Outcomes: (1) Services accepted `vercel.json` as
+  written -- web `main.py`/`app`, scheduler `app/storage/scheduler.py`/`application`, `maxDuration` 60 and
+  300, region iad1, scheduler rewrite first, one cron bound to the production deployment (P1, P4); the
+  platform cron fired inside its hour with the bearer, the deployment host and the scheduler service
+  (P3). (2) The platform does not validate a descriptor: a rewrite to a missing service deploys READY,
+  answers 404 everywhere and takes the alias; the C9 procedure is therefore a DARK deploy
+  (`--prod --skip-domain`), a smoke of the deployment's own address and `vercel promote`, which is also
+  the 4-second rollback (rehearsed). (3) Static files are served by Flask from the function (no CDN hit);
+  the `public/static` copy of `buildCommand` has no effect behind the catch-all rewrite -- a candidate
+  simplification, not changed here. (4) One rate-limit rule is accepted on Hobby; the action must be
+  `rate_limit` (429) both as `mitigate.action` and `rateLimit.action` (`deny` answers 403); the 101st POST
+  in a 600 s window is refused, GET is not counted, a window that keeps receiving requests stays refused.
+  (5) Vercel Authentication is on by default for every `*.vercel.app` address, which also blocks the smoke;
+  it was switched off on the rehearsal project for the probes and restored afterwards. (6) Without
+  `CRON_SECRET` the scheduler front answers 404 to every request (D14 holds). (7) Findings: values piped
+  from PowerShell carry CRLF and a `CRON_SECRET` with whitespace fails the build (write values with
+  `type <file> |`); the link step writes `.env.local` (an OIDC token) and `.gitignore` into the export
+  directory and both must be removed before the upload; a failed database connection on a credential POST
+  logs a traceback that names the database host (no secret; one hour of retention); anonymous pages carry
+  the platform default `cache-control` and no cache hit was observed. No gate beyond GA1 was used. Not material.
+
 ## 17. Closure
 
 Level reached: **PREPARED_WITH_BLOCKERS** -- every executor-side deliverable is landed and
@@ -663,9 +686,9 @@ Acceptance:
 
 | AC | State | Evidence / what is missing |
 |---|---|---|
-| AC1 | PARTIAL | Export and audit with negative controls (`tests/test_mp3_deploy_audit.py`, descriptor tests). BLOCKED: running the web and scheduler functions on a Hobby rehearsal project (P1-P5) needs the user's rehearsal project (GA1). |
+| AC1 | MET | Export and audit with negative controls (`tests/test_mp3_deploy_audit.py`, descriptor tests) and, on the GA1 rehearsal project (A12): the exported commit deploys as two Python functions (web and scheduler) with the declared `maxDuration` and region, the scheduler rewrite wins, the platform cron fired and passed the bearer check, the built source tree audits CLEAN and the negative control FINDINGS. The web function ran without a database (health fails closed); its database-backed behaviour is the GA4 lane. |
 | AC2 | PARTIAL | PostgreSQL 17.11 passes the real-PG families locally and the probe shows the DEV Data API behaviour. BLOCKED: pooler and session lanes against Supabase DEV need its database credential (GA4). |
-| AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels. BLOCKED: the live rate-limit and scheduler probes (GA1); R3 verdict pending. |
+| AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels, and live (A12): the rate-limit rule refuses the 101st credential POST per address and window, the scheduler answers 401 / 404 (front disabled) / authenticated, runtime logs hold no secret shape. BLOCKED: OAuth and bootstrap rehearsal need a database and a Google client; R3 verdict pending. |
 | AC4 | PARTIAL | Layer-2 and object-set backup, verify and restore, the Supabase restore profile on a project-shaped target, `ops_backup` sequencing with registry rotation, corrupted-backup refusal (`test_mp3_rehearsal_live.py`). BLOCKED: restore of a set taken on the managed platform into another environment (DR1) and of a foreign set into the managed DEV target (DR3) need GA4; RTO on the platform is therefore not measured. |
 | AC5 | MET | `test_mp3_cutover_ledger.py` (order, gates, identities, rollback from every state before C13 including C12, PONR, head binding), `test_mp3_rehearsal_live.py` (C0..C14 end to end on real DEV Storage and PostgreSQL 17, a killed converge resumed, a foreign object at a key never overwritten and refused by the ledger, a corrupted backup refused, an offline v15 -> v16 upgrade), `test_mp3_smoke_real_app.py` (the smoke writes no business row on the real application), `test_mp2_scheduler_real_pg.py` (duplicate invocations). Not injected live: unavailable Drive and wrong secret (covered at unit level by MP-1/MP-2 and the scheduler's 401), failed deployment and commit-uncertain (unit level: `COMMIT_UNCERTAIN_NOT_RESOLVED`). |
 | AC6 | GATED | S7 is executed only through the gates. |
