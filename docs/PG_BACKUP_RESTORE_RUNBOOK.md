@@ -403,14 +403,18 @@ database (behaviour probes run on clones).
   the plain restore refuses it. `restore --target-profile supabase` (explicit, never
   inferred from the address) allows exactly what a fresh project holds -- the schemas
   `auth`, `extensions`, `graphql`, `graphql_public`, `pgbouncer`, `realtime`,
-  `storage`, `vault`; the extensions `plpgsql`, `pg_stat_statements`, `pgcrypto`,
+  `storage`, `vault`, and the empty placeholder schema of a project whose Data API is off
+  (`pgrst_no_exposed_schemas`, `pg_pgrst_no_exposed_schemas`; it must hold nothing); the
+  extensions `plpgsql`, `pg_stat_statements`, `pgcrypto`,
   `uuid-ossp`, `supabase_vault`, `pg_graphql`; the six API event triggers -- and still
   refuses a used project (rows in `auth.users`, `storage.buckets`, `storage.objects`),
   any other schema or extension, and anything in `public`. After a restore into a
   managed project, the revocation of `docs/HOSTED_RUNTIME.md` §11 is applied again
   (a dump carries no privileges) and `hosting_cli check --database` must be clean
   before the application opens. The profile is proven on a target shaped like a fresh
-  project; the managed-target proof on the real provider is DR3 of the MP-3 SPEC.
+  project and on Supabase DEV itself (DR3 of the MP-3 SPEC, A14: a synthetic set restored
+  through the session pooler in 88 s, then the application served through the transaction
+  pooler and smoked, 140 s end to end).
 * **Cross-environment proof (required before production)**: take a Layer-2
   artifact **from the actual Supabase project**, verify it, restore it into a
   new database, `verify --restored`, clone probes, smoke.

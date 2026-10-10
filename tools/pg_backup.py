@@ -1402,10 +1402,13 @@ EMPTY_TARGET_CHECKS = {
 #: MP-3 S1): its provider schemas, the extensions it installs by default and its API event triggers.
 #: The profile is explicit (``--target-profile supabase``), never inferred from the address.
 TARGET_PROFILES = ("plain", "supabase")
+#: The empty placeholder schema a project exposes when its Data API is off (the provider's own name, and
+#: the documented override's); allowed by name, and it must hold nothing (``placeholder_objects``).
+SUPABASE_PLACEHOLDER_SCHEMAS = ("pgrst_no_exposed_schemas", "pg_pgrst_no_exposed_schemas")
 SUPABASE_PROFILE_SCHEMAS = (
     "public", "pg_catalog", "information_schema", "pg_toast", "auth", "extensions", "graphql",
     "graphql_public", "pgbouncer", "realtime", "storage", "vault",
-)
+) + SUPABASE_PLACEHOLDER_SCHEMAS
 SUPABASE_PROFILE_EXTENSIONS = (
     "plpgsql", "pg_stat_statements", "pgcrypto", "uuid-ossp", "supabase_vault", "pg_graphql",
 )
@@ -1431,6 +1434,20 @@ def empty_target_checks(profile: str = "plain") -> dict:
     checks["schemas"] = (
         f"SELECT count(*) FROM pg_namespace WHERE nspname NOT IN ({_quoted_list(SUPABASE_PROFILE_SCHEMAS)}) "
         "AND nspname !~ '^pg_(toast_)?temp_[0-9]+$'"
+    )
+    placeholders = f"({_quoted_list(SUPABASE_PLACEHOLDER_SCHEMAS)})"
+    checks["placeholder_objects"] = (  # relations, routines, types, operators, collations, text search, extensions
+        "SELECT"
+        f" (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace"
+        f"    WHERE n.nspname IN {placeholders} AND t.typtype IN ('e','d','r','m'))"
+        f" + (SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_collation c JOIN pg_namespace n ON n.oid = c.collnamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_conversion c JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_ts_config c JOIN pg_namespace n ON n.oid = c.cfgnamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_ts_dict c JOIN pg_namespace n ON n.oid = c.dictnamespace WHERE n.nspname IN {placeholders})"
+        f" + (SELECT count(*) FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname IN {placeholders})"
     )
     checks["extensions"] = (
         f"SELECT count(*) FROM pg_extension WHERE extname NOT IN ({_quoted_list(SUPABASE_PROFILE_EXTENSIONS)})"

@@ -50,6 +50,12 @@ that would cost money is not performed; stop and say so.
 - The whole C0..C14 rehearsal, including a real restore drill into scratch PostgreSQL, runs in
   under one minute at this size; the data-dependent steps are convergence, Path-B and the
   restore drill, which scale with rows and bytes.
+- Supabase DEV, synthetic one-administrator database, from the operator workstation (MP-3 SPEC A14):
+  v16 provisioning 26 s; session-mode snapshot backup of the managed project 57 s; DR1 (that set into
+  local PostgreSQL 17, verified, application booted and smoked) 5 s; DR3 (a foreign set into the managed
+  target, verified, recipe applied, probe clean, application served through the transaction pooler and
+  smoked) 140 s, of which the restore is 88 s. Real data adds dump and restore time in proportion to
+  rows and bytes; the 140 s is dominated by the pooler round trips of the restore.
 - These are lower bounds from a small synthetic set: record the real figures from C5 and C8.
 
 ## 2. States

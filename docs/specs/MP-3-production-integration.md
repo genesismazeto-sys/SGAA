@@ -462,10 +462,10 @@ money, is hard stop H3.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes BLOCKED on the user-only DEV database credential (libpq password file; not a gate) |
+| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes DONE (A14) |
 | 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | landed (03cc05b); live Services qualification P1-P5 DONE on the GA1 rehearsal project (A12) |
-| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live probes DONE on the GA1 rehearsal project (A12); database-dependent probes need the user-only DEV database credential |
-| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 BLOCKED on the user-only DEV database credential (not a gate) |
+| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live probes DONE on the GA1 rehearsal project (A12) and on DEV (A14); the Google OAuth rehearsal needs the optional GA2 |
+| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 DONE on Supabase DEV, RTO measured (A14) |
 | 5 | Cutover tooling and runbook: ledger, smoke, generator and harness, PROD qualification checklist, first-mirror procedure | `tools/cutover_ledger.py`, `tools/hosted_smoke.py`, runbook, tests | T1–T4; ledger mutation probes; R2 | landed (646a6d0) |
 | 6 | Full DEV dress rehearsal and final candidate: S6 evidence plan, runbook amended with measured numbers, packet for R3, T5 | tests, runbook, docs | rehearsal index; T5; R3 PASS | landed; rehearsal on local PostgreSQL 17 + real DEV Storage; R3 pending |
 | 7 | Gated production execution C1–C14 | none in code; ledger and runbook | gate-by-gate evidence | gated |
@@ -696,11 +696,31 @@ Executor amendments (consequences of the above; not material beyond what the use
   lanes, DR1, DR3 and the managed-platform RTO therefore remain unrun. The executor does not read the
   password back and cannot repair it. Not material.
 
+- A14 2026-10-10 -- Database lanes on Supabase DEV (user repaired the libpq credential; GA4 stays as A13).
+  `tests/test_mp3_live_db.py`, opt-in, two password-less pooler URLs, inside DEV `public` (run-owned, emptied
+  before and after): (1) v16 provisions in 26 s and validates; the recipe then `api_role_exposure` clean for
+  `anon`, `authenticated` and `service_role`; `hosting_cli check --database` through session mode reports ready,
+  `pooler_session` and a clean exposure. (2) Transaction pooler: the durable throttle flips at its threshold and
+  loses no event across eight concurrent writers; of six concurrent confirmations exactly one claims an import
+  preview; a held row lock makes a second writer wait while `SKIP LOCKED` passes it by; no prepared statement
+  survives (`prepare_threshold=None`). (3) The offline bootstrap creates one administrator on the managed
+  project, prints no secret and refuses a second run. (4) Session mode: `pg_backup` refuses the transaction
+  pooler and takes a verified snapshot set (57 s). (5) DR1: that set restores into local PostgreSQL 17,
+  `verify --restored` passes, the application boots and passes the smoke with sign-in (restore 1.1 s, RTO
+  4.9 s). (6) DR3: a synthetic set from local PostgreSQL restores into the emptied DEV through the supabase
+  profile (restore 88 s), the recipe and probe are clean, the application served through the transaction
+  pooler passes the smoke with sign-in (RTO 140 s), and a second restore is refused as not empty. (7) The
+  first real restore into a managed project found one profile gap: the empty placeholder schema a project
+  exposes when its Data API is off (`pgrst_no_exposed_schemas`, `pg_pgrst_no_exposed_schemas`) was a stray
+  schema; it is now allowed by name and must hold nothing (relations, routines, types, operators,
+  collations, text-search objects, extensions), after an R2 recheck that found the relation-only first
+  version. Not material.
+
 ## 17. Closure
 
-Level reached: **PREPARED_WITH_BLOCKERS** -- every executor-side deliverable is landed and
-evidenced; the closure level *Prepared* of §13 additionally needs the R3 PASS and the lanes below
-that only the user's inputs can unblock. Only GA1 and GA4 (both DEV, both authorized by the user) were
+Level reached: **PREPARED, PENDING R3** -- every executor-side deliverable is landed and evidenced
+and the database lanes ran on Supabase DEV (A14); the closure level *Prepared* of §13 additionally
+needs the R3 PASS, and AC3 keeps one partial item (the Google OAuth rehearsal, which needs the optional GA2). Only GA1 and GA4 (both DEV, both authorized by the user) were
 used; nothing touched PROD,
 the institution's Drive or real student data; no cost was incurred.
 
@@ -712,9 +732,9 @@ Acceptance:
 | AC | State | Evidence / what is missing |
 |---|---|---|
 | AC1 | MET | Export and audit with negative controls (`tests/test_mp3_deploy_audit.py`, descriptor tests) and, on the GA1 rehearsal project (A12): the exported commit deploys as two Python functions (web and scheduler) with the declared `maxDuration` and region, the scheduler rewrite wins, the platform cron fired and passed the bearer check, the built source tree audits CLEAN and the negative control FINDINGS. The web function ran without a database (health fails closed); its database-backed behaviour is the GA4 lane. |
-| AC2 | PARTIAL | PostgreSQL 17.11 passes the real-PG families locally and the probe shows the DEV Data API behaviour. BLOCKED: pooler and session lanes against Supabase DEV need the user-only DEV database credential (libpq password file; not a gate). The cryptography/msal fix is applied (A13). |
-| AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels, and live (A12): the rate-limit rule refuses the 101st credential POST per address and window, the scheduler answers 401 / 404 (front disabled) / authenticated, runtime logs hold no secret shape. BLOCKED: OAuth and bootstrap rehearsal need a database and a Google client; R3 verdict pending. |
-| AC4 | PARTIAL | Layer-2 and object-set backup, verify and restore, the Supabase restore profile on a project-shaped target, `ops_backup` sequencing with registry rotation, corrupted-backup refusal (`test_mp3_rehearsal_live.py`). BLOCKED: restore of a set taken on the managed platform into another environment (DR1) and of a foreign set into the managed DEV target (DR3) need the user-only DEV database credential; RTO on the platform is therefore not measured. |
+| AC2 | MET | PostgreSQL 17.11 passes the real-PG families locally; on Supabase DEV (A14) v16 provisions and validates, the exposure probe is clean after the recipe, the transaction pooler (the runtime path) carries the throttle flip and concurrency, the exactly-one preview claim, serializing row locks, `SKIP LOCKED` and no prepared statements, and session mode carries the snapshot backup and the readiness command; the Data API is off with the placeholder-schema proof (A13). `tests/test_mp3_live_db.py` (11 lanes). |
+| AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels; live (A12): the rate-limit rule refuses the 101st credential POST per address and window, the scheduler answers 401 / 404 (front disabled) / authenticated, runtime logs hold no secret shape; live on DEV (A14): the offline administrator bootstrap creates one administrator, prints no secret and then refuses. BLOCKED: the Google OAuth callback rehearsal needs a DEV Google client (the optional GA2); R3 verdict pending. |
+| AC4 | MET | With no provider backup or PITR assumed (A14, Supabase DEV, synthetic data): the session-mode snapshot backup of the managed project verifies (57 s); DR1 restores that set into local PostgreSQL 17, `verify --restored` passes and the application boots and passes the smoke with sign-in (restore 1.1 s, RTO 4.9 s to a passing smoke); DR3 restores a synthetic set from a different source into the managed target through the supabase profile (restore 88 s), the recipe and the exposure probe are clean, and the application is served through the transaction pooler and smoked (RTO 140 s); a second restore into the used target is refused. Object-set backup, verify and restore, the registry-rotating `ops_backup`, the restore drill and the corrupted-backup refusal are in `test_mp2_object_backup*`, `test_mp3_ops_backup*` and `test_mp3_rehearsal_live.py`. RTO scales with data: the census at C2 and the C8 drill re-derive it. |
 | AC5 | MET | `test_mp3_cutover_ledger.py` (order, gates, identities, rollback from every state before C13 including C12, PONR, head binding), `test_mp3_rehearsal_live.py` (C0..C14 end to end on real DEV Storage and PostgreSQL 17, a killed converge resumed, a foreign object at a key never overwritten and refused by the ledger, a corrupted backup refused, an offline v15 -> v16 upgrade), `test_mp3_smoke_real_app.py` (the smoke writes no business row on the real application), `test_mp2_scheduler_real_pg.py` (duplicate invocations). Not injected live: unavailable Drive and wrong secret (covered at unit level by MP-1/MP-2 and the scheduler's 401), failed deployment and commit-uncertain (unit level: `COMMIT_UNCERTAIN_NOT_RESOLVED`). |
 | AC6 | GATED | S7 is executed only through the gates. |
 | AC7 | MET | Self-audit in the phase report. |
@@ -750,9 +770,6 @@ credential version (known derived writes the PONR detector reports and the opera
 
 Dependencies (A13): `cryptography` 50.0.2 and `msal` 1.37.0 are applied; the A8 deferral is closed.
 
-Input the user must provide to unblock the PARTIAL lanes (a user-only act, not a gate): a DEV database
-password in the libpq password file that the Supabase poolers accept for the tenant user (the entry
-present on 2026-10-10 is rejected by both poolers, A13). With it: provision v16 on DEV, the
-transaction-pooler and session lanes, DR1, DR3 and the managed-platform RTO. The R3 verdict is the
-other pending item.
-
+Pending: the R3 verdict (the user runs it from the packet) and, optionally, GA2 (a DEV Google client) for
+the OAuth callback rehearsal. The DEV database credential was repaired by the user and every database lane ran
+(A14); DEV `public` was left empty and its Data API off.

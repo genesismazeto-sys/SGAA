@@ -31,7 +31,9 @@ def test_the_plain_profile_is_the_unchanged_definition():
 
 def test_the_supabase_profile_allows_exactly_the_listed_provider_objects():
     checks = tool.empty_target_checks("supabase")
-    assert set(checks) == set(tool.EMPTY_TARGET_CHECKS)
+    assert set(checks) == set(tool.EMPTY_TARGET_CHECKS) | {"placeholder_objects"}
+    for placeholder in tool.SUPABASE_PLACEHOLDER_SCHEMAS:
+        assert f"'{placeholder}'" in checks["schemas"] and f"'{placeholder}'" in checks["placeholder_objects"]
     for schema in tool.SUPABASE_PROFILE_SCHEMAS:
         assert f"'{schema}'" in checks["schemas"]
     for extension in tool.SUPABASE_PROFILE_EXTENSIONS:
@@ -113,6 +115,37 @@ def test_a_fresh_project_shape_is_empty_only_under_the_supabase_profile(registry
     plain = _occupancy(url, "plain")
     assert plain["schemas"] > 0 and plain["extensions"] == 1
     assert not any(_occupancy(url, "supabase").values())
+
+
+@NEEDS_PG
+def test_the_empty_placeholder_schema_of_a_project_with_its_api_off_is_allowed_but_must_stay_empty(registry):
+    name, url = registry.create()
+    _fresh_project_shape(url)
+    conn = tool.connect(url)
+    try:
+        conn.execute("CREATE SCHEMA pgrst_no_exposed_schemas")
+    finally:
+        conn.close()
+    assert not any(_occupancy(url, "supabase").values())
+    assert _occupancy(url, "plain")["schemas"] > 0
+    conn = tool.connect(url)
+    try:
+        conn.execute("CREATE TABLE pgrst_no_exposed_schemas.smuggled (id integer)")
+    finally:
+        conn.close()
+    assert _occupancy(url, "supabase")["placeholder_objects"] == 1
+    # non-relation objects count too: a function there would be an RPC endpoint of the exposed schema
+    for statement, expected in (
+        ("DROP TABLE pgrst_no_exposed_schemas.smuggled", 0),
+        ("CREATE FUNCTION pgrst_no_exposed_schemas.f() RETURNS integer LANGUAGE sql AS 'SELECT 1'", 1),
+        ("CREATE TYPE pgrst_no_exposed_schemas.mood AS ENUM ('a')", 2),  # the function plus the enum
+    ):
+        conn = tool.connect(url)
+        try:
+            conn.execute(statement)
+        finally:
+            conn.close()
+        assert _occupancy(url, "supabase")["placeholder_objects"] == expected, statement
 
 
 @NEEDS_PG

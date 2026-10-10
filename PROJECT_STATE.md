@@ -52,15 +52,14 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- MP-3 production integration / cutover: PREPARED_WITH_BLOCKERS
+- MP-3 production integration / cutover: PREPARED, PENDING R3
   (`docs/specs/MP-3-production-integration.md` §17): zero recurring cost, Vercel Hobby, Supabase
   Free, no paid backup. Executor scope landed (descriptors and deployment audit, fail-closed
   authorization, restore profile and scheduled backups, cutover ledger, smoke, PONR detector,
   runbook, DEV rehearsal). GA1 was granted and the Vercel Hobby rehearsal qualification is done
   (SPEC A12); GA4 was granted and the DEV Data API is off (A13); cryptography 50.0.2 and msal 1.37.0
-  are applied. Pending: the R3 blind review and a DEV database credential that the poolers accept
-  (user-only input, libpq password file; not a gate) for the database-backed live lanes. No PROD
-  gate granted.
+  are applied; the database lanes ran on Supabase DEV (A14: pooler and session lanes, DR1, DR3, RTO).
+  Pending: the R3 blind review (and, optionally, GA2 for the Google OAuth rehearsal). No PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -123,5 +122,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED_WITH_BLOCKERS — R3 review and the user-only DEV database credential pending; no PROD gate granted |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — database lanes done on DEV; R3 review pending; no PROD gate granted |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
