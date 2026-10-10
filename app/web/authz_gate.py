@@ -11,7 +11,7 @@ so that no ``app.web -> main`` edge exists.
 """
 import logging
 
-from flask import current_app, g, jsonify, redirect, request, session, url_for
+from flask import abort, current_app, g, jsonify, redirect, request, session, url_for
 
 from app.admin_access import _admin_can, _get_current_admin_access_context
 from app.auth import (
@@ -24,8 +24,8 @@ from app.web.request import _is_ajax_request
 from utils.messages import flash, resolve_user_message
 
 # Deliberately the "main" logger, not __name__: the audit stream, its handlers
-# and its rotation policy are configured once in main.py and the shadow-audit
-# evidence must keep landing on that exact channel.
+# and its rotation policy are configured once in main.py and the refused-request
+# audit line must keep landing on that exact channel.
 logger = logging.getLogger("main")
 
 
@@ -46,20 +46,20 @@ def _admin_access_denied_response(resource: str, required_scope: str):
 
 
 def _audit_missing_admin_authorization_configuration(classification: dict[str, object]) -> None:
-    """Production-only shadow evidence; never include request payload or secrets."""
+    """Production evidence of a refused unmapped admin request; never request payload or secrets."""
     try:
         logger.error(
             "event=admin_rbac_missing_configuration endpoint=%s method=%s rule=%s "
-            "access_level=%s rollout_mode=production_shadow",
+            "access_level=%s rollout_mode=production_enforced",
             classification.get("endpoint"),
             classification.get("method"),
             classification.get("rule"),
             session.get("access_level"),
         )
     except Exception:
-        # Shadow auditing must never turn a missing-policy observation into a
-        # production request failure.  Do not recurse into logging or expose
-        # request data through another fallback channel.
+        # A failing audit sink must not change the decision, which is already
+        # "refuse".  Do not recurse into logging or expose request data
+        # through another fallback channel.
         return
 
 
@@ -78,8 +78,12 @@ def enforce_admin_access_control():
         return None
     if kind in {"missing_configuration", "invalid_configuration"}:
         if current_app.config.get("IS_PRODUCTION"):
+            # Fail closed: a governed admin route with no (or an invalid) RBAC
+            # requirement is refused, never passed through.  The coverage guard
+            # keeps this unreachable for registered routes; the refusal is what
+            # a future unmapped route meets instead of being open to every admin.
             _audit_missing_admin_authorization_configuration(classification)
-            return None
+            abort(403)
         raise AdminAuthorizationConfigurationError(
             "Resolved governed endpoint lacks exactly one RBAC requirement or approved exemption: "
             f"{classification.get('endpoint')} {classification.get('method')}"

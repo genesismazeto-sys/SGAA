@@ -58,9 +58,10 @@ Repository (verified 2026-10-10):
   own OAuth client created or the user opened. The hosted deployment must therefore use the
   workstation's existing OAuth client identity; a new client cannot see the legacy hierarchy.
 - `app/web/authz_gate.py:80`: under `IS_PRODUCTION` a governed admin request whose RBAC
-  configuration is missing or invalid passes with a shadow log. `docs/ENGINEERING_STANDARDS.md` §12
+  configuration was missing or invalid passed with a shadow log (changed by S3, A8). `docs/ENGINEERING_STANDARDS.md` §12
   defers that decision to this phase's security review.
-- No response-wide security headers exist (per-response `nosniff` only). Session cookies are
+- The application already sets the response security headers and a default CSP
+  (`app/__init__.py::_apply_security_headers`; found by the S3 review, A8). Session cookies are
   `Secure` under `IS_PRODUCTION`. `TRUST_PROXY_XFF` is an explicit startup decision.
 - `app/admin_bootstrap.py` prints the administrator's e-mail on success.
 - Roadmap residuals assigned here (`PROJECT_STATE.md`): Vercel project and descriptors, rate
@@ -113,10 +114,11 @@ leak carries a sentinel so a leak audit can search outputs, logs and bundles for
 
 | Artifact | Single responsibility |
 |---|---|
-| `vercel.json`, `pyproject.toml`, `.python-version`, `.vercelignore` (root) | declarative deployment: two functions, region, `maxDuration`, headers, cron entry, bundle exclusions, Python 3.12. No logic |
+| `vercel.json`, `pyproject.toml`, `.python-version`, `.vercelignore` (root) | declarative deployment: two functions, `maxDuration`, the daily cron entry, bundle exclusions, Python 3.12. No logic and no response headers (the application owns them) |
 | `tools/deploy_audit.py` (new operator tool) | refuses a deployment source or built output that holds a forbidden path, database or dump signature or sentinel; value-free |
 | `tools/hosted_smoke.py` (new operator tool) | public HTTPS smoke, read-only, value-free (checks listed at state C10) |
 | `tools/cutover_ledger.py` (new operator tool) | the state machine as an append-only hash-chained ledger outside the repository; validates order and evidence, executes nothing |
+| `tools/pg_fingerprint.py` (new operator tool) | read-only business-table fingerprint of PROD: the PONR detector (A10) |
 | `tools/ops_backup.py` (new operator tool) | sequences Layer-2 backup, verify, object backup, verify, rotation and the off-platform copy; value-free log |
 | `app/hosting_cli` (extended) | `check --database` also reports whether provider API roles hold privileges on SGAA tables and the connection kind |
 | `app/web/authz_gate` (changed) | production fail-closed (UD7) |
@@ -172,10 +174,10 @@ the user has not accepted.
 | C6 SOURCE_CROSS_CHECKED | GR2 | `verify --deep` of the converged copy against the PROD bucket and its listing | clean verdict, reference digest D |
 | C7 TARGET_LOADED | GR3 | Path-B dry run, then apply into the PROD database; validation | report; commit outcome known |
 | C8 TARGET_VERIFIED | GB1 GP3 | `verify --deep` on PROD: digest equals D, census equal; administrator bootstrap only if no login-capable full administrator exists; **cutover baseline** (Layer-2 and object set), both verified, restore drill into scratch PostgreSQL of the PROD major, clone probe | digest equality, manifest identities |
-| C9 DEPLOYED_DARK | GD1 | production deployment of the exact commit from a clean export, readiness `--database` ready, the one rate-limit rule published, no cron entry | deployment identity |
+| C9 DEPLOYED_DARK | GD1 | production deployment of the exact commit from a clean export, readiness `--database` ready, the one rate-limit rule published, the scheduler front disabled (no `CRON_SECRET`; the daily cron entry in the committed descriptor reaches a disabled front) | deployment identity |
 | C10 SMOKED | — | `hosted_smoke`: TLS and hostname, `/health`, login page and cookie flags, response headers, unauthenticated admin refusal, static asset, scheduler probes (404/401), Data API probe, read-only authenticated checks by an operator account; its write set is pinned by a rehearsal tripwire | report |
-| C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; the daily cron entry added by redeploy and, if the backlog needs it, the external trigger enabled; first scheduled passes observed | results; none `reconciliation_required` |
-| C12 OPEN_PONR_PENDING | GO | users admitted (announcement); the local runtime stays stopped and protected; the business-table fingerprint of C8 is the reference; rollback is still available | timestamp, reference fingerprint |
+| C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; `CRON_SECRET` set and the deployment redone (the same commit) so the daily cron reaches the enabled front and, if the backlog needs it, the external trigger enabled; first scheduled passes observed | results; none `reconciliation_required` |
+| C12 OPEN_PONR_PENDING | GO | users admitted (announcement); the local runtime stays stopped and protected; the business-table fingerprint taken at the opening is the reference; rollback is still available | timestamp, reference fingerprint |
 | C13 PONR_RECORDED | — | the first successful non-operator business write on PROD is detected (fingerprint delta) and recorded explicitly in the ledger; window W starts | the write's class and time, never its content |
 | C14 WINDOW_CLOSED | — | W elapsed; no unresolved reconciliation; a later Layer-2 generation restore-validated; object set verified; hand-over to MP-4 | window report |
 
@@ -195,9 +197,10 @@ rollback stays available after the opening until the first business write (§3.4
 | C13 onward | forward-fix only | see below |
 
 PONR is the first successful non-operator business write on PROD, not the opening. Opening only
-starts PONR_PENDING (C12). The ledger detects the write as a delta of the business-table
-fingerprint against the C8 reference (counts and maximum identifiers per business table, ephemeral
-and authentication tables excluded) and the operator records it explicitly (C13); until it is
+starts PONR_PENDING (C12). The operator detects the write as a delta of the business-table
+fingerprint against the one taken at the opening (`tools/pg_fingerprint.py`: row count and content
+digest per business table; ephemeral, machine and mirror state excluded) and records it explicitly
+in the ledger (C13); until it is
 recorded, rollback stays the C12 row. Before it the workstation source is frozen, untouched and
 authoritative, and no step changed it or any legacy byte. After it a return to the workstation
 loses the hosted writes: MP-3 builds no reverse migration. Recovery after PONR is a Layer-2
@@ -232,8 +235,8 @@ remains possible. W ends only on the C14 criteria; purge and legacy contraction 
   refused in every mode (403 and an error log in production; the existing raise elsewhere). The
   RBAC-coverage guard and the actor-matrix guards are unchanged; a negative control proves the
   refusal.
-- Platform: security headers from `vercel.json` (HSTS, `nosniff`, framing and referrer policy; no
-  CSP in this phase, the templates use inline script). Hobby allows one rate-limit rule, so it
+- Platform: response security headers and the CSP are the application's (one owner; the smoke
+  checks they arrive at the public address). Hobby allows one rate-limit rule, so it
   covers the login and password-recovery submissions together, set above the application's
   per-address attempt limit within the same window so the platform never refuses a legitimate user
   first; counters are per region, recorded as a residual. Everything else rests on the durable
@@ -315,7 +318,7 @@ recommended defaults and are batched with the gates in §10.
 
 ## 6. Scope
 
-- Allowed: root deployment descriptors; `tools/` (the four new tools of §3.2 and `pg_backup`);
+- Allowed: root deployment descriptors; `tools/` (the five new tools of §3.2 and `pg_backup`);
   `app/web/authz_gate.py`; `app/hosting_cli.py`; `app/hosting.py` and `app/pg_schema.py`
   (read-only probe and classifier, A6); deployment-facing parts of `app/__init__.py` if a
   qualification proves them necessary; `docs/` governance, runbooks and `HOSTED_RUNTIME`;
@@ -570,6 +573,23 @@ Executor amendments (consequences of the above; not material beyond what the use
   transaction-pooler address and a list of hosts. (e) The real-PG lanes against the Supabase DEV
   database (pooler and session modes) need the DEV database credential, a user-only input recorded as
   a BLOCKER for that sub-lane; every other S1 lane ran. Not material.
+- A8 2026-10-10 — Slice 3. The authorization gate refuses (403 and an error log) a governed admin request
+  with no or an invalid RBAC requirement in production (UD7); the three guards that encoded the shadow
+  behaviour were updated with negative controls (non-production still raises, a mapped route is decided
+  as before). Advisory review of the pinned runtime dependencies (read-only, 2026-10-10): same-major
+  bumps applied (Flask 3.1.3 for the missing `Vary: Cookie`, Werkzeug 3.1.9, python-dotenv 1.2.2,
+  requests 2.33.0, Pillow 12.3.0 and pypdf 6.19.0, which parse uploads). `cryptography` 45.0.7 carries 13
+  advisories fixed only from 46.0.5 (and 48/49/50 for the others); 46 requires `msal` >= 1.32, which
+  crosses D13's same-major bound, so it is deferred with this analysis: the advisories concern X.509 path
+  validation, PKCS7 decryption, EC public-key loading from numbers, non-contiguous buffers and the
+  OpenSSL statically linked into wheels, none of which the application calls (Fernet over bytes, token
+  claims decoded without a signature check). Recommendation recorded for the user: bump `cryptography` and `msal`
+  together in a hardening change. Not material to the design; the bump itself is the user's decision.
+- A8b 2026-10-10 — Slice 3 review. The application already owns the response security headers and a
+  default CSP, so `vercel.json` declares none (the first descriptor draft duplicated them, with a
+  conflicting `X-Frame-Options`); the smoke now also requires the CSP header; the rate-limit rule is
+  sized against the login and recovery limits together, and `/primeiro-acesso` and `/redefinir-senha`
+  are named as not throttled by the application (covered only by the platform rule). Not material.
 
 ## 17. Closure
 

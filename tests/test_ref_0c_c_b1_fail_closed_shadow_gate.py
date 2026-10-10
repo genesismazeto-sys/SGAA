@@ -1,4 +1,5 @@
-"""REF-0C-C-B1 hybrid boundary, shadow audit, and non-production hard-failure contract.
+"""REF-0C-C-B1 hybrid boundary, production refusal with audit (was shadow audit until MP-3), and
+non-production hard-failure contract.
 
 All database-backed assertions use the fixture-controlled versioned environment.
 The configuration-failure tests intentionally avoid access-context/database loading.
@@ -278,7 +279,10 @@ def test_development_missing_configuration_uses_same_hard_failure(monkeypatch):
             authz_gate.enforce_admin_access_control()
 
 
-def test_production_shadow_audits_once_without_denying_or_loading_context(monkeypatch):
+def test_production_missing_configuration_audits_once_and_refuses_without_loading_context(monkeypatch):
+    """MP-3 (UD7): production no longer passes an unmapped governed admin request through."""
+    from werkzeug.exceptions import Forbidden
+
     events = []
     monkeypatch.setattr(auth, "get_admin_permission_requirement", lambda *_: None)
     monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", lambda **_: pytest.fail("context loaded"))
@@ -286,17 +290,19 @@ def test_production_shadow_audits_once_without_denying_or_loading_context(monkey
     monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
     with main.app.test_request_context("/admin/dashboard?token=must-not-log"):
         _set_admin_session("consultivo")
-        assert authz_gate.enforce_admin_access_control() is None
+        with pytest.raises(Forbidden):
+            authz_gate.enforce_admin_access_control()
     assert len(events) == 1
     message, fields = events[0]
     assert message.startswith("event=admin_rbac_missing_configuration")
+    assert message.endswith("rollout_mode=production_enforced")
     assert fields == ("admin_dashboard", "GET", "/admin/dashboard", "consultivo")
     serialized = repr((message, fields))
     for forbidden in ("token=", "must-not-log", "cookie", "session", "password", "body"):
         assert forbidden not in serialized.lower()
 
 
-def test_production_shadow_logger_failure_does_not_block_request_or_load_context(monkeypatch):
+def test_production_audit_failure_still_refuses_and_loads_no_context(monkeypatch):
     endpoint = "admin_shadow_audit_logger_failure_regression"
     path = "/admin/shadow-audit-logger-failure-regression"
     rule = Rule(path, endpoint=endpoint, methods={"GET"})
@@ -307,7 +313,7 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
         raise RuntimeError("test logger backend unavailable")
 
     def unexpected_access(*_args, **_kwargs):
-        pytest.fail("production shadow classification loaded access context or database state")
+        pytest.fail("production refusal of an unmapped route loaded access context or database state")
 
     monkeypatch.setattr(authz_gate.logger, "error", failing_logger)
     monkeypatch.setattr(authz_gate, "_get_current_admin_access_context", unexpected_access)
@@ -338,7 +344,8 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
     # registers a test-only rule at the URL-map layer and removes it afterwards.
     # It still traverses Flask's actual request routing and before_request hook.
     main.app.url_map.add(rule)
-    main.app.view_functions[endpoint] = lambda: ("shadow request continued", 200)
+    view_calls = []
+    main.app.view_functions[endpoint] = lambda: view_calls.append(True) or ("request continued", 200)
     try:
         client = main.app.test_client()
         with client.session_transaction() as value:
@@ -346,7 +353,7 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
             # Was a synthetic id; the production session guard now reads the
             # durable credential on every authenticated request, so the actor
             # has to be a real admin.  What this test asserts is unchanged:
-            # the shadow gate itself loads no access context and no DB state.
+            # the gate itself loads no access context and no DB state.
             value["user_id"] = existing_admin_user_id()
             value["user_type"] = "admin"
             value["access_level"] = "admin_total"
@@ -354,8 +361,10 @@ def test_production_shadow_logger_failure_does_not_block_request_or_load_context
 
         response = client.get(path)
 
-        assert response.status_code == 200
-        assert response.get_data(as_text=True) == "shadow request continued"
+        # The audit sink raised, the decision is unchanged: the unmapped route is refused
+        # and its view never runs.
+        assert response.status_code == 403
+        assert view_calls == []
         assert logger_attempts == [True]
     finally:
         main.app.view_functions.pop(endpoint, None)
@@ -377,6 +386,19 @@ def test_existing_mapped_browser_ajax_and_actor_contracts_are_preserved(env):
     _login(client, "admin_total")
     assert client.get("/admin/atividades").status_code == 200
     _login(client, "administrativo")
+    assert client.get("/admin/atividades").status_code == 200
+
+
+def test_mapped_routes_are_decided_as_before_with_the_production_flag(env, monkeypatch):
+    """Positive control for the production branch: only an UNMAPPED route changes."""
+    monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
+    client = env["client"]
+    _login(client, "consultivo")
+    denied = client.get("/admin/catalogo-versoes/nova-base")
+    assert denied.status_code == 302 and denied.headers["Location"].endswith("/admin/dashboard")
+    ajax = client.get("/admin/catalogo-versoes/nova-base", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert ajax.status_code == 403 and ajax.get_json()["error"] == "forbidden"
+    _login(client, "admin_total")
     assert client.get("/admin/atividades").status_code == 200
 
 

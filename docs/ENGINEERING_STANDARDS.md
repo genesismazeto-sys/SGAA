@@ -196,11 +196,9 @@ Weakening or retiring a guard otherwise is hard stop H9.
 - Storage-domain user messages are outside the `_iter_backend_files()` scanner.
 - `main.py` residue: real wrappers (`admin_required`, `aluno_required`), the
   unused `proximo_numero_turma`, a duplicate log handler.
-- `app/web/authz_gate.py` admits a governed admin request whose RBAC
-  configuration is missing when `IS_PRODUCTION` is set (shadow audit only).
-  This is a deliberate historical decision, mitigated by the RBAC-coverage
-  guard; it is re-decided in the pre-go-live security review, not changed
-  opportunistically.
+- (Resolved by MP-3 S3: `app/web/authz_gate.py` now refuses a governed admin
+  request whose RBAC configuration is missing when `IS_PRODUCTION` is set; the
+  RBAC-coverage guard keeps the case unreachable for registered routes.)
 
 ## 13. Self-audit checklist (answered in every phase report)
 

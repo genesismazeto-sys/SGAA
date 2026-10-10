@@ -281,3 +281,70 @@ protects the objects that exist and those the owner creates afterwards; the prob
 not the statements, is the acceptance. Layer-2 dumps with `--no-privileges`, so a
 restore into a managed project needs this procedure again before the application
 opens.
+
+## 12. Security posture on the platform
+
+**Authorization.** A governed admin request whose RBAC requirement is missing or
+invalid is refused (403, an error line with endpoint, method and access level; no
+payload) in production, and raises everywhere else. The coverage guards make the case
+unreachable for registered routes; the refusal is what a future unmapped route meets.
+
+**Headers.** The application owns them (`_apply_security_headers`): `nosniff`,
+`X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`, HSTS in
+production (`includeSubDomains`) and a default Content-Security-Policy (`default-src
+'self'`, scripts and styles allowing inline, the Google origins the Drive picker needs,
+the Storage origin in `connect-src` only when `SUPABASE_URL` is configured). `vercel.json`
+declares none, so there is one owner; the public smoke checks that they arrive at the
+public address. `CONTENT_SECURITY_POLICY` overrides the default.
+
+**Rate limiting.** The application throttle is durable (section 6) and covers `/login` and
+`/esqueci-minha-senha`; `/primeiro-acesso` and `/redefinir-senha` are not throttled by the
+application. The Hobby plan allows one WAF rate-limit rule per project; it covers the four
+public credential POSTs together (`/login`, `/esqueci-minha-senha`, `/primeiro-acesso`,
+`/redefinir-senha`), counted per address over the longest window (600 s). Its ceiling is
+set above the application's own per-address limits combined (`LOGIN_MAX_ATTEMPTS` and
+`PASSWORD_RESET_MAX_ATTEMPTS`, 10 failures each in 600 s, plus the successful submissions
+of a shared campus address) so that the platform never refuses a legitimate user first;
+the action is the default 429. Counters are per region and approximate. Attack Challenge Mode is the incident lever.
+
+**Scheduler.** `CRON_SECRET` (at least 32 random characters) enables the front; it is
+unset until the mirror is wanted (the cron entry then reaches a disabled front that answers
+404). A route-level rule is not added: the user agent of a platform cron or of a database
+trigger is spoofable and the bearer is the control.
+
+**Secrets.** Only the platform holds production values; the repository, logs, the ledger
+and every report hold none.
+
+| Variable | Set by | Rotation effect |
+|---|---|---|
+| `APP_SECRET_KEY` | user, platform | sessions end, throttle windows clear |
+| `TOKEN_ENCRYPTION_KEY` | user, platform | stored Google tokens become unreadable: reconnect Google |
+| `DATABASE_URL` (transaction pooler) | user, platform | rotate the database password at the provider, update, redeploy |
+| `SUPABASE_SECRET_KEY` | user, platform only | rotate at the provider, update, redeploy; never on a workstation file |
+| `CRON_SECRET` | user, platform | redeploy; the old value stops working at once |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | user, platform | the legacy OAuth client; a new client cannot see the legacy Drive files (`drive.file`) |
+| `SUPABASE_URL`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY`, `APP_PUBLIC_BASE_URL` | user, platform | configuration, not secrets (the publishable key is public by design) |
+
+A one-off operator credential (the production secret key for a gated run, a database
+password through the libpq file) is scoped to one process and never written to a file.
+
+**OAuth.** `APP_PUBLIC_BASE_URL` is https; the legacy `GOOGLE_REDIRECT_URI` /
+`MS_REDIRECT_URI` variables are unset; the exact callback is registered on the legacy
+OAuth client; the consent screen is published to production (a client left in testing
+status expires refresh tokens within days).
+
+**Administrator bootstrap.** Only when no login-capable full administrator exists; the
+password is read at a hidden prompt and the tool prints the account e-mail on success, so
+its output stays on the operator terminal and is never captured by the ledger or a report.
+
+**Leaks.** The deployment is built from `tools/deploy_audit.py export` and checked with
+`audit` (forbidden paths, database and dump signatures, secret shapes, planted sentinels,
+links); runtime logs on Hobby are kept for one hour, so a leak is looked for at the moment
+and the platform's log drains are not enabled for personal data.
+
+**Dependencies.** The pinned runtime dependencies were checked against published
+advisories (read-only). Same-major fixes are applied. `cryptography` 45.0.7 is outside
+that bound: its fixed releases (46.0.5 and later, with `msal` 1.32 or later) were not
+applied in MP-3; the advisories concern X.509 chain validation, PKCS7 decryption, EC public
+key loading from numbers, non-contiguous buffers and the OpenSSL linked into wheels, none of
+which the application calls. Bump `cryptography` and `msal` together in a hardening change.

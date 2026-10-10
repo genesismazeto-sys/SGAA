@@ -1615,7 +1615,7 @@ def test_network_backed_logging_handlers_are_rejected_and_absent_from_live_chain
 
 def test_synchronous_rbac_and_csrf_audit_logging_present_in_canonical_log(_bootstrapped_env, monkeypatch):
     """End-to-end synchronous audit-logging preservation: the RBAC
-    missing-configuration shadow audit and the CSRF diagnostic are present in
+    missing-configuration audit line (a refused unmapped route) and the CSRF diagnostic are present in
     the canonical local log immediately after dispatch.  No sleep, no queue,
     no listener."""
     env = _bootstrapped_env
@@ -1638,7 +1638,8 @@ def test_synchronous_rbac_and_csrf_audit_logging_present_in_canonical_log(_boots
         monkeypatch.setitem(main.app.config, "IS_PRODUCTION", True)
         _login(env.client, env.admin_id, "consultivo")
         response = env.client.get("/admin/c4-shadow-audit-probe")
-        assert response.status_code == 200
+        # MP-3: the unmapped governed probe is refused (403) and its audit line is the evidence.
+        assert response.status_code == 403
         monkeypatch.setitem(env.app.config, "WTF_CSRF_ENABLED", True)
         monkeypatch.setitem(env.app.config, "WTF_CSRF_CHECK_DEFAULT", True)
         with env.client.session_transaction() as session:
@@ -1648,7 +1649,7 @@ def test_synchronous_rbac_and_csrf_audit_logging_present_in_canonical_log(_boots
         _flush_file_handlers()
         text = canonical_log.read_text(encoding="utf-8", errors="replace")
         assert "event=admin_rbac_missing_configuration" in text, (
-            "RBAC missing-configuration shadow audit not present in the canonical "
+            "RBAC missing-configuration audit line not present in the canonical "
             "local log after dispatch"
         )
         assert "CSRFError method=POST" in text, (
