@@ -42,7 +42,10 @@ import sys
 from urllib.parse import urlsplit
 
 SCHEDULER_ROUTE = "/internal/scheduler/mirror"
-DATA_API_PATHS = ("/rest/v1/", "/rest/v1/usuarios?select=id&limit=1")
+# One application table asked for in the ``public`` schema.  On a project whose Data API is off PostgREST
+# exposes only an empty schema and answers 406 PGRST106 ("Invalid schema: public"); with the API on and
+# ``public`` exposed it answers 404 PGRST205 (table absent), 42501 (privileges revoked) or the rows.
+DATA_API_TABLE_PATH = "/rest/v1/usuarios?select=id&limit=1"
 REQUIRED_HEADERS = {
     "strict-transport-security": None,
     "x-content-type-options": "nosniff",
@@ -97,8 +100,28 @@ class _Client:
             connection.close()
 
 
+PLACEHOLDER_SCHEMAS = frozenset({"pgrst_no_exposed_schemas", "pg_pgrst_no_exposed_schemas"})
+_EXPOSED_HINT = re.compile(r"Only the following schemas are exposed: ([A-Za-z0-9_, ]+)")
+
+
+def _only_placeholder_schema_exposed(status: int, body: bytes) -> bool:
+    """406 PGRST106 whose hint lists only the empty placeholder schema (the Data API is off)."""
+    try:
+        parsed = json.loads(body.decode("utf-8"))
+    except ValueError:
+        return False
+    if status != 406 or not isinstance(parsed, dict) or parsed.get("code") != "PGRST106":
+        return False
+    hint = parsed.get("hint")
+    found = _EXPOSED_HINT.fullmatch(hint) if isinstance(hint, str) else None
+    if not found:
+        return False
+    listed = {name.strip() for name in found.group(1).split(",") if name.strip()}
+    return bool(listed) and listed <= PLACEHOLDER_SCHEMAS
+
+
 def _check(name: str, ok: bool, code: str = "OK") -> dict:
-    return {"check": name, "ok": bool(ok), "code": code if ok else (code if code != "OK" else "FAILED")}
+    return {"check": name, "ok": bool(ok), "code": "OK" if ok else (code if code != "OK" else "FAILED")}
 
 
 def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None = None,
@@ -201,16 +224,21 @@ def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None
                 # Without the key an enabled API answers 401 too: the check would prove nothing.
                 return _check("DATA_API", False, "DATA_API_KEY_REQUIRED")
             api = _Client(data_api_url, allow_insecure=allow_insecure)
-            # The root and a table of the application: a platform that stopped serving the schema root to
-            # publishable keys would still serve a table, so both are asked.
-            for path in DATA_API_PATHS:
-                valid, _h, _b, _c = api.request("GET", path, headers={"apikey": publishable_key})
-                bogus, _h, _b, _c = api.request("GET", path, headers={"apikey": "x" * len(publishable_key)})
-                # Disabled: the API is not there, so the right key and a wrong one are refused alike (and
-                # neither is a success).  Enabled: the right key is served or at least told apart.
-                if not (valid >= 400 and valid == bogus):
-                    return _check("DATA_API", False, "DATA_API_SERVES")
-            return _check("DATA_API", True)
+            if not allow_insecure and not (api.host or "").endswith(".supabase.co"):
+                return _check("DATA_API", False, "DATA_API_URL_NOT_PROVIDER")
+            valid, _h, body, _c = api.request(
+                "GET", DATA_API_TABLE_PATH, headers={"apikey": publishable_key, "Accept-Profile": "public"})
+            control, _h, _b, _c = api.request(
+                "GET", DATA_API_TABLE_PATH,
+                headers={"apikey": "x" * len(publishable_key), "Accept-Profile": "public"})
+            if control != 401:
+                # The gateway must refuse a bogus key, otherwise the answer to the valid key says nothing.
+                return _check("DATA_API", False, "DATA_API_CONTROL")
+            # Off, and only this: PostgREST answers for the valid key and says that the one schema it
+            # exposes is the empty placeholder.  A refusal of the valid key (a wrong, rotated or foreign
+            # key, a protection page in front), rows, a table missing from an exposed schema, revoked
+            # privileges and any other schema list are NOT proof, and fail.
+            return _check("DATA_API", _only_placeholder_schema_exposed(valid, body), "DATA_API_SERVES")
 
         attempt("DATA_API", data_api)
 

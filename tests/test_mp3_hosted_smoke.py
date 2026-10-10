@@ -70,15 +70,37 @@ def _app(**defect):
         if path == "/internal/scheduler/mirror":
             return reply("200 OK" if defect.get("scheduler_open") else "401 Unauthorized", b"{}")
         if path == "/rest/v1/usuarios":
-            if defect.get("data_api_table"):  # the schema root is closed to the key, a table is not
-                valid = environ.get("HTTP_APIKEY", "") == "pub-key-123"
-                return reply("200 OK" if valid else "401 Unauthorized", b"[]")
-            return reply("404 Not Found", b"{}")
-        if path == "/rest/v1/":
-            if defect.get("data_api"):  # enabled: the right key is served, a wrong one is refused
-                valid = environ.get("HTTP_APIKEY", "") == "pub-key-123"
-                return reply("200 OK" if valid else "401 Unauthorized", b"{}")
-            return reply("404 Not Found", b"{}")  # disabled: the API is simply not there
+            # The platform gateway refuses a bogus key whatever the Data API state is.
+            if environ.get("HTTP_APIKEY", "") != "pub-key-123" and not defect.get("gateway_open"):
+                return reply("401 Unauthorized", b'{"message":"Invalid API key"}')
+            profile = environ.get("HTTP_ACCEPT_PROFILE", "")
+            if defect.get("data_api_serves"):  # enabled and serving rows
+                return reply("200 OK", b"[]")
+            if defect.get("data_api_locked"):  # enabled, privileges revoked
+                return reply("401 Unauthorized", b'{"code":"42501","message":"permission denied for table usuarios"}')
+            if defect.get("data_api"):  # enabled, public exposed, table not in the schema cache
+                return reply("404 Not Found", b'{"code":"PGRST205","message":"Could not find the table"}')
+            if defect.get("data_api_absent"):  # no PostgREST answer at all
+                return reply("404 Not Found", b'{"message":"no route"}')
+            if defect.get("data_api_other_schema"):  # public hidden, another schema serves rows
+                return reply("406 Not Acceptable", b'{"code":"PGRST106","hint":"Only the following schemas are '
+                             b'exposed: api, pgrst_no_exposed_schemas","message":"Invalid schema: public"}')
+            placeholder = (b'"hint":"Only the following schemas are exposed: pgrst_no_exposed_schemas",'
+                           b'"message":"Invalid schema: public"')
+            if defect.get("data_api_wrong_status"):  # the placeholder body, but not a 406
+                return reply("200 OK", b'{"code":"PGRST106",' + placeholder + b"}")
+            if defect.get("data_api_no_code"):  # a 406 that is not PGRST106
+                return reply("406 Not Acceptable", b"{" + placeholder + b"}")
+            if defect.get("data_api_no_hint"):  # PGRST106 without the schema list: nothing to verify
+                return reply("406 Not Acceptable", b'{"code":"PGRST106","message":"Invalid schema: public"}')
+            if defect.get("data_api_refuses_valid_key"):  # a wrong or foreign key: refused like the bogus one
+                return reply("401 Unauthorized", b'{"message":"Invalid API key"}')
+            if defect.get("data_api_protection_page"):  # a protection page in front of the host
+                return reply("403 Forbidden", b"<html>blocked</html>")
+            if profile == "public":  # off: only an empty schema is exposed
+                return reply("406 Not Acceptable", b'{"code":"PGRST106","hint":"Only the following schemas are '
+                             b'exposed: pgrst_no_exposed_schemas","message":"Invalid schema: public"}')
+            return reply("404 Not Found", b'{"code":"PGRST205","message":"not in pgrst_no_exposed_schemas"}')
         body = b"Traceback (most recent call last):\n File \"x.py\"" if defect.get("trace") else b"<h1>404</h1>"
         return reply("404 Not Found", body)
 
@@ -137,17 +159,39 @@ def test_each_named_defect_fails_its_own_check_and_only_that_check(server, defec
     assert _failed(report) == {check}
 
 
-def test_a_data_api_that_serves_fails_the_data_api_check(server):
-    report = smoke.run(server(), allow_insecure=True, data_api_url=server(data_api=True),
-                       publishable_key="pub-key-123")
-    assert _failed(report) == {"DATA_API"}
-
-
-def test_a_data_api_that_closes_its_root_but_serves_a_table_still_fails(server):
-    report = smoke.run(server(), allow_insecure=True, data_api_url=server(data_api_table=True),
+@pytest.mark.parametrize("state", [
+    "data_api", "data_api_serves", "data_api_locked", "data_api_absent", "data_api_other_schema",
+    "data_api_refuses_valid_key", "data_api_protection_page", "data_api_wrong_status", "data_api_no_code",
+    "data_api_no_hint",
+])
+def test_anything_but_the_placeholder_schema_answer_fails_the_check(server, state):
+    """Rows, a missing table, revoked privileges, another exposed schema, a refused valid key and a
+    protection page are not proof that the API is off."""
+    report = smoke.run(server(), allow_insecure=True, data_api_url=server(**{state: True}),
                        publishable_key="pub-key-123")
     assert {item["check"]: item["code"] for item in report["checks"]}["DATA_API"] == "DATA_API_SERVES"
     assert _failed(report) == {"DATA_API"}
+
+
+def test_a_data_api_with_only_the_empty_placeholder_schema_exposed_passes(server):
+    report = smoke.run(server(), allow_insecure=True, data_api_url=server(), publishable_key="pub-key-123")
+    assert _failed(report) == set()
+
+
+def test_a_data_api_url_that_is_not_the_provider_is_refused_over_https_only(server):
+    from tools import hosted_smoke as module
+
+    result = module.run("https://example.invalid", data_api_url="https://api.example.invalid",
+                        publishable_key="pub-key-123")
+    codes = {item["check"]: item["code"] for item in result["checks"]}
+    assert codes["DATA_API"] == "DATA_API_URL_NOT_PROVIDER"
+
+
+def test_a_gateway_that_accepts_a_bogus_key_makes_the_answer_meaningless(server):
+    """The control: the bogus key must be refused (401), or the valid-key answer proves nothing."""
+    report = smoke.run(server(), allow_insecure=True, data_api_url=server(gateway_open=True),
+                       publishable_key="pub-key-123")
+    assert {item["check"]: item["code"] for item in report["checks"]}["DATA_API"] == "DATA_API_CONTROL"
 
 
 def test_the_data_api_check_proves_nothing_without_the_key_and_says_so(server):

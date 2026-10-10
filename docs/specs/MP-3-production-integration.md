@@ -365,7 +365,8 @@ audited):
 
 - Supabase DEV `sgaa-dev`: the database `public` schema is declared run-owned and reset between
   rehearsals; private buckets `sgaa-mp3-<run>`; objects; the DEV secret key kept outside the
-  repository. The Data API toggle and project-level settings are the user's (GA4).
+  repository. The Data API toggle and project-level settings are the user's (GA4, the consent that DEV
+  `public` is run-owned); the DEV database credential is a user-only input in the libpq password file, not a gate.
 - The rehearsal Vercel project the user provisions (GA1): deployments, environment variables of that
   project, its cron entry and its one rate-limit rule; never a production hostname.
 - DEV Google (GA2), if provided.
@@ -420,7 +421,8 @@ PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" de
 | GO | open to users: starts PONR_PENDING (C12); PONR itself is recorded at C13 | stop admitting users while pending (§3.4) |
 | GX1 | empty the PROD database or remove unreferenced PROD bucket objects this phase created, before PONR | irreversible by design |
 
-User-only acts, never gates the executor holds: creating and revoking credentials (including
+User-only acts, never gates the executor holds: creating and revoking credentials (including the DEV
+database password placed in the libpq password file, which the executor never reads back, and
 revoking the DEV rehearsal secret when S6 ends), billing, DNS, Google console, protected branches,
 tags, releases, pull requests. Any PROD access not in this table, and any action that would cost
 money, is hard stop H3.
@@ -460,10 +462,10 @@ money, is hard stop H3.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes BLOCKED on the DEV database credential (GA4) |
+| 1 | PostgreSQL 17 and Supabase DEV qualification: PG17 cluster, v16 provisioning on DEV, pooler and session lanes, exposure probe, Data API off with Storage working, Layer-2 client 17 | `hosting_cli`, `pg_backup`, tests, support | T1–T4; E-PG1/E-PG2 on 17; E-LIVE-DB; R2 | landed (ff3c2ff); Supabase-DEV pooler and session lanes BLOCKED on the user-only DEV database credential (libpq password file; not a gate) |
 | 2 | Packaging and rehearsal deployment on Hobby: descriptors, mechanism qualification P1–P5, static, headers, daily cron and the external trigger, `deploy_audit`, rehearsal project | root descriptors, `tools/deploy_audit.py`, docs, tests | T1–T4; E-LIVE (GA1); R2 | landed (03cc05b); live Services qualification P1-P5 DONE on the GA1 rehearsal project (A12) |
-| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live probes DONE on the GA1 rehearsal project (A12); database-dependent probes need GA4 |
-| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 BLOCKED on the DEV database credential (GA4) |
+| 3 | Security posture: authz gate fail-closed, the one rate-limit rule, secrets matrix, OAuth, bootstrap leak control, advisories, live negative probes | `authz_gate`, descriptors, docs, tests | T1–T4; T5; E-LIVE probes; R2 | landed (b22a7b9); live probes DONE on the GA1 rehearsal project (A12); database-dependent probes need the user-only DEV database credential |
+| 4 | Backup and DR without provider backups: Supabase restore profile, `ops_backup`, DR1 and DR3, RTO measured, cadence-bound RPO, schedule | `pg_backup`, `tools/ops_backup.py`, runbooks, tests | T1–T4; E-PG1; E-LIVE; R2 | landed (4a1940f); DR1 and DR3 BLOCKED on the user-only DEV database credential (not a gate) |
 | 5 | Cutover tooling and runbook: ledger, smoke, generator and harness, PROD qualification checklist, first-mirror procedure | `tools/cutover_ledger.py`, `tools/hosted_smoke.py`, runbook, tests | T1–T4; ledger mutation probes; R2 | landed (646a6d0) |
 | 6 | Full DEV dress rehearsal and final candidate: S6 evidence plan, runbook amended with measured numbers, packet for R3, T5 | tests, runbook, docs | rehearsal index; T5; R3 PASS | landed; rehearsal on local PostgreSQL 17 + real DEV Storage; R3 pending |
 | 7 | Gated production execution C1–C14 | none in code; ledger and runbook | gate-by-gate evidence | gated |
@@ -642,11 +644,9 @@ Executor amendments (consequences of the above; not material beyond what the use
   entry), and a changed fingerprint
   may be rolled back only with the operator's recorded adjudication naming the derived classes. (5) One
   gate is added for what the PONR leaves possible: `GF1`, a forward-fix deployment, valid only after C13
-  and once per user message (it grants nothing by itself). (6) The data-API check asks the schema root
-  and one table, and its positive control (a project with the API on must FAIL it) is part of the
-  runbook; observed on the DEV project (API on): the schema root answers 401 to the valid and to a
-  bogus key alike (it is closed to publishable keys, so a root-only check passes on an enabled API),
-  while a table answers 404 to the valid key and 401 to the bogus one -- the check fails there, as it must. (7) The derived `unconverged` class names reach 60 characters, so the class cap is 64.
+  and once per user message (it grants nothing by itself). (6) The data-API check first asked the schema root
+  and one table with a valid-versus-bogus comparison; A13 replaces that logic (a gateway refuses a
+  bogus key whatever the API state, so it could not tell off from on). (7) The derived `unconverged` class names reach 60 characters, so the class cap is 64.
   Not material.
 
 - A12 2026-10-10 -- GA1 granted by the user (rehearsal project `sgaa-mp3-rehearsal`, Hobby, Git integration
@@ -672,11 +672,36 @@ Executor amendments (consequences of the above; not material beyond what the use
   logs a traceback that names the database host (no secret; one hour of retention); anonymous pages carry
   the platform default `cache-control` and no cache hit was observed. No gate beyond GA1 was used. Not material.
 
+- A13 2026-10-10 -- Pre-R3 database unblock (user message). (1) Governance correction: the DEV database
+  credential in the libpq password file is a user-only input, not GA4; GA4 is exactly "DEV Data API off and
+  DEV `public` run-owned", and it was authorized. (2) Executed GA4: the Dashboard toggle is the user's, and
+  it was still on (PostgREST answered 404 `PGRST205` for `public.usuarios`); the executor applied the
+  documented override (`pgrst_no_exposed_schemas` schema, `ALTER ROLE authenticator SET pgrst.db_schemas`,
+  `NOTIFY pgrst`) through the project's SQL interface. Observed after: `Accept-Profile: public` answers 406
+  `PGRST106`, the bogus key 401, the root 401 (closed to publishable keys). The override is reversible with
+  `ALTER ROLE authenticator RESET pgrst.db_schemas`; the Dashboard no longer manages exposed schemas while
+  it stands. (3) The smoke's data-API check is redesigned on that evidence and, after the R2 recheck (which found the
+  first redesign could pass on a refused valid key or a protection page), passes only on 406 `PGRST106`
+  whose hint lists nothing but the empty placeholder schema, with a bogus-key control (401) and the
+  provider's own host; rows, PGRST205, 42501, another schema list, a refused valid key and a protection
+  page fail; every conjunct is pinned by a mutation probe; the earlier valid-versus-bogus comparison
+  would have failed on a project with the API off. (4) Dependencies (user decision): `cryptography`
+  45.0.7 -> 50.0.2 and `msal` 1.31.1 -> 1.37.0 (the smallest msal that resolves with the fixed cryptography;
+  the lines before it conflict). Requalified on a clean virtual environment: the authentication, OAuth,
+  crypto, backup, storage and hosted-runtime surfaces (1,197 tests) pass; Fernet round trip and an msal
+  client construct; the full suite follows the TEP trigger D (A14 records it). (5) The credential the
+  pooler was offered (the pgpass entry for the project pooler) is parsed correctly (host, any port, `postgres`
+  database, the tenant user, a password of eleven plain characters) and is REJECTED by the session (5432)
+  and transaction (6543) poolers with `password authentication failed`; the Supabase-DEV pooler and session
+  lanes, DR1, DR3 and the managed-platform RTO therefore remain unrun. The executor does not read the
+  password back and cannot repair it. Not material.
+
 ## 17. Closure
 
 Level reached: **PREPARED_WITH_BLOCKERS** -- every executor-side deliverable is landed and
 evidenced; the closure level *Prepared* of §13 additionally needs the R3 PASS and the lanes below
-that only the user's inputs can unblock. No gate was granted or performed; nothing touched PROD,
+that only the user's inputs can unblock. Only GA1 and GA4 (both DEV, both authorized by the user) were
+used; nothing touched PROD,
 the institution's Drive or real student data; no cost was incurred.
 
 Slices (landing order 1, 3, 2, 4, 5, 6): S1 `ff3c2ff`, S3 `b22a7b9`, S2 `03cc05b`, S4 `4a1940f`,
@@ -687,9 +712,9 @@ Acceptance:
 | AC | State | Evidence / what is missing |
 |---|---|---|
 | AC1 | MET | Export and audit with negative controls (`tests/test_mp3_deploy_audit.py`, descriptor tests) and, on the GA1 rehearsal project (A12): the exported commit deploys as two Python functions (web and scheduler) with the declared `maxDuration` and region, the scheduler rewrite wins, the platform cron fired and passed the bearer check, the built source tree audits CLEAN and the negative control FINDINGS. The web function ran without a database (health fails closed); its database-backed behaviour is the GA4 lane. |
-| AC2 | PARTIAL | PostgreSQL 17.11 passes the real-PG families locally and the probe shows the DEV Data API behaviour. BLOCKED: pooler and session lanes against Supabase DEV need its database credential (GA4). |
+| AC2 | PARTIAL | PostgreSQL 17.11 passes the real-PG families locally and the probe shows the DEV Data API behaviour. BLOCKED: pooler and session lanes against Supabase DEV need the user-only DEV database credential (libpq password file; not a gate). The cryptography/msal fix is applied (A13). |
 | AC3 | PARTIAL | Authz gate fail-closed with negative controls, secrets matrix, leak audit by sentinels, and live (A12): the rate-limit rule refuses the 101st credential POST per address and window, the scheduler answers 401 / 404 (front disabled) / authenticated, runtime logs hold no secret shape. BLOCKED: OAuth and bootstrap rehearsal need a database and a Google client; R3 verdict pending. |
-| AC4 | PARTIAL | Layer-2 and object-set backup, verify and restore, the Supabase restore profile on a project-shaped target, `ops_backup` sequencing with registry rotation, corrupted-backup refusal (`test_mp3_rehearsal_live.py`). BLOCKED: restore of a set taken on the managed platform into another environment (DR1) and of a foreign set into the managed DEV target (DR3) need GA4; RTO on the platform is therefore not measured. |
+| AC4 | PARTIAL | Layer-2 and object-set backup, verify and restore, the Supabase restore profile on a project-shaped target, `ops_backup` sequencing with registry rotation, corrupted-backup refusal (`test_mp3_rehearsal_live.py`). BLOCKED: restore of a set taken on the managed platform into another environment (DR1) and of a foreign set into the managed DEV target (DR3) need the user-only DEV database credential; RTO on the platform is therefore not measured. |
 | AC5 | MET | `test_mp3_cutover_ledger.py` (order, gates, identities, rollback from every state before C13 including C12, PONR, head binding), `test_mp3_rehearsal_live.py` (C0..C14 end to end on real DEV Storage and PostgreSQL 17, a killed converge resumed, a foreign object at a key never overwritten and refused by the ledger, a corrupted backup refused, an offline v15 -> v16 upgrade), `test_mp3_smoke_real_app.py` (the smoke writes no business row on the real application), `test_mp2_scheduler_real_pg.py` (duplicate invocations). Not injected live: unavailable Drive and wrong secret (covered at unit level by MP-1/MP-2 and the scheduler's 401), failed deployment and commit-uncertain (unit level: `COMMIT_UNCERTAIN_NOT_RESOLVED`). |
 | AC6 | GATED | S7 is executed only through the gates. |
 | AC7 | MET | Self-audit in the phase report. |
@@ -716,11 +741,15 @@ is run by the user from the packet and is pending.
 
 Findings of this phase worth carrying: a fresh Supabase project exposes every public object to the
 Data API roles and PostgreSQL grants `EXECUTE` on new functions to PUBLIC (HOSTED_RUNTIME §11);
-the Supabase schema root is closed to publishable keys, so a root-only Data API check passes on an
-enabled API; the first sign-in rewrites legacy-level student rows and a legacy-hash login bumps the
+the Supabase schema root is closed to publishable keys and the gateway refuses a bogus key whatever the
+Data API state, so only `Accept-Profile: public` -> 406 `PGRST106` proves the API off (A13); the first sign-in rewrites legacy-level student rows and a legacy-hash login bumps the
 credential version (known derived writes the PONR detector reports and the operator adjudicates).
 
-Inputs the user must provide to unblock the PARTIAL lanes (none is a gate by itself): a Vercel
-Hobby rehearsal project (GA1), the DEV database credential through the libpq password file (GA4),
-and a decision on bumping `cryptography` with `msal` together (A8).
+Dependencies (A13): `cryptography` 50.0.2 and `msal` 1.37.0 are applied; the A8 deferral is closed.
+
+Input the user must provide to unblock the PARTIAL lanes (a user-only act, not a gate): a DEV database
+password in the libpq password file that the Supabase poolers accept for the tenant user (the entry
+present on 2026-10-10 is rejected by both poolers, A13). With it: provision v16 on DEV, the
+transaction-pooler and session lanes, DR1, DR3 and the managed-platform RTO. The R3 verdict is the
+other pending item.
 

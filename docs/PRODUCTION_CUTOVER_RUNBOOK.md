@@ -180,10 +180,16 @@ that would cost money is not performed; stop and say so.
 with `SUPABASE_PUBLISHABLE_KEY` in the process environment (the data-API check needs the key:
 without it the check refuses rather than passing on a 401) and, for the sign-in check,
 `--email <operator>` (password at the hidden prompt; refused over plain http). PASS required.
-The data-API check asks the schema root and one application table with the valid key and
-with a bogus one, and passes only if neither is served (both refused alike). Its positive
-control is run once before C10: point it at the DEV project, whose Data API is on, and see
-it FAIL (`DATA_API_SERVES`); a check that cannot fail proves nothing.
+The data-API check asks one application table in the `public` schema (`Accept-Profile: public`)
+with the valid key, and with a bogus key as the control (the gateway must answer 401, else
+`DATA_API_CONTROL`). It passes only on 406 `PGRST106` whose hint lists no schema but the empty
+placeholder (`pgrst_no_exposed_schemas` / `pg_pgrst_no_exposed_schemas`). Rows, 404 `PGRST205`,
+401 `42501`, a PGRST106 that lists another schema, a valid key refused like the bogus one and a
+protection page all fail (`DATA_API_SERVES`): none of them proves the API off. The data-API
+address must be the provider's (`*.supabase.co`, `DATA_API_URL_NOT_PROVIDER`). The schema root
+is not asked: it answers 401 to every publishable key whatever the state. Its positive control is run once
+before C10 against a project whose API is on and must FAIL; a check that cannot fail proves
+nothing.
 
 The smoke reads `/csrf-token`, never the dashboard (its view writes alert receipts and may
 derive a rejection). Its only application write is the sign-in. Prove that, do not assume it:
