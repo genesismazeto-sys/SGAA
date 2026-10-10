@@ -1,0 +1,44 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": ".",
+      "entrypoint": "main:app",
+      "buildCommand": "mkdir -p public && cp -r static public/static",
+      "functions": {
+        "main.py": {
+          "maxDuration": 60
+        }
+      }
+    },
+    "scheduler": {
+      "root": ".",
+      "entrypoint": "app.storage.scheduler:application",
+      "functions": {
+        "app/storage/scheduler.py": {
+          "maxDuration": 300
+        }
+      }
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/internal/scheduler/(.*)",
+      "destination": {
+        "service": "scheduler"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
+  ],
+  "crons": [
+    {
+      "path": "/internal/scheduler/mirror",
+      "schedule": "17 4 * * *"
+    }
+  ]
+}

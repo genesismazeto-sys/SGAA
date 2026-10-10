@@ -348,3 +348,37 @@ that bound: its fixed releases (46.0.5 and later, with `msal` 1.32 or later) wer
 applied in MP-3; the advisories concern X.509 chain validation, PKCS7 decryption, EC public
 key loading from numbers, non-contiguous buffers and the OpenSSL linked into wheels, none of
 which the application calls. Bump `cryptography` and `msal` together in a hardening change.
+
+## 13. Deployment on Vercel Hobby
+
+The working tree beside the code holds the real database, its copies, uploaded documents
+and logs, none of them in Git. A platform CLI that uploads "the directory" would publish
+them, so a deployment is never made from the working tree:
+
+```
+python tools/deploy_audit.py export --commit <reviewed commit> --out <new empty directory>
+python tools/deploy_audit.py audit  --dir <that directory> [--sentinels <file>]
+```
+
+`export` writes the committed content of one commit, keeping only the runtime allowlist
+(the application, templates, static files, requirements and the descriptors below); tests,
+docs and tools are not uploaded. `audit` refuses a forbidden path (databases, dumps,
+documents, logs, `.env`), a SQLite or dump signature in any file, a secret-shaped value, a
+planted sentinel and any link. Its output is counts, fixed codes and path digests (paths
+only with `--show-paths`). The user-authenticated Vercel CLI then deploys that directory.
+
+Descriptors at the repository root: `vercel.json` (two services -- web `main:app` and the
+scheduler `app.storage.scheduler:application` -- the scheduler rewrite before the
+catch-all and one daily cron entry; no response headers, the application owns them),
+`.python-version` (3.12) and
+`.vercelignore` (defence in depth, not the control). Hobby runs a cron at most once a day
+(any minute within the hour): the entry reaches a disabled front until `CRON_SECRET` is
+set, so one commit is rehearsed, deployed and promoted. A higher mirror cadence uses a
+free external trigger that sends the same bearer (a Supabase `pg_cron` job with `pg_net`,
+which is also database activity that keeps a Free project from pausing).
+
+Limits the deployment lives with (Hobby, read 2026-10-10): `maxDuration` 300 s, a 4.5 MB
+request or response body, one hour of runtime logs, one rate-limit rule per project, and a
+monthly ceiling on invocations and active CPU after which usage stops rather than bills.
+Student documents do not pass through the function (signed direct uploads); a CSV import
+larger than the body limit fails at the platform.

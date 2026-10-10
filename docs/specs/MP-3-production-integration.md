@@ -573,6 +573,15 @@ Executor amendments (consequences of the above; not material beyond what the use
   transaction-pooler address and a list of hosts. (e) The real-PG lanes against the Supabase DEV
   database (pooler and session modes) need the DEV database credential, a user-only input recorded as
   a BLOCKER for that sub-lane; every other S1 lane ran. Not material.
+- A7 2026-10-10 — Slice 2. `vercel.json` declares two services (web `main:app`, scheduler
+  `app.storage.scheduler:application`), the scheduler rewrite before the catch-all, the daily cron
+  entry (no response headers: the application owns them, A8b); the cron entry is in the committed
+  descriptor from the start and the
+  scheduler front stays disabled until `CRON_SECRET` is set at GD2 (C9 `scheduler_front` DISABLED, C11
+  ENABLED), so the rehearsed, deployed and promoted commit is one commit instead of a descriptor-only
+  commit at C11. The deployment source is `tools/deploy_audit.py export` (committed content, runtime
+  allowlist) followed by `audit`; the live qualification of Services on the Hobby account (P1-P5, static
+  copy, header and cron behaviour) waits for GA1. Not material.
 - A8 2026-10-10 — Slice 3. The authorization gate refuses (403 and an error log) a governed admin request
   with no or an invalid RBAC requirement in production (UD7); the three guards that encoded the shadow
   behaviour were updated with negative controls (non-production still raises, a mapped route is decided

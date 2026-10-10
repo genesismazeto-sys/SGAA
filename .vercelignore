@@ -1,0 +1,20 @@
+# Defence in depth only: the control is `tools/deploy_audit.py export` + `audit`
+# (a deployment is built from a clean export of a commit, never this tree).
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+uploads/
+documentos_alunos/
+logs/
+backups/
+_normativos_inbox/
+.git/
+.claude/
+tests/
+docs/
+tools/
