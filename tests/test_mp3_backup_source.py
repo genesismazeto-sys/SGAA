@@ -389,3 +389,57 @@ def test_a_foreign_set_resealed_with_prod_metadata_is_never_what_the_ledger_reco
     [entry] = _backups(at_c11["directory"])
     assert entry["manifest_sha256"] != planted["manifest_sha256"] and entry["object_set_name"] == result["object_set"]
     assert ops_backup.verify_generation(root, off)["manifest_sha256"] == entry["manifest_sha256"]
+
+
+@NEEDS_PG
+def test_the_drill_restores_only_a_recorded_generation_unaltered_into_a_new_scratch_target(
+        at_c11, registry, tmp_path, monkeypatch):
+    """Finding 6: a drill receipt exists only for the recorded generation, verified, restored into scratch."""
+    import os
+    import shutil
+
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger as ledger
+    from tools import ops_backup
+
+    directory = at_c11["directory"]
+    baseline = [e for e in ledger.read_ledger(directory) if e["type"] == "backup" and e["kind"] == "BASELINE"][-1]
+    root, off = tmp_path / "baseline", tmp_path / "baseline-off"
+    scratch_name, scratch_url = registry.create()
+    env = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
+    env["SGAA_RESTORE_TARGET_URL"] = scratch_url
+
+    def refused(**kwargs):
+        options = dict(environ=env)
+        options.update(kwargs)
+        with pytest.raises(ops_backup.Refused) as caught:
+            ops_backup.drill(directory, root, off, options.pop("generation", baseline["manifest_sha256"]), **options)
+        return caught.value.code
+
+    try:
+        restores = len([e for e in ledger.read_ledger(directory) if e["type"] == "restore"])
+        assert refused(environ=dict(env, DATABASE_URL=at_c11["prod"])) == "DRILL_SOURCE_URL_SET"
+        assert refused(environ=dict(env, PGHOSTADDR="127.0.0.1")) == "SOURCE_ENV_ROUTING"
+        assert refused(generation="a" * 64) == "GENERATION_NOT_RECORDED"
+        # The object set altered after it was recorded (its copy too): not the recorded generation.
+        object_set = root / "objects" / baseline["object_set_name"]
+        saved = tmp_path / "saved-objects"
+        shutil.copytree(object_set, saved)
+        for directory_ in (object_set, off / "objects" / baseline["object_set_name"]):
+            manifest = directory_ / "MANIFEST.json"
+            manifest.write_bytes(manifest.read_bytes().replace(b'"label"', b'"label" ', 1))
+        assert refused() in {"OBJECT_SET_NOT_THE_RECORDED_ONE"}
+        for directory_ in (object_set, off / "objects" / baseline["object_set_name"]):
+            shutil.rmtree(directory_)
+            shutil.copytree(saved, directory_)
+        # The target must be scratch: the PROD stand-in itself (not empty, the source) is refused by the restore,
+        # and a server that names a Supabase project is never a drill target.
+        assert refused(environ=dict(env, SGAA_RESTORE_TARGET_URL=at_c11["prod"])).startswith("RESTORE_")
+        ls.local_server_is_project(monkeypatch, PROD_REF)
+        assert refused() == "TARGET_NOT_SCRATCH"
+        monkeypatch.undo()
+        assert [e for e in ledger.read_ledger(directory) if e["type"] == "restore"].__len__() == restores
+        drilled = ops_backup.drill(directory, root, off, baseline["manifest_sha256"], environ=env)
+        assert drilled["result"] == "DRILL_VERIFIED"
+    finally:
+        registry.drop(scratch_name)

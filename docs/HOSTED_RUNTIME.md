@@ -68,14 +68,26 @@ control, so the hosted runtime carries a fail-closed admission switch
   its issue time and an HMAC of that time and the token under `APP_SECRET_KEY` (never the
   token); the server refuses it eight hours after issue, or dated in the future. Behind the
   gate the application's own authentication and RBAC decide, as after the opening.
-- `SGAA_ADMISSION=open`: no gate is installed. In production (and on a serverless platform) it
-  needs `SGAA_OPENING_REFERENCE`, the hash of the reference entry the cutover ledger printed when
-  it took the reference while admission was closed (not known before that entry exists);
-  every response then carries `X-SGAA-Opening: <tag>` (`app.hosting.opening_tag`), which the
-  ledger checks before it records the opening. The process checks only the value's shape; the
-  binding is proven by the ledger. Setting
-  both and redeploying the same commit is the opening; setting `operator` again and
-  redeploying is the first step of a rollback from C12.
+- `SGAA_ADMISSION=open` (MP-3 SPEC A17): on a workstation or in a test no gate is installed. In
+  production (and on a serverless platform) it needs `SGAA_OPENING_REFERENCE`, the hash of the
+  reference entry the cutover ledger recorded while admission was closed, and it admits users ONLY
+  while the PROD database holds the authorization the ledger wrote with that entry
+  (`sgaa_cutover.opening`, a schema outside `public`; `app.hosting.OPENING_*`). The row carries the
+  ledger entry itself: it must hash to the reference (or, for a forward fix, be an authorization
+  entry naming it), name this database's live identity (`app.hosting.source_identity_sha256` of the
+  process's own connection), this process's code and this platform project (`VERCEL_PROJECT_ID`),
+  and not be revoked. The check is the first request hook, re-read at most every 15 s
+  (`OPENING_CHECK_SECONDS`), and fails closed: a missing, forged, revoked or foreign authorization,
+  or a database that cannot be asked, is answered like a closed deployment (`503`,
+  `X-SGAA-Admission: closed`; `/health` and static files stay reachable). Every response of an open
+  deployment carries `X-SGAA-Opening: <tag>` (`app.hosting.opening_tag`). The values are set on each
+  deployment by `tools/deploy_audit.py deploy`, never at the project level. A rollback starts with the
+  ledger's `close`, which revokes the authorization and applies the write barrier.
+- Every response of a hosted production process names the code it runs: `X-SGAA-Code`, the
+  SHA-256 of the sorted path and git blob id of its code files (`app.hosting.runtime_code_sha256`;
+  `CODE_PATHS`; the platform's build files -- the rewritten `vercel.json`, the generated
+  `pyproject.toml` and `uv.lock` -- are not code). The governed deploy and the ledger compare it with
+  the reviewed export's identity.
 - Anyone can observe the state without a credential (`tools/hosted_smoke.py
   probe_admission`, also the ledger's probe): `closed` means every probe (two pages and a
   credential POST) is `503` with the closed header and sets no cookie.

@@ -120,7 +120,9 @@ leak carries a sentinel so a leak audit can search outputs, logs and bundles for
 | `tools/hosted_smoke.py` (new operator tool) | public HTTPS smoke, read-only, value-free (checks listed at state C10) |
 | `tools/cutover_ledger.py` (new operator tool) | the state machine as an append-only hash-chained ledger outside the repository; validates order and evidence, executes nothing |
 | `tools/pg_fingerprint.py` (new operator tool) | read-only business-table fingerprint of PROD: the PONR detector (A10) |
-| `tools/ops_backup.py` (new operator tool) | sequences Layer-2 backup, verify, object backup, verify, rotation and the off-platform copy; value-free log |
+| `tools/ops_backup.py` (new operator tool) | sequences Layer-2 backup, verify, object backup, verify, rotation and the off-platform copy; value-free log; the governed run and the restore drill whose receipts the ledger records (A17) |
+| `tools/prod_source.py` (new operator tool, A17) | the one verified connection to the PROD database: session pooler, `verify-full` against the pinned Supabase root CA, no libpq routing input |
+| `tools/vercel_provider.py` (new operator tool, A17) | the platform's record of the production project (deployments, uploaded files, alias) through the user's pinned CLI |
 | `app/hosting_cli` (extended) | `check --database` also reports whether provider API roles hold privileges on SGAA tables and the connection kind |
 | `app/web/authz_gate` (changed) | production fail-closed (UD7) |
 | `tools/pg_backup.py` (extended) | PostgreSQL 17 corrections found by S1 and an explicit Supabase restore profile (allow-list of provider schemas and extensions; the strict plain-PG definition stays the default) |
@@ -168,20 +170,20 @@ the user has not accepted.
 | State | Gate | What happens | Exit evidence |
 |---|---|---|---|
 | C0 REHEARSED | — | S1–S6 done, runbook hash frozen, final-candidate review PASS, UD answered; the PROD project named (A15) | rehearsal index; PROD project digest |
-| C1 PROD_QUALIFIED | GP0 GP1 GP2 | PROD major read; Data API off: the user's toggle, then the provider's documented override named in GP1, then the exact answer proven on DEV, bound to the PROD project (A15); v16 provisioned and validated; private bucket; canary object round trip then removed; API-role privileges revoked; Free-plan capacity and pause preconditions recorded (database, storage, egress against the census); secrets in the platform by the user (dashboard or interactive prompt), admission `operator`; the session connection proven to belong to the PROD project (A16) | schema CURRENT, 0 rows, 0 objects, data-API proof and database of THE project |
+| C1 PROD_QUALIFIED | GP0 GP1 GP2 | PROD major read; Data API off: the user's toggle, then the provider's documented override named in GP1, then the exact answer proven on DEV, bound to the PROD project (A15); v16 provisioned and validated; private bucket; canary object round trip then removed; API-role privileges revoked; Free-plan capacity and pause preconditions recorded (database, storage, egress against the census); secrets in the platform by the user (dashboard or interactive prompt), admission `operator`; the session connection proven to belong to the PROD project (A16), by the ledger's own `qualify` through the verified source, cross-checked with the project's storage API (A17) | schema CURRENT, 0 rows, 0 objects, data-API proof, the qualification entry |
 | C2 SNAPSHOT_CENSUSED | GR0 | online snapshot copy of the workstation database, upgraded offline on the copy when needed; census; volume and classes; downtime budget from rehearsal throughput; disposition proposal | counts by class |
 | C3 SOURCE_FROZEN | GR1 | workstation runtime and scheduled tasks stopped; no `-wal`; byte copy of database and document roots plus the file backup into an encrypted custody directory outside the repository | size, SHA-256 |
 | C4 SOURCE_PREPARED | GR1 | on the copy only: offline upgrade to v16 if needed, integrity and FK checks, authoritative census; terminal and unsupported rows dispositioned per UD6 | accepted classes with exact counts |
 | C5 CONVERGED | GR2 | `converge --apply` on the copy (resumable): deterministic keys into the PROD bucket; legacy bytes untouched | zero unaccepted rows |
 | C6 SOURCE_CROSS_CHECKED | GR2 | `verify --deep` of the converged copy against the PROD bucket and its listing | clean verdict, reference digest D |
 | C7 TARGET_LOADED | GR3 | Path-B dry run, then apply into the PROD database; validation | report; commit outcome known |
-| C8 TARGET_VERIFIED | GB1 GP3 | `verify --deep` on PROD: digest equals D, census equal; administrator bootstrap only if no login-capable full administrator exists; **cutover baseline** (Layer-2 and object set), both verified, restore drill into scratch PostgreSQL of the PROD major, clone probe | digest equality, manifest identities |
-| C9 DEPLOYED_DARK | GD1 | production deployment of the exact commit from a clean export, re-verified against the commit's blob ids immediately before the upload (`deploy_audit verify`, A15); admission closed to everyone but the operator (`SGAA_ADMISSION=operator`, A15); readiness `--database` ready, the one rate-limit rule published, the scheduler front disabled (no `CRON_SECRET`; the daily cron entry in the committed descriptor reaches a disabled front) | deployment identity, deploy-tree digest, admission CLOSED |
+| C8 TARGET_VERIFIED | GB1 GP3 | `verify --deep` on PROD: digest equals D, census equal; administrator bootstrap only if no login-capable full administrator exists; **cutover baseline** (Layer-2 and object set), both verified, restore drill into scratch PostgreSQL of the PROD major, clone probe; the baseline by the governed backup and the drill by `ops_backup drill`, both recorded as receipts (A17) | digest equality, the baseline and drill receipts |
+| C9 DEPLOYED_DARK | GD1 | production deployment of the exact commit by `deploy_audit deploy`: the export verified and uploaded in one operation, bound to the platform's own list of the files it received and to the code the deployment announces, recorded in the ledger (A15, A17); admission closed to everyone but the operator (`SGAA_ADMISSION=operator`, A15); readiness `--database` ready, the one rate-limit rule published, the scheduler front disabled (no `CRON_SECRET`; the daily cron entry in the committed descriptor reaches a disabled front) | deployment identity, deploy-tree digest, admission CLOSED |
 | C10 SMOKED | — | `hosted_smoke` with the operator credential: TLS and hostname, `/health`, login page and cookie flags, response headers, unauthenticated admin refusal, static asset, scheduler probes (404/401), the Data API proof of C1's project, read-only authenticated checks by an operator account, and, with an anonymous client, admission still CLOSED; its write set is pinned by a fingerprint before and after | report |
 | C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI behind the admission gate (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; `CRON_SECRET` set and the deployment redone (the same commit) so the daily cron reaches the enabled front and, if the backlog needs it, the external trigger enabled (its bearer in Supabase Vault); first scheduled passes observed; admission still CLOSED | results; none `reconciliation_required` |
-| C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger, its source proven to be the PROD database and store (A16); the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference entry's hash, same commit redeployed and promoted) and `open`, which observes it and the reference's tag; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
+| C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger, its source proven to be the PROD database and store (A16); the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; the reference also writes the opening authorization into PROD (A17); then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference entry's hash, the same commit deployed by the governed deploy and promoted) and `open`, which observes it, the reference's tag and the authorization; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
 | C13 PONR_RECORDED | — | the first successful non-operator business write on PROD is detected (fingerprint delta) and recorded explicitly in the ledger; window W starts | the write's class and time, never its content |
-| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation of the PROD database (A16) made after C13 restore-validated; object set verified; hand-over to MP-4 | window report |
+| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation of the PROD database (A16) made after C13 restore-validated by the drill's receipt (A17); object set verified; hand-over to MP-4 | window report |
 
 Order note. The charter lists the elements; MP-1 D12 and Path-B force convergence before Path-B for
 local rows, and convergence on the frozen copy keeps the live source unmutated. The opening is after
@@ -195,7 +197,7 @@ rollback stays available after the opening until the first business write (§3.4
 | C1–C4 | stop; restart the workstation runtime if frozen | none; PROD holds nothing real |
 | C5–C6 | as above; PROD bucket keeps additive unreferenced objects, adopted by a rerun | none; removal only under GX1 |
 | C7–C11 | as above; abandon the deployment (no cron, trigger disabled); PROD database holds a copy, so a retry needs it emptied (GX1) | none to source; PROD copy discarded; mirror files written to the Drive at C11 stay (additive, removed by hand) |
-| C12 | close admission (`SGAA_ADMISSION=operator`, redeploy), stop the scheduler front and the external trigger; the ledger itself proves quiescence and compares the live fingerprint with the reference: equal, or differing only by the fixed derived-write classes verified row by row and acknowledged exactly (A15); anything else refuses and the PONR is recorded (C13); then pause the deployment and restart the workstation runtime | none to source; users told once; never an undetected user write |
+| C12 | stop the scheduler front and the external trigger, close admission (a governed operator deployment); `close` revokes the opening authorization and applies the database write barrier (A17); the ledger itself proves the barrier and quiescence and compares the live fingerprint with the reference: equal, or differing only by the fixed derived-write classes verified row by row and acknowledged exactly (A15); anything else refuses and the PONR is recorded (C13); then pause the deployment and restart the workstation runtime | none to source; users told once; never an undetected user write |
 | C13 onward | forward-fix only | see below |
 
 PONR is the first successful non-operator business write on PROD, not the opening. Opening only
@@ -423,7 +425,7 @@ PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" de
 | GD2 | redeploy with `CRON_SECRET`; enable the external trigger (a `pg_cron` job in PROD is a PROD database write; its bearer is stored by the user in Supabase Vault, never in the job) when the backlog needs it | redeploy without; job unscheduled, Vault entry deleted |
 | GG1 | register the callback on the legacy OAuth client; connect Google through the hosted UI | disconnect |
 | GG2 | first live mirror passes against the institution's Drive (additive; the mirror never deletes) | files removed by hand |
-| GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed, then the lift (`SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE` = the reference entry's hash, same commit redeployed and promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | close admission again, remove the open deployments and roll back on the ledger's proof while pending (§3.4) |
+| GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed everywhere (it writes the opening authorization), then the lift (the governed open deployment carrying `SGAA_OPENING_REFERENCE` = the reference entry's hash, promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | `close` (authorization revoked, write barrier), remove the open deployments and roll back on the ledger's proof while pending (§3.4); after a refused rollback `resume` |
 | GX1 | empty the PROD database or remove unreferenced PROD bucket objects this phase created, before PONR | irreversible by design |
 
 User-only acts, never gates the executor holds: creating and revoking credentials (including the DEV
@@ -843,12 +845,81 @@ Executor amendments (consequences of the above; not material beyond what the use
   identifier is readable, the server-side role is `postgres` for every project and the pooler host is shared
   by the region, so the authenticated tenant is what names the project. Evidence: section 17.
 
+- A17 2026-10-11 -- R3 cross-family remediation, final enforcement round (user message "MP-3 R3 CROSS-FAMILY
+  REMEDIATION — FINAL ENFORCEMENT ROUND": the cross-family review of `000667d` returned FAIL on six material
+  findings; GP0 is not authorized; then "MP-3 — EXPEDITED COMPLETION": no dedicated Vercel lane, targeted
+  mutation, one T5, no same-family recheck). The architecture is unchanged (Vercel Hobby, Supabase Free, zero
+  recurring cost, Supabase Storage canonical, Drive an asynchronous mirror, no paid backup). Every control is
+  executable and observed or taken from the receipt of the tool that performed the step; nothing the ledger
+  relies on is typed. (1) Pre-GO opening machine-bound. An open production process admits users only while
+  the PROD database holds the authorization the ledger's `reference` writes, in one database transaction
+  with the entry, into `sgaa_cutover.opening` (a control schema outside `public`: no Layer-2 set, fingerprint
+  or schema contract includes it). The row carries the reference entry itself; the application
+  (`app/web/admission_gate.py`, the check owned by `app.hosting`) re-derives the entry hash, compares it with
+  `SGAA_OPENING_REFERENCE`, and requires the entry to name its own live database identity, its own code
+  (`X-SGAA-Code`, `app.hosting.runtime_code_sha256`) and its platform project (`VERCEL_PROJECT_ID`), not
+  revoked; it re-reads at most every 15 s and fails closed (503 closed) on anything else, a database it
+  cannot ask included. A well-formed value alone opens nothing. `reference` refuses on any machine-observable
+  sign of an earlier opening: an authorization already in PROD (`OPENING_AUTHORIZATION_EXISTS`), a deployment
+  the platform holds that the governed deploy never recorded (`UNRECORDED_DEPLOYMENT`) or recorded as open,
+  a deployment address that admits users or runs other code, an alias that is not the candidate. One
+  reference per opening stays. After the point of no return a forward fix is opened only by
+  `authorize-code` (GF1). (2) C12 rollback proves global write quiescence. `close` revokes the authorization
+  and applies a database write barrier the role every writer uses can apply to itself on Supabase Free
+  (`ALTER ROLE <role> IN DATABASE <db> SET default_transaction_read_only = on`), then ends every older
+  session of that role, its own included (the provider's session pooler reuses server sessions: observed on
+  DEV, where a first version that spared its own session left a writable session in the pool), and records
+  it only once a fresh session proves it (setting present, the session read-only, a write refused, no older
+  session, no authorization in force). The rollback requires it and re-verifies it before each fingerprint
+  and immediately before the record; it stays after a recorded rollback; `resume` lifts it (and ends the
+  sessions that started read-only) after a refused rollback. Immutable deployment URLs, the scheduler and
+  the external trigger all write through that role, so none can write. (3) PROD identity from authenticated
+  provider evidence. `tools/prod_source.py` is the one connection the ledger and the governed backup use: the
+  session pooler only, `sslmode=verify-full` against the Supabase root CA committed in `tools/certs/` and
+  pinned by its DER SHA-256, no password or parameter but `sslmode` in the URL, and no libpq routing or TLS
+  variable (`PGHOSTADDR`, `PGHOST`, `PGSERVICE`, `PGSERVICEFILE`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGOPTIONS`,
+  `PGSSL*`, … refused by name). The ledger's `qualify` (GP1) records the identity (database, role, cluster,
+  the tenant the pooler authenticated) only when the project's own storage API (public TLS, the secret key)
+  lists exactly the buckets the database holds; every later observation must be that database
+  (`DATABASE_NOT_THE_QUALIFIED_ONE`). C1 requires the qualification. (4) Backup provenance from the live
+  operation. `ops_backup --ledger-dir` is the only recorder: it observes the qualified database through the
+  verified source before any step and after the last, runs the children on the verified address, re-verifies
+  from disk the generation it created and hands the ledger a receipt (manifest and dump digests, object set
+  name, digest and manifest digest, the identities observed, the store project, the run's own time window);
+  the ledger re-observes the database and refuses any difference (`BACKUP_NOT_THE_RUNS_OUTPUT`,
+  `BACKUP_NOT_FROM_THE_PROD_DATABASE`, `OBJECT_SET_NOT_FROM_THE_PROD_PROJECT`, `BACKUP_TIME_INVALID`).
+  `record-backup` is removed: no command records a set found on disk. `--baseline` takes the cutover baseline
+  the same way. A foreign set with resealed PROD metadata or a mixed-source generation is never recorded;
+  the reference and C14 re-verify the recorded digests on disk. No new secret was introduced. (5) Deployment
+  identity bound to the candidate. `deploy_audit deploy` exports, audits and verifies into a directory it
+  creates, uploads it (`--prod --skip-domain`, the admission and the reference set on the deployment), asks
+  the platform for the files it received (each named by the SHA-1 of its bytes) and requires them equal to
+  the verified export (`DEPLOYED_FILES_DIFFER`), observes at the deployment's own address its code and its
+  admission, and records it; a failing deployment is removed. `deploy_audit promote` promotes only a recorded
+  deployment still holding the recorded files and records it once the platform resolves the public address
+  to it and the address serves its code. C9 names a recorded deployment, C10 a recorded promotion; reference,
+  open and every later deployment (GD2, the lift, a rollback deployment, a reopening, a forward fix) go
+  through the same path. (6) Restore validation is executable evidence. `ops_backup drill` restores a
+  recorded generation into a new scratch PostgreSQL (`DATABASE_URL` unset), verifies the restored database
+  and the object set (its recorded digest, and that it holds every restored `storage_objects` row), and
+  records a receipt bound to the generation, its source and the scratch target; C8 and C14 consume it (the
+  typed `restore_drill`, `verify_backup` and `object_set_verified` are gone; C14 keeps UD4's window and the
+  cadence). Non-material: the smoke refuses secret and service keys before anything is sent
+  (`DATA_API_KEY_NOT_PUBLISHABLE`). Provider facts (GA1 rehearsal project, one probe deployment of the
+  reviewed export, removed afterwards; the project left empty, its protection restored): the platform's
+  file list equals the uploaded export (per-file SHA-1); the function holds the uploaded code paths byte for
+  byte, `vercel.json` rewritten and a `pyproject.toml` and `uv.lock` added by the Python builder (so the code
+  identity excludes them: an attempt that counted `pyproject.toml` was refused `DEPLOYMENT_CODE_NOT_OBSERVED`,
+  fail closed); `VERCEL_DEPLOYMENT_ID` and `VERCEL_PROJECT_ID` are present at run time. On Windows the CLI
+  runs through node, never a `.cmd` shim (cmd.exe split an API path at `&`). Evidence: section 17.
+
 ## 17. Closure
 
 Level reached: **PREPARED, PENDING R3** -- every executor-side deliverable is landed and evidenced
 and the database lanes ran on Supabase DEV (A14). The first R3 review returned FAIL on five material
 findings; their remediation (A15) landed; the re-review of that candidate (`d4e9dc8`) returned FAIL on one
-material finding, the backup source identity, remediated in A16; the R3 re-review of this candidate is
+material finding, the backup source identity, remediated in A16; the cross-family review of `000667d`
+returned FAIL on six material findings, remediated in A17; the cross-family R3 review of this candidate is
 pending. The
 closure level *Prepared* of §13 additionally needs the R3 PASS; AC3 keeps one partial item (the Google
 OAuth rehearsal, which needs the optional GA2) and AC4 is PARTIAL until its production-side evidence
@@ -925,6 +996,21 @@ needed its object directory created (found by the real opening lane).
 
 Dependencies (A13): `cryptography` 50.0.2 and `msal` 1.37.0 are applied; the A8 deferral is closed.
 
-Pending: the R3 re-review verdict (the user runs it from the regenerated packet) and, optionally, GA2 (a DEV
-Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
+A17 evidence (final enforcement round). Unit and loopback lanes: the ledger (208 incl. the real-application
+opening on PostgreSQL 17: the ledger's qualification, a governed baseline restore-drilled into scratch, the
+authorization written by the reference, an application lifted early or with a forged, revoked or foreign
+authorization admitting no one, `close` refusing every new write, the rollback, `resume`), the verified source
+(73), the platform client (13), the governed deploy and promote (75), the governed backup and drill (46 unit,
+real-PostgreSQL lanes with a foreign database, a foreign store, a mixed child and a resealed planted set),
+the admission gate (33, eight authorization controls on the served application). Live on Supabase DEV (GA4,
+synthetic, left clean): verified TLS with the pinned root and its negative controls (another root, a
+redirected address, each routing variable), the application's path reading the same identity as the
+ledger's, the qualification against the storage API, the write barrier refusing writes through both poolers
+and lifted cleanly, a governed baseline, its drill into local PostgreSQL and a governed generation recorded
+from DEV (15 lanes); the DEV dress rehearsal C0..C13 on the new flow with real DEV objects (5 lanes). Provider
+facts from the GA1 probe (A17). Targeted mutation of every new refusal boundary of findings 1-6: see the
+evidence index. T5 on the candidate: see the evidence index. No same-family recheck (user instruction).
+
+Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
+(a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
 (A14); DEV `public` was left empty and its Data API off.

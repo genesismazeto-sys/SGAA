@@ -371,14 +371,20 @@ database (behaviour probes run on clones).
 2. Frozen byte copy; Path-B migrate it into the freshly provisioned target
    (`python -m app.pg_migrate_from_sqlite ... --apply`); validate.
 3. R5 activation; application smoke on the new target.
-4. **Immediately** take the Layer-2 cutover baseline (`<DIR>` as in §A.5:
-   outside the repository, on encrypted storage):
-   `python tools/pg_backup.py backup --output-dir <DIR> --label cutover-baseline`.
-5. `verify --manifest`; restore drill into a scratch database
-   (`restore`), §H clone probe, §L smoke against the scratch database; drop
-   the scratch database.
-6. Store the set in two off-platform locations (§E); record manifest SHA,
-   artifact SHA and tool git SHA in the cutover record.
+4. **Immediately** take the Layer-2 cutover baseline. In the MP-3 cutover this is the governed
+   run (MP-3 SPEC A17; `PRODUCTION_CUTOVER_RUNBOOK.md` C8):
+   `python tools/ops_backup.py --baseline --root <DIR> --off-platform <second DIR> --ledger-dir <ledger>`
+   (`<DIR>` as in §A.5: outside the repository, on encrypted storage). It takes the Layer-2 set and
+   the object set from the verified PROD source, copies them off-platform and the ledger records the
+   run's receipt. The plain `pg_backup.py backup --label cutover-baseline` remains the tool's own
+   contract outside the cutover.
+5. Restore drill into a new scratch database, in the drill terminal:
+   `python tools/ops_backup.py drill --ledger-dir <ledger> --root <DIR> --off-platform <second DIR>
+   --generation <baseline manifest sha256>` (restore, `verify --restored`, the object set verified and
+   covering every restored `storage_objects` row; the ledger records the drill's receipt); §H clone
+   probe, §L smoke against the scratch database; drop the scratch database.
+6. The two encrypted locations are the run's own (§E); the manifest and dump digests are in the
+   ledger's records.
 7. Reopen traffic. Keep this baseline until a later generation has passed a
    restore validation.
 
@@ -439,6 +445,8 @@ assets and this tool sequences them; it adds no backup logic of its own.
 
 ```
 python tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects] [--generations N] [--label <text>]
+python tools/ops_backup.py --root <dir> --off-platform <dir> --baseline --ledger-dir <ledger>   # MP-3 C7
+python tools/ops_backup.py drill --ledger-dir <ledger> --root <dir> --off-platform <dir> --generation <sha256>
 ```
 
 One run: `pg_backup backup` and `verify`; with `--objects`, `backup-objects` and
@@ -449,11 +457,19 @@ deleted. Sets the tool did not create (including the `cutover-baseline` set) are
 deleted. Both directories must be encrypted storage the operator controls (the sets
 are personal data); the tool states that it cannot verify this. `DATABASE_URL` is the
 direct or session-mode address; for PROD the password is typed at a hidden prompt (section B),
-so the operator starts each run (a scheduled task would need a stored PROD password); from the
-cutover's C11 to C14 each run also records itself in the cutover ledger (`--ledger-dir`), which
-records it only when the live database is the PROD project's and both sets name it (and the PROD
-store) as their source. Run a restore drill into scratch PostgreSQL on a calendar (section F-H), in
-the drill terminal.
+so the operator starts each run (a scheduled task would need a stored PROD password).
+
+From the cutover's C11 to C14 (and for the baseline at C7, `--baseline`) the run is governed
+(`--ledger-dir`, MP-3 SPEC A17): before any step it refuses any libpq routing variable and observes,
+through the verified PROD source (`tools/prod_source`: the session pooler, TLS verified against the
+pinned Supabase root CA), that `DATABASE_URL` is the database the ledger qualified and `SUPABASE_URL`
+the PROD store; the children connect through that verified address; after the last step it observes
+the database again; it then hands the ledger a receipt naming the generation THIS run created (its
+manifest and dump digests, its object set) and the identity it observed. Only such receipts are
+recorded; there is no command that records a set found on disk. `python tools/ops_backup.py drill
+--ledger-dir <ledger> --root … --off-platform … --generation <manifest sha256>` runs a restore drill of a
+recorded generation into a new scratch database (`SGAA_RESTORE_TARGET_URL`, with `DATABASE_URL` unset)
+and records its receipt. Run a restore drill on a calendar (section F-H), in the drill terminal.
 The achievable RPO is the interval between runs.
 
 ## Exit codes
