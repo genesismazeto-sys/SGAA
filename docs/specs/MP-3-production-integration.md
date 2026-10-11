@@ -835,21 +835,24 @@ Acceptance:
 | AC7 | MET | Self-audit in the phase report. |
 
 Measured (workstation to DEV Storage, us-east-1; synthetic, production-shaped, 11 documents):
-convergence 1.5 s per object including upload, byte verification and link; the whole C0..C14
-rehearsal under one minute. The maintenance window of C2 is twice `objects x 1.5 s` plus the
+convergence 1.5 s per object including upload, byte verification and link; the whole dress
+rehearsal (C0..C13 through served applications, with real generations and the opening) in about
+three minutes. The maintenance window of C2 is twice `objects x 1.5 s` plus the
 fixed steps. Real data will change these numbers; the census at C2 re-derives them.
 
-Full suite (T5), chunked in six fresh interpreters from a clean checkout of the candidate `5786459`
-(clean virtual environment from `requirements.txt` with `cryptography` 50.0.2 and `msal` 1.37.0,
-PostgreSQL 17 lanes on; TEP trigger D after the dependency bump): 5,506 passed, 149 skipped,
-3 failed, 6 collection errors. The 6 errors are the `xlwt` baseline and the 3 failures are the
-recorded baseline (`TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 -- it fails
-identically on the MP-2 closure `0287f94` -- and the backup-package test that needs the gitignored
-`database.db`). The earlier run on `d42a453` (before the bump) had 5,495 passed with the same
-three failures and six errors. Delta since that run (A14: the restore profile's placeholder schema, the
-live database module, records) touches no TEP section 7 invalidator and is qualified per section 6: the
-changed and consuming files were rerun (152 passed, 12 skipped without the live environment) and the
-live module ran 11 of 11 on Supabase DEV.
+Full suite (T5) on the remediation, chunked in eight fresh interpreters from a clean worktree of `af8c809`
+(the clean virtual environment from `requirements.txt` with `cryptography` 50.0.2 and `msal` 1.37.0,
+PostgreSQL 17 lanes on; TEP trigger: the application bootstrap and the hosted runtime contract changed):
+5,633 passed, 161 skipped, 3 failed, 6 collection errors -- exactly the recorded baseline: the 6 errors are
+`xlwt`, the 3 failures `TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 (it fails identically on the
+MP-2 closure `0287f94`) and the backup-package test that needs the gitignored `database.db`. No MP-3 test
+failed. The run on `b4c6f3e` (before the recheck's fixes) had 5,619 passed with the same baseline, and the
+earlier runs on `5786459` and `d42a453` 5,506 and 5,495. Delta `af8c809`..`ffba879` (the ledger, its tests
+and the documents; the two application files changed in comments and docstrings only, their executable code
+AST-identical) touches no TEP section 7 invalidator and is qualified per section 6: the ledger tests (120),
+the real-application opening lane with the backup, admission and hosted-runtime families (116 passed), the
+DEV dress rehearsal (5 of 5) and the round-3 and round-4 mutation probes (all killed). The live database
+lanes ran 11 of 11 on Supabase DEV on `af8c809`, and the dress rehearsal on every remediation commit.
 
 R3: the first blind cross-family review returned FAIL (pre-GO admission, the C12 rollback, secret
 custody and deploy identity, backup before the opening, the Data API proof; A15). Mutation of the
@@ -857,8 +860,11 @@ remediation: 88 mutants (every data-API conjunct, the admission gate's condition
 verifiers, the ledger's window, cadence and quiescence, and every new refusal guard of the ledger, the deploy
 audit and the scheduled backup); 10 survived the first pass (a shape change, an unanchored marker, the window
 anchor, the opening's order guards, links without the symlink privilege, an empty commit, each off-platform
-registry entry) and were answered with new tests; all are killed. The remediation was rechecked by a
-fresh-context same-family review before landing; the re-review is the user's.
+registry entry) and were answered with new tests; all are killed. The recheck fixes added 35 more (27,
+then 5, then 3), all killed after 4 survivors were answered with tests. The remediation was rechecked
+by three fresh-context same-family reviews before landing: FAIL on `b4c6f3e` (three material defects,
+A15 (6)), then PASS on `af8c809` and on `99f2275`, whose non-material observations were closed in
+`99f2275` and `ffba879`. The re-review is the user's.
 
 Reviews: S1, S2, S3, S4 and S5 each had an independent fresh-context R2 review with a targeted
 recheck after fixes (S2 failed its first review on three findings and its recheck on one more, a

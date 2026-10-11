@@ -64,8 +64,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   the C12 rollback observed by the ledger itself (reference while closed, quiescence, fixed
   derived-write allowlist), P6 secret custody with the deploy tree re-verified before the upload,
   a verified pre-opening backup with the cadence held to C14, and the Data API proof accepting only
-  the answer proven on DEV. Pending: the R3 re-review of the remediated candidate (and, optionally,
-  GA2 for the Google OAuth rehearsal). GP0 is not authorized; no PROD gate granted.
+  the answer proven on DEV. Three fresh-context rechecks (FAIL, then PASS twice) hardened it: one
+  reference per opening bound to the lift (`SGAA_OPENING_REFERENCE`), every observation bound to the
+  public address, each backup counted once by its own time. T5 at the recorded baseline. Pending: the
+  R3 re-review of the remediated candidate (packet in `D:\SGAA_REVIEW\mp3_r3_packet`) and, optionally,
+  GA2 for the Google OAuth rehearsal; the user turns DEV's Data API toggle off before GP1. GP0 is not
+  authorized; no PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
