@@ -124,7 +124,7 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         "pg_major": major, "schema_current": True, "rows": rows, "objects": len(listed),
         "data_api_toggle_off": True, "data_api_override": "APPLIED", "data_api_probe": "NOT_SERVED",
         "data_api_project_sha256": DATA_API_PROJECT, "api_exposure_clean": True, "capacity_ok": True,
-        "database_project_sha256": database_project,
+        "database_project_sha256": database_project, "database_identity_proven": True,
     })
 
     # ---- C2: census of a snapshot copy -------------------------------------------------------
@@ -481,7 +481,7 @@ def test_different_bytes_already_at_a_key_make_the_row_a_conflict_the_ledger_wil
                                       "data_api_toggle_off": True, "data_api_override": "APPLIED",
                                       "data_api_probe": "NOT_SERVED", "data_api_project_sha256": DATA_API_PROJECT,
                                       "api_exposure_clean": True, "capacity_ok": True,
-                                      "database_project_sha256": DATA_API_PROJECT})
+                                      "database_project_sha256": DATA_API_PROJECT, "database_identity_proven": True})
     ledger.advance(ledger_dir, "C2", {"database_bytes": 1, "document_bytes": 1, "census": {"ROWS": 1}})
     ledger.advance(ledger_dir, "C3", {"source_size": 1, "source_sha256": h("c"), "wal_bytes": 0})
     ledger.advance(ledger_dir, "C4", {"source_sha256": h("c"), "prepared_sha256": h("d"), "integrity_ok": True,

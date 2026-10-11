@@ -59,6 +59,13 @@ that would cost money is not performed; stop and say so.
   that does not prove its cluster (`DATABASE_IDENTITY_UNPROVEN`) and, once the reference exists,
   any other database (`DATABASE_NOT_THE_REFERENCE`). An address of another kind may identify
   itself differently and is refused the same way.
+- **The store's address is the project's.** `SUPABASE_URL` is `https://<ref>.supabase.co` (the address
+  the object set records; a custom domain or another form names no project and its object sets are
+  refused, `OBJECT_SET_NOT_FROM_THE_PROD_PROJECT`).
+- **No provider-side change to the PROD database from C11 to C14.** An upgrade, a pause and restore or
+  a migration of the project changes its cluster identifier; every later generation is then refused
+  (`DATABASE_NOT_THE_REFERENCE`) and C14 cannot be reached in this ledger (fail closed, no data lost).
+  If the provider forces one, stop and escalate before recording anything else.
 - **Two terminals: production backups and restore drills never share one.** The PROD backup
   terminal has `DATABASE_URL` = the PROD session address and nothing else; a restore drill runs in
   a separate terminal where `DATABASE_URL` is unset and the scratch database is named only as
@@ -164,7 +171,9 @@ that would cost money is not performed; stop and say so.
    override stands), `data_api_override` APPLIED, `data_api_probe` NOT_SERVED (the
    smoke's PASS), `data_api_project_sha256` (printed by the smoke; it must equal C0's
    `prod_project_sha256`), `api_exposure_clean`, `capacity_ok`, `database_project_sha256` (from
-   the readiness report; it must equal C0's `prod_project_sha256`, `DATABASE_NOT_THE_PROD_PROJECT`).
+   the readiness report; it must equal C0's `prod_project_sha256`, `DATABASE_NOT_THE_PROD_PROJECT`),
+   `database_identity_proven` (true: the cluster identifier is readable; otherwise C1 waits, since every
+   later generation would be refused as unproven).
 
 ### C2 SNAPSHOT_CENSUSED — gate GR0
 

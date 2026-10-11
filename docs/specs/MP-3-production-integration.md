@@ -837,7 +837,7 @@ Executor amendments (consequences of the above; not material beyond what the use
   so it counts for neither cadence nor the restore validation, and the reference is taken from the database
   the pre-opening generation came from. (4) C1 binds the qualification: `hosting_cli check --database` reports
   `database_project_sha256` and `database_identity_proven`, and the C1 evidence `database_project_sha256` must
-  equal C0's project (`DATABASE_NOT_THE_PROD_PROJECT`). (5) Procedure: one PROD session address for every
+  equal C0's project (`DATABASE_NOT_THE_PROD_PROJECT`) with the cluster proven. (5) Procedure: one PROD session address for every
   compared output; a restore drill runs in its own terminal with `DATABASE_URL` unset and the scratch target
   only in `SGAA_RESTORE_TARGET_URL`. Observed on Supabase DEV through the session pooler: the cluster
   identifier is readable, the server-side role is `postgres` for every project and the pooler host is shared
