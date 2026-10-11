@@ -278,10 +278,15 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         assert generation["result"] == "GENERATION_COMPLETE"
         ledger.record_backup(ledger_dir, root, off, observer=observer)
         reference = custody / "reference.json"
-        taken = ledger.take_reference(ledger_dir, reference, root, off, cadence_hours=24, observer=observer)
+        front = stack.enter_context(served_app(target_url, tmp_path / "front", SGAA_ADMISSION="operator",
+                                               SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN, CRON_SECRET="c" * 40,
+                                               wsgi="app.storage.scheduler:application"))
+        at_production = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url,
+                                        scheduler_url=front.url)
+        taken = ledger.take_reference(ledger_dir, reference, root, off, cadence_hours=24, observer=at_production)
         stack.close()
         opened = stack.enter_context(served_app(target_url, tmp_path / "open", SGAA_ADMISSION="open",
-                                                SGAA_OPENING_REFERENCE=taken["reference_fingerprint_sha256"]))
+                                                SGAA_OPENING_REFERENCE=taken["hash"]))
         ledger.open_admission(ledger_dir, observer=ledger.Observer(opened.url, allow_insecure=True,
                                                                    database_url=target_url))
         assert ledger.status(ledger_dir)["state"] == "C12"

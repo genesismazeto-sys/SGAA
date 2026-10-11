@@ -36,7 +36,7 @@ class FakeObserver:
 
     def __init__(self):
         self.admission_state = "closed"
-        self.scheduler = "disabled"
+        self.scheduler = "enabled"  # production after GD2; a rollback disables it first
         self.jobs = 0
         self.identity = IDENTITY
         self.current = REFERENCE
@@ -47,7 +47,7 @@ class FakeObserver:
         self.matches = True
         self.backup_calls: list[bool] = []
         self.host = H["m"]  # the public address proven at C10
-        self.tag = hosting.opening_tag(REFERENCE["fingerprint_sha256"])  # lifted with the reference
+        self.tag = ""  # set to the reference entry's tag once the deployment is lifted with it
         self._made = 0
 
     def admission(self):
@@ -131,10 +131,16 @@ def _open(directory, observer):
     """C11 -> C12 the only way: a post-C11 backup, the reference while closed, then open."""
     _set_clock(ledger._CLOCK() + timedelta(minutes=1))  # the generation is made after C11
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
-    ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
-                          cadence_hours=24, observer=observer)
-    observer.admission_state = "open"
+    taken = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
+    _lift(observer, taken)
     return ledger.open_admission(directory, observer=observer)
+
+
+def _lift(observer, taken):
+    """GO: SGAA_ADMISSION=open and SGAA_OPENING_REFERENCE = the reference entry's hash, redeployed."""
+    observer.admission_state = "open"
+    observer.tag = hosting.opening_tag(taken["hash"])
 
 
 def _drive(directory, upto, overrides=None, observer=None):
@@ -417,7 +423,7 @@ def test_the_opening_needs_go_a_reference_taken_while_closed_and_admission_obser
     written = json.loads(_reference_file(directory).read_text())
     assert fp.validate(written)["fingerprint_sha256"] == REFERENCE["fingerprint_sha256"] and written["taken_at"]
     assert _code(ledger.open_admission, directory, observer=observer) == "ADMISSION_NOT_OPEN"  # not lifted yet
-    observer.admission_state = "open"
+    _lift(observer, entry)
     opened = ledger.open_admission(directory, observer=observer)
     assert opened["state"] == "C12"
     assert opened["evidence"]["reference_fingerprint_sha256"] == REFERENCE["fingerprint_sha256"]
@@ -428,19 +434,58 @@ def test_one_reference_per_opening_whatever_its_age_and_the_lift_must_carry_it(d
     _grant_all(directory)
     _drive(directory, "C11", observer=observer)
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
-    ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
-                          cadence_hours=24, observer=observer)
+    taken = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
     # A second reference would re-baseline whatever users wrote after a premature lift.
     assert _code(ledger.take_reference, directory, _reference_file(directory, "second.json"), directory.parent,
                  directory.parent, cadence_hours=24, observer=observer) == "REFERENCE_ALREADY_TAKEN"
     observer.admission_state = "open"
-    for announced in (hosting.opening_tag(H["a"]), ""):  # lifted with another reference, or with none
+    # Lifted with another value, with none, or with the fingerprint digest (computable in advance by a
+    # snapshot): only the reference entry's hash, which exists once the ledger recorded it, binds.
+    for announced in (hosting.opening_tag(H["a"]), "", hosting.opening_tag(REFERENCE["fingerprint_sha256"])):
         observer.tag = announced
         assert _code(ledger.open_admission, directory, observer=observer) == "OPENING_NOT_BOUND_TO_THE_REFERENCE"
-    observer.tag = hosting.opening_tag(REFERENCE["fingerprint_sha256"])
+    observer.tag = hosting.opening_tag(taken["hash"])
     clock["now"] += timedelta(hours=3)  # a late lift is still after the reference: no dead end
     opened = ledger.open_admission(directory, observer=observer)
     assert opened["evidence"]["opening_bound"] is True and opened["evidence"]["reference_age_seconds"] == 3 * 3600
+
+
+def test_the_reference_is_taken_at_the_production_deployment_whose_scheduler_front_is_enabled(directory, observer):
+    """An older deployment (no CRON_SECRET) answers closed for ever; probing it would prove nothing."""
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    observer.scheduler = "disabled"
+    assert _code(ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent,
+                 cadence_hours=24, observer=observer) == "SCHEDULER_FRONT_NOT_ENABLED"
+
+
+def test_the_opening_needs_a_generation_within_the_cadence(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    taken = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
+    _lift(observer, taken)
+    clock["now"] += timedelta(hours=37)  # longer than 1.5 x 24 h since the pre-opening generation
+    assert _code(ledger.open_admission, directory, observer=observer) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(7))
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)  # still allowed at C11
+    assert ledger.open_admission(directory, observer=observer)["state"] == "C12"
+
+
+def test_plain_http_is_observed_only_on_the_loopback():
+    for url in ("http://sgaa.example.test", "http://10.0.0.5:8080"):
+        observer = ledger.Observer(url, allow_insecure=True)
+        for probe in (observer.admission, observer.scheduler_front, observer.opening_tag):
+            with pytest.raises(ledger.Refused) as caught:
+                probe()
+            assert caught.value.code == "INSECURE_ONLY_ON_LOOPBACK"
+    assert ledger.Observer("http://127.0.0.1:1", allow_insecure=True)._require_base() == "http://127.0.0.1:1"
+    with pytest.raises(ledger.Refused):
+        ledger.Observer("http://127.0.0.1:1", allow_insecure=True,
+                        scheduler_url="http://sgaa.example.test").scheduler_front()
 
 
 def test_every_observation_probes_the_public_address_proven_at_c10(directory, observer):
@@ -451,13 +496,13 @@ def test_every_observation_probes_the_public_address_proven_at_c10(directory, ob
     observer.host = H["a"]
     assert _code(*take, cadence_hours=24, observer=observer) == "ADDRESS_NOT_THE_DEPLOYMENT"
     observer.host = H["m"]
-    ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
-    observer.admission_state = "open"
+    taken = ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
+    _lift(observer, taken)
     observer.host = H["a"]
     assert _code(ledger.open_admission, directory, observer=observer) == "ADDRESS_NOT_THE_DEPLOYMENT"
     observer.host = H["m"]
     ledger.open_admission(directory, observer=observer)
-    observer.admission_state = "closed"
+    observer.admission_state, observer.scheduler = "closed", "disabled"
     observer.host = H["a"]  # another, closed deployment would fake the quiescence of the open one
     assert _code(ledger.rollback, directory, "OPERATOR_STOP", observer=observer,
                  reference_path=str(_reference_file(directory))) == "ADDRESS_NOT_THE_DEPLOYMENT"
@@ -712,6 +757,7 @@ def _opened(directory, observer):
     _grant_all(directory)
     _drive(directory, "C12", observer=observer)
     observer.admission_state = "closed"  # the operator stopped admitting users and redeployed
+    observer.scheduler = "disabled"  # and removed CRON_SECRET
     return str(_reference_file(directory))
 
 
@@ -809,6 +855,7 @@ def test_once_a_reference_is_taken_a_rollback_from_c11_is_treated_as_from_the_op
                           cadence_hours=24, observer=observer)
     # The admission control may already be lifted although `open` was not recorded: users may be in.
     assert _code(ledger.rollback, directory, "STOP") == "QUIESCENCE_PROOF_REQUIRED"
+    observer.scheduler = "disabled"
     entry = ledger.rollback(directory, "STOP", observer=observer, reference_path=str(_reference_file(directory)))
     assert entry["from_state"] == "C11" and entry["quiescence"] == "PROVEN"
 

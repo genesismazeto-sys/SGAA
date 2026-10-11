@@ -40,8 +40,9 @@ COMMANDS
                    C11) current against the live database, take the reference
                    fingerprint live, write it out and print its digest
     open           observe that admission is OPEN at that address and that the
-                   deployment announces the tag of THAT reference (it was lifted with
-                   SGAA_OPENING_REFERENCE), then enter C12 from the reference
+                   deployment announces the tag of THAT reference entry's hash (it was
+                   lifted with SGAA_OPENING_REFERENCE = that hash, which exists only once
+                   the reference is recorded), then enter C12 from the reference
     rollback       record a rollback; refused once the point of no return is
                    recorded.  From the opening (C12, or C11 once a reference was
                    taken) only with quiescence OBSERVED -- admission closed, the
@@ -537,6 +538,9 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
         return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
 
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
 class Observer:
     """The ledger's read-only eyes: the public address (no credential), the database, the backups.
 
@@ -557,7 +561,15 @@ class Observer:
     def _require_base(self) -> str:
         if not self.base_url:
             raise Refused("BASE_URL_REQUIRED")
-        return self.base_url
+        return self._checked(self.base_url)
+
+    def _checked(self, url: str) -> str:
+        """Plain http is for the tests' loopback servers only: a production probe is https."""
+        from urllib.parse import urlsplit
+
+        if self.allow_insecure and (urlsplit(url).hostname or "") not in _LOOPBACK_HOSTS:
+            raise Refused("INSECURE_ONLY_ON_LOOPBACK")
+        return url
 
     def admission(self) -> str:
         from tools import hosted_smoke
@@ -588,8 +600,8 @@ class Observer:
         from tools import hosted_smoke
 
         try:
-            return hosted_smoke.probe_scheduler_front(self.scheduler_url or self._require_base(),
-                                                      allow_insecure=self.allow_insecure)
+            address = self._checked(self.scheduler_url) if self.scheduler_url else self._require_base()
+            return hosted_smoke.probe_scheduler_front(address, allow_insecure=self.allow_insecure)
         except hosted_smoke.Refused as refusal:
             raise Refused(refusal.code) from None
         except OSError:
@@ -744,6 +756,10 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
         _require_the_deployment(summary, observer)
         if observer.admission() != "closed":
             raise Refused("ADMISSION_NOT_CLOSED", "the reference is taken before anyone but the operator is admitted")
+        if observer.scheduler_front() != "enabled":
+            # The production deployment carries CRON_SECRET since GD2 (C11); an address whose front is
+            # disabled is an older deployment, and probing it would prove nothing about production.
+            raise Refused("SCHEDULER_FRONT_NOT_ENABLED", "probe the production deployment (CRON_SECRET set at C11)")
         entered_c11 = summary["entered"]["C11"]
         recorded = [b for b in summary["backups"] if b["seq"] > entered_c11["seq"]
                     and _parse(b["generation_at"]) >= _parse(entered_c11["at"])]
@@ -780,9 +796,14 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
         _require_the_deployment(summary, observer)
         if observer.admission() != "open":
             raise Refused("ADMISSION_NOT_OPEN")
-        if observer.opening_tag() != hosting.opening_tag(reference["reference_fingerprint_sha256"]):
-            # The open deployment must have been lifted with THIS reference (SGAA_OPENING_REFERENCE).
+        if observer.opening_tag() != hosting.opening_tag(reference["hash"]):
+            # The open deployment must have been lifted with THIS reference entry's hash
+            # (SGAA_OPENING_REFERENCE): unknowable before the entry exists and unique to this ledger.
             raise Refused("OPENING_NOT_BOUND_TO_THE_REFERENCE")
+        cadence_hours = int(reference["backup_cadence_hours"])
+        newest = max(_parse(b["generation_at"]) for b in summary["backups"])
+        if _CLOCK() - newest > timedelta(hours=cadence_hours * CADENCE_TOLERANCE):
+            raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation first: the cadence starts at the opening")
         evidence = {
             "reference_fingerprint_sha256": reference["reference_fingerprint_sha256"],
             "database_identity_sha256": reference["database_identity_sha256"],

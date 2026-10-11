@@ -147,8 +147,9 @@ with the user-authenticated Vercel CLI after `deploy_audit` passes. `.verceligno
 depth, not the control. No Git integration is attached to a protected branch.
 
 Database access. The web and scheduler functions use the transaction-pooler URL. Operator tools
-that need session state (Layer-2, Path-B, the readiness check) use the direct or session-pooler URL
-and a libpq password file, never a URL password. S1 qualifies the application on the pooler.
+that need session state (Layer-2, Path-B, the readiness check) use the direct or session-pooler URL,
+never a URL password; the password comes from the libpq password file on DEV and, for PROD, from a
+hidden prompt into one process (P6, A15). S1 qualifies the application on the pooler.
 
 PostgreSQL major. The binding major is the one read at GP0; 17 is qualified regardless because DEV
 runs it. A PostgreSQL 17 cluster is added beside the persistent PG15 cluster, which is never touched.
@@ -180,7 +181,7 @@ the user has not accepted.
 | C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI behind the admission gate (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; `CRON_SECRET` set and the deployment redone (the same commit) so the daily cron reaches the enabled front and, if the backlog needs it, the external trigger enabled (its bearer in Supabase Vault); first scheduled passes observed; admission still CLOSED | results; none `reconciliation_required` |
 | C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger; the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference digest, same commit redeployed and promoted) and `open`, which observes it and the reference's tag; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
 | C13 PONR_RECORDED | — | the first successful non-operator business write on PROD is detected (fingerprint delta) and recorded explicitly in the ledger; window W starts | the write's class and time, never its content |
-| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation recorded after C13 restore-validated; object set verified; hand-over to MP-4 | window report |
+| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation made after C13 restore-validated; object set verified; hand-over to MP-4 | window report |
 
 Order note. The charter lists the elements; MP-1 D12 and Path-B force convergence before Path-B for
 local rows, and convergence on the frozen copy keeps the live source unmutated. The opening is after
@@ -734,10 +735,12 @@ Executor amendments (consequences of the above; not material beyond what the use
   carry `admission` CLOSED as reported by the smoke's anonymous ADMISSION check; the ledger observes it
   itself at the reference. GO is: the pre-opening generation, the one reference of the opening (refused
   unless admission is observed CLOSED at C10's address), the lift (`open` with `SGAA_OPENING_REFERENCE` =
-  that reference's digest, and a redeploy of the same commit; a production deployment set `open` without
-  it does not start), then the ledger command `open`, which observes OPEN and the deployment's announced
-  tag of THAT reference and writes C12 from it (C12 can no longer be typed:
-  `OPENING_NEEDS_THE_OPEN_COMMAND`). No ordinary user can write before the reference exists. (2) C12 rollback fails closed. The ledger
+  the reference entry's chain hash, which exists only once the ledger recorded it, and a redeploy of the
+  same commit; a production deployment set `open` without a well-formed value does not start), then the
+  ledger command `open`, which observes OPEN and the deployment's announced tag of THAT entry and writes
+  C12 from it (C12 can no longer be typed: `OPENING_NEEDS_THE_OPEN_COMMAND`). The deployment checks only
+  the value's shape: a lift made outside the runbook is not prevented by the platform, but it cannot be
+  recorded as the opening, and the rollback proof still compares with the reference. (2) C12 rollback fails closed. The ledger
   observes quiescence itself (admission closed, scheduler front disabled, no active `pg_cron` job, the
   reference's database), takes the fingerprint live twice 330 s apart in read-only snapshots and requires
   agreement, then compares with the reference. Unequal is accepted only when every changed table and
@@ -792,7 +795,13 @@ Executor amendments (consequences of the above; not material beyond what the use
   must decide its admission even without `APP_ENV`; "open" needs a served login page; the admission cookie
   expires server-side; a changed table that no row explains is never excused (`UNEXPLAINED_CHANGE`); the
   lift and the rollback redeploys are promoted and the open deployments removed; one database address
-  kind; the toggle is the user's statement. Found on the way: run as scripts (`python tools/...`, as the
+  kind; the toggle is the user's statement. A second, targeted recheck of the fix (`af8c809`) returned
+  PASS; its non-material observations were then closed too: the lift is bound to the reference entry's
+  hash (unknowable in advance, so neither a value left from an earlier attempt nor a precomputed
+  fingerprint opens), the rollback removes `SGAA_OPENING_REFERENCE`, the reference requires the probed
+  deployment's scheduler front to be enabled (so an older deployment cannot stand in for production),
+  plain http is observed only on the loopback, `open` refuses when the newest generation is older than
+  1.5 x the cadence, and the C11 exit after a changed fingerprint is documented. Found on the way: run as scripts (`python tools/...`, as the
   runbook says), the ledger and `ops_backup` could not import the repository's modules; fixed and pinned
   by a subprocess test. Evidence: section 17.
 

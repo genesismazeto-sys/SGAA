@@ -69,9 +69,11 @@ control, so the hosted runtime carries a fail-closed admission switch
   token); the server refuses it eight hours after issue, or dated in the future. Behind the
   gate the application's own authentication and RBAC decide, as after the opening.
 - `SGAA_ADMISSION=open`: no gate is installed. In production (and on a serverless platform) it
-  needs `SGAA_OPENING_REFERENCE`, the digest the cutover ledger printed when it took the
-  reference while admission was closed; every response then carries `X-SGAA-Opening: <tag>`
-  (`app.hosting.opening_tag`), which the ledger checks before it records the opening. Setting
+  needs `SGAA_OPENING_REFERENCE`, the hash of the reference entry the cutover ledger printed when
+  it took the reference while admission was closed (it cannot be known before that entry exists);
+  every response then carries `X-SGAA-Opening: <tag>` (`app.hosting.opening_tag`), which the
+  ledger checks before it records the opening. The process checks only the value's shape; the
+  binding is proven by the ledger. Setting
   both and redeploying the same commit is the opening; setting `operator` again and
   redeploying is the first step of a rollback from C12.
 - Anyone can observe the state without a credential (`tools/hosted_smoke.py
@@ -86,7 +88,7 @@ authorization gate, RBAC and the route inventories are unchanged.
 | Variable | Hosted use | Secret |
 |---|---|---|
 | `SGAA_RUNTIME` | `hosted` | no |
-| `DATABASE_URL` | the web and scheduler functions use the Supabase **transaction pooler** (port 6543; the application disables prepared statements and keeps no session state). Operator tools that need one session (Layer-2 backup and restore, Path-B, convergence runs) use the direct or the session-pooler address, with the password from the libpq password file (DEV) or typed by the user at a hidden prompt as `PGPASSWORD` for one process (PROD, section 12); Layer-2 refuses a transaction-pooler address. No password in logs | yes |
+| `DATABASE_URL` | the web and scheduler functions use the Supabase **transaction pooler** (port 6543; the application disables prepared statements and keeps no session state). Operator tools that need one session (Layer-2 backup and restore, Path-B, convergence runs) use the direct or the session-pooler address (the cutover's backups, fingerprints and ledger observations always the session address, so the database identity they compare is the same), with the password from the libpq password file (DEV) or typed by the user at a hidden prompt as `PGPASSWORD` for one process (PROD, section 12); Layer-2 refuses a transaction-pooler address. No password in logs | yes |
 | `SGAA_PG_CONNECT_TIMEOUT` | seconds, default 10; ignored when the URL carries `connect_timeout` or `PGCONNECT_TIMEOUT` is set | no |
 | `APP_SECRET_KEY` | session and CSRF signing; at least 24 characters, not a published value | yes |
 | `TRUST_PROXY_XFF` | `0` or `1` | no |
@@ -98,7 +100,7 @@ authorization gate, RBAC and the route inventories are unchanged.
 | `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
 | `SGAA_ADMISSION` | `operator` (only the operator is admitted, section 2a) or `open`; required in production | no |
 | `SGAA_OPERATOR_TOKEN` | the operator credential while `SGAA_ADMISSION=operator` (at least 32 printable ASCII characters); kept until the rollback window closes, so a rollback can close admission again | yes |
-| `SGAA_OPENING_REFERENCE` | with `SGAA_ADMISSION=open` in production: the cutover reference digest the opening is lifted with (section 2a) | no |
+| `SGAA_OPENING_REFERENCE` | with `SGAA_ADMISSION=open` in production: the cutover reference entry's hash the opening is lifted with (section 2a); stays set while production is open, removed by a rollback | no |
 | `SCHEDULER_MIRROR_BATCH`, `SCHEDULER_MIRROR_LEASE_SECONDS` | objects per mirror invocation (default 5, at most 25) and lease length (default 300) | no |
 | `APP_LOG_DIR` | optional; defaults to `<scratch>/logs` when hosted, because `main` creates its log directory at import, before the factory runs. Logs also go to the platform stream (both the `app` and `main` channels) | no |
 

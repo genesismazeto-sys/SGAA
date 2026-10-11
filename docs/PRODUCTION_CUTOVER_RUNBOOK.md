@@ -50,10 +50,12 @@ that would cost money is not performed; stop and say so.
   The libpq password file serves DEV only. A value never goes into a file, a pipe, an
   argument, a history line, the ledger, a report or a chat. Every command that reads PROD
   (database or bucket) or carries the operator token is a user-terminal command.
-- **One database address.** Every operator command that reads the PROD database (backups,
-  fingerprints, the ledger's `reference`, `record-backup` and `rollback`) uses the same
+- **One database address.** Every operator command whose output the ledger compares (backups,
+  fingerprints, the ledger's `reference` and `rollback`, in `DATABASE_URL`) uses the same
   session-pooler address: the ledger compares the database identity it reads, and an address
   of another kind may identify itself differently (`DATABASE_NOT_THE_REFERENCE`).
+- **https only.** The ledger observes the public address over https; `--allow-insecure` is for
+  the tests' loopback servers and is refused for any other host (`INSECURE_ONLY_ON_LOOPBACK`).
 - **Never** run a tool against the live workstation database. The only touch of the live
   file is the read-only snapshot of GR0 and the byte copy of the stopped runtime of GR1.
 
@@ -288,7 +290,7 @@ observation must probe (`ADDRESS_NOT_THE_DEPLOYMENT` otherwise).
 The smoke reads `/csrf-token`, never the dashboard (its view writes alert receipts and may
 derive a rejection). Its only application write is the sign-in. Prove that, do not assume it:
 **(user terminal)** `python tools/pg_fingerprint.py snapshot --out <before>` and `--out
-<after>` around the smoke (`DATABASE_URL` = the direct or session address; a snapshot needs a
+<after>` around the smoke (`DATABASE_URL` = the session address; a snapshot needs a
 read-only snapshot transaction, which the transaction pooler does not give), then `compare`.
 Identical is `write_set_ok` true. The first sign-in may rewrite student rows that kept the
 legacy access level `administrativo` (the application normalizes them): `changed_tables`
@@ -337,29 +339,36 @@ reference exists, because the deployment refuses them until the lift and the lif
 after the reference.
 
 1. Pre-opening generation, **(user terminal**, `PGPASSWORD` and `SUPABASE_SECRET_KEY` at
-   hidden prompts; `DATABASE_URL` the direct or session address**)**:
+   hidden prompts; `DATABASE_URL` the session address**)**:
    `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> --objects
    --label pre-open --ledger-dir <ledger>`. The Layer-2 set and the object set are taken and
    verified, the off-platform copy is compared file by file, and the ledger records the
    generation only after re-verifying it (`backup` entry, value-free).
-2. The reference, **(user terminal**, `PGPASSWORD`**)**: `python tools/cutover_ledger.py
+2. The reference, **(user terminal**, `PGPASSWORD`, `DATABASE_URL` the session address**)**:
+   `python tools/cutover_ledger.py
    reference --ledger-dir <ledger> --expect-head <head> --base-url <public address>
    --backup-root <primary dir> --off-platform <second dir> --out <custody>/reference.json
    --backup-cadence-hours <h>` (UD10: `24`, at most 24). The ledger refuses unless the state
    is C11 with GO granted, no reference was taken before (`REFERENCE_ALREADY_TAKEN`: there is
    one reference per opening, so nothing written after it can be re-baselined), the address is
-   C10's, the deployment is observed CLOSED without any credential, the last recorded backup was
+   C10's and is the production deployment (its scheduler front answers as enabled: CRON_SECRET has
+   been set since GD2, so an older deployment is refused, `SCHEDULER_FRONT_NOT_ENABLED`), the
+   deployment is observed CLOSED without any credential, the last recorded backup was
    made after C11 and includes an object set, that generation re-verifies from both directories
    and is current (its Layer-2 table digests equal the live fingerprint and its object set equals
    the live references). It then takes the fingerprint itself, writes the reference file (digests
    and counts only), records the reference, the database identity, the cadence and the RPO (= the
-   cadence), and prints `reference_fingerprint_sha256`.
-3. The lift (GO): the user sets `SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE=<that
-   reference_fingerprint_sha256>` (not a secret) and the same commit is redeployed and promoted
-   (C9 steps 1–4). A production deployment set `open` without a well-formed reference does not
-   start (`HOSTED_OPENING_REFERENCE_REQUIRED`), so the opening cannot precede the reference; the
-   open deployment announces a tag of the reference on every response (`X-SGAA-Opening`). Keep
-   `SGAA_OPERATOR_TOKEN` in the platform until C14: a rollback closes admission again with it.
+   cadence), and prints the new entry's `hash` (also printed as `head`).
+3. The lift (GO): the user sets `SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE=<that hash>`
+   (not a secret) and the same commit is redeployed and promoted (C9 steps 1–4). A production
+   deployment set `open` without a well-formed value does not start
+   (`HOSTED_OPENING_REFERENCE_REQUIRED`). The value is the reference entry's chain hash: it exists
+   only once this ledger has recorded the reference and cannot be computed beforehand (not even
+   from a fingerprint snapshot), and `open` accepts no other. The open deployment announces a tag
+   of it on every response (`X-SGAA-Opening`). `SGAA_OPENING_REFERENCE` stays set for as long as
+   production is open (an open production deployment without it does not start); a rollback
+   removes it. Keep `SGAA_OPERATOR_TOKEN` in the platform until C14: a rollback closes admission
+   again with it.
 4. `python tools/cutover_ledger.py open --ledger-dir <ledger> --expect-head <head> --base-url
    <public address>`: the ledger observes, at C10's address, admission OPEN and the tag of ITS
    reference (`OPENING_NOT_BOUND_TO_THE_REFERENCE` otherwise), and writes C12 from the reference
@@ -367,7 +376,9 @@ after the reference.
    `pre_open_backup_manifest_sha256`, `backup_cadence_hours`, `rpo_hours`, `opening_bound`,
    `reference_age_seconds`); `advance --state C12` is refused (`OPENING_NEEDS_THE_OPEN_COMMAND`).
    A late lift is not refused: the reference still precedes it, and anything the operator wrote
-   in between counts as a business write for the rollback (fail closed).
+   in between counts as a business write for the rollback (fail closed). The newest recorded
+   generation must be within 1.5 × the cadence (`BACKUP_TOO_OLD_TO_OPEN`: record a new one first,
+   which C11 allows), because the cadence is counted from the opening.
 5. Announce. The local runtime stays stopped and protected.
 
 ### C12 OPEN_PONR_PENDING
@@ -400,12 +411,12 @@ refused, and the window starts.
 
 ### C14 WINDOW_CLOSED
 
-After UD4's 30 days from C13, with the cadence held: a generation recorded after C13 restored
+After UD4's 30 days from C13, with the cadence held: a generation made after C13 restored
 into scratch PostgreSQL of the PROD major (`restore`, `verify --restored`), no unresolved
 reconciliation, the object set verified. Ledger C14: `restore_validated_manifest_sha256` (that
 generation's manifest digest, as recorded), `restore_drill` OK, `unresolved_reconciliation` 0,
 `object_set_verified`. The ledger refuses before 30 days from C13 (`WINDOW_NOT_ELAPSED`), on a
-cadence gap since the opening, and on a drill of a generation not recorded after C13
+cadence gap since the opening, and on a drill of a generation not made after C13
 (`RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION`). The window report lists them; MP-4 may then
 be chartered.
 
@@ -416,7 +427,7 @@ be chartered.
 | C1–C4 | stop; restart the workstation runtime if frozen | `cutover_ledger rollback --reason <CODE>` |
 | C5–C6 | as above | bucket objects stay as additive orphans; removal only under GX1 |
 | C7–C11 (no reference taken) | as above; admission is still closed; take the deployment down or pause it; remove `CRON_SECRET`; `select cron.unschedule('sgaa-mirror')` and delete the Vault entry if they exist | the PROD database is a copy; emptying it needs GX1 |
-| C12, or C11 once a reference exists | in this order: (1) close admission: `SGAA_ADMISSION=operator`, redeploy the same commit and promote it (C9 steps 1–4), then delete every deployment that ran `open` (`vercel remove <deployment url> --yes`) so that no address still admits users; (2) stop system writes: remove `CRON_SECRET` and redeploy (the scheduler front answers 404), `select cron.unschedule('sgaa-mirror')`; (3) **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py rollback --ledger-dir <ledger> --expect-head <head> --reason <CODE> --base-url <public address> --reference <custody>/reference.json [--derived-class <CLASS> ...]`; (4) pause the deployment; restart the workstation runtime | see below |
+| C12, or C11 once a reference exists | in this order: (1) close admission: `SGAA_ADMISSION=operator`, remove `SGAA_OPENING_REFERENCE`, redeploy the same commit and promote it (C9 steps 1–4), then delete every deployment that ran `open` (`vercel remove <deployment url> --yes`) so that no address still admits users; (2) stop system writes: remove `CRON_SECRET` and redeploy (the scheduler front answers 404), `select cron.unschedule('sgaa-mirror')`; (3) **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py rollback --ledger-dir <ledger> --expect-head <head> --reason <CODE> --base-url <public address> --reference <custody>/reference.json [--derived-class <CLASS> ...]`; (4) pause the deployment; restart the workstation runtime | see below |
 
 The C12 rollback is decided by the ledger, not by the operator. It observes, without any
 credential, that admission is closed, that the scheduler front is disabled and that no
@@ -431,6 +442,11 @@ empty "seen" mark now set), and the operator's `--derived-class` list equals the
 classes exactly (`DERIVED_CLASSES_NOT_ACKNOWLEDGED`). A file, a timestamp or a fingerprint typed
 by the operator is never the evidence. Mirror files already in the Drive stay (additive).
 
+From C11 with a reference, a `FINGERPRINT_CHANGED` (an operator write after the reference, or a
+legacy-hash sign-in) cannot be followed by C13 at once, and no second reference is taken: the
+cutover either goes forward -- the lift, `open`, then C13 recorded immediately with the changed
+fingerprint -- or is abandoned with a new ledger (PROD is a copy; emptying it needs GX1).
+
 After C13 there is no rollback: use the latest Layer-2 generation and the frozen source for
 manual reconciliation. Never improvise a reverse migration. A forward-fix deployment is the
 one deployment action that remains: each one needs its own user message, recorded with
@@ -441,7 +457,7 @@ the first deployment are refused).
 
 - Backups: until C14 as in C12 (with `--ledger-dir`); afterwards **(user terminal)** `python
   tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects]` on the
-  cadence of UD10 (database from `DATABASE_URL`, direct or session address, `PGPASSWORD` at the
+  cadence of UD10 (database from `DATABASE_URL`, the session address, `PGPASSWORD` at the
   hidden prompt): two generations kept, the copy to the off-platform directory verified,
   restore verification; a periodic restore drill into scratch PostgreSQL. Rotation deletes only
   generations the tool itself registered; the cutover baseline is never rotated.
@@ -450,3 +466,5 @@ the first deployment are refused).
 - Secret rotation: `CRON_SECRET` by redeploy and the Vault entry; `APP_SECRET_KEY` ends
   sessions and clears throttle windows; `TOKEN_ENCRYPTION_KEY` needs a Google reconnect;
   `SGAA_OPERATOR_TOKEN` is removed after C14 (an open deployment does not read it).
+- `SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE` stay set for the life of production: an
+  open production deployment without the reference does not start.

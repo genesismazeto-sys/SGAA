@@ -114,7 +114,11 @@ def _open_cutover(lane):
     with ExitStack() as closed_stack:
         closed = closed_stack.enter_context(served_app(lane["url"], lane["tmp"] / "closed", SGAA_ADMISSION="operator",
                                                        SGAA_OPERATOR_TOKEN=TOKEN))
-        observer = ledger.Observer(closed.url, allow_insecure=True, database_url=lane["url"])
+        # Since GD2 the production deployment's scheduler front is enabled (CRON_SECRET set).
+        front = closed_stack.enter_context(served_app(lane["url"], lane["tmp"] / "front", SGAA_ADMISSION="operator",
+                                                      SGAA_OPERATOR_TOKEN=TOKEN, CRON_SECRET="c" * 40,
+                                                      wsgi="app.storage.scheduler:application"))
+        observer = ledger.Observer(closed.url, allow_insecure=True, database_url=lane["url"], scheduler_url=front.url)
         assert observer.admission() == "closed"
         root, off = lane["tmp"] / "backups", lane["tmp"] / "off-platform"
         generation = ops_backup.run_generation(root, label="pre-open", generations=2, objects=True,
@@ -125,7 +129,7 @@ def _open_cutover(lane):
         reference = lane["tmp"] / "reference.json"
         taken = ledger.take_reference(directory, reference, root, off, cadence_hours=24, observer=observer)
         assert taken["admission"] == "CLOSED" and taken["pre_open_backup_manifest_sha256"] == recorded["manifest_sha256"]
-    opened_app = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["reference_fingerprint_sha256"])
+    opened_app = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["hash"])
     opened = ledger.open_admission(directory, observer=ledger.Observer(opened_app.url, allow_insecure=True,
                                                                          database_url=lane["url"]))
     assert opened["state"] == "C12" and opened["evidence"]["admission"] == "OPEN"
