@@ -54,6 +54,30 @@ def test_a_process_on_a_serverless_platform_must_decide_even_outside_production(
     assert hosting.admission_mode({"SGAA_ADMISSION": ""}, production=False) == "open"  # a workstation, a test
 
 
+def test_the_code_identity_is_the_deployed_code_and_never_what_the_platform_writes_at_build(tmp_path):
+    """Observed on the rehearsal project (MP-3 A17): the function holds the uploaded code paths byte for byte,
+    ``vercel.json`` rewritten, and a ``pyproject.toml`` / ``uv.lock`` the Python builder adds.  The identity
+    the application announces must equal the one the governed deploy computes from the export."""
+    files = {"app/__init__.py": b"x = 1\n", "app/web/gate.py": b"y = 2\n", "static/app.css": b"body{}",
+             "templates/a.html": b"<p>", "main.py": b"import app\n", "requirements.txt": b"flask\n",
+             ".python-version": b"3.12\n"}
+    for relative, data in files.items():
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / relative).write_bytes(data)
+    export = hosting.code_sha256({path: hosting.git_blob_id(data) for path, data in files.items()})
+    assert hosting.runtime_code_sha256(tmp_path) == export
+    for relative, data in (("vercel.json", b'{"rewritten": true}'), ("pyproject.toml", b"[project]\n"),
+                           ("uv.lock", b"lock"), (".vercelignore", b"*"), ("app/__pycache__/gate.cpython-312.pyc", b"c"),
+                           ("app/web/gate.cpython-312.pyc", b"c"), ("_vendor/flask/__init__.py", b"v"),
+                           ("___vc/__env.encrypted", b"e")):
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / relative).write_bytes(data)
+    assert hosting.runtime_code_sha256(tmp_path) == export  # build outputs and the platform's files are not code
+    (tmp_path / "app" / "web" / "gate.py").write_bytes(b"y = 3\n")
+    assert hosting.runtime_code_sha256(tmp_path) != export  # one changed byte of code is another identity
+    assert not any(hosting.is_code_path(p) for p in ("pyproject.toml", "uv.lock", "vercel.json", "public/x.css"))
+
+
 def test_the_opening_reference_is_a_digest_and_its_tag_is_what_the_ledger_expects():
     assert hosting.opening_reference({"SGAA_OPENING_REFERENCE": REFERENCE.upper()}) == REFERENCE
     for bad in ("", "ab" * 31, "zz" * 32, "ab" * 32 + "0"):

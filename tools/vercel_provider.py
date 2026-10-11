@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from urllib.parse import quote
 
 CLI_PACKAGE = "vercel@63.1.2"
@@ -89,9 +90,22 @@ class VercelCli:
         self._runner = runner
         self._npx = npx
 
+    def _launcher(self) -> list[str]:
+        if self._npx:
+            return [self._npx]
+        npx = shutil.which("npx") or "npx"
+        if os.name == "nt" and npx.lower().endswith((".cmd", ".bat")):
+            # cmd.exe parses a .cmd shim's command line and would split an API path at its '&' (or run
+            # what follows it): run npx's own script with node, so every argument reaches the CLI as is.
+            node = shutil.which("node")
+            script = Path(npx).parent / "node_modules" / "npm" / "bin" / "npx-cli.js"
+            if not node or not script.is_file():
+                raise Refused("PROVIDER_UNAVAILABLE", "npx-cli.js was not found beside npx.cmd")
+            return [node, str(script)]
+        return [npx]
+
     def _command(self, *arguments) -> list[str]:
-        npx = self._npx or shutil.which("npx") or "npx"
-        return [npx, "--yes", CLI_PACKAGE, *arguments, "--scope", self.team_id]
+        return [*self._launcher(), "--yes", CLI_PACKAGE, *arguments, "--scope", self.team_id]
 
     def _run(self, arguments, *, timeout, extra_env=None):
         env = dict(os.environ)

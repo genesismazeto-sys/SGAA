@@ -147,3 +147,21 @@ def test_the_alias_resolves_to_the_deployment_the_platform_serves_and_promote_an
     cli.remove(DEPLOYMENT["id"])
     assert runner.calls[1][0][3:6] == ["promote", DEPLOYMENT["id"], "--yes"]
     assert runner.calls[2][0][3:6] == ["remove", DEPLOYMENT["id"], "--yes"]
+
+
+def test_on_windows_the_cli_runs_through_node_so_no_shell_parses_an_api_path(tmp_path, monkeypatch):
+    """A .cmd shim is parsed by cmd.exe, which splits ``/v6/deployments?projectId=..&limit=..`` at '&'."""
+    shim = tmp_path / "npx.cmd"
+    shim.write_text("@echo off")
+    script = tmp_path / "node_modules" / "npm" / "bin" / "npx-cli.js"
+    script.parent.mkdir(parents=True)
+    script.write_text("// npx")
+    monkeypatch.setattr(vp.os, "name", "nt")
+    monkeypatch.setattr(vp.shutil, "which", lambda name: str(shim) if name == "npx" else "C:/node/node.exe")
+    cli = vp.VercelCli(team_id=TEAM, project_id=PROJECT)
+    command = cli._command("api", "/v6/deployments?projectId=x&limit=100")
+    assert command[:2] == ["C:/node/node.exe", str(script)] and "/v6/deployments?projectId=x&limit=100" in command
+    script.unlink()
+    with pytest.raises(vp.Refused) as caught:
+        cli._command("api", "/x")
+    assert caught.value.code == "PROVIDER_UNAVAILABLE"

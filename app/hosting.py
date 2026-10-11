@@ -319,11 +319,13 @@ def source_identity_sha256(source) -> str | None:
 # ---------------------------------------------------------------------------
 
 #: The deployed files that ARE the application, as they arrive in the function unchanged.  The
-#: deployment allowlist (``tools/deploy_audit``) adds the descriptors the platform reads or rewrites at
-#: build (``vercel.json`` arrives rewritten, ``public`` is a build output, ``.vercelignore`` is no code).
+#: deployment allowlist (``tools/deploy_audit``) adds the descriptors the platform reads, rewrites or
+#: generates at build (observed on the rehearsal project, MP-3 A17: ``vercel.json`` arrives rewritten and
+#: the Python builder adds ``pyproject.toml`` and ``uv.lock``; ``public`` is a build output and
+#: ``.vercelignore`` no code).
 CODE_PATHS = (
     "app", "services", "utils", "templates", "static", "main.py", "presets_api.py", "presets_data.json",
-    "requirements.txt", "pyproject.toml", ".python-version",
+    "requirements.txt", ".python-version",
 )
 #: Every hosted response names the code that produced it (``app.web.admission_gate``).
 CODE_HEADER = "X-SGAA-Code"
