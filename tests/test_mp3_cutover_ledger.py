@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from app import hosting
 from tests.mp3_ledger_support import ALL_GATES, COMMIT, GOOD, H, OTHER_COMMIT
 from tests.mp3_ledger_support import manifest_digest as _manifest
 from tools import cutover_ledger as ledger
@@ -45,6 +46,9 @@ class FakeObserver:
                            "object_set_digest": H["g"]}
         self.matches = True
         self.backup_calls: list[bool] = []
+        self.host = H["m"]  # the public address proven at C10
+        self.tag = hosting.opening_tag(REFERENCE["fingerprint_sha256"])  # lifted with the reference
+        self._made = 0
 
     def admission(self):
         return self.admission_state
@@ -66,17 +70,32 @@ class FakeObserver:
             return self.verdicts.pop(0)
         return {"identical": True, "derived_classes": [], "refusal": None, "current": reference}
 
+    def host_sha256(self):
+        return self.host
+
+    def opening_tag(self):
+        return self.tag
+
     def backup(self, root, off_platform, *, against_database):
         self.backup_calls.append(against_database)
-        return dict(self.generation)
+        generation = dict(self.generation)
+        if "created_at" not in generation:  # made just now (a second apart, so each is newer)
+            self._made += 1
+            generation["created_at"] = (ledger._CLOCK() + timedelta(seconds=self._made)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return generation
 
     def backup_matches(self, manifest_path, fingerprint):
         return self.matches
 
 
+_CLOCK_STATE: dict = {}
+
+
 @pytest.fixture(autouse=True)
 def clock(monkeypatch):
+    global _CLOCK_STATE
     state = {"now": datetime(2026, 11, 1, 8, 0, 0, tzinfo=timezone.utc), "slept": []}
+    _CLOCK_STATE = state
 
     def sleep(seconds):
         state["slept"].append(seconds)
@@ -110,6 +129,7 @@ def _reference_file(directory, name="reference.json"):
 
 def _open(directory, observer):
     """C11 -> C12 the only way: a post-C11 backup, the reference while closed, then open."""
+    _set_clock(ledger._CLOCK() + timedelta(minutes=1))  # the generation is made after C11
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
     ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
                           cadence_hours=24, observer=observer)
@@ -125,6 +145,8 @@ def _drive(directory, upto, overrides=None, observer=None):
         if state == "C12":
             _open(directory, observer)
             continue
+        if state == "C13":
+            _set_clock(ledger._CLOCK() + timedelta(hours=1))  # a business write some time after the opening
         if state == "C14":
             _window(directory, observer, days=30)
         evidence = dict(GOOD[state])
@@ -150,7 +172,7 @@ def _window(directory, observer, days, *, every_hours=24, objects_every_days=7, 
 
 
 def _set_clock(moment):
-    ledger._CLOCK = lambda: moment  # the autouse fixture restores the original afterwards
+    _CLOCK_STATE["now"] = moment
 
 
 def _code(call, *args, **kwargs):
@@ -239,7 +261,8 @@ BAD = {
            "admin_bootstrap": "MAYBE"},
     "C9": {"commit": "nope", "readiness": "NOT_READY", "bundle_audit": "FINDINGS", "deploy_verify": "DIFFERS",
            "deploy_tree_sha256": "nope", "scheduler_front": "ENABLED", "admission": "OPEN"},
-    "C10": {"smoke": "FAIL", "write_set_ok": False, "admission": "OPEN", "data_api_project_sha256": "nope"},
+    "C10": {"smoke": "FAIL", "write_set_ok": False, "admission": "OPEN", "data_api_project_sha256": "nope",
+            "public_host_sha256": "nope"},
     "C11": {"account_key_match": False, "mirror_passes": 0, "reconciliation_required": 2,
             "scheduler_front": "DISABLED", "admission": "OPEN"},
     "C13": {"write_class": "a request", "detected_at": "later", "current_fingerprint_sha256": "nope",
@@ -401,15 +424,87 @@ def test_the_opening_needs_go_a_reference_taken_while_closed_and_admission_obser
     assert opened["evidence"]["admission"] == "OPEN" and opened["evidence"]["backup_cadence_hours"] == 24
 
 
-def test_a_reference_older_than_the_limit_is_refused_at_the_opening(directory, observer, clock):
+def test_one_reference_per_opening_whatever_its_age_and_the_lift_must_carry_it(directory, observer, clock):
     _grant_all(directory)
     _drive(directory, "C11", observer=observer)
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
     ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
                           cadence_hours=24, observer=observer)
+    # A second reference would re-baseline whatever users wrote after a premature lift.
+    assert _code(ledger.take_reference, directory, _reference_file(directory, "second.json"), directory.parent,
+                 directory.parent, cadence_hours=24, observer=observer) == "REFERENCE_ALREADY_TAKEN"
     observer.admission_state = "open"
-    clock["now"] += timedelta(seconds=ledger.REFERENCE_MAX_AGE_SECONDS + 1)
-    assert _code(ledger.open_admission, directory, observer=observer) == "REFERENCE_STALE"
+    for announced in (hosting.opening_tag(H["a"]), ""):  # lifted with another reference, or with none
+        observer.tag = announced
+        assert _code(ledger.open_admission, directory, observer=observer) == "OPENING_NOT_BOUND_TO_THE_REFERENCE"
+    observer.tag = hosting.opening_tag(REFERENCE["fingerprint_sha256"])
+    clock["now"] += timedelta(hours=3)  # a late lift is still after the reference: no dead end
+    opened = ledger.open_admission(directory, observer=observer)
+    assert opened["evidence"]["opening_bound"] is True and opened["evidence"]["reference_age_seconds"] == 3 * 3600
+
+
+def test_every_observation_probes_the_public_address_proven_at_c10(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    take = (ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent)
+    observer.host = H["a"]
+    assert _code(*take, cadence_hours=24, observer=observer) == "ADDRESS_NOT_THE_DEPLOYMENT"
+    observer.host = H["m"]
+    ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
+    observer.admission_state = "open"
+    observer.host = H["a"]
+    assert _code(ledger.open_admission, directory, observer=observer) == "ADDRESS_NOT_THE_DEPLOYMENT"
+    observer.host = H["m"]
+    ledger.open_admission(directory, observer=observer)
+    observer.admission_state = "closed"
+    observer.host = H["a"]  # another, closed deployment would fake the quiescence of the open one
+    assert _code(ledger.rollback, directory, "OPERATOR_STOP", observer=observer,
+                 reference_path=str(_reference_file(directory))) == "ADDRESS_NOT_THE_DEPLOYMENT"
+
+
+def test_each_generation_is_recorded_once_and_by_its_own_time(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    record = (ledger.record_backup, directory, directory.parent, directory.parent)
+    ledger.record_backup(*record[1:], observer=observer)
+    assert _code(*record, observer=observer) == "BACKUP_ALREADY_RECORDED"  # re-recording would fake the cadence
+    stamp = lambda moment: moment.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(5),
+                               created_at=stamp(clock["now"] - timedelta(days=1)))
+    assert _code(*record, observer=observer) == "BACKUP_OLDER_THAN_RECORDED"
+    for bad in (stamp(clock["now"] + timedelta(hours=1)), "yesterday", None):
+        observer.generation = dict(observer.generation, created_at=bad)
+        assert _code(*record, observer=observer) == "BACKUP_TIME_INVALID"
+
+
+def test_the_pre_opening_generation_must_be_made_after_c11(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C10", observer=observer)
+    made_before = (clock["now"] - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ledger.advance(directory, "C11", GOOD["C11"])
+    observer.generation = dict(observer.generation, created_at=made_before)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)  # recorded after C11
+    assert _code(ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent,
+                 cadence_hours=24, observer=observer) == "PRE_OPEN_BACKUP_REQUIRED"
+
+
+def test_the_command_line_runs_as_a_script_from_anywhere(tmp_path):
+    """The runbook runs `python tools/cutover_ledger.py`: its observing commands must import their tools."""
+    import subprocess
+    import sys
+
+    directory = tmp_path / "ledger"
+    ledger.init(directory)
+    _grant_all(directory)
+    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
+        ledger.advance(directory, state, GOOD[state])
+    done = subprocess.run(
+        [sys.executable, str(Path(ledger.__file__)), "record-backup", "--ledger-dir", str(directory),
+         "--expect-head", ledger.status(directory)["head"], "--backup-root", str(tmp_path / "none"),
+         "--off-platform", str(tmp_path / "off")],
+        cwd=tmp_path, capture_output=True, text=True, timeout=180)
+    assert done.returncode == 1 and "BACKUP_NO_GENERATION" in done.stderr, done.stderr[-400:]
 
 
 def test_the_reference_and_the_opening_follow_c11_only_and_never_a_rollback(directory, observer):
@@ -450,19 +545,19 @@ def test_the_reference_needs_a_post_c11_backup_with_objects_proven_current_again
     observer.generation = dict(observer.generation, object_set=None, object_set_digest=None)
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
     assert _code(*take, cadence_hours=24, observer=observer) == "PRE_OPEN_BACKUP_REQUIRED"  # no object set
-    observer.generation = dict(observer.generation, object_set="20261101T000000Z-auto-weekly",
-                               object_set_digest=H["g"])
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(1),
+                               object_set="20261101T000000Z-auto-weekly", object_set_digest=H["g"])
     ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
     observer.generation = dict(observer.generation, manifest_sha256=_manifest(99))  # a newer, unrecorded one
     assert _code(*take, cadence_hours=24, observer=observer) == "BACKUP_NOT_THE_RECORDED_ONE"
-    observer.generation = dict(observer.generation, manifest_sha256=_manifest(0))
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(1))
     observer.matches = False
     assert _code(*take, cadence_hours=24, observer=observer) == "BACKUP_NOT_CURRENT"
     observer.matches = True
     for bad in (0, 25, True):
         assert _code(*take, cadence_hours=bad, observer=observer) == "CADENCE_INVALID"
     entry = ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
-    assert entry["pre_open_backup_manifest_sha256"] == _manifest(0) and entry["rpo_hours"] == 24
+    assert entry["pre_open_backup_manifest_sha256"] == _manifest(1) and entry["rpo_hours"] == 24
     assert observer.backup_calls[-1] is True  # the object set was compared with the live rows
 
 
@@ -537,6 +632,38 @@ def test_the_window_is_counted_from_the_ponr_not_from_the_opening(directory, obs
     _window(directory, observer, days=29)  # 34 days after the opening, 29 after the PONR
     assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(29)}) \
         == "WINDOW_NOT_ELAPSED"
+
+
+def _stamp(moment):
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_the_cadence_is_measured_by_when_generations_were_made_not_when_they_were_recorded(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    start = ledger._CLOCK()
+    for day in range(1, 31):  # recorded daily, but all made within the first hour (a burst passed off as a cadence)
+        _set_clock(start + timedelta(days=day))
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(300 + day),
+                                   object_set=f"burst-{day // 7}", created_at=_stamp(start + timedelta(minutes=day)))
+        ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    _set_clock(start + timedelta(days=30, minutes=1))
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(330)}
+    assert _code(ledger.advance, directory, "C14", validated) == "BACKUP_CADENCE_BROKEN"
+
+
+def test_a_generation_made_before_the_ponr_is_not_a_window_generation_whenever_it_was_recorded(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)  # the PONR an hour after the opening
+    ponr = ledger._CLOCK()
+    _set_clock(ponr + timedelta(hours=1))
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(400),
+                               created_at=_stamp(ponr - timedelta(minutes=30)))  # made before C13, recorded after
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    observer.generation = {k: v for k, v in observer.generation.items() if k != "created_at"}
+    _window(directory, observer, days=30)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(400)}
+    assert _code(ledger.advance, directory, "C14", validated) == "RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION"
 
 
 def test_the_object_sets_must_be_taken_weekly_through_the_window(directory, observer):

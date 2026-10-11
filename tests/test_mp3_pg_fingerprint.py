@@ -103,6 +103,14 @@ def test_a_tampered_or_foreign_fingerprint_is_refused():
         assert caught.value.code == "FINGERPRINT_INVALID"
 
 
+def test_a_changed_table_that_no_row_explains_is_never_excused():
+    """Equal row hashes under a different table digest (a short-hash collision) prove nothing."""
+    reference = {"requisicoes": dict(_entry(1), sha256="1" * 64)}
+    current = {"requisicoes": dict(_entry(1), sha256="2" * 64)}
+    verdict = fp._classify(reference, current, {"requisicoes": []})
+    assert verdict["refusal"] == "UNEXPLAINED_CHANGE" and verdict["derived_classes"] == []
+
+
 def test_a_derived_table_whose_column_list_changed_is_never_excused():
     """A reference taken by another code version (another column list) proves nothing about the rows."""
     reference = {"requisicoes": dict(_entry(1, columns=("id", "status")), sha256="1" * 64)}

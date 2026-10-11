@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import http.client
 import re
+import time
 from urllib.parse import urlencode, urlsplit
 
 import pytest
@@ -31,6 +32,7 @@ from tools import hosted_smoke
 NEEDS_PG = pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT")
 TOKEN = "operator-" + "Q7" * 20
 SENTINEL = "SENTINEL-ADMISSION-VALUE-0123456789"
+REFERENCE = "ab" * 32  # a cutover reference digest the opening is lifted with
 
 
 # ---- the contract -----------------------------------------------------------------------------
@@ -43,6 +45,41 @@ SENTINEL = "SENTINEL-ADMISSION-VALUE-0123456789"
 ])
 def test_production_must_decide_and_nothing_is_guessed(raw, production, expected):
     assert hosting.admission_mode({"SGAA_ADMISSION": raw}, production=production) == expected
+
+
+def test_a_process_on_a_serverless_platform_must_decide_even_outside_production():
+    """A deployment missing APP_ENV runs non-production; on the platform it still has to decide."""
+    assert hosting.admission_mode({"SGAA_ADMISSION": "", "VERCEL": "1"}, production=False) is None
+    assert hosting.admission_mode({"SGAA_ADMISSION": "operator", "VERCEL": "1"}, production=False) == "operator"
+    assert hosting.admission_mode({"SGAA_ADMISSION": ""}, production=False) == "open"  # a workstation, a test
+
+
+def test_the_opening_reference_is_a_digest_and_its_tag_is_what_the_ledger_expects():
+    assert hosting.opening_reference({"SGAA_OPENING_REFERENCE": REFERENCE.upper()}) == REFERENCE
+    for bad in ("", "ab" * 31, "zz" * 32, "ab" * 32 + "0"):
+        assert hosting.opening_reference({"SGAA_OPENING_REFERENCE": bad}) is None
+    assert hosting.opening_tag(REFERENCE) != hosting.opening_tag("cd" * 32) and len(hosting.opening_tag(REFERENCE)) == 64
+
+
+def test_install_itself_refuses_an_undecided_an_uncredentialled_or_an_unbound_production_app():
+    """Defence in depth behind the startup blockers: the gate never installs a guessed state."""
+    from flask import Flask
+
+    from app.hosting import HostingConfigurationError
+    from app.web import admission_gate
+
+    for env, code in (({}, "HOSTED_ADMISSION_UNDECIDED"),
+                      ({"SGAA_ADMISSION": "operator"}, "HOSTED_OPERATOR_TOKEN_REQUIRED"),
+                      ({"SGAA_ADMISSION": "open"}, "HOSTED_OPENING_REFERENCE_REQUIRED")):
+        app = Flask(__name__)
+        app.config["IS_PRODUCTION"] = True
+        with pytest.raises(HostingConfigurationError) as caught:
+            admission_gate.install(app, env)
+        assert [b.code for b in caught.value.blockers] == [code]
+    app = Flask(__name__)
+    app.config["IS_PRODUCTION"] = True
+    assert admission_gate.install(app, {"SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": REFERENCE}) == "open"
+    assert app.config["SGAA_OPENING_TAG"] == hosting.opening_tag(REFERENCE)
 
 
 @pytest.mark.parametrize("token,ok", [
@@ -71,8 +108,18 @@ def test_a_production_start_refuses_without_an_admission_decision_or_without_the
     short = _blockers({"SGAA_ADMISSION": "operator", "SGAA_OPERATOR_TOKEN": "x" * 31}, monkeypatch, production=True)
     assert [b.code for b in short] == ["HOSTED_OPERATOR_TOKEN_REQUIRED"]
     assert _blockers({"SGAA_ADMISSION": "operator", "SGAA_OPERATOR_TOKEN": TOKEN}, monkeypatch, production=True) == ()
-    assert _blockers({"SGAA_ADMISSION": "open"}, monkeypatch, production=True) == ()
-    assert _blockers({}, monkeypatch, production=False) == ()  # non-production never serves real users
+    opening = Blocker("HOSTED_OPENING_REFERENCE_REQUIRED", ("SGAA_OPENING_REFERENCE",))
+    assert _blockers({"SGAA_ADMISSION": "open"}, monkeypatch, production=True) == (opening,)
+    assert _blockers({"SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": "ab" * 31}, monkeypatch,
+                     production=True) == (opening,)
+    assert _blockers({"SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": REFERENCE}, monkeypatch,
+                     production=True) == ()
+    assert _blockers({}, monkeypatch, production=False) == ()  # a workstation or a test serves no real user
+    assert _blockers({"SGAA_ADMISSION": "open"}, monkeypatch, production=False) == ()
+    # On the platform even a deployment that forgot APP_ENV must decide, and an opening names its reference.
+    assert _blockers({"VERCEL": "1"}, monkeypatch, production=False) == (
+        Blocker("HOSTED_ADMISSION_UNDECIDED", ("SGAA_ADMISSION",)),)
+    assert _blockers({"VERCEL": "1", "SGAA_ADMISSION": "open"}, monkeypatch, production=False) == (opening,)
     assert SENTINEL not in repr(_blockers({"SGAA_ADMISSION": SENTINEL}, monkeypatch, production=True))
 
 
@@ -196,13 +243,38 @@ def test_before_the_opening_a_browser_enters_once_with_the_token_and_then_carrie
 
 
 @NEEDS_PG
+def test_the_admission_cookie_expires_and_cannot_be_dated_or_forged(database, tmp_path):
+    from app.web import admission_gate
+    from tests.mp3_served_app import SERVED_SECRET_KEY
+
+    now = int(time.time())
+
+    def carried(cookie):
+        return _request(app.url, "GET", "/login", headers={"Cookie": f"sgaa_operator={cookie}"})[0]
+
+    with served_app(database, tmp_path, SGAA_ADMISSION="operator", SGAA_OPERATOR_TOKEN=TOKEN) as app:
+        assert carried(admission_gate.cookie_for(SERVED_SECRET_KEY, TOKEN, now)) == 200  # control
+        assert carried(admission_gate.cookie_for(SERVED_SECRET_KEY, TOKEN,
+                                                 now - admission_gate.ADMISSION_COOKIE_SECONDS - 5)) == 503
+        assert carried(admission_gate.cookie_for(SERVED_SECRET_KEY, TOKEN, now + 3600)) == 503
+        assert carried(admission_gate.cookie_for(SERVED_SECRET_KEY, "x" * 40, now)) == 503
+        assert carried(admission_gate.cookie_for("another-key-" + "z" * 40, TOKEN, now)) == 503
+        old_mac = admission_gate.cookie_for(SERVED_SECRET_KEY, TOKEN, now - 10 ** 6).split(".", 1)[1]
+        assert carried(f"{now}.{old_mac}") == 503  # an old cookie re-dated
+        assert "x-sgaa-opening" not in _request(app.url, "GET", "/health")[1]
+
+
+@NEEDS_PG
 def test_opening_is_the_switch_the_same_database_served_open_admits_everyone(database, tmp_path):
     before = _whole_database(database)
-    with served_app(database, tmp_path, SGAA_ADMISSION="open") as app:
+    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=REFERENCE) as app:
         status, seen, page, cookies = _request(app.url, "GET", "/login")
         assert status == 200 and "x-sgaa-admission" not in seen
         assert _request(app.url, "GET", "/operator-admission")[0] == 404
         assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "open"
+        # The opening announces the reference it was lifted with, on every response.
+        assert seen["x-sgaa-opening"] == hosting.opening_tag(REFERENCE)
+        assert hosted_smoke.probe_opening_tag(app.url, allow_insecure=True) == hosting.opening_tag(REFERENCE)
         # Control for the "writes nothing" witness: once open, a stranger's failed sign-in IS a write.
         csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', page).group(1).decode()
         session_cookie = "; ".join(c.split(";", 1)[0] for c in cookies)
@@ -234,3 +306,9 @@ def test_a_production_deployment_without_an_admission_decision_does_not_start(da
     done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
                           capture_output=True, text=True, timeout=180)
     assert done.returncode == 0 and '"admission": "operator"' in done.stdout and TOKEN not in done.stdout
+    # An opening without the reference it is lifted with does not start either.
+    env["SGAA_ADMISSION"] = "open"
+    env.pop("SGAA_OPENING_REFERENCE")
+    done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
+                          capture_output=True, text=True, timeout=180)
+    assert done.returncode == 1 and "HOSTED_OPENING_REFERENCE_REQUIRED" in done.stdout

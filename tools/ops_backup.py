@@ -54,6 +54,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Run as ``python tools/ops_backup.py``: the repository root must be importable (``app``, ``tools``).
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 AUTO_PREFIX = "auto"
 BASELINE_PREFIX = "cutover-baseline"
 MIN_GENERATIONS = 2
@@ -321,8 +325,12 @@ def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
         copy = off_platform / "layer2" / item.name
         if not copy.is_file() or _sha256(item) != _sha256(copy):
             raise Refused("OFF_PLATFORM_COPY_MISMATCH")
+    try:
+        created_at = json.loads(files[0].read_text(encoding="utf-8"))["created_at"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise Refused("DATABASE_SET_INVALID") from None
     result = {"database_set": base, "manifest_sha256": _sha256(files[0]), "manifest_path": str(files[0]),
-              "object_set": None, "object_set_digest": None}
+              "created_at": created_at, "object_set": None, "object_set_digest": None}
     if registry["objects"]:
         from app.storage import object_backup
 

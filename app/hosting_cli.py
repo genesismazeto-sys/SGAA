@@ -76,6 +76,8 @@ def check(*, database: bool) -> tuple[int, dict]:
     report["production"] = bool(flask_app.config.get("IS_PRODUCTION"))
     if flask_app.config.get("SGAA_ADMISSION"):
         report["admission"] = flask_app.config["SGAA_ADMISSION"]
+        if flask_app.config.get("SGAA_OPENING_TAG"):
+            report["opening_tag"] = flask_app.config["SGAA_OPENING_TAG"]
     if not database:
         return 0, report
     from app import db as app_db

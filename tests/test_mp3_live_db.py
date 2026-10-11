@@ -163,7 +163,7 @@ class _Served:
             "TEMP": str(tmp_path), "TMP": str(tmp_path), "TMPDIR": str(tmp_path),
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
             "DATABASE_URL": database_url, "SGAA_RUNTIME": "hosted", "APP_ENV": "production", "TRUST_PROXY_XFF": "1",
-            "SGAA_ADMISSION": "open",
+            "SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": "5" * 64,
             "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
             "APP_PUBLIC_BASE_URL": "https://sgaa.example.test", "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SECRET_KEY": "not-a-real-key-" + "x" * 20, "SGAA_STORAGE_BUCKET": "sgaa-rehearsal-none",
@@ -265,7 +265,7 @@ def test_the_readiness_command_reports_ready_and_a_clean_exposure_through_the_se
 
     env = {key: os.environ[key] for key in _KEEP if key in os.environ}
     env.update({"DATABASE_URL": SESSION_URL, "SGAA_RUNTIME": "hosted", "APP_ENV": "production", "SGAA_ADMISSION": "open",
-                "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+                "SGAA_OPENING_REFERENCE": "5" * 64, "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
                 "SUPABASE_URL": "https://example.supabase.co", "SUPABASE_SECRET_KEY": "k" * 30,
                 "SGAA_STORAGE_BUCKET": "b", "PYTHONDONTWRITEBYTECODE": "1", "TRUST_PROXY_XFF": "1",
                 "APP_PUBLIC_BASE_URL": "https://sgaa.example.test"})

@@ -32,13 +32,16 @@ COMMANDS
     init           create the ledger (the directory must not hold one)
     grant          record that the user granted a gate (an opaque reference only)
     advance        enter the next state with its evidence (never C12: see ``open``)
-    record-backup  verify the newest backup generation from disk and record it
-                   (C11 onward; ``ops_backup --ledger-dir`` calls it after every run)
-    reference      at C11, with GO granted: observe that admission is CLOSED,
-                   prove the recorded pre-opening backup current against the live
-                   database, take the reference fingerprint live, write it out
-    open           observe that admission is OPEN and enter C12 from the reference
-                   (which must be at most 30 minutes old)
+    record-backup  verify the newest backup generation from disk and record it once,
+                   by its own creation time (C11 onward; ``ops_backup --ledger-dir``
+                   calls it after every run)
+    reference      at C11, with GO granted, once: observe at C10's public address
+                   that admission is CLOSED, prove the pre-opening backup (made after
+                   C11) current against the live database, take the reference
+                   fingerprint live, write it out and print its digest
+    open           observe that admission is OPEN at that address and that the
+                   deployment announces the tag of THAT reference (it was lifted with
+                   SGAA_OPENING_REFERENCE), then enter C12 from the reference
     rollback       record a rollback; refused once the point of no return is
                    recorded.  From the opening (C12, or C11 once a reference was
                    taken) only with quiescence OBSERVED -- admission closed, the
@@ -65,6 +68,13 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Run as ``python tools/cutover_ledger.py``: the repository root must be importable (``app``, ``tools``).
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from app import hosting  # noqa: E402
+
 LEDGER_FILE = "ledger.jsonl"
 LOCK_FILE = ".ledger.lock"
 MAX_EVIDENCE_BYTES = 8192
@@ -78,8 +88,6 @@ ROLLBACK_WINDOW_DAYS = 30
 #: Before a rollback from the opening is trusted, two live fingerprints this far apart must agree:
 #: longer than the longest request a deployment can still be serving (maxDuration 300 s).
 QUIESCENCE_SECONDS = 330
-#: The reference is taken immediately before the admission control is lifted.
-REFERENCE_MAX_AGE_SECONDS = 30 * 60
 #: Backup cadence (UD10): the Layer-2 cadence is declared at the reference (1..24 hours); object sets weekly.
 OBJECT_CADENCE_HOURS = 7 * 24
 CADENCE_TOLERANCE = 1.5
@@ -245,15 +253,18 @@ _SCHEMA = {
     "C9": {"commit": _hex40, "readiness": _equals("READY"), "bundle_audit": _equals("CLEAN"),
            "deploy_verify": _equals("IDENTICAL"), "deploy_tree_sha256": _hex64,
            "scheduler_front": _equals("DISABLED"), "admission": _equals("CLOSED")},
+    # ``public_host_sha256``: the public address the smoke ran on (its report prints it); every later
+    # observation of the ledger (reference, open, rollback) must probe that host.
     "C10": {"smoke": _equals("PASS"), "write_set_ok": _true, "admission": _equals("CLOSED"),
-            "data_api_project_sha256": _hex64},
+            "data_api_project_sha256": _hex64, "public_host_sha256": _hex64},
     "C11": {"account_key_match": _true, "mirror_passes": lambda v: _nonneg(v) and v >= 1,
             "reconciliation_required": _zero, "scheduler_front": _equals("ENABLED"),
             "admission": _equals("CLOSED")},
     # Written only by ``open``: every value is the ledger's own observation or the reference's.
     "C12": {"reference_fingerprint_sha256": _hex64, "database_identity_sha256": _hex64, "opened_at": _stamp,
             "admission": _equals("OPEN"), "pre_open_backup_manifest_sha256": _hex64,
-            "backup_cadence_hours": lambda v: _int(v) and 1 <= v <= 24, "rpo_hours": lambda v: _int(v) and v >= 1},
+            "backup_cadence_hours": lambda v: _int(v) and 1 <= v <= 24, "rpo_hours": lambda v: _int(v) and v >= 1,
+            "opening_bound": _true, "reference_age_seconds": _nonneg},
     "C13": {"write_class": lambda v: isinstance(v, str) and bool(_CLASS.fullmatch(v)),
             "detected_at": _stamp, "current_fingerprint_sha256": _hex64, "adjudicated_by_operator": _true},
     "C14": {"restore_validated_manifest_sha256": _hex64, "restore_drill": _equals("OK"),
@@ -451,7 +462,7 @@ def _check_window(summary: dict, evidence: dict) -> None:
     # The pre-open generation (recorded before C12) anchors both cadences.
     start = _parse(summary["entered"]["C12"]["at"])
     cadence = int(_evidence_of(summary, "C12")["backup_cadence_hours"])
-    database_times = [_parse(b["at"]) for b in summary["backups"]]
+    database_times = sorted({_parse(b["generation_at"]) for b in summary["backups"]})
     anchor = [t for t in database_times if t <= start]
     if not _gaps_within(database_times, max(anchor) if anchor else start, now, cadence * CADENCE_TOLERANCE):
         raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
@@ -459,11 +470,11 @@ def _check_window(summary: dict, evidence: dict) -> None:
     for backup in summary["backups"]:
         if backup["object_set_name"] != "NONE" and backup["object_set_name"] not in seen:
             seen.add(backup["object_set_name"])
-            object_times.append(_parse(backup["at"]))
+            object_times.append(_parse(backup["generation_at"]))
     anchor = [t for t in object_times if t <= start]
     if not _gaps_within(object_times, max(anchor) if anchor else start, now, OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
         raise Refused("OBJECT_CADENCE_BROKEN", "an object set is missing from the window")
-    in_window = {b["manifest_sha256"] for b in summary["backups"] if _parse(b["at"]) > ponr_at}
+    in_window = {b["manifest_sha256"] for b in summary["backups"] if _parse(b["generation_at"]) > ponr_at}
     if evidence["restore_validated_manifest_sha256"] not in in_window:
         raise Refused("RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION")
 
@@ -558,6 +569,21 @@ class Observer:
         except OSError:
             return "unknown"
 
+    def opening_tag(self) -> str:
+        from tools import hosted_smoke
+
+        try:
+            return hosted_smoke.probe_opening_tag(self._require_base(), allow_insecure=self.allow_insecure)
+        except hosted_smoke.Refused as refusal:
+            raise Refused(refusal.code) from None
+        except OSError:
+            return ""
+
+    def host_sha256(self) -> str:
+        from tools import hosted_smoke
+
+        return hosted_smoke.host_digest(self._require_base())
+
     def scheduler_front(self) -> str:
         from tools import hosted_smoke
 
@@ -642,6 +668,12 @@ class Observer:
         return True
 
 
+def _require_the_deployment(summary: dict, observer: Observer) -> None:
+    """Every observation probes the public address the smoke proved at C10, not some other deployment."""
+    if observer.host_sha256() != _evidence_of(summary, "C10").get("public_host_sha256"):
+        raise Refused("ADDRESS_NOT_THE_DEPLOYMENT", "probe the public address recorded at C10")
+
+
 def _require_open_pending(summary: dict, *, allow_reference: bool) -> None:
     if summary["rolled_back"]:
         raise Refused("ROLLED_BACK", "a rolled-back cutover is not continued; start a new ledger")
@@ -667,8 +699,19 @@ def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_hea
         if state is None or STATES.index(state) < STATES.index("C11") or state == STATES[-1]:
             raise Refused("OUT_OF_ORDER", "backups are recorded from C11 until the window closes")
         generation = observer.backup(Path(root), Path(off_platform), against_database=False)
+        if any(b["manifest_sha256"] == generation["manifest_sha256"] for b in summary["backups"]):
+            raise Refused("BACKUP_ALREADY_RECORDED", "each generation counts once; take a new one")
+        try:
+            generation_at = _parse(generation["created_at"])
+        except (KeyError, TypeError, ValueError):
+            raise Refused("BACKUP_TIME_INVALID") from None
+        if generation_at > _CLOCK() + timedelta(minutes=5):
+            raise Refused("BACKUP_TIME_INVALID", "the generation is dated in the future")
+        if summary["backups"] and generation_at <= max(_parse(b["generation_at"]) for b in summary["backups"]):
+            raise Refused("BACKUP_OLDER_THAN_RECORDED", "the generation is not newer than one already recorded")
         return _append(directory, entries, {
             "type": "backup", "manifest_sha256": generation["manifest_sha256"],
+            "generation_at": generation_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "object_set_name": generation["object_set"] or "NONE",
             "object_set_digest": generation["object_set_digest"] or "NONE",
             "off_platform": "VERIFIED",
@@ -694,10 +737,16 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
         _check_head(entries, expect_head)
         summary = _summary(entries)
         _require_open_pending(summary, allow_reference=True)
+        if summary["reference"] is not None:
+            # A second reference would re-baseline whatever happened after the first (users admitted
+            # by a premature lift included): the opening uses the one reference, whatever its age.
+            raise Refused("REFERENCE_ALREADY_TAKEN", "lift with the recorded reference; a new one is never taken")
+        _require_the_deployment(summary, observer)
         if observer.admission() != "closed":
             raise Refused("ADMISSION_NOT_CLOSED", "the reference is taken before anyone but the operator is admitted")
-        entered_c11 = summary["entered"]["C11"]["seq"]
-        recorded = [b for b in summary["backups"] if b["seq"] > entered_c11]
+        entered_c11 = summary["entered"]["C11"]
+        recorded = [b for b in summary["backups"] if b["seq"] > entered_c11["seq"]
+                    and _parse(b["generation_at"]) >= _parse(entered_c11["at"])]
         if not recorded or recorded[-1]["object_set_name"] == "NONE":
             raise Refused("PRE_OPEN_BACKUP_REQUIRED", "a verified generation with objects, recorded after C11")
         generation = observer.backup(Path(root), Path(off_platform), against_database=True)
@@ -728,16 +777,20 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
         summary = _summary(entries)
         _require_open_pending(summary, allow_reference=False)
         reference = summary["reference"]
-        if (_CLOCK() - _parse(reference["at"])).total_seconds() > REFERENCE_MAX_AGE_SECONDS:
-            raise Refused("REFERENCE_STALE", "take a new reference immediately before lifting the admission control")
+        _require_the_deployment(summary, observer)
         if observer.admission() != "open":
             raise Refused("ADMISSION_NOT_OPEN")
+        if observer.opening_tag() != hosting.opening_tag(reference["reference_fingerprint_sha256"]):
+            # The open deployment must have been lifted with THIS reference (SGAA_OPENING_REFERENCE).
+            raise Refused("OPENING_NOT_BOUND_TO_THE_REFERENCE")
         evidence = {
             "reference_fingerprint_sha256": reference["reference_fingerprint_sha256"],
             "database_identity_sha256": reference["database_identity_sha256"],
             "opened_at": _now(), "admission": "OPEN",
             "pre_open_backup_manifest_sha256": reference["pre_open_backup_manifest_sha256"],
             "backup_cadence_hours": reference["backup_cadence_hours"], "rpo_hours": reference["rpo_hours"],
+            "opening_bound": True,
+            "reference_age_seconds": int((_CLOCK() - _parse(reference["at"])).total_seconds()),
         }
         return _advance_locked(directory, entries, OPENING_STATE, evidence)
 
@@ -794,6 +847,7 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
             raise Refused("REFERENCE_INVALID") from None
         if reference["fingerprint_sha256"] != reference_entry["reference_fingerprint_sha256"]:
             raise Refused("REFERENCE_FILE_MISMATCH", "not the reference the ledger recorded")
+        _require_the_deployment(summary, observer)
         _quiescent(observer)
         if observer.database_identity() != reference_entry["database_identity_sha256"]:
             raise Refused("DATABASE_NOT_THE_REFERENCE", "the database is not the one the reference was taken from")

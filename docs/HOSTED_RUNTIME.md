@@ -38,8 +38,9 @@ refusal is a `HostingConfigurationError` carrying fixed codes and variable names
 | `HOSTED_STORAGE_CONFIG_REQUIRED` | production only: a canonical-storage variable is missing or malformed | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET` |
 | `HOSTED_TOKEN_KEY_REQUIRED` | production only: no valid Fernet `TOKEN_ENCRYPTION_KEY` | `TOKEN_ENCRYPTION_KEY` |
 | `HOSTED_PUBLIC_URL_INVALID` | production only: `APP_PUBLIC_BASE_URL` missing or not https | `APP_PUBLIC_BASE_URL` |
-| `HOSTED_ADMISSION_UNDECIDED` | production only: `SGAA_ADMISSION` is neither `operator` nor `open` (unset included); outside production an unset value means `open` | `SGAA_ADMISSION` |
+| `HOSTED_ADMISSION_UNDECIDED` | production, or any process on a serverless platform (a deployment that forgot `APP_ENV` included): `SGAA_ADMISSION` is neither `operator` nor `open` (unset included); only a non-production process off the platform takes an unset value as `open` | `SGAA_ADMISSION` |
 | `HOSTED_OPERATOR_TOKEN_REQUIRED` | `SGAA_ADMISSION=operator` without a valid `SGAA_OPERATOR_TOKEN` (printable ASCII, at least 32 characters) | `SGAA_OPERATOR_TOKEN` |
+| `HOSTED_OPENING_REFERENCE_REQUIRED` | the same processes: `SGAA_ADMISSION=open` without a well-formed `SGAA_OPENING_REFERENCE` (64 hex: the cutover reference digest) | `SGAA_OPENING_REFERENCE` |
 
 `TRUST_PROXY_XFF` is a decision, not a default. On Vercel set `1`: the platform
 overwrites `X-Forwarded-For` with the real client address and never forwards a
@@ -64,11 +65,15 @@ control, so the hosted runtime carries a fail-closed admission switch
   Tools send it in the `X-SGAA-Operator-Token` header; a browser presents it once on
   `/operator-admission` (CSRF-protected form; a wrong value is `403` and logged as
   `operator_admission_refused`) and receives an HttpOnly, Secure, SameSite=Lax cookie holding
-  an HMAC of the token under `APP_SECRET_KEY` (never the token), valid eight hours. Behind
-  the gate the application's own authentication and RBAC decide, as after the opening.
-- `SGAA_ADMISSION=open`: no gate is installed. Setting it and redeploying the same commit is
-  the opening; setting `operator` again and redeploying is the first step of a rollback
-  from C12.
+  its issue time and an HMAC of that time and the token under `APP_SECRET_KEY` (never the
+  token); the server refuses it eight hours after issue, or dated in the future. Behind the
+  gate the application's own authentication and RBAC decide, as after the opening.
+- `SGAA_ADMISSION=open`: no gate is installed. In production (and on a serverless platform) it
+  needs `SGAA_OPENING_REFERENCE`, the digest the cutover ledger printed when it took the
+  reference while admission was closed; every response then carries `X-SGAA-Opening: <tag>`
+  (`app.hosting.opening_tag`), which the ledger checks before it records the opening. Setting
+  both and redeploying the same commit is the opening; setting `operator` again and
+  redeploying is the first step of a rollback from C12.
 - Anyone can observe the state without a credential (`tools/hosted_smoke.py
   probe_admission`, also the ledger's probe): `closed` means every probe (two pages and a
   credential POST) is `503` with the closed header and sets no cookie.
@@ -93,6 +98,7 @@ authorization gate, RBAC and the route inventories are unchanged.
 | `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
 | `SGAA_ADMISSION` | `operator` (only the operator is admitted, section 2a) or `open`; required in production | no |
 | `SGAA_OPERATOR_TOKEN` | the operator credential while `SGAA_ADMISSION=operator` (at least 32 printable ASCII characters); kept until the rollback window closes, so a rollback can close admission again | yes |
+| `SGAA_OPENING_REFERENCE` | with `SGAA_ADMISSION=open` in production: the cutover reference digest the opening is lifted with (section 2a) | no |
 | `SCHEDULER_MIRROR_BATCH`, `SCHEDULER_MIRROR_LEASE_SECONDS` | objects per mirror invocation (default 5, at most 25) and lease length (default 300) | no |
 | `APP_LOG_DIR` | optional; defaults to `<scratch>/logs` when hosted, because `main` creates its log directory at import, before the factory runs. Logs also go to the platform stream (both the `app` and `main` channels) | no |
 

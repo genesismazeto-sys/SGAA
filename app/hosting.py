@@ -18,6 +18,7 @@ operator command line is ``app.hosting_cli``; the web runtime never imports it.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 from dataclasses import dataclass
@@ -40,6 +41,10 @@ ADMISSION_OPERATOR = "operator"
 ADMISSION_OPEN = "open"
 OPERATOR_TOKEN_ENV = "SGAA_OPERATOR_TOKEN"
 OPERATOR_TOKEN_MIN_LENGTH = 32
+#: An ``open`` production deployment names the cutover reference it was lifted with (the digest the
+#: ledger printed when it took the reference while admission was closed) and announces a tag of it, so
+#: the opening is bound to that reference and cannot happen before it (MP-3 A15).
+OPENING_REFERENCE_ENV = "SGAA_OPENING_REFERENCE"
 
 _SERVERLESS_MARKERS = ("VERCEL", "AWS_LAMBDA_FUNCTION_NAME")
 _BOOLEAN_WORDS = frozenset({"0", "1", "true", "false", "yes", "no", "on", "off"})
@@ -54,6 +59,7 @@ HOSTED_TOKEN_KEY_REQUIRED = "HOSTED_TOKEN_KEY_REQUIRED"
 HOSTED_PUBLIC_URL_INVALID = "HOSTED_PUBLIC_URL_INVALID"
 HOSTED_ADMISSION_UNDECIDED = "HOSTED_ADMISSION_UNDECIDED"
 HOSTED_OPERATOR_TOKEN_REQUIRED = "HOSTED_OPERATOR_TOKEN_REQUIRED"
+HOSTED_OPENING_REFERENCE_REQUIRED = "HOSTED_OPENING_REFERENCE_REQUIRED"
 
 
 @dataclass(frozen=True)
@@ -144,18 +150,34 @@ def scheduler_secret_configured(environ=None) -> bool:
     return cron_secret(environ) is not None
 
 
-def admission_mode(environ=None, *, production: bool) -> str | None:
-    """``operator`` or ``open``; ``None`` when production has not decided (a startup blocker).
+def admission_must_be_decided(environ=None, *, production: bool) -> bool:
+    """Production, or any process on a serverless platform (a deployment missing ``APP_ENV`` included)."""
+    return production or serverless_platform(environ)
 
-    Outside production an undeclared value means ``open``: a non-production process never serves
-    the institution's users.  An unknown value is never guessed in either direction.
+
+def admission_mode(environ=None, *, production: bool) -> str | None:
+    """``operator`` or ``open``; ``None`` when a deployment has not decided (a startup blocker).
+
+    Only a non-production process off any serverless platform (a workstation, a test) takes an
+    undeclared value as ``open``.  An unknown value is never guessed in either direction.
     """
     raw = str(_environ(environ).get(ADMISSION_ENV) or "").strip().lower()
     if raw in (ADMISSION_OPERATOR, ADMISSION_OPEN):
         return raw
-    if not raw and not production:
+    if not raw and not admission_must_be_decided(environ, production=production):
         return ADMISSION_OPEN
     return None
+
+
+def opening_reference(environ=None) -> str | None:
+    """The cutover reference digest an ``open`` deployment was lifted with: 64 lowercase hex, else None."""
+    raw = str(_environ(environ).get(OPENING_REFERENCE_ENV) or "").strip().lower()
+    return raw if len(raw) == 64 and all(c in "0123456789abcdef" for c in raw) else None
+
+
+def opening_tag(reference: str) -> str:
+    """What an open deployment announces (``X-SGAA-Opening``) for its reference; the ledger computes it too."""
+    return hashlib.sha256(b"sgaa-opening\x00" + reference.encode("ascii")).hexdigest()
 
 
 def operator_token(environ=None) -> str | None:
@@ -244,6 +266,9 @@ def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
         found.append(Blocker(HOSTED_ADMISSION_UNDECIDED, (ADMISSION_ENV,)))
     elif admission == ADMISSION_OPERATOR and operator_token(env) is None:
         found.append(Blocker(HOSTED_OPERATOR_TOKEN_REQUIRED, (OPERATOR_TOKEN_ENV,)))
+    elif admission == ADMISSION_OPEN and admission_must_be_decided(env, production=production) \
+            and opening_reference(env) is None:
+        found.append(Blocker(HOSTED_OPENING_REFERENCE_REQUIRED, (OPENING_REFERENCE_ENV,)))
     return tuple(found)
 
 
@@ -264,10 +289,15 @@ __all__ = [
     "ADMISSION_OPERATOR",
     "Blocker",
     "HOSTED_ADMISSION_UNDECIDED",
+    "HOSTED_OPENING_REFERENCE_REQUIRED",
     "HOSTED_OPERATOR_TOKEN_REQUIRED",
+    "OPENING_REFERENCE_ENV",
     "OPERATOR_TOKEN_ENV",
     "OPERATOR_TOKEN_MIN_LENGTH",
     "admission_mode",
+    "admission_must_be_decided",
+    "opening_reference",
+    "opening_tag",
     "operator_token",
     "CRON_SECRET_ENV",
     "CRON_SECRET_MIN_LENGTH",

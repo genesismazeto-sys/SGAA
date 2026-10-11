@@ -240,9 +240,11 @@ def _classify(reference_tables: dict, current_tables: dict, raw: dict) -> dict:
             values = tuple(record)
             normalized_key = next(iter(pathb.normalize_rows(table, [values])))
             live["|".join(str(part) for part in normalized_key)] = values
+        explained = False
         for key in sorted(old):
             if old[key] == new[key]:
                 continue
+            explained = True
             changed = frozenset(name for name, left, right in zip(after["columns"], old[key], new[key]) if left != right)
             classes = _classes_for(changed)
             if classes is None:
@@ -255,6 +257,8 @@ def _classify(reference_tables: dict, current_tables: dict, raw: dict) -> dict:
                 if not _VERIFIERS[name](row, before_hashes, columns):
                     return refused("DERIVED_VALUE_NOT_REPRODUCED")
             derived.update(classes)
+        if not explained:  # the table differs but no row does (a short-hash collision): never excused
+            return refused("UNEXPLAINED_CHANGE")
     return {"identical": False, "derived_classes": sorted(derived), "refusal": None,
             "changed_tables": [name.upper() for name in changed_tables]}
 

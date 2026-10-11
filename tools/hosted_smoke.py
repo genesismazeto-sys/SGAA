@@ -67,6 +67,7 @@ REQUIRED_HEADERS = {
 TIMEOUT_SECONDS = 20
 OPERATOR_HEADER = "X-SGAA-Operator-Token"
 ADMISSION_STATE_HEADER = "x-sgaa-admission"
+OPENING_HEADER = "x-sgaa-opening"
 #: The provider address of a project; a module constant so the tests can point it at a local server.
 PROJECT_HOST_TEMPLATE = "{ref}.supabase.co"
 _PROJECT_REF = re.compile(r"[a-z0-9.]{8,40}")
@@ -157,6 +158,11 @@ def _jwt_claims(key: str) -> dict | None:
     return claims if isinstance(claims, dict) else {}
 
 
+def host_digest(base_url: str) -> str:
+    """The deployment's identity for the ledger: SHA-256 of its lowercase host name."""
+    return hashlib.sha256((urlsplit(base_url).hostname or "").lower().encode("ascii", "replace")).hexdigest()
+
+
 def project_digest(project_ref: str) -> str:
     return hashlib.sha256(project_ref.encode("ascii")).hexdigest()
 
@@ -165,6 +171,7 @@ def probe_admission(base_url: str, *, allow_insecure: bool = False) -> str:
     """``closed``, ``open`` or ``unknown``, seen without any credential (also the ledger's probe)."""
     anonymous = _Client(base_url, allow_insecure=allow_insecure)
     states = set()
+    login_served = False
     for method, path, body, headers in (
         ("GET", "/login", None, {}),
         ("GET", "/admin/dashboard", None, {}),
@@ -176,9 +183,19 @@ def probe_admission(base_url: str, *, allow_insecure: bool = False) -> str:
             states.add("closed")
         elif ADMISSION_STATE_HEADER not in seen and status != 503:
             states.add("open")
+            login_served = login_served or (method == "GET" and path == "/login" and status == 200)
         else:
             states.add("unknown")
+    if states == {"open"} and not login_served:
+        return "unknown"  # a 404, a protection page or an error page is not an application admitting users
     return states.pop() if len(states) == 1 else "unknown"
+
+
+def probe_opening_tag(base_url: str, *, allow_insecure: bool = False) -> str:
+    """The ``X-SGAA-Opening`` tag an open deployment announces on ``/health`` ('' when none)."""
+    client = _Client(base_url, allow_insecure=allow_insecure)
+    _status, seen, _data, _cookies = client.request("GET", "/health")
+    return seen.get(OPENING_HEADER, "").strip().lower()
 
 
 def probe_scheduler_front(base_url: str, *, allow_insecure: bool = False) -> str:
@@ -380,6 +397,7 @@ def run(base_url: str, *, allow_insecure: bool = False, data_api_url: str | None
     return {
         "result": "PASS" if checks and all(item["ok"] for item in checks) else "FAIL",
         "host_digest": hashlib.sha256(client.host.encode()).hexdigest()[:12],
+        "public_host_sha256": host_digest(base_url),
         "checks": checks,
         **report_extra,
     }

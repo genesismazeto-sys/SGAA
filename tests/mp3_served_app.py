@@ -19,6 +19,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SERVED_SECRET_KEY = "p" + "3" * 47
+# An open production deployment names the reference it was lifted with; the lanes that do not test the
+# opening itself use this one.
+SERVED_OPENING_REFERENCE = "5" * 64
 # APPDATA / LOCALAPPDATA: libpq finds the workstation password file there (the live lanes).
 _KEEP = ("SYSTEMROOT", "SystemDrive", "WINDIR", "COMSPEC", "PATHEXT", "PATH", "USERPROFILE", "OS",
          "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH")
@@ -44,8 +48,8 @@ def hosted_environment(database_url: str, tmp_path, **extra_env) -> dict:
         "TEMP": str(tmp_path), "TMP": str(tmp_path), "TMPDIR": str(tmp_path),
         "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
         "DATABASE_URL": database_url, "SGAA_RUNTIME": "hosted", "APP_ENV": "production", "TRUST_PROXY_XFF": "1",
-        "SGAA_ADMISSION": "open",
-        "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+        "SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": SERVED_OPENING_REFERENCE,
+        "APP_SECRET_KEY": SERVED_SECRET_KEY, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
         "APP_PUBLIC_BASE_URL": "https://sgaa.example.test", "SUPABASE_URL": "https://example.supabase.co",
         "SUPABASE_SECRET_KEY": "not-a-real-key-" + "x" * 20, "SGAA_STORAGE_BUCKET": "sgaa-documentos",
         "GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": "",

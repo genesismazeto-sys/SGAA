@@ -32,7 +32,7 @@ from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, 
 from tests.mp3_ledger_support import ALL_GATES, GOOD
 from tests.mp3_served_app import seed_admin_and_requests, served_app
 from tools import cutover_ledger as ledger
-from tools import ops_backup
+from tools import hosted_smoke, ops_backup
 
 pytestmark = pytest.mark.skipif(
     not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT"
@@ -40,6 +40,8 @@ pytestmark = pytest.mark.skipif(
 
 pytest.importorskip("psycopg")
 TOKEN = "operator-" + "R5" * 20
+# The served applications all answer on this host; C10 records it as the public address.
+LOCAL_HOST = hosted_smoke.host_digest("http://127.0.0.1")
 _FORM = {"Content-Type": "application/x-www-form-urlencoded"}
 
 
@@ -96,14 +98,19 @@ def lane(registry, tmp_path, monkeypatch):
         registry.drop(name)
 
 
-def _open_cutover(lane):
-    """C0..C11 recorded, then the real opening: generation, record, reference while closed, reopen, open."""
-    directory = lane["ledger"]
+def _to_c11(directory):
     ledger.init(directory)
     for index, gate in enumerate(ALL_GATES):
         ledger.grant(directory, gate, f"user-msg-{index}")
     for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
-        ledger.advance(directory, state, GOOD[state])
+        evidence = dict(GOOD[state], public_host_sha256=LOCAL_HOST) if state == "C10" else GOOD[state]
+        ledger.advance(directory, state, evidence)
+
+
+def _open_cutover(lane):
+    """C0..C11 recorded, then the real opening: generation, record, reference while closed, reopen, open."""
+    directory = lane["ledger"]
+    _to_c11(directory)
     with ExitStack() as closed_stack:
         closed = closed_stack.enter_context(served_app(lane["url"], lane["tmp"] / "closed", SGAA_ADMISSION="operator",
                                                        SGAA_OPERATOR_TOKEN=TOKEN))
@@ -118,7 +125,7 @@ def _open_cutover(lane):
         reference = lane["tmp"] / "reference.json"
         taken = ledger.take_reference(directory, reference, root, off, cadence_hours=24, observer=observer)
         assert taken["admission"] == "CLOSED" and taken["pre_open_backup_manifest_sha256"] == recorded["manifest_sha256"]
-    opened_app = lane["serve"]("open")
+    opened_app = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["reference_fingerprint_sha256"])
     opened = ledger.open_admission(directory, observer=ledger.Observer(opened_app.url, allow_insecure=True,
                                                                          database_url=lane["url"]))
     assert opened["state"] == "C12" and opened["evidence"]["admission"] == "OPEN"
@@ -208,11 +215,7 @@ def test_a_business_write_after_the_opening_refuses_the_rollback_and_the_ponr_is
 
 def test_the_reference_is_refused_while_the_deployment_already_admits_everyone(lane):
     directory = lane["ledger"]
-    ledger.init(directory)
-    for index, gate in enumerate(ALL_GATES):
-        ledger.grant(directory, gate, f"user-msg-{index}")
-    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
-        ledger.advance(directory, state, GOOD[state])
+    _to_c11(directory)
     opened = lane["serve"]("open")
     observer = ledger.Observer(opened.url, allow_insecure=True, database_url=lane["url"])
     root, off = lane["tmp"] / "backups", lane["tmp"] / "off-platform"

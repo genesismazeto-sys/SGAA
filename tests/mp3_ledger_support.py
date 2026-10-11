@@ -8,7 +8,8 @@ from __future__ import annotations
 import hashlib
 
 H = {"a": "a" * 64, "b": "b" * 64, "c": "c" * 64, "d": "d" * 64, "e": "e" * 64, "f": "f" * 64,
-     "g": "1" * 64, "h": "2" * 64, "i": "3" * 64, "j": "4" * 64, "k": "5" * 64}  # distinct 64-hex digests
+     "g": "1" * 64, "h": "2" * 64, "i": "3" * 64, "j": "4" * 64, "k": "5" * 64,
+     "m": "6" * 64}  # distinct 64-hex digests
 COMMIT = "c" * 40
 OTHER_COMMIT = "d" * 40
 
@@ -39,7 +40,8 @@ GOOD = {
            "admin_bootstrap": "NOT_NEEDED"},
     "C9": {"commit": COMMIT, "readiness": "READY", "bundle_audit": "CLEAN", "deploy_verify": "IDENTICAL",
            "deploy_tree_sha256": H["h"], "scheduler_front": "DISABLED", "admission": "CLOSED"},
-    "C10": {"smoke": "PASS", "write_set_ok": True, "admission": "CLOSED", "data_api_project_sha256": H["k"]},
+    "C10": {"smoke": "PASS", "write_set_ok": True, "admission": "CLOSED", "data_api_project_sha256": H["k"],
+            "public_host_sha256": H["m"]},
     "C11": {"account_key_match": True, "mirror_passes": 2, "reconciliation_required": 0,
             "scheduler_front": "ENABLED", "admission": "CLOSED"},
     "C13": {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",

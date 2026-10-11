@@ -21,12 +21,20 @@ THE OPERATOR CREDENTIAL
     ``SGAA_OPERATOR_TOKEN`` (at least 32 characters), placed in the platform by the
     user and never seen by the executor.  Tools send it in the ``X-SGAA-Operator-Token``
     header.  A browser presents it once on ``/operator-admission`` (a POST form with the
-    application's CSRF protection) and receives an HttpOnly, Secure cookie that holds an
-    HMAC of the token under the application's secret key -- never the token itself.
+    application's CSRF protection) and receives an HttpOnly, Secure cookie that holds its
+    issue time and an HMAC of that time and the token under the application's secret key --
+    never the token itself; the server refuses it eight hours after issue.
 
 ALWAYS REACHABLE
     ``/health`` (read-only), static files and the admission form.  Everything else
     answers 503 with ``X-SGAA-Admission: closed`` and no cookie.
+
+THE OPENING
+    ``SGAA_ADMISSION=open`` registers no gate.  In production (and on any serverless
+    platform) it also requires ``SGAA_OPENING_REFERENCE``, the digest of the cutover
+    reference taken while admission was closed; every response then announces
+    ``X-SGAA-Opening: <tag of that reference>`` so the ledger can prove the lift is bound to
+    the reference it recorded, and an opening before any reference cannot start.
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import time
 
 from flask import Response, current_app, redirect, request
 
@@ -45,6 +54,8 @@ ADMISSION_CLOSED = "closed"
 ADMISSION_COOKIE = "sgaa_operator"
 ADMISSION_PATH = "/operator-admission"
 ADMISSION_COOKIE_SECONDS = 8 * 60 * 60
+ADMISSION_OPENING_HEADER = "X-SGAA-Opening"
+_COOKIE_CLOCK_SKEW_SECONDS = 60
 _ALWAYS_REACHABLE = frozenset({"/health", ADMISSION_PATH})
 _HMAC_CONTEXT = b"sgaa-operator-admission\x00"
 
@@ -63,10 +74,25 @@ _FORM_PAGE = (
 )
 
 
-def _cookie_value(token: str) -> str:
-    key = current_app.secret_key
-    key = key.encode("utf-8") if isinstance(key, str) else bytes(key)
-    return hmac.new(key, _HMAC_CONTEXT + token.encode("ascii"), hashlib.sha256).hexdigest()
+def cookie_for(secret_key, token: str, issued: int) -> str:
+    """The admission cookie value: its issue time and an HMAC of that time and the token."""
+    key = secret_key.encode("utf-8") if isinstance(secret_key, str) else bytes(secret_key)
+    mac = hmac.new(key, _HMAC_CONTEXT + str(issued).encode("ascii") + b"\x00" + token.encode("ascii"), hashlib.sha256)
+    return f"{issued}.{mac.hexdigest()}"
+
+
+def _cookie_value(token: str, issued: int) -> str:
+    return cookie_for(current_app.secret_key, token, issued)
+
+
+def _cookie_valid(cookie: str, token: str) -> bool:
+    issued, _, _mac = cookie.partition(".")
+    if not issued.isdigit() or len(issued) > 12:
+        return False
+    age = int(time.time()) - int(issued)
+    if age > ADMISSION_COOKIE_SECONDS or age < -_COOKIE_CLOCK_SKEW_SECONDS:
+        return False
+    return hmac.compare_digest(cookie.encode("ascii", "replace"), _cookie_value(token, int(issued)).encode("ascii"))
 
 
 def _token() -> str:
@@ -80,7 +106,7 @@ def operator_presented() -> bool:
     if presented and hmac.compare_digest(presented.encode("utf-8", "replace"), token.encode("ascii")):
         return True
     cookie = request.cookies.get(ADMISSION_COOKIE, "")
-    return bool(cookie) and hmac.compare_digest(cookie.encode("ascii", "replace"), _cookie_value(token).encode("ascii"))
+    return bool(cookie) and _cookie_valid(cookie, token)
 
 
 def _closed() -> Response:
@@ -114,10 +140,15 @@ def admission_view():
         return response
     response = redirect("/login", code=303)
     response.set_cookie(
-        ADMISSION_COOKIE, _cookie_value(_token()), max_age=ADMISSION_COOKIE_SECONDS, path="/",
+        ADMISSION_COOKIE, _cookie_value(_token(), int(time.time())), max_age=ADMISSION_COOKIE_SECONDS, path="/",
         secure=bool(current_app.config.get("SESSION_COOKIE_SECURE")), httponly=True, samesite="Lax",
     )
     response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _announce_opening(response):
+    response.headers[ADMISSION_OPENING_HEADER] = current_app.config["SGAA_OPENING_TAG"]
     return response
 
 
@@ -126,13 +157,20 @@ def install(app, environ=None) -> str:
 
     Called right after the application object exists, so the gate is the FIRST
     ``before_request`` -- ahead of CSRF, the session hooks and every view.  ``open``
-    registers nothing.
+    registers no gate; with an opening reference it announces the reference's tag.
     """
-    mode = hosting.admission_mode(environ, production=bool(app.config.get("IS_PRODUCTION")))
+    production = bool(app.config.get("IS_PRODUCTION"))
+    mode = hosting.admission_mode(environ, production=production)
     if mode is None:  # create_app refuses earlier through the startup blockers; never guess
         raise hosting.single(hosting.HOSTED_ADMISSION_UNDECIDED, hosting.ADMISSION_ENV)
     app.config["SGAA_ADMISSION"] = mode
     if mode != hosting.ADMISSION_OPERATOR:
+        reference = hosting.opening_reference(environ)
+        if reference is None and hosting.admission_must_be_decided(environ, production=production):
+            raise hosting.single(hosting.HOSTED_OPENING_REFERENCE_REQUIRED, hosting.OPENING_REFERENCE_ENV)
+        if reference is not None:
+            app.config["SGAA_OPENING_TAG"] = hosting.opening_tag(reference)
+            app.after_request(_announce_opening)
         return mode
     token = hosting.operator_token(environ)
     if token is None:
@@ -148,8 +186,10 @@ __all__ = [
     "ADMISSION_CLOSED",
     "ADMISSION_COOKIE",
     "ADMISSION_HEADER",
+    "ADMISSION_OPENING_HEADER",
     "ADMISSION_PATH",
     "ADMISSION_STATE_HEADER",
+    "cookie_for",
     "enforce_admission",
     "install",
     "operator_presented",

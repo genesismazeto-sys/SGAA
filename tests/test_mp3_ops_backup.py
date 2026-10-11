@@ -43,6 +43,9 @@ class _Children:
             directory.mkdir(parents=True, exist_ok=True)
             for suffix in DUMP_SUFFIXES:
                 (directory / (base + suffix)).write_bytes(f"{base}{suffix}".encode())
+            # The real manifest carries its creation time (the ledger measures the cadence by it).
+            (directory / (base + ".manifest.json")).write_text(
+                json.dumps({"set": base, "created_at": f"2026-10-10T00:00:{self.counter:02d}Z"}), encoding="utf-8")
             return 0
         if "pg_backup.py" in text and " verify " in f" {text} ":
             return 3 if self.fail_at == "DATABASE_VERIFY" else 0
@@ -340,6 +343,7 @@ def test_the_newest_generation_is_reverified_from_disk_including_its_off_platfor
     result = ob.verify_generation(root, off)
     assert result["database_set"].startswith("sgaa-pg-") and len(result["manifest_sha256"]) == 64
     assert result["object_set"] and result["object_set_digest"] == "9" * 64
+    assert result["created_at"] == json.loads(Path(result["manifest_path"]).read_text())["created_at"]
     assert len(calls["artifact"]) == 1 and calls["objects"] == [None]
     marker = object()
     ob.verify_generation(root, off, conn=marker)
@@ -387,6 +391,17 @@ def test_an_invalid_layer2_set_or_object_set_is_refused(verifiable, monkeypatch)
         raise pg_backup.Refused("ARTIFACT_SHA_MISMATCH", "x")
 
     monkeypatch.setattr(pg_backup, "verify_artifact", broken)
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "DATABASE_SET_INVALID"
+
+
+def test_a_layer2_manifest_without_its_creation_time_is_refused(verifiable):
+    (root, off), _calls, _report = verifiable
+    manifest = next((root / "layer2").glob("*.manifest.json"))
+    manifest.write_text(json.dumps({"set": "x"}), encoding="utf-8")
+    copy = off / "layer2" / manifest.name
+    copy.write_bytes(manifest.read_bytes())
     with pytest.raises(ob.Refused) as caught:
         ob.verify_generation(root, off)
     assert caught.value.code == "DATABASE_SET_INVALID"

@@ -70,7 +70,10 @@ def _app(**defect):
             return reply("503 Service Unavailable", b"<p>fechado</p>", extra)
         if path == "/health":
             body = b'{"status": "degraded"}' if defect.get("health_body") else b'{"status": "ok"}'
-            return reply("500 ERR" if defect.get("health") else "200 OK", body)
+            announced = [("X-SGAA-Opening", defect["opening_tag"])] if defect.get("opening_tag") else []
+            return reply("500 ERR" if defect.get("health") else "200 OK", body, announced)
+        if defect.get("login_missing") and path == "/login" and method == "GET":  # not an application page
+            return reply("404 Not Found", b"<h1>404</h1>")
         if path == "/login" and method == "GET":
             cookie = "session=abc; Path=/; HttpOnly; SameSite=Lax"
             if not defect.get("cookie_no_secure"):
@@ -276,6 +279,21 @@ def test_the_proof_is_bound_to_the_intended_project(server):
     assert _code(_data_api(server, key=service, valid_key=service), "DATA_API") == "DATA_API_KEY_WRONG_PROJECT"
     own = _jwt({"ref": PROJECT, "role": "anon"})
     assert _failed(_data_api(server, key=own, valid_key=own)) == set()
+
+
+def test_open_means_an_application_serving_its_login_page_not_any_answer_without_the_header(server):
+    assert smoke.probe_admission(server(), allow_insecure=True) == "open"
+    assert smoke.probe_admission(server(login_missing=True), allow_insecure=True) == "unknown"
+
+
+def test_the_opening_tag_and_the_public_host_are_read_for_the_ledger(server):
+    tag = "AB" * 32
+    assert smoke.probe_opening_tag(server(opening_tag=tag), allow_insecure=True) == tag.lower()
+    assert smoke.probe_opening_tag(server(), allow_insecure=True) == ""
+    assert smoke.host_digest("https://SGAA.Example.test:443/x") == smoke.host_digest("https://sgaa.example.test")
+    assert smoke.host_digest("https://sgaa.example.test") != smoke.host_digest("https://other.example.test")
+    base = server()
+    assert smoke.run(base, allow_insecure=True)["public_host_sha256"] == smoke.host_digest(base)
 
 
 def test_the_production_address_must_be_the_projects_own(monkeypatch):
