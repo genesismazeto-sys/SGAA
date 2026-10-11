@@ -66,10 +66,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   a verified pre-opening backup with the cadence held to C14, and the Data API proof accepting only
   the answer proven on DEV. Three fresh-context rechecks (FAIL, then PASS twice) hardened it: one
   reference per opening bound to the lift (`SGAA_OPENING_REFERENCE`), every observation bound to the
-  public address, each backup counted once by its own time. T5 at the recorded baseline. Pending: the
-  R3 re-review of the remediated candidate (packet in `D:\SGAA_REVIEW\mp3_r3_packet`) and, optionally,
-  GA2 for the Google OAuth rehearsal; the user turns DEV's Data API toggle off before GP1. GP0 is not
-  authorized; no PROD gate granted.
+  public address, each backup counted once by its own time. The re-review then returned FAIL on one
+  material finding, remediated as A16: every generation the ledger counts is bound, from its own
+  manifests, to the PROD database and the PROD project's store (`app.hosting` source identity; the
+  project from the pooler's authenticated tenant), and C1 proves the session connection is the PROD
+  project's. T5 at the recorded baseline. Pending: the next R3 re-review (packet in
+  `D:\SGAA_REVIEW\mp3_r3_packet`) and, optionally, GA2 for the Google OAuth rehearsal; the user turns
+  DEV's Data API toggle off before GP1. GP0 is not authorized; no PROD gate granted.
 
 ## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
 
@@ -133,5 +136,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — first R3 FAIL remediated (SPEC A15); R3 re-review pending; no PROD gate granted |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — R3 FAILs remediated (SPEC A15, A16); R3 re-review pending; no PROD gate granted |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |

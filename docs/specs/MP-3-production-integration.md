@@ -876,19 +876,17 @@ rehearsal (C0..C13 through served applications, with real generations and the op
 three minutes. The maintenance window of C2 is twice `objects x 1.5 s` plus the
 fixed steps. Real data will change these numbers; the census at C2 re-derives them.
 
-Full suite (T5) on the remediation, chunked in eight fresh interpreters from a clean worktree of `af8c809`
-(the clean virtual environment from `requirements.txt` with `cryptography` 50.0.2 and `msal` 1.37.0,
-PostgreSQL 17 lanes on; TEP trigger: the application bootstrap and the hosted runtime contract changed):
-5,633 passed, 161 skipped, 3 failed, 6 collection errors -- exactly the recorded baseline: the 6 errors are
-`xlwt`, the 3 failures `TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548 (it fails identically on the
-MP-2 closure `0287f94`) and the backup-package test that needs the gitignored `database.db`. No MP-3 test
-failed. The run on `b4c6f3e` (before the recheck's fixes) had 5,619 passed with the same baseline, and the
-earlier runs on `5786459` and `d42a453` 5,506 and 5,495. Delta `af8c809`..`ffba879` (the ledger, its tests
-and the documents; the two application files changed in comments and docstrings only, their executable code
-AST-identical) touches no TEP section 7 invalidator and is qualified per section 6: the ledger tests (120),
-the real-application opening lane with the backup, admission and hosted-runtime families (116 passed), the
-DEV dress rehearsal (5 of 5) and the round-3 and round-4 mutation probes (all killed). The live database
-lanes ran 11 of 11 on Supabase DEV on `af8c809`, and the dress rehearsal on every remediation commit.
+Full suite (T5) on the backup-source remediation, chunked in eight fresh interpreters from a clean worktree
+of `78b5f0e` (the clean virtual environment from `requirements.txt` with `cryptography` 50.0.2 and `msal`
+1.37.0, PostgreSQL 17 lanes on; TEP trigger: the hosted runtime contract, the object-backup and Layer-2
+manifests changed): 5,691 passed, 162 skipped, 3 failed, 6 collection errors -- exactly the recorded
+baseline: the 6 errors are `xlwt`, the 3 failures `TestSentinelSurvival`, the MX3 catalogue delta 549 vs 548
+(it fails identically on the MP-2 closure `0287f94`) and the backup-package test that needs the gitignored
+`database.db`. No MP-3 test failed. Earlier runs: `af8c809` 5,633 passed, `b4c6f3e` 5,619, `5786459` 5,506,
+`d42a453` 5,495, each with the same baseline. Delta `78b5f0e`..`bb06d7f` (the ledger's C1 predicate, its
+tests and the documents) touches no TEP section 7 invalidator and is qualified per section 6: the ledger
+tests (141), the dress rehearsal on DEV with the backup-source and opening lanes (39 passed) and the live
+database lanes on Supabase DEV (12 of 12, the two-project lane included).
 
 R3: the first blind cross-family review returned FAIL (pre-GO admission, the C12 rollback, secret
 custody and deploy identity, backup before the opening, the Data API proof; A15). Mutation of the
@@ -900,7 +898,12 @@ registry entry) and were answered with new tests; all are killed. The recheck fi
 then 5, then 3), all killed after 4 survivors were answered with tests. The remediation was rechecked
 by three fresh-context same-family reviews before landing: FAIL on `b4c6f3e` (three material defects,
 A15 (6)), then PASS on `af8c809` and on `99f2275`, whose non-material observations were closed in
-`99f2275` and `ffba879`. The re-review is the user's.
+`99f2275` and `ffba879`. The re-review of `d4e9dc8` returned FAIL on one material finding (the backup source
+identity, A16): remediated in `78b5f0e`; 27 mutants over every new refusal and derivation, all killed (2
+after strengthening tests); a fresh-context same-family recheck PASS, whose notes that keep the contract
+consistent were closed in `bb06d7f` (C1 requires a proven cluster; the store address and the window's
+no-provider-change rule are stated) and whose others are carried as non-material. The next re-review is the
+user's.
 
 Reviews: S1, S2, S3, S4 and S5 each had an independent fresh-context R2 review with a targeted
 recheck after fixes (S2 failed its first review on three findings and its recheck on one more, a
