@@ -326,11 +326,15 @@ def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
         if not copy.is_file() or _sha256(item) != _sha256(copy):
             raise Refused("OFF_PLATFORM_COPY_MISMATCH")
     try:
-        created_at = json.loads(files[0].read_text(encoding="utf-8"))["created_at"]
+        layer2 = json.loads(files[0].read_text(encoding="utf-8"))
+        created_at, database_source = layer2["created_at"], layer2["source"]
     except (OSError, ValueError, KeyError, TypeError):
         raise Refused("DATABASE_SET_INVALID") from None
+    # The sources are reported as recorded by the tools that read the database and the store; the
+    # cutover ledger derives their identity (``app.hosting``) and refuses any but production's.
     result = {"database_set": base, "manifest_sha256": _sha256(files[0]), "manifest_path": str(files[0]),
-              "created_at": created_at, "object_set": None, "object_set_digest": None}
+              "created_at": created_at, "database_source": database_source,
+              "object_set": None, "object_set_digest": None, "object_source": None}
     if registry["objects"]:
         from app.storage import object_backup
 
@@ -346,7 +350,11 @@ def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
             copy = off_platform / "objects" / name / item.relative_to(set_dir)
             if not copy.is_file() or _sha256(item) != _sha256(copy):
                 raise Refused("OFF_PLATFORM_COPY_MISMATCH")
-        result.update(object_set=name, object_set_digest=report.objects_digest)
+        try:
+            object_source = json.loads((set_dir / object_backup.MANIFEST_NAME).read_text(encoding="utf-8")).get("source")
+        except (OSError, ValueError):
+            raise Refused("OBJECT_SET_INVALID") from None
+        result.update(object_set=name, object_set_digest=report.objects_digest, object_source=object_source)
     return result
 
 

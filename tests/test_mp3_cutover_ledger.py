@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from app import hosting
-from tests.mp3_ledger_support import ALL_GATES, COMMIT, GOOD, H, OTHER_COMMIT
+from tests.mp3_ledger_support import ALL_GATES, COMMIT, GOOD, H, OBJECT_SOURCE, OTHER_COMMIT, OTHER_REF, PROD_REF, SOURCE
 from tests.mp3_ledger_support import manifest_digest as _manifest
 from tools import cutover_ledger as ledger
 from tools import pg_fingerprint as fp
@@ -28,7 +28,7 @@ _TABLES = {"alunos": {"rows": 1, "sha256": "d" * 64, "columns": ["id"], "row_has
 REFERENCE = {"format": fp.FORMAT, "tables": _TABLES, "fingerprint_sha256": fp._digest_of(_TABLES)}
 _CHANGED = {"alunos": {"rows": 1, "sha256": "e" * 64, "columns": ["id"], "row_hashes": {"1": ["i"]}}}
 CHANGED = {"format": fp.FORMAT, "tables": _CHANGED, "fingerprint_sha256": fp._digest_of(_CHANGED)}
-IDENTITY = H["j"]
+IDENTITY = hosting.source_identity_sha256(SOURCE)
 
 
 class FakeObserver:
@@ -38,12 +38,13 @@ class FakeObserver:
         self.admission_state = "closed"
         self.scheduler = "enabled"  # production after GD2; a rollback disables it first
         self.jobs = 0
-        self.identity = IDENTITY
+        self.source = dict(SOURCE)  # what DATABASE_URL reads
         self.current = REFERENCE
         self.verdicts: list[dict] = []
         self.generation = {"database_set": "sgaa-pg-x-auto-scheduled", "manifest_sha256": _manifest(0),
                            "manifest_path": "unused", "object_set": "20261101T000000Z-auto-weekly",
-                           "object_set_digest": H["g"]}
+                           "object_set_digest": H["g"], "database_source": dict(SOURCE),
+                           "object_source": {"database": dict(SOURCE), "store_host": OBJECT_SOURCE["store_host"]}}
         self.matches = True
         self.backup_calls: list[bool] = []
         self.host = H["m"]  # the public address proven at C10
@@ -59,8 +60,11 @@ class FakeObserver:
     def external_trigger_jobs(self):
         return self.jobs
 
+    def database_source(self):
+        return self.source
+
     def database_identity(self):
-        return self.identity
+        return hosting.source_identity_sha256(self.source)
 
     def fingerprint(self):
         return self.current
@@ -252,7 +256,7 @@ BAD = {
            "prod_project_sha256": "uckadhcwfknklmdktuyi"},
     "C1": {"pg_major": 14, "schema_current": False, "rows": 3, "objects": 1, "data_api_toggle_off": False,
            "data_api_override": "SKIPPED", "data_api_probe": "SERVED", "data_api_project_sha256": "nope",
-           "api_exposure_clean": False, "capacity_ok": False},
+           "api_exposure_clean": False, "capacity_ok": False, "database_project_sha256": "nope"},
     "C2": {"database_bytes": -1, "document_bytes": "1", "census": {}},
     "C3": {"source_size": 0, "source_sha256": "nope", "wal_bytes": 12},
     "C4": {"source_sha256": "nope", "prepared_sha256": "nope", "integrity_ok": False, "fk_violations": 1,
@@ -580,8 +584,10 @@ def test_the_command_line_runs_as_a_script_from_anywhere(tmp_path):
         [sys.executable, str(Path(ledger.__file__)), "record-backup", "--ledger-dir", str(directory),
          "--expect-head", ledger.status(directory)["head"], "--backup-root", str(tmp_path / "none"),
          "--off-platform", str(tmp_path / "off")],
-        cwd=tmp_path, capture_output=True, text=True, timeout=180)
-    assert done.returncode == 1 and "BACKUP_NO_GENERATION" in done.stderr, done.stderr[-400:]
+        cwd=tmp_path, capture_output=True, text=True, timeout=180,
+        env={k: v for k, v in __import__("os").environ.items() if k != "DATABASE_URL"})
+    # It imports its tools and reaches its own refusal: no database to prove production from.
+    assert done.returncode == 1 and done.stderr.startswith("cutover-ledger: refused: SOURCE_REQUIRED"), done.stderr[-400:]
 
 
 def test_the_reference_and_the_opening_follow_c11_only_and_never_a_rollback(directory, observer):
@@ -743,6 +749,158 @@ def test_a_generation_made_before_the_ponr_is_not_a_window_generation_whenever_i
     assert _code(ledger.advance, directory, "C14", validated) == "RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION"
 
 
+# ---- every generation from the PROD database and store (A16) -------------------------------------------------
+
+FOREIGN_CLUSTER = dict(SOURCE, system_identifier="7400000000000000009")  # another server
+SCRATCH = dict(SOURCE, host="127.0.0.1", port="5432", login_user="sgaa", user="sgaa")  # a workstation / scratch
+DEV = dict(SOURCE, login_user="postgres." + OTHER_REF)  # another project behind the same regional pooler
+
+
+def _ledger_bytes(directory):
+    return (directory / ledger.LEDGER_FILE).read_text()
+
+
+def _record(directory, observer):
+    return ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+
+
+@pytest.mark.parametrize("live,code", [
+    (dict(SOURCE, system_identifier=None), "DATABASE_IDENTITY_UNPROVEN"),
+    (DEV, "DATABASE_NOT_THE_PROD_PROJECT"),
+    (SCRATCH, "DATABASE_NOT_THE_PROD_PROJECT"),
+    (dict(SOURCE, host="db." + OTHER_REF + ".supabase.co", login_user="postgres"), "DATABASE_NOT_THE_PROD_PROJECT"),
+])
+def test_a_consistent_wrong_database_is_refused_by_its_own_project(directory, observer, live, code):
+    """DATABASE_URL, the Layer-2 set and the object set all agree -- on the wrong database: refused."""
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    observer.source = live
+    observer.generation = dict(observer.generation, database_source=dict(live),
+                               object_source={"database": dict(live), "store_host": OTHER_REF + ".supabase.co"})
+    before = _ledger_bytes(directory)
+    assert _code(_record, directory, observer) == code
+    assert _code(ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent,
+                 cadence_hours=24, observer=observer) in {code, "PRE_OPEN_BACKUP_REQUIRED"}
+    assert _ledger_bytes(directory) == before
+
+
+@pytest.mark.parametrize("change,code", [
+    ({"database_source": FOREIGN_CLUSTER}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"database_source": dict(SOURCE, database="scratch")}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"database_source": DEV}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"database_source": SCRATCH}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"database_source": {k: v for k, v in SOURCE.items() if k != "login_user"}}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"database_source": None}, "BACKUP_NOT_FROM_THE_PROD_DATABASE"),
+    ({"object_source": {"database": FOREIGN_CLUSTER, "store_host": PROD_REF + ".supabase.co"}},
+     "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"),
+    ({"object_source": {"database": SOURCE, "store_host": OTHER_REF + ".supabase.co"}},
+     "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"),
+    ({"object_source": {"database": SOURCE, "store_host": None}}, "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"),
+    ({"object_source": {"database": None, "store_host": PROD_REF + ".supabase.co"}},
+     "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"),
+    ({"object_source": None}, "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"),  # a set from before sources were sealed
+])
+def test_a_generation_that_names_another_source_is_refused_and_nothing_is_recorded(directory, observer, change, code):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    observer.generation = dict(observer.generation, **change)
+    before = _ledger_bytes(directory)
+    assert _code(_record, directory, observer) == code
+    assert _ledger_bytes(directory) == before
+
+
+def test_without_an_object_set_only_the_layer2_source_is_checked(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    observer.generation = dict(observer.generation, object_set=None, object_set_digest=None, object_source=None)
+    entry = _record(directory, observer)
+    assert entry["source_identity_sha256"] == IDENTITY and entry["object_set_name"] == "NONE"
+
+
+def test_the_reference_is_bound_to_the_prod_database_its_backup_came_from(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    entry = _record(directory, observer)
+    assert entry["source_identity_sha256"] == IDENTITY
+    take = (ledger.take_reference, directory, _reference_file(directory), directory.parent, directory.parent)
+    observer.source = DEV  # DATABASE_URL now names another project
+    assert _code(*take, cadence_hours=24, observer=observer) == "DATABASE_NOT_THE_PROD_PROJECT"
+    observer.source = dict(SOURCE, database="other")  # the PROD project's server, another database
+    assert _code(*take, cadence_hours=24, observer=observer) == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
+    observer.source = dict(SOURCE)
+    taken = ledger.take_reference(*take[1:], cadence_hours=24, observer=observer)
+    assert taken["database_identity_sha256"] == IDENTITY
+    # From now on every generation and every observation is the reference's database.
+    observer.source = dict(SOURCE, database="other")
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(9), database_source=dict(SOURCE, database="other"))
+    assert _code(_record, directory, observer) == "DATABASE_NOT_THE_REFERENCE"
+
+
+def test_the_qualified_database_must_be_the_prod_project_at_c1(directory):
+    _grant_all(directory)
+    _drive(directory, "C0")
+    other = hosting.project_sha256(OTHER_REF)
+    assert _code(ledger.advance, directory, "C1", {**GOOD["C1"], "database_project_sha256": other}) == \
+        "DATABASE_NOT_THE_PROD_PROJECT"
+    assert ledger.advance(directory, "C1", GOOD["C1"])["state"] == "C1"
+
+
+def _attempt_foreign(directory, observer, moment, **foreign):
+    """A foreign generation offered between good ones: refused, it must change nothing in the window."""
+    _set_clock(moment)
+    saved = dict(observer.generation)
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(int(moment.timestamp()) % 100000 + 900000),
+                               **foreign)
+    code = _code(_record, directory, observer)
+    observer.generation = saved
+    return code
+
+
+def test_foreign_layer2_generations_never_fill_the_database_cadence(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    start = ledger._CLOCK()
+    for day in range(2, 31, 2):  # PROD generations every 48 h: the 24 h cadence is broken ...
+        _set_clock(start + timedelta(days=day))
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(800 + day), object_set=f"wk-{day // 7}")
+        _record(directory, observer)
+        # ... and foreign ones in between would mend it, if they counted.
+        assert _attempt_foreign(directory, observer, start + timedelta(days=day, hours=24),
+                                database_source=FOREIGN_CLUSTER) == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
+    _set_clock(start + timedelta(days=31, minutes=1))
+    assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(830)}) \
+        == "BACKUP_CADENCE_BROKEN"
+
+
+def test_foreign_object_sets_never_fill_the_object_cadence(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    start = ledger._CLOCK()
+    for day in range(1, 31):  # daily PROD Layer-2, but its object sets only every 12 days ...
+        _set_clock(start + timedelta(days=day))
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(850 + day), object_set=f"slow-{day // 12}")
+        _record(directory, observer)
+        if day % 7 == 0:  # ... and a weekly object set read from another project's store would mend it
+            assert _attempt_foreign(directory, observer, start + timedelta(days=day, hours=12), object_set=f"foreign-{day}",
+                                    object_source={"database": SOURCE, "store_host": OTHER_REF + ".supabase.co"}) \
+                == "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
+    _set_clock(start + timedelta(days=30, minutes=1))
+    assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": _manifest(880)}) \
+        == "OBJECT_CADENCE_BROKEN"
+
+
+def test_a_foreign_generation_never_satisfies_the_restore_validation(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    _window(directory, observer, days=30)
+    moment = ledger._CLOCK()  # the newest generation offered: only its source can refuse it
+    foreign_manifest = _manifest(int(moment.timestamp()) % 100000 + 900000)
+    assert _attempt_foreign(directory, observer, moment, database_source=DEV) == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
+    _set_clock(moment + timedelta(minutes=1))
+    assert _code(ledger.advance, directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": foreign_manifest}) \
+        == "RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION"
+
+
 def test_the_object_sets_must_be_taken_weekly_through_the_window(directory, observer):
     _grant_all(directory)
     _drive(directory, "C13", observer=observer)
@@ -809,7 +967,7 @@ def test_a_rollback_from_the_opening_with_nothing_changed_is_recorded_after_obse
     (lambda o: setattr(o, "scheduler", "unknown"), "SCHEDULER_STILL_ENABLED"),
     (lambda o: setattr(o, "jobs", 1), "EXTERNAL_TRIGGER_ACTIVE"),
     (lambda o: setattr(o, "jobs", -1), "QUIESCENCE_UNVERIFIABLE"),
-    (lambda o: setattr(o, "identity", H["a"]), "DATABASE_NOT_THE_REFERENCE"),
+    (lambda o: setattr(o, "source", dict(SOURCE, system_identifier="7400000000000000002")), "DATABASE_NOT_THE_REFERENCE"),
 ])
 def test_a_rollback_from_the_opening_refuses_until_production_is_proven_quiescent(directory, observer, setup, code):
     reference = _opened(directory, observer)

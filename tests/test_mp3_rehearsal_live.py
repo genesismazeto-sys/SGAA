@@ -27,6 +27,7 @@ import pytest
 
 from tests import mp3_rehearsal_support as rs
 from tests.mp2_pg_support import PG_URL, Registry
+from tests.mp3_ledger_support import local_server_is_project
 
 pytestmark = pytest.mark.skipif(
     not (rs.enabled() and PG_URL),
@@ -37,7 +38,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SENTINEL = "ZZLEAK-MP3-REHEARSAL-7f3a91"
 OPERATOR_TOKEN = "rehearsal-operator-" + "T4" * 16
 # The Data API proof binds to a project; the rehearsal's is the DEV project (its proof: SPEC A13/A15).
-DATA_API_PROJECT = __import__("hashlib").sha256(b"pkwtgqsiulzeqkqlsdou").hexdigest()
+DEV_REF = "pkwtgqsiulzeqkqlsdou"
+DATA_API_PROJECT = __import__("hashlib").sha256(DEV_REF.encode("ascii")).hexdigest()
 GATES_BEFORE_OPEN = ["GP0", "GP1", "GP2", "GR0", "GR1", "GR2", "GR3", "GB1", "GD1", "GG1", "GG2", "GD2", "GO"]
 
 
@@ -87,6 +89,8 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
     from tools import deploy_audit, pg_backup, pg_fingerprint
 
     custody = tmp_path / "custody"
+    # The PostgreSQL stand-in for PROD is the DEV project's database for the ledger (its store is DEV's).
+    local_server_is_project(monkeypatch, DEV_REF)
     source = rs.build_source(tmp_path / "workstation", SENTINEL)
     ledger_dir = tmp_path / "ledger"
     ledger.init(ledger_dir)
@@ -111,11 +115,16 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
                    if table != "schema_migrations")
         major = int(target.conn.execute("SHOW server_version_num").fetchone()[0]) // 10000
         target.conn.rollback()
+        from app import hosting
+
+        database_project = hosting.source_project_sha256(hosting.database_source(target.conn.raw_connection))
+        target.conn.rollback()
     listed = dev_bucket.store.list_objects(dev_bucket.name, "", max_objects=100)
     ledger.advance(ledger_dir, "C1", {
         "pg_major": major, "schema_current": True, "rows": rows, "objects": len(listed),
         "data_api_toggle_off": True, "data_api_override": "APPLIED", "data_api_probe": "NOT_SERVED",
         "data_api_project_sha256": DATA_API_PROJECT, "api_exposure_clean": True, "capacity_ok": True,
+        "database_project_sha256": database_project,
     })
 
     # ---- C2: census of a snapshot copy -------------------------------------------------------
@@ -471,7 +480,8 @@ def test_different_bytes_already_at_a_key_make_the_row_a_conflict_the_ledger_wil
     ledger.advance(ledger_dir, "C1", {"pg_major": 17, "schema_current": True, "rows": 0, "objects": 0,
                                       "data_api_toggle_off": True, "data_api_override": "APPLIED",
                                       "data_api_probe": "NOT_SERVED", "data_api_project_sha256": DATA_API_PROJECT,
-                                      "api_exposure_clean": True, "capacity_ok": True})
+                                      "api_exposure_clean": True, "capacity_ok": True,
+                                      "database_project_sha256": DATA_API_PROJECT})
     ledger.advance(ledger_dir, "C2", {"database_bytes": 1, "document_bytes": 1, "census": {"ROWS": 1}})
     ledger.advance(ledger_dir, "C3", {"source_size": 1, "source_sha256": h("c"), "wal_bytes": 0})
     ledger.advance(ledger_dir, "C4", {"source_sha256": h("c"), "prepared_sha256": h("d"), "integrity_ok": True,

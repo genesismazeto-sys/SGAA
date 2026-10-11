@@ -45,7 +45,8 @@ class _Children:
                 (directory / (base + suffix)).write_bytes(f"{base}{suffix}".encode())
             # The real manifest carries its creation time (the ledger measures the cadence by it).
             (directory / (base + ".manifest.json")).write_text(
-                json.dumps({"set": base, "created_at": f"2026-10-10T00:00:{self.counter:02d}Z"}), encoding="utf-8")
+                json.dumps({"set": base, "created_at": f"2026-10-10T00:00:{self.counter:02d}Z",
+                            "source": {"database": "postgres", "system_identifier": "1"}}), encoding="utf-8")
             return 0
         if "pg_backup.py" in text and " verify " in f" {text} ":
             return 3 if self.fail_at == "DATABASE_VERIFY" else 0
@@ -56,7 +57,9 @@ class _Children:
             if not destination.parent.is_dir() or destination.exists():
                 return 2  # the real tool: DESTINATION_INVALID / DESTINATION_EXISTS (it never creates parents)
             (destination / "objects" / "ab").mkdir(parents=True)
-            (destination / "MANIFEST.json").write_bytes(b"{}")
+            # The real set seals its source (the database read, the store's host): reported as recorded.
+            (destination / "MANIFEST.json").write_bytes(
+                json.dumps({"source": {"database": None, "store_host": "fake-store"}}).encode("ascii"))
             (destination / "objects" / "ab" / "abcd").write_bytes(b"bytes")
             return 0
         if "verify-backup" in text:
@@ -343,7 +346,12 @@ def test_the_newest_generation_is_reverified_from_disk_including_its_off_platfor
     result = ob.verify_generation(root, off)
     assert result["database_set"].startswith("sgaa-pg-") and len(result["manifest_sha256"]) == 64
     assert result["object_set"] and result["object_set_digest"] == "9" * 64
-    assert result["created_at"] == json.loads(Path(result["manifest_path"]).read_text())["created_at"]
+    recorded = json.loads(Path(result["manifest_path"]).read_text())
+    assert result["created_at"] == recorded["created_at"]
+    # Both sources are reported exactly as the tools recorded them; the ledger judges them (A16).
+    assert result["database_source"] == recorded["source"]
+    object_manifest = next(root.glob("objects/*/MANIFEST.json"))
+    assert result["object_source"] == json.loads(object_manifest.read_text())["source"] ==         {"database": None, "store_host": "fake-store"}
     assert len(calls["artifact"]) == 1 and calls["objects"] == [None]
     marker = object()
     ob.verify_generation(root, off, conn=marker)
@@ -396,10 +404,11 @@ def test_an_invalid_layer2_set_or_object_set_is_refused(verifiable, monkeypatch)
     assert caught.value.code == "DATABASE_SET_INVALID"
 
 
-def test_a_layer2_manifest_without_its_creation_time_is_refused(verifiable):
+@pytest.mark.parametrize("content", [{"set": "x", "source": {}}, {"set": "x", "created_at": "2026-10-10T00:00:01Z"}])
+def test_a_layer2_manifest_without_its_creation_time_or_its_source_is_refused(verifiable, content):
     (root, off), _calls, _report = verifiable
     manifest = next((root / "layer2").glob("*.manifest.json"))
-    manifest.write_text(json.dumps({"set": "x"}), encoding="utf-8")
+    manifest.write_text(json.dumps(content), encoding="utf-8")
     copy = off / "layer2" / manifest.name
     copy.write_bytes(manifest.read_bytes())
     with pytest.raises(ob.Refused) as caught:

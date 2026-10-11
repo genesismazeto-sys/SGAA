@@ -130,7 +130,10 @@ the encrypted, access-controlled storage of §E, not from the seal.
 
 Manifest fields: format/version, `created_at` (UTC), label, scope and
 pg_dump options, sanitized source identity (backend, host, port, database,
-user, server version, cluster system identifier), server version/major/
+user, server version, cluster system identifier, and the login the server
+authenticated -- on a Supabase pooler `postgres.<ref>`, which names the project;
+the cutover ledger derives the set's source identity from these fields and
+counts only sets of the PROD database, MP-3 A16), server version/major/
 encoding/collation, pg_dump and pg_restore versions, artifact file/size/
 SHA-256, consistency mode, schema epoch/version/contract digest/latest
 migration, per-table row count + normalized digest (39 tables; image `bytea`
@@ -191,7 +194,11 @@ by this runbook):
 
 ## F. Restore into a new target
 
-Only into a **new, empty** PostgreSQL database. Plain PostgreSQL:
+Only into a **new, empty** PostgreSQL database. A restore or a drill runs in its own
+terminal, where `DATABASE_URL` is unset and the target is named only by
+`SGAA_RESTORE_TARGET_URL`: the terminal that takes PROD backups is never pointed at a
+scratch database (the cutover ledger would refuse such a generation anyway, MP-3 A16).
+Plain PostgreSQL:
 
 ```
 CREATE DATABASE <new_name> ENCODING 'UTF8' TEMPLATE template1;   -- as a role with CREATEDB
@@ -443,8 +450,10 @@ deleted. Both directories must be encrypted storage the operator controls (the s
 are personal data); the tool states that it cannot verify this. `DATABASE_URL` is the
 direct or session-mode address; for PROD the password is typed at a hidden prompt (section B),
 so the operator starts each run (a scheduled task would need a stored PROD password); from the
-cutover's C11 to C14 each run also records itself in the cutover ledger (`--ledger-dir`). Run a
-restore drill into scratch PostgreSQL on a calendar (section F-H).
+cutover's C11 to C14 each run also records itself in the cutover ledger (`--ledger-dir`), which
+records it only when the live database is the PROD project's and both sets name it (and the PROD
+store) as their source. Run a restore drill into scratch PostgreSQL on a calendar (section F-H), in
+the drill terminal.
 The achievable RPO is the interval between runs.
 
 ## Exit codes

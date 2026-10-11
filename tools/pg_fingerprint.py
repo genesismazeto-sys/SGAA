@@ -284,17 +284,16 @@ def classify(conn, reference: dict) -> dict:
     return verdict
 
 
-def database_identity_sha256(conn) -> str:
-    """Which database this is, as a digest: the server's system identifier when readable, else its address.
+def database_identity_sha256(conn) -> str | None:
+    """Which database this is: the canonical identity of ``app.hosting`` (database, role, cluster, project).
 
-    Read on an autocommit connection (``tools.pg_backup.connect``).  The reference and every later
-    observation must come from the same database, not from a copy of it.
+    The same basis the cutover ledger derives from a backup manifest, so a live database and a backup of
+    it compare equal and nothing else does; ``None`` when the cluster is not proven.  The reference and
+    every later observation must come from the same database, not from a copy of it.
     """
-    from tools import pg_backup
+    from app import hosting
 
-    identity = pg_backup.database_identity(conn)
-    basis = [identity.database, identity.user, identity.system_identifier or f"{identity.host}:{identity.port}"]
-    return hashlib.sha256(json.dumps(basis).encode("utf-8")).hexdigest()
+    return hosting.source_identity_sha256(hosting.database_source(conn))
 
 
 def validate(fingerprint) -> dict:

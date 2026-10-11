@@ -276,6 +276,14 @@ def test_the_readiness_command_reports_ready_and_a_clean_exposure_through_the_se
     assert done.returncode == 0 and report["startup"] == "OK", report
     assert database["current"] is True and database["api_exposure"]["clean"] is True
     assert database["connection_kind"] == "pooler_session"
+    # The C1 qualification names the project this connection belongs to (the pooler's tenant) and
+    # proves the cluster: DEV's here; at GP1 it must be the PROD project of C0 (MP-3 A16).
+    from app import hosting
+    from psycopg.conninfo import conninfo_to_dict
+
+    tenant = conninfo_to_dict(SESSION_URL)["user"]
+    assert database["database_project_sha256"] == hosting.project_sha256(tenant.split(".", 1)[1])
+    assert database["database_identity_proven"] is True
 
 
 def test_the_offline_administrator_bootstrap_creates_one_admin_prints_no_secret_and_then_refuses(
@@ -483,6 +491,95 @@ def test_dr1_a_set_taken_from_dev_restores_into_local_postgres_and_the_applicati
         if served is not None:
             served.close()
         local_registry.drop(name)
+
+
+# ---- A16: every generation the cutover counts is the PROD project's (two real projects, two databases) ----
+
+# The PROD project of record: only its name's digest is used, to bind a ledger; it is never connected to.
+PROD_REF_OF_RECORD = "uckadhcwfknklmdktuyi"
+
+
+def _ledger_at_c11(directory, project_ref):
+    from tests.mp3_ledger_support import ALL_GATES, GOOD
+    from tools import cutover_ledger as ledger
+    from app import hosting
+
+    digest = hosting.project_sha256(project_ref)
+    ledger.init(directory)
+    for index, gate in enumerate(ALL_GATES):
+        ledger.grant(directory, gate, f"user-msg-{index}")
+    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
+        evidence = dict(GOOD[state])
+        for key in ("prod_project_sha256", "data_api_project_sha256", "database_project_sha256"):
+            if key in evidence:
+                evidence[key] = digest
+        ledger.advance(directory, state, evidence)
+    return directory
+
+
+def _ops_generation(monkeypatch, root, database_url, store_ref, *, objects):
+    from tools import ops_backup
+
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("SUPABASE_URL", f"https://{store_ref}.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "not-a-real-key-" + "x" * 20)  # no row: no object is read
+    monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
+    result = ops_backup.run_generation(root, label="source", generations=2, objects=objects,
+                                       off_platform=root.parent / (root.name + "-off"))
+    assert result["result"] == "GENERATION_COMPLETE"
+
+
+def test_the_ledger_counts_only_generations_of_the_project_and_database_it_was_bound_to(
+        tmp_path, local_registry, monkeypatch):
+    """Real DEV through the session pooler and a real local server: the source is read, never typed."""
+    from app import hosting, pg_schema
+    from tools import cutover_ledger as ledger
+    from tools import pg_backup
+
+    conn = pg_backup.connect(SESSION_URL)
+    try:
+        dev = hosting.database_source(conn)
+    finally:
+        conn.close()
+    dev_ref = hosting.supabase_project_ref(dev["host"], dev["login_user"])
+    assert dev_ref and dev["system_identifier"], "the session pooler proves the tenant and the cluster"
+    observer = ledger.Observer(database_url=SESSION_URL)
+
+    def refused(directory, root):
+        before = (directory / ledger.LEDGER_FILE).read_text()
+        with pytest.raises(ledger.Refused) as caught:
+            ledger.record_backup(directory, root, root.parent / (root.name + "-off"), observer=observer)
+        assert (directory / ledger.LEDGER_FILE).read_text() == before
+        return caught.value.code
+
+    # A whole, consistent DEV generation -- database, Layer-2 set and object set all DEV's.
+    _ops_generation(monkeypatch, tmp_path / "dev", SESSION_URL, dev_ref, objects=True)
+    # Bound to the PROD project, the ledger refuses it: a consistent wrong project does not pass.
+    bound_to_prod = _ledger_at_c11(tmp_path / "ledger-prod", PROD_REF_OF_RECORD)
+    assert refused(bound_to_prod, tmp_path / "dev") == "DATABASE_NOT_THE_PROD_PROJECT"
+    # Bound to DEV (the control), the same generation is recorded with DEV's identity.
+    bound_to_dev = _ledger_at_c11(tmp_path / "ledger-dev", dev_ref)
+    entry = ledger.record_backup(bound_to_dev, tmp_path / "dev", tmp_path / "dev-off", observer=observer)
+    assert entry["source_identity_sha256"] == hosting.source_identity_sha256(dev)
+
+    # A generation of another database (a local server, v16) is refused while DATABASE_URL is DEV's ...
+    name, url = local_registry.create()
+    try:
+        raw = _raw(url, autocommit=False)
+        try:
+            pg_schema.provision_pg_schema(raw)
+            raw.commit()
+        finally:
+            raw.close()
+        _ops_generation(monkeypatch, tmp_path / "local", url, dev_ref, objects=True)
+        assert refused(bound_to_dev, tmp_path / "local") == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
+        # ... and so is DEV's Layer-2 set paired with the local server's object set.
+        _ops_generation(monkeypatch, tmp_path / "mixed", url, dev_ref, objects=True)
+        _ops_generation(monkeypatch, tmp_path / "mixed", SESSION_URL, dev_ref, objects=False)
+        assert refused(bound_to_dev, tmp_path / "mixed") == "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
+    finally:
+        local_registry.drop(name)
+    assert [e["type"] for e in ledger.read_ledger(bound_to_dev)].count("backup") == 1
 
 
 # ---- DR3: a foreign set into the managed target, served through the transaction pooler ---------

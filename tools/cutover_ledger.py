@@ -33,8 +33,10 @@ COMMANDS
     grant          record that the user granted a gate (an opaque reference only)
     advance        enter the next state with its evidence (never C12: see ``open``)
     record-backup  verify the newest backup generation from disk and record it once,
-                   by its own creation time (C11 onward; ``ops_backup --ledger-dir``
-                   calls it after every run)
+                   by its own creation time, only when the live database (DATABASE_URL)
+                   proves itself the PROD project's and the generation's Layer-2 set and
+                   object set both name that database (and the PROD store) as their
+                   source (C11 onward; ``ops_backup --ledger-dir`` calls it after every run)
     reference      at C11, with GO granted, once: observe at C10's public address
                    that admission is CLOSED, prove the pre-opening backup (made after
                    C11) current against the live database, take the reference
@@ -233,7 +235,7 @@ _SCHEMA = {
     "C1": {"pg_major": lambda v: _int(v) and v >= 15, "schema_current": _true, "rows": _zero, "objects": _zero,
            "data_api_toggle_off": _true, "data_api_override": _equals("APPLIED"),
            "data_api_probe": _equals("NOT_SERVED"), "data_api_project_sha256": _hex64,
-           "api_exposure_clean": _true, "capacity_ok": _true},
+           "api_exposure_clean": _true, "capacity_ok": _true, "database_project_sha256": _hex64},
     "C2": {"database_bytes": _nonneg, "document_bytes": _nonneg, "census": _census},
     "C3": {"source_size": lambda v: _int(v) and v > 0, "source_sha256": _hex64, "wal_bytes": _zero},
     "C4": {"source_sha256": _hex64, "prepared_sha256": _hex64, "integrity_ok": _true, "fk_violations": _zero,
@@ -439,6 +441,10 @@ def _check_carried_identities(state: str, evidence: dict, summary: dict) -> None
         "prod_project_sha256"
     ):
         raise Refused("DATA_API_NOT_THE_PROD_PROJECT", "the data-API proof names another project than GP0's")
+    if state == "C1" and evidence["database_project_sha256"] != _evidence_of(summary, "C0").get(
+        "prod_project_sha256"
+    ):
+        raise Refused("DATABASE_NOT_THE_PROD_PROJECT", "the qualified database belongs to another project than GP0's")
     if state == "C10" and evidence["data_api_project_sha256"] != _evidence_of(summary, "C1").get(
         "data_api_project_sha256"
     ):
@@ -627,11 +633,13 @@ class Observer:
         finally:
             conn.close()
 
-    def database_identity(self) -> str:
-        from tools import pg_fingerprint
-
+    def database_source(self) -> dict:
+        """The raw facts naming the database behind DATABASE_URL (``app.hosting.database_source``)."""
         with self._connection() as conn:
-            return pg_fingerprint.database_identity_sha256(conn)
+            return hosting.database_source(conn)
+
+    def database_identity(self) -> str | None:
+        return hosting.source_identity_sha256(self.database_source())
 
     def fingerprint(self) -> dict:
         from tools import pg_fingerprint
@@ -684,6 +692,36 @@ class Observer:
         return True
 
 
+def _production_database(summary: dict, observer: Observer) -> str:
+    """The live database's canonical identity, proven to be the PROD project's database (and, once a
+    reference exists, the reference's).  Never a typed value: it is read from the connection itself."""
+    source = observer.database_source()
+    identity = hosting.source_identity_sha256(source)
+    if identity is None:
+        raise Refused("DATABASE_IDENTITY_UNPROVEN", "the database does not prove its cluster (system identifier)")
+    if hosting.source_project_sha256(source) != _evidence_of(summary, "C0").get("prod_project_sha256"):
+        # A consistent wrong database (DEV, a scratch server, another project) is refused here.
+        raise Refused("DATABASE_NOT_THE_PROD_PROJECT", "DATABASE_URL is not the PROD project's database")
+    anchor = summary["reference"]["database_identity_sha256"] if summary["reference"] else \
+        _evidence_of(summary, OPENING_STATE).get("database_identity_sha256")
+    if anchor and identity != anchor:
+        raise Refused("DATABASE_NOT_THE_REFERENCE", "the database is not the one the reference was taken from")
+    return identity
+
+
+def _check_generation_sources(summary: dict, generation: dict, identity: str) -> None:
+    """The generation's Layer-2 set and object set name THIS database (and the PROD store) as their source."""
+    if hosting.source_identity_sha256(generation.get("database_source")) != identity:
+        raise Refused("BACKUP_NOT_FROM_THE_PROD_DATABASE", "the Layer-2 set was taken from another database")
+    if generation.get("object_set"):
+        source = generation.get("object_source") if isinstance(generation.get("object_source"), dict) else {}
+        store = hosting.supabase_project_ref(source.get("store_host"))
+        if hosting.source_identity_sha256(source.get("database")) != identity or store is None or \
+                hosting.project_sha256(store) != _evidence_of(summary, "C0").get("prod_project_sha256"):
+            raise Refused("OBJECT_SET_NOT_FROM_THE_PROD_PROJECT",
+                          "the object set was read from another database or another project's store")
+
+
 def _require_the_deployment(summary: dict, observer: Observer) -> None:
     """Every observation probes the public address the smoke proved at C10, not some other deployment."""
     if observer.host_sha256() != _evidence_of(summary, "C10").get("public_host_sha256"):
@@ -714,6 +752,7 @@ def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_hea
         state = summary["state"]
         if state is None or STATES.index(state) < STATES.index("C11") or state == STATES[-1]:
             raise Refused("OUT_OF_ORDER", "backups are recorded from C11 until the window closes")
+        identity = _production_database(summary, observer)
         generation = observer.backup(Path(root), Path(off_platform), against_database=False)
         if any(b["manifest_sha256"] == generation["manifest_sha256"] for b in summary["backups"]):
             raise Refused("BACKUP_ALREADY_RECORDED", "each generation counts once; take a new one")
@@ -725,8 +764,10 @@ def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_hea
             raise Refused("BACKUP_TIME_INVALID", "the generation is dated in the future")
         if summary["backups"] and generation_at <= max(_parse(b["generation_at"]) for b in summary["backups"]):
             raise Refused("BACKUP_OLDER_THAN_RECORDED", "the generation is not newer than one already recorded")
+        _check_generation_sources(summary, generation, identity)
         return _append(directory, entries, {
             "type": "backup", "manifest_sha256": generation["manifest_sha256"],
+            "source_identity_sha256": identity,
             "generation_at": generation_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "object_set_name": generation["object_set"] or "NONE",
             "object_set_digest": generation["object_set_digest"] or "NONE",
@@ -764,6 +805,7 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
             # The production deployment carries CRON_SECRET since GD2 (C11); an address whose front is
             # disabled is an older deployment, and probing it would prove nothing about production.
             raise Refused("SCHEDULER_FRONT_NOT_ENABLED", "probe the production deployment (CRON_SECRET set at C11)")
+        identity = _production_database(summary, observer)
         entered_c11 = summary["entered"]["C11"]
         recorded = [b for b in summary["backups"] if b["seq"] > entered_c11["seq"]
                     and _parse(b["generation_at"]) >= _parse(entered_c11["at"])]
@@ -773,10 +815,10 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
         if generation["manifest_sha256"] != recorded[-1]["manifest_sha256"] or \
                 generation["object_set"] != recorded[-1]["object_set_name"]:
             raise Refused("BACKUP_NOT_THE_RECORDED_ONE")
+        _check_generation_sources(summary, generation, identity)
         fingerprint = observer.fingerprint()
         if not observer.backup_matches(generation["manifest_path"], fingerprint):
             raise Refused("BACKUP_NOT_CURRENT", "the pre-opening backup does not hold the current business state")
-        identity = observer.database_identity()
         document = dict(fingerprint, taken_at=_now())
         pg_fingerprint.validate(document)
         out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")

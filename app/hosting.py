@@ -19,6 +19,7 @@ operator command line is ``app.hosting_cli``; the web runtime never imports it.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import tempfile
 from dataclasses import dataclass
@@ -232,6 +233,87 @@ def connection_kind(url: str) -> str:
     return "pooler_transaction" if number == SUPABASE_TRANSACTION_PORT else "pooler_session"
 
 
+# ---------------------------------------------------------------------------
+# which database, which Supabase project: the canonical source identity (MP-3 A16)
+# ---------------------------------------------------------------------------
+
+_SUPABASE_REF_LENGTH = 20
+_SUPABASE_REF_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789")
+_POOLER_TENANT_PREFIX = "postgres."
+
+
+def _supabase_ref(value) -> str | None:
+    value = str(value or "")
+    return value if len(value) == _SUPABASE_REF_LENGTH and set(value) <= _SUPABASE_REF_CHARS else None
+
+
+def supabase_project_ref(host, login_user=None) -> str | None:
+    """The Supabase project a database connection or a storage address belongs to, else ``None``.
+
+    A pooler address is shared by every project of a region: the project is the tenant the pooler
+    authenticated (the login ``postgres.<ref>``).  A direct database address names it
+    (``db.<ref>.supabase.co``), as does the storage API's (``<ref>.supabase.co``).  Anything else --
+    a workstation, a scratch server -- belongs to no project.
+    """
+    host = str(host or "").strip().lower().rstrip(".")
+    if host.endswith(SUPABASE_POOLER_SUFFIX):
+        login = str(login_user or "")
+        return _supabase_ref(login[len(_POOLER_TENANT_PREFIX):]) if login.startswith(_POOLER_TENANT_PREFIX) else None
+    labels = host.split(".")
+    if len(labels) == 4 and labels[0] == "db" and labels[2:] == ["supabase", "co"]:
+        return _supabase_ref(labels[1])
+    if len(labels) == 3 and labels[1:] == ["supabase", "co"]:
+        return _supabase_ref(labels[0])
+    return None
+
+
+def project_sha256(ref: str) -> str:
+    """The value-free name of a Supabase project (the cutover ledger's ``prod_project_sha256``)."""
+    return hashlib.sha256(ref.encode("ascii")).hexdigest()
+
+
+def database_source(conn) -> dict:
+    """The raw facts naming the PostgreSQL database behind ``conn`` (a psycopg connection).
+
+    Recorded in backup manifests and read live by the cutover ledger; never a password.  It raises
+    nothing for a missing privilege: ``system_identifier`` is ``None`` when ``pg_control_system()`` is
+    not executable, and the identity is then unproven.
+    """
+    from psycopg.rows import tuple_row
+
+    with conn.cursor(row_factory=tuple_row) as cursor:
+        database, user, readable = cursor.execute(
+            "SELECT current_database(), current_user, "
+            "has_function_privilege('pg_control_system()', 'EXECUTE')").fetchone()
+        system_identifier = None
+        if readable:
+            system_identifier = str(cursor.execute("SELECT system_identifier FROM pg_control_system()").fetchone()[0])
+    info = conn.info
+    return {"database": str(database), "user": str(user), "login_user": str(info.user),
+            "host": str(info.host), "port": str(info.port), "system_identifier": system_identifier}
+
+
+def source_project_sha256(source) -> str | None:
+    """The Supabase project of a recorded or live database source (``None``: no project)."""
+    if not isinstance(source, dict):
+        return None
+    ref = supabase_project_ref(source.get("host"), source.get("login_user"))
+    return project_sha256(ref) if ref else None
+
+
+def source_identity_sha256(source) -> str | None:
+    """The canonical identity every cutover comparison uses: database, role, cluster and project.
+
+    The same database read live and recorded in a backup manifest gives the same value; another
+    database, cluster or project does not.  ``None`` when the source does not prove its cluster.
+    """
+    if not isinstance(source, dict) or not source.get("system_identifier"):
+        return None
+    basis = [str(source.get("database")), str(source.get("user")), str(source["system_identifier"]),
+             source_project_sha256(source)]
+    return hashlib.sha256(json.dumps(basis).encode("utf-8")).hexdigest()
+
+
 def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
     """Hosted-only conditions that make starting wrong.
 
@@ -304,6 +386,11 @@ __all__ = [
     "SUPABASE_POOLER_SUFFIX",
     "SUPABASE_TRANSACTION_PORT",
     "connection_kind",
+    "database_source",
+    "project_sha256",
+    "source_identity_sha256",
+    "source_project_sha256",
+    "supabase_project_ref",
     "cron_secret",
     "HOSTED_POSTGRES_REQUIRED",
     "HOSTED_PROXY_TRUST_UNDECIDED",

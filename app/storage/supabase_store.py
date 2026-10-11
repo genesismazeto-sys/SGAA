@@ -272,6 +272,13 @@ class SupabaseObjectStore:
     def bucket(self) -> str:
         return self._config.bucket
 
+    @property
+    def origin_host(self) -> str | None:
+        """The storage API's host (``<ref>.supabase.co``): which project an object set came from."""
+        from urllib.parse import urlsplit
+
+        return urlsplit(self._config.url).hostname
+
     # -- HTTP boundary ----------------------------------------------------
 
     @property

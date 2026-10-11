@@ -27,7 +27,7 @@ appending a change would make an owner worse, a proportional local refactor
 | PostgreSQL schema, including the read-only provider API-role exposure probe (`api_role_exposure`) | `app/pg_schema.py` |
 | SQLite → PostgreSQL cutover; PostgreSQL logical backup | `app/pg_migrate_from_sqlite.py`; `tools/pg_backup.py` (operator tool, never imported by `app/`) |
 | SQLite file backup | `app/backup/` (`capability.py` decides whether it applies) |
-| Hosted-runtime mode, scratch space, startup blockers, the connection-kind classifier | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |
+| Hosted-runtime mode, scratch space, startup blockers, the connection-kind classifier, the canonical database source identity (which database, which Supabase project; MP-3 A16) | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |
 | Hosted pre-opening admission switch (operator-only until the opening; MP-3 A15) | `app/web/admission_gate.py` (installed by `create_app` only when hosted; its mode and token are read by `app/hosting.py`) |
 | Machine-local secrets (DPAPI store); environment-only when hosted | `app/machine_secrets.py` (consulted through `app/cloud_config.py`; `app/cloud_credentials.py` is the product-level write path) |
 | Login / recovery throttling (hosted: durable) | `app/auth_throttle.py` selects the store; the in-memory limiters stay in `app/auth.py` and `app/password_recovery_limiter.py`; hosted rows in `auth_throttle_events` |

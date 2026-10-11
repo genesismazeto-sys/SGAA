@@ -29,7 +29,7 @@ from urllib.parse import urlencode
 import pytest
 
 from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, adapter
-from tests.mp3_ledger_support import ALL_GATES, GOOD
+from tests.mp3_ledger_support import ALL_GATES, GOOD, PROD_REF, local_server_is_project
 from tests.mp3_served_app import seed_admin_and_requests, served_app
 from tools import cutover_ledger as ledger
 from tools import hosted_smoke, ops_backup
@@ -76,7 +76,8 @@ def lane(registry, tmp_path, monkeypatch):
     name, url = registry.create(template=registry.template)
     monkeypatch.setenv("DATABASE_URL", url)
     # The object-set child builds the canonical store from the environment; there are no objects to read.
-    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_URL", f"https://{PROD_REF}.supabase.co")  # the PROD project's store
+    local_server_is_project(monkeypatch, PROD_REF)  # this server stands for the PROD project's database
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "not-a-real-key-" + "x" * 20)
     monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
     monkeypatch.setattr(ledger, "QUIESCENCE_SECONDS", 3)

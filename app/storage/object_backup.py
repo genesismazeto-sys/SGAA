@@ -11,7 +11,10 @@ SET LAYOUT (a directory, outside the repository)
 
 MANIFEST.json holds, per ``storage_objects`` row: id, bucket, key, size, SHA-256,
 MIME type and lifecycle state; the counts; the ``objects_digest`` (SHA-256 of the
-canonical row list) and the ``seal`` (SHA-256 of everything else).  The seal
+canonical row list); the ``source`` -- the facts naming the database whose rows were
+read (``app.hosting.database_source``; none for SQLite) and the host of the store the
+bytes came from -- so the set can be bound to one project and one database (MP-3 A16;
+sets written before it carry no source); and the ``seal`` (SHA-256 of everything else).  The seal
 detects corruption and truncation; it is an integrity check, not authenticity --
 the set's confidentiality and tamper-resistance are the storage's job.
 
@@ -99,6 +102,9 @@ _LABEL_RE = re.compile(r"^[A-Za-z0-9._-]{0,64}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _SHARD_RE = re.compile(r"^[0-9a-f]{2}$")
 _TOP_KEYS = {"format", "kind", "label", "created_at", "counts", "objects", "objects_digest", "seal"}
+_SOURCE_KEYS = {"database", "store_host"}
+_DATABASE_SOURCE_KEYS = {"database", "user", "login_user", "host", "port", "system_identifier"}
+_SOURCE_TEXT_MAX = 255
 _ROW_KEYS = {"id", "bucket", "key", "size", "sha256", "mime", "lifecycle"}
 _COUNT_KEYS = {"objects", "contents", "bytes", "active", "retired"}
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -334,6 +340,7 @@ def backup(
     if not _LABEL_RE.fullmatch(label or ""):
         raise SetInvalid(LABEL_INVALID)
     target = _resolve_destination(destination, repo_root or _REPO_ROOT)
+    source = backup_source(conn, store)
     rows = current_rows(conn)
     # The rows are a read-only snapshot: end the read transaction now so a long copy never
     # holds a lock on ``storage_objects`` (PostgreSQL keeps ACCESS SHARE until it ends).
@@ -389,6 +396,7 @@ def backup(
             },
             "objects": rows,
             "objects_digest": digest,
+            "source": source,
         }
         manifest["seal"] = _seal(manifest)
         _write_file(os.path.join(staging, MANIFEST_NAME), json.dumps(manifest, indent=1, sort_keys=True).encode("ascii"))
@@ -446,9 +454,35 @@ def _read_manifest(set_dir: str) -> dict:
     return _validate_manifest(manifest)
 
 
+def backup_source(conn, store) -> dict:
+    """Where a set comes from: the PostgreSQL database behind ``conn`` and the store's host."""
+    raw = getattr(conn, "raw_connection", None)
+    database = None
+    if raw is not None and hasattr(getattr(raw, "info", None), "server_version"):  # psycopg, not sqlite3
+        from app import hosting
+
+        database = hosting.database_source(raw)
+    return {"database": database, "store_host": getattr(store, "origin_host", None)}
+
+
+def _source_valid(source) -> bool:
+    def text(value, *, optional=False):
+        return (optional and value is None) or (isinstance(value, str) and len(value) <= _SOURCE_TEXT_MAX)
+
+    if not isinstance(source, dict) or set(source) != _SOURCE_KEYS or not text(source["store_host"], optional=True):
+        return False
+    database = source["database"]
+    if database is None:
+        return True
+    return isinstance(database, dict) and set(database) == _DATABASE_SOURCE_KEYS and all(
+        text(database[key], optional=key == "system_identifier") for key in _DATABASE_SOURCE_KEYS)
+
+
 def _validate_manifest(manifest) -> dict:
-    if not isinstance(manifest, dict) or set(manifest) != _TOP_KEYS:
+    if not isinstance(manifest, dict) or set(manifest) not in (_TOP_KEYS, _TOP_KEYS | {"source"}):
         raise SetInvalid(SET_INVALID, "manifest shape")
+    if "source" in manifest and not _source_valid(manifest["source"]):
+        raise SetInvalid(SET_INVALID, "source")
     if manifest["format"] != FORMAT or manifest["kind"] != KIND:
         raise SetInvalid(SET_INVALID, "manifest format")
     if not isinstance(manifest["label"], str) or not _LABEL_RE.fullmatch(manifest["label"]):

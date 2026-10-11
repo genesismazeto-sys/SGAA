@@ -157,6 +157,15 @@ def test_check_database_reports_current_and_skewed_schemas(database, monkeypatch
     assert code == 0 and report["database"]["current"] is True
     assert report["database"]["backend"] == "postgres"
     assert report["database"]["schema_version"] == report["database"]["target_schema_version"]
+    # A local server proves its cluster but belongs to no Supabase project (MP-3 A16) ...
+    assert report["database"]["database_identity_proven"] is True
+    assert report["database"]["database_project_sha256"] is None
+    # ... and the report names the project the connection belongs to when there is one.
+    from tests.mp3_ledger_support import PROD_REF, PROJECT, local_server_is_project
+
+    local_server_is_project(monkeypatch, PROD_REF)
+    code, report = run()
+    assert code == 0 and report["database"]["database_project_sha256"] == PROJECT
     monkeypatch.setattr(pg_schema, "PG_SCHEMA_VERSION", pg_schema.PG_SCHEMA_VERSION + 1)
     code, report = run()
     assert code == 1 and "error_type" in report["database"]

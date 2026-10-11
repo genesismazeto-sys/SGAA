@@ -456,8 +456,11 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
         f"{manifest['artifact']['sha256']}  {dump.name}\n"
     assert manifest["result"] == "ok" and manifest["format_version"] == 2
     assert manifest["source"]["database"] == source and manifest["source"]["system_identifier"]
+    # ``login_user``: the login the server authenticated (a Supabase pooler's tenant names the project;
+    # the cutover ledger binds every generation to the PROD database by it, MP-3 A16).
     assert set(manifest["source"]) == {"backend", "host", "port", "database", "user", "server_version",
-                                       "system_identifier"}
+                                       "system_identifier", "login_user"}
+    assert manifest["source"]["login_user"]
     # The native client matches the server (the tool refuses an older client); 15 is the
     # persistent local lane and 17 the managed platform's major (MP-3 S1).
     assert manifest["server"]["major"] == manifest["native_tools"]["pg_dump"]["major"] in (15, 17)

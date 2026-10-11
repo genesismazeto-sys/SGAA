@@ -33,9 +33,13 @@ def _database_report(app_db) -> dict:
         status = get_schema_status(conn)
         version, target = int(status["schema_version"]), int(status["target_schema_version"])
         exposure = pg_schema.api_role_exposure(conn)
+        source = hosting.database_source(conn.raw_connection)
         return {"backend": "postgres", "schema_version": version,
                 "target_schema_version": target, "current": version == target,
                 "connection_kind": hosting.connection_kind(app_db.DATABASE_URL or ""),
+                # Which project this connection belongs to (value-free), and whether it proves its cluster.
+                "database_project_sha256": hosting.source_project_sha256(source),
+                "database_identity_proven": hosting.source_identity_sha256(source) is not None,
                 "api_exposure": exposure}
     finally:
         conn.rollback()

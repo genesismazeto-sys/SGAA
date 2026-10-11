@@ -50,10 +50,21 @@ that would cost money is not performed; stop and say so.
   The libpq password file serves DEV only. A value never goes into a file, a pipe, an
   argument, a history line, the ledger, a report or a chat. Every command that reads PROD
   (database or bucket) or carries the operator token is a user-terminal command.
-- **One database address.** Every operator command whose output the ledger compares (backups,
-  fingerprints, the ledger's `reference` and `rollback`, in `DATABASE_URL`) uses the same
-  session-pooler address: the ledger compares the database identity it reads, and an address
-  of another kind may identify itself differently (`DATABASE_NOT_THE_REFERENCE`).
+- **One database address, the PROD project's.** Every operator command whose output the ledger
+  compares (backups, fingerprints, the ledger's `record-backup`, `reference` and `rollback`, in
+  `DATABASE_URL`) uses the same session-pooler address of the PROD project. The ledger reads the
+  database's identity from the connection itself -- database, role, cluster (`system_identifier`)
+  and the Supabase project the pooler authenticated (the login `postgres.<ref>`) -- and refuses a
+  database of any other project, a scratch or local server (`DATABASE_NOT_THE_PROD_PROJECT`), one
+  that does not prove its cluster (`DATABASE_IDENTITY_UNPROVEN`) and, once the reference exists,
+  any other database (`DATABASE_NOT_THE_REFERENCE`). An address of another kind may identify
+  itself differently and is refused the same way.
+- **Two terminals: production backups and restore drills never share one.** The PROD backup
+  terminal has `DATABASE_URL` = the PROD session address and nothing else; a restore drill runs in
+  a separate terminal where `DATABASE_URL` is unset and the scratch database is named only as
+  `SGAA_RESTORE_TARGET_URL` (`restore`, `verify --restored`), closed when the drill ends. A drill
+  never changes `DATABASE_URL`, so the next production backup cannot read scratch; if it ever did,
+  the ledger would refuse that generation (it names another database as its source).
 - **https only.** The ledger observes the public address over https; `--allow-insecure` is for
   the tests' loopback servers and is refused for any other host (`INSECURE_ONLY_ON_LOOPBACK`).
 - **Never** run a tool against the live workstation database. The only touch of the live
@@ -103,8 +114,11 @@ that would cost money is not performed; stop and say so.
 2. GP1, as the schema-owning role, in this order: the revocation statements of
    `docs/HOSTED_RUNTIME.md` §11; `python -m app.pg_schema provision`; `… validate`; the
    revocation again; create the private bucket; one synthetic canary object written, read
-   back and removed; `python -m app.hosting_cli check --database` (direct or session
-   address) must report `api_exposure.clean: true`.
+   back and removed; `python -m app.hosting_cli check --database` (**user terminal**, the session
+   address) must report `api_exposure.clean: true`, `database_identity_proven: true` and the
+   `database_project_sha256` of the PROD project named at C0: the qualification proves that this
+   connection belongs to the PROD project (the pooler's authenticated tenant), not to whatever the
+   URL points at.
 3. GP1, the Data API, in this order. These are the only PROD writes of this step and they
    are named here so that none is improvised:
    1. the user turns **Enable Data API** off (Dashboard, Integrations, Data API);
@@ -149,7 +163,8 @@ that would cost money is not performed; stop and say so.
    `data_api_toggle_off` (the user's statement: no probe can tell the toggle's state while the
    override stands), `data_api_override` APPLIED, `data_api_probe` NOT_SERVED (the
    smoke's PASS), `data_api_project_sha256` (printed by the smoke; it must equal C0's
-   `prod_project_sha256`), `api_exposure_clean`, `capacity_ok`.
+   `prod_project_sha256`), `api_exposure_clean`, `capacity_ok`, `database_project_sha256` (from
+   the readiness report; it must equal C0's `prod_project_sha256`, `DATABASE_NOT_THE_PROD_PROJECT`).
 
 ### C2 SNAPSHOT_CENSUSED — gate GR0
 
@@ -218,8 +233,9 @@ that would cost money is not performed; stop and say so.
    prompt, never the password file); `verify --manifest`; the
    object set `python -m app.storage.cli backup-objects --destination <new dir>`, then
    `verify-backup --set <dir> --database`; restore drill into scratch PostgreSQL of the PROD
-   major (`restore`, `verify --restored`, the clone probe of `PG_BACKUP_RESTORE_RUNBOOK.md`
-   §H); drop the scratch database; keep two encrypted copies, one off-platform.
+   major in the drill terminal (ground rules: `SGAA_RESTORE_TARGET_URL` only; `restore`, `verify
+   --restored`, the clone probe of `PG_BACKUP_RESTORE_RUNBOOK.md` §H); drop the scratch database;
+   keep two encrypted copies, one off-platform.
 4. Ledger C8: `reference_digest`, `census_equal`, `baseline_manifest_sha256`,
    `object_set_digest`, `restore_drill`, `verify_backup`, `admin_bootstrap`.
 
@@ -343,7 +359,11 @@ after the reference.
    `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> --objects
    --label pre-open --ledger-dir <ledger>`. The Layer-2 set and the object set are taken and
    verified, the off-platform copy is compared file by file, and the ledger records the
-   generation only after re-verifying it (`backup` entry, value-free).
+   generation only after re-verifying it and proving its source: the live database is the PROD
+   project's, the Layer-2 manifest's recorded source is that same database (identity derived from
+   the manifest, never typed; `BACKUP_NOT_FROM_THE_PROD_DATABASE`), and the object set's sealed
+   source names that database and the PROD project's store (`OBJECT_SET_NOT_FROM_THE_PROD_PROJECT`).
+   The `backup` entry carries the source identity (value-free).
 2. The reference, **(user terminal**, `PGPASSWORD`, `DATABASE_URL` the session address**)**:
    `python tools/cutover_ledger.py
    reference --ledger-dir <ledger> --expect-head <head> --base-url <public address>
@@ -393,8 +413,11 @@ after the reference.
   than 1.5 × `h`, or an object-set gap longer than 1.5 weeks, anywhere from the opening to C14
   refuses C14 (`BACKUP_CADENCE_BROKEN`, `OBJECT_CADENCE_BROKEN`). The cadence is measured by each
   generation's own creation time; a generation is recorded once (`BACKUP_ALREADY_RECORDED`), never
-  older than one already recorded and never dated in the future. A scheduled task is not
-  used for PROD: it would need a stored PROD secret (P6).
+  older than one already recorded and never dated in the future, and only when its Layer-2 set and
+  object set name the reference's database and the PROD store as their source (as at the opening):
+  a generation of DEV, of scratch or of another project is refused and so counts for neither
+  cadence nor the C14 drill. A scheduled task is not used for PROD: it would need a stored PROD
+  secret (P6).
 - While pending, rollback is available (section 3).
 
 ### C13 PONR_RECORDED
@@ -415,8 +438,9 @@ refused, and the window starts.
 
 ### C14 WINDOW_CLOSED
 
-After UD4's 30 days from C13, with the cadence held: a generation made after C13 restored
-into scratch PostgreSQL of the PROD major (`restore`, `verify --restored`), no unresolved
+After UD4's 30 days from C13, with the cadence held: a generation made after C13 (and so
+recorded with the PROD database as its source) restored into scratch PostgreSQL of the PROD major in
+the drill terminal (`SGAA_RESTORE_TARGET_URL` only; `restore`, `verify --restored`), no unresolved
 reconciliation, the object set verified. Ledger C14: `restore_validated_manifest_sha256` (that
 generation's manifest digest, as recorded), `restore_drill` OK, `unresolved_reconciliation` 0,
 `object_set_verified`. The ledger refuses before 30 days from C13 (`WINDOW_NOT_ELAPSED`), on a
@@ -469,7 +493,8 @@ the first deployment are refused).
   tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects]` on the
   cadence of UD10 (database from `DATABASE_URL`, the session address, `PGPASSWORD` at the
   hidden prompt): two generations kept, the copy to the off-platform directory verified,
-  restore verification; a periodic restore drill into scratch PostgreSQL. Rotation deletes only
+  restore verification; a periodic restore drill into scratch PostgreSQL in the drill terminal
+  (ground rules), never with `DATABASE_URL` pointing at scratch. Rotation deletes only
   generations the tool itself registered; the cutover baseline is never rotated.
 - Watch the Free limits (database 500 MB, storage 1 GB, egress 5 GB a month, Hobby
   invocations and active CPU, seven days of inactivity) before they bind.

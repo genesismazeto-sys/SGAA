@@ -128,8 +128,14 @@ blockers by code and variable name, or the class of an unexpected startup error)
 the scheduler state, and with `--database` the connected schema version against
 the code's target (`--database` needs a PostgreSQL `DATABASE_URL` and never opens
 a SQLite file). With `--database` the report also names the connection kind
-(`direct`, `pooler_session`, `pooler_transaction`; never the host) and the API
-exposure of the schema (section 11); exposure that is not clean is "not ready".
+(`direct`, `pooler_session`, `pooler_transaction`; never the host), the API
+exposure of the schema (section 11; exposure that is not clean is "not ready"), the
+Supabase project the connection belongs to as a digest (`database_project_sha256`: the
+tenant a pooler authenticated, `postgres.<ref>`, or the direct address's `db.<ref>`; null
+for any other server) and whether the database proves its cluster
+(`database_identity_proven`). The owner of that identity is `app.hosting`
+(`database_source`, `supabase_project_ref`, `source_identity_sha256`); the cutover ledger
+derives it the same way from a live connection and from a backup manifest (MP-3 A16).
 Exit 0 ready, 1 not ready, 2 usage. It builds the application as
 a start does, so a local-mode check creates the local directories a local start
 creates. Run it with the target environment before promoting a deployment. `/health` additionally fails when the
@@ -250,7 +256,9 @@ python -m app.storage.cli restore-objects --set <directory> [--bucket <name>]
 | `restore-objects` | storage variables only | puts the set's objects into the bucket without overwriting or deleting; adopts an existing object only when its size, SHA-256 and MIME type match |
 
 Set layout: `MANIFEST.json` (per-object id, bucket, key, size, SHA-256, MIME,
-lifecycle; the counts; the `objects_digest` and the `seal`) and
+lifecycle; the counts; the `objects_digest`; the `source` -- the facts naming the
+database whose rows were read and the host of the store the bytes came from, under the
+seal, so a set binds to one database and one project (MP-3 A16); and the `seal`) and
 `objects/<sha256[:2]>/<sha256>`. The seal detects corruption and truncation; it is
 an integrity check, not authenticity, so keep the set where it cannot be altered.
 

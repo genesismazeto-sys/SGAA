@@ -346,6 +346,8 @@ class TargetIdentity:
     user: str
     server_version: str
     system_identifier: str | None = None
+    # The login the server authenticated (on a Supabase pooler ``postgres.<ref>``: the project).
+    login_user: str | None = None
 
     def label(self) -> str:
         return (
@@ -362,6 +364,7 @@ class TargetIdentity:
             "user": self.user,
             "server_version": self.server_version,
             "system_identifier": self.system_identifier,
+            "login_user": self.login_user,
         }
 
     @classmethod
@@ -409,7 +412,7 @@ def database_identity(conn) -> TargetIdentity:
     info = conn.info
     return TargetIdentity(
         "postgresql", str(info.host), str(info.port), str(database), str(user),
-        _format_version(version_num), system_identifier,
+        _format_version(version_num), system_identifier, str(info.user),
     )
 
 
