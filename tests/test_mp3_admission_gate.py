@@ -26,7 +26,7 @@ import pytest
 from app import hosting
 from app.hosting import Blocker
 from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, adapter
-from tests.mp3_served_app import seed_admin_and_requests, served_app
+from tests.mp3_served_app import REPO_ROOT, seed_admin_and_requests, served_app
 from tools import hosted_smoke
 
 NEEDS_PG = pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT")
@@ -267,14 +267,16 @@ def test_the_admission_cookie_expires_and_cannot_be_dated_or_forged(database, tm
 @NEEDS_PG
 def test_opening_is_the_switch_the_same_database_served_open_admits_everyone(database, tmp_path):
     before = _whole_database(database)
-    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=REFERENCE) as app:
+    with served_app(database, tmp_path, SGAA_ADMISSION="open") as app:  # lifted under a standing authorization
+        reference = app.opening_reference
         status, seen, page, cookies = _request(app.url, "GET", "/login")
         assert status == 200 and "x-sgaa-admission" not in seen
         assert _request(app.url, "GET", "/operator-admission")[0] == 404
         assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "open"
-        # The opening announces the reference it was lifted with, on every response.
-        assert seen["x-sgaa-opening"] == hosting.opening_tag(REFERENCE)
-        assert hosted_smoke.probe_opening_tag(app.url, allow_insecure=True) == hosting.opening_tag(REFERENCE)
+        # The opening announces the reference it was lifted with, and its code, on every response.
+        assert seen["x-sgaa-opening"] == hosting.opening_tag(reference)
+        assert hosted_smoke.probe_opening_tag(app.url, allow_insecure=True) == hosting.opening_tag(reference)
+        assert hosted_smoke.probe_code(app.url, allow_insecure=True) == hosting.runtime_code_sha256(REPO_ROOT)
         # Control for the "writes nothing" witness: once open, a stranger's failed sign-in IS a write.
         csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', page).group(1).decode()
         session_cookie = "; ".join(c.split(";", 1)[0] for c in cookies)
@@ -312,3 +314,88 @@ def test_a_production_deployment_without_an_admission_decision_does_not_start(da
     done = subprocess.run([sys.executable, "-m", "app.hosting_cli", "check"], cwd=REPO_ROOT, env=env,
                           capture_output=True, text=True, timeout=180)
     assert done.returncode == 1 and "HOSTED_OPENING_REFERENCE_REQUIRED" in done.stdout
+
+
+# ---- the opening authorization, on the real application (MP-3 A17 finding 1) -------------------------------
+
+
+def _identity(url):
+    conn = adapter(url)
+    try:
+        return hosting.source_identity_sha256(hosting.database_source(conn.raw_connection))
+    finally:
+        conn.close()
+
+
+def _authorization(url, *, kind="reference", identity=None, code=None, project=None, reference=None,
+                   tamper=False, revoked=False, key=None):
+    """Write one authorization row the way the ledger shapes it; returns the reference to lift with."""
+    import hashlib
+
+    from tests.mp3_served_app import PROJECT_ID
+
+    own_code = hosting.runtime_code_sha256(REPO_ROOT)
+    body = {"seq": 7, "prev": "0" * 64, "at": "2026-11-01T00:00:00Z", "type": kind,
+            "database_identity_sha256": identity or _identity(url), "code_sha256": code or own_code,
+            "vercel_project_sha256": project or hashlib.sha256(PROJECT_ID.encode()).hexdigest()}
+    if kind == "authorization":
+        body["opening_reference"] = reference
+    entry = dict(body, hash=hosting.ledger_entry_hash(body))
+    lifted = key or (entry["hash"] if kind == "reference" else reference)
+    if tamper:
+        entry["seq"] = 8  # no longer the entry its hash names
+    import json
+
+    conn = adapter(url)
+    raw = conn.raw_connection  # the ledger's own SQL, with psycopg placeholders
+    try:
+        for statement in hosting.OPENING_DDL:
+            raw.execute(statement)
+        raw.execute(hosting.OPENING_INSERT_SQL, (lifted, own_code, json.dumps(entry)))
+        if revoked:
+            raw.execute(hosting.OPENING_REVOKE_SQL)
+        raw.commit()
+    finally:
+        conn.close()
+    return lifted
+
+
+@NEEDS_PG
+@pytest.mark.parametrize("case", [
+    "no_row", "revoked", "other_code", "other_database", "other_project", "not_a_ledger_entry", "other_kind",
+])
+def test_an_open_application_admits_no_one_without_a_standing_authorization_for_itself(database, tmp_path, case):
+    """A well-formed value, a revoked or edited authorization, or one for another code, database or platform
+    project opens nothing: the application answers like a closed deployment and writes nothing."""
+    if case == "no_row":
+        reference = "6" * 64
+    elif case == "revoked":
+        reference = _authorization(database, revoked=True)
+    elif case == "other_code":
+        reference = _authorization(database, code="9" * 64)
+    elif case == "other_database":
+        reference = _authorization(database, identity="8" * 64)
+    elif case == "other_project":
+        reference = _authorization(database, project="7" * 64)
+    elif case == "not_a_ledger_entry":
+        reference = _authorization(database, tamper=True)
+    else:  # stored under the lifted reference, but a forward-fix authorization naming another one
+        reference = _authorization(database, kind="authorization", reference="4" * 64, key="3" * 64)
+    before = _whole_database(database)
+    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=reference) as app:
+        for method, path, body, headers in STRANGER_REQUESTS[:6]:
+            status, seen, _data, cookies = _request(app.url, method, path, body=body, headers=headers)
+            assert (status, seen.get("x-sgaa-admission"), cookies) == (503, "closed", []), (case, method, path)
+        assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "closed"
+        status, seen, _data, _cookies = _request(app.url, "GET", "/health")
+        assert seen.get("x-sgaa-code") == hosting.runtime_code_sha256(REPO_ROOT)  # it still names its code
+    assert _whole_database(database) == before
+
+
+@NEEDS_PG
+def test_a_forward_fix_authorization_naming_the_lifted_reference_admits_users(database, tmp_path):
+    """The positive control of the authorization kind a forward fix uses (``authorize-code``)."""
+    reference = "2" * 64
+    _authorization(database, kind="authorization", reference=reference)
+    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=reference) as app:
+        assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "open"

@@ -54,7 +54,11 @@ def _app(**defect):
         length = int(environ.get("CONTENT_LENGTH") or 0)
         if length:
             environ["wsgi.input"].read(length)
+        if defect.get("on_request"):
+            defect["on_request"](path)
         headers = [h for h in GOOD_HEADERS if h[0] not in defect.get("drop_headers", ())]
+        if defect.get("code"):  # what a hosted process announces on every response
+            headers.append(("X-SGAA-Code", defect["code"]))
 
         def reply(status, body=b"", extra=()):
             start_response(status, [("Content-Type", "text/html"), *headers, *extra])
@@ -102,7 +106,7 @@ def _app(**defect):
             if environ.get("HTTP_X_SGAA_OPERATOR_TOKEN"):
                 SEEN_OPERATOR_HEADER_ON_DATA_API.append(True)
             # The platform gateway refuses a bogus key whatever the Data API state is.
-            if environ.get("HTTP_APIKEY", "") not in ("pub-key-123", defect.get("valid_key", "")) \
+            if environ.get("HTTP_APIKEY", "") not in ("sb_publishable_pubkey123", defect.get("valid_key", "")) \
                     and not defect.get("gateway_open"):
                 return reply("401 Unauthorized", b'{"message":"Invalid API key"}')
             profile = environ.get("HTTP_ACCEPT_PROFILE", "")
@@ -176,7 +180,7 @@ def _code(report, check):
     return {item["check"]: item["code"] for item in report["checks"]}[check]
 
 
-def _data_api(server, key="pub-key-123", project=PROJECT, **state):
+def _data_api(server, key="sb_publishable_pubkey123", project=PROJECT, **state):
     return smoke.run(server(), allow_insecure=True, data_api_url=server(**state), publishable_key=key,
                      data_api_project_ref=project)
 
@@ -275,10 +279,23 @@ def test_the_proof_is_bound_to_the_intended_project(server):
     assert _code(_data_api(server, project="otherproject1"), "DATA_API") == "DATA_API_WRONG_PROJECT"
     foreign = _jwt({"ref": "otherproject1", "role": "anon"})
     assert _code(_data_api(server, key=foreign, valid_key=foreign), "DATA_API") == "DATA_API_KEY_WRONG_PROJECT"
-    service = _jwt({"ref": PROJECT, "role": "service_role"})
-    assert _code(_data_api(server, key=service, valid_key=service), "DATA_API") == "DATA_API_KEY_WRONG_PROJECT"
     own = _jwt({"ref": PROJECT, "role": "anon"})
     assert _failed(_data_api(server, key=own, valid_key=own)) == set()
+
+
+@pytest.mark.parametrize("key", [
+    "sb_secret_" + "s" * 30,                                           # the modern server-side secret
+    _jwt({"ref": PROJECT, "role": "service_role"}),                    # the legacy service key
+    _jwt({"ref": PROJECT}),                                            # a JWT that names no role
+    "x" * 40,                                                          # neither publishable nor a legacy anon key
+])
+def test_a_secret_or_service_key_is_refused_before_anything_is_sent(server, key):
+    """The check needs exactly what a browser may hold; a server-side credential never leaves the machine."""
+    calls = []
+    base = server(on_request=calls.append)
+    report = smoke.run_data_api_only(base, publishable_key=key, project_ref=PROJECT, allow_insecure=True)
+    assert _code(report, "DATA_API") == "DATA_API_KEY_NOT_PUBLISHABLE"
+    assert calls == []
 
 
 def test_open_means_an_application_serving_its_login_page_not_any_answer_without_the_header(server):
@@ -296,10 +313,18 @@ def test_the_opening_tag_and_the_public_host_are_read_for_the_ledger(server):
     assert smoke.run(base, allow_insecure=True)["public_host_sha256"] == smoke.host_digest(base)
 
 
+def test_the_code_a_deployment_announces_is_read_only_when_it_is_a_digest(server):
+    code = "ab" * 32
+    assert smoke.probe_code(server(code=code), allow_insecure=True) == code
+    assert smoke.probe_code(server(code=code.upper()), allow_insecure=True) == code
+    assert smoke.probe_code(server(), allow_insecure=True) == ""
+    assert smoke.probe_code(server(code="not-a-digest"), allow_insecure=True) == ""
+
+
 def test_the_production_address_must_be_the_projects_own(monkeypatch):
     monkeypatch.setattr(smoke, "PROJECT_HOST_TEMPLATE", "{ref}.supabase.co")
     result = smoke.run("https://example.invalid", data_api_url="https://otherproject1.supabase.co",
-                       publishable_key="pub-key-123", data_api_project_ref="intendedref1")
+                       publishable_key="sb_publishable_pubkey123", data_api_project_ref="intendedref1")
     assert _code(result, "DATA_API") == "DATA_API_WRONG_PROJECT"
 
 
@@ -321,7 +346,7 @@ def test_before_the_opening_the_operator_smoke_passes_and_strangers_are_refused(
     base = server(admission_closed=True)
     report = smoke.run(base, allow_insecure=True, operator_token=OPERATOR_TOKEN, admission="closed",
                        email="operator@example.test", password="x", data_api_url=server(),
-                       publishable_key="pub-key-123", data_api_project_ref=PROJECT)
+                       publishable_key="sb_publishable_pubkey123", data_api_project_ref=PROJECT)
     assert report["result"] == "PASS", [(c["check"], c["code"]) for c in report["checks"] if not c["ok"]]
     assert SEEN_OPERATOR_HEADER_ON_DATA_API == []  # the operator credential never leaves the application
     stranger = smoke.run(base, allow_insecure=True)
@@ -374,7 +399,7 @@ def test_plain_http_is_refused_unless_explicitly_allowed_and_bad_addresses_are_r
 
 
 def test_c1_proves_the_data_api_off_alone_before_any_deployment_exists(server, monkeypatch):
-    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "pub-key-123")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_pubkey123")
     args = ["--data-api-only", "--allow-insecure", "--data-api-project-ref", PROJECT]
     out = io.StringIO()
     assert smoke.main(args + ["--data-api-url", server()], out=out, err=io.StringIO()) == 0

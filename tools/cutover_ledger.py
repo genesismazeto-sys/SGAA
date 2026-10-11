@@ -8,13 +8,24 @@ WHY THIS EXISTS
     be entered, that the evidence for it is complete and VALUE-FREE, that every
     gate it needs was granted, and that the identities carried from state to
     state (frozen source, prepared copy, reference digest, deployed commit,
-    opening fingerprint) never change.  It writes nothing but its own file.
-    Where the SPEC forbids trusting the operator's word (the opening, a
-    rollback from it, the backups that must exist before and after it) the
-    ledger OBSERVES for itself, read-only: the public address without any
-    credential (``tools/hosted_smoke`` probes), the database in one read-only
-    snapshot (``tools/pg_fingerprint``) and the backup directories
-    (``tools/ops_backup.verify_generation``).
+    opening fingerprint) never change.  Where the SPEC forbids trusting the
+    operator's word the ledger OBSERVES for itself or consumes a receipt that a
+    governed tool produced while it acted (MP-3 A15, A16, A17):
+
+    * the PROD database only through a verified connection (``tools/prod_source``:
+      TLS verified against the pinned provider CA, no hidden routing input), whose
+      identity must be the one the ledger itself qualified at GP1 (``qualify``,
+      cross-checked against the project's own storage API);
+    * the public address and every deployment address without any credential
+      (``tools/hosted_smoke`` probes), and the platform's own record of every
+      deployment (``tools/vercel_provider``);
+    * the backups only as the receipts ``tools/ops_backup`` produces while it takes
+      them from the verified source, re-verified from disk; restore drills only as
+      the receipts of the drill that ran them.
+
+    Two writes to PROD are the ledger's own, both bounded and reversible under GO:
+    the opening authorization (written with the reference, revoked by ``close``) and
+    the write barrier (``close`` applies it, ``resume`` lifts it).
 
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
@@ -24,36 +35,42 @@ WHAT IT STORES
     removal of the LAST entries, so every command prints the new ``head`` and
     every later command takes ``--expect-head`` (the runbook makes it
     mandatory): a truncated tail is then refused.  Entries hold counts,
-    classes, digests and fixed codes only; any other value is refused before
-    it is written.  A grant is the operator's record of the user's message: the
-    ledger cannot verify the user.
+    classes, digests, opaque identifiers and fixed codes only; any other value is
+    refused before it is written.  A grant is the operator's record of the user's
+    message: the ledger cannot verify the user.
 
 COMMANDS
     init           create the ledger (the directory must not hold one)
     grant          record that the user granted a gate (an opaque reference only)
+    qualify        at C0 with GP0/GP1: prove through a verified connection that DATABASE_URL is
+                   the PROD project's database (the tenant the provider authenticated, the cluster)
+                   and that the project's storage API lists exactly the buckets that database holds;
+                   record that identity -- every later observation must be this database
     advance        enter the next state with its evidence (never C12: see ``open``)
-    record-backup  verify the newest backup generation from disk and record it once,
-                   by its own creation time, only when the live database (DATABASE_URL)
-                   proves itself the PROD project's and the generation's Layer-2 set and
-                   object set both name that database (and the PROD store) as their
-                   source (C11 onward; ``ops_backup --ledger-dir`` calls it after every run)
-    reference      at C11, with GO granted, once: observe at C10's public address
-                   that admission is CLOSED, prove the pre-opening backup (made after
-                   C11) current against the live database, take the reference
-                   fingerprint live, write it out and print its digest
-    open           observe that admission is OPEN at that address and that the
-                   deployment announces the tag of THAT reference entry's hash (it was
-                   lifted with SGAA_OPENING_REFERENCE = that hash, which exists only once
-                   the reference is recorded), then enter C12 from the reference
-    rollback       record a rollback; refused once the point of no return is
-                   recorded.  From the opening (C12, or C11 once a reference was
-                   taken) only with quiescence OBSERVED -- admission closed, the
-                   scheduler front disabled, no external trigger -- and the current
-                   fingerprint taken live twice, a quiescence interval apart, equal
-                   to each other and either equal to the reference or different
-                   only by the fixed derived-write classes, acknowledged exactly
+    reference      at C11, with GO granted, once: observe that every deployment of the production
+                   project is recorded and CLOSED and that no opening was ever authorized, prove the
+                   pre-opening generation current, take the reference fingerprint live, and write the
+                   opening authorization for the candidate's code into PROD with the entry
+    open           observe that the public address serves the recorded open deployment of that code,
+                   that it admits users and announces THAT reference, that the authorization stands
+                   and no barrier is in force; then enter C12 from the reference
+    close          from the opening (C12, or C11 once a reference exists): revoke the opening
+                   authorization and apply the write barrier (the database role every writer uses
+                   defaults to read-only; every session started before it is ended); verified live
+    rollback       record a rollback; refused once the point of no return is recorded.  From the
+                   opening only with the barrier observed in force, quiescence observed and the
+                   current fingerprint taken live twice, a quiescence interval apart, equal to each
+                   other and either equal to the reference or different only by the fixed
+                   derived-write classes, acknowledged exactly
+    resume         after a refused rollback: lift the barrier and restore the authorization
+    authorize-code after the point of no return, for a recorded forward-fix deployment (GF1):
+                   authorize its code under the same opening reference
     status         current state, granted gates, head, chain verdict
     verify         chain verdict and head only
+
+    Backups, restore drills and deployments are recorded by the tools that perform them
+    (``ops_backup --ledger-dir``, ``ops_backup drill``, ``deploy_audit deploy`` / ``promote``),
+    never typed.
 
 Exit codes: 0 done, 1 refused (code on stderr), 2 usage.
 """
@@ -85,7 +102,10 @@ MAX_EVIDENCE_BYTES = 8192
 STATES = (
     "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14",
 )
-ENTRY_TYPES = frozenset({"init", "advance", "grant", "rollback", "reference", "backup"})
+ENTRY_TYPES = frozenset({
+    "init", "advance", "grant", "rollback", "reference", "backup", "qualification", "deployment",
+    "promotion", "barrier", "restore", "authorization",
+})
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
 #: Before a rollback from the opening is trusted, two live fingerprints this far apart must agree:
@@ -122,6 +142,8 @@ STATE_GATES = {
 PONR_STATE = "C13"
 OPENING_STATE = "C12"
 PRE_PONR_ONLY_GATES = frozenset({"GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3", "GX1", "GD1"})
+# Deployments the platform will never serve again; every other one must be one the ledger recorded.
+TERMINAL_DEPLOYMENT_STATES = frozenset({"ERROR", "CANCELED", "DELETED"})
 
 _KEY = re.compile(r"[a-z][a-z0-9_]{0,48}")
 _LEAF = re.compile(r"[A-Za-z0-9_.:+-]{0,80}")
@@ -130,6 +152,7 @@ _HEX40 = re.compile(r"[0-9a-f]{40}")
 _CLASS = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 _REF = re.compile(r"[A-Za-z0-9_.:+-]{1,64}")
 _STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+_DEPLOYMENT_ID = re.compile(r"dpl_[A-Za-z0-9]{8,64}")
 
 
 class Refused(Exception):
@@ -199,6 +222,10 @@ def _stamp(value) -> bool:
     return isinstance(value, str) and bool(_STAMP.fullmatch(value))
 
 
+def _deployment_id(value) -> bool:
+    return isinstance(value, str) and bool(_DEPLOYMENT_ID.fullmatch(value))
+
+
 def _equals(expected):
     return lambda value: isinstance(value, str) and value == expected
 
@@ -227,16 +254,19 @@ def _exceptions_key(value):
     return sorted((item["class"], item["count"]) for item in value)
 
 
-# Per state: required evidence keys and the predicate each value must satisfy.
+# Per state: required evidence keys and the predicate each value must satisfy.  What the ledger observes
+# or a governed tool recorded (the qualified database, the baseline and its restore drill, the deployment,
+# the promoted address, the window's restore drill) is never typed: the evidence names it and the ledger
+# finds it in its own entries.
 _SCHEMA = {
     # ``prod_project_sha256``: the PROD project GP0 names (sha256 of its reference); every data-API proof binds to it.
     "C0": {"commit": _hex40, "runbook_sha256": _hex64, "rehearsal_index_sha256": _hex64,
            "review_verdict": _equals("PASS"), "prod_project_sha256": _hex64},
+    # The database itself is proven by ``qualify`` (a ``qualification`` entry), not by typed evidence.
     "C1": {"pg_major": lambda v: _int(v) and v >= 15, "schema_current": _true, "rows": _zero, "objects": _zero,
            "data_api_toggle_off": _true, "data_api_override": _equals("APPLIED"),
            "data_api_probe": _equals("NOT_SERVED"), "data_api_project_sha256": _hex64,
-           "api_exposure_clean": _true, "capacity_ok": _true, "database_project_sha256": _hex64,
-           "database_identity_proven": _true},
+           "api_exposure_clean": _true, "capacity_ok": _true},
     "C2": {"database_bytes": _nonneg, "document_bytes": _nonneg, "census": _census},
     "C3": {"source_size": lambda v: _int(v) and v > 0, "source_sha256": _hex64, "wal_bytes": _zero},
     "C4": {"source_sha256": _hex64, "prepared_sha256": _hex64, "integrity_ok": _true, "fk_violations": _zero,
@@ -249,16 +279,15 @@ _SCHEMA = {
     "C7": {"prepared_sha256": _hex64, "pathb_exit": lambda v: _int(v) and v in (0, 3),
            "commit_resolved_by_inspection": lambda v: isinstance(v, bool),
            "commit_outcome": _equals("COMMITTED")},
+    # The baseline is a ``backup`` entry of kind BASELINE recorded at C7 and its drill a ``restore`` entry.
     "C8": {"reference_digest": _hex64, "census_equal": _true, "baseline_manifest_sha256": _hex64,
-           "object_set_digest": _hex64, "restore_drill": _equals("OK"), "verify_backup": _equals("OK"),
-           "admin_bootstrap": lambda v: v in {"NOT_NEEDED", "DONE"}},
-    # The deployment admits only the operator from C9 to C11 (app.web.admission_gate); the tree that was
-    # uploaded is the reviewed export, re-proven immediately before the upload (deploy_audit verify).
-    "C9": {"commit": _hex40, "readiness": _equals("READY"), "bundle_audit": _equals("CLEAN"),
-           "deploy_verify": _equals("IDENTICAL"), "deploy_tree_sha256": _hex64,
+           "object_set_digest": _hex64, "admin_bootstrap": lambda v: v in {"NOT_NEEDED", "DONE"}},
+    # The deployment is a ``deployment`` entry ``deploy_audit deploy`` recorded (export re-proven, the
+    # platform's own file list equal to it, the running code observed); admission only the operator's.
+    "C9": {"commit": _hex40, "deployment_id": _deployment_id, "readiness": _equals("READY"),
            "scheduler_front": _equals("DISABLED"), "admission": _equals("CLOSED")},
-    # ``public_host_sha256``: the public address the smoke ran on (its report prints it); every later
-    # observation of the ledger (reference, open, rollback) must probe that host.
+    # ``public_host_sha256``: the public address the smoke ran on (its report prints it); it must be the
+    # address ``deploy_audit promote`` recorded, and every later observation of the ledger probes it.
     "C10": {"smoke": _equals("PASS"), "write_set_ok": _true, "admission": _equals("CLOSED"),
             "data_api_project_sha256": _hex64, "public_host_sha256": _hex64},
     "C11": {"account_key_match": _true, "mirror_passes": lambda v: _nonneg(v) and v >= 1,
@@ -268,11 +297,12 @@ _SCHEMA = {
     "C12": {"reference_fingerprint_sha256": _hex64, "database_identity_sha256": _hex64, "opened_at": _stamp,
             "admission": _equals("OPEN"), "pre_open_backup_manifest_sha256": _hex64,
             "backup_cadence_hours": lambda v: _int(v) and 1 <= v <= 24, "rpo_hours": lambda v: _int(v) and v >= 1,
-            "opening_bound": _true, "reference_age_seconds": _nonneg},
+            "opening_bound": _true, "reference_age_seconds": _nonneg, "code_sha256": _hex64,
+            "deployment_id": _deployment_id, "opening_authorized": _true},
     "C13": {"write_class": lambda v: isinstance(v, str) and bool(_CLASS.fullmatch(v)),
             "detected_at": _stamp, "current_fingerprint_sha256": _hex64, "adjudicated_by_operator": _true},
-    "C14": {"restore_validated_manifest_sha256": _hex64, "restore_drill": _equals("OK"),
-            "unresolved_reconciliation": _zero, "object_set_verified": _true},
+    # The restore validation is a ``restore`` entry of the drill that ran it.
+    "C14": {"restore_validated_manifest_sha256": _hex64, "unresolved_reconciliation": _zero},
 }
 
 
@@ -282,11 +312,11 @@ _SCHEMA = {
 
 
 def _canonical(entry: dict) -> bytes:
-    return json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    return hosting.ledger_canonical(entry)
 
 
 def _entry_hash(body: dict) -> str:
-    return hashlib.sha256(_canonical(body)).hexdigest()
+    return hosting.ledger_entry_hash(body)
 
 
 def _now() -> str:
@@ -317,7 +347,7 @@ def read_ledger(directory: Path) -> list[dict]:
     entries: list[dict] = []
     previous = "0" * 64
     try:
-        raw = (directory / LEDGER_FILE).read_text(encoding="ascii")
+        raw = (Path(directory) / LEDGER_FILE).read_text(encoding="ascii")
     except (OSError, UnicodeDecodeError):
         raise Refused("LEDGER_UNREADABLE") from None
     for number, line in enumerate(raw.splitlines(), 1):
@@ -343,6 +373,7 @@ def _head(entries: list[dict]) -> str:
 @contextmanager
 def _locked(directory: Path):
     """One writer at a time: two concurrent appends would fork the chain."""
+    directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / LOCK_FILE
     try:
@@ -364,19 +395,29 @@ def _check_head(entries: list[dict], expected: str | None) -> None:
         raise Refused("HEAD_MISMATCH", "the ledger does not end where the operator last saw it")
 
 
-def _append(directory: Path, entries: list[dict], body: dict) -> dict:
+def _prepare(entries: list[dict], body: dict) -> dict:
+    """The next entry, hashed, not yet written (the reference is written into PROD before the ledger)."""
     entry = {"seq": len(entries) + 1, "prev": _head(entries), "at": _now(), **body}
+    _check_value_free({key: value for key, value in entry.items() if key != "evidence"})
     entry["hash"] = _entry_hash(entry)
+    return entry
+
+
+def _write(directory: Path, entry: dict) -> dict:
     line = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
-    with open(directory / LEDGER_FILE, "a", encoding="ascii", newline="\n") as handle:
+    with open(Path(directory) / LEDGER_FILE, "a", encoding="ascii", newline="\n") as handle:
         handle.write(line)
         handle.flush()
         os.fsync(handle.fileno())
     return entry
 
 
+def _append(directory: Path, entries: list[dict], body: dict) -> dict:
+    return _write(directory, _prepare(entries, body))
+
+
 def _summary(entries: list[dict]) -> dict:
-    """The derived position: current state, rollbacks, grants, carried evidence."""
+    """The derived position: current state, rollbacks, grants, carried evidence, recorded facts."""
     state = None
     granted: dict[str, str] = {}
     rolled_back = False
@@ -385,6 +426,8 @@ def _summary(entries: list[dict]) -> dict:
     reference = None  # the latest reference taken in the current state
     opening_reference = None  # the reference entry C12 was opened from
     backups: list[dict] = []
+    collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
+                 "authorizations": [], "grants": []}
     for entry in entries:
         kind = entry["type"]
         if kind == "advance":
@@ -393,19 +436,32 @@ def _summary(entries: list[dict]) -> dict:
             carried[entry["state"]] = entry["evidence"]
             entered[entry["state"]] = entry
             if state == OPENING_STATE and reference is not None:
-                opening_reference = reference["hash"]
+                opening_reference = reference
             reference = None
         elif kind == "grant":
             granted[entry["gate"]] = entry["ref"]
+            collected["grants"].append(entry)
         elif kind == "rollback":
             rolled_back = True
         elif kind == "reference":
             reference = entry
         elif kind == "backup":
             backups.append(entry)
+        elif kind == "qualification":
+            collected["qualification"] = entry
+        elif kind == "deployment":
+            collected["deployments"].append(entry)
+        elif kind == "promotion":
+            collected["promotions"].append(entry)
+        elif kind == "barrier":
+            collected["barriers"].append(entry)
+        elif kind == "restore":
+            collected["restores"].append(entry)
+        elif kind == "authorization":
+            collected["authorizations"].append(entry)
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
             "entered": entered, "reference": reference, "backups": backups,
-            "opening_reference": opening_reference}
+            "opening_reference": opening_reference, "any_reference": reference or opening_reference, **collected}
 
 
 def _evidence_of(summary: dict, state: str) -> dict:
@@ -416,6 +472,32 @@ def _next_state(current):
     if current is None:
         return STATES[0]
     return STATES[STATES.index(current) + 1] if current != STATES[-1] else None
+
+
+def _generations(summary: dict) -> list[dict]:
+    return [b for b in summary["backups"] if b["kind"] == "GENERATION"]
+
+
+def _baseline(summary: dict):
+    found = [b for b in summary["backups"] if b["kind"] == "BASELINE"]
+    return found[-1] if found else None
+
+
+def _deployment(summary: dict, deployment_id: str):
+    found = [d for d in summary["deployments"] if d["deployment_id"] == deployment_id]
+    return found[-1] if found else None
+
+
+def _restored(summary: dict, backup: dict) -> bool:
+    return any(r["manifest_sha256"] == backup["manifest_sha256"] and r["seq"] > backup["seq"]
+               for r in summary["restores"])
+
+
+def _barrier_applied(summary: dict) -> dict | None:
+    """The barrier currently in force by the ledger's own record (the latest barrier entry is APPLIED)."""
+    if summary["barriers"] and summary["barriers"][-1]["action"] == "APPLIED":
+        return summary["barriers"][-1]
+    return None
 
 
 def _check_carried_identities(state: str, evidence: dict, summary: dict) -> None:
@@ -436,26 +518,65 @@ def _check_carried_identities(state: str, evidence: dict, summary: dict) -> None
         raise Refused("REFERENCE_DIGEST_MISMATCH", "the target does not reproduce the converged source")
     if state == "C8" and evidence["admin_bootstrap"] == "DONE" and "GP3" not in summary["granted"]:
         raise Refused("GATE_NOT_GRANTED", "GP3")
-    if state == "C9" and evidence["commit"] != _evidence_of(summary, "C0").get("commit"):
-        raise Refused("COMMIT_NOT_THE_REHEARSED_ONE")
-    if state == "C1" and evidence["data_api_project_sha256"] != _evidence_of(summary, "C0").get(
-        "prod_project_sha256"
-    ):
-        raise Refused("DATA_API_NOT_THE_PROD_PROJECT", "the data-API proof names another project than GP0's")
-    if state == "C1" and evidence["database_project_sha256"] != _evidence_of(summary, "C0").get(
-        "prod_project_sha256"
-    ):
-        raise Refused("DATABASE_NOT_THE_PROD_PROJECT", "the qualified database belongs to another project than GP0's")
-    if state == "C10" and evidence["data_api_project_sha256"] != _evidence_of(summary, "C1").get(
-        "data_api_project_sha256"
-    ):
-        raise Refused("DATA_API_PROJECT_CHANGED", "the data-API proof names another project than C1's")
+    if state == "C8":
+        _check_baseline(summary, evidence)
+    if state == "C9":
+        _check_dark_deployment(summary, evidence)
+    if state == "C1":
+        if summary["qualification"] is None:
+            raise Refused("QUALIFICATION_REQUIRED", "`qualify` proves the PROD database before C1")
+        if evidence["data_api_project_sha256"] != _evidence_of(summary, "C0").get("prod_project_sha256"):
+            raise Refused("DATA_API_NOT_THE_PROD_PROJECT", "the data-API proof names another project than GP0's")
+    if state == "C10":
+        if evidence["data_api_project_sha256"] != _evidence_of(summary, "C1").get("data_api_project_sha256"):
+            raise Refused("DATA_API_PROJECT_CHANGED", "the data-API proof names another project than C1's")
+        _check_promoted_address(summary, evidence)
     if state == "C13" and evidence["current_fingerprint_sha256"] == _evidence_of(summary, "C12").get(
         "reference_fingerprint_sha256"
     ):
         raise Refused("NO_FINGERPRINT_DELTA", "a business write changes the fingerprint; this one equals the opening")
     if state == "C14":
         _check_window(summary, evidence)
+
+
+def _check_baseline(summary: dict, evidence: dict) -> None:
+    """C8: the baseline was taken by the governed backup after C7 and restore-drilled by the drill."""
+    baseline = _baseline(summary)
+    if baseline is None or baseline["seq"] < summary["entered"]["C7"]["seq"]:
+        raise Refused("BASELINE_REQUIRED", "`ops_backup --baseline --ledger-dir` at C7 records the baseline")
+    if evidence["baseline_manifest_sha256"] != baseline["manifest_sha256"] or \
+            evidence["object_set_digest"] != baseline["object_set_digest"]:
+        raise Refused("BASELINE_NOT_THE_RECORDED_ONE")
+    if not _restored(summary, baseline):
+        raise Refused("BASELINE_RESTORE_REQUIRED", "`ops_backup drill` restores the baseline into scratch first")
+
+
+def _check_dark_deployment(summary: dict, evidence: dict) -> None:
+    """C9: the deployment ``deploy_audit deploy`` recorded after C8, admitting only the operator."""
+    deployment = _deployment(summary, evidence["deployment_id"])
+    if deployment is None or deployment["seq"] < summary["entered"]["C8"]["seq"]:
+        raise Refused("DEPLOYMENT_NOT_RECORDED", "`deploy_audit deploy --ledger-dir` records the deployment")
+    if evidence["commit"] != _evidence_of(summary, "C0").get("commit") or deployment["commit"] != evidence["commit"]:
+        raise Refused("COMMIT_NOT_THE_REHEARSED_ONE")
+    if deployment["admission"] != "OPERATOR":
+        raise Refused("DEPLOYMENT_NOT_CLOSED")
+
+
+def _candidate_code(summary: dict):
+    """The code of the deployment C9 recorded: the candidate every pre-PONR deployment must run."""
+    deployment_id = _evidence_of(summary, "C9").get("deployment_id")
+    deployment = _deployment(summary, deployment_id) if deployment_id else None
+    return deployment["code_sha256"] if deployment else None
+
+
+def _check_promoted_address(summary: dict, evidence: dict) -> None:
+    """C10: the address the smoke proved is the one ``deploy_audit promote`` pointed at the candidate."""
+    promotions = [p for p in summary["promotions"] if p["seq"] > summary["entered"]["C9"]["seq"]]
+    if not promotions or promotions[-1]["public_host_sha256"] != evidence["public_host_sha256"]:
+        raise Refused("PUBLIC_ADDRESS_NOT_PROMOTED", "promote the smoked deployment with `deploy_audit promote`")
+    deployment = _deployment(summary, promotions[-1]["deployment_id"])
+    if deployment is None or deployment["code_sha256"] != _candidate_code(summary):
+        raise Refused("PUBLIC_ADDRESS_NOT_THE_CANDIDATE")
 
 
 def _gaps_within(times: list[datetime], start: datetime, end: datetime, hours: float) -> bool:
@@ -474,21 +595,21 @@ def _check_window(summary: dict, evidence: dict) -> None:
     # The pre-open generation (recorded before C12) anchors both cadences.
     start = _parse(summary["entered"]["C12"]["at"])
     cadence = int(_evidence_of(summary, "C12")["backup_cadence_hours"])
-    database_times = sorted({_parse(b["generation_at"]) for b in summary["backups"]})
+    generations = _generations(summary)
+    database_times = sorted({_parse(b["generation_at"]) for b in generations})
     anchor = [t for t in database_times if t <= start]
     if not _gaps_within(database_times, max(anchor) if anchor else start, now, cadence * CADENCE_TOLERANCE):
         raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
-    object_times, seen = [], set()
-    for backup in summary["backups"]:
-        if backup["object_set_name"] != "NONE" and backup["object_set_name"] not in seen:
-            seen.add(backup["object_set_name"])
-            object_times.append(_parse(backup["generation_at"]))
+    object_times = [_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE"]
     anchor = [t for t in object_times if t <= start]
     if not _gaps_within(object_times, max(anchor) if anchor else start, now, OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
         raise Refused("OBJECT_CADENCE_BROKEN", "an object set is missing from the window")
-    in_window = {b["manifest_sha256"] for b in summary["backups"] if _parse(b["generation_at"]) > ponr_at}
-    if evidence["restore_validated_manifest_sha256"] not in in_window:
+    in_window = [b for b in generations if _parse(b["generation_at"]) > ponr_at and b["object_set_name"] != "NONE"]
+    validated = [b for b in in_window if b["manifest_sha256"] == evidence["restore_validated_manifest_sha256"]]
+    if not validated:
         raise Refused("RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION")
+    if not _restored(summary, validated[-1]):
+        raise Refused("RESTORE_RECEIPT_REQUIRED", "`ops_backup drill` restores that generation into scratch")
 
 
 def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None) -> dict:
@@ -549,25 +670,39 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
         return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
 
 
+# ---------------------------------------------------------------------------
+# the ledger's eyes
+# ---------------------------------------------------------------------------
+
+
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 class Observer:
-    """The ledger's read-only eyes: the public address (no credential), the database, the backups.
+    """The ledger's eyes: public addresses (no credential), the PROD database, the platform, the backups.
 
-    ``base_url``: the public address of the deployment.  The database is ``DATABASE_URL`` (direct
-    or session mode: one snapshot transaction; the transaction pooler is refused).  Every answer is
-    a fixed code, a count or a digest.
+    ``base_url``: the public address of the deployment.  The database is ``DATABASE_URL`` (the
+    session-pooler address of the PROD project), always opened through ``tools/prod_source``: TLS
+    verified against the pinned provider CA, no hidden routing input (``source_connector`` replaces
+    it only in the tests, with a disposable local server).  ``provider``: the platform's record of the
+    production project's deployments (``tools/vercel_provider.VercelCli``).  Every answer is a fixed
+    code, a count, an opaque identifier or a digest.
     """
 
     def __init__(self, base_url: str | None = None, *, allow_insecure: bool = False,
-                 database_url: str | None = None, scheduler_url: str | None = None) -> None:
+                 database_url: str | None = None, scheduler_url: str | None = None,
+                 source_connector=None, provider=None, environ=None) -> None:
         self.base_url = base_url
         self.allow_insecure = allow_insecure
         self.database_url = database_url
         # On the platform the scheduler front answers at the same public address (a rewrite to its own
         # function); a rehearsal that serves it separately names its address here.
         self.scheduler_url = scheduler_url
+        self.source_connector = source_connector
+        self.provider = provider
+        self.environ = environ
+
+    # -- public addresses ----------------------------------------------------
 
     def _require_base(self) -> str:
         if not self.base_url:
@@ -582,15 +717,28 @@ class Observer:
             raise Refused("INSECURE_ONLY_ON_LOOPBACK")
         return url
 
-    def admission(self) -> str:
+    def admission(self, url: str | None = None) -> str:
         from tools import hosted_smoke
 
         try:
-            return hosted_smoke.probe_admission(self._require_base(), allow_insecure=self.allow_insecure)
+            address = self._checked(url) if url else self._require_base()
+            return hosted_smoke.probe_admission(address, allow_insecure=self.allow_insecure)
         except hosted_smoke.Refused as refusal:
             raise Refused(refusal.code) from None
         except OSError:
             return "unknown"
+
+    def code(self, url: str | None = None) -> str:
+        """The code identity a deployment announces (``X-SGAA-Code``; '' when none)."""
+        from tools import hosted_smoke
+
+        try:
+            address = self._checked(url) if url else self._require_base()
+            return hosted_smoke.probe_code(address, allow_insecure=self.allow_insecure)
+        except hosted_smoke.Refused as refusal:
+            raise Refused(refusal.code) from None
+        except OSError:
+            return ""
 
     def opening_tag(self) -> str:
         from tools import hosted_smoke
@@ -607,6 +755,11 @@ class Observer:
 
         return hosted_smoke.host_digest(self._require_base())
 
+    def public_host(self) -> str:
+        from urllib.parse import urlsplit
+
+        return (urlsplit(self._require_base()).hostname or "").lower()
+
     def scheduler_front(self) -> str:
         from tools import hosted_smoke
 
@@ -618,15 +771,55 @@ class Observer:
         except OSError:
             return "unknown"
 
-    @contextmanager
-    def _connection(self):
-        from tools import pg_backup
+    # -- the platform ----------------------------------------------------------
+
+    def _platform(self):
+        if self.provider is None:
+            raise Refused("PROVIDER_REQUIRED", "name the production project (--vercel-team, --vercel-project)")
+        return self.provider
+
+    def provider_project_sha256(self) -> str:
+        return hashlib.sha256(self._platform().project_id.encode("utf-8")).hexdigest()
+
+    def provider_deployments(self) -> list[dict]:
+        """Every deployment the platform holds for the production project: id, url, state."""
+        from tools import vercel_provider
 
         try:
-            url = pg_backup.require_url(self.database_url, "DATABASE_URL")
-            conn = pg_backup.connect(url)
-        except pg_backup.BackupToolError as exc:
-            raise Refused(exc.code) from None
+            return self._platform().deployments()
+        except vercel_provider.Refused as refusal:
+            raise Refused(refusal.code) from None
+
+    def alias_deployment(self) -> str:
+        """The deployment the public address serves, as the platform resolves it."""
+        from tools import vercel_provider
+
+        try:
+            return self._platform().alias_target(self.public_host())
+        except vercel_provider.Refused as refusal:
+            raise Refused(refusal.code) from None
+
+    def deployment_files_sha256(self, deployment_id: str) -> str:
+        from tools import vercel_provider
+
+        try:
+            return vercel_provider.files_sha256(self._platform().files(deployment_id))
+        except vercel_provider.Refused as refusal:
+            raise Refused(refusal.code) from None
+
+    # -- the PROD database, verified ----------------------------------------------
+
+    @contextmanager
+    def _connection(self):
+        from tools import prod_source
+
+        url = self.database_url if self.database_url is not None else os.environ.get("DATABASE_URL")
+        try:
+            conn = (self.source_connector or prod_source.connect)(url)
+        except prod_source.Refused as refusal:
+            raise Refused(refusal.code) from None
+        except Refused:
+            raise
         except Exception:
             raise Refused("DATABASE_UNREACHABLE") from None
         try:
@@ -634,13 +827,43 @@ class Observer:
         finally:
             conn.close()
 
-    def database_source(self) -> dict:
-        """The raw facts naming the database behind DATABASE_URL (``app.hosting.database_source``)."""
-        with self._connection() as conn:
-            return hosting.database_source(conn)
+    def source(self):
+        """What the verified connection proves (``tools/prod_source.VerifiedSource``)."""
+        from tools import prod_source
 
-    def database_identity(self) -> str | None:
-        return hosting.source_identity_sha256(self.database_source())
+        with self._connection() as conn:
+            try:
+                return prod_source.observe(conn)
+            except prod_source.Refused as refusal:
+                raise Refused(refusal.code) from None
+
+    def database_identity(self) -> str:
+        return self.source().identity
+
+    def store_project_sha256(self) -> str:
+        from tools import prod_source
+
+        try:
+            return prod_source.store_project_sha256(self.environ)
+        except prod_source.Refused as refusal:
+            raise Refused(refusal.code) from None
+
+    def store_buckets(self) -> frozenset:
+        from tools import prod_source
+
+        try:
+            return prod_source.store_buckets(self.environ)
+        except prod_source.Refused as refusal:
+            raise Refused(refusal.code) from None
+
+    def database_buckets(self) -> frozenset:
+        from tools import prod_source
+
+        with self._connection() as conn:
+            try:
+                return prod_source.database_buckets(conn)
+            except prod_source.Refused as refusal:
+                raise Refused(refusal.code) from None
 
     def fingerprint(self) -> dict:
         from tools import pg_fingerprint
@@ -692,22 +915,158 @@ class Observer:
                 return False
         return True
 
+    # -- the opening authorization (written by the ledger, read by every open deployment) --------
+
+    def opening_rows(self) -> int:
+        with self._connection() as conn:
+            if not conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                return 0
+            return int(conn.execute(hosting.OPENING_ROWS_SQL).fetchone()[0])
+
+    def authorize(self, reference_sha256: str, code_sha256: str, entry: dict, write, *, first: bool) -> None:
+        """Insert the authorization and run ``write`` (the ledger append) in ONE database transaction.
+
+        ``first``: the opening's own authorization -- refused when any authorization already exists (a
+        stale or premature one).  The row commits only once the ledger entry is on disk.
+        """
+        text = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        with self._connection() as conn:
+            conn.execute("SET default_transaction_read_only = off")
+            with conn.transaction():
+                for statement in hosting.OPENING_DDL:
+                    conn.execute(statement)
+                existing = int(conn.execute(hosting.OPENING_ROWS_SQL).fetchone()[0])
+                if first and existing:
+                    raise Refused("OPENING_AUTHORIZATION_EXISTS", "an opening was authorized before this reference")
+                conn.execute(hosting.OPENING_INSERT_SQL, (reference_sha256, code_sha256, text))
+                write()
+
+    def authorization_valid(self, reference_sha256: str, code_sha256: str, project_sha256: str) -> bool:
+        """Whether the PROD database authorizes an open deployment of this code -- the app's own test."""
+        with self._connection() as conn:
+            if not conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                return False
+            row = conn.execute(hosting.OPENING_SELECT_SQL, (reference_sha256, code_sha256)).fetchone()
+            identity = hosting.source_identity_sha256(hosting.database_source(conn))
+        return row is not None and hosting.opening_entry_authorizes(
+            row[0], reference=reference_sha256, database_identity=identity, code=code_sha256, project=project_sha256)
+
+    # -- the write barrier ----------------------------------------------------------
+
+    @staticmethod
+    def _role_statement(conn, action: str):
+        from psycopg import sql
+
+        role, database = conn.execute("SELECT current_user, current_database()").fetchone()
+        return sql.SQL("ALTER ROLE {} IN DATABASE {} " + action).format(sql.Identifier(role), sql.Identifier(database))
+
+    @staticmethod
+    def _end_sessions_before(conn, moment) -> int:
+        """End every session of the writers' role older than ``moment`` -- this one last.
+
+        A pooler reuses server sessions across clients (observed on the provider's session pooler,
+        MP-3 A17): a role default applies only to sessions started after it, so every older session,
+        the one running this statement included, must end or the pool would hand it out again.
+        """
+        import psycopg
+
+        ended = int(conn.execute(
+            "SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+            " WHERE usename = current_user AND datname = current_database() AND pid <> pg_backend_pid()"
+            " AND backend_type = 'client backend' AND backend_start < %s) ended", (moment,)).fetchone()[0])
+        try:
+            conn.execute("SELECT pg_terminate_backend(pg_backend_pid())")
+        except psycopg.Error:
+            pass  # this session ended, as intended
+        return ended + 1
+
+    def apply_barrier(self) -> dict:
+        """Revoke the authorization, make the writers' role read-only by default, end every older session."""
+        with self._connection() as conn:
+            conn.execute("SET default_transaction_read_only = off")
+            with conn.transaction():
+                if conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                    conn.execute(hosting.OPENING_REVOKE_SQL)
+                conn.execute(self._role_statement(conn, "SET default_transaction_read_only = on"))
+            barrier_at = conn.execute("SELECT clock_timestamp()").fetchone()[0]
+            terminated = self._end_sessions_before(conn, barrier_at)
+        return {"barrier_at": barrier_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "terminated": terminated}
+
+    def barrier_state(self, barrier_at: str) -> dict:
+        """Read in a fresh session: the role default it got, a write it cannot make, older sessions left
+        (this one included: a pooled session from before the barrier is no fresh session)."""
+        import psycopg
+
+        moment = datetime.strptime(barrier_at, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+        with self._connection() as conn:
+            fresh_read_only = str(conn.execute("SHOW transaction_read_only").fetchone()[0]) == "on"
+            setting = bool(conn.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase"
+                " WHERE d.datname = current_database() AND s.setrole = (SELECT oid FROM pg_roles"
+                " WHERE rolname = current_user) AND 'default_transaction_read_only=on' = ANY (s.setconfig))"
+            ).fetchone()[0])
+            older = 0
+            for _attempt in range(10):  # a terminated backend leaves pg_stat_activity within moments
+                older = int(conn.execute(
+                    "SELECT count(*) FROM pg_stat_activity WHERE usename = current_user"
+                    " AND datname = current_database() AND backend_type = 'client backend'"
+                    " AND backend_start < %s", (moment,)).fetchone()[0])
+                if not older:
+                    break
+                time.sleep(0.5)
+            open_rows = 0
+            if conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                open_rows = int(conn.execute(
+                    "SELECT count(*) FROM sgaa_cutover.opening WHERE revoked_at IS NULL").fetchone()[0])
+            try:
+                conn.execute("CREATE TEMP TABLE sgaa_barrier_probe (x integer)")
+                write_refused = False
+            except psycopg.errors.ReadOnlySqlTransaction:
+                write_refused = True
+        return {"setting": setting, "fresh_read_only": fresh_read_only, "write_refused": write_refused,
+                "older_sessions": older, "authorizations_in_force": open_rows}
+
+    def lift_barrier(self, reference_sha256: str) -> bool:
+        """Reset the role default, restore the authorization and end every session that started read-only;
+        True when a fresh session can write."""
+        with self._connection() as conn:
+            conn.execute("SET default_transaction_read_only = off")
+            with conn.transaction():
+                conn.execute(self._role_statement(conn, "RESET default_transaction_read_only"))
+                if conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                    conn.execute(hosting.OPENING_RESTORE_SQL, (reference_sha256,))
+            lifted_at = conn.execute("SELECT clock_timestamp()").fetchone()[0]
+            self._end_sessions_before(conn, lifted_at)
+        return self.writable()
+
+    def writable(self) -> bool:
+        """Whether a fresh session of the writers' role may write (no barrier in force)."""
+        with self._connection() as conn:
+            return str(conn.execute("SHOW transaction_read_only").fetchone()[0]) == "off"
+
+
+# ---------------------------------------------------------------------------
+# what the ledger requires of what it observes
+# ---------------------------------------------------------------------------
+
 
 def _production_database(summary: dict, observer: Observer) -> str:
-    """The live database's canonical identity, proven to be the PROD project's database (and, once a
-    reference exists, the reference's).  Never a typed value: it is read from the connection itself."""
-    source = observer.database_source()
-    identity = hosting.source_identity_sha256(source)
-    if identity is None:
-        raise Refused("DATABASE_IDENTITY_UNPROVEN", "the database does not prove its cluster (system identifier)")
-    if hosting.source_project_sha256(source) != _evidence_of(summary, "C0").get("prod_project_sha256"):
-        # A consistent wrong database (DEV, a scratch server, another project) is refused here.
+    """The live database's canonical identity, proven to be THE database qualified at GP1 (and, once a
+    reference exists, the reference's).  Never a typed value: it is read through a verified connection."""
+    qualification = summary["qualification"]
+    if qualification is None:
+        raise Refused("QUALIFICATION_REQUIRED", "`qualify` proves the PROD database first")
+    live = observer.source()
+    if live.project_sha256 != _evidence_of(summary, "C0").get("prod_project_sha256"):
+        # A consistent wrong database (DEV, another project) is refused here.
         raise Refused("DATABASE_NOT_THE_PROD_PROJECT", "DATABASE_URL is not the PROD project's database")
-    anchor = summary["reference"]["database_identity_sha256"] if summary["reference"] else \
-        _evidence_of(summary, OPENING_STATE).get("database_identity_sha256")
-    if anchor and identity != anchor:
+    if live.identity != qualification["database_identity_sha256"]:
+        raise Refused("DATABASE_NOT_THE_QUALIFIED_ONE", "the database is not the one qualified at GP1")
+    anchor = summary["any_reference"]
+    if anchor and live.identity != anchor["database_identity_sha256"]:
         raise Refused("DATABASE_NOT_THE_REFERENCE", "the database is not the one the reference was taken from")
-    return identity
+    return live.identity
 
 
 def _check_generation_sources(summary: dict, generation: dict, identity: str) -> None:
@@ -729,6 +1088,39 @@ def _require_the_deployment(summary: dict, observer: Observer) -> None:
         raise Refused("ADDRESS_NOT_THE_DEPLOYMENT", "probe the public address recorded at C10")
 
 
+def _require_provider_project(summary: dict, observer: Observer) -> str:
+    project = summary["deployments"][0]["vercel_project_sha256"] if summary["deployments"] else None
+    if project is None or observer.provider_project_sha256() != project:
+        raise Refused("PROVIDER_NOT_THE_PROJECT", "name the production project the deployments were recorded in")
+    return project
+
+
+def _require_closed_everywhere(summary: dict, observer: Observer) -> None:
+    """No deployment of the production project can have admitted anyone (the reference's precondition).
+
+    The platform's own list: every deployment it may still serve must be one the governed deploy
+    recorded, recorded as admitting only the operator, and observed CLOSED at its own address running
+    the code recorded for it.  The public address must serve the candidate.
+    """
+    for deployment in observer.provider_deployments():
+        if deployment["state"] in TERMINAL_DEPLOYMENT_STATES:
+            continue
+        recorded = _deployment(summary, deployment["id"])
+        if recorded is None:
+            raise Refused("UNRECORDED_DEPLOYMENT", "a deployment the ledger never recorded may have admitted users")
+        if recorded["admission"] != "OPERATOR":
+            raise Refused("DEPLOYMENT_OPENED_BEFORE_THE_REFERENCE")
+        if deployment["state"] != "READY":
+            continue
+        if observer.admission(deployment["url"]) != "closed":
+            raise Refused("DEPLOYMENT_NOT_CLOSED", "every deployment address must refuse users before the reference")
+        if observer.code(deployment["url"]) != recorded["code_sha256"]:
+            raise Refused("DEPLOYMENT_CODE_CHANGED")
+    serving = _deployment(summary, observer.alias_deployment())
+    if serving is None or serving["code_sha256"] != _candidate_code(summary):
+        raise Refused("ALIAS_NOT_THE_CANDIDATE", "the public address must serve a recorded deployment of the candidate")
+
+
 def _require_open_pending(summary: dict, *, allow_reference: bool) -> None:
     if summary["rolled_back"]:
         raise Refused("ROLLED_BACK", "a rolled-back cutover is not continued; start a new ledger")
@@ -740,9 +1132,44 @@ def _require_open_pending(summary: dict, *, allow_reference: bool) -> None:
         raise Refused("REFERENCE_REQUIRED", "take the reference with `reference` first")
 
 
-def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_head: str | None = None,
-                  observer: Observer | None = None) -> dict:
-    """Verify the newest backup generation from disk and record it (C11 onward, until C14)."""
+def _require_pending_opening(summary: dict) -> dict:
+    """C12, or C11 once a reference exists (users may already be admitted): the reference entry."""
+    current = summary["state"]
+    if summary["rolled_back"]:
+        raise Refused("ROLLED_BACK")
+    if current is not None and STATES.index(current) >= STATES.index(PONR_STATE):
+        raise Refused("PONR_RECORDED", "after the point of no return the cutover is forward-fix only")
+    if current == OPENING_STATE:
+        return summary["opening_reference"]
+    if current == "C11" and summary["reference"] is not None:
+        return summary["reference"]
+    raise Refused("NOT_OPENED", "the barrier serves the opening (C12, or C11 once a reference exists)")
+
+
+def _require_barrier(summary: dict, observer: Observer) -> dict:
+    """The barrier the ledger applied is in force, observed in a fresh session."""
+    applied = _barrier_applied(summary)
+    if applied is None:
+        raise Refused("BARRIER_REQUIRED", "`close` applies the write barrier before the rollback proof")
+    state = observer.barrier_state(applied["barrier_at"])
+    if not (state["setting"] and state["fresh_read_only"] and state["write_refused"]):
+        raise Refused("BARRIER_NOT_IN_FORCE", "a fresh session of the writers' role can write")
+    if state["older_sessions"]:
+        raise Refused("BARRIER_NOT_IN_FORCE", "a session started before the barrier is still connected")
+    if state["authorizations_in_force"]:
+        raise Refused("BARRIER_NOT_IN_FORCE", "an opening authorization is in force again")
+    return applied
+
+
+# ---------------------------------------------------------------------------
+# the qualification (GP1)
+# ---------------------------------------------------------------------------
+
+
+def qualify(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """C0 -> (C1): the PROD database, proven through a verified connection and the project's own API."""
+    from tools import prod_source
+
     observer = observer or Observer()
     with _locked(directory):
         entries = read_ledger(directory)
@@ -750,35 +1177,265 @@ def record_backup(directory: Path, root: Path, off_platform: Path, *, expect_hea
         summary = _summary(entries)
         if summary["rolled_back"]:
             raise Refused("ROLLED_BACK")
-        state = summary["state"]
-        if state is None or STATES.index(state) < STATES.index("C11") or state == STATES[-1]:
-            raise Refused("OUT_OF_ORDER", "backups are recorded from C11 until the window closes")
+        if summary["state"] != "C0":
+            raise Refused("OUT_OF_ORDER", "the PROD database is qualified at C0, before C1")
+        missing = [gate for gate in ("GP0", "GP1") if gate not in summary["granted"]]
+        if missing:
+            raise Refused("GATE_NOT_GRANTED", ",".join(missing))
+        if summary["qualification"] is not None:
+            raise Refused("QUALIFICATION_ALREADY_RECORDED")
+        project = _evidence_of(summary, "C0")["prod_project_sha256"]
+        live = observer.source()
+        if live.project_sha256 != project:
+            raise Refused("DATABASE_NOT_THE_PROD_PROJECT", "DATABASE_URL is not the PROD project's database")
+        if observer.store_project_sha256() != project:
+            raise Refused("STORE_NOT_THE_PROD_PROJECT", "SUPABASE_URL names another project than GP0's")
+        listed, held = observer.store_buckets(), observer.database_buckets()
+        if not listed:
+            raise Refused("NO_BUCKET_TO_COMPARE", "create the private bucket (GP1) before the qualification")
+        if listed != held:
+            raise Refused("STORE_NOT_THE_DATABASES_PROJECT",
+                          "the project's storage API and the database do not hold the same buckets")
+        return _append(directory, entries, {
+            "type": "qualification", "database_identity_sha256": live.identity, "project_sha256": project,
+            "store_project_sha256": project, "buckets_compared": len(listed), "tls": "VERIFIED",
+            "ca_sha256": prod_source.PINNED_CA_SHA256,
+        })
+
+
+# ---------------------------------------------------------------------------
+# receipts of the governed tools: backups, restore drills, deployments, promotions
+# ---------------------------------------------------------------------------
+
+_BACKUP_KINDS = frozenset({"GENERATION", "BASELINE"})
+
+
+def _backup_window(summary: dict, kind: str) -> None:
+    state = summary["state"]
+    if summary["rolled_back"]:
+        raise Refused("ROLLED_BACK")
+    if kind == "BASELINE":
+        if state != "C7":
+            raise Refused("OUT_OF_ORDER", "the cutover baseline is taken at C7 (GB1)")
+        if "GB1" not in summary["granted"]:
+            raise Refused("GATE_NOT_GRANTED", "GB1")
+        if _baseline(summary) is not None:
+            raise Refused("BASELINE_ALREADY_RECORDED")
+        return
+    if state is None or STATES.index(state) < STATES.index("C11") or state == STATES[-1]:
+        raise Refused("OUT_OF_ORDER", "backups are recorded from C11 until the window closes")
+
+
+def backup_preconditions(directory: Path, kind: str) -> dict:
+    """What the governed backup must hold before it starts: the qualified identity and the PROD project."""
+    if kind not in _BACKUP_KINDS:
+        raise Refused("BACKUP_KIND_INVALID")
+    summary = _summary(read_ledger(directory))
+    _backup_window(summary, kind)
+    if summary["qualification"] is None:
+        raise Refused("QUALIFICATION_REQUIRED")
+    return {"database_identity_sha256": summary["qualification"]["database_identity_sha256"],
+            "prod_project_sha256": _evidence_of(summary, "C0")["prod_project_sha256"]}
+
+
+def record_generation(directory: Path, receipt: dict, root: Path, off_platform: Path, *,
+                      observer: Observer | None = None) -> dict:
+    """Record the generation a governed ``ops_backup`` run just took (its receipt), re-verified from disk.
+
+    The receipt's identity was observed live through the verified connection before and after the run;
+    it must be the qualified (and reference) database now as well, every artifact on disk must be the
+    one the run produced (Layer-2 manifest and dump, object set manifest and digest), and its time lies
+    inside the run.  No typed or file-borne provenance is ever accepted.
+    """
+    observer = observer or Observer()
+    kind = receipt.get("kind")
+    if kind not in _BACKUP_KINDS:
+        raise Refused("BACKUP_KIND_INVALID")
+    with _locked(directory):
+        entries = read_ledger(directory)
+        summary = _summary(entries)
+        _backup_window(summary, kind)
         identity = _production_database(summary, observer)
-        generation = observer.backup(Path(root), Path(off_platform), against_database=False)
-        if any(b["manifest_sha256"] == generation["manifest_sha256"] for b in summary["backups"]):
-            raise Refused("BACKUP_ALREADY_RECORDED", "each generation counts once; take a new one")
+        if receipt.get("source_identity_sha256") != identity or receipt.get("source_identity_after_sha256") != identity:
+            raise Refused("BACKUP_NOT_FROM_THE_PROD_DATABASE", "the run did not read the qualified database throughout")
+        project = _evidence_of(summary, "C0")["prod_project_sha256"]
+        if receipt.get("object_set") and receipt.get("store_project_sha256") != project:
+            raise Refused("OBJECT_SET_NOT_FROM_THE_PROD_PROJECT")
+        if kind == "BASELINE" and not receipt.get("object_set"):
+            raise Refused("BASELINE_NEEDS_OBJECTS")
         try:
-            generation_at = _parse(generation["created_at"])
+            started, finished = _parse(receipt["run_started_at"]), _parse(receipt["run_finished_at"])
+            generation_at = _parse(receipt["generation_at"])
         except (KeyError, TypeError, ValueError):
             raise Refused("BACKUP_TIME_INVALID") from None
-        if generation_at > _CLOCK() + timedelta(minutes=5):
-            raise Refused("BACKUP_TIME_INVALID", "the generation is dated in the future")
-        if summary["backups"] and generation_at <= max(_parse(b["generation_at"]) for b in summary["backups"]):
+        if not started <= generation_at <= finished or finished > _CLOCK() + timedelta(minutes=5):
+            raise Refused("BACKUP_TIME_INVALID", "the generation is not dated inside its own run")
+        if any(b["manifest_sha256"] == receipt.get("manifest_sha256") for b in summary["backups"]):
+            raise Refused("BACKUP_ALREADY_RECORDED", "each generation counts once; take a new one")
+        generations = _generations(summary)
+        if kind == "GENERATION" and generations and \
+                generation_at <= max(_parse(b["generation_at"]) for b in generations):
             raise Refused("BACKUP_OLDER_THAN_RECORDED", "the generation is not newer than one already recorded")
-        _check_generation_sources(summary, generation, identity)
+        on_disk = observer.backup(Path(root), Path(off_platform), against_database=False)
+        produced = (receipt.get("manifest_sha256"), receipt.get("dump_sha256"), receipt.get("object_set"),
+                    receipt.get("object_set_digest"), receipt.get("object_manifest_sha256"))
+        found = (on_disk["manifest_sha256"], on_disk["dump_sha256"], on_disk["object_set"],
+                 on_disk["object_set_digest"], on_disk["object_manifest_sha256"])
+        if produced != found:
+            raise Refused("BACKUP_NOT_THE_RUNS_OUTPUT", "the artifacts on disk are not the ones this run produced")
+        _check_generation_sources(summary, on_disk, identity)
         return _append(directory, entries, {
-            "type": "backup", "manifest_sha256": generation["manifest_sha256"],
-            "source_identity_sha256": identity,
+            "type": "backup", "kind": kind, "manifest_sha256": on_disk["manifest_sha256"],
+            "dump_sha256": on_disk["dump_sha256"], "source_identity_sha256": identity,
+            "store_project_sha256": project if on_disk["object_set"] else "NONE",
             "generation_at": generation_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "object_set_name": generation["object_set"] or "NONE",
-            "object_set_digest": generation["object_set_digest"] or "NONE",
-            "off_platform": "VERIFIED",
+            "object_set_name": on_disk["object_set"] or "NONE",
+            "object_set_digest": on_disk["object_set_digest"] or "NONE",
+            "object_manifest_sha256": on_disk["object_manifest_sha256"] or "NONE",
+            "off_platform": "VERIFIED", "provenance": "LIVE_RUN",
+            "run_seconds": int((finished - started).total_seconds()),
         })
+
+
+def record_restore(directory: Path, receipt: dict) -> dict:
+    """Record a restore drill ``ops_backup drill`` just ran, bound to a recorded generation and a scratch target."""
+    with _locked(directory):
+        entries = read_ledger(directory)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        generation = [b for b in summary["backups"] if b["manifest_sha256"] == receipt.get("manifest_sha256")]
+        if not generation:
+            raise Refused("RESTORE_NOT_OF_A_RECORDED_GENERATION")
+        generation = generation[-1]
+        if (receipt.get("dump_sha256"), receipt.get("source_identity_sha256")) != (
+                generation["dump_sha256"], generation["source_identity_sha256"]):
+            raise Refused("RESTORE_SOURCE_MISMATCH", "the restored set is not the recorded generation")
+        if generation["object_set_name"] == "NONE" or receipt.get("object_set_digest") != generation["object_set_digest"] \
+                or receipt.get("object_set") != "VERIFIED" or receipt.get("objects_cover_restored_rows") is not True:
+            raise Refused("RESTORE_OBJECT_SET_NOT_VERIFIED")
+        if receipt.get("restored") != "VERIFIED" or not _int(receipt.get("tables_verified")) or \
+                receipt["tables_verified"] < 1:
+            raise Refused("RESTORE_NOT_VERIFIED")
+        if summary["qualification"] is None:
+            raise Refused("QUALIFICATION_REQUIRED")
+        target = receipt.get("target_identity_sha256")
+        if not _hex64(target) or target == summary["qualification"]["database_identity_sha256"]:
+            raise Refused("RESTORE_TARGET_IS_PROD")
+        if receipt.get("target_scratch") is not True:
+            raise Refused("RESTORE_TARGET_NOT_SCRATCH")
+        if receipt.get("target_major") != _evidence_of(summary, "C1").get("pg_major"):
+            raise Refused("RESTORE_TARGET_NOT_THE_PROD_MAJOR")
+        return _append(directory, entries, {
+            "type": "restore", "manifest_sha256": generation["manifest_sha256"],
+            "dump_sha256": generation["dump_sha256"], "source_identity_sha256": generation["source_identity_sha256"],
+            "object_set_digest": generation["object_set_digest"], "target_identity_sha256": target,
+            "target_major": receipt["target_major"], "tables_verified": receipt["tables_verified"],
+            "objects_verified": int(receipt.get("objects_verified") or 0), "restored": "VERIFIED",
+            "object_set": "VERIFIED",
+        })
+
+
+_DEPLOYMENT_KEYS = ("deployment_id", "url_sha256", "vercel_project_sha256", "commit", "deploy_tree_sha256",
+                    "code_sha256", "files_sha256", "admission", "opening_reference", "forward_fix_ref",
+                    "observed_admission", "aliased")
+
+
+def deployment_preconditions(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
+                             forward_fix_ref: str | None) -> None:
+    """Refuse a deployment before anything is uploaded (``record_deployment`` re-checks it all)."""
+    _deployment_rules(_summary(read_ledger(directory)), commit=commit, admission=admission,
+                      opening_reference=opening_reference, forward_fix_ref=forward_fix_ref)
+
+
+def _deployment_rules(summary: dict, *, commit, admission, opening_reference, forward_fix_ref) -> None:
+    state = summary["state"]
+    if summary["rolled_back"]:
+        raise Refused("ROLLED_BACK")
+    if state is None or STATES.index(state) < STATES.index("C8"):
+        raise Refused("OUT_OF_ORDER", "the production deployment follows C8")
+    if "GD1" not in summary["granted"]:
+        raise Refused("GATE_NOT_GRANTED", "GD1")
+    after_ponr = STATES.index(state) >= STATES.index(PONR_STATE)
+    if forward_fix_ref not in (None, "NONE"):
+        grants = [g["ref"] for g in summary["grants"] if g["gate"] == FORWARD_FIX_GATE]
+        used = {d["forward_fix_ref"] for d in summary["deployments"]}
+        if not after_ponr or forward_fix_ref not in grants or forward_fix_ref in used:
+            raise Refused("FORWARD_FIX_GATE_REQUIRED", "a forward fix needs its own GF1 grant, after the PONR")
+    elif commit != _evidence_of(summary, "C0").get("commit"):
+        raise Refused("COMMIT_NOT_THE_REHEARSED_ONE", "before a forward fix only the reviewed commit is deployed")
+    if admission not in ("OPERATOR", "OPEN"):
+        raise Refused("ADMISSION_INVALID")
+    if admission == "OPEN":
+        reference = summary["any_reference"]
+        if reference is None or opening_reference != reference["hash"]:
+            raise Refused("OPEN_WITHOUT_THE_REFERENCE", "an open deployment carries the recorded opening reference")
+        if _barrier_applied(summary) is not None:
+            raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
+    elif opening_reference not in (None, "NONE"):
+        raise Refused("ADMISSION_INVALID", "an operator deployment carries no opening reference")
+
+
+def recorded_deployment(directory: Path, deployment_id: str) -> dict:
+    """The ``deployment`` entry ``deploy_audit deploy`` recorded for ``deployment_id`` (refused when none)."""
+    found = _deployment(_summary(read_ledger(directory)), deployment_id)
+    if found is None:
+        raise Refused("DEPLOYMENT_NOT_RECORDED")
+    return found
+
+
+def record_deployment(directory: Path, receipt: dict) -> dict:
+    """Record a deployment ``deploy_audit deploy`` just made and verified against the platform's record."""
+    with _locked(directory):
+        entries = read_ledger(directory)
+        summary = _summary(entries)
+        if set(receipt) != set(_DEPLOYMENT_KEYS):
+            raise Refused("DEPLOYMENT_RECEIPT_INVALID")
+        _deployment_rules(summary, commit=receipt["commit"], admission=receipt["admission"],
+                          opening_reference=receipt["opening_reference"], forward_fix_ref=receipt["forward_fix_ref"])
+        if not _deployment_id(receipt["deployment_id"]) or _deployment(summary, receipt["deployment_id"]):
+            raise Refused("DEPLOYMENT_RECEIPT_INVALID", "a deployment is recorded once")
+        if summary["deployments"] and receipt["vercel_project_sha256"] != summary["deployments"][0]["vercel_project_sha256"]:
+            raise Refused("DEPLOYMENT_PROJECT_CHANGED", "every deployment goes to the one production project")
+        if receipt["admission"] == "OPERATOR" and receipt["observed_admission"] != "CLOSED":
+            raise Refused("DEPLOYMENT_NOT_CLOSED", "an operator deployment must refuse users at its own address")
+        candidate = _candidate_code(summary)
+        if receipt["forward_fix_ref"] == "NONE" and candidate is not None and receipt["code_sha256"] != candidate:
+            raise Refused("DEPLOYMENT_CODE_CHANGED", "the same commit must run the same code")
+        for key in ("url_sha256", "vercel_project_sha256", "deploy_tree_sha256", "code_sha256", "files_sha256"):
+            if not _hex64(receipt[key]):
+                raise Refused("DEPLOYMENT_RECEIPT_INVALID", key)
+        return _append(directory, entries, {"type": "deployment", **receipt})
+
+
+def record_promotion(directory: Path, receipt: dict) -> dict:
+    """Record that the public address serves a recorded deployment (``deploy_audit promote``)."""
+    with _locked(directory):
+        entries = read_ledger(directory)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        deployment = _deployment(summary, receipt.get("deployment_id") or "")
+        if deployment is None:
+            raise Refused("DEPLOYMENT_NOT_RECORDED")
+        if receipt.get("files_sha256") != deployment["files_sha256"] or \
+                receipt.get("observed_code") != deployment["code_sha256"]:
+            raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
+        if receipt.get("alias_deployment_id") != deployment["deployment_id"] or not _hex64(receipt.get("public_host_sha256")):
+            raise Refused("ALIAS_NOT_THE_DEPLOYMENT")
+        return _append(directory, entries, {"type": "promotion", "deployment_id": deployment["deployment_id"],
+                                            "public_host_sha256": receipt["public_host_sha256"]})
+
+
+# ---------------------------------------------------------------------------
+# the opening
+# ---------------------------------------------------------------------------
 
 
 def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *, cadence_hours: int,
                    expect_head: str | None = None, observer: Observer | None = None) -> dict:
-    """The C12 reference, taken by the ledger itself while admission is still CLOSED."""
+    """The C12 reference, taken by the ledger itself while admission is still CLOSED everywhere, and the
+    opening authorization for the candidate's code, written into PROD with the reference entry."""
     from tools import pg_fingerprint
 
     observer = observer or Observer()
@@ -800,21 +1457,27 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
             # by a premature lift included): the opening uses the one reference, whatever its age.
             raise Refused("REFERENCE_ALREADY_TAKEN", "lift with the recorded reference; a new one is never taken")
         _require_the_deployment(summary, observer)
+        project = _require_provider_project(summary, observer)
         if observer.admission() != "closed":
             raise Refused("ADMISSION_NOT_CLOSED", "the reference is taken before anyone but the operator is admitted")
         if observer.scheduler_front() != "enabled":
             # The production deployment carries CRON_SECRET since GD2 (C11); an address whose front is
             # disabled is an older deployment, and probing it would prove nothing about production.
             raise Refused("SCHEDULER_FRONT_NOT_ENABLED", "probe the production deployment (CRON_SECRET set at C11)")
+        _require_closed_everywhere(summary, observer)
         identity = _production_database(summary, observer)
+        if observer.opening_rows():
+            # Only the reference writes an authorization: one already there was made before it.
+            raise Refused("OPENING_AUTHORIZATION_EXISTS", "an opening was authorized before this reference")
         entered_c11 = summary["entered"]["C11"]
-        recorded = [b for b in summary["backups"] if b["seq"] > entered_c11["seq"]
+        recorded = [b for b in _generations(summary) if b["seq"] > entered_c11["seq"]
                     and _parse(b["generation_at"]) >= _parse(entered_c11["at"])]
         if not recorded or recorded[-1]["object_set_name"] == "NONE":
             raise Refused("PRE_OPEN_BACKUP_REQUIRED", "a verified generation with objects, recorded after C11")
         generation = observer.backup(Path(root), Path(off_platform), against_database=True)
-        if generation["manifest_sha256"] != recorded[-1]["manifest_sha256"] or \
-                generation["object_set"] != recorded[-1]["object_set_name"]:
+        if (generation["manifest_sha256"], generation["dump_sha256"], generation["object_set"],
+                generation["object_set_digest"]) != (recorded[-1]["manifest_sha256"], recorded[-1]["dump_sha256"],
+                                                     recorded[-1]["object_set_name"], recorded[-1]["object_set_digest"]):
             raise Refused("BACKUP_NOT_THE_RECORDED_ONE")
         _check_generation_sources(summary, generation, identity)
         fingerprint = observer.fingerprint()
@@ -822,17 +1485,22 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
             raise Refused("BACKUP_NOT_CURRENT", "the pre-opening backup does not hold the current business state")
         document = dict(fingerprint, taken_at=_now())
         pg_fingerprint.validate(document)
-        out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")
-        return _append(directory, entries, {
+        code = _candidate_code(summary)
+        entry = _prepare(entries, {
             "type": "reference", "reference_fingerprint_sha256": fingerprint["fingerprint_sha256"],
             "database_identity_sha256": identity, "admission": "CLOSED",
             "pre_open_backup_manifest_sha256": generation["manifest_sha256"],
             "backup_cadence_hours": cadence_hours, "rpo_hours": cadence_hours,
+            "code_sha256": code, "vercel_project_sha256": project,
         })
+        out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")
+        # The authorization commits only with the entry on disk; a failed append leaves no row.
+        observer.authorize(entry["hash"], code, entry, lambda: _write(directory, entry), first=True)
+        return entry
 
 
 def open_admission(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
-    """Enter C12: the reference is fresh and admission is now observed OPEN."""
+    """Enter C12: the public address serves the recorded open deployment, authorized and observed OPEN."""
     observer = observer or Observer()
     with _locked(directory):
         entries = read_ledger(directory)
@@ -841,19 +1509,31 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
         _require_open_pending(summary, allow_reference=False)
         reference = summary["reference"]
         _require_the_deployment(summary, observer)
+        project = _require_provider_project(summary, observer)
+        serving = _deployment(summary, observer.alias_deployment())
+        if serving is None or serving["admission"] != "OPEN" or serving["opening_reference"] != reference["hash"] \
+                or serving["code_sha256"] != reference["code_sha256"]:
+            raise Refused("ALIAS_NOT_THE_AUTHORIZED_DEPLOYMENT",
+                          "the public address must serve the recorded open deployment of the candidate")
+        if observer.deployment_files_sha256(serving["deployment_id"]) != serving["files_sha256"]:
+            raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
+        if _barrier_applied(summary) is not None or not observer.writable():
+            raise Refused("BARRIER_IN_FORCE", "`resume` lifts the barrier before production is opened again")
+        if not observer.authorization_valid(reference["hash"], reference["code_sha256"], project):
+            raise Refused("OPENING_NOT_AUTHORIZED", "the PROD database holds no valid authorization for this opening")
         if observer.admission() != "open":
             raise Refused("ADMISSION_NOT_OPEN")
         if observer.opening_tag() != hosting.opening_tag(reference["hash"]):
             # The open deployment must have been lifted with THIS reference entry's hash
             # (SGAA_OPENING_REFERENCE): unknowable before the entry exists and unique to this ledger.
             raise Refused("OPENING_NOT_BOUND_TO_THE_REFERENCE")
+        if observer.code() != reference["code_sha256"]:
+            raise Refused("DEPLOYMENT_CODE_CHANGED")
         cadence_hours = int(reference["backup_cadence_hours"])
-        newest = max(_parse(b["generation_at"]) for b in summary["backups"])
-        object_sets: dict[str, datetime] = {}  # an object set dates from the first generation that carried it
-        for backup in summary["backups"]:
-            if backup["object_set_name"] != "NONE":
-                object_sets.setdefault(backup["object_set_name"], _parse(backup["generation_at"]))
-        newest_objects = max(object_sets.values())
+        generations = _generations(summary)
+        newest = max(_parse(b["generation_at"]) for b in generations)
+        object_sets = [_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE"]
+        newest_objects = max(object_sets)
         if _CLOCK() - newest > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) or \
                 _CLOCK() - newest_objects > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
             raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation first: the cadence starts at the opening")
@@ -865,13 +1545,62 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
             "backup_cadence_hours": reference["backup_cadence_hours"], "rpo_hours": reference["rpo_hours"],
             "opening_bound": True,
             "reference_age_seconds": int((_CLOCK() - _parse(reference["at"])).total_seconds()),
+            "code_sha256": reference["code_sha256"], "deployment_id": serving["deployment_id"],
+            "opening_authorized": True,
         }
         return _advance_locked(directory, entries, OPENING_STATE, evidence)
 
 
+# ---------------------------------------------------------------------------
+# closing, rolling back, resuming
+# ---------------------------------------------------------------------------
+
+
+def close(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """Revoke the opening authorization and apply the write barrier, then prove it in a fresh session."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        reference = _require_pending_opening(summary)
+        if "GO" not in summary["granted"]:
+            raise Refused("GATE_NOT_GRANTED", "GO")
+        if _barrier_applied(summary) is not None:
+            raise Refused("BARRIER_ALREADY_APPLIED")
+        identity = _production_database(summary, observer)
+        if identity != reference["database_identity_sha256"]:
+            raise Refused("DATABASE_NOT_THE_REFERENCE")
+        applied = observer.apply_barrier()
+        body = {"type": "barrier", "action": "APPLIED", "barrier_at": applied["barrier_at"],
+                "terminated_sessions": applied["terminated"], "database_identity_sha256": identity,
+                "authorization": "REVOKED"}
+        _require_barrier({**summary, "barriers": [*summary["barriers"], body]}, observer)
+        return _append(directory, entries, body)
+
+
+def resume(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """After a refused rollback: lift the barrier and restore the authorization (production goes forward)."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        reference = _require_pending_opening(summary)
+        identity = _production_database(summary, observer)
+        # The ledger's record, or the database itself (a `close` that applied the barrier and then failed
+        # its own verification wrote no entry, and its barrier must still be liftable).
+        if _barrier_applied(summary) is None and observer.writable():
+            raise Refused("BARRIER_NOT_APPLIED")
+        if not observer.lift_barrier(reference["hash"]):
+            raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write")
+        return _append(directory, entries, {"type": "barrier", "action": "LIFTED", "database_identity_sha256": identity,
+                                            "authorization": "RESTORED"})
+
+
 def _quiescent(observer: Observer) -> None:
     if observer.admission() != "closed":
-        raise Refused("ADMISSION_STILL_OPEN", "stop admitting users (SGAA_ADMISSION=operator) before the proof")
+        raise Refused("ADMISSION_STILL_OPEN", "stop admitting users before the proof")
     if observer.scheduler_front() != "disabled":
         raise Refused("SCHEDULER_STILL_ENABLED", "remove CRON_SECRET and redeploy before the proof")
     jobs = observer.external_trigger_jobs()
@@ -885,12 +1614,16 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
              reference_path: str | None = None, derived_classes: list[str] | None = None) -> dict:
     """Record the rollback.  Before the opening, a record.  From the opening, only on observed proof.
 
-    From C12 -- or C11 once a reference was taken, when users may already be admitted -- the ledger
-    itself observes quiescence (admission closed, scheduler front disabled, no external trigger), then
-    takes the current fingerprint live twice, ``QUIESCENCE_SECONDS`` apart.  The two must agree; the
-    current one must equal the reference, or differ only by the fixed derived-write classes of
-    ``pg_fingerprint``, verified row by row, which the operator must name exactly.  Anything else is a
-    business write: no rollback, record the point of no return (C13).
+    From C12 -- or C11 once a reference was taken, when users may already be admitted -- the write
+    barrier must be in force (``close``): no session of the writers' role can write, whatever address
+    or trigger reaches the database, and none started before it is left.  The ledger observes that in a
+    fresh session before each fingerprint and again before the entry is written; it also observes the
+    public address closed, the scheduler front disabled and no external trigger.  It then takes the
+    current fingerprint live twice, ``QUIESCENCE_SECONDS`` apart.  The two must agree; the current one
+    must equal the reference, or differ only by the fixed derived-write classes of ``pg_fingerprint``,
+    verified row by row, which the operator must name exactly.  Anything else is a business write: no
+    rollback, record the point of no return (C13).  The barrier stays: nothing lifts it after a
+    recorded rollback.
     """
     with _locked(directory):
         entries = read_ledger(directory)
@@ -922,11 +1655,14 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
         if reference["fingerprint_sha256"] != reference_entry["reference_fingerprint_sha256"]:
             raise Refused("REFERENCE_FILE_MISMATCH", "not the reference the ledger recorded")
         _require_the_deployment(summary, observer)
-        _quiescent(observer)
-        if observer.database_identity() != reference_entry["database_identity_sha256"]:
+        identity = _production_database(summary, observer)
+        if identity != reference_entry["database_identity_sha256"]:
             raise Refused("DATABASE_NOT_THE_REFERENCE", "the database is not the one the reference was taken from")
+        _require_barrier(summary, observer)
+        _quiescent(observer)
         first = observer.classify(reference)
         _SLEEP(QUIESCENCE_SECONDS)
+        _require_barrier(summary, observer)
         _quiescent(observer)
         verdict = observer.classify(reference)
         if first["current"]["fingerprint_sha256"] != verdict["current"]["fingerprint_sha256"]:
@@ -937,16 +1673,47 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
         if acknowledged != verdict["derived_classes"]:
             raise Refused("DERIVED_CLASSES_NOT_ACKNOWLEDGED",
                           "name exactly the derived classes the ledger observed: " + ",".join(verdict["derived_classes"]))
+        _require_barrier(summary, observer)  # nothing can have been written between the proof and the record
         return _append(directory, entries, {
             "type": "rollback", "from_state": current, "reason": reason, "quiescence": "PROVEN",
-            "current_fingerprint_sha256": verdict["current"]["fingerprint_sha256"],
+            "barrier": "VERIFIED", "current_fingerprint_sha256": verdict["current"]["fingerprint_sha256"],
             "derived_classes": verdict["derived_classes"],
         })
 
 
+def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | None = None,
+                   observer: Observer | None = None) -> dict:
+    """After the PONR: authorize a recorded forward-fix deployment's code under the opening reference."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        if summary["state"] is None or STATES.index(summary["state"]) < STATES.index(PONR_STATE):
+            raise Refused("GATE_ONLY_AFTER_PONR", "before the PONR only the candidate's code is authorized")
+        deployment = _deployment(summary, deployment_id)
+        reference = summary["opening_reference"]
+        if deployment is None or deployment["forward_fix_ref"] == "NONE" or deployment["admission"] != "OPEN" \
+                or deployment["opening_reference"] != reference["hash"]:
+            raise Refused("NOT_A_RECORDED_FORWARD_FIX")
+        if deployment["code_sha256"] in {reference["code_sha256"], *(a["code_sha256"] for a in summary["authorizations"])}:
+            raise Refused("CODE_ALREADY_AUTHORIZED")
+        identity = _production_database(summary, observer)
+        entry = _prepare(entries, {
+            "type": "authorization", "opening_reference": reference["hash"], "code_sha256": deployment["code_sha256"],
+            "database_identity_sha256": identity, "vercel_project_sha256": deployment["vercel_project_sha256"],
+            "deployment_id": deployment_id, "forward_fix_ref": deployment["forward_fix_ref"],
+        })
+        observer.authorize(reference["hash"], deployment["code_sha256"], entry, lambda: _write(directory, entry),
+                           first=False)
+        return entry
+
+
 def init(directory: Path) -> dict:
     with _locked(directory):
-        if (directory / LEDGER_FILE).exists():
+        if (Path(directory) / LEDGER_FILE).exists():
             raise Refused("LEDGER_EXISTS")
         return _append(directory, [], {"type": "init"})
 
@@ -967,6 +1734,8 @@ def status(directory: Path) -> dict:
         "granted": sorted(summary["granted"]),
         "rolled_back": summary["rolled_back"],
         "ponr_recorded": bool(state and STATES.index(state) >= STATES.index(PONR_STATE)),
+        "qualified": summary["qualification"] is not None,
+        "barrier": summary["barriers"][-1]["action"] if summary["barriers"] else "NONE",
         # The value SGAA_OPENING_REFERENCE carries (also after a refused rollback, to re-open).
         "opening_reference": _opening_reference(summary),
     }
@@ -976,7 +1745,7 @@ def _opening_reference(summary: dict):
     if summary["state"] == "C11" and summary["reference"] is not None:
         return summary["reference"]["hash"]
     if summary["state"] is not None and STATES.index(summary["state"]) >= STATES.index(OPENING_STATE):
-        return summary["opening_reference"]
+        return summary["opening_reference"]["hash"] if summary["opening_reference"] else None
     return None
 
 
@@ -995,6 +1764,15 @@ def _load_evidence(path: str) -> dict:
     return data
 
 
+def _provider(args):
+    team, project = getattr(args, "vercel_team", None), getattr(args, "vercel_project", None)
+    if not (team and project):
+        return None
+    from tools import vercel_provider
+
+    return vercel_provider.VercelCli(team_id=team, project_id=project)
+
+
 def main(argv=None, *, out=None, err=None) -> int:
     out = out or sys.stdout
     err = err or sys.stderr
@@ -1002,7 +1780,7 @@ def main(argv=None, *, out=None, err=None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
-    bound = ("grant", "advance", "rollback", "record-backup", "reference", "open")
+    bound = ("grant", "advance", "qualify", "rollback", "reference", "open", "close", "resume", "authorize-code")
     for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
@@ -1011,7 +1789,10 @@ def main(argv=None, *, out=None, err=None) -> int:
         if name in {"rollback", "reference", "open"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
-        if name in {"record-backup", "reference"}:
+        if name in {"reference", "open"}:
+            sub.add_argument("--vercel-team", default=None, help="the team id of the production project")
+            sub.add_argument("--vercel-project", default=None, help="the production project's id")
+        if name == "reference":
             sub.add_argument("--backup-root", required=True, help="the ops_backup primary directory")
             sub.add_argument("--off-platform", required=True, help="the ops_backup off-platform directory")
         if name == "grant":
@@ -1028,6 +1809,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             sub.add_argument("--reference", default=None, help="from the opening: the reference fingerprint file")
             sub.add_argument("--derived-class", action="append", default=None,
                              help="from the opening: each derived-write class the ledger observed, named exactly")
+        elif name == "authorize-code":
+            sub.add_argument("--deployment", required=True, help="the recorded forward-fix deployment id")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -1038,25 +1821,31 @@ def main(argv=None, *, out=None, err=None) -> int:
         return 1
     try:
         directory = _ledger_dir(args.ledger_dir, must_exist=args.command != "init")
-        observer = Observer(getattr(args, "base_url", None), allow_insecure=getattr(args, "allow_insecure", False))
+        observer = Observer(getattr(args, "base_url", None), allow_insecure=getattr(args, "allow_insecure", False),
+                            provider=_provider(args))
         if args.command == "init":
             result = init(directory)
         elif args.command == "grant":
             result = grant(directory, args.gate, args.ref, expect_head=args.expect_head)
         elif args.command == "advance":
             result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head)
-        elif args.command == "record-backup":
-            result = record_backup(directory, Path(args.backup_root), Path(args.off_platform),
-                                   expect_head=args.expect_head, observer=observer)
+        elif args.command == "qualify":
+            result = qualify(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "reference":
             result = take_reference(directory, Path(args.out), Path(args.backup_root), Path(args.off_platform),
                                     cadence_hours=args.backup_cadence_hours, expect_head=args.expect_head,
                                     observer=observer)
         elif args.command == "open":
             result = open_admission(directory, expect_head=args.expect_head, observer=observer)
+        elif args.command == "close":
+            result = close(directory, expect_head=args.expect_head, observer=observer)
+        elif args.command == "resume":
+            result = resume(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "rollback":
             result = rollback(directory, args.reason, expect_head=args.expect_head, observer=observer,
                               reference_path=args.reference, derived_classes=args.derived_class)
+        elif args.command == "authorize-code":
+            result = authorize_code(directory, args.deployment, expect_head=args.expect_head, observer=observer)
         elif args.command == "status":
             result = status(directory)
         else:

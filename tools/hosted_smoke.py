@@ -68,6 +68,13 @@ TIMEOUT_SECONDS = 20
 OPERATOR_HEADER = "X-SGAA-Operator-Token"
 ADMISSION_STATE_HEADER = "x-sgaa-admission"
 OPENING_HEADER = "x-sgaa-opening"
+#: The code identity every hosted response announces (``app.hosting.CODE_HEADER``).
+CODE_HEADER = "x-sgaa-code"
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+#: Keys the DATA_API check must never send: a server-side secret proves nothing about the public API
+#: and would leave the operator's machine for a check that needs only the browser-safe key.
+SECRET_KEY_PREFIX = "sb_secret_"
+PUBLISHABLE_KEY_PREFIX = "sb_publishable_"
 #: The provider address of a project; a module constant so the tests can point it at a local server.
 PROJECT_HOST_TEMPLATE = "{ref}.supabase.co"
 _PROJECT_REF = re.compile(r"[a-z0-9.]{8,40}")
@@ -198,6 +205,14 @@ def probe_opening_tag(base_url: str, *, allow_insecure: bool = False) -> str:
     return seen.get(OPENING_HEADER, "").strip().lower()
 
 
+def probe_code(base_url: str, *, allow_insecure: bool = False) -> str:
+    """The code identity a hosted deployment announces on ``/health`` (``X-SGAA-Code``; '' when none)."""
+    client = _Client(base_url, allow_insecure=allow_insecure)
+    _status, seen, _data, _cookies = client.request("GET", "/health")
+    code = seen.get(CODE_HEADER, "").strip().lower()
+    return code if _HEX64.fullmatch(code) else ""
+
+
 def probe_scheduler_front(base_url: str, *, allow_insecure: bool = False) -> str:
     """``disabled`` (404 with no bearer and with a wrong one), ``enabled`` (401) or ``unknown``."""
     client = _Client(base_url, allow_insecure=allow_insecure)
@@ -221,14 +236,19 @@ def check_data_api(data_api_url: str, publishable_key: str | None, project_ref: 
     if not publishable_key:
         # Without the key an enabled API answers 401 too: the check would prove nothing.
         return _check("DATA_API", False, "DATA_API_KEY_REQUIRED")
+    claims = _jwt_claims(publishable_key)
+    if publishable_key.startswith(SECRET_KEY_PREFIX) or (claims is not None and claims.get("role") != "anon") or \
+            (claims is None and not publishable_key.startswith(PUBLISHABLE_KEY_PREFIX)):
+        # A secret or service key (or a shape that is neither publishable nor a legacy anon key) is refused
+        # before anything is sent: the check needs exactly what a browser may hold.
+        return _check("DATA_API", False, "DATA_API_KEY_NOT_PUBLISHABLE")
     if not project_ref or not _PROJECT_REF.fullmatch(project_ref):
         return _check("DATA_API", False, "DATA_API_PROJECT_REQUIRED")
     api = _Client(data_api_url, allow_insecure=allow_insecure)
     # Bound to the intended project: its own address, and a JWT-shaped key of that project.
     if (api.host or "").lower() != PROJECT_HOST_TEMPLATE.format(ref=project_ref):
         return _check("DATA_API", False, "DATA_API_WRONG_PROJECT")
-    claims = _jwt_claims(publishable_key)
-    if claims is not None and (claims.get("ref") != project_ref or claims.get("role") != "anon"):
+    if claims is not None and claims.get("ref") != project_ref:
         return _check("DATA_API", False, "DATA_API_KEY_WRONG_PROJECT")
     report["data_api_project_sha256"] = project_digest(project_ref)
     valid, _h, body, _c = api.request(

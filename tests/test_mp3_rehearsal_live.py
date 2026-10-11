@@ -25,9 +25,9 @@ from pathlib import Path
 
 import pytest
 
+from tests import mp3_ledger_support as ls
 from tests import mp3_rehearsal_support as rs
 from tests.mp2_pg_support import PG_URL, Registry
-from tests.mp3_ledger_support import local_server_is_project
 
 pytestmark = pytest.mark.skipif(
     not (rs.enabled() and PG_URL),
@@ -83,19 +83,23 @@ def _unconverged(census, *, include_eligible: bool = False) -> list:
 
 
 def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, dev_bucket, registry):
+    from app import hosting
     from app import pg_migrate_from_sqlite as pathb
-    from app.storage import legacy_convergence, object_backup, storage_audit
+    from app.storage import legacy_convergence, storage_audit
     from tools import cutover_ledger as ledger
-    from tools import deploy_audit, pg_backup, pg_fingerprint
+    from tools import deploy_audit, ops_backup, pg_fingerprint
 
     custody = tmp_path / "custody"
-    # The PostgreSQL stand-in for PROD is the DEV project's database for the ledger (its store is DEV's).
-    local_server_is_project(monkeypatch, DEV_REF)
     source = rs.build_source(tmp_path / "workstation", SENTINEL)
     ledger_dir = tmp_path / "ledger"
     ledger.init(ledger_dir)
     for index, gate in enumerate(GATES_BEFORE_OPEN + ["GP3"]):
         ledger.grant(ledger_dir, gate, f"rehearsal-{index}")
+    dev = rs.load_dev_env()
+    # The store every governed run reads is the real DEV bucket (the stand-in for the PROD store).
+    monkeypatch.setenv("SUPABASE_URL", dev["SUPABASE_URL"])
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", dev["SUPABASE_SECRET_KEY"])
+    monkeypatch.setenv("SGAA_STORAGE_BUCKET", dev_bucket.name)
 
     head = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True,
                           check=True).stdout.strip()
@@ -104,8 +108,16 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         "rehearsal_index_sha256": "0" * 63 + "1", "review_verdict": "PASS", "prod_project_sha256": DATA_API_PROJECT,
     })
 
-    # ---- C1: the target is qualified empty ---------------------------------------------------
+    # ---- C1: the target is qualified empty, its database by the ledger itself ---------------------
     target_name, target_url = registry.create(template=registry.template)
+    platform = ls.Platform()
+
+    def observer(base=None, scheduler=None):
+        # The PostgreSQL stand-in for PROD is a loopback server: the ledger's real Observer, with only the
+        # tenant (none on a loopback server), the platform and the bucket listing scripted (ls.LocalObserver).
+        return ls.LocalObserver(base, database_url=target_url, scheduler_url=scheduler, platform=platform,
+                                project=DATA_API_PROJECT)
+
     with rs.application(database_url=target_url, store=dev_bucket.store) as target:
         from app import pg_schema
 
@@ -115,16 +127,12 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
                    if table != "schema_migrations")
         major = int(target.conn.execute("SHOW server_version_num").fetchone()[0]) // 10000
         target.conn.rollback()
-        from app import hosting
-
-        database_project = hosting.source_project_sha256(hosting.database_source(target.conn.raw_connection))
-        target.conn.rollback()
     listed = dev_bucket.store.list_objects(dev_bucket.name, "", max_objects=100)
+    qualified = ledger.qualify(ledger_dir, observer=observer())
     ledger.advance(ledger_dir, "C1", {
         "pg_major": major, "schema_current": True, "rows": rows, "objects": len(listed),
         "data_api_toggle_off": True, "data_api_override": "APPLIED", "data_api_probe": "NOT_SERVED",
         "data_api_project_sha256": DATA_API_PROJECT, "api_exposure_clean": True, "capacity_ok": True,
-        "database_project_sha256": database_project, "database_identity_proven": True,
     })
 
     # ---- C2: census of a snapshot copy -------------------------------------------------------
@@ -202,7 +210,6 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
     ledger.advance(ledger_dir, "C6", {
         "prepared_sha256": prepared_sha, "reference_digest": cross["reference_digest"], "verdict": "CLEAN",
     })
-    # The ledger's C7 identity is the prepared copy's identity at C4 (what was carried forward).
 
     # ---- C7: Path-B into the PostgreSQL stand-in ---------------------------------------------
     monkeypatch.setenv("DATABASE_URL", target_url)
@@ -212,62 +219,58 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
     ledger.advance(ledger_dir, "C7", {"prepared_sha256": prepared_sha, "pathb_exit": 0,
                                       "commit_resolved_by_inspection": False, "commit_outcome": "COMMITTED"})
 
-    # ---- C8: the target reproduces the digest; baseline, object set, restore drill -----------
+    # ---- C8: the digest reproduced; the governed baseline (real objects) and its restore drill -----
     with rs.application(database_url=target_url, store=dev_bucket.store) as target:
         target_cross = storage_audit.cross_check(target.conn, store=dev_bucket.store, deep=True, listing=True,
                                                  buckets=(dev_bucket.name,))
         target.conn.rollback()
         assert target_cross["reference_digest"] == cross["reference_digest"]
-        object_dir = custody / "objects"
-        objects = object_backup.backup(target.conn, dev_bucket.store, str(object_dir), label="rehearsal")
-        assert objects.ok
-        verified = object_backup.verify_set(str(object_dir), conn=target.conn)
-        assert verified.ok
-        target.conn.rollback()
-    monkeypatch.setenv(pg_backup.SOURCE_URL_ENV, target_url)
-    monkeypatch.delenv(pg_backup.TARGET_URL_ENV, raising=False)
-    sets = custody / "layer2"
-    sets.mkdir()
-    backup = pg_backup.backup(str(sets), "cutover-baseline")
-    manifest = next(sets.glob("*.manifest.json"))
+    ls.governed_local(ledger_dir, observer(), custody / "baseline", baseline=True)
+    baseline = [e for e in ledger.read_ledger(ledger_dir) if e["type"] == "backup"][-1]
+    assert baseline["kind"] == "BASELINE" and baseline["source_identity_sha256"] == qualified["database_identity_sha256"]
+    assert baseline["object_set_name"] != "NONE"
     scratch_name, scratch_url = registry.create()
-    pg_backup.restore(str(manifest), target_url=scratch_url)
-    loaded = pg_backup.verify_artifact(str(manifest))
-    pg_backup.verify_database(loaded.manifest, scratch_url)
+    drill_env = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
+    drill_env["SGAA_RESTORE_TARGET_URL"] = scratch_url
+    drilled = ops_backup.drill(ledger_dir, custody / "baseline", custody / "baseline-off", baseline["manifest_sha256"],
+                               environ=drill_env)
+    assert drilled["result"] == "DRILL_VERIFIED" and drilled["objects_verified"] > 0  # the real converged objects
     registry.drop(scratch_name)
     ledger.advance(ledger_dir, "C8", {
         "reference_digest": target_cross["reference_digest"], "census_equal": True,
-        "baseline_manifest_sha256": rs.sha256_file(manifest), "object_set_digest": backup.manifest["artifact"]["sha256"],
-        "restore_drill": "OK", "verify_backup": "OK", "admin_bootstrap": "NOT_NEEDED",
+        "baseline_manifest_sha256": baseline["manifest_sha256"], "object_set_digest": baseline["object_set_digest"],
+        "admin_bootstrap": "NOT_NEEDED",
     })
 
-    # ---- C9: the deployment source, re-proven, served dark and CLOSED ------------------------
+    # ---- C9: the deployment source audited for the sentinel, served dark and CLOSED, recorded --------
     from contextlib import ExitStack
 
     from tests.mp3_served_app import served_app
-    from tools import hosted_smoke, ops_backup
+    from tools import hosted_smoke
 
     export_dir = tmp_path / "upload"
     exported = deploy_audit.export(head, export_dir)
     assert deploy_audit.audit(export_dir, sentinels=[SENTINEL.encode()])["findings"] == []
     proof = deploy_audit.verify(export_dir, head)
     assert exported["files"] > 50 and proof["result"] == "IDENTICAL"
+    code = hosting.runtime_code_sha256(REPO_ROOT)  # what every served application announces
+    local_host = hosted_smoke.host_digest("http://127.0.0.1")
     stack = ExitStack()
     try:
         closed = stack.enter_context(served_app(target_url, tmp_path / "closed", SGAA_ADMISSION="operator",
                                                 SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN))
-        observer = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url)
-        assert observer.admission() == "closed"
-        ledger.advance(ledger_dir, "C9", {"commit": head, "readiness": "READY", "bundle_audit": "CLEAN",
-                                          "deploy_verify": proof["result"],
-                                          "deploy_tree_sha256": proof["deploy_tree_sha256"],
+        watch = observer(closed.url)
+        assert watch.admission() == "closed" and watch.code() == code
+        ls.record_served(ledger_dir, platform, ls.DEPLOYMENT, closed.url, code=code, commit=head)
+        ledger.advance(ledger_dir, "C9", {"commit": head, "deployment_id": ls.DEPLOYMENT, "readiness": "READY",
                                           "scheduler_front": "DISABLED", "admission": "CLOSED"})
 
         # ---- C10: the operator's smoke through the admission gate; its write set by fingerprint --
-        before_smoke = observer.fingerprint()
+        before_smoke = watch.fingerprint()
         smoke = hosted_smoke.run(closed.url, allow_insecure=True, operator_token=OPERATOR_TOKEN, admission="closed")
         assert smoke["result"] == "PASS", [(c["check"], c["code"]) for c in smoke["checks"] if not c["ok"]]
-        assert pg_fingerprint.compare(before_smoke, observer.fingerprint())["identical"] is True
+        assert pg_fingerprint.compare(before_smoke, watch.fingerprint())["identical"] is True
+        ls.promote_served(ledger_dir, platform, ls.DEPLOYMENT, code=code, host=local_host)
         ledger.advance(ledger_dir, "C10", {"smoke": "PASS", "write_set_ok": True, "admission": "CLOSED",
                                            "data_api_project_sha256": DATA_API_PROJECT,
                                            "public_host_sha256": smoke["public_host_sha256"]})
@@ -275,43 +278,34 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
                                            "reconciliation_required": 0, "scheduler_front": "ENABLED",
                                            "admission": "CLOSED"})
 
-        # ---- C11 -> C12: a real generation from the DEV bucket, the reference while CLOSED -------
-        dev = rs.load_dev_env()
-        monkeypatch.setenv("SUPABASE_URL", dev["SUPABASE_URL"])
-        monkeypatch.setenv("SUPABASE_SECRET_KEY", dev["SUPABASE_SECRET_KEY"])
-        monkeypatch.setenv("SGAA_STORAGE_BUCKET", dev_bucket.name)
-        monkeypatch.setenv("DATABASE_URL", target_url)
-        root, off = custody / "ops-primary", custody / "ops-off-platform"
-        generation = ops_backup.run_generation(root, label="pre-open", generations=2, objects=True,
-                                               off_platform=off)
-        assert generation["result"] == "GENERATION_COMPLETE"
-        ledger.record_backup(ledger_dir, root, off, observer=observer)
+        # ---- C11 -> C12: a governed generation from the DEV bucket, the reference while CLOSED ----
+        root = custody / "ops-primary"
+        generation = ls.governed_local(ledger_dir, observer(), root)
+        assert generation["result"] == "GENERATION_COMPLETE" and generation["ledger"]["recorded"]
         reference = custody / "reference.json"
         front = stack.enter_context(served_app(target_url, tmp_path / "front", SGAA_ADMISSION="operator",
                                                SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN, CRON_SECRET="c" * 40,
                                                wsgi="app.storage.scheduler:application"))
-        at_production = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url,
-                                        scheduler_url=front.url)
-        taken = ledger.take_reference(ledger_dir, reference, root, off, cadence_hours=24, observer=at_production)
-        stack.close()
+        taken = ledger.take_reference(ledger_dir, reference, root, custody / "ops-primary-off", cadence_hours=24,
+                                      observer=observer(closed.url, front.url))
         opened = stack.enter_context(served_app(target_url, tmp_path / "open", SGAA_ADMISSION="open",
                                                 SGAA_OPENING_REFERENCE=taken["hash"]))
-        ledger.open_admission(ledger_dir, observer=ledger.Observer(opened.url, allow_insecure=True,
-                                                                   database_url=target_url))
+        ls.record_served(ledger_dir, platform, ls.LIFT, opened.url, code=code, admission="OPEN",
+                         opening_reference=taken["hash"], commit=head)
+        ls.promote_served(ledger_dir, platform, ls.LIFT, code=code, host=local_host)
+        ledger.open_admission(ledger_dir, observer=observer(opened.url))
         assert ledger.status(ledger_dir)["state"] == "C12"
 
         # A non-operator business write (a request hour count changed) is detected and recorded.
         with rs.application(database_url=target_url) as target:
             target.conn.execute("UPDATE requisicoes SET horas_solicitadas = horas_solicitadas + 1 WHERE id = 1")
             target.conn.commit()
-        stack.close()
-        closed = stack.enter_context(served_app(target_url, tmp_path / "closed-again", SGAA_ADMISSION="operator",
-                                                SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN))
         scheduler = stack.enter_context(served_app(target_url, tmp_path / "scheduler", SGAA_ADMISSION="operator",
                                                    SGAA_OPERATOR_TOKEN=OPERATOR_TOKEN,
                                                    wsgi="app.storage.scheduler:application"))
-        quiet = ledger.Observer(closed.url, allow_insecure=True, database_url=target_url, scheduler_url=scheduler.url)
+        quiet = observer(closed.url, scheduler.url)
         monkeypatch.setattr(ledger, "QUIESCENCE_SECONDS", 3)
+        ledger.close(ledger_dir, observer=quiet)
         with pytest.raises(ledger.Refused) as caught:
             ledger.rollback(ledger_dir, "CHANGED_MY_MIND", observer=quiet, reference_path=str(reference))
         assert caught.value.code == "FINGERPRINT_CHANGED"
@@ -319,6 +313,7 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         delta = pg_fingerprint.compare(json.loads(reference.read_text()), quiet.fingerprint())
         assert delta["changed_tables"] == ["REQUISICOES"]
         assert delta["detail"]["REQUISICOES"]["changed_columns"] == ["horas_solicitadas"]
+        ledger.resume(ledger_dir, observer=quiet)  # production goes forward: the barrier is lifted
         ledger.advance(ledger_dir, "C13", {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",
                                            "current_fingerprint_sha256": now_sha, "adjudicated_by_operator": True})
         with pytest.raises(ledger.Refused) as caught:
@@ -326,15 +321,15 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         assert caught.value.code == "PONR_RECORDED"
         # The window closes only after UD4's 30 days with the backup cadence held (pinned by the unit tests).
         with pytest.raises(ledger.Refused) as caught:
-            ledger.advance(ledger_dir, "C14", {"restore_validated_manifest_sha256": "0" * 64, "restore_drill": "OK",
-                                               "unresolved_reconciliation": 0, "object_set_verified": True})
+            ledger.advance(ledger_dir, "C14", {"restore_validated_manifest_sha256": "0" * 64,
+                                               "unresolved_reconciliation": 0})
         assert caught.value.code == "WINDOW_NOT_ELAPSED"
     finally:
         stack.close()
 
     # ---- leak audit: the sentinel is in document bytes only, never in any record -------------
-    records = [ledger_dir / ledger.LEDGER_FILE, reference, *sets.glob("*.manifest.json"), object_dir / "MANIFEST.json",
-               *root.rglob("*.manifest.json"), *root.rglob("MANIFEST.json"), *root.rglob("*.json")]
+    records = [ledger_dir / ledger.LEDGER_FILE, reference, *custody.rglob("*.manifest.json"),
+               *custody.rglob("MANIFEST.json"), *custody.rglob("*.json")]
     for artifact in records:
         assert SENTINEL.encode() not in Path(artifact).read_bytes(), artifact.name
     assert ledger.status(ledger_dir)["state"] == "C13"
@@ -472,18 +467,8 @@ def test_different_bytes_already_at_a_key_make_the_row_a_conflict_the_ledger_wil
     ledger.init(ledger_dir)
     for index, gate in enumerate(GATES_BEFORE_OPEN):
         ledger.grant(ledger_dir, gate, f"rehearsal-{index}")
-    head = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True,
-                          check=True).stdout.strip()
     h = lambda ch: ch * 64  # noqa: E731
-    ledger.advance(ledger_dir, "C0", {"commit": head, "runbook_sha256": h("a"), "rehearsal_index_sha256": h("b"),
-                                      "review_verdict": "PASS", "prod_project_sha256": DATA_API_PROJECT})
-    ledger.advance(ledger_dir, "C1", {"pg_major": 17, "schema_current": True, "rows": 0, "objects": 0,
-                                      "data_api_toggle_off": True, "data_api_override": "APPLIED",
-                                      "data_api_probe": "NOT_SERVED", "data_api_project_sha256": DATA_API_PROJECT,
-                                      "api_exposure_clean": True, "capacity_ok": True,
-                                      "database_project_sha256": DATA_API_PROJECT, "database_identity_proven": True})
-    ledger.advance(ledger_dir, "C2", {"database_bytes": 1, "document_bytes": 1, "census": {"ROWS": 1}})
-    ledger.advance(ledger_dir, "C3", {"source_size": 1, "source_sha256": h("c"), "wal_bytes": 0})
+    ls.drive(ledger_dir, "C3", ls.FakeObserver())  # the ledger's own earlier states (pinned elsewhere)
     ledger.advance(ledger_dir, "C4", {"source_sha256": h("c"), "prepared_sha256": h("d"), "integrity_ok": True,
                                       "fk_violations": 0, "schema_version": 16, "accepted_exceptions": accepted,
                                       "accepted_by_user": True})

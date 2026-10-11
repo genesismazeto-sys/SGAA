@@ -10,6 +10,7 @@ registered (never a hand-made set, a foreign file or the cutover baseline).
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 from datetime import datetime, timedelta, timezone
@@ -25,13 +26,16 @@ DUMP_SUFFIXES = (".dump", ".dump.sha256", ".manifest.json")
 class _Children:
     """Scripted ``pg_backup`` / object-backup children that create the files the real ones do."""
 
-    def __init__(self, fail_at: str | None = None) -> None:
+    def __init__(self, fail_at: str | None = None, created_at: str | None = None) -> None:
+        self.created_at = created_at
         self.calls: list[list[str]] = []
+        self.envs: list[dict | None] = []
         self.fail_at = fail_at
         self.counter = 0
 
-    def __call__(self, command: list[str]) -> int:
+    def __call__(self, command: list[str], env: dict | None = None) -> int:
         self.calls.append(command)
+        self.envs.append(env)
         text = " ".join(command)
         if "pg_backup.py" in text and " backup " in f" {text} ":
             if self.fail_at == "DATABASE_BACKUP":
@@ -43,10 +47,13 @@ class _Children:
             directory.mkdir(parents=True, exist_ok=True)
             for suffix in DUMP_SUFFIXES:
                 (directory / (base + suffix)).write_bytes(f"{base}{suffix}".encode())
-            # The real manifest carries its creation time (the ledger measures the cadence by it).
+            # The real manifest carries its creation time (the ledger measures the cadence by it) and the
+            # digest of the dump it describes.
+            dump = (directory / (base + ".dump")).read_bytes()
             (directory / (base + ".manifest.json")).write_text(
-                json.dumps({"set": base, "created_at": f"2026-10-10T00:00:{self.counter:02d}Z",
-                            "source": {"database": "postgres", "system_identifier": "1"}}), encoding="utf-8")
+                json.dumps({"set": base, "created_at": self.created_at or f"2026-10-10T00:00:{self.counter:02d}Z",
+                            "source": {"database": "postgres", "system_identifier": "1"},
+                            "artifact": {"sha256": hashlib.sha256(dump).hexdigest()}}), encoding="utf-8")
             return 0
         if "pg_backup.py" in text and " verify " in f" {text} ":
             return 3 if self.fail_at == "DATABASE_VERIFY" else 0
@@ -423,34 +430,167 @@ def test_no_generation_yet_is_refused(dirs):
     assert caught.value.code == "NO_GENERATION"
 
 
-def test_with_a_ledger_the_generation_is_recorded_after_it_completes_retrying_a_busy_ledger(tmp_path, monkeypatch):
+# ---- the governed run: provenance established while the generation is taken (A17 finding 4) -----------------
+
+
+class _Seen:
+    """What a verified connection proves, scripted: one identity per observation."""
+
+    def __init__(self, identities, project="p" * 64):
+        self.identities = list(identities)
+        self.project = project
+        self.observations = 0
+
+    def source(self):
+        from tools import prod_source
+
+        identity = self.identities[min(self.observations, len(self.identities) - 1)]
+        self.observations += 1
+        return prod_source.VerifiedSource(identity=identity, project_sha256="q" * 64, source={})
+
+    def store_project_sha256(self):
+        return self.project
+
+
+class _Source:
+    url = "postgresql://postgres.abcdefghijklmnopqrst@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+    child_url = url + "?sslmode=verify-full&sslrootcert=pinned"
+
+    def connect(self):  # pragma: no cover - the scripted observer never connects
+        raise AssertionError("no connection in the unit lane")
+
+
+@pytest.fixture
+def governed(tmp_path, monkeypatch):
+    """A ledger that expects identity I and project P; the observer and the record scripted."""
     from tools import cutover_ledger
 
-    seen = []
+    state = {"seen": _Seen(["i" * 64]), "receipts": [], "refuse": [], "expected": {
+        "database_identity_sha256": "i" * 64, "prod_project_sha256": "p" * 64}}
+    monkeypatch.setattr(cutover_ledger, "backup_preconditions", lambda directory, kind: dict(state["expected"]))
+    monkeypatch.setattr(cutover_ledger, "Observer", lambda **kwargs: state["seen"])
 
-    def record(ledger_dir, root, off_platform):
-        seen.append((ledger_dir, root, off_platform))
-        if len(seen) == 1:
-            raise cutover_ledger.Refused("LEDGER_BUSY")
-        return {"hash": "h" * 64}
+    def record(directory, receipt, root, off_platform, observer=None):
+        if state["refuse"]:
+            raise cutover_ledger.Refused(state["refuse"].pop(0))
+        state["receipts"].append(receipt)
+        return {"hash": "h" * 64, "manifest_sha256": receipt["manifest_sha256"],
+                "object_set_digest": receipt["object_set_digest"] or "NONE"}
 
-    monkeypatch.setattr(cutover_ledger, "record_backup", record)
+    monkeypatch.setattr(cutover_ledger, "record_generation", record)
     monkeypatch.setattr(ob.time, "sleep", lambda seconds: None)
-    out = io.StringIO()
-    code = ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o"),
-                    "--ledger-dir", str(tmp_path / "ledger")], out=out, err=io.StringIO(), runner=_Children())
-    assert code == 0 and len(seen) == 2
-    assert json.loads(out.getvalue())["ledger"] == {"recorded": True, "head": "h" * 64}
+    from app.storage import object_backup
+    from tools import pg_backup
+
+    monkeypatch.setattr(pg_backup, "verify_artifact", lambda path, **kwargs: None)
+    monkeypatch.setattr(object_backup, "verify_set", lambda path, conn=None: _Report())
+    return state
 
 
-def test_a_ledger_that_refuses_the_record_fails_the_run_by_code(tmp_path, monkeypatch):
+def _governed(tmp_path, children, **kwargs):
+    options = dict(objects=True, runner=children, source=_Source(), clock=_clock, environ={})
+    options.update(kwargs)
+    return ob.run_governed(tmp_path / "ledger", tmp_path / "p", tmp_path / "o", **options)
+
+
+def test_the_governed_run_hands_the_ledger_the_receipt_of_what_it_just_took_from_the_verified_source(
+        tmp_path, governed):
+    children = _Children(created_at="2026-10-10T00:00:01Z")
+    result = _governed(tmp_path, children)
+    assert result["ledger"]["recorded"] is True and result["ledger"]["kind"] == "GENERATION"
+    assert result["ledger"]["head"] == "h" * 64
+    # Every child connected through the verified address, never the operator's raw one.
+    assert children.envs and all(env["DATABASE_URL"] == _Source.child_url for env in children.envs)
+    [receipt] = governed["receipts"]
+    manifest = next((tmp_path / "p" / "layer2").glob("*.manifest.json"))
+    assert receipt["manifest_sha256"] == ob._sha256(manifest)
+    assert receipt["dump_sha256"] == json.loads(manifest.read_text())["artifact"]["sha256"]
+    assert receipt["object_set"] == result["object_set"] and receipt["kind"] == "GENERATION"
+    assert receipt["source_identity_sha256"] == receipt["source_identity_after_sha256"] == "i" * 64
+    assert receipt["store_project_sha256"] == "p" * 64 and governed["seen"].observations == 2
+    assert receipt["generation_at"] == "2026-10-10T00:00:01Z"  # the snapshot's own time, judged by the ledger
+
+
+@pytest.mark.parametrize("setup,code", [
+    (lambda s: s.__setitem__("seen", _Seen(["x" * 64])), "SOURCE_NOT_THE_QUALIFIED_DATABASE"),
+    (lambda s: s.__setitem__("seen", _Seen(["i" * 64], project="o" * 64)), "STORE_NOT_THE_PROD_PROJECT"),
+])
+def test_the_governed_run_refuses_before_any_step_when_the_source_is_not_production(tmp_path, governed, setup, code):
+    setup(governed)
+    children = _Children()
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path, children)
+    assert caught.value.code == code and children.calls == [] and governed["receipts"] == []
+
+
+@pytest.mark.parametrize("name", ["PGHOSTADDR", "PGHOST", "PGSERVICE", "PGSERVICEFILE", "PGPORT", "PGSSLMODE"])
+def test_the_governed_run_refuses_any_hidden_routing_input_before_any_step(tmp_path, governed, name):
+    children = _Children()
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path, children, environ={name: "x"})
+    assert caught.value.code == "SOURCE_ENV_ROUTING" and children.calls == []
+
+
+def test_a_source_that_changed_during_the_run_is_reported_to_the_ledger_as_observed(tmp_path, governed):
+    governed["seen"] = _Seen(["i" * 64, "z" * 64])
+    _governed(tmp_path, _Children())
+    [receipt] = governed["receipts"]
+    assert receipt["source_identity_after_sha256"] == "z" * 64  # the ledger refuses it (test_mp3_cutover_ledger)
+
+
+def test_the_receipt_names_only_the_generation_this_run_created(tmp_path, governed, monkeypatch):
+    real = ob.verify_generation
+    monkeypatch.setattr(ob, "verify_generation", lambda root, off, conn=None: dict(real(root, off),
+                                                                                    database_set="sgaa-pg-planted"))
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path, _Children())
+    assert caught.value.code == "GENERATION_NOT_THIS_RUNS" and governed["receipts"] == []
+
+
+def test_a_busy_ledger_is_retried_and_a_refusal_fails_the_run_by_code(tmp_path, governed):
+    governed["refuse"] = ["LEDGER_BUSY"]
+    assert _governed(tmp_path, _Children())["ledger"]["recorded"] is True
+    governed["refuse"] = ["OUT_OF_ORDER"]
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path / "second", _Children())
+    assert caught.value.code == "LEDGER_OUT_OF_ORDER"
+
+
+def test_the_baseline_takes_its_own_directories_once_with_objects_and_is_never_rotated(tmp_path, governed):
+    children = _Children()
+    result = _governed(tmp_path, children, baseline=True)
+    assert result["ledger"]["kind"] == "BASELINE" and "cutover-baseline" in result["database_set"]
+    assert result["rotation"]["primary"]["deleted"] == 0
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path, children, baseline=True)
+    assert caught.value.code == "BASELINE_ROOT_NOT_EMPTY"
+    with pytest.raises(ob.Refused) as caught:  # a scheduled generation never shares the baseline's root
+        _governed(tmp_path, children)
+    assert caught.value.code == "BASELINE_ROOT"
+    with pytest.raises(ob.Refused) as caught:
+        _governed(tmp_path / "other", children, baseline=True, objects=False)
+    assert caught.value.code == "BASELINE_NEEDS_OBJECTS"
+
+
+def test_the_command_line_takes_the_baseline_only_through_the_ledger_and_drills_as_its_own_command(tmp_path):
+    err = io.StringIO()
+    assert ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o"), "--baseline"],
+                   out=io.StringIO(), err=err, runner=_Children()) == 1
+    assert "BASELINE_NEEDS_THE_LEDGER" in err.getvalue()
+    assert ob.main(["drill", "--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o")],
+                   out=io.StringIO(), err=io.StringIO()) == 2  # the ledger and the generation are required
+
+
+def test_the_drill_runs_in_its_own_terminal_and_only_for_a_recorded_generation(tmp_path, monkeypatch):
     from tools import cutover_ledger
 
-    def record(ledger_dir, root, off_platform):
-        raise cutover_ledger.Refused("OUT_OF_ORDER")
-
-    monkeypatch.setattr(cutover_ledger, "record_backup", record)
-    err = io.StringIO()
-    code = ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o"),
-                    "--ledger-dir", str(tmp_path / "ledger")], out=io.StringIO(), err=err, runner=_Children())
-    assert code == 1 and "LEDGER_OUT_OF_ORDER" in err.getvalue()
+    ledger_dir = tmp_path / "ledger"
+    cutover_ledger.init(ledger_dir)
+    for name, value, code in (("DATABASE_URL", "postgresql://x@h/db", "DRILL_SOURCE_URL_SET"),
+                              ("PGHOSTADDR", "127.0.0.1", "SOURCE_ENV_ROUTING")):
+        with pytest.raises(ob.Refused) as caught:
+            ob.drill(ledger_dir, tmp_path / "p", tmp_path / "o", "a" * 64, environ={name: value})
+        assert caught.value.code == code
+    with pytest.raises(ob.Refused) as caught:
+        ob.drill(ledger_dir, tmp_path / "p", tmp_path / "o", "a" * 64, environ={})
+    assert caught.value.code == "GENERATION_NOT_RECORDED"

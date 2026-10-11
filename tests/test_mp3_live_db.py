@@ -66,6 +66,8 @@ RECIPE = (
     "REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated, service_role",
 )
 STATE: dict = {"timings": {}}
+# Before the opening the deployment admits only the operator: the DR smokes run as C10 does (MP-3 A15/A17).
+OPERATOR_TOKEN = "live-operator-" + "L7" * 16
 
 
 def _write_report() -> None:
@@ -163,7 +165,7 @@ class _Served:
             "TEMP": str(tmp_path), "TMP": str(tmp_path), "TMPDIR": str(tmp_path),
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
             "DATABASE_URL": database_url, "SGAA_RUNTIME": "hosted", "APP_ENV": "production", "TRUST_PROXY_XFF": "1",
-            "SGAA_ADMISSION": "open", "SGAA_OPENING_REFERENCE": "5" * 64,
+            "SGAA_ADMISSION": "operator", "SGAA_OPERATOR_TOKEN": OPERATOR_TOKEN,
             "APP_SECRET_KEY": "p" + "3" * 47, "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
             "APP_PUBLIC_BASE_URL": "https://sgaa.example.test", "SUPABASE_URL": "https://example.supabase.co",
             "SUPABASE_SECRET_KEY": "not-a-real-key-" + "x" * 20, "SGAA_STORAGE_BUCKET": "sgaa-rehearsal-none",
@@ -192,7 +194,8 @@ class _Served:
 def _smoke(url) -> dict:
     from tools import hosted_smoke
 
-    report = hosted_smoke.run(url, allow_insecure=True, email=ADMIN_EMAIL, password=ADMIN_PASSWORD)
+    report = hosted_smoke.run(url, allow_insecure=True, email=ADMIN_EMAIL, password=ADMIN_PASSWORD,
+                              operator_token=OPERATOR_TOKEN, admission="closed")
     failed = [(c["check"], c["code"]) for c in report["checks"] if not c["ok"]]
     assert report["result"] == "PASS", failed
     return report
@@ -493,93 +496,208 @@ def test_dr1_a_set_taken_from_dev_restores_into_local_postgres_and_the_applicati
         local_registry.drop(name)
 
 
-# ---- A16: every generation the cutover counts is the PROD project's (two real projects, two databases) ----
+# ---- A17: the verified source, the qualification, the barrier and the governed provenance on DEV ------------
 
 # The PROD project of record: only its name's digest is used, to bind a ledger; it is never connected to.
 PROD_REF_OF_RECORD = "uckadhcwfknklmdktuyi"
 
 
-def _ledger_at_c11(directory, project_ref):
+def _dev_env():
+    from tests import mp3_rehearsal_support as rs
+
+    if not rs.env_file().is_file():
+        pytest.skip("the DEV Storage credential file is needed for the storage API channel")
+    return rs.load_dev_env()
+
+
+def test_the_verified_source_reaches_dev_only_through_tls_verified_against_the_pinned_ca(tmp_path, monkeypatch):
+    """Finding 3 live: verify-full against the pinned root; a redirect or another root fails before any query."""
+    from app import hosting
+    from tools import prod_source
+
+    conn = prod_source.connect(SESSION_URL)
+    try:
+        seen = prod_source.observe(conn)
+        settings = conn.info.get_parameters()
+        assert conn.pgconn.ssl_in_use and settings["sslmode"] == "verify-full"
+    finally:
+        conn.close()
+    tenant = psycopg.conninfo.conninfo_to_dict(SESSION_URL)["user"].split(".", 1)[1]
+    assert seen.project_sha256 == hosting.project_sha256(tenant)
+    # The application's own path (the transaction pooler) reads the same identity the ledger records.
+    with _raw(TRANSACTION_URL) as app_conn:
+        assert hosting.source_identity_sha256(hosting.database_source(app_conn)) == seen.identity
+    base = prod_source.verified_url(SESSION_URL).split("?", 1)[0]
+    # Another root (the operating system's store) does not verify the provider's certificate ...
+    with pytest.raises(psycopg.OperationalError):
+        psycopg.connect(base + "?sslmode=verify-full&sslrootcert=system", connect_timeout=20).close()
+    # ... and a redirect of the pooler's name to another server (here the local test server, as a hosts
+    # entry or a hostaddr would do) fails the verification before any query.
+    local = psycopg.conninfo.conninfo_to_dict(PG_URL)
+    redirected = prod_source.verified_url(SESSION_URL) + f"&hostaddr=127.0.0.1&port={local.get('port', '5432')}"
+    with pytest.raises(psycopg.OperationalError):
+        psycopg.connect(redirected, connect_timeout=20).close()
+    for name, value in (("PGHOSTADDR", "127.0.0.1"), ("PGHOST", "localhost"), ("PGSERVICE", "prod"),
+                        ("PGSSLMODE", "disable"), ("PGSSLROOTCERT", "system")):
+        monkeypatch.setenv(name, value)
+        with pytest.raises(prod_source.Refused) as caught:
+            prod_source.connect(SESSION_URL)
+        assert caught.value.code == "SOURCE_ENV_ROUTING"
+        monkeypatch.delenv(name)
+    with pytest.raises(prod_source.Refused) as caught:
+        prod_source.connect(TRANSACTION_URL)
+    assert caught.value.code == "SOURCE_NOT_THE_SESSION_POOLER"
+
+
+def _dev_observer():
+    from tools import cutover_ledger as ledger
+
+    return ledger.Observer(database_url=SESSION_URL)
+
+
+def _ledger_bound_to(directory, project_ref):
+    from app import hosting
     from tests.mp3_ledger_support import ALL_GATES, GOOD
     from tools import cutover_ledger as ledger
-    from app import hosting
 
-    digest = hosting.project_sha256(project_ref)
     ledger.init(directory)
     for index, gate in enumerate(ALL_GATES):
         ledger.grant(directory, gate, f"user-msg-{index}")
-    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
-        evidence = dict(GOOD[state])
-        for key in ("prod_project_sha256", "data_api_project_sha256", "database_project_sha256"):
-            if key in evidence:
-                evidence[key] = digest
-        ledger.advance(directory, state, evidence)
+    ledger.advance(directory, "C0", dict(GOOD["C0"], prod_project_sha256=hosting.project_sha256(project_ref)))
     return directory
 
 
-def _ops_generation(monkeypatch, root, database_url, store_ref, *, objects):
+def test_the_ledger_qualifies_dev_by_its_authenticated_tenant_and_its_own_storage_api(tmp_path, monkeypatch):
+    from tests import mp3_rehearsal_support as rs
+    from tools import cutover_ledger as ledger
+
+    dev = _dev_env()
+    tenant = psycopg.conninfo.conninfo_to_dict(SESSION_URL)["user"].split(".", 1)[1]
+    monkeypatch.setenv("SUPABASE_URL", dev["SUPABASE_URL"])
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", dev["SUPABASE_SECRET_KEY"])
+    bucket = rs.RunBucket(dev)
+    bucket.create()
+    try:
+        monkeypatch.setenv("SGAA_STORAGE_BUCKET", bucket.name)
+        bound_to_prod = _ledger_bound_to(tmp_path / "prod", PROD_REF_OF_RECORD)
+        with pytest.raises(ledger.Refused) as caught:  # DEV through a verified connection is still not PROD
+            ledger.qualify(bound_to_prod, observer=_dev_observer())
+        assert caught.value.code == "DATABASE_NOT_THE_PROD_PROJECT"
+        bound_to_dev = _ledger_bound_to(tmp_path / "dev", tenant)
+        entry = ledger.qualify(bound_to_dev, observer=_dev_observer())
+        assert entry["tls"] == "VERIFIED" and entry["buckets_compared"] >= 1
+        STATE["dev_identity"] = entry["database_identity_sha256"]
+    finally:
+        bucket.purge_and_delete()
+
+
+def _barrier_probe(url, value):
+    with _raw(url) as conn:
+        conn.execute("INSERT INTO public.sgaa_mp3_barrier_probe(x) VALUES (%s)", (value,))
+
+
+def test_the_write_barrier_on_dev_ends_older_sessions_and_refuses_every_new_write_until_lifted():
+    """Finding 2 live: the provider's poolers, the application's path included, cannot write under the barrier."""
+    observer = _dev_observer()
+    with _raw(SESSION_URL) as conn:
+        conn.execute("CREATE TABLE public.sgaa_mp3_barrier_probe (x integer)")
+    held = _raw(SESSION_URL)  # a session opened before the barrier, held like a long request
+    applied = None
+    try:
+        _barrier_probe(TRANSACTION_URL, 1)  # the application's path writes before the barrier
+        with _timed("barrier_apply_seconds"):
+            applied = observer.apply_barrier()
+        assert applied["terminated"] >= 1
+        state = observer.barrier_state(applied["barrier_at"])
+        assert state == {"setting": True, "fresh_read_only": True, "write_refused": True, "older_sessions": 0,
+                         "authorizations_in_force": 0}, state
+        with pytest.raises(psycopg.OperationalError):
+            held.execute("SELECT 1")  # ended: a session from before the barrier never writes after it
+        for url in (TRANSACTION_URL, SESSION_URL):
+            with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+                _barrier_probe(url, 2)
+        with _timed("barrier_lift_seconds"):
+            assert observer.lift_barrier("0" * 64) is True
+        applied = None
+        _barrier_probe(TRANSACTION_URL, 3)  # writable again once lifted
+        with _raw(SESSION_URL) as conn:
+            assert [row[0] for row in conn.execute("SELECT x FROM public.sgaa_mp3_barrier_probe ORDER BY x")] == [1, 3]
+            assert conn.execute("SELECT count(*) FROM pg_db_role_setting WHERE setrole = (SELECT oid FROM pg_roles"
+                                " WHERE rolname = current_user) AND 'default_transaction_read_only=on'"
+                                " = ANY (setconfig)").fetchone()[0] == 0
+    finally:
+        if applied is not None:
+            observer.lift_barrier("0" * 64)
+        try:
+            held.close()
+        except Exception:
+            pass
+        with _raw(SESSION_URL) as conn:
+            conn.execute("DROP TABLE IF EXISTS public.sgaa_mp3_barrier_probe")
+
+
+def test_a_governed_generation_on_dev_is_recorded_with_the_provenance_of_its_own_run(
+        tmp_path, local_registry, monkeypatch):
+    """Findings 3, 4 and 6 live: the baseline and a generation taken from DEV through the verified source,
+    the baseline restored into local scratch by the drill, each recorded only as its run's receipt."""
+    from app import hosting
+    from tests import mp3_ledger_support as ls
+    from tests import mp3_rehearsal_support as rs
+    from tests.mp3_ledger_support import DEPLOYMENT, GOOD
+    from tools import cutover_ledger as ledger
     from tools import ops_backup
 
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    monkeypatch.setenv("SUPABASE_URL", f"https://{store_ref}.supabase.co")
-    monkeypatch.setenv("SUPABASE_SECRET_KEY", "not-a-real-key-" + "x" * 20)  # no row: no object is read
-    monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
-    result = ops_backup.run_generation(root, label="source", generations=2, objects=objects,
-                                       off_platform=root.parent / (root.name + "-off"))
-    assert result["result"] == "GENERATION_COMPLETE"
-
-
-def test_the_ledger_counts_only_generations_of_the_project_and_database_it_was_bound_to(
-        tmp_path, local_registry, monkeypatch):
-    """Real DEV through the session pooler and a real local server: the source is read, never typed."""
-    from app import hosting, pg_schema
-    from tools import cutover_ledger as ledger
-    from tools import pg_backup
-
-    conn = pg_backup.connect(SESSION_URL)
+    dev = _dev_env()
+    tenant = psycopg.conninfo.conninfo_to_dict(SESSION_URL)["user"].split(".", 1)[1]
+    project = hosting.project_sha256(tenant)
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY"):
+        monkeypatch.setenv(name, dev[name])
+    monkeypatch.setenv("DATABASE_URL", SESSION_URL)
+    bucket = rs.RunBucket(dev)
+    bucket.create()
+    scratch_name, scratch_url = local_registry.create()
     try:
-        dev = hosting.database_source(conn)
+        monkeypatch.setenv("SGAA_STORAGE_BUCKET", bucket.name)
+        directory = _ledger_bound_to(tmp_path / "ledger", tenant)
+        qualified = ledger.qualify(directory, observer=_dev_observer())
+        ledger.advance(directory, "C1", dict(GOOD["C1"], data_api_project_sha256=project))
+        for state in ledger.STATES[2:8]:
+            ledger.advance(directory, state, GOOD[state])
+        root = tmp_path / "baseline"
+        with _timed("governed_baseline_seconds"):
+            ops_backup.run_governed(directory, root, tmp_path / "baseline-off", objects=True, baseline=True)
+        baseline = [e for e in ledger.read_ledger(directory) if e["type"] == "backup"][-1]
+        assert baseline["kind"] == "BASELINE" and baseline["provenance"] == "LIVE_RUN"
+        assert baseline["source_identity_sha256"] == qualified["database_identity_sha256"]
+        drill_env = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
+        drill_env["SGAA_RESTORE_TARGET_URL"] = scratch_url
+        with _timed("governed_drill_seconds"):
+            drilled = ops_backup.drill(directory, root, tmp_path / "baseline-off", baseline["manifest_sha256"],
+                                       environ=drill_env)
+        assert drilled["result"] == "DRILL_VERIFIED"
+        ledger.advance(directory, "C8", dict(GOOD["C8"], baseline_manifest_sha256=baseline["manifest_sha256"],
+                                             object_set_digest=baseline["object_set_digest"]))
+        platform = ls.Platform()  # no deployment is made in this lane: the states are recorded as receipts
+        ls.record_served(directory, platform, DEPLOYMENT, "https://dark.example.test", code=ls.CODE)
+        ledger.advance(directory, "C9", GOOD["C9"])
+        ls.promote_served(directory, platform, DEPLOYMENT, code=ls.CODE, host=ls.PUBLIC_HOST)
+        ledger.advance(directory, "C10", dict(GOOD["C10"], data_api_project_sha256=project))
+        ledger.advance(directory, "C11", GOOD["C11"])
+        # A governed generation whose DATABASE_URL is not the verified session address is refused before any step.
+        monkeypatch.setenv("DATABASE_URL", TRANSACTION_URL)
+        with pytest.raises(ops_backup.Refused) as caught:
+            ops_backup.run_governed(directory, tmp_path / "wrong", tmp_path / "wrong-off", objects=True)
+        assert caught.value.code == "SOURCE_NOT_THE_SESSION_POOLER" and not (tmp_path / "wrong").exists()
+        monkeypatch.setenv("DATABASE_URL", SESSION_URL)
+        with _timed("governed_generation_seconds"):
+            ops_backup.run_governed(directory, tmp_path / "primary", tmp_path / "primary-off", objects=True)
+        generation = [e for e in ledger.read_ledger(directory) if e["type"] == "backup"][-1]
+        assert generation["kind"] == "GENERATION" and generation["provenance"] == "LIVE_RUN"
+        assert generation["source_identity_sha256"] == baseline["source_identity_sha256"]
+        assert generation["store_project_sha256"] == project
     finally:
-        conn.close()
-    dev_ref = hosting.supabase_project_ref(dev["host"], dev["login_user"])
-    assert dev_ref and dev["system_identifier"], "the session pooler proves the tenant and the cluster"
-    observer = ledger.Observer(database_url=SESSION_URL)
-
-    def refused(directory, root):
-        before = (directory / ledger.LEDGER_FILE).read_text()
-        with pytest.raises(ledger.Refused) as caught:
-            ledger.record_backup(directory, root, root.parent / (root.name + "-off"), observer=observer)
-        assert (directory / ledger.LEDGER_FILE).read_text() == before
-        return caught.value.code
-
-    # A whole, consistent DEV generation -- database, Layer-2 set and object set all DEV's.
-    _ops_generation(monkeypatch, tmp_path / "dev", SESSION_URL, dev_ref, objects=True)
-    # Bound to the PROD project, the ledger refuses it: a consistent wrong project does not pass.
-    bound_to_prod = _ledger_at_c11(tmp_path / "ledger-prod", PROD_REF_OF_RECORD)
-    assert refused(bound_to_prod, tmp_path / "dev") == "DATABASE_NOT_THE_PROD_PROJECT"
-    # Bound to DEV (the control), the same generation is recorded with DEV's identity.
-    bound_to_dev = _ledger_at_c11(tmp_path / "ledger-dev", dev_ref)
-    entry = ledger.record_backup(bound_to_dev, tmp_path / "dev", tmp_path / "dev-off", observer=observer)
-    assert entry["source_identity_sha256"] == hosting.source_identity_sha256(dev)
-
-    # A generation of another database (a local server, v16) is refused while DATABASE_URL is DEV's ...
-    name, url = local_registry.create()
-    try:
-        raw = _raw(url, autocommit=False)
-        try:
-            pg_schema.provision_pg_schema(raw)
-            raw.commit()
-        finally:
-            raw.close()
-        _ops_generation(monkeypatch, tmp_path / "local", url, dev_ref, objects=True)
-        assert refused(bound_to_dev, tmp_path / "local") == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
-        # ... and so is DEV's Layer-2 set paired with the local server's object set.
-        _ops_generation(monkeypatch, tmp_path / "mixed", url, dev_ref, objects=True)
-        _ops_generation(monkeypatch, tmp_path / "mixed", SESSION_URL, dev_ref, objects=False)
-        assert refused(bound_to_dev, tmp_path / "mixed") == "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
-    finally:
-        local_registry.drop(name)
-    assert [e["type"] for e in ledger.read_ledger(bound_to_dev)].count("backup") == 1
+        local_registry.drop(scratch_name)
+        bucket.purge_and_delete()
 
 
 # ---- DR3: a foreign set into the managed target, served through the transaction pooler ---------

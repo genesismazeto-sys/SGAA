@@ -1,38 +1,48 @@
 # coding: utf-8
-"""MP-3 R3 remediation, findings 1, 2 and 4, end to end on the REAL application (opt-in, ``SGAA_PG_TEST_URL``).
+"""MP-3 R3 remediations (A15, A17), end to end on the REAL application (opt-in, ``SGAA_PG_TEST_URL``).
 
 The cutover's opening and its rollback run through the real ledger commands, observing a real
 ``main:app`` (hosted production mode, served by a fresh interpreter) and a real scheduler front,
 over a disposable PostgreSQL database holding an administrator with a known password and an
-overdue returned request (the dashboard's derived-write trap):
+overdue returned request (the dashboard's derived-write trap).  The loopback server stands for the
+PROD project's database (``tests.mp3_ledger_support.LocalObserver``: its storage API and the
+platform's deployment list are scripted; the database, the barrier, the authorization and every
+address are real):
 
-* C11 -> C12: a real ``ops_backup`` generation (Layer-2 + object set + off-platform copy) is recorded
-  by the ledger; the reference is taken while admission is observed CLOSED and the backup is proven
-  current against the live database; the deployment is restarted OPEN and ``open`` observes it.
+* C1 is qualified by the ledger itself; C8's baseline is taken by the governed backup and restore-drilled
+  into a fresh scratch database by the drill; C9 and C10 name served applications recorded as deployments.
+* C11 -> C12: a governed generation; the reference while every deployment is observed CLOSED, which
+  writes the opening authorization into the database; an application lifted with THAT reference admits
+  users only because the authorization is there -- one lifted with another value, or before the
+  reference, admits no one.
 * A real non-operator administrator signs in on the open deployment and views the dashboard: the
-  application auto-rejects the overdue request.  The deployment is closed again and the scheduler
-  front is disabled; the ledger observes quiescence, takes the fingerprint live twice, classifies
-  the change as the fixed derived class, and records the rollback only when it is acknowledged
-  exactly.
-* A real business write instead refuses the rollback: the point of no return must be recorded.
+  application auto-rejects the overdue request.  ``close`` revokes the authorization (the open
+  application turns itself closed) and applies the write barrier: no new session of the application's
+  role can write; the ledger proves it, takes the fingerprint live twice and records the rollback only
+  when the derived class is acknowledged exactly.
+* A real business write instead refuses the rollback; ``resume`` lifts the barrier and the point of no
+  return is recorded.
 
-The prior states (C0..C11) carry the unit tests' value-free evidence; their own controls are proven
-elsewhere.  ``QUIESCENCE_SECONDS`` is shortened here; the interval itself is pinned by the unit tests.
+``QUIESCENCE_SECONDS`` is shortened here; the interval itself is pinned by the unit tests.
 """
 
 from __future__ import annotations
 
 import re
+import time
 from contextlib import ExitStack
 from urllib.parse import urlencode
 
 import pytest
 
+from app import hosting
+from app.web import admission_gate
+from tests import mp3_ledger_support as ls
 from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, adapter
-from tests.mp3_ledger_support import ALL_GATES, GOOD, PROD_REF, local_server_is_project
-from tests.mp3_served_app import seed_admin_and_requests, served_app
+from tests.mp3_ledger_support import GOOD, LIFT, PROD_REF, PROJECT_ID
+from tests.mp3_served_app import REPO_ROOT, seed_admin_and_requests, served_app
 from tools import cutover_ledger as ledger
-from tools import hosted_smoke, ops_backup
+from tools import hosted_smoke
 
 pytestmark = pytest.mark.skipif(
     not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT"
@@ -40,9 +50,10 @@ pytestmark = pytest.mark.skipif(
 
 pytest.importorskip("psycopg")
 TOKEN = "operator-" + "R5" * 20
-# The served applications all answer on this host; C10 records it as the public address.
+# The served applications all answer on this host; the promotion and C10 record it as the public address.
 LOCAL_HOST = hosted_smoke.host_digest("http://127.0.0.1")
 _FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+_CODE = hosting.runtime_code_sha256(REPO_ROOT)  # what every served application announces
 
 
 def _seed(conn):
@@ -74,66 +85,77 @@ def registry():
 @pytest.fixture
 def lane(registry, tmp_path, monkeypatch):
     name, url = registry.create(template=registry.template)
+    scratch_name, scratch_url = registry.create()
     monkeypatch.setenv("DATABASE_URL", url)
     # The object-set child builds the canonical store from the environment; there are no objects to read.
     monkeypatch.setenv("SUPABASE_URL", f"https://{PROD_REF}.supabase.co")  # the PROD project's store
-    local_server_is_project(monkeypatch, PROD_REF)  # this server stands for the PROD project's database
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "not-a-real-key-" + "x" * 20)
     monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
     monkeypatch.setattr(ledger, "QUIESCENCE_SECONDS", 3)
+    platform = ls.Platform()
     stack = ExitStack()
-    state = {"url": url, "stack": stack, "tmp": tmp_path, "ledger": tmp_path / "ledger", "served": 0}
+    state = {"url": url, "stack": stack, "tmp": tmp_path, "ledger": tmp_path / "ledger", "served": 0,
+             "platform": platform, "scratch": scratch_url}
 
     def serve(admission, **extra):
-        env = {"SGAA_ADMISSION": admission, **extra}
+        env = {"SGAA_ADMISSION": admission, "VERCEL_PROJECT_ID": PROJECT_ID, **extra}
         if admission == "operator":
             env["SGAA_OPERATOR_TOKEN"] = TOKEN
         state["served"] += 1
         return stack.enter_context(served_app(url, tmp_path / f"app-{state['served']}", **env))
 
-    state["serve"] = serve
+    def observer(base=None, scheduler=None):
+        return ls.LocalObserver(base, database_url=url, scheduler_url=scheduler, platform=platform)
+
+    state["serve"], state["observer"] = serve, observer
     try:
         yield state
     finally:
         stack.close()
+        registry.drop(scratch_name)
         registry.drop(name)
 
 
-def _to_c11(directory):
-    ledger.init(directory)
-    for index, gate in enumerate(ALL_GATES):
-        ledger.grant(directory, gate, f"user-msg-{index}")
-    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
-        evidence = dict(GOOD[state], public_host_sha256=LOCAL_HOST) if state == "C10" else GOOD[state]
-        ledger.advance(directory, state, evidence)
+def _governed(lane, root):
+    return ls.governed_local(lane["ledger"], lane["observer"](), lane["tmp"] / root)
+
+
+def _to_c11(lane):
+    """C0..C11 through the real ledger: the ledger's qualification, the governed baseline and its real drill,
+    the dark deployment (a served operator application) recorded and promoted."""
+    closed = lane["serve"]("operator")
+    ls.drive_local_to_c11(lane["ledger"], lane["observer"](), tmp=lane["tmp"], scratch_url=lane["scratch"],
+                          code=_CODE, host=LOCAL_HOST, deployment_url=closed.url)
+    return closed
+
+
+def _reference(lane, closed):
+    """C11: a governed generation, then the reference while every deployment is observed closed."""
+    directory = lane["ledger"]
+    # Since GD2 the production deployment's scheduler front is enabled (CRON_SECRET set).
+    front = lane["serve"]("operator", CRON_SECRET="c" * 40, wsgi="app.storage.scheduler:application")
+    _governed(lane, "backups")
+    reference = lane["tmp"] / "reference.json"
+    taken = ledger.take_reference(directory, reference, lane["tmp"] / "backups", lane["tmp"] / "backups-off",
+                                  cadence_hours=24, observer=lane["observer"](closed.url, front.url))
+    assert taken["admission"] == "CLOSED" and taken["code_sha256"] == _CODE
+    return taken, reference
+
+
+def _lift(lane, taken):
+    opened = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["hash"])
+    ls.record_served(lane["ledger"], lane["platform"], LIFT, opened.url, code=_CODE, admission="OPEN",
+                     opening_reference=taken["hash"])
+    ls.promote_served(lane["ledger"], lane["platform"], LIFT, code=_CODE, host=LOCAL_HOST)
+    return opened
 
 
 def _open_cutover(lane):
-    """C0..C11 recorded, then the real opening: generation, record, reference while closed, reopen, open."""
-    directory = lane["ledger"]
-    _to_c11(directory)
-    with ExitStack() as closed_stack:
-        closed = closed_stack.enter_context(served_app(lane["url"], lane["tmp"] / "closed", SGAA_ADMISSION="operator",
-                                                       SGAA_OPERATOR_TOKEN=TOKEN))
-        # Since GD2 the production deployment's scheduler front is enabled (CRON_SECRET set).
-        front = closed_stack.enter_context(served_app(lane["url"], lane["tmp"] / "front", SGAA_ADMISSION="operator",
-                                                      SGAA_OPERATOR_TOKEN=TOKEN, CRON_SECRET="c" * 40,
-                                                      wsgi="app.storage.scheduler:application"))
-        observer = ledger.Observer(closed.url, allow_insecure=True, database_url=lane["url"], scheduler_url=front.url)
-        assert observer.admission() == "closed"
-        root, off = lane["tmp"] / "backups", lane["tmp"] / "off-platform"
-        generation = ops_backup.run_generation(root, label="pre-open", generations=2, objects=True,
-                                               off_platform=off)
-        assert generation["result"] == "GENERATION_COMPLETE"
-        recorded = ledger.record_backup(directory, root, off, observer=observer)
-        assert recorded["object_set_name"] != "NONE"
-        reference = lane["tmp"] / "reference.json"
-        taken = ledger.take_reference(directory, reference, root, off, cadence_hours=24, observer=observer)
-        assert taken["admission"] == "CLOSED" and taken["pre_open_backup_manifest_sha256"] == recorded["manifest_sha256"]
-    opened_app = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["hash"])
-    opened = ledger.open_admission(directory, observer=ledger.Observer(opened_app.url, allow_insecure=True,
-                                                                         database_url=lane["url"]))
-    assert opened["state"] == "C12" and opened["evidence"]["admission"] == "OPEN"
+    closed = _to_c11(lane)
+    taken, reference = _reference(lane, closed)
+    opened_app = _lift(lane, taken)
+    opened = ledger.open_admission(lane["ledger"], observer=lane["observer"](opened_app.url))
+    assert opened["state"] == "C12" and opened["evidence"]["opening_authorized"] is True
     return opened_app, reference
 
 
@@ -168,11 +190,27 @@ def _sign_in_and_view_the_dashboard(base):
     assert status == 200
 
 
-def _quiesce(lane):
-    """Stop admitting users and disable the scheduler front: what the operator does first on a rollback."""
-    closed = lane["serve"]("operator")
+def _close_and_quiesce(lane, opened_app):
+    """What the operator does first on a rollback: the scheduler front disabled, then `close`."""
     scheduler = lane["serve"]("operator", wsgi="app.storage.scheduler:application")  # no CRON_SECRET: disabled
-    return ledger.Observer(closed.url, allow_insecure=True, database_url=lane["url"], scheduler_url=scheduler.url)
+    observer = lane["observer"](opened_app.url, scheduler.url)
+    closed = ledger.close(lane["ledger"], observer=observer)
+    assert closed["action"] == "APPLIED"
+    # The open deployment reads the revoked authorization at its next check and admits no one.
+    time.sleep(admission_gate.OPENING_CHECK_SECONDS + 1)
+    assert observer.admission() == "closed"
+    return observer
+
+
+def _write_is_refused(url):
+    import psycopg
+
+    conn = adapter(url)
+    try:
+        with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+            conn.execute("UPDATE requisicoes SET horas_solicitadas = horas_solicitadas + 1 WHERE id = 1")
+    finally:
+        conn.close()
 
 
 def test_a_dashboard_view_on_the_opened_deployment_is_a_derived_write_and_the_rollback_proves_it(lane):
@@ -183,18 +221,21 @@ def test_a_dashboard_view_on_the_opened_deployment_is_a_derived_write_and_the_ro
         assert conn.execute("SELECT status FROM requisicoes WHERE id = 2").fetchone()[0] == "Indeferida"
     finally:
         conn.close()
-    observer = _quiesce(lane)
+    observer = _close_and_quiesce(lane, opened_app)
+    _write_is_refused(lane["url"])  # whatever address or tool would write, the database refuses it now
     directory = lane["ledger"]
     with pytest.raises(ledger.Refused) as caught:  # not acknowledged: refused, nothing written
         ledger.rollback(directory, "OPERATOR_STOP", observer=observer, reference_path=str(reference))
     assert caught.value.code == "DERIVED_CLASSES_NOT_ACKNOWLEDGED"
     entry = ledger.rollback(directory, "OPERATOR_STOP", observer=observer, reference_path=str(reference),
                             derived_classes=["REQUISICOES_AUTO_REJECTION"])
-    assert entry["quiescence"] == "PROVEN" and entry["derived_classes"] == ["REQUISICOES_AUTO_REJECTION"]
+    assert entry["quiescence"] == "PROVEN" and entry["barrier"] == "VERIFIED"
+    assert entry["derived_classes"] == ["REQUISICOES_AUTO_REJECTION"]
     assert ledger.status(directory)["rolled_back"] is True
+    _write_is_refused(lane["url"])  # the barrier stays after the rollback is recorded
 
 
-def test_a_business_write_after_the_opening_refuses_the_rollback_and_the_ponr_is_recorded(lane):
+def test_a_business_write_after_the_opening_refuses_the_rollback_resume_reopens_and_the_ponr_is_recorded(lane):
     opened_app, reference = _open_cutover(lane)
     conn = adapter(lane["url"])
     try:
@@ -203,30 +244,37 @@ def test_a_business_write_after_the_opening_refuses_the_rollback_and_the_ponr_is
     finally:
         conn.close()
     directory = lane["ledger"]
-    # Still open: no proof is even attempted.
-    still_open = ledger.Observer(opened_app.url, allow_insecure=True, database_url=lane["url"])
+    # Still open and no barrier: no proof is even attempted.
     with pytest.raises(ledger.Refused) as caught:
-        ledger.rollback(directory, "OPERATOR_STOP", observer=still_open, reference_path=str(reference))
-    assert caught.value.code == "ADMISSION_STILL_OPEN"
-    observer = _quiesce(lane)
+        ledger.rollback(directory, "OPERATOR_STOP", observer=lane["observer"](opened_app.url),
+                        reference_path=str(reference))
+    assert caught.value.code == "BARRIER_REQUIRED"
+    observer = _close_and_quiesce(lane, opened_app)
     with pytest.raises(ledger.Refused) as caught:
         ledger.rollback(directory, "OPERATOR_STOP", observer=observer, reference_path=str(reference),
                         derived_classes=["REQUISICOES_AUTO_REJECTION"])
     assert caught.value.code == "FINGERPRINT_CHANGED"
     current = observer.fingerprint()["fingerprint_sha256"]
+    lifted = ledger.resume(directory, observer=observer)
+    assert lifted["action"] == "LIFTED" and observer.writable()
+    time.sleep(admission_gate.OPENING_CHECK_SECONDS + 1)
+    assert observer.admission() == "open"  # the authorization stands again: production goes forward
     entry = ledger.advance(directory, "C13", {**GOOD["C13"], "current_fingerprint_sha256": current})
     assert entry["state"] == "C13"
 
 
-def test_the_reference_is_refused_while_the_deployment_already_admits_everyone(lane):
-    directory = lane["ledger"]
-    _to_c11(directory)
-    opened = lane["serve"]("open")
-    observer = ledger.Observer(opened.url, allow_insecure=True, database_url=lane["url"])
-    root, off = lane["tmp"] / "backups", lane["tmp"] / "off-platform"
-    ops_backup.run_generation(root, label="pre-open", generations=2, objects=True, off_platform=off)
-    ledger.record_backup(directory, root, off, observer=observer)
+def test_an_application_lifted_before_the_reference_admits_no_one_and_cannot_be_recorded(lane):
+    """A premature lift -- a well-formed value, another ledger's reference -- opens nothing (fail closed)."""
+    closed = _to_c11(lane)
+    premature = lane["serve"]("open", SGAA_OPENING_REFERENCE="5" * 64)
+    observer = lane["observer"](premature.url)
+    assert observer.admission() == "closed" and observer.code() == _CODE
+    # On the platform, that deployment was never recorded: the reference refuses to proceed.
+    lane["platform"].deployments["dpl_" + "P" * 24] = {"url": premature.url, "state": "READY", "files": ls.FILES}
+    front = lane["serve"]("operator", CRON_SECRET="c" * 40, wsgi="app.storage.scheduler:application")
+    _governed(lane, "backups")
     with pytest.raises(ledger.Refused) as caught:
-        ledger.take_reference(directory, lane["tmp"] / "reference.json", root, off, cadence_hours=24,
-                              observer=observer)
-    assert caught.value.code == "ADMISSION_NOT_CLOSED"
+        ledger.take_reference(lane["ledger"], lane["tmp"] / "reference.json", lane["tmp"] / "backups",
+                              lane["tmp"] / "backups-off", cadence_hours=24,
+                              observer=lane["observer"](closed.url, front.url))
+    assert caught.value.code == "UNRECORDED_DEPLOYMENT"

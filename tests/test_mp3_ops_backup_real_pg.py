@@ -88,6 +88,7 @@ def test_the_command_line_reports_a_failed_backup_by_code_when_the_database_is_u
 def test_the_verified_generation_holds_exactly_the_live_business_state_until_a_write(database, tmp_path, monkeypatch):
     """The opening's proof that the pre-opening backup is current: Layer-2 digests == live fingerprint."""
     from tests.mp2_pg_support import adapter
+    from tests.mp3_ledger_support import local_connector
     from tools import cutover_ledger
 
     name, url = database
@@ -95,7 +96,7 @@ def test_the_verified_generation_holds_exactly_the_live_business_state_until_a_w
     root, off = tmp_path / "primary", tmp_path / "off"
     ob.run_generation(root, label="pre-open", generations=2, objects=False, off_platform=off)
     generation = ob.verify_generation(root, off)
-    observer = cutover_ledger.Observer(database_url=url)
+    observer = cutover_ledger.Observer(database_url=url, source_connector=local_connector(url))
     assert observer.backup_matches(generation["manifest_path"], observer.fingerprint()) is True
     conn = adapter(url)
     try:

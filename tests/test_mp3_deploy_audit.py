@@ -529,3 +529,217 @@ def test_the_command_line_reports_the_identity_or_the_difference_by_counts_only(
     assert da.main(["verify", "--dir", str(fresh_export), "--commit", _head()], out=io.StringIO(), err=err) == 1
     assert "DEPLOY_TREE_DIFFERS (added=1 removed=0 changed=0)" in err.getvalue()
     assert "student-file" not in err.getvalue()
+
+
+# ---- deploy and promote: one controlled operation, bound to what the platform received (MP-3 A17) ----------
+
+
+class _Platform:
+    """A scripted platform: it 'receives' the directory the tool uploads, naming files as the real one does."""
+
+    def __init__(self, *, tamper=None, state="READY", alias_follows=True):
+        from tests.mp3_ledger_support import PROJECT_ID
+
+        self.project_id = PROJECT_ID
+        self.tamper, self.state, self.alias_follows = tamper, state, alias_follows
+        self.received: dict[str, dict] = {}
+        self.removed: list[str] = []
+        self.promoted: list[str] = []
+        self.envs: list[dict] = []
+        self.alias = None
+
+    def deploy(self, directory, env):
+        from tools import vercel_provider
+
+        self.envs.append(dict(env))
+        if self.tamper:
+            self.tamper(Path(directory))  # something changed the directory after the verification
+        identifier = f"dpl_{len(self.received) + 1:024d}"
+        files = {}
+        for current, _dirs, names in os.walk(directory):
+            for name in names:
+                full = Path(current) / name
+                files[full.relative_to(directory).as_posix()] = vercel_provider.content_sha1(full.read_bytes())
+        self.received[identifier] = files
+        return self.deployment(identifier)
+
+    def deployment(self, identifier):
+        return {"id": identifier, "url": identifier.lower() + ".example.test", "state": self.state,
+                "target": "production", "project": self.project_id, "aliased": False}
+
+    def files(self, identifier):
+        return dict(self.received[identifier])
+
+    def promote(self, identifier):
+        self.promoted.append(identifier)
+        if self.alias_follows:
+            self.alias = identifier
+
+    def alias_target(self, host):
+        return self.alias
+
+    def remove(self, identifier):
+        self.removed.append(identifier)
+
+
+_HEAD_CODE: list[str] = []
+
+
+def _code_of_head() -> str:
+    """The code identity of HEAD's export: what an honest deployment of it announces."""
+    if not _HEAD_CODE:
+        from app import hosting
+
+        blobs = {path: blob for path, blob in da._committed_blobs(_head(), REPO_ROOT).items() if da._allowed(path)}
+        _HEAD_CODE.append(hosting.code_sha256(blobs))
+    return _HEAD_CODE[0]
+
+
+@pytest.fixture
+def at_c8(tmp_path, monkeypatch):
+    """A ledger at C8 whose rehearsed commit is this repository's HEAD; the address probes answer as told."""
+    import time
+    from datetime import datetime, timezone
+
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger as ledger
+
+    ls.install_clock(monkeypatch, datetime(2026, 11, 1, 8, 0, tzinfo=timezone.utc))
+    directory = tmp_path / "ledger"
+    ledger.init(directory)
+    for index, gate in enumerate(ls.ALL_GATES):
+        ledger.grant(directory, gate, f"m-{index}")
+    ls.drive(directory, "C8", ls.FakeObserver(), {"C0": {"commit": _head()}})
+    answers = {"admission": "closed", "code": None}
+    monkeypatch.setattr(da, "_observed", lambda url, *, allow_insecure: (
+        answers["admission"], _code_of_head() if answers["code"] is None else answers["code"]))
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    return {"directory": directory, "answers": answers}
+
+
+def _deployments(directory):
+    from tools import cutover_ledger as ledger
+
+    return [e for e in ledger.read_ledger(directory) if e["type"] == "deployment"]
+
+
+def test_a_deployment_is_recorded_only_after_the_platform_confirms_it_received_the_verified_export(at_c8):
+    from tools import vercel_provider
+
+    platform = _Platform()
+    result = da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator")
+    [entry] = _deployments(at_c8["directory"])
+    assert result["result"] == "DEPLOYED" and entry["deployment_id"] == result["deployment_id"]
+    assert entry["commit"] == _head() and entry["code_sha256"] == _code_of_head() == result["code_sha256"]
+    assert entry["admission"] == "OPERATOR" and entry["observed_admission"] == "CLOSED"
+    assert entry["files_sha256"] == vercel_provider.files_sha256(platform.received[entry["deployment_id"]])
+    assert platform.envs == [{"SGAA_ADMISSION": "operator"}] and platform.removed == []
+
+
+@pytest.mark.parametrize("tamper", [
+    lambda d: (d / "main.py").write_bytes((d / "main.py").read_bytes() + b"\n# changed after verify\n"),
+    lambda d: (d / "app" / "extra_after_verify.py").write_text("x = 1\n"),
+    lambda d: (d / "presets_data.json").unlink(),
+])
+def test_anything_that_changed_between_the_verification_and_the_upload_is_never_served(at_c8, tamper):
+    platform = _Platform(tamper=tamper)
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator")
+    assert caught.value.code == "DEPLOYED_FILES_DIFFER"
+    assert platform.removed == list(platform.received) and _deployments(at_c8["directory"]) == []
+
+
+@pytest.mark.parametrize("answers,code", [
+    ({"code": "9" * 64}, "DEPLOYMENT_CODE_NOT_OBSERVED"),     # it runs other code than the export's
+    ({"code": ""}, "DEPLOYMENT_CODE_NOT_OBSERVED"),           # a protection page, or nothing announced
+    ({"admission": "open"}, "LEDGER_DEPLOYMENT_NOT_CLOSED"),  # an operator deployment that admits users
+    ({"admission": "unknown"}, "LEDGER_DEPLOYMENT_NOT_CLOSED"),
+])
+def test_a_deployment_that_does_not_run_and_refuse_as_recorded_is_removed_not_recorded(at_c8, answers, code):
+    at_c8["answers"].update(answers)
+    platform = _Platform()
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator")
+    assert caught.value.code == code
+    assert platform.removed == list(platform.received) and _deployments(at_c8["directory"]) == []
+
+
+def test_nothing_is_uploaded_before_the_ledger_allows_the_deployment(tmp_path):
+    from tools import cutover_ledger as ledger
+
+    directory = tmp_path / "ledger"
+    ledger.init(directory)
+    platform = _Platform()
+    for admission, kwargs, code in (("operator", {}, "LEDGER_OUT_OF_ORDER"),
+                                    ("open", {"opening_reference": "a" * 64}, "LEDGER_OUT_OF_ORDER"),
+                                    ("closed", {}, "ADMISSION_INVALID")):
+        with pytest.raises(da.Refused) as caught:
+            da.deploy(_head(), ledger_dir=directory, provider=platform, admission=admission, **kwargs)
+        assert caught.value.code == code
+    assert platform.received == {}
+
+
+def test_an_open_deployment_needs_the_recorded_reference(at_c8):
+    platform = _Platform()
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="open",
+                  opening_reference="a" * 64)
+    assert caught.value.code == "LEDGER_OPEN_WITHOUT_THE_REFERENCE" and platform.received == {}
+
+
+def test_a_sentinel_in_the_commit_stops_the_deployment_before_the_upload(at_c8):
+    platform = _Platform()
+    token = b"from __future__"  # present in committed application files: a planted sentinel's stand-in
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator", sentinels=[token])
+    assert caught.value.code == "BUNDLE_AUDIT_FINDINGS" and platform.received == {}
+
+
+def test_a_deployment_the_platform_did_not_finish_is_removed(at_c8):
+    platform = _Platform(state="ERROR")
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator")
+    assert caught.value.code == "DEPLOYMENT_NOT_READY" and platform.removed == list(platform.received)
+
+
+def test_promotion_points_the_public_address_at_a_recorded_deployment_and_records_what_it_serves(at_c8, monkeypatch):
+    from tools import hosted_smoke
+
+    platform = _Platform()
+    deployed = da.deploy(_head(), ledger_dir=at_c8["directory"], provider=platform, admission="operator")
+    served = {"code": _code_of_head()}
+    monkeypatch.setattr(hosted_smoke, "probe_code", lambda url, allow_insecure=False: served["code"])
+    public = "https://sgaa.example.test"
+    with pytest.raises(da.Refused) as caught:
+        da.promote("dpl_" + "Z" * 24, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert caught.value.code == "LEDGER_DEPLOYMENT_NOT_RECORDED" and platform.promoted == []
+    identifier = deployed["deployment_id"]
+    original = platform.received[identifier]
+    platform.received[identifier] = {**original, "main.py": "0" * 40}  # the platform now holds other files
+    with pytest.raises(da.Refused) as caught:
+        da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert caught.value.code == "DEPLOYMENT_NOT_THE_RECORDED_ONE" and platform.promoted == []
+    platform.received[identifier] = original
+    served["code"] = "9" * 64  # the address serves something else
+    with pytest.raises(da.Refused) as caught:
+        da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert caught.value.code == "LEDGER_DEPLOYMENT_NOT_THE_RECORDED_ONE"
+    served["code"] = _code_of_head()
+    stuck = _Platform(alias_follows=False)
+    stuck.received = platform.received
+    with pytest.raises(da.Refused) as caught:
+        da.promote(identifier, ledger_dir=at_c8["directory"], provider=stuck, public_url=public)
+    assert caught.value.code == "LEDGER_ALIAS_NOT_THE_DEPLOYMENT"
+    result = da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert result["result"] == "PROMOTED" and result["public_host_sha256"] == hosted_smoke.host_digest(public)
+
+
+def test_the_command_line_deploys_and_promotes_only_through_the_named_project(tmp_path):
+    for args in (["deploy", "--ledger-dir", str(tmp_path), "--vercel-team", "ej-883a", "--vercel-project", "prj_x",
+                  "--commit", "HEAD", "--admission", "operator"],
+                 ["promote", "--ledger-dir", str(tmp_path), "--vercel-team", "team_" + "T" * 24,
+                  "--vercel-project", "sgaa-mp3", "--deployment", "dpl_x", "--public-url", "https://x"]):
+        err = io.StringIO()
+        assert da.main(args, out=io.StringIO(), err=err) == 1
+        assert "PROVIDER_PROJECT_INVALID" in err.getvalue()
+    assert da.main(["deploy", "--ledger-dir", str(tmp_path)], out=io.StringIO(), err=io.StringIO()) == 2

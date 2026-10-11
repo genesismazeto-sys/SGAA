@@ -29,12 +29,22 @@ ALWAYS REACHABLE
     ``/health`` (read-only), static files and the admission form.  Everything else
     answers 503 with ``X-SGAA-Admission: closed`` and no cookie.
 
-THE OPENING
-    ``SGAA_ADMISSION=open`` registers no gate.  In production (and on any serverless
-    platform) it also requires ``SGAA_OPENING_REFERENCE``, the hash of the cutover ledger's
-    reference entry (taken while admission was closed); every response then announces
-    ``X-SGAA-Opening: <tag of that value>`` so the ledger can prove the lift is bound to the
-    reference it recorded.  The process checks only the value's shape.
+THE OPENING (MP-3 A15, A17)
+    ``SGAA_ADMISSION=open`` with no gate is for a workstation or a test only.  In production
+    (and on any serverless platform) it also requires ``SGAA_OPENING_REFERENCE``, the hash of
+    the cutover ledger's reference entry, and it admits users ONLY while the PROD database
+    holds the authorization the ledger wrote with that entry (``app.hosting``: the row carries
+    the entry; it must hash to the reference, name this database's live identity, this process's
+    code and this platform project, and not be revoked).  The check runs before anything else,
+    is re-read at most every ``OPENING_CHECK_SECONDS``, and fails closed: a missing, forged,
+    revoked or foreign authorization -- or a database that cannot be asked -- is answered like
+    a closed deployment (503 ``X-SGAA-Admission: closed``).  A well-formed value alone opens
+    nothing.  Every response of an open deployment announces ``X-SGAA-Opening: <tag>``.
+
+THE CODE IDENTITY
+    Every response of a hosted production process names the code it runs
+    (``X-SGAA-Code``: ``app.hosting.runtime_code_sha256`` of its own files), so the deploy
+    tool and the ledger observe what each deployment address actually serves.
 """
 
 from __future__ import annotations
@@ -55,8 +65,13 @@ ADMISSION_COOKIE = "sgaa_operator"
 ADMISSION_PATH = "/operator-admission"
 ADMISSION_COOKIE_SECONDS = 8 * 60 * 60
 ADMISSION_OPENING_HEADER = "X-SGAA-Opening"
+ADMISSION_CODE_HEADER = hosting.CODE_HEADER
+#: How long an open process trusts its last reading of the authorization (a revocation takes effect
+#: within this time on every running instance).
+OPENING_CHECK_SECONDS = 15
 _COOKIE_CLOCK_SKEW_SECONDS = 60
 _ALWAYS_REACHABLE = frozenset({"/health", ADMISSION_PATH})
+_OPEN_REACHABLE = frozenset({"/health"})
 _HMAC_CONTEXT = b"sgaa-operator-admission\x00"
 
 logger = logging.getLogger("main")
@@ -152,25 +167,92 @@ def _announce_opening(response):
     return response
 
 
+_RUNTIME_CODE: list[str] = []
+
+
+def _runtime_code() -> str:
+    """The code identity of this process's files, read once (the files do not change while it runs)."""
+    if not _RUNTIME_CODE:
+        _RUNTIME_CODE.append(hosting.runtime_code_sha256())
+    return _RUNTIME_CODE[0]
+
+
+def _announce_code(response):
+    response.headers[ADMISSION_CODE_HEADER] = current_app.config["SGAA_CODE"]
+    return response
+
+
+def _read_authorization() -> bool:
+    """Ask the PROD database once whether it authorizes this process to admit users (fails closed)."""
+    from app.db import get_db_connection
+
+    config = current_app.config
+    reference, code, project = config["SGAA_OPENING_REFERENCE"], config["SGAA_CODE"], config["SGAA_PLATFORM_PROJECT"]
+    try:
+        raw = get_db_connection().raw_connection
+        try:
+            row = raw.execute(hosting.OPENING_SELECT_SQL, (reference, code)).fetchone()
+            identity = hosting.source_identity_sha256(hosting.database_source(raw))
+        finally:
+            raw.rollback()  # the gate runs first: nothing of the request is on this connection yet
+    except Exception:
+        logger.warning("event=opening_authorization_unreadable")
+        return False
+    authorized = row is not None and hosting.opening_entry_authorizes(
+        row[0], reference=reference, database_identity=identity, code=code, project=project)
+    if not authorized:
+        logger.warning("event=opening_not_authorized")
+    return authorized
+
+
+def opening_authorized() -> bool:
+    state = current_app.config["SGAA_OPENING_STATE"]
+    now = time.monotonic()
+    if now >= state["until"]:
+        state["authorized"] = _read_authorization()
+        state["until"] = now + OPENING_CHECK_SECONDS
+    return state["authorized"]
+
+
+def enforce_opening():
+    """``before_request`` of an open production process: users only under a standing authorization."""
+    path = request.path
+    if path in _OPEN_REACHABLE or path.startswith("/static/"):
+        return None
+    if opening_authorized():
+        return None
+    return _closed()
+
+
 def install(app, environ=None) -> str:
     """Register the gate on a hosted application; returns the admission mode.
 
     Called right after the application object exists, so the gate is the FIRST
-    ``before_request`` -- ahead of CSRF, the session hooks and every view.  ``open``
-    registers no gate; with an opening reference it announces the reference's tag.
+    ``before_request`` -- ahead of CSRF, the session hooks and every view.  ``open`` on a
+    workstation or in a test registers no gate; ``open`` in production (or on a serverless
+    platform) registers the authorization check and announces the reference's tag.
     """
     production = bool(app.config.get("IS_PRODUCTION"))
     mode = hosting.admission_mode(environ, production=production)
     if mode is None:  # create_app refuses earlier through the startup blockers; never guess
         raise hosting.single(hosting.HOSTED_ADMISSION_UNDECIDED, hosting.ADMISSION_ENV)
     app.config["SGAA_ADMISSION"] = mode
+    decided = hosting.admission_must_be_decided(environ, production=production)
+    if decided:
+        app.config["SGAA_CODE"] = _runtime_code()
+        app.after_request(_announce_code)
     if mode != hosting.ADMISSION_OPERATOR:
         reference = hosting.opening_reference(environ)
-        if reference is None and hosting.admission_must_be_decided(environ, production=production):
+        if reference is None and decided:
             raise hosting.single(hosting.HOSTED_OPENING_REFERENCE_REQUIRED, hosting.OPENING_REFERENCE_ENV)
         if reference is not None:
             app.config["SGAA_OPENING_TAG"] = hosting.opening_tag(reference)
             app.after_request(_announce_opening)
+        if decided:
+            app.config["SGAA_OPENING_REFERENCE"] = reference
+            app.config["SGAA_PLATFORM_PROJECT"] = hosting.vercel_project_sha256(environ)
+            app.config["SGAA_OPENING_STATE"] = {"until": 0.0, "authorized": False}
+            app.before_request(enforce_opening)
         return mode
     token = hosting.operator_token(environ)
     if token is None:
@@ -184,13 +266,17 @@ def install(app, environ=None) -> str:
 
 __all__ = [
     "ADMISSION_CLOSED",
+    "ADMISSION_CODE_HEADER",
     "ADMISSION_COOKIE",
     "ADMISSION_HEADER",
     "ADMISSION_OPENING_HEADER",
     "ADMISSION_PATH",
     "ADMISSION_STATE_HEADER",
+    "OPENING_CHECK_SECONDS",
     "cookie_for",
     "enforce_admission",
+    "enforce_opening",
     "install",
+    "opening_authorized",
     "operator_presented",
 ]

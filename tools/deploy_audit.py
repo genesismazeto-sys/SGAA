@@ -20,13 +20,28 @@ WHY THIS EXISTS
                 file is read to the end (up to ``MAX_FILE_BYTES``); a larger
                 file is itself a finding.
 
-    ``verify``  immediately before the upload, re-proves that the directory IS the
-                reviewed export: exactly the commit's allowlisted files, each with
-                the commit's blob id; the only other files allowed are the two the
-                platform link writes (``.vercel/project.json``, ``.vercel/README.txt``).
-                An added, removed or changed deployable file -- or a link, or
-                anything else under ``.vercel/`` -- refuses.  Its digest of the
-                (path, blob) list is the deployment identity recorded at C9.
+    ``verify``  re-proves that a directory IS the reviewed export: exactly the commit's
+                allowlisted files, each with the commit's blob id; the only other
+                files allowed are the two the platform link writes
+                (``.vercel/project.json``, ``.vercel/README.txt``).  An added, removed
+                or changed deployable file -- or a link, or anything else under
+                ``.vercel/`` -- refuses.
+
+    ``deploy``  (MP-3 SPEC A17) the one way a production deployment is made: export,
+                audit and verify into a directory the tool creates and nobody else
+                writes, upload it, then ask the PLATFORM what it received -- its own
+                list of the uploaded files, each named by the SHA-1 of its bytes, must
+                equal the verified export exactly, so nothing that changed between the
+                verification and the upload can be served -- and observe at the
+                deployment's own address that it runs the export's code
+                (``X-SGAA-Code``) and, for an operator deployment, refuses users.  Only
+                then is it recorded in the cutover ledger (commit, tree, code, platform
+                project, admission, opening reference); a deployment that fails any
+                check is removed.  The admission and the opening reference are set on
+                the deployment itself, never left to a project-wide value.
+    ``promote`` points the public address at a RECORDED deployment, after the platform
+                confirms it is still the recorded one, and records it once the platform
+                resolves the address to it and the address serves its code.
 
     The audit is the control; ``.vercelignore`` is defence in depth.
 
@@ -54,6 +69,9 @@ import tarfile
 from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Run as ``python tools/deploy_audit.py``: ``deploy`` imports the hosted contract and the ledger.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # What a deployment contains: exactly this and nothing else (first path segment or file).
 RUNTIME_ALLOWLIST = (
@@ -407,6 +425,178 @@ def verify(directory: Path, commit: str, *, repo: Path = REPO_ROOT) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# deploy and promote: one controlled operation, bound to what the platform received (MP-3 A17)
+# ---------------------------------------------------------------------------
+
+ADMISSIONS = ("operator", "open")
+PROBE_ATTEMPTS = 10
+PROBE_PAUSE_SECONDS = 3
+
+
+def _exported_files(directory: Path) -> tuple[dict, dict]:
+    """``({path: git blob id}, {path: sha1 of bytes})`` of a verified export, read once."""
+    blobs, sha1s = {}, {}
+    for current, _dirs, names in os.walk(directory):
+        for name in names:
+            full = Path(current) / name
+            data = full.read_bytes()
+            relative = _relative(full, directory)
+            blobs[relative] = _blob_id(data)
+            sha1s[relative] = hashlib.sha1(data).hexdigest()
+    return blobs, sha1s
+
+
+def _observed(url: str, *, allow_insecure: bool) -> tuple[str, str]:
+    """The admission and the code a deployment address answers with, retried while it starts."""
+    import time
+
+    from tools import hosted_smoke
+
+    admission, code = "unknown", ""
+    for _attempt in range(PROBE_ATTEMPTS):
+        try:
+            code = hosted_smoke.probe_code(url, allow_insecure=allow_insecure)
+            admission = hosted_smoke.probe_admission(url, allow_insecure=allow_insecure)
+        except (OSError, hosted_smoke.Refused):
+            code, admission = "", "unknown"
+        if code and admission != "unknown":
+            break
+        time.sleep(PROBE_PAUSE_SECONDS)
+    return admission, code
+
+
+def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_reference: str | None = None,
+           forward_fix_ref: str | None = None, sentinels: list[bytes] | None = None, repo: Path = REPO_ROOT,
+           allow_insecure: bool = False) -> dict:
+    """Export, audit, verify, upload, prove what the platform received and what it runs, record it."""
+    import tempfile
+
+    from app import hosting
+    from tools import cutover_ledger, vercel_provider
+
+    if admission not in ADMISSIONS:
+        raise Refused("ADMISSION_INVALID")
+    mode = admission.upper()
+    resolved = _resolve_commit(commit, repo)
+    try:
+        cutover_ledger.deployment_preconditions(Path(ledger_dir), commit=resolved, admission=mode,
+                                                opening_reference=opening_reference, forward_fix_ref=forward_fix_ref)
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
+    workspace = Path(tempfile.mkdtemp(prefix="sgaa-deploy-"))
+    upload = workspace / "upload"
+    try:
+        export(resolved, upload, repo=repo)
+        if audit(upload, sentinels=sentinels)["findings"]:
+            raise Refused("BUNDLE_AUDIT_FINDINGS")
+        proof = verify(upload, resolved, repo=repo)
+        blobs, sha1s = _exported_files(upload)
+        if tree_digest(blobs) != proof["deploy_tree_sha256"]:
+            raise Refused("DEPLOY_TREE_DIFFERS")
+        code = hosting.code_sha256(blobs)
+        expected_files = vercel_provider.files_sha256(sha1s)
+        env = {hosting.ADMISSION_ENV: admission}
+        if mode == "OPEN":
+            env[hosting.OPENING_REFERENCE_ENV] = opening_reference
+        try:
+            deployment = provider.deploy(str(upload), env)
+        except vercel_provider.Refused as refusal:
+            raise Refused(refusal.code) from None
+        recorded = False
+        try:
+            if deployment["state"] != "READY" or deployment["target"] != "production":
+                raise Refused("DEPLOYMENT_NOT_READY")
+            try:
+                received = vercel_provider.files_sha256(provider.files(deployment["id"]))
+            except vercel_provider.Refused as refusal:
+                raise Refused(refusal.code) from None
+            if received != expected_files:
+                # Whatever changed between the verification and the upload is never served.
+                raise Refused("DEPLOYED_FILES_DIFFER", "the platform received other files than the verified export")
+            address = "https://" + deployment["url"] if not deployment["url"].startswith("http") else deployment["url"]
+            observed_admission, observed_code = _observed(address, allow_insecure=allow_insecure)
+            if observed_code != code:
+                raise Refused("DEPLOYMENT_CODE_NOT_OBSERVED", "the deployment does not announce the export's code")
+            from tools import hosted_smoke
+
+            receipt = {
+                "deployment_id": deployment["id"], "url_sha256": hosted_smoke.host_digest(address),
+                "vercel_project_sha256": hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest(),
+                "commit": resolved, "deploy_tree_sha256": proof["deploy_tree_sha256"], "code_sha256": code,
+                "files_sha256": received, "admission": mode, "opening_reference": opening_reference or "NONE",
+                "forward_fix_ref": forward_fix_ref or "NONE", "observed_admission": observed_admission.upper(),
+                "aliased": bool(deployment.get("aliased")),
+            }
+            try:
+                entry = cutover_ledger.record_deployment(Path(ledger_dir), receipt)
+            except cutover_ledger.Refused as refusal:
+                raise Refused(f"LEDGER_{refusal.code}") from None
+            recorded = True
+        finally:
+            if not recorded:
+                try:
+                    provider.remove(deployment["id"])  # an unrecorded deployment must not stay to be served
+                except Exception:
+                    pass
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+    return {"result": "DEPLOYED", "deployment_id": deployment["id"], "commit": resolved, "files": proof["files"],
+            "code_sha256": code, "admission": mode, "observed_admission": receipt["observed_admission"],
+            "aliased": receipt["aliased"], "head": entry["hash"]}
+
+
+def promote(deployment_id: str, *, ledger_dir: Path, provider, public_url: str, allow_insecure: bool = False) -> dict:
+    """Point the public address at a recorded deployment and record it once the platform and the address agree."""
+    import time
+
+    from tools import cutover_ledger, hosted_smoke, vercel_provider
+
+    try:
+        recorded = cutover_ledger.recorded_deployment(Path(ledger_dir), deployment_id)
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
+    try:
+        current = provider.deployment(deployment_id)
+        files = vercel_provider.files_sha256(provider.files(deployment_id))
+    except vercel_provider.Refused as refusal:
+        raise Refused(refusal.code) from None
+    if current["state"] != "READY" or files != recorded["files_sha256"]:
+        raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
+    from urllib.parse import urlsplit
+
+    host = (urlsplit(public_url).hostname or "").lower()
+    if not host:
+        raise Refused("PUBLIC_URL_INVALID")
+    try:
+        provider.promote(deployment_id)
+        target = ""
+        for _attempt in range(PROBE_ATTEMPTS):
+            target = provider.alias_target(host)
+            if target == deployment_id:
+                break
+            time.sleep(PROBE_PAUSE_SECONDS)
+    except vercel_provider.Refused as refusal:
+        raise Refused(refusal.code) from None
+    observed_code = ""
+    for _attempt in range(PROBE_ATTEMPTS):
+        try:
+            observed_code = hosted_smoke.probe_code(public_url, allow_insecure=allow_insecure)
+        except (OSError, hosted_smoke.Refused):
+            observed_code = ""
+        if observed_code == recorded["code_sha256"]:
+            break
+        time.sleep(PROBE_PAUSE_SECONDS)
+    receipt = {"deployment_id": deployment_id, "public_host_sha256": hosted_smoke.host_digest(public_url),
+               "alias_deployment_id": target, "files_sha256": files, "observed_code": observed_code}
+    try:
+        entry = cutover_ledger.record_promotion(Path(ledger_dir), receipt)
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
+    return {"result": "PROMOTED", "deployment_id": deployment_id, "public_host_sha256": receipt["public_host_sha256"],
+            "head": entry["hash"]}
+
+
+# ---------------------------------------------------------------------------
 # command line
 # ---------------------------------------------------------------------------
 
@@ -426,11 +616,42 @@ def main(argv=None, *, out=None, err=None) -> int:
     verify_parser = commands.add_parser("verify", allow_abbrev=False)
     verify_parser.add_argument("--dir", required=True)
     verify_parser.add_argument("--commit", required=True)
+    for name in ("deploy", "promote"):
+        sub = commands.add_parser(name, allow_abbrev=False)
+        sub.add_argument("--ledger-dir", required=True, help="the cutover ledger the deployment is recorded in")
+        sub.add_argument("--vercel-team", required=True, help="the team id (team_...) of the production project")
+        sub.add_argument("--vercel-project", required=True, help="the production project's id (prj_...)")
+        if name == "deploy":
+            sub.add_argument("--commit", required=True)
+            sub.add_argument("--admission", required=True, choices=ADMISSIONS)
+            sub.add_argument("--opening-reference", default=None, help="open only: the ledger's opening reference")
+            sub.add_argument("--forward-fix-ref", default=None, help="after the PONR: the GF1 grant's reference")
+            sub.add_argument("--sentinels", default=None, help="a file with one sentinel token per line")
+        else:
+            sub.add_argument("--deployment", required=True, help="a recorded deployment id (dpl_...)")
+            sub.add_argument("--public-url", required=True, help="the production project's public address")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
     try:
+        if args.command in ("deploy", "promote"):
+            from tools import vercel_provider
+
+            try:
+                provider = vercel_provider.VercelCli(team_id=args.vercel_team, project_id=args.vercel_project)
+            except vercel_provider.Refused as refusal:
+                raise Refused(refusal.code) from None
+            if args.command == "deploy":
+                result = deploy(args.commit, ledger_dir=Path(args.ledger_dir), provider=provider,
+                                admission=args.admission, opening_reference=args.opening_reference,
+                                forward_fix_ref=args.forward_fix_ref, sentinels=load_sentinels(args.sentinels))
+            else:
+                result = promote(args.deployment, ledger_dir=Path(args.ledger_dir), provider=provider,
+                                 public_url=args.public_url)
+            json.dump(result, out, sort_keys=True)
+            out.write("\n")
+            return 0
         if args.command == "verify":
             json.dump(verify(Path(args.dir), args.commit), out, sort_keys=True)
             out.write("\n")

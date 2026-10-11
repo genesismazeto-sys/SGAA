@@ -314,6 +314,134 @@ def source_identity_sha256(source) -> str | None:
     return hashlib.sha256(json.dumps(basis).encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------------------
+# what code runs: the runtime code identity (MP-3 A17)
+# ---------------------------------------------------------------------------
+
+#: The deployed files that ARE the application, as they arrive in the function unchanged.  The
+#: deployment allowlist (``tools/deploy_audit``) adds the descriptors the platform reads or rewrites at
+#: build (``vercel.json`` arrives rewritten, ``public`` is a build output, ``.vercelignore`` is no code).
+CODE_PATHS = (
+    "app", "services", "utils", "templates", "static", "main.py", "presets_api.py", "presets_data.json",
+    "requirements.txt", "pyproject.toml", ".python-version",
+)
+#: Every hosted response names the code that produced it (``app.web.admission_gate``).
+CODE_HEADER = "X-SGAA-Code"
+
+
+def git_blob_id(data: bytes) -> str:
+    """The git object id of a file's bytes: what a commit names and what the export re-proves."""
+    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\x00" + data).hexdigest()
+
+
+def is_code_path(relative: str) -> bool:
+    parts = relative.split("/")
+    return parts[0] in CODE_PATHS and "__pycache__" not in parts and not relative.endswith(".pyc")
+
+
+def code_sha256(files) -> str:
+    """SHA-256 of the sorted ``path NUL blob`` list of the code paths among ``files`` ({path: blob id})."""
+    digest = hashlib.sha256()
+    for path in sorted(path for path in files if is_code_path(path)):
+        digest.update(path.encode("utf-8", "surrogatepass") + b"\x00" + files[path].encode("ascii") + b"\n")
+    return digest.hexdigest()
+
+
+def runtime_code_sha256(root=None) -> str:
+    """The code identity of the files this process runs from (the directory holding ``app``).
+
+    The same value ``deploy_audit`` computes from the reviewed export: the platform delivers the
+    uploaded code paths byte for byte (proven on the rehearsal project, MP-3 A17).  Compiled caches
+    are not code; a link is never followed.
+    """
+    from pathlib import Path
+
+    base = Path(root) if root is not None else Path(__file__).resolve().parent.parent
+    files: dict[str, str] = {}
+    for name in CODE_PATHS:
+        top = base / name
+        candidates = [top] if top.is_file() else sorted(top.rglob("*")) if top.is_dir() else []
+        for path in candidates:
+            if path.is_symlink() or not path.is_file():
+                continue
+            relative = path.relative_to(base).as_posix()
+            if is_code_path(relative):
+                files[relative] = git_blob_id(path.read_bytes())
+    return code_sha256(files)
+
+
+# ---------------------------------------------------------------------------
+# the opening authorization (MP-3 A17)
+# ---------------------------------------------------------------------------
+
+#: An ``open`` production deployment admits users only while the PROD database holds an authorization
+#: for its opening reference and its code, written by the cutover ledger when it records the reference
+#: (and, after the point of no return, for a forward fix).  The row carries the ledger entry itself, so
+#: the deployment re-derives the reference from it rather than trusting a well-formed value.  The
+#: control schema is outside ``public``: no Layer-2 set, fingerprint or schema contract includes it.
+OPENING_SCHEMA = "sgaa_cutover"
+OPENING_DDL = (
+    "CREATE SCHEMA IF NOT EXISTS sgaa_cutover",
+    "REVOKE ALL ON SCHEMA sgaa_cutover FROM PUBLIC",
+    "CREATE TABLE IF NOT EXISTS sgaa_cutover.opening ("
+    " reference_sha256 text NOT NULL, code_sha256 text NOT NULL, entry text NOT NULL,"
+    " created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz,"
+    " PRIMARY KEY (reference_sha256, code_sha256))",
+    "REVOKE ALL ON sgaa_cutover.opening FROM PUBLIC",
+)
+OPENING_EXISTS_SQL = "SELECT to_regclass('sgaa_cutover.opening') IS NOT NULL"
+OPENING_ROWS_SQL = "SELECT count(*) FROM sgaa_cutover.opening"
+OPENING_INSERT_SQL = "INSERT INTO sgaa_cutover.opening (reference_sha256, code_sha256, entry) VALUES (%s, %s, %s)"
+OPENING_SELECT_SQL = (
+    "SELECT entry FROM sgaa_cutover.opening WHERE reference_sha256 = %s AND code_sha256 = %s AND revoked_at IS NULL"
+)
+OPENING_REVOKE_SQL = "UPDATE sgaa_cutover.opening SET revoked_at = now() WHERE revoked_at IS NULL"
+OPENING_RESTORE_SQL = "UPDATE sgaa_cutover.opening SET revoked_at = NULL WHERE reference_sha256 = %s"
+VERCEL_PROJECT_ENV = "VERCEL_PROJECT_ID"
+
+
+def ledger_canonical(entry: dict) -> bytes:
+    """The cutover ledger's canonical bytes of an entry (``tools/cutover_ledger`` hashes these)."""
+    return json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def ledger_entry_hash(body: dict) -> str:
+    return hashlib.sha256(ledger_canonical(body)).hexdigest()
+
+
+def vercel_project_sha256(environ=None) -> str | None:
+    """The platform project this process belongs to (the platform sets ``VERCEL_PROJECT_ID``)."""
+    project = str(_environ(environ).get(VERCEL_PROJECT_ENV) or "").strip()
+    return hashlib.sha256(project.encode("utf-8")).hexdigest() if project else None
+
+
+_AUTHORIZING_TYPES = frozenset({"reference", "authorization"})
+
+
+def opening_entry_authorizes(entry_text, *, reference: str, database_identity, code: str, project) -> bool:
+    """Whether a stored ledger entry authorizes THIS process to admit users under ``reference``.
+
+    The entry must be intact (its own hash), be the reference itself or a forward-fix authorization
+    naming it, and name this database (its live identity), this code and this platform project.
+    Anything else -- a value from another ledger, another reference, another database, another
+    candidate or a hand-made row that is not a ledger entry -- authorizes nothing.
+    """
+    if not (reference and database_identity and code and project):
+        return False
+    try:
+        entry = json.loads(entry_text)
+        claimed = entry.pop("hash")
+        intact = isinstance(claimed, str) and ledger_entry_hash(entry) == claimed
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return False
+    if not intact or entry.get("type") not in _AUTHORIZING_TYPES:
+        return False
+    names_reference = claimed == reference if entry["type"] == "reference" else \
+        entry.get("opening_reference") == reference
+    return (names_reference and entry.get("database_identity_sha256") == database_identity
+            and entry.get("code_sha256") == code and entry.get("vercel_project_sha256") == project)
+
+
 def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
     """Hosted-only conditions that make starting wrong.
 
@@ -386,6 +514,18 @@ __all__ = [
     "SUPABASE_POOLER_SUFFIX",
     "SUPABASE_TRANSACTION_PORT",
     "connection_kind",
+    "CODE_HEADER",
+    "CODE_PATHS",
+    "OPENING_DDL",
+    "OPENING_SCHEMA",
+    "code_sha256",
+    "git_blob_id",
+    "is_code_path",
+    "ledger_canonical",
+    "ledger_entry_hash",
+    "opening_entry_authorizes",
+    "runtime_code_sha256",
+    "vercel_project_sha256",
     "database_source",
     "project_sha256",
     "source_identity_sha256",

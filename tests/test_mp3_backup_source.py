@@ -27,7 +27,7 @@ import pytest
 
 from app import hosting
 from app.storage import object_backup
-from tests.mp3_ledger_support import ALL_GATES, GOOD, OTHER_REF, PROD_REF, PROJECT, SOURCE, local_server_is_project
+from tests.mp3_ledger_support import OTHER_REF, PROD_REF, PROJECT, SOURCE
 from tools import hosted_smoke
 
 # ---- which project ------------------------------------------------------------------------------------
@@ -263,70 +263,129 @@ def test_an_object_set_seals_the_database_it_read_and_the_store_it_read_from(two
 
 
 @pytest.fixture
-def at_c11(tmp_path, monkeypatch):
-    """A ledger at C11 bound to the fixtures' PROD project; the local server mapped to that project."""
-    from tools import cutover_ledger as ledger
+def at_c11(two_databases, registry, tmp_path, monkeypatch):
+    """A ledger at C11 on the loopback server standing for PROD: qualified, baseline drilled, deployed."""
+    from tests import mp3_ledger_support as ls
 
-    local_server_is_project(monkeypatch, PROD_REF)
-    directory = tmp_path / "ledger"
-    ledger.init(directory)
-    for index, gate in enumerate(ALL_GATES):
-        ledger.grant(directory, gate, f"user-msg-{index}")
-    for state in ledger.STATES[: ledger.STATES.index("C11") + 1]:
-        ledger.advance(directory, state, GOOD[state])
+    prod_url, other_url = two_databases
+    scratch_name, scratch_url = registry.create()
+    monkeypatch.setenv("SUPABASE_URL", f"https://{PROD_REF}.supabase.co")  # the PROD project's store
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "not-a-real-key-" + "x" * 20)  # no object is read: no rows
     monkeypatch.setenv("SGAA_STORAGE_BUCKET", "sgaa-documentos")
-    return directory
+    monkeypatch.setenv("DATABASE_URL", prod_url)
+    directory = tmp_path / "ledger"
+    observer = ls.LocalObserver(database_url=prod_url)
+    ls.drive_local_to_c11(directory, observer, tmp=tmp_path, scratch_url=scratch_url)
+    try:
+        yield {"directory": directory, "observer": observer, "prod": prod_url, "other": other_url}
+    finally:
+        registry.drop(scratch_name)
 
 
-def _generation(monkeypatch, root, database_url, *, objects, store_ref=PROD_REF):
-    from tools import ops_backup
-
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    monkeypatch.setenv("SUPABASE_URL", f"https://{store_ref}.supabase.co")
-    result = ops_backup.run_generation(root, label="source", generations=2, objects=objects,
-                                       off_platform=root.parent / (root.name + "-off"))
-    assert result["result"] == "GENERATION_COMPLETE"
-
-
-def _record(directory, root, prod_url):
+def _backups(directory):
     from tools import cutover_ledger as ledger
 
-    return ledger.record_backup(directory, root, root.parent / (root.name + "-off"),
-                                observer=ledger.Observer(database_url=prod_url))
+    return [e for e in ledger.read_ledger(directory) if e["type"] == "backup" and e["kind"] == "GENERATION"]
+
+
+def _governed(state, root, *, url=None, runner=None):
+    from tests import mp3_ledger_support as ls
+    from tools import ops_backup
+
+    url = url or state["prod"]
+    kwargs = {"runner": runner} if runner else {}
+    return ops_backup.run_governed(state["directory"], root, root.parent / (root.name + "-off"), objects=True,
+                                   source=ls.LocalSource(url), observer=ls.LocalObserver(database_url=url), **kwargs)
+
+
+def _refused(call, *args, **kwargs):
+    from tools import ops_backup
+
+    with pytest.raises(ops_backup.Refused) as caught:
+        call(*args, **kwargs)
+    return caught.value.code
+
+
+class _MixedChildren:
+    """The real children, except that the object set reads another database (its rows, its sealed source)."""
+
+    def __init__(self, other_url):
+        self.other_url = other_url
+        self.switched = False
+
+    def __call__(self, command, env=None):
+        from tools import ops_backup
+
+        text = " ".join(command)
+        if "backup-objects" in text or "verify-backup" in text:
+            env = dict(env, DATABASE_URL=self.other_url)
+            self.switched = True
+        return ops_backup._run(command, env)
 
 
 @NEEDS_PG
-def test_real_generations_from_another_database_or_store_are_refused_and_prods_are_recorded(
-        two_databases, at_c11, tmp_path, monkeypatch):
+def test_only_a_governed_run_from_the_qualified_database_and_the_prod_store_is_ever_recorded(
+        at_c11, tmp_path, monkeypatch):
+    from tools import ops_backup
+
+    # DATABASE_URL names another database: refused before any step, nothing taken, nothing recorded.
+    code = _refused(_governed, at_c11, tmp_path / "other", url=at_c11["other"])
+    assert code == "SOURCE_NOT_THE_QUALIFIED_DATABASE" and not (tmp_path / "other").exists()
+    # The store is another project's: refused before any step.
+    monkeypatch.setenv("SUPABASE_URL", f"https://{OTHER_REF}.supabase.co")
+    assert _refused(_governed, at_c11, tmp_path / "store") == "STORE_NOT_THE_PROD_PROJECT"
+    assert not (tmp_path / "store").exists()
+    monkeypatch.setenv("SUPABASE_URL", f"https://{PROD_REF}.supabase.co")
+    # A child that read another database during the run (a mixed-source generation): refused at the record.
+    mixed = _MixedChildren(at_c11["other"])
+    code = _refused(_governed, at_c11, tmp_path / "mixed", runner=mixed)
+    assert code == "LEDGER_OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
+    assert mixed.switched and _backups(at_c11["directory"]) == []
+    # PROD's own generation is recorded with this run's provenance and the live identity.
+    result = _governed(at_c11, tmp_path / "prod")
+    [entry] = _backups(at_c11["directory"])
+    assert entry["provenance"] == "LIVE_RUN" and entry["object_set_name"] == result["object_set"]
+    assert entry["source_identity_sha256"] == at_c11["observer"].source().identity
+    on_disk = ops_backup.verify_generation(tmp_path / "prod", tmp_path / "prod-off")
+    assert on_disk["manifest_sha256"] == entry["manifest_sha256"]
+
+
+@NEEDS_PG
+def test_a_foreign_set_resealed_with_prod_metadata_is_never_what_the_ledger_records(at_c11, tmp_path, monkeypatch):
+    """Copied and resealed PROD metadata on a foreign dump: the seal and the sidecar verify and the source
+    names PROD -- and still nothing records it.  Only the set a governed run takes is ever recorded."""
+    from tests import mp3_ledger_support as ls
     from tools import cutover_ledger as ledger
+    from tools import ops_backup, pg_backup
 
-    prod_url, other_url = two_databases
-    prod_identity = hosting.source_identity_sha256(_live_source(prod_url))
+    root, off = tmp_path / "primary", tmp_path / "primary-off"
+    # The foreign set: a real dump of the other database, its manifest source rewritten to PROD's, resealed.
+    monkeypatch.setenv(pg_backup.SOURCE_URL_ENV, at_c11["other"])
+    (root / "layer2").mkdir(parents=True)
+    foreign = pg_backup.backup(str(root / "layer2"), "auto-planted")
+    manifest = dict(foreign.manifest)
+    manifest.pop("manifest_sha256")
+    prod_manifest = next((tmp_path / "baseline" / "layer2").glob("*.manifest.json"))
+    manifest["source"] = json.loads(prod_manifest.read_text())["source"]
+    foreign.paths.manifest.write_bytes(pg_backup.manifest_bytes(pg_backup.seal_manifest(manifest)))
+    pg_backup.verify_artifact(str(foreign.paths.manifest))  # the forgery verifies as an artifact
+    monkeypatch.setenv(pg_backup.SOURCE_URL_ENV, at_c11["prod"])
+    (off / "layer2").mkdir(parents=True)
+    for item in (root / "layer2").iterdir():
+        (off / "layer2" / item.name).write_bytes(item.read_bytes())
+    base = foreign.paths.manifest.name[: -len(".manifest.json")]
+    for directory in (root, off):
+        ops_backup._register(directory, "database", base)
+    planted = ops_backup.verify_generation(root, off)
+    assert hosting.source_identity_sha256(planted["database_source"]) == at_c11["observer"].source().identity
+    # Nothing records a set found on disk: the command line has no such command ...
+    import io
 
-    def refused(root):
-        with pytest.raises(ledger.Refused) as caught:
-            _record(at_c11, root, prod_url)
-        return caught.value.code
-
-    # The other database's Layer-2 set, offered while DATABASE_URL is PROD.
-    _generation(monkeypatch, tmp_path / "other", other_url, objects=True)
-    assert refused(tmp_path / "other") == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
-    # PROD's Layer-2 set paired with the other database's object set (the newest of each in one root).
-    _generation(monkeypatch, tmp_path / "mixed", other_url, objects=True)
-    _generation(monkeypatch, tmp_path / "mixed", prod_url, objects=False)
-    assert refused(tmp_path / "mixed") == "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
-    # PROD's database with an object set read from another project's store.
-    _generation(monkeypatch, tmp_path / "store", prod_url, objects=True, store_ref=OTHER_REF)
-    assert refused(tmp_path / "store") == "OBJECT_SET_NOT_FROM_THE_PROD_PROJECT"
-    # PROD's own generation is recorded, with PROD's identity; nothing foreign was.
-    _generation(monkeypatch, tmp_path / "prod", prod_url, objects=True)
-    entry = _record(at_c11, tmp_path / "prod", prod_url)
-    assert entry["source_identity_sha256"] == prod_identity and entry["object_set_name"] != "NONE"
-    assert [e["type"] for e in ledger.read_ledger(at_c11)].count("backup") == 1
-    # DATABASE_URL left on another database (a drill's scratch, say) while PROD's next generation is
-    # offered: the live database is not the one the generation came from.
-    _generation(monkeypatch, tmp_path / "prod", prod_url, objects=False)
-    with pytest.raises(ledger.Refused) as caught:
-        _record(at_c11, tmp_path / "prod", other_url)
-    assert caught.value.code == "BACKUP_NOT_FROM_THE_PROD_DATABASE"
+    assert ledger.main(["record-backup", "--ledger-dir", str(at_c11["directory"]), "--expect-head", "0" * 64,
+                        "--backup-root", str(root), "--off-platform", str(off)],
+                       out=io.StringIO(), err=io.StringIO()) == 2
+    # ... and a governed run into the same directory takes and records its own set, never the planted one.
+    result = _governed(at_c11, root)
+    [entry] = _backups(at_c11["directory"])
+    assert entry["manifest_sha256"] != planted["manifest_sha256"] and entry["object_set_name"] == result["object_set"]
+    assert ops_backup.verify_generation(root, off)["manifest_sha256"] == entry["manifest_sha256"]
