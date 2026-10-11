@@ -475,6 +475,38 @@ def test_the_opening_needs_a_generation_within_the_cadence(directory, observer, 
     assert ledger.open_admission(directory, observer=observer)["state"] == "C12"
 
 
+def test_the_opening_needs_an_object_set_within_its_weekly_cadence(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    taken = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
+    _lift(observer, taken)
+    for day in range(1, 12):  # fresh Layer-2 every day, but no new object set for 11 days
+        clock["now"] += timedelta(days=1)
+        observer.generation = dict(observer.generation, manifest_sha256=_manifest(500 + day))
+        ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    assert _code(ledger.open_admission, directory, observer=observer) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = dict(observer.generation, manifest_sha256=_manifest(600), object_set="fresh-objects")
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    assert ledger.open_admission(directory, observer=observer)["state"] == "C12"
+
+
+def test_status_names_the_opening_reference_to_set_and_to_restore(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C11", observer=observer)
+    assert ledger.status(directory)["opening_reference"] is None
+    ledger.record_backup(directory, directory.parent, directory.parent, observer=observer)
+    taken = ledger.take_reference(directory, _reference_file(directory), directory.parent, directory.parent,
+                                  cadence_hours=24, observer=observer)
+    assert ledger.status(directory)["opening_reference"] == taken["hash"]
+    _lift(observer, taken)
+    ledger.open_admission(directory, observer=observer)
+    assert ledger.status(directory)["opening_reference"] == taken["hash"]  # still the one to restore after C12
+    ledger.advance(directory, "C13", GOOD["C13"])
+    assert ledger.status(directory)["opening_reference"] == taken["hash"]
+
+
 def test_plain_http_is_observed_only_on_the_loopback():
     for url in ("http://sgaa.example.test", "http://10.0.0.5:8080"):
         observer = ledger.Observer(url, allow_insecure=True)

@@ -41,9 +41,9 @@ ADMISSION_OPERATOR = "operator"
 ADMISSION_OPEN = "open"
 OPERATOR_TOKEN_ENV = "SGAA_OPERATOR_TOKEN"
 OPERATOR_TOKEN_MIN_LENGTH = 32
-#: An ``open`` production deployment names the cutover reference it was lifted with (the digest the
-#: ledger printed when it took the reference while admission was closed) and announces a tag of it, so
-#: the opening is bound to that reference and cannot happen before it (MP-3 A15).
+#: An ``open`` production deployment names the cutover reference it was lifted with (the hash of the
+#: reference entry the ledger printed when it took the reference while admission was closed) and
+#: announces a tag of it; the ledger's ``open`` proves the binding (MP-3 A15).
 OPENING_REFERENCE_ENV = "SGAA_OPENING_REFERENCE"
 
 _SERVERLESS_MARKERS = ("VERCEL", "AWS_LAMBDA_FUNCTION_NAME")
@@ -170,7 +170,7 @@ def admission_mode(environ=None, *, production: bool) -> str | None:
 
 
 def opening_reference(environ=None) -> str | None:
-    """The cutover reference digest an ``open`` deployment was lifted with: 64 lowercase hex, else None."""
+    """The reference entry hash an ``open`` deployment was lifted with: 64 lowercase hex, else None."""
     raw = str(_environ(environ).get(OPENING_REFERENCE_ENV) or "").strip().lower()
     return raw if len(raw) == 64 and all(c in "0123456789abcdef" for c in raw) else None
 

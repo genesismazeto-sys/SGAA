@@ -31,10 +31,10 @@ ALWAYS REACHABLE
 
 THE OPENING
     ``SGAA_ADMISSION=open`` registers no gate.  In production (and on any serverless
-    platform) it also requires ``SGAA_OPENING_REFERENCE``, the digest of the cutover
-    reference taken while admission was closed; every response then announces
-    ``X-SGAA-Opening: <tag of that reference>`` so the ledger can prove the lift is bound to
-    the reference it recorded, and an opening before any reference cannot start.
+    platform) it also requires ``SGAA_OPENING_REFERENCE``, the hash of the cutover ledger's
+    reference entry (taken while admission was closed); every response then announces
+    ``X-SGAA-Opening: <tag of that value>`` so the ledger can prove the lift is bound to the
+    reference it recorded.  The process checks only the value's shape.
 """
 
 from __future__ import annotations

@@ -179,7 +179,7 @@ the user has not accepted.
 | C9 DEPLOYED_DARK | GD1 | production deployment of the exact commit from a clean export, re-verified against the commit's blob ids immediately before the upload (`deploy_audit verify`, A15); admission closed to everyone but the operator (`SGAA_ADMISSION=operator`, A15); readiness `--database` ready, the one rate-limit rule published, the scheduler front disabled (no `CRON_SECRET`; the daily cron entry in the committed descriptor reaches a disabled front) | deployment identity, deploy-tree digest, admission CLOSED |
 | C10 SMOKED | — | `hosted_smoke` with the operator credential: TLS and hostname, `/health`, login page and cookie flags, response headers, unauthenticated admin refusal, static asset, scheduler probes (404/401), the Data API proof of C1's project, read-only authenticated checks by an operator account, and, with an anonymous client, admission still CLOSED; its write set is pinned by a fingerprint before and after | report |
 | C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI behind the admission gate (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; `CRON_SECRET` set and the deployment redone (the same commit) so the daily cron reaches the enabled front and, if the backlog needs it, the external trigger enabled (its bearer in Supabase Vault); first scheduled passes observed; admission still CLOSED | results; none `reconciliation_required` |
-| C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger; the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference digest, same commit redeployed and promoted) and `open`, which observes it and the reference's tag; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
+| C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger; the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference entry's hash, same commit redeployed and promoted) and `open`, which observes it and the reference's tag; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
 | C13 PONR_RECORDED | — | the first successful non-operator business write on PROD is detected (fingerprint delta) and recorded explicitly in the ledger; window W starts | the write's class and time, never its content |
 | C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation made after C13 restore-validated; object set verified; hand-over to MP-4 | window report |
 
@@ -421,7 +421,7 @@ PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" de
 | GD2 | redeploy with `CRON_SECRET`; enable the external trigger (a `pg_cron` job in PROD is a PROD database write; its bearer is stored by the user in Supabase Vault, never in the job) when the backlog needs it | redeploy without; job unscheduled, Vault entry deleted |
 | GG1 | register the callback on the legacy OAuth client; connect Google through the hosted UI | disconnect |
 | GG2 | first live mirror passes against the institution's Drive (additive; the mirror never deletes) | files removed by hand |
-| GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed, then the lift (`SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE` = the reference digest, same commit redeployed and promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | close admission again, remove the open deployments and roll back on the ledger's proof while pending (§3.4) |
+| GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed, then the lift (`SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE` = the reference entry's hash, same commit redeployed and promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | close admission again, remove the open deployments and roll back on the ledger's proof while pending (§3.4) |
 | GX1 | empty the PROD database or remove unreferenced PROD bucket objects this phase created, before PONR | irreversible by design |
 
 User-only acts, never gates the executor holds: creating and revoking credentials (including the DEV
@@ -797,11 +797,15 @@ Executor amendments (consequences of the above; not material beyond what the use
   lift and the rollback redeploys are promoted and the open deployments removed; one database address
   kind; the toggle is the user's statement. A second, targeted recheck of the fix (`af8c809`) returned
   PASS; its non-material observations were then closed too: the lift is bound to the reference entry's
-  hash (unknowable in advance, so neither a value left from an earlier attempt nor a precomputed
-  fingerprint opens), the rollback removes `SGAA_OPENING_REFERENCE`, the reference requires the probed
+  hash (not known before the ledger records the reference, so neither a value left from an earlier attempt
+  nor a precomputed fingerprint opens; it is not a secret), the rollback removes `SGAA_OPENING_REFERENCE`, the reference requires the probed
   deployment's scheduler front to be enabled (so an older deployment cannot stand in for production),
   plain http is observed only on the loopback, `open` refuses when the newest generation is older than
-  1.5 x the cadence, and the C11 exit after a changed fingerprint is documented. Found on the way: run as scripts (`python tools/...`, as the
+  1.5 x the cadence, and the C11 exit after a changed fingerprint is documented. A third, targeted recheck of
+  that commit (`99f2275`) returned PASS; its notes were closed as well: the opening also refuses an object set
+  older than 1.5 weeks, `status` prints the opening reference (to set it, and to restore it after a refused
+  rollback), the runbook checks the generation's age before the lift and says how to re-open after a refused
+  rollback, and the C11 abandon exit applies only when no lift happened. Found on the way: run as scripts (`python tools/...`, as the
   runbook says), the ledger and `ops_backup` could not import the repository's modules; fixed and pinned
   by a subprocess test. Evidence: section 17.
 

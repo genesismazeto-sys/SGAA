@@ -40,7 +40,7 @@ refusal is a `HostingConfigurationError` carrying fixed codes and variable names
 | `HOSTED_PUBLIC_URL_INVALID` | production only: `APP_PUBLIC_BASE_URL` missing or not https | `APP_PUBLIC_BASE_URL` |
 | `HOSTED_ADMISSION_UNDECIDED` | production, or any process on a serverless platform (a deployment that forgot `APP_ENV` included): `SGAA_ADMISSION` is neither `operator` nor `open` (unset included); only a non-production process off the platform takes an unset value as `open` | `SGAA_ADMISSION` |
 | `HOSTED_OPERATOR_TOKEN_REQUIRED` | `SGAA_ADMISSION=operator` without a valid `SGAA_OPERATOR_TOKEN` (printable ASCII, at least 32 characters) | `SGAA_OPERATOR_TOKEN` |
-| `HOSTED_OPENING_REFERENCE_REQUIRED` | the same processes: `SGAA_ADMISSION=open` without a well-formed `SGAA_OPENING_REFERENCE` (64 hex: the cutover reference digest) | `SGAA_OPENING_REFERENCE` |
+| `HOSTED_OPENING_REFERENCE_REQUIRED` | the same processes: `SGAA_ADMISSION=open` without a well-formed `SGAA_OPENING_REFERENCE` (64 hex: the cutover ledger's reference entry hash) | `SGAA_OPENING_REFERENCE` |
 
 `TRUST_PROXY_XFF` is a decision, not a default. On Vercel set `1`: the platform
 overwrites `X-Forwarded-For` with the real client address and never forwards a
@@ -70,7 +70,7 @@ control, so the hosted runtime carries a fail-closed admission switch
   gate the application's own authentication and RBAC decide, as after the opening.
 - `SGAA_ADMISSION=open`: no gate is installed. In production (and on a serverless platform) it
   needs `SGAA_OPENING_REFERENCE`, the hash of the reference entry the cutover ledger printed when
-  it took the reference while admission was closed (it cannot be known before that entry exists);
+  it took the reference while admission was closed (not known before that entry exists);
   every response then carries `X-SGAA-Opening: <tag>` (`app.hosting.opening_tag`), which the
   ledger checks before it records the opening. The process checks only the value's shape; the
   binding is proven by the ledger. Setting

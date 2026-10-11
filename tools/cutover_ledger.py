@@ -380,6 +380,7 @@ def _summary(entries: list[dict]) -> dict:
     carried: dict[str, object] = {}
     entered: dict[str, dict] = {}
     reference = None  # the latest reference taken in the current state
+    opening_reference = None  # the reference entry C12 was opened from
     backups: list[dict] = []
     for entry in entries:
         kind = entry["type"]
@@ -388,6 +389,8 @@ def _summary(entries: list[dict]) -> dict:
             rolled_back = False
             carried[entry["state"]] = entry["evidence"]
             entered[entry["state"]] = entry
+            if state == OPENING_STATE and reference is not None:
+                opening_reference = reference["hash"]
             reference = None
         elif kind == "grant":
             granted[entry["gate"]] = entry["ref"]
@@ -398,7 +401,8 @@ def _summary(entries: list[dict]) -> dict:
         elif kind == "backup":
             backups.append(entry)
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
-            "entered": entered, "reference": reference, "backups": backups}
+            "entered": entered, "reference": reference, "backups": backups,
+            "opening_reference": opening_reference}
 
 
 def _evidence_of(summary: dict, state: str) -> dict:
@@ -802,7 +806,13 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
             raise Refused("OPENING_NOT_BOUND_TO_THE_REFERENCE")
         cadence_hours = int(reference["backup_cadence_hours"])
         newest = max(_parse(b["generation_at"]) for b in summary["backups"])
-        if _CLOCK() - newest > timedelta(hours=cadence_hours * CADENCE_TOLERANCE):
+        object_sets: dict[str, datetime] = {}  # an object set dates from the first generation that carried it
+        for backup in summary["backups"]:
+            if backup["object_set_name"] != "NONE":
+                object_sets.setdefault(backup["object_set_name"], _parse(backup["generation_at"]))
+        newest_objects = max(object_sets.values())
+        if _CLOCK() - newest > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) or \
+                _CLOCK() - newest_objects > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
             raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation first: the cadence starts at the opening")
         evidence = {
             "reference_fingerprint_sha256": reference["reference_fingerprint_sha256"],
@@ -914,7 +924,17 @@ def status(directory: Path) -> dict:
         "granted": sorted(summary["granted"]),
         "rolled_back": summary["rolled_back"],
         "ponr_recorded": bool(state and STATES.index(state) >= STATES.index(PONR_STATE)),
+        # The value SGAA_OPENING_REFERENCE carries (also after a refused rollback, to re-open).
+        "opening_reference": _opening_reference(summary),
     }
+
+
+def _opening_reference(summary: dict):
+    if summary["state"] == "C11" and summary["reference"] is not None:
+        return summary["reference"]["hash"]
+    if summary["state"] is not None and STATES.index(summary["state"]) >= STATES.index(OPENING_STATE):
+        return summary["opening_reference"]
+    return None
 
 
 # ---------------------------------------------------------------------------

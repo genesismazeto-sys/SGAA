@@ -359,12 +359,16 @@ after the reference.
    the live references). It then takes the fingerprint itself, writes the reference file (digests
    and counts only), records the reference, the database identity, the cadence and the RPO (= the
    cadence), and prints the new entry's `hash` (also printed as `head`).
-3. The lift (GO): the user sets `SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE=<that hash>`
-   (not a secret) and the same commit is redeployed and promoted (C9 steps 1–4). A production
-   deployment set `open` without a well-formed value does not start
-   (`HOSTED_OPENING_REFERENCE_REQUIRED`). The value is the reference entry's chain hash: it exists
-   only once this ledger has recorded the reference and cannot be computed beforehand (not even
-   from a fingerprint snapshot), and `open` accepts no other. The open deployment announces a tag
+3. The lift (GO). First, if the newest generation is older than the cadence allows (1.5 × `h`,
+   or 1.5 weeks for the object set), record a new one (step 1 again): `open` would refuse it
+   (`BACKUP_TOO_OLD_TO_OPEN`) only after users are admitted. Then the user sets
+   `SGAA_ADMISSION=open` and `SGAA_OPENING_REFERENCE=<that hash>` (not a secret; `status` also
+   prints it as `opening_reference`) and the same commit is redeployed and promoted (C9 steps
+   1–4). A production deployment set `open` without a well-formed value does not start
+   (`HOSTED_OPENING_REFERENCE_REQUIRED`). The value is the reference entry's chain hash: it is not
+   known before this ledger records the reference (it covers the chain position and time), so a
+   value left from an earlier attempt or computed from a fingerprint snapshot does not match, and
+   `open` accepts no other. The open deployment announces a tag
    of it on every response (`X-SGAA-Opening`). `SGAA_OPENING_REFERENCE` stays set for as long as
    production is open (an open production deployment without it does not start); a rollback
    removes it. Keep `SGAA_OPERATOR_TOKEN` in the platform until C14: a rollback closes admission
@@ -445,7 +449,13 @@ by the operator is never the evidence. Mirror files already in the Drive stay (a
 From C11 with a reference, a `FINGERPRINT_CHANGED` (an operator write after the reference, or a
 legacy-hash sign-in) cannot be followed by C13 at once, and no second reference is taken: the
 cutover either goes forward -- the lift, `open`, then C13 recorded immediately with the changed
-fingerprint -- or is abandoned with a new ledger (PROD is a copy; emptying it needs GX1).
+fingerprint -- or, only if no lift has happened (no user can have written), is abandoned with a new
+ledger (PROD is a copy; emptying it needs GX1).
+
+When a rollback from C12 is refused (`FINGERPRINT_CHANGED`), production goes forward: restore
+`SGAA_ADMISSION=open`, `SGAA_OPENING_REFERENCE=<status opening_reference>` and `CRON_SECRET`,
+redeploy and promote, re-enable the external trigger if it was used, and record C13 with the
+changed fingerprint.
 
 After C13 there is no rollback: use the latest Layer-2 generation and the frozen source for
 manual reconciliation. Never improvise a reverse migration. A forward-fix deployment is the
