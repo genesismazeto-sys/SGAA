@@ -493,7 +493,13 @@ other change -- including the credential-version bump of a legacy-hash re-hash, 
 exactly like a password change -- is a business write. Record it: `advance --state C13` with
 `write_class` (the changed table name as printed), `detected_at`, `current_fingerprint_sha256`
 (the snapshot that showed it; it must differ from the reference) and `adjudicated_by_operator`
-true. From here the cutover is forward-fix only (SPEC §3.4), gates that only serve rollback are
+true. A restore through "Recuperar banco de dados" is the PONR even when it restores the reference's
+own content (SPEC A19 (12), (13)): record it **(user terminal**, `PGPASSWORD`**)** with `write_class`
+`ADMIN_RESTORE`, `detected_at` the restore's moment (the production log's `event=pg_restore_done`),
+the unchanged `current_fingerprint_sha256`, `adjudicated_by_operator` true and
+`safety_copy_manifest_sha256` (the manifest of the restore's safety copy, as "Gerações registradas"
+shows it): `advance` finds that receipt in PROD, made between the opening and `detected_at`, or
+refuses. From here the cutover is forward-fix only (SPEC §3.4), gates that only serve rollback are
 refused, and the window starts.
 
 ### C14 WINDOW_CLOSED
