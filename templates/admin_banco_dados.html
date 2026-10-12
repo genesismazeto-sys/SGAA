@@ -591,7 +591,7 @@
     {% endif %}
     {# U5-E: SQLite file backup/restore is unavailable for a PostgreSQL backend. #}
     {% if sqlite_maintenance_supported is sameas false %}
-      <p class="db-cloud-store-warning" role="status">O banco de dados configurado é PostgreSQL: backup, restauração e envio do arquivo SQLite estão indisponíveis e não são executados por esta tela.</p>
+      <p class="db-cloud-store-warning" role="status">O banco de dados configurado é PostgreSQL: a restauração e as rotinas do arquivo SQLite não se aplicam; o backup do banco é feito pelas operações abaixo.</p>
     {% endif %}
   </header>
 
@@ -619,7 +619,7 @@
     {% set protection = database_protection or {'state': 'UNREADABLE'} %}
     <article class="db-card" data-database-protection="postgresql" data-protection-state="{{ protection.state }}">
       <h2>Proteção do banco</h2>
-      <p>Backups do PostgreSQL feitos pelo operador, com cópia fora da plataforma e restauração de teste. O plano do provedor não inclui backup próprio.</p>
+      <p>Backups do PostgreSQL enviados às contas em nuvem e gerações completas do operador, com restauração de teste. O plano do provedor não inclui backup próprio.</p>
       {% if protection.state == 'UNREADABLE' %}
         <p class="db-cloud-store-warning" role="status">Não foi possível ler os registros de backup deste banco.</p>
       {% else %}
@@ -720,7 +720,7 @@
     {% if file_backup %}
     <p>Configure onde os snapshots serão salvos e enviados. O Google Drive é o provedor em nuvem ativo desta entrega.</p>
     {% else %}
-    <p>Contas em nuvem conectadas a esta instalação. O envio do backup do banco por arquivo não se aplica ao PostgreSQL.</p>
+    <p>Contas em nuvem conectadas a esta instalação. "Gerar backup agora" envia o backup do banco para a pasta de destino de cada conta conectada.</p>
     {% endif %}
     {% if file_backup %}
     {% if auth_can('banco_dados', 'edit') %}
@@ -864,12 +864,10 @@
               <span>Não conectado</span>
             </div>
           {% endif %}
-          {% if file_backup %}
           <div class="db-provider-line">
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ google_folder_label or 'Backups/sistema' }}">{{ google_folder_label or 'Backups/sistema' }}</span>
           </div>
-          {% endif %}
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else ('ambiente de hospedagem' if cloud_credentials_environment_managed else 'ambiente legado') if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
@@ -895,8 +893,7 @@
           it renders in the state-driven note region both cards already share
           with "Último upload"/"Falha" -- never as a common metadata row.
         #}
-        {% if not file_backup %}
-        {% elif drive_settings.gdrive_last_upload_error %}
+        {% if drive_settings.gdrive_last_upload_error %}
           <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.gdrive_last_upload_error[:120] }}</p>
         {% elif gdrive_last_upload_label %}
           <p class="db-provider-note"><strong>Último upload:</strong> {{ gdrive_last_upload_label }}</p>
@@ -922,7 +919,6 @@
                   <i class="lucide" data-lucide="circle-check"></i>Testar conexão
                 </button>
               {% endif %}
-              {% if file_backup %}
               <button
                 type="button"
                 class="btn"
@@ -939,7 +935,7 @@
               >
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
-              {% endif %}
+
 
               <a href="{{ url_for('admin_backup_google_connect') }}" class="btn" title="{% if gdrive_connection_status == 'needs_reconnection' or gdrive_connected or gdrive_legacy_connection_detected %}Reconectar Google Drive{% else %}Conectar Google Drive{% endif %}">
                 <i class="lucide" data-lucide="refresh-cw"></i>Conectar
@@ -1109,19 +1105,16 @@
               <span>Não conectado</span>
             </div>
           {% endif %}
-          {% if file_backup %}
           <div class="db-provider-line">
             <i class="lucide" data-lucide="folder"></i>
             <span class="db-path db-path-ellipsis" data-ptip="{{ onedrive_folder_label or 'SGAA - Backups' }}">{{ onedrive_folder_label or 'SGAA - Backups' }}</span>
           </div>
-          {% endif %}
           <div class="db-provider-line is-muted">
             <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else ('ambiente de hospedagem' if cloud_credentials_environment_managed else 'ambiente legado') if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
         </div>
 
-        {% if not file_backup %}
-        {% elif drive_settings.onedrive_last_upload_error %}
+        {% if drive_settings.onedrive_last_upload_error %}
           <p class="db-provider-note" style="color:#dc2626;"><strong>Falha:</strong> {{ drive_settings.onedrive_last_upload_error[:120] }}</p>
         {% elif onedrive_last_upload_label %}
           <p class="db-provider-note"><strong>Último upload:</strong> {{ onedrive_last_upload_label }}</p>
@@ -1145,7 +1138,6 @@
                 </button>
               {% endif %}
 
-              {% if file_backup %}
               <button
                 type="button"
                 class="btn"
@@ -1162,7 +1154,7 @@
               >
                 <i class="lucide" data-lucide="folder-search"></i>Selecionar pasta
               </button>
-              {% endif %}
+
 
               {% if onedrive_connection_status == 'not_configured' %}
                 <button type="button" class="btn" disabled aria-disabled="true" title="Disponível após configurar as credenciais Microsoft (MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID)">
@@ -1584,13 +1576,23 @@
     <div class="db-card-head">
       <span class="db-section-label">Operações</span>
     </div>
-    <p>Os backups do banco e dos arquivos do armazenamento e as restaurações de teste rodam na máquina de operação, que guarda a cópia fora da plataforma (<code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>). Os prazos abaixo seguem a política de retenção.</p>
+    <p>Use "Gerar backup agora" para criar uma cópia imediata e verificada do banco e enviá-la às contas em nuvem conectadas, na pasta de destino de cada uma; cada pasta guarda as gerações definidas na política de retenção. As gerações completas (banco e arquivos do armazenamento, com cópia fora da plataforma) e as restaurações de teste são feitas na máquina de operação (<code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>).</p>
     <div class="db-meta">
       <div><strong>Backup do banco:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span> {{ protection.latest_generation_label or 'nenhuma geração registrada' }}{% if protection.next_generation_due_label %} · próximo até {{ protection.next_generation_due_label }}{% endif %}</div>
       <div data-protection-objects-status="{{ protection.objects_status.code }}"><strong>Arquivos do armazenamento:</strong> <span class="badge status-pill {{ protection.objects_status.css }}">{{ protection.objects_status.label }}</span> {{ protection.latest_object_set_label or 'nenhum conjunto registrado' }}{% if protection.next_object_set_due_label %} · próximo até {{ protection.next_object_set_due_label }}{% endif %}</div>
       <div><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span>{% if protection.validation %} {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados) · próxima até {{ protection.next_restore_test_due_label }}{% endif %}</div>
       <div><strong>Perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h{% if protection.ceiling_hours %} · teto registrado na abertura: {{ protection.ceiling_hours }} h{% endif %}</div>
     </div>
+    {% if auth_can('banco_dados', 'edit') %}
+      <form method="post" action="{{ url_for('admin_banco_dados_backup') }}" data-pg-backup-now>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="db-actions">
+          <button type="submit" class="btn primary">
+            <i class="lucide" data-lucide="database"></i>Gerar backup agora
+          </button>
+        </div>
+      </form>
+    {% endif %}
   </article>
   {% endif %}
 
@@ -1677,9 +1679,9 @@
             {% for item in protection.recent %}
               <tr>
                 <td>{{ item.generation_label }}</td>
-                <td>{{ 'Linha de base' if item.baseline else 'Geração' }}</td>
+                <td>{{ 'Linha de base' if item.baseline else ('Backup agora' if item.snapshot else 'Geração') }}</td>
                 <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
-                <td>{{ 'Verificada' if item.off_platform else '—' }}</td>
+                <td>{% if item.snapshot %}{{ item.destinations|map('replace', 'google', 'Google Drive')|map('replace', 'onedrive', 'OneDrive')|join(', ') or '—' }}{% else %}{{ 'Verificada' if item.off_platform else '—' }}{% endif %}</td>
                 <td><code>{{ item.manifest_short }}</code></td>
               </tr>
             {% endfor %}
@@ -1728,9 +1730,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  {# The scripts below serve the file-backup surfaces only (cloud-folder picker, Google
-     Picker, restore upload cards): a PostgreSQL page renders none of their targets. #}
-  {% if sqlite_maintenance_supported is not sameas false %}
+  {# The scripts below serve the cloud-folder picker and the Google Picker (both backends: the
+     destination of "Gerar backup agora", MP-3 A19) and the restore upload cards (SQLite only;
+     each binding returns early when its target is absent). #}
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
@@ -2528,5 +2530,4 @@
       }
     })();
   </script>
-  {% endif %}
 {% endblock %}

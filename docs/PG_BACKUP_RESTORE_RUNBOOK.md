@@ -478,7 +478,10 @@ The administrator sets the policy on Banco de dados > Política de retenção: d
 frequency (the RPO), object-set frequency, generations kept, restore-test interval. `ops_backup`
 reads it from the database it backs up and keeps that many generations in each directory
 (`--generations` may keep more, never fewer); the operator runs generations and drills on that
-cadence.
+cadence. "Gerar backup agora" on the same page sends a verified snapshot (`sgaa-pg-snapshot-*.db`,
+schema v16 SQLite) to the connected cloud drives; to restore one into PostgreSQL, provision an empty
+target and run the Path-B tool on the downloaded file (`python -m app.pg_migrate_from_sqlite`, the file's
+SHA-256 as the expected digest).
 
 The Banco de dados page shows the protection posture from records published into the
 database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).

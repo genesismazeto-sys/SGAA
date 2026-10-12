@@ -219,6 +219,19 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "catalogued literals. 0 additions, 1 retirement",
         -1,
     ),
+    (
+        "MP-3 A19 'Gerar backup agora' under PostgreSQL: the manual backup is "
+        "restored as a verified snapshot sent to the connected cloud drives, "
+        "with its outcomes 'Backup do banco gerado e enviado para {value_1}.' "
+        "(msg_a264d1eb18b22533), '... e enviado para {value_1}, mas o envio "
+        "falhou para {value_2}.' (msg_e53297836d1be823), 'Backup do banco "
+        "gerado, mas o envio falhou para {value_1}.' (msg_2e248a5226c2b973), "
+        "'Nenhuma conta em nuvem está conectada para receber o backup do "
+        "banco.' (msg_9cbd187e1295c62a) and 'Não foi possível gerar o backup "
+        "do banco. Nada foi enviado.' (msg_6d7b2ffb8df4ca6e). 5 additions, "
+        "0 retirements",
+        5,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -263,9 +276,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # delete refusals for one that names the real dependency, to 581; U5-B retires
 # the unreachable atividade_versao.grupo classifier message, to 580; U5-E adds
 # the SQLite-maintenance-unsupported refusal, to 581; STORAGE S3-A retires the
-# request-flow Google Drive flash, to 580.
+# request-flow Google Drive flash, to 580; MP-3 A19 restores "Gerar backup agora"
+# under PostgreSQL with its five outcome messages, to 585.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "34780f80e5d31e41d0888b54b000234ef0a4a0abf577ab9335f9e8085ac6e2c3"
+    "7dc151fcec55e00ff044d9b928e031f848d7d47bd16a943ed97f5853ee9c0386"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -799,6 +813,26 @@ def catalog_keys_before_version_delete(keys) -> set[str]:
     return (set(keys) - set(AVD1_VERSION_DELETE_KEYS)) | set(
         AVD1_VERSION_DELETE_RETIRED_KEYS
     )
+
+
+A19_BACKUP_NOW_KEYS = frozenset(
+    {
+        "msg_a264d1eb18b22533",  # Backup do banco gerado e enviado para {value_1}.
+        "msg_e53297836d1be823",  # ... e enviado para {value_1}, mas o envio falhou para {value_2}.
+        "msg_2e248a5226c2b973",  # Backup do banco gerado, mas o envio falhou para {value_1}.
+        "msg_9cbd187e1295c62a",  # Nenhuma conta em nuvem está conectada para receber o backup do banco.
+        "msg_6d7b2ffb8df4ca6e",  # Não foi possível gerar o backup do banco. Nada foi enviado.
+    }
+)
+
+
+def catalog_keys_before_a19_backup_now(keys) -> set[str]:
+    """Undo the MP-3 A19 term: drop the PostgreSQL "Gerar backup agora" outcomes.
+
+    A19 is the newest term, so a reconstruction walks back through this first,
+    then S3-A, U5-E, U5-B and every older term.
+    """
+    return set(keys) - set(A19_BACKUP_NOW_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

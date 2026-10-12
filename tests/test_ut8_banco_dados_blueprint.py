@@ -117,6 +117,8 @@ POST_UT8_HELPER_NAMES = (
     # MP-3 A19: the PostgreSQL backup posture card (delegates to app.backup.pg_posture).
     "_database_protection_context",
     "_policy_fields",
+    # MP-3 A19: "Gerar backup agora" under PostgreSQL (delegates to app.backup.pg_snapshot).
+    "_postgres_backup_now",
 )
 
 CONSTANT_NAMES = (

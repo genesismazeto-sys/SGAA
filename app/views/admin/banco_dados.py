@@ -1829,11 +1829,94 @@ def admin_banco_dados_drive_settings():
     flash("Configurações de destino em nuvem salvas.", "success")
     return redirect(url_for("admin_banco_dados"))
 
+_PG_SNAPSHOT_DEFAULT_FOLDER = "SGAA - Backups"
+
+
+def _postgres_backup_now():
+    """MP-3 A19: "Gerar backup agora" under PostgreSQL (owner: ``app.backup.pg_snapshot``).
+
+    A verified snapshot of the live database is sent to every connected cloud drive, into its
+    destination folder ("Selecionar pasta"); each drive keeps the newest snapshots the retention
+    policy sets (only SGAA's own snapshot files are ever pruned); the receipt joins the posture.
+    """
+    import tempfile
+    import time
+
+    from app.backup import pg_snapshot
+    from app import cloud_drives as _cd
+
+    conn = get_db_connection()
+    raw = getattr(conn, "raw_connection", None)
+    drive_settings = get_drive_settings(conn)
+    keep = pg_posture.read_policy(raw)["pg_retention_generations"] if raw is not None else pg_posture.MIN_GENERATIONS
+    targets = [provider for provider in ("google", "onedrive") if _get_active_cloud_account(conn, provider)]
+    if not targets:
+        flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
+        return redirect(url_for("admin_banco_dados"))
+    started = time.monotonic()
+    sent, failed = [], []
+    with tempfile.TemporaryDirectory(prefix="sgaa-pg-snapshot-") as scratch:
+        try:
+            snapshot = pg_snapshot.create(scratch)
+        except Exception as exc:
+            logger.warning("event=pg_snapshot_failed code=%s", getattr(exc, "code", type(exc).__name__))
+            flash("Não foi possível gerar o backup do banco. Nada foi enviado.", "error")
+            return redirect(url_for("admin_banco_dados"))
+        for provider in targets:
+            prefix = "gdrive" if provider == "google" else "onedrive"
+            folder = str(drive_settings.get(f"{prefix}_dest_folder") or "").strip() or _PG_SNAPSHOT_DEFAULT_FOLDER
+            label = "Google Drive" if provider == "google" else "OneDrive"
+            try:
+                token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
+                if provider == "google":
+                    _cd.google_upload(token, snapshot["path"], folder)
+                else:
+                    _cd.onedrive_upload(token, snapshot["path"], folder)
+            except Exception as exc:
+                logger.warning("event=pg_snapshot_upload_failed provider=%s error=%s", provider, type(exc).__name__)
+                failed.append(label)
+                _save_drive_config(conn, {f"{prefix}_last_upload_error": "Falha no envio do backup do banco."})
+                conn.commit()
+                continue
+            sent.append(provider)
+            _save_drive_config(conn, {f"{prefix}_last_upload_at": snapshot["generation_at"],
+                                      f"{prefix}_last_upload_error": ""})
+            conn.commit()
+            try:
+                if provider == "google":
+                    listed = [{"id": f.get("id"), "name": f.get("name")} for f in _cd.google_list_db_files(token, folder)]
+                    pg_snapshot.prune(listed, keep, lambda file_id: _cd.google_delete_file(token, file_id))
+                else:
+                    listed = [{"id": f.get("id"), "name": f.get("name")} for f in _cd.onedrive_list_db_files(token, folder)]
+                    pg_snapshot.prune(listed, keep, lambda item_id: _cd.onedrive_delete_file(token, item_id))
+            except Exception as exc:
+                logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
+    if sent and raw is not None:
+        record = pg_posture.run_record(
+            generation_at=snapshot["generation_at"], manifest_sha256=snapshot["sha256"],
+            dump_sha256=snapshot["sha256"], source_identity_sha256=snapshot["source_identity_sha256"],
+            object_set_name=None, object_set_digest=None, object_manifest_sha256=None,
+            run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
+            kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
+        )
+        try:
+            pg_posture.publish(raw, [record])
+        except Exception as exc:
+            logger.warning("event=pg_snapshot_record_failed error=%s", type(exc).__name__)
+    labels = ["Google Drive" if provider == "google" else "OneDrive" for provider in sent]
+    if labels and not failed:
+        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}.", "success")
+    elif labels:
+        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}, mas o envio falhou para {' e '.join(failed)}.", "warning")
+    else:
+        flash(f"Backup do banco gerado, mas o envio falhou para {' e '.join(failed)}.", "error")
+    return redirect(url_for("admin_banco_dados"))
+
+
 @admin_required
 def admin_banco_dados_backup():
-    refused = _refuse_unsupported_sqlite_maintenance()
-    if refused is not None:
-        return refused
+    if not sqlite_maintenance_supported():
+        return _postgres_backup_now()
     conn = get_db_connection()
     context = _build_database_admin_context(conn)
     settings = context["backup_settings"]

@@ -104,7 +104,8 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "objects", "off_platform", "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "destinations", "objects", "off_platform",
+                              "governed", "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 
@@ -352,3 +353,101 @@ def test_a_run_that_cannot_read_the_policy_keeps_every_generation():
     with pytest.raises(RuntimeError):
         pg_posture.read_policy(Refusing(), strict=True)
     assert pg_posture.read_policy(Refusing())["pg_retention_generations"] == pg_posture.MIN_GENERATIONS
+
+
+# ---- "Gerar backup agora" under PostgreSQL (app.backup.pg_snapshot) ----------------------------------
+
+
+def test_pruning_only_ever_deletes_sgaa_snapshots_and_keeps_the_newest():
+    from app.backup import pg_snapshot
+
+    listed = [{"id": "a", "name": "sgaa-pg-snapshot-20261010T000000Z.db"},
+              {"id": "b", "name": "sgaa-pg-snapshot-20261012T000000Z.db"},
+              {"id": "c", "name": "sgaa-pg-snapshot-20261011T000000Z.db"},
+              {"id": "d", "name": "sgaa_backup_20240101.db"},  # a legacy SQLite backup in the same folder
+              {"id": "e", "name": "sgaa-pg-snapshot-20261009T000000Z.db.part"},
+              {"id": None, "name": "sgaa-pg-snapshot-20261008T000000Z.db"}]
+    deleted = []
+    assert pg_snapshot.prune(listed, 2, deleted.append) == ["sgaa-pg-snapshot-20261010T000000Z.db"]
+    assert deleted == ["a"]
+    deleted.clear()
+    assert pg_snapshot.prune(listed, 0, deleted.append) == ["sgaa-pg-snapshot-20261011T000000Z.db",
+                                                           "sgaa-pg-snapshot-20261010T000000Z.db"]  # never below one
+
+
+@pytest.fixture
+def business_database():
+    from tests.storage_mp1_pg_support import Registry
+
+    registry = Registry("a19snap")
+    try:
+        registry.provision_template()
+        source = registry.create(template=registry.template)
+        target = registry.create()
+        yield source[1], target[1]
+    finally:
+        assert registry.close() == 0
+
+
+@real_pg
+def test_real_pg_a_snapshot_is_proven_equal_and_restores_through_path_b(business_database, tmp_path):
+    import sqlite3
+
+    from app import pg_migrate_from_sqlite as pathb
+    from app import pg_schema
+    from app.backup import pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+    from tools import pg_fingerprint
+
+    source_url, target_url = business_database
+    seeded = raw_connection(source_url, autocommit=True)
+    try:  # a production account always carries its credential row (Path-B's domain check)
+        seeded.execute("INSERT INTO usuario_credenciais(usuario_id, estado) SELECT id, 'personal' FROM usuarios"
+                       " ON CONFLICT DO NOTHING")
+    finally:
+        seeded.close()
+    snap = pg_snapshot.create(tmp_path, connect=lambda: raw_connection(source_url))
+    assert snap["file_name"].startswith(pg_snapshot.SNAPSHOT_PREFIX) and snap["rows"] > 0
+    lite = sqlite3.connect(snap["path"])
+    try:
+        assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
+    finally:
+        lite.close()
+    source = raw_connection(source_url, autocommit=True)
+    assert snap["source_identity_sha256"] == hosting.source_identity_sha256(hosting.database_source(source))
+    # restore: the qualified Path-B tool loads the snapshot into an empty provisioned database
+    target = raw_connection(target_url)
+    pg_schema.provision_pg_schema(target)
+    target.commit()
+    target.close()
+    pathb.migrate(snap["path"], snap["sha256"], database_url=target_url, apply=True)
+    target = raw_connection(target_url, autocommit=True)
+    try:
+        assert pg_fingerprint.snapshot(target)["fingerprint_sha256"] == \
+            pg_fingerprint.snapshot(source)["fingerprint_sha256"]
+    finally:
+        target.close()
+        source.close()
+
+
+@real_pg
+def test_real_pg_a_snapshot_that_does_not_equal_its_source_is_refused_and_removed(business_database, tmp_path,
+                                                                                    monkeypatch):
+    from app.backup import pg_snapshot
+
+    import sqlite3
+
+    from tests.mp2_pg_support import raw_connection
+
+    source_url, _target = business_database
+    real_read = pg_snapshot.pathb.read_target_rows
+
+    def lossy(conn, table):  # the file loses one row of one table on its way to disk
+        rows = real_read(conn, table)
+        return rows[1:] if isinstance(conn, sqlite3.Connection) and table == "usuarios" and rows else rows
+
+    monkeypatch.setattr(pg_snapshot.pathb, "read_target_rows", lossy)
+    with pytest.raises(pg_snapshot.SnapshotError) as caught:
+        pg_snapshot.create(tmp_path, connect=lambda: raw_connection(source_url))
+    assert caught.value.code == "SNAPSHOT_TABLE_DIFFERS"
+    assert list(tmp_path.iterdir()) == []

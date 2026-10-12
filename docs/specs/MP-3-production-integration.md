@@ -1025,7 +1025,25 @@ Executor amendments (consequences of the above; not material beyond what the use
   "Política de retenção" (the editable grid, "Restaurar padrões", "Salvar política") and "Gerações
   registradas" (the recent generations). No hosted "back up now": a generation needs the PROD password on
   the operator's machine and makes the off-platform copy there. GC1 is consumed by one amendment, so this
-  change is recorded under its own GC1 grant. Evidence: section 17.
+  change is recorded under its own GC1 grant. (9) "Gerar backup agora" restored (user correction: the
+  manual backup is part of the product; "no hosted back up now" above is withdrawn). Under PostgreSQL the
+  existing protected backup route (`/admin/banco-dados/backup`) makes what the SQLite route made -- a
+  consistent snapshot sent to the connected cloud drives with retention there -- with the PostgreSQL
+  owner `app.backup.pg_snapshot`: every application table is copied inside ONE repeatable-read read-only
+  transaction (through `app.db`'s own connection) into the product's snapshot format, a schema-v16
+  SQLite file in scratch, and proven table by table with the Path-B row digests (the PONR fingerprint's
+  normalization), foreign keys, integrity and version; a copy that is not proven equal is refused and
+  deleted. The file goes to each connected Google Drive / OneDrive account, into its destination folder
+  -- "Selecionar pasta" is the live action again on both cards (the cards keep their four actions) --
+  and each folder keeps the newest snapshots the policy's "gerações mantidas" sets; only files named
+  `sgaa-pg-snapshot-*.db` are ever pruned, never the legacy SQLite backups that may share the folder. The
+  run's self-hashed receipt (`SNAPSHOT`, `HOSTED_RUN`, the drives that received it) joins the posture
+  ("Backup agora" in "Gerações registradas"). Restore: the workstation runtime restores the file as it
+  restores any snapshot; into PostgreSQL the qualified Path-B tool loads it into an empty provisioned
+  database (real-PostgreSQL lane: the restored business fingerprint equals the source's). It is the
+  administrator's on-demand copy; the operator's governed generations stay the cutover's counted backups.
+  Writes: none to a business table (the drive settings' last-upload keys and the receipt only).
+  Evidence: section 17.
 
 ## 17. Closure
 

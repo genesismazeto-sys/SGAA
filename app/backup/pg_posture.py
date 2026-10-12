@@ -84,6 +84,9 @@ RESTORE_TYPE = "restore"
 _TYPES = frozenset({BACKUP_TYPE, RESTORE_TYPE})
 #: An ``ops_backup`` run outside the ledger's window carries this provenance instead of ``LIVE_RUN``.
 RUN_PROVENANCE = "OPERATOR_RUN"
+#: "Gerar backup agora" on the page (``app.backup.pg_snapshot``): kind ``SNAPSHOT``.
+HOSTED_PROVENANCE = "HOSTED_RUN"
+SNAPSHOT_KIND = "SNAPSHOT"
 
 
 class PolicyError(ValueError):
@@ -194,17 +197,21 @@ def opening_ceiling(raw) -> int | None:
 
 def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, source_identity_sha256: str,
                object_set_name: str | None, object_set_digest: str | None, object_manifest_sha256: str | None,
-               run_seconds: int, at: str) -> dict:
-    """The self-hashed receipt of an ``ops_backup`` run outside the ledger's window (same shape as the
-    ledger's ``backup`` entry, provenance ``OPERATOR_RUN``, no chain)."""
+               run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
+               off_platform: str = "VERIFIED", destinations: tuple[str, ...] = ()) -> dict:
+    """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
+    no chain): an ``ops_backup`` run (``OPERATOR_RUN``) or "Gerar backup agora" (``SNAPSHOT``,
+    ``HOSTED_RUN``, the cloud drives that received it)."""
     body = {
-        "type": BACKUP_TYPE, "kind": "GENERATION", "at": at, "generation_at": generation_at,
+        "type": BACKUP_TYPE, "kind": kind, "at": at, "generation_at": generation_at,
         "manifest_sha256": manifest_sha256, "dump_sha256": dump_sha256,
         "source_identity_sha256": source_identity_sha256,
         "object_set_name": object_set_name or "NONE", "object_set_digest": object_set_digest or "NONE",
         "object_manifest_sha256": object_manifest_sha256 or "NONE",
-        "off_platform": "VERIFIED", "provenance": RUN_PROVENANCE, "run_seconds": int(run_seconds),
+        "off_platform": off_platform, "provenance": provenance, "run_seconds": int(run_seconds),
     }
+    if destinations:
+        body["destinations"] = sorted(destinations)
     return dict(body, hash=hosting.ledger_entry_hash(body))
 
 
@@ -408,6 +415,8 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
         "retention": retention,
         "recent": [
             {"generation_at": moment, "baseline": entry.get("kind") == "BASELINE",
+             "snapshot": entry.get("kind") == SNAPSHOT_KIND,
+             "destinations": [d for d in (entry.get("destinations") or []) if d in ("google", "onedrive")],
              "objects": entry.get("object_set_name") not in (None, "NONE"),
              "off_platform": entry.get("off_platform") == "VERIFIED",
              "governed": entry.get("provenance") == "LIVE_RUN",

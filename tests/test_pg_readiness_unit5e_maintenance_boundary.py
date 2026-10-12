@@ -334,7 +334,18 @@ def _assert_cycle_not_successful(call):
 # ===========================================================================
 
 
-def test_pg_manual_backup_refuses_before_any_sqlite_io(backup_env, admin_client, events, pg_backend):
+def test_pg_manual_backup_never_runs_the_sqlite_file_backup(backup_env, admin_client, events, pg_backend,
+                                                           monkeypatch):
+    """MP-3 A19: under PostgreSQL "Gerar backup agora" is the PostgreSQL snapshot
+    (``app.backup.pg_snapshot``; real-PostgreSQL lane in
+    ``test_pg_readiness_route_smoke_real_pg.py``), never the SQLite file backup: the stale file, the
+    SQLite snapshot series and its uploads are untouched whatever the snapshot's outcome."""
+    from app.backup import pg_snapshot
+
+    def refused(*_a, **_k):
+        raise pg_snapshot.SnapshotError("SNAPSHOT_TABLE_DIFFERS")
+
+    monkeypatch.setattr(pg_snapshot, "create", refused)
     backup_env.configure(cloud_folder=True, google=True, onedrive=True)
     pg_backend.activate()
     _clear_flashes(admin_client)
@@ -348,7 +359,7 @@ def test_pg_manual_backup_refuses_before_any_sqlite_io(backup_env, admin_client,
     _assert_handled_redirect(response, exc)
     flashes = _flashes(admin_client)
     assert not any(BACKUP_SUCCESS_FLASH in str(message) for _c, message in flashes), flashes
-    _assert_unsupported_flash(flashes)
+    assert any("backup do banco" in str(message) for _c, message in flashes), flashes
 
 
 # ===========================================================================

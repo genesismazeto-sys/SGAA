@@ -217,7 +217,15 @@ retention route saves, under PostgreSQL, the database backup frequency (1-24 h, 
 the cadence an opening of this database recorded), the object-set frequency (1-7 days), the
 generations kept in each directory (2-30) and the restore-test interval (7-90 days), in the
 product's backup settings (`configuracoes_backup`, keys `pg_*`). `ops_backup` rotates by it and every
-status and due date is judged against it. The records live in the control schema
+status and due date is judged against it.
+
+"Gerar backup agora" (the existing backup route, `app.backup.pg_snapshot`) copies the database inside
+one repeatable-read read-only transaction into a schema-v16 SQLite snapshot in scratch, proves it table
+by table with the Path-B row digests, sends it to every connected Google Drive / OneDrive account into
+the folder "Selecionar pasta" chose, and prunes there only `sgaa-pg-snapshot-*.db` files beyond the
+policy's generations kept. The snapshot restores on the workstation runtime, or into an empty PostgreSQL
+through the Path-B tool. It runs inside the web function's time limit: the database must stay small
+enough to copy and upload within it (the operator's governed generations have no such limit). The records live in the control schema
 `sgaa_ops` (outside `public`: no Layer-2 set, business fingerprint or schema contract
 includes it). Each is a cutover-ledger `backup` or `restore` entry, or the self-hashed
 receipt of an `ops_backup` run, published verbatim by the run that made it into the

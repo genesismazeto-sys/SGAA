@@ -92,18 +92,18 @@ FILE_BACKUP_MARKERS = (
     "admin/banco-dados/configuracoes",
     "restore-snapshot-form",
     "restore-upload-form",
-    "admin/banco-dados/backup",
     'id="retention-form"',
     "Snapshots disponíveis",
     # MP-3 A19: "Política de retenção" is also the PostgreSQL policy section; the GFS window
     # chip is what only the SQLite file retention renders.
     "GFS · ",
     "gdrive-backup-now",
-    "data-google-picker-button",
     "data-automatic-backup-status",
     "gdrive_enabled_submitted",
-    "https://apis.google.com/js/api.js",
 )
+# MP-3 A19: "Gerar backup agora" (admin/banco-dados/backup), the destination-folder pickers
+# (data-google-picker-button, data-cloud-folder-button) and the Google Picker script serve
+# PostgreSQL too: the snapshot goes to the connected cloud drives.
 
 
 # ===========================================================================
@@ -263,3 +263,20 @@ def test_pg_page_context_flag_is_the_single_decision(backup_env, admin_client, p
     assert context["backups"] == []
     assert context["automatic_backup_status"] is None
     assert forbid_file_backup_reads == []
+
+
+def test_pg_provider_cards_keep_their_four_actions(
+    backup_env, admin_client, pg_backend, forbid_file_backup_reads, google_connected
+):
+    """MP-3 A19: the cards keep the designed 2x2 grid; the folder action chooses where "Gerar backup agora" sends."""
+    backup_env.configure(cloud_folder=False, google=False, onedrive=False)
+    pg_backend.activate()
+    html = _page(admin_client)
+    cards = html.split('<section class="db-provider-card">')[1:]
+    assert len(cards) == 2
+    for card in cards:
+        card = card.split("</section>")[0]
+        for label in ("Testar conexão", "Selecionar pasta", "Conectar", "Desconectar"):
+            assert label in card, label
+        assert "Não se aplica ao PostgreSQL" not in card
+        assert "data-cloud-folder-button" in card or "data-google-picker-button" in card
