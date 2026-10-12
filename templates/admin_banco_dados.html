@@ -1714,6 +1714,7 @@
         <table class="db-table" data-protection-recent>
           <thead>
             <tr>
+              <th>Origem</th>
               <th>Criada em</th>
               <th>Tipo</th>
               <th>Arquivos do armazenamento</th>
@@ -1725,6 +1726,13 @@
           <tbody>
             {% for item in protection.recent %}
               <tr>
+                {% set location = 'cloud' if item.snapshot else 'local' %}
+                <td>
+                  <span class="db-origin-pill {{ location }}">
+                    <i class="lucide" data-lucide="{{ 'cloud' if location == 'cloud' else 'monitor' }}"></i>
+                    {{ 'Nuvem' if location == 'cloud' else 'Local' }}
+                  </span>
+                </td>
                 <td>{{ item.generation_label }}</td>
                 <td>{{ 'Linha de base' if item.baseline else ('Backup agora' if item.snapshot else 'Geração') }}</td>
                 <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
