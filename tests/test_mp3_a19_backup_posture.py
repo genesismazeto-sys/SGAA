@@ -656,7 +656,7 @@ def test_real_pg_a_restore_brings_the_registers_back_exactly_and_never_reuses_an
         conn.execute("INSERT INTO cursos (codigo, nome, duracao_periodos) VALUES ('DEPOIS-1', 'Curso depois do backup', 8)")
         issued = pathb.next_identity_value(conn, "cursos") - 1
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] != expected
-        result = pg_restore.restore(pg_restore.read(snap["path"]), connect=connect, before=lambda: True)
+        result = pg_restore.restore(pg_restore.read(snap["path"]), connect=connect, before=lambda: "f" * 64)
         assert result["rows"] > 0
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == expected  # exactly the backup's registers
         assert pathb.next_identity_value(conn, "cursos") > issued  # the id issued after the backup is never reused
@@ -699,7 +699,7 @@ def test_real_pg_no_write_falls_between_the_safety_copy_and_the_replacement(busi
         thread.join()
         safety = pg_snapshot.create(tmp_path / "safety", connect=connect)  # reads go on under the lock
         outcome["copied"] = bool(safety["rows"])
-        return True
+        return safety["sha256"]
 
     (tmp_path / "safety").mkdir()
     pg_restore.restore(snapshot, connect=connect, before=safety_copy)
@@ -727,11 +727,11 @@ def test_real_pg_a_restore_that_cannot_be_proven_changes_nothing(business_databa
         monkeypatch.setattr(pg_restore.pathb, "read_target_rows",  # the proof sees a lost row
                             lambda c, table: real_read(c, table)[1:] if table == "turmas" else real_read(c, table))
         with pytest.raises(pg_restore.RestoreError) as caught:
-            pg_restore.restore(snapshot, connect=connect, before=lambda: True)
+            pg_restore.restore(snapshot, connect=connect, before=lambda: "f" * 64)
         assert caught.value.code == "RESTORE_TABLE_DIFFERS"
         monkeypatch.undo()
         with pytest.raises(pg_restore.RestoreError) as caught:  # no safety copy: nothing changes
-            pg_restore.restore(snapshot, connect=connect, before=lambda: False)
+            pg_restore.restore(snapshot, connect=connect, before=lambda: None)
         assert caught.value.code == "SAFETY_COPY_NOT_SENT"
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == before
         monkeypatch.undo()
@@ -751,3 +751,320 @@ def test_real_pg_a_restore_that_cannot_be_proven_changes_nothing(business_databa
         assert caught.value.code == "SOURCE_SCHEMA_UNSUPPORTED"
     finally:
         conn.close()
+
+
+# ---- the R3 rereview of 171d21f (SPEC A19 (14)) -------------------------------------------------------------
+
+
+class _LossyCommit:
+    """TEST ONLY: the restore's connection, whose replacement COMMIT reaches PostgreSQL but whose answer is
+    lost (``committed``), or whose COMMIT PostgreSQL rolls back without the client learning it
+    (``aborted``).  The restore's first, DDL-only transaction is answered normally."""
+
+    class _Abort(Exception):
+        pass
+
+    def __init__(self, real, mode):
+        object.__setattr__(self, "_real", real)
+        object.__setattr__(self, "_mode", mode)
+        object.__setattr__(self, "_transactions", 0)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._real, name, value)
+
+    def transaction(self):
+        import contextlib
+
+        import psycopg
+
+        real, mode, abort = self._real, self._mode, self._Abort
+        object.__setattr__(self, "_transactions", self._transactions + 1)
+        if self._transactions == 1:
+            return real.transaction()
+
+        @contextlib.contextmanager
+        def lossy():
+            if mode == "committed":
+                with real.transaction():
+                    yield
+            else:
+                try:
+                    with real.transaction():
+                        yield
+                        raise abort()
+                except abort:
+                    pass
+            raise psycopg.OperationalError("consuming input failed: server closed the connection unexpectedly")
+
+        return lossy()
+
+
+def _markers(conn):
+    from app.backup import pg_restore
+
+    if not conn.execute(pg_restore.MARKER_EXISTS_SQL).fetchone()[0]:
+        return []
+    return [json.loads(row[0]) for row in conn.execute(pg_restore.MARKER_SELECT_SQL).fetchall()]
+
+
+@real_pg
+def test_real_pg_r1_a_committed_restore_leaves_its_commit_marker_and_a_refused_one_none(business_database, tmp_path):
+    """R1: the restore writes, in the transaction that replaces the registers, a self-hashed marker naming
+    the operation, this database, the restored file, the safety copy and the completion time."""
+    from app.backup import pg_restore, pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+
+    url, _target = business_database
+    _with_credentials(url)
+    connect = lambda: raw_connection(url)  # noqa: E731
+    snapshot = pg_restore.read(pg_snapshot.create(tmp_path, connect=connect)["path"])
+    conn = raw_connection(url, autocommit=True)
+    try:
+        with pytest.raises(pg_restore.RestoreError):
+            pg_restore.restore(snapshot, connect=connect, before=lambda: None)  # no safety copy: refused
+        assert _markers(conn) == []
+        safety = "f" * 64
+        result = pg_restore.restore(snapshot, connect=connect, before=lambda: safety)
+        (marker,) = _markers(conn)
+        assert marker["operation_id"] == result["operation_id"] and marker["type"] == "admin_restore"
+        assert marker["safety_copy_manifest_sha256"] == safety and marker["restored_sha256"] == snapshot.sha256
+        assert marker["source_identity_sha256"] == _identity(conn)
+        assert pg_restore.marker_intact(marker) and not pg_restore.marker_intact(dict(marker, rows=0))
+        assert datetime.strptime(marker["completed_at"], "%Y-%m-%dT%H:%M:%SZ")
+    finally:
+        conn.close()
+
+
+@real_pg
+def test_real_pg_r3_a_lost_commit_acknowledgement_is_never_reported_as_nothing_changed(business_database, tmp_path):
+    """R3: PostgreSQL committed the replacement but the answer was lost: the outcome is resolved through the
+    commit marker on a fresh connection -- never reported as "nada foi alterado"."""
+    from app.backup import pg_restore, pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+    from tools import pg_fingerprint
+
+    url, _target = business_database
+    _with_credentials(url)
+    connect = lambda: raw_connection(url)  # noqa: E731
+    snapshot = pg_restore.read(pg_snapshot.create(tmp_path, connect=connect)["path"])
+    conn = raw_connection(url, autocommit=True)
+    try:
+        expected = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
+        conn.execute("UPDATE turmas SET nome = nome || ' (depois)'")
+        changed = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
+        calls = []
+
+        def lossy(mode):
+            def connect_once():
+                calls.append(mode)
+                return _LossyCommit(raw_connection(url), mode) if len(calls) == 1 else raw_connection(url)
+            return connect_once
+
+        result = pg_restore.restore(snapshot, connect=lossy("committed"), before=lambda: "f" * 64)
+        assert result["outcome"] == "COMMITTED_CONFIRMED"
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == expected  # it did happen
+        conn.execute("UPDATE turmas SET nome = nome || ' (de novo)'")
+        before = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
+        calls.clear()
+        with pytest.raises(pg_restore.RestoreError) as caught:  # PostgreSQL rolled it back: confirmed
+            pg_restore.restore(snapshot, connect=lossy("aborted"), before=lambda: "f" * 64)
+        assert caught.value.code == "RESTORE_ROLLED_BACK" and "nada foi alterado" in str(caught.value)
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == before
+        calls.clear()
+
+        def unreachable_after(mode):
+            def connect_once():
+                calls.append(mode)
+                if len(calls) == 1:
+                    return _LossyCommit(raw_connection(url), mode)
+                raise OSError("no route to the database")
+            return connect_once
+
+        with pytest.raises(pg_restore.RestoreError) as caught:  # nobody can tell: never "nothing changed"
+            pg_restore.restore(snapshot, connect=unreachable_after("committed"), before=lambda: "f" * 64)
+        assert caught.value.code == "RESTORE_OUTCOME_UNCERTAIN" and "nada foi alterado" not in str(caught.value)
+        assert changed != expected
+    finally:
+        conn.close()
+
+
+@real_pg
+def test_real_pg_r8_two_snapshots_in_the_same_second_never_share_a_name(business_database, tmp_path):
+    """R8: two backups in the same second, or two installations sharing a folder, never produce one name."""
+    from app.backup import pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+
+    url, _target = business_database
+    connect = lambda: raw_connection(url)  # noqa: E731
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    first = pg_snapshot.create(tmp_path / "a", now=NOW, connect=connect)
+    second = pg_snapshot.create(tmp_path / "b", now=NOW, connect=connect)
+    assert first["file_name"] != second["file_name"]
+    assert first["registers_file_name"] != second["registers_file_name"]
+    for made in (first, second):
+        assert pg_snapshot.SNAPSHOT_NAME.fullmatch(made["file_name"])
+        assert pg_snapshot.REGISTERS_NAME.fullmatch(made["registers_file_name"])
+        assert made["source_identity_sha256"][:12] in made["file_name"]  # the installation is in the name
+
+
+def test_r8_the_snapshot_upload_never_replaces_existing_onedrive_content(monkeypatch, tmp_path):
+    from services import onedrive_service
+
+    default = onedrive_service._build_folder_upload_url(graph_base_url="https://g", file_name="x.zip", folder_id="F",
+                                                       drive_id="D")
+    assert "conflictBehavior" not in default  # the legacy SQLite path keeps its behaviour
+    sent = []
+
+    class Response:
+        status_code = 409
+        content = b'{"error": {"code": "nameAlreadyExists"}}'
+
+        def json(self):
+            return json.loads(self.content)
+
+    class Requests:
+        @staticmethod
+        def put(url, **_kwargs):
+            sent.append(url)
+            return Response()
+
+    monkeypatch.setattr(onedrive_service, "_import_requests", lambda: Requests)
+    monkeypatch.setattr(onedrive_service, "_load_config",
+                        lambda: type("C", (), {"graph_base_url": "https://graph.example.invalid/v1.0"})())
+    path = tmp_path / "sgaa-pg-snapshot.db"
+    path.write_bytes(b"x")
+    with pytest.raises(onedrive_service.OneDriveServiceError):
+        onedrive_service.upload_zip_backup_with_access_token(access_token="t", zip_path=str(path), file_name=path.name,
+                                                             folder_id="F", drive_id="D", replace=False)
+    assert sent and sent[0].endswith("/content?@microsoft.graph.conflictBehavior=fail")
+
+
+def _fake_view(monkeypatch, tmp_path, *, owned=frozenset(), listed=(), upload_drive="D"):
+    """TEST ONLY: the Banco de dados view's PostgreSQL backup path with every boundary scripted."""
+    from app import cloud_drives
+    from app.backup import pg_snapshot
+    from app.views.admin import banco_dados as view
+
+    calls = {"uploads": [], "deleted": [], "listed": []}
+
+    class Conn:
+        raw_connection = object()
+
+        def commit(self):
+            pass
+
+    def create(directory, **_kwargs):
+        db, csv = tmp_path / "snap.db", tmp_path / "regs.zip"
+        db.write_bytes(b"db")
+        csv.write_bytes(b"zip")
+        return {"path": str(db), "file_name": "sgaa-pg-snapshot-20261012T100000Z-aaaaaaaaaaaa-00000001.db",
+                "registers_path": str(csv),
+                "registers_file_name": "sgaa-registros-20261012T100000Z-aaaaaaaaaaaa-00000001.zip",
+                "sha256": "e" * 64, "generation_at": "2026-10-12T10:00:00Z", "source_identity_sha256": IDENTITY}
+
+    def upload(conn, provider, **kwargs):
+        calls["uploads"].append((provider, kwargs))
+        return {"file_id": f"{provider}-{len(calls['uploads'])}", "drive_id": upload_drive if provider == "onedrive" else ""}
+
+    monkeypatch.setattr(view, "get_db_connection", lambda: Conn())
+    monkeypatch.setattr(view, "_get_active_cloud_account", lambda conn, provider: provider == "onedrive")
+    monkeypatch.setattr(view, "_get_cloud_drive_folder_setting", lambda conn, provider: {"folder_id": "F", "drive_id": "D"})
+    monkeypatch.setattr(view, "_save_drive_config", lambda conn, updates: None)
+    monkeypatch.setattr(pg_snapshot, "create", create)
+    monkeypatch.setattr(view.pg_posture, "read_policy", lambda raw, strict=False: {"pg_retention_generations": 2})
+    monkeypatch.setattr(view.pg_posture, "publish", lambda raw, entries, **_k: {"published": 1, "already": 0})
+    monkeypatch.setattr(view.pg_posture, "owned_files", lambda raw: set(owned))
+    monkeypatch.setattr(view._cloud_connections, "upload_backup_zip", upload)
+    monkeypatch.setattr(view._cloud_connections, "get_authenticated_access_token", lambda conn, provider: ("tok", {}))
+
+    def children(token, *, folder_id, drive_id, folder_path):
+        calls["listed"].append(drive_id)
+        return [dict(item) for item in listed]
+
+    monkeypatch.setattr(cloud_drives, "onedrive_list_folder_children", children)
+    monkeypatch.setattr(cloud_drives, "onedrive_delete_item",
+                        lambda token, item_id, drive_id=None: calls["deleted"].append((drive_id, item_id)))
+    return view, calls
+
+
+def test_r8_the_view_sends_every_snapshot_file_without_replacing_existing_content(monkeypatch, tmp_path):
+    view, calls = _fake_view(monkeypatch, tmp_path)
+    view._send_postgres_snapshot()
+    assert len(calls["uploads"]) == 2 and all(kwargs.get("replace") is False for _p, kwargs in calls["uploads"])
+
+
+def test_r4_onedrive_retention_never_deletes_an_owned_item_id_found_in_another_drive(monkeypatch, tmp_path):
+    """R4: OneDrive item ids are scoped to their drive: a receipt owning (driveA, X) never deletes (driveB, X)."""
+    listed = [{"id": "X", "name": "sgaa-pg-snapshot-20261001T000000Z.db"},
+              {"id": "Y1", "name": "sgaa-pg-snapshot-20261011T000000Z.db"},
+              {"id": "Y2", "name": "sgaa-pg-snapshot-20261012T000000Z.db"}]
+    owned = {("onedrive", "driveA", "X"), ("onedrive", "driveB", "Y1"), ("onedrive", "driveB", "Y2")}
+    view, calls = _fake_view(monkeypatch, tmp_path, owned=owned, listed=listed)
+    view._prune_owned_snapshots(view.get_db_connection(), object(), ["onedrive"],
+                                {"onedrive": ("", "F", "driveB")}, 2, registers_skip=[])
+    assert calls["deleted"] == []  # X in driveB is not the X this database owns
+    owned.add(("onedrive", "driveB", "X"))
+    view, calls = _fake_view(monkeypatch, tmp_path, owned=owned, listed=listed)
+    view._prune_owned_snapshots(view.get_db_connection(), object(), ["onedrive"],
+                                {"onedrive": ("", "F", "driveB")}, 2, registers_skip=[])
+    assert calls["deleted"] == [("driveB", "X")] and calls["listed"] == ["driveB"]
+    view, calls = _fake_view(monkeypatch, tmp_path, owned=owned, listed=listed)
+    view._prune_owned_snapshots(view.get_db_connection(), object(), ["onedrive"],  # the drive is not known
+                                {"onedrive": ("", "F", "")}, 1, registers_skip=[])
+    assert calls["deleted"] == [] and calls["listed"] == []
+
+
+def test_r4_the_drive_pruned_is_the_one_the_upload_landed_in(monkeypatch, tmp_path):
+    listed = [{"id": "X", "name": "sgaa-pg-snapshot-20261001T000000Z.db"}]
+    view, calls = _fake_view(monkeypatch, tmp_path, owned={("onedrive", "driveB", "X")}, listed=listed,
+                             upload_drive="driveB")
+    view._send_postgres_snapshot()
+    assert calls["listed"] == ["driveB"]
+
+
+def test_n1_a_mixed_failure_names_every_missing_copy(monkeypatch):
+    """N1: Google got the database but not the CSV, OneDrive got nothing: the warning names both."""
+    import main
+    from flask import get_flashed_messages
+
+    from app.views.admin import banco_dados as view
+
+    monkeypatch.setattr(view, "_send_postgres_snapshot",
+                        lambda **_k: (["google", "onedrive"], ["google"], ["OneDrive"], ["Google Drive"], "e" * 64))
+    with main.app.test_request_context("/admin/banco-dados/backup", method="POST"):
+        view._postgres_backup_now()
+        flashed = " | ".join(message for _category, message in get_flashed_messages(with_categories=True))
+    assert "falhou para OneDrive" in flashed
+    assert "registros (CSV)" in flashed and "Google Drive" in flashed
+
+
+def test_r3_an_uncertain_restore_is_a_warning_naming_no_failure(monkeypatch, tmp_path, caplog):
+    """Review N-d: an uncertain outcome is never shown as "could not restore"; its operation is logged."""
+    import logging
+
+    import main
+    from flask import get_flashed_messages
+
+    from app.backup import pg_restore
+    from app.views.admin import banco_dados as view
+
+    class Conn:
+        def commit(self):
+            pass
+
+    def uncertain(snapshot, *, before, connect=None):
+        raise pg_restore.RestoreError(pg_restore.OUTCOME_UNCERTAIN, "x", operation_id="ab" * 16)
+
+    monkeypatch.setattr(pg_restore, "read", lambda path, expected_sha256=None: object())
+    monkeypatch.setattr(pg_restore, "restore", uncertain)
+    monkeypatch.setattr(view, "get_db_connection", lambda: Conn())
+    with main.app.test_request_context("/admin/banco-dados/restaurar/upload", method="POST"),             caplog.at_level(logging.WARNING):
+        view._postgres_restore(str(tmp_path / "x.db"), uploaded=True)
+        flashed = get_flashed_messages(with_categories=True)
+    assert [category for category, _m in flashed] == ["warning"]
+    assert "Não foi possível restaurar" not in flashed[0][1] and "Não repita a recuperação" in flashed[0][1]
+    assert "event=pg_restore_uncertain operation=" + "ab" * 16 in caplog.text

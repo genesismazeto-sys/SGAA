@@ -64,9 +64,10 @@ class _Children:
             if not destination.parent.is_dir() or destination.exists():
                 return 2  # the real tool: DESTINATION_INVALID / DESTINATION_EXISTS (it never creates parents)
             (destination / "objects" / "ab").mkdir(parents=True)
-            # The real set seals its source (the database read, the store's host): reported as recorded.
+            # The real set seals its source (the database read, the store's host) and its creation time.
             (destination / "MANIFEST.json").write_bytes(
-                json.dumps({"source": {"database": None, "store_host": "fake-store"}}).encode("ascii"))
+                json.dumps({"source": {"database": None, "store_host": "fake-store"},
+                            "created_at": "2026-10-09 23:59:58"}).encode("ascii"))
             (destination / "objects" / "ab" / "abcd").write_bytes(b"bytes")
             return 0
         if "verify-backup" in text:
@@ -360,6 +361,8 @@ def test_the_newest_generation_is_reverified_from_disk_including_its_off_platfor
     object_manifest = next(root.glob("objects/*/MANIFEST.json"))
     assert result["object_source"] == json.loads(object_manifest.read_text())["source"] ==         {"database": None, "store_host": "fake-store"}
     assert len(calls["artifact"]) == 1 and calls["objects"] == [None]
+    # the object set's own creation time, in the ledger's form (A19 R3 rereview R6)
+    assert result["object_created_at"] == "2026-10-09T23:59:58Z"
     marker = object()
     ob.verify_generation(root, off, conn=marker)
     assert calls["objects"][-1] is marker  # with a connection the object set is compared with the live rows
@@ -594,3 +597,14 @@ def test_the_drill_runs_in_its_own_terminal_and_only_for_a_recorded_generation(t
     with pytest.raises(ob.Refused) as caught:
         ob.drill(ledger_dir, tmp_path / "p", tmp_path / "o", "a" * 64, environ={})
     assert caught.value.code == "GENERATION_NOT_RECORDED"
+
+
+def test_an_object_set_without_a_readable_creation_time_is_refused(verifiable):
+    """A19 R3 rereview R6: the re-opening judges the object set by its own creation time; none is no proof."""
+    (root, off), _calls, _report = verifiable
+    for manifest in (next(root.glob("objects/*/MANIFEST.json")), next(off.glob("objects/*/MANIFEST.json"))):
+        manifest.write_text(json.dumps({"source": {"database": None, "store_host": "fake-store"},
+                                        "created_at": "yesterday"}), encoding="ascii")
+    with pytest.raises(ob.Refused) as caught:
+        ob.verify_generation(root, off)
+    assert caught.value.code == "OBJECT_SET_INVALID"

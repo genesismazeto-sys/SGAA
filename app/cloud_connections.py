@@ -379,7 +379,10 @@ def upload_backup_zip(
     folder_name: str,
     folder_id: str | None = None,
     drive_id: str | None = None,
+    replace: bool = True,
 ) -> dict[str, str]:
+    """Upload a backup file to the provider's folder.  ``replace=False``: never overwrite an existing file
+    of the same name (OneDrive refuses; a Google Drive upload always creates a new file)."""
     normalized = normalize_provider(provider)
     access_token, account_email = get_authenticated_access_token(conn, normalized)
     if normalized == "google":
@@ -398,6 +401,7 @@ def upload_backup_zip(
             folder_name=folder_name,
             folder_id=folder_id,
             drive_id=drive_id,
+            replace=replace,
         )
     result["account_email"] = account_email
     return result

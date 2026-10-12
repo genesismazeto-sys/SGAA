@@ -63,9 +63,13 @@ POLICY_SELECT_SQL = (
 )
 
 SCHEMA = "sgaa_ops"
-DDL = (
+#: The control schema itself (also ``app.backup.pg_restore``'s commit markers live in it).
+SCHEMA_DDL = (
     "CREATE SCHEMA IF NOT EXISTS sgaa_ops",
     "REVOKE ALL ON SCHEMA sgaa_ops FROM PUBLIC",
+)
+DDL = (
+    *SCHEMA_DDL,
     "CREATE TABLE IF NOT EXISTS sgaa_ops.backup_records ("
     " entry_hash text PRIMARY KEY, entry_type text NOT NULL, entry text NOT NULL,"
     " annotation text, published_at timestamptz NOT NULL DEFAULT now())",
@@ -527,9 +531,19 @@ def owned_files(raw) -> set:
     return owned
 
 
+def owned_in(owned, provider: str, drive_id: str = "") -> set:
+    """The file ids among ``owned`` (``owned_files``) this database owns in ONE place.  A Google Drive id
+    is global; a OneDrive item id is scoped to its drive, so it counts only with the drive the receipt
+    named, and an unknown drive owns nothing (A19 R3 rereview R4)."""
+    if provider == "onedrive":
+        return {file_id for (kind, drive, file_id) in owned if kind == provider and drive_id and drive == drive_id}
+    return {file_id for (kind, _drive, file_id) in owned if kind == provider}
+
+
 __all__ = [
     "CADENCE_TOLERANCE", "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "POLICY_FIELDS",
     "CeilingUnverifiable", "PolicyError", "PostureError", "default_policy", "opening_ceiling", "owned_files",
+    "owned_in",
     "policy_from_rows", "publish", "read",
     "read_policy",
     "run_record", "save_policy", "summarize", "validate_policy",

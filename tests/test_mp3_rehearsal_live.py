@@ -313,7 +313,8 @@ def test_the_cutover_state_machine_runs_c0_to_c14_on_dev(tmp_path, monkeypatch, 
         delta = pg_fingerprint.compare(json.loads(reference.read_text()), quiet.fingerprint())
         assert delta["changed_tables"] == ["REQUISICOES"]
         assert delta["detail"]["REQUISICOES"]["changed_columns"] == ["horas_solicitadas"]
-        ledger.resume(ledger_dir, observer=quiet)  # production goes forward: the barrier is lifted
+        ledger.resume(ledger_dir, observer=quiet, backup_root=root,  # production goes forward: the barrier is lifted
+                      off_platform=custody / "ops-primary-off")
         ledger.advance(ledger_dir, "C13", {"write_class": "REQUISICOES", "detected_at": "2026-11-01T10:30:00Z",
                                            "current_fingerprint_sha256": now_sha, "adjudicated_by_operator": True})
         with pytest.raises(ledger.Refused) as caught:

@@ -28,8 +28,18 @@ WHY THIS EXISTS
     the write barrier (``close`` applies it, ``resume`` lifts it).  Only the code the
     ledger currently authorizes may admit (A19 R3 M2): a later authorization, a
     product-contract amendment (``amend --contract-ref``) and ``supersede`` revoke every
-    other code of the reference in the same transaction as their entry, and ``resume``
+    other code of the reference in the same transaction as their own marker, and ``resume``
     restores only the current one.
+
+    A ledger file and a PROD transaction cannot commit atomically, so every act whose effect is a
+    PROD transaction (the reference, an authorization, a product-contract amendment, a supersession)
+    is written first as an entry that takes effect only with its ``outcome`` (A19 R3 rereview R2):
+    its PROD transaction records the entry's hash in ``sgaa_cutover.operations``, then the ledger
+    appends COMMITTED -- or ABORTED when PROD provably did not commit.  When the COMMIT's answer is
+    lost the act stays unresolved, and every other act is refused until ``reconcile`` has read the
+    marker (after waiting for that transaction to end) and recorded the outcome.  The ledger
+    therefore never names a code PROD does not authorize, and nothing that lets users in happens
+    while it cannot know.
 
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
@@ -70,13 +80,19 @@ COMMANDS
                    current fingerprint taken live twice, a quiescence interval apart, equal to each
                    other and either equal to the reference or different only by the fixed
                    derived-write classes, acknowledged exactly
-    resume         after a refused rollback: lift the barrier and restore the authorization
+    resume         after a refused rollback: re-prove the newest generation (within the cadence, on disk and
+                   off-platform) and that every deployment is recorded, then lift the barrier and restore
+                   the authorization
     supersede      at C12 or after the PONR: revoke in PROD every authorization of the opening reference
                    whose code is not the one the ledger currently authorizes (none after a product-contract
                    amendment until its GC2) -- a narrowing act, no gate (A19 R3 M2)
     authorize-code after the point of no return, for a recorded forward-fix deployment (GF1):
                    authorize its code under the same opening reference.  With ``--contract-ref`` (A19),
                    at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
+    reconcile      resolve an act whose PROD outcome is unknown: read its marker in PROD, record COMMITTED
+                   or ABORTED (A19 R3 rereview R2)
+    attest-ponr    once, for a declared C13 recorded before restores left a commit marker: bind it forward
+                   to the safety copy that restore left in PROD (A19 R3 rereview R1); nothing is rewritten
     status         current state, granted gates, head, chain verdict
     verify         chain verdict and head only
 
@@ -116,7 +132,7 @@ STATES = (
 )
 ENTRY_TYPES = frozenset({
     "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
-    "promotion", "barrier", "restore", "authorization", "supersession",
+    "promotion", "barrier", "restore", "authorization", "supersession", "outcome", "attestation",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
@@ -166,6 +182,19 @@ PRE_PONR_ONLY_GATES = frozenset({"GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3"
 #: so it is the PONR although a restore of the opening's own content moves no digest.  Any other write
 #: class is recorded only on a fingerprint delta.
 DECLARED_PONR_WRITE_CLASSES = frozenset({"ADMIN_RESTORE"})
+#: A restore's safety copy is made inside the restore's own request: the web function's maximum duration.
+RESTORE_REQUEST_SECONDS = 300
+#: The ledger's own marker of each PROD transaction it runs (A19 R3 rereview R2).  The table exists,
+#: committed, before any act's transaction starts, so ``reconcile`` can always wait on it.
+OPERATIONS_DDL = (
+    "CREATE TABLE IF NOT EXISTS sgaa_cutover.operations ("
+    " entry_hash text PRIMARY KEY, recorded_at timestamptz NOT NULL DEFAULT now())",
+    "REVOKE ALL ON sgaa_cutover.operations FROM PUBLIC",
+)
+OPERATIONS_EXISTS_SQL = "SELECT to_regclass('sgaa_cutover.operations') IS NOT NULL"
+#: Longer than any act's own transaction can stay open (``Observer._transact`` bounds it at 20 s): an act
+#: still running is waited for, never guessed.
+RECONCILE_LOCK_SECONDS = 60
 #: The only files a pre-PONR amendment may add: the public compliance pages (SPEC A18).
 COMPLIANCE_PREFIX = "static/compliance/"
 # Deployments the platform will never serve again; every other one must be one the ledger recorded.
@@ -182,10 +211,15 @@ _DEPLOYMENT_ID = re.compile(r"dpl_[A-Za-z0-9]{8,64}")
 
 
 class Refused(Exception):
-    def __init__(self, code: str, detail: str = "") -> None:
+    def __init__(self, code: str, detail: str = "", *, head: str | None = None) -> None:
         super().__init__(code)
         self.code = code
         self.detail = detail
+        self.head = head  # set only by an act refused after it wrote its own entries: the head it moved to
+
+
+class CommitUncertain(Exception):
+    """A PROD transaction's COMMIT was sent and its answer never arrived: it may or may not have committed."""
 
 
 # ---------------------------------------------------------------------------
@@ -327,9 +361,9 @@ _SCHEMA = {
             "deployment_id": _deployment_id, "opening_authorized": _true},
     "C13": {"write_class": lambda v: isinstance(v, str) and bool(_CLASS.fullmatch(v)),
             "detected_at": _stamp, "current_fingerprint_sha256": _hex64, "adjudicated_by_operator": _true},
-    # A declared PONR (``DECLARED_PONR_WRITE_CLASSES``) also names the snapshot receipt its safety copy
-    # left in PROD; ``advance`` finds it there (A19 R3).
-    "C13_DECLARED": {"safety_copy_manifest_sha256": _hex64},
+    # A declared PONR (``DECLARED_PONR_WRITE_CLASSES``) also names the restore's commit marker and the
+    # safety copy it names; ``advance`` finds both in PROD (A19 R3, rereview R1).
+    "C13_DECLARED": {"safety_copy_manifest_sha256": _hex64, "restore_operation_sha256": _hex64},
     # The restore validation is a ``restore`` entry of the drill that ran it.
     "C14": {"restore_validated_manifest_sha256": _hex64, "unresolved_reconciliation": _zero},
 }
@@ -429,10 +463,25 @@ def _locked(directory: Path):
 def _check_head(entries: list[dict], expected: str | None) -> None:
     if expected is not None and expected != _head(entries):
         raise Refused("HEAD_MISMATCH", "the ledger does not end where the operator last saw it")
+    _require_resolved(entries)
+
+
+def _unresolved(entries: list[dict]) -> dict | None:
+    """The act whose PROD outcome the ledger does not know yet (an ``outcome_required`` entry no
+    ``outcome`` resolves), else ``None``."""
+    resolved = {e["of"] for e in entries if e["type"] == "outcome"}
+    return next((e for e in entries if e.get("outcome_required") is True and e["hash"] not in resolved), None)
+
+
+def _require_resolved(entries: list[dict]) -> None:
+    if _unresolved(entries) is not None:
+        raise Refused("OPERATION_UNRESOLVED", "a PROD transaction's outcome is unknown: run `reconcile` first")
 
 
 def _prepare(entries: list[dict], body: dict) -> dict:
-    """The next entry, hashed, not yet written (the reference is written into PROD before the ledger)."""
+    """The next entry, hashed, not yet written.  Nothing but an outcome follows an unresolved act."""
+    if body.get("type") != "outcome":
+        _require_resolved(entries)
     entry = {"seq": len(entries) + 1, "prev": _head(entries), "at": _now(), **body}
     _check_value_free({key: value for key, value in entry.items() if key != "evidence"})
     entry["hash"] = _entry_hash(entry)
@@ -452,6 +501,33 @@ def _append(directory: Path, entries: list[dict], body: dict) -> dict:
     return _write(directory, _prepare(entries, body))
 
 
+def _commit_act(directory: Path, entries: list[dict], body: dict, act) -> dict:
+    """Run an act whose effect is a PROD transaction (A19 R3 rereview R2).
+
+    The entry is written first, marked ``outcome_required``; ``act(entry)`` runs the PROD transaction,
+    which records the entry's hash in ``sgaa_cutover.operations``; then the outcome is appended.  Only a
+    ``Refused`` -- which the acts raise exclusively before their COMMIT is sent (``Observer._transact``)
+    -- is a proven non-commit: ABORTED, and the refusal goes on.  Anything else (the COMMIT's answer
+    lost, an interruption, a failure after the COMMIT) leaves the act unresolved -- ``reconcile``
+    decides.  Returns the entry (the ledger's head is then its outcome).
+    """
+    entry = _write(directory, _prepare(entries, {**body, "outcome_required": True}))
+    written = [*entries, entry]
+    try:
+        act(entry)
+    except Refused as refusal:
+        aborted = _append(directory, written, {"type": "outcome", "of": entry["hash"], "result": "ABORTED",
+                                               "resolved_by": "REFUSED"})
+        refusal.head = aborted["hash"]
+        raise
+    except BaseException:
+        raise Refused("OPERATION_UNRESOLVED", "PROD's outcome is unknown: run `reconcile`",
+                      head=entry["hash"]) from None
+    _append(directory, written, {"type": "outcome", "of": entry["hash"], "result": "COMMITTED",
+                                 "resolved_by": "ACKNOWLEDGED"})
+    return entry
+
+
 def _summary(entries: list[dict]) -> dict:
     """The derived position: current state, rollbacks, grants, carried evidence, recorded facts."""
     state = None
@@ -463,8 +539,12 @@ def _summary(entries: list[dict]) -> dict:
     opening_reference = None  # the reference entry C12 was opened from
     backups: list[dict] = []
     collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
-                 "authorizations": [], "grants": [], "amendments": [], "supersessions": []}
+                 "authorizations": [], "grants": [], "amendments": [], "supersessions": [], "attestations": []}
+    # An act whose PROD transaction did not commit, or whose outcome is still unknown, has no effect.
+    committed = {e["of"] for e in entries if e["type"] == "outcome" and e["result"] == "COMMITTED"}
     for entry in entries:
+        if entry.get("outcome_required") is True and entry["hash"] not in committed:
+            continue
         kind = entry["type"]
         if kind == "advance":
             state = entry["state"]
@@ -499,6 +579,8 @@ def _summary(entries: list[dict]) -> dict:
             collected["amendments"].append(entry)
         elif kind == "supersession":
             collected["supersessions"].append(entry)
+        elif kind == "attestation":
+            collected["attestations"].append(entry)
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
             "entered": entered, "reference": reference, "backups": backups,
             "opening_reference": opening_reference, "any_reference": reference or opening_reference, **collected}
@@ -694,22 +776,89 @@ def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | N
 
 
 def _require_declared_restore(summary: dict, evidence: dict, observer: "Observer") -> None:
-    """A declared PONR (an administrator's restore) is recorded only on the restore's own trace in PROD:
-    the self-hashed snapshot receipt of its safety copy, for this database, made after the opening and
-    no later than the declared moment."""
+    """A declared PONR (an administrator's restore) is recorded only on proof that the restore COMMITTED
+    (A19 R3 rereview R1): the commit marker ``app.backup.pg_restore`` writes in the very transaction that
+    replaced the registers -- intact, of this database, naming the declared safety copy, completed between
+    the opening and the declared moment -- and that safety copy's own receipt in PROD, made after the
+    opening and before the completion, sent to a drive.  A backup receipt alone proves no restore."""
+    from app.backup import pg_restore
+
     reference = summary["opening_reference"]
     opened = _parse_or_none(_evidence_of(summary, OPENING_STATE).get("opened_at"))
     detected = _parse_or_none(evidence.get("detected_at"))
-    manifest = evidence.get("safety_copy_manifest_sha256")
-    if reference is None or opened is None or detected is None or not _hex64(manifest):
-        raise Refused("EVIDENCE_INVALID", "safety_copy_manifest_sha256")
+    manifest, operation = evidence.get("safety_copy_manifest_sha256"), evidence.get("restore_operation_sha256")
+    if reference is None or opened is None or detected is None or not _hex64(manifest) or not _hex64(operation):
+        raise Refused("EVIDENCE_INVALID", "safety_copy_manifest_sha256, restore_operation_sha256")
     identity = _production_database(summary, observer)
     if identity != reference["database_identity_sha256"]:
         raise Refused("DATABASE_NOT_THE_REFERENCE")
-    made = _parse_or_none(observer.snapshot_receipt_at(manifest, identity))
-    if made is None or not opened <= made <= detected:
+    marker = observer.restore_marker(operation, identity)
+    completed = _parse_or_none(marker.get("completed_at")) if pg_restore.marker_intact(marker) else None
+    if completed is None or marker["hash"] != operation or marker["source_identity_sha256"] != identity \
+            or marker["safety_copy_manifest_sha256"] != manifest or not opened <= completed <= detected:
         raise Refused("DECLARED_RESTORE_NOT_FOUND",
-                      "no snapshot receipt of that safety copy, made between the opening and the restore")
+                      "no commit marker of a restore of this database with that safety copy, completed between "
+                      "the opening and the declared moment")
+    receipt = next((r for r in observer.snapshot_receipts(identity) if r["manifest_sha256"] == manifest), None)
+    made = _parse_or_none(receipt["generation_at"]) if receipt else None
+    if made is None or not receipt["destinations"] or not opened <= made <= completed:
+        raise Refused("DECLARED_RESTORE_NOT_FOUND", "the safety copy the marker names is not recorded in PROD")
+
+
+def _needs_attestation(summary: dict) -> bool:
+    """A declared C13 recorded before restores left a commit marker, not yet attested (rereview R1): no
+    code is authorized after it until its restore is bound to what PROD shows."""
+    c13 = summary["entered"].get(PONR_STATE)
+    evidence = c13["evidence"] if c13 else {}
+    return bool(c13) and evidence.get("write_class") in DECLARED_PONR_WRITE_CLASSES \
+        and "restore_operation_sha256" not in evidence \
+        and not any(a["of_hash"] == c13["hash"] for a in summary["attestations"])
+
+
+def attest_ponr(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """Bind, forward, a declared C13 recorded before restores left a commit marker (A19 R3 rereview R1).
+
+    That C13 stays as written.  The attestation records what PROD shows of that restore: the one snapshot
+    receipt of this database, sent to a drive, made within the restore's own request (from the declared
+    moment, ``RESTORE_REQUEST_SECONDS``) -- its safety copy -- and carries forward the digest the C13
+    evidence named, which is the file that was restored.  The commit itself is the operator's
+    adjudication of the application's log (``pg_restore_done`` is logged only after the COMMIT was
+    acknowledged); the attestation says so and that no marker exists.  Once per C13.
+    """
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        c13 = summary["entered"].get(PONR_STATE)
+        evidence = c13["evidence"] if c13 else {}
+        if c13 is None or evidence.get("write_class") not in DECLARED_PONR_WRITE_CLASSES \
+                or "restore_operation_sha256" in evidence:
+            raise Refused("NOTHING_TO_ATTEST", "only a declared C13 recorded before the restore's commit marker")
+        if any(a["of_hash"] == c13["hash"] for a in summary["attestations"]):
+            raise Refused("ALREADY_ATTESTED")
+        reference = summary["opening_reference"]
+        identity = _production_database(summary, observer)
+        if identity != reference["database_identity_sha256"]:
+            raise Refused("DATABASE_NOT_THE_REFERENCE")
+        detected = _parse(evidence["detected_at"])
+        window = []
+        for receipt in observer.snapshot_receipts(identity):
+            made = _parse_or_none(receipt["generation_at"])
+            if receipt["destinations"] and made is not None and \
+                    detected <= made <= detected + timedelta(seconds=RESTORE_REQUEST_SECONDS):
+                window.append(receipt)
+        if not window:
+            raise Refused("SAFETY_COPY_NOT_FOUND", "no snapshot of this database was sent within the restore's request")
+        if len(window) > 1:
+            raise Refused("SAFETY_COPY_AMBIGUOUS", "more than one snapshot was sent within the restore's request")
+        return _append(directory, entries, {
+            "type": "attestation", "of_state": PONR_STATE, "of_hash": c13["hash"],
+            "basis": "PRE_MARKER_ADMIN_RESTORE", "commit_marker": "ABSENT",
+            "commit_evidence": "OPERATOR_ADJUDICATED_APP_LOG",
+            "safety_copy_manifest_sha256": window[0]["manifest_sha256"], "safety_copy_at": window[0]["generation_at"],
+            "restored_manifest_sha256": evidence["safety_copy_manifest_sha256"], "database_identity_sha256": identity,
+        })
 
 
 def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: dict) -> dict:
@@ -845,11 +994,10 @@ def amend(directory: Path, commit: str, ref: str, *, expect_head: str | None = N
             identity = _production_database(summary, observer)
             if identity != reference["database_identity_sha256"]:
                 raise Refused("DATABASE_NOT_THE_REFERENCE")
-            entry = _prepare(entries, {"type": "amendment", "amends": previous, "commit": resolved,
-                                       "code_sha256": code, "ref": ref, "contract_ref": contract_ref,
-                                       "authorizations": "SUPERSEDED"})
-            observer.supersede(reference["hash"], None, lambda: _write(directory, entry))
-            return entry
+            return _commit_act(directory, entries, {
+                "type": "amendment", "amends": previous, "commit": resolved, "code_sha256": code, "ref": ref,
+                "contract_ref": contract_ref, "authorizations": "SUPERSEDED",
+            }, lambda entry: observer.supersede(reference["hash"], None, entry))
         if changed:
             raise Refused("AMENDMENT_CHANGES_DEPLOYED_FILES",
                           "the amendment only adds files; it never changes or removes one")
@@ -1124,58 +1272,107 @@ class Observer:
                 return 0
             return int(conn.execute(hosting.OPENING_ROWS_SQL).fetchone()[0])
 
-    def authorize(self, reference_sha256: str, code_sha256: str, entry: dict, write, *, first: bool) -> None:
-        """Insert the authorization and run ``write`` (the ledger append) in ONE database transaction.
+    def _transact(self, entry: dict, statements):
+        """Run ``statements(conn)`` and record ``entry``'s hash in ``sgaa_cutover.operations`` in ONE PROD
+        transaction (A19 R3 rereview R2).  Raises ``Refused`` only when PROD provably did not commit (no
+        COMMIT was sent), ``CommitUncertain`` when the COMMIT was sent and its answer never came.
 
-        ``first``: the opening's own authorization -- refused when any authorization already exists (a
-        stale or premature one).  The row commits only once the ledger entry is on disk.
-        """
+        The marker is the transaction's FIRST statement: from then on the act holds the operations table,
+        so ``reconcile`` waits for it; the transaction is bounded below ``RECONCILE_LOCK_SECONDS``."""
+        with self._connection() as conn:
+            committing = False
+            try:
+                conn.execute("SET default_transaction_read_only = off")
+                with conn.transaction():  # committed before the act: `reconcile` can always wait on the table
+                    for statement in (*hosting.OPENING_DDL, *OPERATIONS_DDL):
+                        conn.execute(statement)
+                with conn.transaction():
+                    conn.execute("SET LOCAL statement_timeout = '20s'")
+                    conn.execute("SET LOCAL idle_in_transaction_session_timeout = '20s'")
+                    conn.execute("INSERT INTO sgaa_cutover.operations (entry_hash) VALUES (%s)", (entry["hash"],))
+                    result = statements(conn)
+                    committing = True  # leaving the block sends COMMIT
+            except Refused:
+                raise
+            except BaseException:
+                if committing:
+                    raise CommitUncertain() from None
+                raise Refused("PROD_TRANSACTION_FAILED", "PROD did not commit; nothing changed") from None
+            return result
+
+    def authorize(self, reference_sha256: str, code_sha256: str, entry: dict, *, first: bool) -> None:
+        """Insert the authorization (the entry itself, which the application verifies) in the act's PROD
+        transaction (``_transact``).  ``first``: the opening's own authorization -- refused when any
+        authorization already exists (a stale or premature one)."""
         text = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-        with self._connection() as conn:
-            conn.execute("SET default_transaction_read_only = off")
-            with conn.transaction():
-                for statement in hosting.OPENING_DDL:
-                    conn.execute(statement)
-                existing = int(conn.execute(hosting.OPENING_ROWS_SQL).fetchone()[0])
-                if first and existing:
-                    raise Refused("OPENING_AUTHORIZATION_EXISTS", "an opening was authorized before this reference")
-                conn.execute(hosting.OPENING_INSERT_SQL, (reference_sha256, code_sha256, text))
-                if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
-                    conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, code_sha256))
-                write()
 
-    def supersede(self, reference_sha256: str, keep_code: str | None, write) -> int:
-        """Revoke every authorization of the reference except ``keep_code`` (all when ``None``) and run
-        ``write`` (the ledger append) in ONE database transaction; the number of rows revoked."""
-        with self._connection() as conn:
-            conn.execute("SET default_transaction_read_only = off")
-            with conn.transaction():
-                if not conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
-                    write()
-                    return 0
-                cursor = conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, keep_code or ""))
-                write()
-                return int(cursor.rowcount or 0)
+        def statements(conn):
+            if first and int(conn.execute(hosting.OPENING_ROWS_SQL).fetchone()[0]):
+                raise Refused("OPENING_AUTHORIZATION_EXISTS", "an opening was authorized before this reference")
+            conn.execute(hosting.OPENING_INSERT_SQL, (reference_sha256, code_sha256, text))
+            if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
+                conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, code_sha256))
 
-    def snapshot_receipt_at(self, manifest_sha256: str, identity: str) -> str | None:
-        """The ``generation_at`` of an intact "Gerar backup agora" receipt of this database with this
-        manifest in PROD's ``sgaa_ops.backup_records``, else ``None``."""
+        self._transact(entry, statements)
+
+    def supersede(self, reference_sha256: str, keep_code: str | None, entry: dict) -> int:
+        """Revoke every authorization of the reference except ``keep_code`` (all when ``None``) in the act's
+        PROD transaction (``_transact``); the number of rows revoked."""
+        return self._transact(entry, lambda conn: int(
+            conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, keep_code or "")).rowcount or 0))
+
+    def operation_committed(self, entry_hash: str) -> bool:
+        """Whether the act ``entry_hash`` committed in PROD.  Waits (``RECONCILE_LOCK_SECONDS``) until no act's
+        transaction holds the operations table, so an act still running is never read as aborted."""
+        with self._connection() as conn:
+            try:  # read-only is enough (SHARE is allowed there): it also runs under the write barrier
+                with conn.transaction():
+                    if not conn.execute(OPERATIONS_EXISTS_SQL).fetchone()[0]:
+                        return False  # created, committed, before any act: no act ever reached PROD
+                    conn.execute(f"SET LOCAL lock_timeout = '{RECONCILE_LOCK_SECONDS}s'")
+                    conn.execute("LOCK TABLE sgaa_cutover.operations IN SHARE MODE")
+                    return bool(conn.execute("SELECT EXISTS (SELECT 1 FROM sgaa_cutover.operations"
+                                             " WHERE entry_hash = %s)", (entry_hash,)).fetchone()[0])
+            except Refused:
+                raise
+            except Exception:
+                raise Refused("RECONCILE_UNDECIDED", "PROD could not be read; run `reconcile` again") from None
+
+    def snapshot_receipts(self, identity: str) -> list[dict]:
+        """Every intact "Gerar backup agora" receipt of this database in PROD's ``sgaa_ops.backup_records``:
+        ``manifest_sha256``, ``generation_at``, ``destinations`` (the drives that received it)."""
         from app.backup import pg_posture
 
         with self._connection() as conn:
             if not conn.execute(pg_posture.EXISTS_SQL).fetchone()[0]:
-                return None
+                return []
             rows = conn.execute(pg_posture.SELECT_SQL).fetchall()
+        found = []
         for text, _note in rows:
             try:
                 entry = json.loads(text)
             except (TypeError, ValueError):
                 continue
             if pg_posture._intact(entry) and entry.get("kind") == pg_posture.SNAPSHOT_KIND \
-                    and entry.get("source_identity_sha256") == identity \
-                    and entry.get("manifest_sha256") == manifest_sha256:
-                return entry.get("generation_at")
-        return None
+                    and entry.get("source_identity_sha256") == identity and _hex64(entry.get("manifest_sha256")):
+                destinations = entry.get("destinations") if isinstance(entry.get("destinations"), list) else []
+                found.append({"manifest_sha256": entry["manifest_sha256"], "generation_at": entry.get("generation_at"),
+                              "destinations": [d for d in destinations if d in ("google", "onedrive")]})
+        return found
+
+    def restore_marker(self, marker_sha256: str, identity: str) -> dict | None:
+        """The commit marker ``marker_sha256`` "Recuperar banco de dados" left in PROD, else ``None`` (the
+        ledger re-verifies its integrity and every field it relies on)."""
+        from app.backup import pg_restore
+
+        with self._connection() as conn:
+            if not conn.execute(pg_restore.MARKER_EXISTS_SQL).fetchone()[0]:
+                return None
+            row = conn.execute(pg_restore.MARKER_BY_HASH_SQL, (marker_sha256,)).fetchone()
+        try:
+            return json.loads(row[0]) if row else None
+        except (TypeError, ValueError):
+            return None
 
     def authorization_valid(self, reference_sha256: str, code_sha256: str, project_sha256: str) -> bool:
         """Whether the PROD database authorizes an open deployment of this code -- the app's own test."""
@@ -1467,7 +1664,9 @@ def backup_preconditions(directory: Path, kind: str) -> dict:
     """What the governed backup must hold before it starts: the qualified identity and the PROD project."""
     if kind not in _BACKUP_KINDS:
         raise Refused("BACKUP_KIND_INVALID")
-    summary = _summary(read_ledger(directory))
+    entries = read_ledger(directory)
+    _require_resolved(entries)  # it could not be recorded: refused before the run, not after it
+    summary = _summary(entries)
     _backup_window(summary, kind)
     if summary["qualification"] is None:
         raise Refused("QUALIFICATION_REQUIRED")
@@ -1579,13 +1778,16 @@ _DEPLOYMENT_KEYS = ("deployment_id", "url_sha256", "vercel_project_sha256", "com
 
 
 def deployment_preconditions(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
-                             forward_fix_ref: str | None) -> None:
-    """Refuse a deployment before anything is uploaded (``record_deployment`` re-checks it all)."""
-    _deployment_rules(_summary(read_ledger(directory)), commit=commit, admission=admission,
-                      opening_reference=opening_reference, forward_fix_ref=forward_fix_ref)
+                             forward_fix_ref: str | None, code: str | None = None) -> None:
+    """Refuse a deployment before anything is uploaded (``record_deployment`` re-checks it all); with
+    ``code`` (known once the export is built), also what depends on it."""
+    entries = read_ledger(directory)
+    _require_resolved(entries)
+    _deployment_rules(_summary(entries), commit=commit, admission=admission, opening_reference=opening_reference,
+                      forward_fix_ref=forward_fix_ref, code=code)
 
 
-def _deployment_rules(summary: dict, *, commit, admission, opening_reference, forward_fix_ref) -> None:
+def _deployment_rules(summary: dict, *, commit, admission, opening_reference, forward_fix_ref, code=None) -> None:
     state = summary["state"]
     if summary["rolled_back"]:
         raise Refused("ROLLED_BACK")
@@ -1594,6 +1796,9 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
     if "GD1" not in summary["granted"]:
         raise Refused("GATE_NOT_GRANTED", "GD1")
     after_ponr = STATES.index(state) >= STATES.index(PONR_STATE)
+    if after_ponr and forward_fix_ref in (None, "NONE"):
+        # Every deployment after the PONR is a forward fix with its own GF1, whatever its commit (rereview R7).
+        raise Refused("FORWARD_FIX_GATE_REQUIRED", "after the PONR every deployment needs its own GF1 grant")
     if forward_fix_ref not in (None, "NONE"):
         grants = [g["ref"] for g in summary["grants"] if g["gate"] == FORWARD_FIX_GATE]
         used = {d["forward_fix_ref"] for d in summary["deployments"]}
@@ -1610,14 +1815,43 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
             raise Refused("OPEN_WITHOUT_THE_REFERENCE", "an open deployment carries the recorded opening reference")
         if _barrier_applied(summary) is not None:
             raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
+        if code is not None and code == _authorized_code(summary):
+            # an open deployment of the authorized code admits users at its own address once it is up
+            _require_fresh(summary, reference)
     elif opening_reference not in (None, "NONE"):
         raise Refused("ADMISSION_INVALID", "an operator deployment carries no opening reference")
+
+
+def _verified_times(summary: dict) -> tuple[list[datetime], list[datetime]]:
+    """When verified generations (and object sets) were made, by the ledger's record: the generations
+    it recorded and the ones a re-opening re-verified on disk (after C14 nothing else is recorded)."""
+    database = [_parse(b["generation_at"]) for b in _generations(summary)]
+    objects = [_parse(b["generation_at"]) for b in _generations(summary) if b["object_set_name"] != "NONE"]
+    for authorization in summary["authorizations"]:
+        for key, found in (("reopening_generation_at", database), ("reopening_objects_at", objects)):
+            moment = _parse_or_none(authorization.get(key))
+            if moment is not None:
+                found.append(moment)
+    return database, objects
+
+
+def _require_fresh(summary: dict, reference: dict) -> None:
+    """Before an act that lets users in (A19 R3 rereview R5): the newest verified generation within the
+    cadence the reference recorded and the newest object set within its own."""
+    database, objects = _verified_times(summary)
+    cadence_hours = int(reference["backup_cadence_hours"])
+    now = _CLOCK()
+    if not database or not objects or now - max(database) > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) \
+            or now - max(objects) > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
+        raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation with objects first")
 
 
 def recorded_deployment(directory: Path, deployment_id: str) -> dict:
     """The ``deployment`` entry ``deploy_audit deploy`` recorded for ``deployment_id`` (refused when none),
     refused too when it may not be promoted now (``_promotion_rules``)."""
-    summary = _summary(read_ledger(directory))
+    entries = read_ledger(directory)
+    _require_resolved(entries)
+    summary = _summary(entries)
     found = _deployment(summary, deployment_id)
     if found is None:
         raise Refused("DEPLOYMENT_NOT_RECORDED")
@@ -1630,6 +1864,8 @@ def _promotion_rules(summary: dict, deployment: dict) -> None:
     authorizes (A19 R3 M2): never a superseded code, never an amended one before its GC2."""
     if deployment["admission"] == "OPEN" and deployment["code_sha256"] != _authorized_code(summary):
         raise Refused("OPEN_DEPLOYMENT_NOT_AUTHORIZED", "only the code the ledger currently authorizes is promoted open")
+    if deployment["admission"] == "OPEN":  # the public address lets users in (rereview R5)
+        _require_fresh(summary, summary["any_reference"])
 
 
 def record_deployment(directory: Path, receipt: dict) -> dict:
@@ -1640,7 +1876,8 @@ def record_deployment(directory: Path, receipt: dict) -> dict:
         if set(receipt) != set(_DEPLOYMENT_KEYS):
             raise Refused("DEPLOYMENT_RECEIPT_INVALID")
         _deployment_rules(summary, commit=receipt["commit"], admission=receipt["admission"],
-                          opening_reference=receipt["opening_reference"], forward_fix_ref=receipt["forward_fix_ref"])
+                          opening_reference=receipt["opening_reference"], forward_fix_ref=receipt["forward_fix_ref"],
+                          code=receipt["code_sha256"])
         if not _deployment_id(receipt["deployment_id"]) or _deployment(summary, receipt["deployment_id"]):
             raise Refused("DEPLOYMENT_RECEIPT_INVALID", "a deployment is recorded once")
         if summary["deployments"] and receipt["vercel_project_sha256"] != summary["deployments"][0]["vercel_project_sha256"]:
@@ -1735,17 +1972,23 @@ def take_reference(directory: Path, out: Path, root: Path, off_platform: Path, *
         document = dict(fingerprint, taken_at=_now())
         pg_fingerprint.validate(document)
         code = _candidate_code(summary)
-        entry = _prepare(entries, {
+        out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")
+
+        def authorize(entry):
+            try:
+                observer.authorize(entry["hash"], code, entry, first=True)
+            except Refused:
+                out.unlink(missing_ok=True)  # aborted: no reference was taken
+                raise
+
+        # The reference takes effect only with its authorization committed in PROD (its outcome).
+        return _commit_act(directory, entries, {
             "type": "reference", "reference_fingerprint_sha256": fingerprint["fingerprint_sha256"],
             "database_identity_sha256": identity, "admission": "CLOSED",
             "pre_open_backup_manifest_sha256": generation["manifest_sha256"],
             "backup_cadence_hours": cadence_hours, "rpo_hours": cadence_hours,
             "code_sha256": code, "vercel_project_sha256": project,
-        })
-        out.write_text(json.dumps(document, sort_keys=True), encoding="ascii", newline="\n")
-        # The authorization commits only with the entry on disk; a failed append leaves no row.
-        observer.authorize(entry["hash"], code, entry, lambda: _write(directory, entry), first=True)
-        return entry
+        }, authorize)
 
 
 def open_admission(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
@@ -1778,14 +2021,7 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
             raise Refused("OPENING_NOT_BOUND_TO_THE_REFERENCE")
         if observer.code() != reference["code_sha256"]:
             raise Refused("DEPLOYMENT_CODE_CHANGED")
-        cadence_hours = int(reference["backup_cadence_hours"])
-        generations = _generations(summary)
-        newest = max(_parse(b["generation_at"]) for b in generations)
-        object_sets = [_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE"]
-        newest_objects = max(object_sets)
-        if _CLOCK() - newest > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) or \
-                _CLOCK() - newest_objects > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
-            raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation first: the cadence starts at the opening")
+        _require_fresh(summary, reference)  # observed again: the cadence starts at the opening
         evidence = {
             "reference_fingerprint_sha256": reference["reference_fingerprint_sha256"],
             "database_identity_sha256": reference["database_identity_sha256"],
@@ -1828,8 +2064,15 @@ def close(directory: Path, *, expect_head: str | None = None, observer: Observer
         return _append(directory, entries, body)
 
 
-def resume(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
-    """After a refused rollback: lift the barrier and restore the authorization (production goes forward)."""
+def resume(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None,
+           backup_root=None, off_platform=None) -> dict:
+    """After a refused rollback: lift the barrier and restore the authorization (production goes forward).
+
+    It lets users back in, so it first re-proves what the opening proved (A19 R3 rereview R5): every
+    deployment the platform may serve is recorded, and the newest recorded generation, with objects, is
+    within the cadence and found intact on disk and off-platform (the business state moved on: a
+    refused rollback is exactly that, so it need not hold the current state).
+    """
     observer = observer or Observer()
     with _locked(directory):
         entries = read_ledger(directory)
@@ -1841,6 +2084,9 @@ def resume(directory: Path, *, expect_head: str | None = None, observer: Observe
         # its own verification wrote no entry, and its barrier must still be liftable).
         if _barrier_applied(summary) is None and observer.writable():
             raise Refused("BARRIER_NOT_APPLIED")
+        _require_every_deployment_recorded(summary, observer)
+        _require_reopening_backup(summary, observer, backup_root, off_platform, identity, require_current=False,
+                                  reference=reference)
         current = _authorized_code(summary)
         if not observer.lift_barrier(reference["hash"], current):
             raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write")
@@ -1932,33 +2178,37 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
 
 
 def _require_reopening_backup(summary: dict, observer: Observer, backup_root, off_platform, identity, *,
-                              require_current: bool) -> str:
+                              require_current: bool, reference: dict | None = None) -> dict:
     """A re-opening re-proves what the opening proved (A19 R3 M6): the newest recorded generation, with
     an object set, within the cadence the reference recorded (and the object set within its own), found
     intact on disk and in the off-platform copy, made from PROD -- and, before the PONR, holding the
-    current business state.  Returns its manifest digest."""
+    current business state.  Returns ``{"manifest_sha256", "generation_at", "objects_at"}``."""
     if backup_root is None or off_platform is None:
         raise Refused("BACKUP_ROOTS_REQUIRED", "a re-opening re-verifies the newest generation (--backup-root, --off-platform)")
-    reference = summary["opening_reference"]
+    reference = reference or summary["opening_reference"]
     cadence_hours = int(reference["backup_cadence_hours"])
     if summary["state"] == STATES[-1]:
         # After the window closed the ledger records no generation (C14): the newest one on disk, made
-        # from PROD and re-verified with its off-platform copy, must itself be within the cadence.
+        # from PROD and re-verified with its off-platform copy, must itself be within the cadence -- and its
+        # object set within its own, by the set's own creation time (rereview R6).
         generation = observer.backup(Path(backup_root), Path(off_platform), against_database=True)
         made = _parse_or_none(generation.get("created_at"))
-        if not generation.get("object_set") or made is None \
-                or _CLOCK() - made > timedelta(hours=cadence_hours * CADENCE_TOLERANCE):
+        objects_made = _parse_or_none(generation.get("object_created_at"))
+        if not generation.get("object_set") or made is None or objects_made is None \
+                or _CLOCK() - made > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) \
+                or _CLOCK() - objects_made > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
             raise Refused("BACKUP_TOO_OLD_TO_OPEN", "run a new generation with objects before re-opening")
         _check_generation_sources(summary, generation, identity)
-        return generation["manifest_sha256"]
+        return {"manifest_sha256": generation["manifest_sha256"], "generation_at": generation["created_at"],
+                "objects_at": generation["object_created_at"]}
     generations = _generations(summary)
     if not generations:
         raise Refused("PRE_OPEN_BACKUP_REQUIRED")
     newest = max(generations, key=lambda b: _parse(b["generation_at"]))
-    object_sets = [_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE"]
+    object_sets = [b["generation_at"] for b in generations if b["object_set_name"] != "NONE"]
     if newest["object_set_name"] == "NONE" or not object_sets \
             or _CLOCK() - _parse(newest["generation_at"]) > timedelta(hours=cadence_hours * CADENCE_TOLERANCE) \
-            or _CLOCK() - max(object_sets) > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
+            or _CLOCK() - max(_parse(t) for t in object_sets) > timedelta(hours=OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
         raise Refused("BACKUP_TOO_OLD_TO_OPEN", "record a new generation with objects before re-opening")
     generation = observer.backup(Path(backup_root), Path(off_platform), against_database=True)
     if (generation["manifest_sha256"], generation["dump_sha256"], generation["object_set"],
@@ -1968,7 +2218,8 @@ def _require_reopening_backup(summary: dict, observer: Observer, backup_root, of
     _check_generation_sources(summary, generation, identity)
     if require_current and not observer.backup_matches(generation["manifest_path"], observer.fingerprint()):
         raise Refused("BACKUP_NOT_CURRENT", "the newest backup does not hold the current business state")
-    return newest["manifest_sha256"]
+    return {"manifest_sha256": newest["manifest_sha256"], "generation_at": newest["generation_at"],
+            "objects_at": max(object_sets, key=_parse)}
 
 
 def _require_every_deployment_recorded(summary: dict, observer: Observer) -> None:
@@ -1997,10 +2248,10 @@ def supersede(directory: Path, *, expect_head: str | None = None, observer: Obse
         if identity != reference["database_identity_sha256"]:
             raise Refused("DATABASE_NOT_THE_REFERENCE")
         keep = _authorized_code(summary)
-        entry = _prepare(entries, {"type": "supersession", "opening_reference": reference["hash"],
-                                   "kept_code_sha256": keep or "NONE", "database_identity_sha256": identity})
-        observer.supersede(reference["hash"], keep, lambda: _write(directory, entry))
-        return entry
+        return _commit_act(directory, entries, {
+            "type": "supersession", "opening_reference": reference["hash"], "kept_code_sha256": keep or "NONE",
+            "database_identity_sha256": identity,
+        }, lambda entry: observer.supersede(reference["hash"], keep, entry))
 
 
 def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | None = None,
@@ -2030,19 +2281,19 @@ def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | No
             raise Refused("NOT_A_RECORDED_FORWARD_FIX")
         if deployment["code_sha256"] in {reference["code_sha256"], *(a["code_sha256"] for a in summary["authorizations"])}:
             raise Refused("CODE_ALREADY_AUTHORIZED")
+        if _needs_attestation(summary):
+            raise Refused("PONR_NOT_ATTESTED", "`attest-ponr` binds the declared C13 to its restore first")
         identity = _production_database(summary, observer)
         _require_every_deployment_recorded(summary, observer)
-        manifest = _require_reopening_backup(summary, observer, backup_root, off_platform, identity,
-                                             require_current=False)
-        entry = _prepare(entries, {
+        backup = _require_reopening_backup(summary, observer, backup_root, off_platform, identity,
+                                           require_current=False)
+        return _commit_act(directory, entries, {
             "type": "authorization", "opening_reference": reference["hash"], "code_sha256": deployment["code_sha256"],
             "database_identity_sha256": identity, "vercel_project_sha256": deployment["vercel_project_sha256"],
             "deployment_id": deployment_id, "forward_fix_ref": deployment["forward_fix_ref"],
-            "reopening_backup_manifest_sha256": manifest,
-        })
-        observer.authorize(reference["hash"], deployment["code_sha256"], entry, lambda: _write(directory, entry),
-                           first=False)
-        return entry
+            "reopening_backup_manifest_sha256": backup["manifest_sha256"],
+            "reopening_generation_at": backup["generation_at"], "reopening_objects_at": backup["objects_at"],
+        }, lambda entry: observer.authorize(reference["hash"], deployment["code_sha256"], entry, first=False))
 
 
 def _authorize_contract_code(directory: Path, deployment_id: str, contract_ref: str, *, expect_head,
@@ -2075,17 +2326,34 @@ def _authorize_contract_code(directory: Path, deployment_id: str, contract_ref: 
         if not observer.writable():  # a barrier `close` applied but could not record
             raise Refused("BARRIER_IN_FORCE", "`resume` lifts the barrier before production is opened again")
         _require_every_deployment_recorded(summary, observer)
-        manifest = _require_reopening_backup(summary, observer, backup_root, off_platform, identity,
-                                             require_current=True)
-        entry = _prepare(entries, {
+        backup = _require_reopening_backup(summary, observer, backup_root, off_platform, identity,
+                                           require_current=True)
+        return _commit_act(directory, entries, {
             "type": "authorization", "opening_reference": reference["hash"], "code_sha256": deployment["code_sha256"],
             "database_identity_sha256": identity, "vercel_project_sha256": deployment["vercel_project_sha256"],
             "deployment_id": deployment_id, "forward_fix_ref": "NONE", "contract_ref": contract_ref,
-            "reopening_backup_manifest_sha256": manifest,
-        })
-        observer.authorize(reference["hash"], deployment["code_sha256"], entry, lambda: _write(directory, entry),
-                           first=False)
-        return entry
+            "reopening_backup_manifest_sha256": backup["manifest_sha256"],
+            "reopening_generation_at": backup["generation_at"], "reopening_objects_at": backup["objects_at"],
+        }, lambda entry: observer.authorize(reference["hash"], deployment["code_sha256"], entry, first=False))
+
+
+def reconcile(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+    """Resolve the act whose PROD outcome is unknown (A19 R3 rereview R2): read in PROD whether its
+    transaction committed (its marker), after waiting for any act still running, and record the outcome."""
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        if expect_head is not None and expect_head != _head(entries):
+            raise Refused("HEAD_MISMATCH", "the ledger does not end where the operator last saw it")
+        pending = _unresolved(entries)
+        if pending is None:
+            raise Refused("NOTHING_TO_RECONCILE")
+        summary = _summary(entries)
+        _production_database(summary, observer)
+        committed = observer.operation_committed(pending["hash"])
+        return _append(directory, entries, {"type": "outcome", "of": pending["hash"],
+                                            "result": "COMMITTED" if committed else "ABORTED",
+                                            "resolved_by": "RECONCILED"})
 
 
 def init(directory: Path) -> dict:
@@ -2113,6 +2381,7 @@ def status(directory: Path) -> dict:
         "ponr_recorded": bool(state and STATES.index(state) >= STATES.index(PONR_STATE)),
         "qualified": summary["qualification"] is not None,
         "barrier": summary["barriers"][-1]["action"] if summary["barriers"] else "NONE",
+        "unresolved_operation": (_unresolved(entries) or {}).get("hash"),
         # The value SGAA_OPENING_REFERENCE carries (also after a refused rollback, to re-open).
         "opening_reference": _opening_reference(summary),
     }
@@ -2158,7 +2427,7 @@ def main(argv=None, *, out=None, err=None) -> int:
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
     bound = ("grant", "advance", "amend", "qualify", "rollback", "reference", "open", "close", "resume",
-             "authorize-code", "supersede")
+             "authorize-code", "supersede", "reconcile", "attest-ponr")
     for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
@@ -2167,9 +2436,12 @@ def main(argv=None, *, out=None, err=None) -> int:
         if name in {"rollback", "reference", "open"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
-        if name in {"reference", "open", "authorize-code"}:
+        if name in {"reference", "open", "authorize-code", "resume"}:
             sub.add_argument("--vercel-team", default=None, help="the team id of the production project")
             sub.add_argument("--vercel-project", default=None, help="the production project's id")
+        if name == "resume":
+            sub.add_argument("--backup-root", default=None, help="the ops_backup primary directory (re-verified)")
+            sub.add_argument("--off-platform", default=None, help="the ops_backup off-platform directory")
         if name == "reference":
             sub.add_argument("--backup-root", required=True, help="the ops_backup primary directory")
             sub.add_argument("--off-platform", required=True, help="the ops_backup off-platform directory")
@@ -2231,7 +2503,12 @@ def main(argv=None, *, out=None, err=None) -> int:
         elif args.command == "close":
             result = close(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "resume":
-            result = resume(directory, expect_head=args.expect_head, observer=observer)
+            result = resume(directory, expect_head=args.expect_head, observer=observer, backup_root=args.backup_root,
+                            off_platform=args.off_platform)
+        elif args.command == "reconcile":
+            result = reconcile(directory, expect_head=args.expect_head, observer=observer)
+        elif args.command == "attest-ponr":
+            result = attest_ponr(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "supersede":
             result = supersede(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "rollback":
@@ -2247,9 +2524,11 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = {"chain": "OK", "head": _head(read_ledger(directory))}
     except Refused as refusal:
         err.write(f"cutover-ledger: refused: {refusal.code}\n")
+        if refusal.head:  # the act wrote its own entries before it was refused: the next command binds to them
+            err.write(f"cutover-ledger: head: {refusal.head}\n")
         return 1
-    if "hash" in result:  # an appended entry: print the new head so the next command can bind to it
-        result = {**result, "head": result["hash"]}
+    if "hash" in result:  # an appended entry: print the ledger's new head (an act's outcome follows its entry)
+        result = {**result, "head": _head(read_ledger(directory))}
     json.dump(result, out, sort_keys=True)
     out.write("\n")
     return 0

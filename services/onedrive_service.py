@@ -452,6 +452,21 @@ def _build_folder_upload_url(
     folder_name: str = DEFAULT_UPLOAD_FOLDER,
     folder_id: str | None = None,
     drive_id: str | None = None,
+    replace: bool = True,
+) -> str:
+    # ``replace=False``: Graph refuses (409) instead of overwriting a file of the same name in the folder.
+    suffix = "" if replace else "?@microsoft.graph.conflictBehavior=fail"
+    return _folder_upload_address(graph_base_url=graph_base_url, file_name=file_name, folder_name=folder_name,
+                                  folder_id=folder_id, drive_id=drive_id) + suffix
+
+
+def _folder_upload_address(
+    *,
+    graph_base_url: str,
+    file_name: str,
+    folder_name: str = DEFAULT_UPLOAD_FOLDER,
+    folder_id: str | None = None,
+    drive_id: str | None = None,
 ) -> str:
     clean_name = (file_name or "").strip()
     if not clean_name:
@@ -641,6 +656,7 @@ def upload_zip_backup_with_access_token(
     folder_name: str = DEFAULT_UPLOAD_FOLDER,
     folder_id: str | None = None,
     drive_id: str | None = None,
+    replace: bool = True,
 ) -> dict[str, str]:
     if not zip_path or not os.path.exists(zip_path):
         raise OneDriveServiceError("Arquivo ZIP de backup não encontrado para upload.")
@@ -653,6 +669,7 @@ def upload_zip_backup_with_access_token(
         folder_name=folder_name,
         folder_id=folder_id,
         drive_id=drive_id,
+        replace=replace,
     )
     requests = _import_requests()
 

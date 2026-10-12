@@ -494,6 +494,12 @@ def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_r
         if tree_digest(blobs) != proof["deploy_tree_sha256"]:
             raise Refused("DEPLOY_TREE_DIFFERS")
         code = hosting.code_sha256(blobs)
+        try:  # what depends on the code (an open deployment of the authorized code admits users at once)
+            cutover_ledger.deployment_preconditions(Path(ledger_dir), commit=resolved, admission=mode,
+                                                    opening_reference=opening_reference,
+                                                    forward_fix_ref=forward_fix_ref, code=code)
+        except cutover_ledger.Refused as refusal:
+            raise Refused(f"LEDGER_{refusal.code}") from None
         expected_files = vercel_provider.files_sha256(sha1s)
         env = {hosting.ADMISSION_ENV: admission}
         if mode == "OPEN":

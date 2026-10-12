@@ -65,6 +65,10 @@ def _code(call, *args, **kwargs):
     return caught.value.code
 
 
+def _ROOTS(directory):  # noqa: N802 -- the backup directories the scripted observer "verifies"
+    return {"backup_root": directory.parent, "off_platform": directory.parent}
+
+
 def _ledger_bytes(directory):
     return (directory / ledger.LEDGER_FILE).read_text()
 
@@ -656,8 +660,10 @@ def test_supersede_revokes_every_code_the_ledger_does_not_authorize(directory, o
     entry = ledger.supersede(directory, observer=observer)
     assert entry["type"] == "supersession" and entry["kept_code_sha256"] == taken["code_sha256"]
     assert [row["code"] for row in observer.rows if not row["revoked"]] == [taken["code_sha256"]]
-    status = ledger.status(directory)  # the ledger reads its own supersession entry back
-    assert status["chain"] == "OK" and status["head"] == entry["hash"]
+    status = ledger.status(directory)  # the ledger reads its own supersession entry and its outcome back
+    last = ledger.read_ledger(directory)[-1]
+    assert status["chain"] == "OK" and status["head"] == last["hash"]
+    assert last["type"] == "outcome" and last["of"] == entry["hash"] and last["result"] == "COMMITTED"
 
 
 def test_contract_gates_follow_the_opening_not_only_the_reference(directory, observer):
@@ -772,7 +778,9 @@ def test_the_reference_writes_one_authorization_that_is_the_entry_itself(directo
     forged = json.loads(stored)
     forged["backup_cadence_hours"] = 12  # edited: no longer the recorded entry
     assert not hosting.opening_entry_authorizes(json.dumps(forged), **good)
-    assert ledger.read_ledger(directory)[-1]["hash"] == taken["hash"]
+    entries = ledger.read_ledger(directory)  # the reference, then its outcome (A19 R3 rereview R2)
+    assert entries[-2]["hash"] == taken["hash"] and entries[-1]["of"] == taken["hash"]
+    assert entries[-1]["result"] == "COMMITTED"
 
 
 def test_a_failed_ledger_write_leaves_no_authorization(directory, observer, monkeypatch):
@@ -1399,10 +1407,10 @@ def test_resume_lifts_the_barrier_and_restores_the_authorization_after_a_refused
     assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=reference) == \
         "FINGERPRINT_CHANGED"
     assert observer.barrier is not None  # a refused rollback leaves production closed (fail closed)
-    entry = ledger.resume(directory, observer=observer)
+    entry = ledger.resume(directory, observer=observer, **_ROOTS(directory))
     assert entry["action"] == "LIFTED" and entry["authorization"] == "RESTORED"
     assert observer.barrier is None and not any(row["revoked"] for row in observer.rows)
-    assert _code(ledger.resume, directory, observer=observer) == "BARRIER_NOT_APPLIED"
+    assert _code(ledger.resume, directory, observer=observer, **_ROOTS(directory)) == "BARRIER_NOT_APPLIED"
     ledger.advance(directory, "C13", GOOD["C13"])
 
 
@@ -1410,14 +1418,14 @@ def test_resume_lifts_a_barrier_close_applied_but_could_not_record(directory, ob
     _opened(directory, observer)
     observer.apply_barrier()  # applied, then `close` refused its own verification: no entry
     assert ledger.status(directory)["barrier"] == "NONE"
-    assert ledger.resume(directory, observer=observer)["action"] == "LIFTED"
+    assert ledger.resume(directory, observer=observer, **_ROOTS(directory))["action"] == "LIFTED"
 
 
 def test_resume_refuses_when_a_fresh_session_still_cannot_write(directory, observer):
     _opened(directory, observer)
     ledger.close(directory, observer=observer)
     observer.lift_works = False
-    assert _code(ledger.resume, directory, observer=observer) == "BARRIER_STILL_IN_FORCE"
+    assert _code(ledger.resume, directory, observer=observer, **_ROOTS(directory)) == "BARRIER_STILL_IN_FORCE"
 
 
 def test_production_is_never_reopened_or_redeployed_open_under_the_barrier(directory, observer):
@@ -1428,7 +1436,7 @@ def test_production_is_never_reopened_or_redeployed_open_under_the_barrier(direc
     ledger.close(directory, observer=observer)  # C11 with a reference: users may already be in
     assert _code(ls.deploy, directory, observer, LIFT, admission="OPEN", opening_reference=taken["hash"]) == \
         "BARRIER_APPLIED"
-    ledger.resume(directory, observer=observer)
+    ledger.resume(directory, observer=observer, **_ROOTS(directory))
     ls.lift(directory, observer, taken)
     observer.barrier = {"setting": True}  # applied outside the ledger: a fresh session cannot write
     assert _code(ledger.open_admission, directory, observer=observer) == "BARRIER_IN_FORCE"
@@ -1583,20 +1591,24 @@ def test_the_ponr_needs_a_fingerprint_that_differs_from_the_opening_and_a_write_
 
 def test_a_declared_restore_is_the_ponr_even_when_it_restores_the_opening_content(directory, observer):
     """SPEC A19 (13): the administrator's restore is the PONR; restoring the opening's own content moves no
-    digest, so it is recorded on the restore's own trace in PROD: its safety copy's snapshot receipt."""
+    digest, so it is recorded on the restore's own trace in PROD: its commit marker and its safety copy's
+    snapshot receipt (rereview R1)."""
     _grant_all(directory)
     _drive(directory, "C12", observer=observer)
     opened = ledger._summary(ledger.read_ledger(directory))["evidence"]["C12"]["opened_at"]
     same = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"],
             "detected_at": "2099-01-01T00:00:00Z"}
     assert _code(ledger.advance, directory, "C13", {**same, "write_class": "REQUISICOES"}) == "NO_FINGERPRINT_DELTA"
-    declared = {**same, "write_class": "ADMIN_RESTORE", "safety_copy_manifest_sha256": "c" * 64}
+    marker = ls.restore_marker(safety_copy="c" * 64, restored="e" * 64, completed_at=opened)
+    declared = {**same, "write_class": "ADMIN_RESTORE", "safety_copy_manifest_sha256": "c" * 64,
+                "restore_operation_sha256": marker["hash"]}
     assert _code(ledger.advance, directory, "C13", {**same, "write_class": "ADMIN_RESTORE"},
-                 observer=observer) == "EVIDENCE_INVALID"  # the safety copy is named
+                 observer=observer) == "EVIDENCE_INVALID"  # the safety copy and the marker are named
+    observer.restore_markers = {marker["hash"]: marker}
     assert _code(ledger.advance, directory, "C13", declared, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
-    observer.snapshot_receipts = {"c" * 64: "2000-01-01T00:00:00Z"}  # before the opening: not this restore
+    observer.receipts = {"c" * 64: "2000-01-01T00:00:00Z"}  # before the opening: not this restore
     assert _code(ledger.advance, directory, "C13", declared, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
-    observer.snapshot_receipts = {"c" * 64: opened}
+    observer.receipts = {"c" * 64: opened}
     entry = ledger.advance(directory, "C13", declared, observer=observer)
     assert entry["state"] == "C13" and ledger.status(directory)["ponr_recorded"] is True
     assert _code(ledger.rollback, directory, "SMOKE_FAILED") == "PONR_RECORDED"  # forward-fix only from here
@@ -1632,7 +1644,7 @@ def test_a_forward_fix_runs_new_code_only_under_its_own_gate_and_its_own_authori
     reference = ledger.status(directory)["opening_reference"]
     fix = "dpl_" + "F" * 24
     assert _code(ls.deploy, directory, observer, fix, admission="OPEN", opening_reference=reference,
-                 commit=OTHER_COMMIT, code=OTHER_CODE) == "COMMIT_NOT_THE_REHEARSED_ONE"
+                 commit=OTHER_COMMIT, code=OTHER_CODE) == "FORWARD_FIX_GATE_REQUIRED"
     assert _code(ls.deploy, directory, observer, fix, admission="OPEN", opening_reference=reference,
                  commit=OTHER_COMMIT, code=OTHER_CODE, forward_fix_ref="m-fix-1") == "FORWARD_FIX_GATE_REQUIRED"
     ledger.grant(directory, "GF1", "m-fix-1")
@@ -1662,9 +1674,10 @@ def test_a_forward_fix_after_the_window_closed_reverifies_the_newest_generation_
     observer.generation = dict(observer.generation, created_at=None)
     assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
     stale = (ledger._CLOCK() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    observer.generation = dict(observer.generation, created_at=stale)
+    now = ledger._CLOCK().strftime("%Y-%m-%dT%H:%M:%SZ")
+    observer.generation = dict(observer.generation, created_at=stale, object_created_at=now)  # the database is old
     assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
-    observer.generation = dict(ls.generation(9), created_at=ledger._CLOCK().strftime("%Y-%m-%dT%H:%M:%SZ"))
+    observer.generation = dict(ls.generation(9), created_at=now, object_created_at=now)
     assert ledger.authorize_code(directory, fix, observer=observer, **roots)["code_sha256"] == OTHER_CODE
 
 
@@ -1970,3 +1983,276 @@ def test_the_command_line_runs_as_a_script_from_anywhere(tmp_path):
         env={k: v for k, v in __import__("os").environ.items() if k != "DATABASE_URL"})
     # It imports its tools and reaches its own refusal: no database to prove production from.
     assert done.returncode == 1 and done.stderr.startswith("cutover-ledger: refused: SOURCE_REQUIRED"), done.stderr[-400:]
+
+
+# ---- the R3 rereview of 171d21f (SPEC A19 (14)) -------------------------------------------------------------
+
+
+def _stamp_at(moment):
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _at_ponr_with_a_forward_fix(directory, observer):
+    """C13 (an ordinary one: the reference's code still authorized) and one forward fix recorded under GF1."""
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    reference = ledger.status(directory)["opening_reference"]
+    fix = "dpl_" + "F" * 24
+    ledger.grant(directory, "GF1", "m-fix-1")
+    ls.deploy(directory, observer, fix, admission="OPEN", opening_reference=reference, commit=OTHER_COMMIT,
+              code=OTHER_CODE, forward_fix_ref="m-fix-1", observed_admission="CLOSED")
+    return reference, fix
+
+
+def test_r1_an_ordinary_snapshot_receipt_never_records_a_declared_restore(directory, observer):
+    """R1: a "Gerar backup agora" receipt proves a backup, not a restore.  An unchanged-fingerprint C13 needs
+    the commit marker the restore wrote in the transaction that replaced the registers: it binds the
+    operation, the restore's own safety copy and its completion time."""
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    opened = ledger._parse(ledger._summary(ledger.read_ledger(directory))["evidence"]["C12"]["opened_at"])
+    safety, restored = "c" * 64, "e" * 64
+    ls.set_clock(opened + timedelta(minutes=30))
+    observer.receipts = {safety: _stamp_at(opened + timedelta(minutes=10))}  # a backup taken at C12, no restore
+    declared = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"],
+                "write_class": "ADMIN_RESTORE", "detected_at": _stamp_at(ledger._CLOCK()),
+                "safety_copy_manifest_sha256": safety}
+    assert _code(ledger.advance, directory, "C13", declared, observer=observer) == "EVIDENCE_INVALID"
+    marker = ls.restore_marker(safety_copy=safety, restored=restored,
+                               completed_at=_stamp_at(opened + timedelta(minutes=11)))
+    with_marker = {**declared, "restore_operation_sha256": marker["hash"]}
+    assert _code(ledger.advance, directory, "C13", with_marker, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
+    for other in (ls.restore_marker(safety_copy="f" * 64, restored=restored,  # another restore's safety copy
+                                    completed_at=_stamp_at(opened + timedelta(minutes=11))),
+                  ls.restore_marker(safety_copy=safety, restored=restored,  # completed after the declared moment
+                                    completed_at=_stamp_at(opened + timedelta(minutes=40))),
+                  ls.restore_marker(safety_copy=safety, restored=restored, identity=H["k"],  # another database
+                                    completed_at=_stamp_at(opened + timedelta(minutes=11))),
+                  dict(marker, rows=1)):  # an altered marker
+        observer.restore_markers = {marker["hash"]: other}
+        assert _code(ledger.advance, directory, "C13", with_marker, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
+    observer.restore_markers = {marker["hash"]: marker}
+    observer.receipts = {}  # the safety copy the marker names must be in PROD too
+    assert _code(ledger.advance, directory, "C13", with_marker, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
+    observer.receipts = {safety: _stamp_at(opened + timedelta(minutes=10))}
+    entry = ledger.advance(directory, "C13", with_marker, observer=observer)
+    assert entry["state"] == "C13" and entry["evidence"]["restore_operation_sha256"] == marker["hash"]
+
+
+def _record_legacy_declared_c13(directory, *, detected, restored):
+    """History as A19 (13) recorded it: an ADMIN_RESTORE C13 whose evidence predates the commit marker."""
+    entries = ledger.read_ledger(directory)
+    evidence = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"],
+                "write_class": "ADMIN_RESTORE", "detected_at": _stamp_at(detected),
+                "safety_copy_manifest_sha256": restored}
+    return ledger._write(directory, ledger._prepare(entries, {"type": "advance", "state": "C13", "evidence": evidence}))
+
+
+def test_r1_a_c13_recorded_before_the_marker_is_attested_forward_never_rewritten(directory, observer):
+    """R1 (history): the C13 recorded on the restore of 2026-10-12 stays as written; one attestation binds it,
+    forward, to the safety copy that restore actually left in PROD (found in the request's own window)."""
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    opened = ledger._parse(ledger._summary(ledger.read_ledger(directory))["evidence"]["C12"]["opened_at"])
+    detected, restored = opened + timedelta(hours=2), "e" * 64
+    observer.receipts = {restored: _stamp_at(detected - timedelta(seconds=53))}  # the file that was restored
+    ls.set_clock(detected + timedelta(hours=1))
+    c13 = _record_legacy_declared_c13(directory, detected=detected, restored=restored)
+    history = _ledger_bytes(directory)
+    assert _code(ledger.attest_ponr, directory, observer=observer) == "SAFETY_COPY_NOT_FOUND"
+    observer.receipts.update({"f" * 64: _stamp_at(detected + timedelta(seconds=20)),
+                              "1" * 64: _stamp_at(detected + timedelta(seconds=40))})
+    assert _code(ledger.attest_ponr, directory, observer=observer) == "SAFETY_COPY_AMBIGUOUS"
+    del observer.receipts["1" * 64]
+    reference = ledger.status(directory)["opening_reference"]
+    fix = "dpl_" + "F" * 24
+    ledger.grant(directory, "GF1", "m-fix-1")
+    ls.deploy(directory, observer, fix, admission="OPEN", opening_reference=reference, commit=OTHER_COMMIT,
+              code=OTHER_CODE, forward_fix_ref="m-fix-1", observed_admission="CLOSED")
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    # until the declared C13 is bound to its restore, no code is authorized after it (review N-c)
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "PONR_NOT_ATTESTED"
+    history = _ledger_bytes(directory)
+    entry = ledger.attest_ponr(directory, observer=observer)
+    assert entry["type"] == "attestation" and entry["of_hash"] == c13["hash"]
+    assert entry["safety_copy_manifest_sha256"] == "f" * 64 and entry["restored_manifest_sha256"] == restored
+    assert entry["commit_marker"] == "ABSENT"
+    assert _ledger_bytes(directory).startswith(history)  # nothing rewritten
+    assert ledger.status(directory)["state"] == "C13"
+    assert _code(ledger.attest_ponr, directory, observer=observer) == "ALREADY_ATTESTED"
+
+
+def test_r1_a_c13_with_its_marker_needs_no_attestation(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    assert _code(ledger.attest_ponr, directory, observer=observer) == "NOTHING_TO_ATTEST"
+
+
+def test_r2_a_prod_transaction_that_rolls_back_never_leaves_the_ledger_authorizing_its_code(directory, observer):
+    """R2: the ledger never names a code PROD does not authorize; a retry is a new, complete act."""
+    reference, fix = _at_ponr_with_a_forward_fix(directory, observer)
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    observer.commit_fault = "rolled_back"
+    with pytest.raises(Exception):
+        ledger.authorize_code(directory, fix, observer=observer, **roots)
+    summary = ledger._summary(ledger.read_ledger(directory))
+    assert ledger._authorized_code(summary) == CODE  # what PROD still authorizes
+    assert not observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)
+    assert _code(ledger.recorded_deployment, directory, fix) == "OPEN_DEPLOYMENT_NOT_AUTHORIZED"
+    observer.commit_fault = None
+    ledger.authorize_code(directory, fix, observer=observer, **roots)
+    assert ledger._authorized_code(ledger._summary(ledger.read_ledger(directory))) == OTHER_CODE
+    assert observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)
+
+
+def test_r2_an_unknown_commit_outcome_blocks_every_act_until_reconciled(directory, observer):
+    reference, fix = _at_ponr_with_a_forward_fix(directory, observer)
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    observer.commit_fault = "lost_ack"
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "OPERATION_UNRESOLVED"
+    observer.commit_fault = None
+    # nothing that could let users in (or change what the ledger knows) proceeds while PROD's outcome is unknown
+    assert _code(ledger.recorded_deployment, directory, fix) == "OPERATION_UNRESOLVED"
+    assert _code(ledger.grant, directory, "GF1", "m-fix-2") == "OPERATION_UNRESOLVED"
+    assert _code(ledger.supersede, directory, observer=observer) == "OPERATION_UNRESOLVED"
+    assert _code(ledger.deployment_preconditions, directory, commit=OTHER_COMMIT, admission="OPEN",
+                 opening_reference=reference, forward_fix_ref="m-fix-2") == "OPERATION_UNRESOLVED"
+    pending = ledger.status(directory)["unresolved_operation"]
+    assert pending is not None
+    entry = ledger.reconcile(directory, observer=observer)  # PROD committed it
+    assert entry["type"] == "outcome" and entry["of"] == pending and entry["result"] == "COMMITTED"
+    assert ledger.status(directory)["unresolved_operation"] is None
+    assert ledger._authorized_code(ledger._summary(ledger.read_ledger(directory))) == OTHER_CODE
+    assert ledger.recorded_deployment(directory, fix)["code_sha256"] == OTHER_CODE
+    assert _code(ledger.reconcile, directory, observer=observer) == "NOTHING_TO_RECONCILE"
+
+
+def test_r2_a_supersession_prod_rolled_back_is_reconciled_as_aborted(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    taken = ledger._summary(ledger.read_ledger(directory))["opening_reference"]
+    observer.rows.append({"reference": taken["hash"], "code": OTHER_CODE, "revoked": False, "entry": "{}"})
+    observer.commit_fault = "lost_rolled_back"
+    assert _code(ledger.supersede, directory, observer=observer) == "OPERATION_UNRESOLVED"
+    observer.commit_fault = None
+    assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
+    assert [row["code"] for row in observer.rows if not row["revoked"]] == [taken["code_sha256"], OTHER_CODE]
+    assert ledger.supersede(directory, observer=observer)["type"] == "supersession"  # the retry is a new act
+    assert [row["code"] for row in observer.rows if not row["revoked"]] == [taken["code_sha256"]]
+
+
+def test_r5_resume_reproves_a_fresh_backup_and_every_deployment_before_lifting(directory, observer):
+    """R5: `resume` lets users back in; it re-proves the backup and the deployments first."""
+    reference = _opened(directory, observer)
+    ledger.close(directory, observer=observer)
+    verdict = {"identical": False, "derived_classes": [], "refusal": "ROWS_ADDED_OR_REMOVED", "current": CHANGED}
+    observer.verdicts = [verdict, dict(verdict)]
+    assert _code(ledger.rollback, directory, "STOP", observer=observer, reference_path=reference) == \
+        "FINGERPRINT_CHANGED"
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    assert _code(ledger.resume, directory, observer=observer) == "BACKUP_ROOTS_REQUIRED"
+    ls.set_clock(ledger._CLOCK() + timedelta(days=3))
+    assert _code(ledger.resume, directory, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
+    assert observer.barrier is not None  # still closed
+    observer.generation = ls.generation(40)
+    ls.record(directory, observer)
+    observer.platform["dpl_" + "Z" * 24] = {"url": "https://stray.example.invalid", "state": "READY", "files": "x"}
+    assert _code(ledger.resume, directory, observer=observer, **roots) == "UNRECORDED_DEPLOYMENT"
+    del observer.platform["dpl_" + "Z" * 24]
+    observer.generation = dict(observer.generation, dump_sha256="0" * 64)  # the generation is gone from disk
+    assert _code(ledger.resume, directory, observer=observer, **roots) == "BACKUP_NOT_THE_RECORDED_ONE"
+    observer.generation = ls.generation(40)
+    assert ledger.resume(directory, observer=observer, **roots)["action"] == "LIFTED"
+
+
+def test_r5_the_initial_lift_never_admits_users_on_a_stale_pre_opening_backup(directory, observer):
+    """R5: the reference authorizes the candidate's code, so the open deployment and its promotion are the
+    acts that let users in: each is refused once the newest generation is out of the cadence."""
+    _at_c11_with_generation(directory, observer)
+    taken = ls.take(directory, observer)
+    start = ledger._CLOCK()
+    ls.set_clock(start + timedelta(hours=37))
+    assert _code(ls.deploy, directory, observer, LIFT, admission="OPEN", opening_reference=taken["hash"]) == \
+        "BACKUP_TOO_OLD_TO_OPEN"
+    ls.set_clock(start + timedelta(hours=1))
+    ls.deploy(directory, observer, LIFT, admission="OPEN", opening_reference=taken["hash"])
+    ls.set_clock(start + timedelta(hours=37))
+    assert _code(ls.promote, directory, observer, LIFT) == "BACKUP_TOO_OLD_TO_OPEN"
+    assert _code(ledger.recorded_deployment, directory, LIFT) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = ls.generation(5)
+    ls.record(directory, observer)
+    ls.promote(directory, observer, LIFT)
+
+
+def test_r6_after_the_window_a_reopening_needs_a_fresh_object_set_too(directory, observer, clock):
+    _grant_all(directory)
+    _drive(directory, "C14", observer=observer)
+    reference = ledger.status(directory)["opening_reference"]
+    fix = "dpl_" + "F" * 24
+    ledger.grant(directory, "GF1", "m-fix-late")
+    ls.deploy(directory, observer, fix, admission="OPEN", opening_reference=reference, commit=OTHER_COMMIT,
+              code=OTHER_CODE, forward_fix_ref="m-fix-late", observed_admission="CLOSED")
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    fresh = _stamp_at(ledger._CLOCK())
+    old = _stamp_at(ledger._CLOCK() - timedelta(days=41))  # September's object set, its bytes still current
+    observer.generation = dict(ls.generation(9), created_at=fresh, object_created_at=old)
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = dict(ls.generation(9), created_at=fresh, object_created_at=None)
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = dict(ls.generation(9), created_at=fresh, object_created_at=fresh)
+    entry = ledger.authorize_code(directory, fix, observer=observer, **roots)
+    assert entry["reopening_generation_at"] == fresh and entry["reopening_objects_at"] == fresh
+
+
+def test_r7_every_deployment_after_the_ponr_needs_its_own_unused_gf1(directory, observer):
+    """R7: after an ordinary C13 the reference's code is still authorized; redeploying the effective commit
+    open (or closed) without a GF1 is refused, whether or not the commit changes."""
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    reference = ledger.status(directory)["opening_reference"]
+    assert _code(ls.deploy, directory, observer, "dpl_" + "S" * 24, admission="OPEN",
+                 opening_reference=reference) == "FORWARD_FIX_GATE_REQUIRED"
+    assert _code(ls.deploy, directory, observer, "dpl_" + "T" * 24) == "FORWARD_FIX_GATE_REQUIRED"
+    assert _code(ledger.deployment_preconditions, directory, commit=ls.COMMIT, admission="OPEN",
+                 opening_reference=reference, forward_fix_ref=None) == "FORWARD_FIX_GATE_REQUIRED"
+    ledger.grant(directory, "GF1", "m-redeploy")
+    ls.deploy(directory, observer, "dpl_" + "S" * 24, admission="OPEN", opening_reference=reference,
+              forward_fix_ref="m-redeploy")
+    assert _code(ls.deploy, directory, observer, "dpl_" + "U" * 24, admission="OPEN", opening_reference=reference,
+                 forward_fix_ref="m-redeploy") == "FORWARD_FIX_GATE_REQUIRED"  # one grant, one deployment
+
+
+def test_r2_a_failure_after_the_commit_is_never_recorded_as_aborted(directory, observer):
+    """Review N-a: only a refusal (raised before any COMMIT is sent) is a proven non-commit."""
+    reference, fix = _at_ponr_with_a_forward_fix(directory, observer)
+    observer.commit_fault = "failed_after_commit"
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **_ROOTS(directory)) ==         "OPERATION_UNRESOLVED"
+    observer.commit_fault = None
+    assert ledger.reconcile(directory, observer=observer)["result"] == "COMMITTED"
+    assert ledger._authorized_code(ledger._summary(ledger.read_ledger(directory))) == OTHER_CODE
+    assert observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)
+
+
+def test_r2_a_refused_act_prints_the_head_it_moved_to(directory, monkeypatch):
+    """Review N-f: an act refused after its entry was written moved the head; the operator is told."""
+    _grant_all(directory)
+    head = ledger.status(directory)["head"]
+
+    def refused_after_writing(directory_, **_kwargs):
+        def act(entry):
+            raise ledger.Refused("PROD_TRANSACTION_FAILED")
+
+        return ledger._commit_act(directory_, ledger.read_ledger(directory_),
+                                  {"type": "supersession", "opening_reference": "5" * 64, "kept_code_sha256": "NONE",
+                                   "database_identity_sha256": IDENTITY}, act)
+
+    monkeypatch.setattr(ledger, "supersede", refused_after_writing)
+    out, err = io.StringIO(), io.StringIO()
+    assert ledger.main(["supersede", "--ledger-dir", str(directory), "--expect-head", head], out=out, err=err) == 1
+    moved = ledger.status(directory)["head"]
+    assert moved != head and err.getvalue().splitlines() == [
+        "cutover-ledger: refused: PROD_TRANSACTION_FAILED", f"cutover-ledger: head: {moved}"]
+    err = io.StringIO()  # a refusal that wrote nothing names no head (another process's head is never shown)
+    assert ledger.main(["grant", "--ledger-dir", str(directory), "--expect-head", head, "--gate", "GA2",
+                        "--ref", "late"], out=out, err=err) == 1
+    assert err.getvalue().splitlines() == ["cutover-ledger: refused: HEAD_MISMATCH"]

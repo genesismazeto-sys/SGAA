@@ -106,7 +106,17 @@ that would cost money is not performed; stop and say so.
   by `close`, restored by `resume`, and authorized for a forward fix by `authorize-code`. The write
   barrier (the writers' role defaults to read-only in the PROD database and every older session of
   it is ended) is applied by `close` and lifted by `resume`. Nothing else in PROD is written by the
-  ledger.
+  ledger, except the marker of each of its own PROD transactions (`sgaa_cutover.operations`, below).
+- **An act whose PROD outcome is unknown (SPEC A19 (14) R2).** `reference`, `authorize-code`, a
+  product-contract `amend` and `supersede` write their entry first, then run their PROD transaction
+  (which records the entry's hash in `sgaa_cutover.operations`), then append its outcome. A refusal
+  before the COMMIT appends ABORTED (the entry has no effect). If the COMMIT's answer is lost the
+  command refuses `OPERATION_UNRESOLVED` and so does every later command (`status` names it as
+  `unresolved_operation`): run **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py
+  reconcile --ledger-dir <ledger> --expect-head <head>`. It waits until no act's transaction is still
+  open, reads the marker and records COMMITTED or ABORTED (`RECONCILE_UNDECIDED`: PROD could not be
+  read; run it again). After ABORTED, repeat the act; it is a new entry. A command refused after it
+  wrote its entry prints `cutover-ledger: head: <hash>`: the next `--expect-head` is that head.
 - **Two terminals: production commands and restore drills never share one.** The PROD terminal
   has `DATABASE_URL` = the PROD session address; a restore drill runs in a separate terminal where
   `DATABASE_URL` is unset (`DRILL_SOURCE_URL_SET` otherwise) and the scratch database is named
@@ -494,13 +504,24 @@ exactly like a password change -- is a business write. Record it: `advance --sta
 `write_class` (the changed table name as printed), `detected_at`, `current_fingerprint_sha256`
 (the snapshot that showed it; it must differ from the reference) and `adjudicated_by_operator`
 true. A restore through "Recuperar banco de dados" is the PONR even when it restores the reference's
-own content (SPEC A19 (12), (13)): record it **(user terminal**, `PGPASSWORD`**)** with `write_class`
-`ADMIN_RESTORE`, `detected_at` the restore's moment (the production log's `event=pg_restore_done`),
-the unchanged `current_fingerprint_sha256`, `adjudicated_by_operator` true and
-`safety_copy_manifest_sha256` (the manifest of the restore's safety copy, as "Gerações registradas"
-shows it): `advance` finds that receipt in PROD, made between the opening and `detected_at`, or
-refuses. From here the cutover is forward-fix only (SPEC §3.4), gates that only serve rollback are
-refused, and the window starts.
+own content (SPEC A19 (12), (13), (14)): record it **(user terminal**, `PGPASSWORD`**)** with
+`write_class` `ADMIN_RESTORE`, `detected_at` a moment at or after the restore's completion, the
+unchanged `current_fingerprint_sha256`, `adjudicated_by_operator` true, `restore_operation_sha256`
+(the restore's commit marker, the `marker=` of the production log's `event=pg_restore_done`; after a
+restore the page called uncertain, `event=pg_restore_uncertain operation=<id>`, the `hash` of the row of
+`sgaa_ops.restore_operations` whose `operation_id` is that id -- none: it did not commit) and
+`safety_copy_manifest_sha256` (the safety copy that marker names, as "Gerações registradas" shows
+it). `advance` finds the marker in PROD -- written in the transaction that replaced the registers, so
+it exists only if the restore committed -- of this database, naming that safety copy, completed
+between the opening and `detected_at`, and that safety copy's receipt (sent to a drive, made between
+the opening and the completion), or refuses `DECLARED_RESTORE_NOT_FOUND`. A backup receipt alone never
+records a restore. The C13 recorded on 2026-10-12 predates the marker: it stays as written, and
+**(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py attest-ponr --ledger-dir <ledger>
+--expect-head <head>` binds it, once, to the one snapshot of this database sent to a drive within
+that restore's own request (300 s from its `detected_at`) -- its safety copy -- and carries the
+restored file's digest forward (until then `authorize-code` refuses `PONR_NOT_ATTESTED`) (`SAFETY_COPY_NOT_FOUND` / `SAFETY_COPY_AMBIGUOUS` otherwise; nothing
+is rewritten). From here the cutover is forward-fix only (SPEC §3.4), gates that only serve rollback
+are refused, and the window starts.
 
 ### C14 WINDOW_CLOSED
 
@@ -554,11 +575,20 @@ written again (`resume` refuses, `ROLLED_BACK`).
 
 When a rollback is refused (`FINGERPRINT_CHANGED`), production goes forward:
 **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py resume --ledger-dir <ledger>
---expect-head <head>` lifts the barrier (resets the role default, ends every session that started
-read-only, restores the authorization; `BARRIER_STILL_IN_FORCE` if a fresh session still cannot
-write); restore `CRON_SECRET`, `deploy_audit deploy … --admission open --opening-reference <status
-opening_reference>` and `promote`; re-enable the external trigger if it was used; record C13 with the
-changed fingerprint. `resume` also lifts a barrier `close` applied but could not record.
+--expect-head <head> --backup-root <primary dir> --off-platform <second dir> --vercel-team <team>
+--vercel-project <project>` first re-proves what the opening proved (SPEC A19 (14) R5): every
+deployment the platform may serve is recorded (`UNRECORDED_DEPLOYMENT`), and the newest recorded
+generation, with objects, is within the cadence and found intact on disk and off-platform
+(`BACKUP_TOO_OLD_TO_OPEN`, `BACKUP_NOT_THE_RECORDED_ONE`: record a new governed generation first --
+it reads PROD only, so it runs under the barrier); then it lifts the barrier (resets the role
+default, ends every session that started read-only, restores the authorization;
+`BARRIER_STILL_IN_FORCE` if a fresh session still cannot write); restore `CRON_SECRET`, `deploy_audit
+deploy … --admission open --opening-reference <status opening_reference>` and `promote`; re-enable
+the external trigger if it was used; record C13 with the changed fingerprint. `resume` also lifts a
+barrier `close` applied but could not record. Every act that lets users in re-proves the backup
+first: an open deployment of the authorized code (before upload, once its code is known) and its
+promotion are refused `BACKUP_TOO_OLD_TO_OPEN` when the newest generation or object set is out of its
+cadence -- the initial lift included.
 
 From C11 with a reference, a `FINGERPRINT_CHANGED` (an operator write after the reference, or a
 legacy-hash sign-in) cannot be followed by C13 at once, and no second reference is taken: the
@@ -568,17 +598,21 @@ with a new ledger (PROD is a copy; emptying it, the control schema included, nee
 
 After C13 there is no rollback: use the latest Layer-2 generation and the frozen source for
 manual reconciliation. Never improvise a reverse migration. A forward-fix deployment is the
-one deployment action that remains: each one needs its own user message, recorded with
-`grant --gate GF1 --ref <code>` (valid only after C13; the gates that act on the source or on
-the first deployment are refused), then `deploy_audit deploy --commit <fix commit> … --admission open
---opening-reference <status opening_reference> --forward-fix-ref <code>` (it admits no one yet: its
-code is not authorized), `cutover_ledger authorize-code --deployment <id> --backup-root <primary dir>
---off-platform <second dir> --vercel-team <team> --vercel-project <project>` (**user terminal**: it
-re-verifies the newest generation on disk (after C14, when the ledger records none, the newest on disk
-must itself be within the cadence) and its
-cadence, refuses while any unrecorded deployment exists, and writes the authorization for that code
-under the same reference, revoking every other code of it) and `promote` (an open deployment is
-promoted only while its code is the one the ledger authorizes). `cutover_ledger supersede` (**user
+one deployment action that remains, and EVERY deployment after C13 is one -- open or operator-only,
+a new commit or the same one redeployed (SPEC A19 (14) R7; `FORWARD_FIX_GATE_REQUIRED` otherwise):
+each needs its own user message, recorded with `grant --gate GF1 --ref <code>` (valid only after
+C13; the gates that act on the source or on the first deployment are refused; one grant, one
+deployment), then `deploy_audit deploy --commit <fix commit> … --admission open --opening-reference
+<status opening_reference> --forward-fix-ref <code>` (a new code admits no one yet: it is not
+authorized; a redeployment of the authorized code admits at once, so it is refused unless the
+backup is within its cadence), `cutover_ledger authorize-code --deployment <id> --backup-root
+<primary dir> --off-platform <second dir> --vercel-team <team> --vercel-project <project>` (**user
+terminal**: it re-verifies the newest generation on disk (after C14, when the ledger records none,
+the newest on disk -- its Layer-2 set and its object set, each by its own creation time -- must
+itself be within the cadence) and its cadence, refuses while any unrecorded deployment exists, and
+writes the authorization for that code under the same reference, revoking every other code of it)
+and `promote` (an open deployment is promoted only while its code is the one the ledger authorizes
+and the backup is within its cadence). `cutover_ledger supersede` (**user
 terminal**) revokes, at any time from C12 on, every authorization whose code the ledger no longer
 authorizes. A superseded code never admits again: undoing a bad forward fix is a new forward fix (a
 commit with a different code), never a re-promotion of the earlier deployment; between `authorize-code`

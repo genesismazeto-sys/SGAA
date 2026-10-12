@@ -91,7 +91,7 @@ def authorize_opening(database_url: str) -> str:
             "vercel_project_sha256": hashlib.sha256(PROJECT_ID.encode("utf-8")).hexdigest()}
     entry = dict(body, hash=hosting.ledger_entry_hash(body))
     observer = cutover_ledger.Observer(database_url=database_url, source_connector=local_connector(database_url))
-    observer.authorize(entry["hash"], body["code_sha256"], entry, lambda: None, first=False)
+    observer.authorize(entry["hash"], body["code_sha256"], entry, first=False)
     return entry["hash"]
 
 

@@ -153,6 +153,12 @@ class FakeObserver:
         self.barrier = None  # the state a fresh session observes once applied
         self.lift_works = True
         self.applied_calls = 0
+        # the PROD transactions of the ledger's own writes, their markers, and what "Recuperar banco de
+        # dados" left in PROD (snapshot receipts by manifest -> generation_at; restore markers by hash)
+        self.commit_fault = None
+        self.operations: set[str] = set()
+        self.receipts: dict[str, str] = {}
+        self.restore_markers: dict[str, dict] = {}
 
     # -- public addresses
     def admission(self, url=None):
@@ -237,29 +243,61 @@ class FakeObserver:
     def opening_rows(self):
         return len(self.rows)
 
-    def authorize(self, reference_sha256, code_sha256, entry, write, *, first):
+    def _commit(self, entry, apply):
+        """One PROD transaction: ``apply`` and the operation marker commit together, or neither.
+
+        ``commit_fault``: ``"rolled_back"`` -- PROD rolls back before any COMMIT and the act knows it; ``"lost_ack"`` -- PROD
+        commits but the acknowledgement is lost; ``"lost_rolled_back"`` -- the COMMIT was sent, PROD rolled
+        back, and the act cannot tell (both raise the ledger's ``CommitUncertain``)."""
+        from tools import cutover_ledger as ledger
+
+        if self.commit_fault == "rolled_back":  # no COMMIT was sent: the real act raises a refusal
+            raise ledger.Refused("PROD_TRANSACTION_FAILED")
+        if self.commit_fault == "lost_rolled_back":
+            raise ledger.CommitUncertain()
+        result = apply()
+        self.operations.add(entry["hash"])
+        if self.commit_fault == "lost_ack":
+            raise ledger.CommitUncertain()
+        if self.commit_fault == "failed_after_commit":  # committed, then the connection's close failed
+            raise RuntimeError("closing the connection failed")
+        return result
+
+    def authorize(self, reference_sha256, code_sha256, entry, *, first):
         from tools import cutover_ledger as ledger
 
         if first and self.rows:
             raise ledger.Refused("OPENING_AUTHORIZATION_EXISTS")
-        write()
-        if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
+
+        def apply():
+            if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
+                for row in self.rows:
+                    if row["reference"] == reference_sha256 and row["code"] != code_sha256:
+                        row["revoked"] = True
+            self.rows.append({"reference": reference_sha256, "code": code_sha256, "revoked": False,
+                              "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))})
+
+        self._commit(entry, apply)
+
+    def supersede(self, reference_sha256, keep_code, entry):
+        def apply():
+            revoked = 0
             for row in self.rows:
-                if row["reference"] == reference_sha256 and row["code"] != code_sha256:
-                    row["revoked"] = True
-        self.rows.append({"reference": reference_sha256, "code": code_sha256, "revoked": False,
-                          "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))})
+                if row["reference"] == reference_sha256 and row["code"] != keep_code and not row["revoked"]:
+                    row["revoked"], revoked = True, revoked + 1
+            return revoked
 
-    def supersede(self, reference_sha256, keep_code, write):
-        write()
-        revoked = 0
-        for row in self.rows:
-            if row["reference"] == reference_sha256 and row["code"] != keep_code and not row["revoked"]:
-                row["revoked"], revoked = True, revoked + 1
-        return revoked
+        return self._commit(entry, apply)
 
-    def snapshot_receipt_at(self, manifest_sha256, identity):
-        return (getattr(self, "snapshot_receipts", {}) or {}).get(manifest_sha256)
+    def operation_committed(self, entry_hash):
+        return entry_hash in self.operations
+
+    def snapshot_receipts(self, identity):
+        return [{"manifest_sha256": manifest, "generation_at": made, "destinations": ["google"]}
+                for manifest, made in self.receipts.items()]
+
+    def restore_marker(self, marker_sha256, identity):
+        return self.restore_markers.get(marker_sha256)
 
     def authorization_valid(self, reference_sha256, code_sha256, project_sha256):
         identity = hosting.source_identity_sha256(self.facts)
@@ -310,11 +348,22 @@ def generation(day: int, *, objects: str | None = "20261101T000000Z-auto-weekly"
             "dump_sha256": dump_digest(manifest), "created_at": None, "database_source": dict(SOURCE),
             "object_set": objects, "object_set_digest": object_digest if objects else None,
             "object_manifest_sha256": object_manifest_digest(object_digest) if objects else None,
-            "object_source": dict(OBJECT_SOURCE, database=dict(SOURCE)) if objects else None}
+            "object_source": dict(OBJECT_SOURCE, database=dict(SOURCE)) if objects else None,
+            "object_created_at": None}
 
 
 def _stamp(moment):
     return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def restore_marker(*, safety_copy: str, restored: str, completed_at: str, identity: str = IDENTITY) -> dict:
+    """The commit marker "Recuperar banco de dados" leaves in PROD, in the transaction that replaced the
+    registers (``app.backup.pg_restore``), as the ledger reads it back."""
+    from app.backup import pg_restore
+
+    return pg_restore.marker_entry(operation_id="0" * 32, source_identity_sha256=identity, restored_sha256=restored,
+                                   safety_copy_manifest_sha256=safety_copy, completed_at=completed_at,
+                                   tables=28, rows=463)
 
 
 def receipt_for(observer, *, kind="GENERATION", made=None, **overrides) -> dict:

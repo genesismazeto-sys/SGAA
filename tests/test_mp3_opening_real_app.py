@@ -282,7 +282,8 @@ def test_a_business_write_after_the_opening_refuses_the_rollback_resume_reopens_
                         derived_classes=["REQUISICOES_AUTO_REJECTION"])
     assert caught.value.code == "FINGERPRINT_CHANGED"
     current = observer.fingerprint()["fingerprint_sha256"]
-    lifted = ledger.resume(directory, observer=observer)
+    lifted = ledger.resume(directory, observer=observer, backup_root=lane["tmp"] / "backups",
+                           off_platform=lane["tmp"] / "backups-off")
     assert lifted["action"] == "LIFTED" and observer.writable()
     time.sleep(admission_gate.OPENING_CHECK_SECONDS + 1)
     assert observer.admission() == "open"  # the authorization stands again: production goes forward

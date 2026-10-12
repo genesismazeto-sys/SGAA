@@ -752,8 +752,10 @@ def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted,
 
     registers = [] if registers is None else registers
 
-    def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None):
+    def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None, replace=True):
         import zipfile
+
+        assert replace is False  # a snapshot never replaces an existing file (A19 R3 rereview R8)
 
         if file_name.endswith(".zip"):
             if registers_fail:

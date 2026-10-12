@@ -1109,6 +1109,58 @@ Executor amendments (consequences of the above; not material beyond what the use
   first `status` read after it refused `LEDGER_CHAIN_BROKEN` because the reader did not know the new
   entry type; the reader was fixed, the chain itself was intact (re-read OK, 84 entries). Evidence:
   section 17.
+  (14) The cross-family rereview of `171d21f` (FAIL, 8 material findings, 1 non-material), each reproduced
+  by a failing test before any change (the reproductions are the tests named below; production stayed
+  CLOSED at C13 throughout). R1 -- a snapshot receipt proves a backup, not a restore: "Recuperar banco
+  de dados" now writes, in the very transaction that replaces the registers, a self-hashed commit
+  marker in `sgaa_ops.restore_operations` (`app.backup.pg_restore`: operation, this database, the file
+  restored, the safety copy's digest -- the safety copy now counts only once it reached a drive AND its
+  receipt was recorded -- and the completion time); an `ADMIN_RESTORE` C13 needs
+  `restore_operation_sha256` and is recorded only on that marker (intact, this database, naming the
+  declared safety copy, completed between the opening and `detected_at`) plus the safety copy's receipt
+  (sent to a drive, made between the opening and the completion). History is not rewritten: the C13
+  of seq 83 was recorded under (13) on the restore of 2026-10-12, which committed (the application logs
+  `pg_restore_done` only after the COMMIT is acknowledged; the administrator saw the success message),
+  but its evidence names the restored file and no marker exists for it. The forward reconciliation is
+  one `attestation` entry (`attest-ponr`, user terminal, once): it observes in PROD the one snapshot of
+  this database sent to a drive within that restore's own request (300 s from `detected_at`) -- the
+  safety copy -- records it, carries the restored file's digest forward and states `commit_marker`
+  ABSENT with the commit as the operator's adjudication of the log; it changes no state. R2 -- a ledger
+  file and a PROD transaction cannot commit atomically: the reference, an authorization, a
+  product-contract amendment and a supersession are written first as entries that take effect only
+  with their `outcome`; their PROD transaction records the entry's hash in `sgaa_cutover.operations`
+  (created, committed, before any act); a refusal before COMMIT appends ABORTED, a lost COMMIT answer
+  leaves the act unresolved, every other command refuses `OPERATION_UNRESOLVED`, and `reconcile` waits
+  for any open act, reads the marker and records COMMITTED or ABORTED. Entries before (14) were written
+  inside their transaction and carry no outcome; they stand as committed (PROD shows that state). R3 --
+  a restore whose COMMIT answer is lost is resolved on a fresh connection that waits for the restore's
+  lock to be released and reads its marker: committed (success), rolled back ("nada foi alterado"), or
+  `RESTORE_OUTCOME_UNCERTAIN`, which says the outcome is unknown and never "nothing changed". R4 --
+  OneDrive retention matches the whole (provider, drive, item) tuple, in the drive Graph reports the
+  upload landed in; an unknown drive deletes nothing (`pg_posture.owned_in`). R5 -- every act that lets
+  users in re-proves the backup: `resume` (the newest recorded generation with objects within the
+  cadence, intact on disk and off-platform, and every deployment recorded), an open deployment of the
+  authorized code (checked once its code is known, before the upload) and the promotion of an open
+  deployment (the initial lift included). R6 -- after C14 a re-opening checks the object set's own
+  creation time (`ops_backup.verify_generation` returns it from the sealed set) within its cadence; the
+  times a re-opening verified are recorded on its authorization and count as verified generations. R7
+  -- every deployment after C13 needs its own unused GF1, open or operator-only, whatever its commit.
+  R8 -- snapshot and registers names carry the installation (the database identity's first twelve hex
+  digits) and a random generation token, and the "Gerar backup agora" uploads never replace an
+  existing OneDrive file (`conflictBehavior=fail`; a Google Drive upload always creates a new file);
+  retention still recognises the earlier names. N1 -- a mixed failure flashes every missing copy, each
+  with its existing message. A fresh-context same-family review of the remediation found two test helpers
+  still on the old ledger API (material, fixed) and six non-material points, all fixed: only a refusal
+  raised before the COMMIT is sent records ABORTED (any other failure leaves the act to `reconcile`); the
+  act's marker is the first statement of its bounded transaction, so `reconcile` waits for it from its
+  start; a declared C13 recorded before the marker lets no code be authorized until it is attested
+  (`PONR_NOT_ATTESTED`); an uncertain restore is its own warning naming no failure, with its operation
+  logged (catalogue 589); the restore creates its marker table outside its own transaction; a command
+  refused after its entry was written prints the head it moved to, and a refused reference leaves no
+  reference file. Accepted residual: after C14, when the ledger records no generation, a
+  redeployment of an already authorized code is admitted only while the last generation a re-opening
+  verified is within the cadence; past it a forward fix is a new commit (as a superseded code already
+  is). Evidence: section 17.
 
 ## 17. Closure
 

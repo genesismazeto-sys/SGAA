@@ -237,8 +237,11 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "(CSV) não foram enviados para {value_2}.' (msg_5fe22f69fc84f9cc) and "
         "the policy refusal 'Não foi possível verificar a cadência registrada "
         "na abertura da virada; a política não foi alterada.' "
-        "(msg_9a4d8ca005110b0e). 8 additions, 0 retirements",
-        8,
+        "(msg_9a4d8ca005110b0e); and, from the rereview, the uncertain restore "
+        "warning 'Não foi possível confirmar se a recuperação do banco foi "
+        "aplicada: a resposta do banco se perdeu. Não repita a recuperação antes "
+        "de conferir os dados atuais.' (msg_4ac08965a1fb60d7). 9 additions, 0 retirements",
+        9,
     ),
 )
 
@@ -286,9 +289,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # the SQLite-maintenance-unsupported refusal, to 581; STORAGE S3-A retires the
 # request-flow Google Drive flash, to 580; MP-3 A19 restores "Gerar backup agora"
 # under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
-# with its one success message, and the R3 review's CSV warning and policy refusal, to 588.
+# with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
+# uncertain-restore warning, to 589.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "f728b020a09a58055e0f7d1869daccc58aa9b8ae3b61f489a5e68c2f61a1840e"
+    "ff4b446891a6ca6c35fcea7f4d22f5eb0057b50d76cfa50359f8b0aec6da98fd"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -834,6 +838,7 @@ A19_BACKUP_NOW_KEYS = frozenset(
         "msg_06330e89f2cbdcde",  # Banco restaurado com sucesso. Uma cópia de segurança ... enviada para {value_1}.
         "msg_5fe22f69fc84f9cc",  # ... mas os registros (CSV) não foram enviados para {value_2}.
         "msg_9a4d8ca005110b0e",  # Não foi possível verificar a cadência registrada na abertura da virada; ...
+        "msg_4ac08965a1fb60d7",  # Não foi possível confirmar se a recuperação do banco foi aplicada: ...
     }
 )
 

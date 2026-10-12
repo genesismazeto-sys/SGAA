@@ -377,7 +377,7 @@ def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
     result = {"database_set": base, "manifest_sha256": _sha256(files[0]), "manifest_path": str(files[0]),
               "dump_sha256": dump_sha256, "created_at": created_at, "database_source": database_source,
               "object_set": None, "object_set_digest": None, "object_source": None,
-              "object_manifest_sha256": None, "object_set_path": None}
+              "object_manifest_sha256": None, "object_set_path": None, "object_created_at": None}
     if registry["objects"]:
         from app.storage import object_backup
 
@@ -395,11 +395,16 @@ def verify_generation(root: Path, off_platform: Path, *, conn=None) -> dict:
                 raise Refused("OFF_PLATFORM_COPY_MISMATCH")
         manifest_file = set_dir / object_backup.MANIFEST_NAME
         try:
-            object_source = json.loads(manifest_file.read_text(encoding="utf-8")).get("source")
-        except (OSError, ValueError):
+            object_manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+            object_source = object_manifest.get("source")
+            # the set's own creation time (verify_set proved the sealed manifest), in the ledger's form
+            object_created_at = datetime.strptime(object_manifest["created_at"], "%Y-%m-%d %H:%M:%S") \
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             raise Refused("OBJECT_SET_INVALID") from None
         result.update(object_set=name, object_set_digest=report.objects_digest, object_source=object_source,
-                      object_manifest_sha256=_sha256(manifest_file), object_set_path=str(set_dir))
+                      object_manifest_sha256=_sha256(manifest_file), object_set_path=str(set_dir),
+                      object_created_at=object_created_at)
     return result
 
 
