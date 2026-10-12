@@ -176,7 +176,8 @@ def test_stored_policy_values_out_of_bounds_fall_back_to_their_defaults():
                                           ("pg_database_cadence_hours", "abc", None)])
     assert policy["pg_retention_generations"] == 7 and policy["pg_restore_test_days"] == 30
     assert policy["pg_database_cadence_hours"] == 24 and policy["configured"] is False  # for display only
-    assert policy["invalid"] == ["pg_database_cadence_hours", "pg_restore_test_days"]
+    # invalid values, and a key a full save would have written (the policy is only partly stored)
+    assert policy["invalid"] == ["pg_database_cadence_hours", "pg_object_cadence_days", "pg_restore_test_days"]
     assert policy["updated_at"] == "2026-10-12 10:00:00"  # only accepted values date the policy
     assert pg_posture.policy_from_rows([]) == dict(pg_posture.default_policy(), configured=False, updated_at=None,
                                                    invalid=[])

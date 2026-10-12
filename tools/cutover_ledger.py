@@ -327,6 +327,9 @@ _SCHEMA = {
             "deployment_id": _deployment_id, "opening_authorized": _true},
     "C13": {"write_class": lambda v: isinstance(v, str) and bool(_CLASS.fullmatch(v)),
             "detected_at": _stamp, "current_fingerprint_sha256": _hex64, "adjudicated_by_operator": _true},
+    # A declared PONR (``DECLARED_PONR_WRITE_CLASSES``) also names the snapshot receipt its safety copy
+    # left in PROD; ``advance`` finds it there (A19 R3).
+    "C13_DECLARED": {"safety_copy_manifest_sha256": _hex64},
     # The restore validation is a ``restore`` entry of the drill that ran it.
     "C14": {"restore_validated_manifest_sha256": _hex64, "unresolved_reconciliation": _zero},
 }
@@ -351,6 +354,13 @@ def _now() -> str:
 
 def _parse(stamp: str) -> datetime:
     return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _parse_or_none(stamp) -> datetime | None:
+    try:
+        return _parse(stamp)
+    except (TypeError, ValueError):
+        return None
 
 
 def _repository_root() -> Path:
@@ -671,13 +681,35 @@ def _check_window(summary: dict, evidence: dict) -> None:
         raise Refused("RESTORE_RECEIPT_REQUIRED", "`ops_backup drill` restores that generation into scratch")
 
 
-def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None) -> dict:
+def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None,
+            observer: Observer | None = None) -> dict:
     if state == OPENING_STATE:
         raise Refused("OPENING_NEEDS_THE_OPEN_COMMAND", "C12 is entered by `open`, from an observed reference")
     with _locked(directory):
         entries = read_ledger(directory)
         _check_head(entries, expect_head)
+        if state == PONR_STATE and evidence.get("write_class") in DECLARED_PONR_WRITE_CLASSES:
+            _require_declared_restore(_summary(entries), evidence, observer or Observer())
         return _advance_locked(directory, entries, state, evidence)
+
+
+def _require_declared_restore(summary: dict, evidence: dict, observer: "Observer") -> None:
+    """A declared PONR (an administrator's restore) is recorded only on the restore's own trace in PROD:
+    the self-hashed snapshot receipt of its safety copy, for this database, made after the opening and
+    no later than the declared moment."""
+    reference = summary["opening_reference"]
+    opened = _parse_or_none(_evidence_of(summary, OPENING_STATE).get("opened_at"))
+    detected = _parse_or_none(evidence.get("detected_at"))
+    manifest = evidence.get("safety_copy_manifest_sha256")
+    if reference is None or opened is None or detected is None or not _hex64(manifest):
+        raise Refused("EVIDENCE_INVALID", "safety_copy_manifest_sha256")
+    identity = _production_database(summary, observer)
+    if identity != reference["database_identity_sha256"]:
+        raise Refused("DATABASE_NOT_THE_REFERENCE")
+    made = _parse_or_none(observer.snapshot_receipt_at(manifest, identity))
+    if made is None or not opened <= made <= detected:
+        raise Refused("DECLARED_RESTORE_NOT_FOUND",
+                      "no snapshot receipt of that safety copy, made between the opening and the restore")
 
 
 def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: dict) -> dict:
@@ -695,7 +727,9 @@ def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: 
     _check_value_free(evidence)
     if len(json.dumps(evidence, sort_keys=True)) > MAX_EVIDENCE_BYTES:
         raise Refused("EVIDENCE_TOO_LARGE")
-    schema = _SCHEMA[state]
+    schema = dict(_SCHEMA[state])
+    if state == PONR_STATE and evidence.get("write_class") in DECLARED_PONR_WRITE_CLASSES:
+        schema.update(_SCHEMA["C13_DECLARED"])
     for key, predicate in schema.items():
         if key not in evidence or not predicate(evidence[key]):
             raise Refused("EVIDENCE_INVALID", key)
@@ -1122,6 +1156,26 @@ class Observer:
                 cursor = conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, keep_code or ""))
                 write()
                 return int(cursor.rowcount or 0)
+
+    def snapshot_receipt_at(self, manifest_sha256: str, identity: str) -> str | None:
+        """The ``generation_at`` of an intact "Gerar backup agora" receipt of this database with this
+        manifest in PROD's ``sgaa_ops.backup_records``, else ``None``."""
+        from app.backup import pg_posture
+
+        with self._connection() as conn:
+            if not conn.execute(pg_posture.EXISTS_SQL).fetchone()[0]:
+                return None
+            rows = conn.execute(pg_posture.SELECT_SQL).fetchall()
+        for text, _note in rows:
+            try:
+                entry = json.loads(text)
+            except (TypeError, ValueError):
+                continue
+            if pg_posture._intact(entry) and entry.get("kind") == pg_posture.SNAPSHOT_KIND \
+                    and entry.get("source_identity_sha256") == identity \
+                    and entry.get("manifest_sha256") == manifest_sha256:
+                return entry.get("generation_at")
+        return None
 
     def authorization_valid(self, reference_sha256: str, code_sha256: str, project_sha256: str) -> bool:
         """Whether the PROD database authorizes an open deployment of this code -- the app's own test."""
@@ -1787,10 +1841,11 @@ def resume(directory: Path, *, expect_head: str | None = None, observer: Observe
         # its own verification wrote no entry, and its barrier must still be liftable).
         if _barrier_applied(summary) is None and observer.writable():
             raise Refused("BARRIER_NOT_APPLIED")
-        if not observer.lift_barrier(reference["hash"], _authorized_code(summary)):
+        current = _authorized_code(summary)
+        if not observer.lift_barrier(reference["hash"], current):
             raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write")
         return _append(directory, entries, {"type": "barrier", "action": "LIFTED", "database_identity_sha256": identity,
-                                            "authorization": "RESTORED"})
+                                            "authorization": "RESTORED" if current else "NONE"})
 
 
 def _quiescent(observer: Observer) -> None:
@@ -1886,6 +1941,16 @@ def _require_reopening_backup(summary: dict, observer: Observer, backup_root, of
         raise Refused("BACKUP_ROOTS_REQUIRED", "a re-opening re-verifies the newest generation (--backup-root, --off-platform)")
     reference = summary["opening_reference"]
     cadence_hours = int(reference["backup_cadence_hours"])
+    if summary["state"] == STATES[-1]:
+        # After the window closed the ledger records no generation (C14): the newest one on disk, made
+        # from PROD and re-verified with its off-platform copy, must itself be within the cadence.
+        generation = observer.backup(Path(backup_root), Path(off_platform), against_database=True)
+        made = _parse_or_none(generation.get("created_at"))
+        if not generation.get("object_set") or made is None \
+                or _CLOCK() - made > timedelta(hours=cadence_hours * CADENCE_TOLERANCE):
+            raise Refused("BACKUP_TOO_OLD_TO_OPEN", "run a new generation with objects before re-opening")
+        _check_generation_sources(summary, generation, identity)
+        return generation["manifest_sha256"]
     generations = _generations(summary)
     if not generations:
         raise Refused("PRE_OPEN_BACKUP_REQUIRED")
@@ -2102,7 +2167,7 @@ def main(argv=None, *, out=None, err=None) -> int:
         if name in {"rollback", "reference", "open"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
-        if name in {"reference", "open"}:
+        if name in {"reference", "open", "authorize-code"}:
             sub.add_argument("--vercel-team", default=None, help="the team id of the production project")
             sub.add_argument("--vercel-project", default=None, help="the production project's id")
         if name == "reference":
@@ -2153,7 +2218,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = amend(directory, args.commit, args.ref, expect_head=args.expect_head,
                            contract_ref=args.contract_ref, observer=observer if args.contract_ref else None)
         elif args.command == "advance":
-            result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head)
+            result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head,
+                             observer=observer)
         elif args.command == "qualify":
             result = qualify(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "reference":

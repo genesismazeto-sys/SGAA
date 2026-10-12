@@ -1579,13 +1579,23 @@ def test_the_ponr_needs_a_fingerprint_that_differs_from_the_opening_and_a_write_
     assert _code(ledger.advance, directory, "C13", {**GOOD["C13"], "write_class": "request"}) == "EVIDENCE_INVALID"
 
 
-def test_a_declared_restore_is_the_ponr_even_when_it_restores_the_opening_content(directory):
-    """SPEC A19 (13): the administrator's restore is the PONR; restoring the opening's own content moves no digest."""
+def test_a_declared_restore_is_the_ponr_even_when_it_restores_the_opening_content(directory, observer):
+    """SPEC A19 (13): the administrator's restore is the PONR; restoring the opening's own content moves no
+    digest, so it is recorded on the restore's own trace in PROD: its safety copy's snapshot receipt."""
     _grant_all(directory)
-    _drive(directory, "C12")
-    same = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"]}
+    _drive(directory, "C12", observer=observer)
+    opened = ledger._summary(ledger.read_ledger(directory))["evidence"]["C12"]["opened_at"]
+    same = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"],
+            "detected_at": "2099-01-01T00:00:00Z"}
     assert _code(ledger.advance, directory, "C13", {**same, "write_class": "REQUISICOES"}) == "NO_FINGERPRINT_DELTA"
-    entry = ledger.advance(directory, "C13", {**same, "write_class": "ADMIN_RESTORE"})
+    declared = {**same, "write_class": "ADMIN_RESTORE", "safety_copy_manifest_sha256": "c" * 64}
+    assert _code(ledger.advance, directory, "C13", {**same, "write_class": "ADMIN_RESTORE"},
+                 observer=observer) == "EVIDENCE_INVALID"  # the safety copy is named
+    assert _code(ledger.advance, directory, "C13", declared, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
+    observer.snapshot_receipts = {"c" * 64: "2000-01-01T00:00:00Z"}  # before the opening: not this restore
+    assert _code(ledger.advance, directory, "C13", declared, observer=observer) == "DECLARED_RESTORE_NOT_FOUND"
+    observer.snapshot_receipts = {"c" * 64: opened}
+    entry = ledger.advance(directory, "C13", declared, observer=observer)
     assert entry["state"] == "C13" and ledger.status(directory)["ponr_recorded"] is True
     assert _code(ledger.rollback, directory, "SMOKE_FAILED") == "PONR_RECORDED"  # forward-fix only from here
 
@@ -1634,6 +1644,38 @@ def test_a_forward_fix_runs_new_code_only_under_its_own_gate_and_its_own_authori
     assert entry["type"] == "authorization" and entry["opening_reference"] == reference
     assert observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)
     assert _code(ledger.authorize_code, directory, fix, observer=observer, backup_root=directory.parent, off_platform=directory.parent) == "CODE_ALREADY_AUTHORIZED"
+
+
+def test_a_forward_fix_after_the_window_closed_reverifies_the_newest_generation_on_disk(directory, observer, clock):
+    """After C14 the ledger records no generation: the newest one on disk must itself be within the cadence."""
+    _grant_all(directory)
+    _drive(directory, "C14", observer=observer)
+    reference = ledger.status(directory)["opening_reference"]
+    ls.set_clock(ledger._CLOCK() + timedelta(days=3))
+    fix = "dpl_" + "F" * 24
+    ledger.grant(directory, "GF1", "m-fix-late")
+    ls.deploy(directory, observer, fix, admission="OPEN", opening_reference=reference, commit=OTHER_COMMIT,
+              code=OTHER_CODE, forward_fix_ref="m-fix-late", observed_admission="CLOSED")
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+    observer.generation = dict(observer.generation, created_at=None)
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
+    stale = (ledger._CLOCK() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    observer.generation = dict(observer.generation, created_at=stale)
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, **roots) == "BACKUP_TOO_OLD_TO_OPEN"
+    observer.generation = dict(ls.generation(9), created_at=ledger._CLOCK().strftime("%Y-%m-%dT%H:%M:%SZ"))
+    assert ledger.authorize_code(directory, fix, observer=observer, **roots)["code_sha256"] == OTHER_CODE
+
+
+def test_authorize_code_takes_the_provider_ids_its_deployment_sweep_needs(directory, capsys):
+    """R2 B1: the command line accepts --vercel-team/--vercel-project (refused here on the ledger, not on usage)."""
+    _grant_all(directory)
+    _drive(directory, "C13")
+    head = ledger.status(directory)["head"]
+    code = ledger.main(["authorize-code", "--ledger-dir", str(directory), "--expect-head", head,
+                        "--deployment", "dpl_" + "F" * 24, "--vercel-team", "team_" + "x" * 12,
+                        "--vercel-project", "prj_" + "x" * 12,
+                        "--backup-root", str(directory.parent), "--off-platform", str(directory.parent)])
+    assert code == 1 and "NOT_A_RECORDED_FORWARD_FIX" in capsys.readouterr().err
 
 
 def test_no_code_is_authorized_after_the_reference_before_the_ponr(directory, observer):

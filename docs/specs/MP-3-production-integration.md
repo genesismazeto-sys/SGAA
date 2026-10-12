@@ -1067,8 +1067,11 @@ Executor amendments (consequences of the above; not material beyond what the use
   IS the point of no return, whatever the fingerprint shows: the ledger's C12 state no longer reflects
   the contract. The ledger recorded a PONR only on a fingerprint delta, so it gains one fixed declared
   write class, `ADMIN_RESTORE`, recordable as C13 with an unchanged fingerprint
-  (`DECLARED_PONR_WRITE_CLASSES`); every other class still needs a delta. The governed transition is
-  C12 -> C13 (`advance --state C13`, `write_class ADMIN_RESTORE`, `detected_at 2026-10-12T19:07:37Z`),
+  (`DECLARED_PONR_WRITE_CLASSES`) and only on the restore's own trace: the evidence names the safety
+  copy's snapshot manifest, which `advance` finds in PROD as an intact receipt of this database made
+  between the opening and the declared moment; every other class still needs a delta. The governed
+  transition is C12 -> C13 (`advance --state C13`, `write_class ADMIN_RESTORE`, `detected_at
+  2026-10-12T19:07:37Z`, `safety_copy_manifest_sha256` of that copy),
   recorded on the user's explicit instruction; from it the cutover is forward-fix only (no C12
   rollback, GC1/GC2 no longer exist; each deployment needs its GF1 and its code is authorized by
   `authorize-code`). M2 -- only the code the ledger currently authorizes admits: a later
@@ -1077,14 +1080,19 @@ Executor amendments (consequences of the above; not material beyond what the use
   authorized code; `resume` restores only the current code; an open deployment is promoted only while
   its code is the authorized one. M3 -- the restore locks the register tables against writes
   (EXCLUSIVE: reads go on) before its safety copy is made, and raises the lock to replace them only
-  if the copy reached a drive: no write can fall between copy and replacement. M4 -- retention deletes
+  if the copy reached a drive: no write can fall between copy and replacement (accepted cost: writes
+  and logins wait while the copy is uploaded, at most the 55 s idle bound; a user transaction that
+  already read a register and then writes another can deadlock with the lock upgrade, and PostgreSQL
+  then aborts one of them -- if it is the restore, it changes nothing). M4 -- retention deletes
   only files this database's own receipts name (all receipts, after this run's receipt is published),
   never a same-named file of another installation, and nothing when the receipts cannot be read. M5 --
   a receipt names the OneDrive drive of its files; download and restore address that drive. M6 -- a
   re-opening (GC2, and a forward-fix authorization) re-proves the newest generation: within the
   recorded cadence (and the object set within its own), intact on disk and off-platform, made from
-  PROD, and -- before the PONR -- holding the current business state; it refuses while any unrecorded
-  deployment exists. M7 -- the policy fails closed: an invalid or partly stored value refuses every
+  PROD, and -- before the PONR -- holding the current business state (after C14, where the ledger
+  records no generation, the newest on disk must itself be within the cadence); it refuses while any
+  unrecorded deployment exists. A superseded code never admits again: a bad forward fix is undone by
+  another forward fix. M7 -- the policy fails closed: an invalid or partly stored value refuses every
   run that deletes by it (they keep every generation; the page says so), only ASCII digits are
   values, and an opening cadence that exists but cannot be verified refuses a policy save and is
   never shown as "em dia". N2 -- a registers copy that did not reach a drive is a warning that names

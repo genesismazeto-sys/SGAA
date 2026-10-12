@@ -567,12 +567,16 @@ one deployment action that remains: each one needs its own user message, recorde
 the first deployment are refused), then `deploy_audit deploy --commit <fix commit> … --admission open
 --opening-reference <status opening_reference> --forward-fix-ref <code>` (it admits no one yet: its
 code is not authorized), `cutover_ledger authorize-code --deployment <id> --backup-root <primary dir>
---off-platform <second dir>` (**user terminal**: it re-verifies the newest generation on disk and its
+--off-platform <second dir> --vercel-team <team> --vercel-project <project>` (**user terminal**: it
+re-verifies the newest generation on disk (after C14, when the ledger records none, the newest on disk
+must itself be within the cadence) and its
 cadence, refuses while any unrecorded deployment exists, and writes the authorization for that code
 under the same reference, revoking every other code of it) and `promote` (an open deployment is
 promoted only while its code is the one the ledger authorizes). `cutover_ledger supersede` (**user
 terminal**) revokes, at any time from C12 on, every authorization whose code the ledger no longer
-authorizes.
+authorizes. A superseded code never admits again: undoing a bad forward fix is a new forward fix (a
+commit with a different code), never a re-promotion of the earlier deployment; between `authorize-code`
+and `promote` the public address admits no one.
 
 ## 4. Routine after cutover
 
@@ -632,7 +636,8 @@ reference, the cadence and every rollback guard stay as they are. In this order:
    … --admission open --opening-reference <status opening_reference>` (it admits no one: its code is
    not authorized yet); a new governed generation with `--objects`; **(user terminal**,
    `PGPASSWORD`**)** `cutover_ledger authorize-code --deployment <its id> --contract-ref <GC2 code>
-   --backup-root <primary dir> --off-platform <second dir>` (it re-proves what the opening proved --
+   --backup-root <primary dir> --off-platform <second dir> --vercel-team <team> --vercel-project
+   <project>` (it re-proves what the opening proved --
    the newest generation within the cadence, intact on disk and off-platform, from PROD, holding the
    current business state -- refuses while any unrecorded deployment exists, and writes the
    authorization for the amended code, revoking every other one, in one transaction with its entry);

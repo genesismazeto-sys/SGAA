@@ -258,6 +258,9 @@ class FakeObserver:
                 row["revoked"], revoked = True, revoked + 1
         return revoked
 
+    def snapshot_receipt_at(self, manifest_sha256, identity):
+        return (getattr(self, "snapshot_receipts", {}) or {}).get(manifest_sha256)
+
     def authorization_valid(self, reference_sha256, code_sha256, project_sha256):
         identity = hosting.source_identity_sha256(self.facts)
         return any(not row["revoked"] and row["reference"] == reference_sha256 and row["code"] == code_sha256

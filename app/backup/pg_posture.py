@@ -154,7 +154,9 @@ def policy_from_rows(rows, *, strict: bool = False) -> dict:
         policy[key], configured = value, True
         if changed and (updated is None or str(changed) > updated):
             updated = str(changed)
-    if strict and (invalid or (present and present != set(POLICY_FIELDS))):
+    if present and present != set(POLICY_FIELDS):  # ``save_policy`` always writes all of it
+        invalid += sorted(set(POLICY_FIELDS) - present)
+    if strict and invalid:
         raise PolicyError("POLICY_VALUE_INVALID")
     return dict(policy, configured=configured and not invalid, updated_at=updated, invalid=sorted(invalid))
 
@@ -341,26 +343,6 @@ def _parse(moment) -> datetime | None:
         return datetime.strptime(str(moment), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except (TypeError, ValueError):
         return None
-
-
-def _cadence(cursor, identity) -> tuple[int, str]:
-    """The cadence recorded at the opening (the ledger's reference entry in ``sgaa_cutover.opening``,
-    naming this database), else the policy default."""
-    try:
-        if not cursor.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
-            return DEFAULT_CADENCE_HOURS, "POLICY"
-        for (text,) in cursor.execute("SELECT entry FROM sgaa_cutover.opening").fetchall():
-            entry = json.loads(text)
-            body = dict(entry)
-            claimed = body.pop("hash", None)
-            if entry.get("type") == "reference" and hosting.ledger_entry_hash(body) == claimed \
-                    and identity and entry.get("database_identity_sha256") == identity:
-                hours = entry.get("backup_cadence_hours")
-                if isinstance(hours, int) and 1 <= hours <= 24:
-                    return hours, "OPENING"
-    except (TypeError, ValueError, AttributeError):
-        pass
-    return DEFAULT_CADENCE_HOURS, "POLICY"
 
 
 def _status(latest: datetime | None, now: datetime, cadence_hours: int) -> str:
