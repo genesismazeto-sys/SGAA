@@ -207,13 +207,14 @@ def test_the_opened_product_shows_the_governed_backup_posture_and_its_restore_va
     finally:
         conn.close()
     assert posture["generations_recorded"] == len([e for e in records if e["type"] == "backup"]) == 3
-    assert posture["ignored"] == 0 and posture["cadence_source"] == "OPENING"
+    assert posture["ignored"] == 0 and posture["ceiling_hours"] == 24
     assert posture["database_status"] == "CURRENT" and posture["validation"]["tables_verified"] > 0
     page = _sign_in_and_view_the_dashboard(opened_app.url, "/admin/banco-dados")
     assert 'data-protection-state="RECORDED"' in page
     assert 'data-protection-database-status="CURRENT"' in page and 'data-protection-objects-status="CURRENT"' in page
-    assert 'data-protection-validation="RECORDED"' in page and "(registrada na abertura)" in page
+    assert 'data-protection-validation="CURRENT"' in page and "teto registrado na abertura: 24 h" in page
     assert "Linha de base" in page and "proteção do próprio provedor" not in page
+    assert "data-protection-operations" in page and 'id="pg-retention-form"' in page
 
 
 def _close_and_quiesce(lane, opened_app):

@@ -208,12 +208,16 @@ Drive and OneDrive account cards (connect, test, disconnect): the Drive mirror u
 connected Google account and every SGAA e-mail is sent by the connected Microsoft account.
 Nothing is listed from the local disk and the Windows task is not queried.
 
-The protection card (SPEC MP-3 A19, owner `app.backup.pg_posture`) states the posture of
-the PostgreSQL database from the records the operator's backup runs publish into it: the
-Layer-2 cadence and RPO (the cadence recorded at the opening, else 24 h), the weekly object
-set, the retention (generations kept in the primary and off-platform directories), the
-newest generation and object set with their status (current, late, none), the newest
-restore validation and the most recent generations. The records live in the control schema
+The PostgreSQL backup surface (SPEC MP-3 A19, owner `app.backup.pg_posture`) keeps the page's
+layout: a summary card "Proteção do banco" in the top row, and, where the SQLite page has its
+sections, "Operações" (the status of the newest database generation, object set and restore
+validation, each with its next due date, and the RPO), "Política de retenção" and "Gerações
+registradas" (the most recent generations). The policy is administrable: the existing protected
+retention route saves, under PostgreSQL, the database backup frequency (1-24 h, the RPO; never above
+the cadence an opening of this database recorded), the object-set frequency (1-7 days), the
+generations kept in each directory (2-30) and the restore-test interval (7-90 days), in the
+product's backup settings (`configuracoes_backup`, keys `pg_*`). `ops_backup` rotates by it and every
+status and due date is judged against it. The records live in the control schema
 `sgaa_ops` (outside `public`: no Layer-2 set, business fingerprint or schema contract
 includes it). Each is a cutover-ledger `backup` or `restore` entry, or the self-hashed
 receipt of an `ops_backup` run, published verbatim by the run that made it into the

@@ -193,3 +193,32 @@ def test_a_refused_publication_never_undoes_the_generation(database, tmp_path, m
     report = json.loads(out.getvalue())
     assert report["result"] == "GENERATION_COMPLETE"
     assert report["posture"] == {"result": "NOT_PUBLISHED", "code": "RUNTIMEERROR"}
+
+
+def test_rotation_keeps_the_generations_the_administrators_policy_sets(database, tmp_path, monkeypatch):
+    """SPEC A19 (8): the run reads the policy from the database it backs up; a request may keep more, never fewer."""
+    from app.backup import pg_posture
+    from tests.mp2_pg_support import adapter
+
+    name, url = database
+    monkeypatch.setenv("DATABASE_URL", url)
+    conn = adapter(url)
+    try:
+        pg_posture.save_policy(conn, dict(pg_posture.default_policy(), pg_retention_generations=3))
+        conn.commit()
+    finally:
+        conn.close()
+    root, off = tmp_path / "primary", tmp_path / "off"
+    for _ in range(4):
+        out, err = io.StringIO(), io.StringIO()
+        assert ob.main(["--root", str(root), "--off-platform", str(off)], out=out, err=err) == 0, err.getvalue()
+    report = json.loads(out.getvalue())
+    assert report["rotation"]["primary"]["deleted"] == 1
+    for directory in (root / "layer2", off / "layer2"):
+        assert len(list(directory.glob("*.manifest.json"))) == 3
+    out, err = io.StringIO(), io.StringIO()
+    assert ob.main(["--root", str(root), "--off-platform", str(off), "--generations", "2"], out=out, err=err) == 1
+    assert "GENERATIONS_BELOW_POLICY" in err.getvalue() and len(list((root / "layer2").glob("*.manifest.json"))) == 3
+    assert ob.main(["--root", str(root), "--off-platform", str(off), "--generations", "4"], out=io.StringIO(),
+                   err=io.StringIO()) == 0
+    assert len(list((root / "layer2").glob("*.manifest.json"))) == 4

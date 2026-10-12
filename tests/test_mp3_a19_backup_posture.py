@@ -50,8 +50,9 @@ def _rows(*entries, note=None):
     return [(json.dumps(entry, sort_keys=True), json.dumps(note) if note else None) for entry in entries]
 
 
-def _summary(rows, *, identity=IDENTITY, cadence=24):
-    return pg_posture.summarize(rows, identity=identity, cadence_hours=cadence, cadence_source="OPENING", now=NOW)
+def _summary(rows, *, identity=IDENTITY, cadence=24, ceiling=None, **policy):
+    return pg_posture.summarize(rows, identity=identity, policy=dict(pg_backup_cadence_hours=cadence, **policy),
+                                ceiling_hours=ceiling, now=NOW)
 
 
 # ---- the reading ----------------------------------------------------------------------------------
@@ -148,6 +149,60 @@ def test_an_operator_run_outside_the_window_is_a_self_hashed_receipt_of_the_same
     assert posture["database_status"] == "CURRENT" and posture["recent"][0]["governed"] is False
 
 
+# ---- the administrator's policy --------------------------------------------------------------------
+
+
+def test_the_policy_is_validated_field_by_field_and_capped_by_an_open_cutover():
+    good = {"pg_backup_cadence_hours": "12", "pg_object_cadence_days": "3", "pg_retention_generations": "5",
+            "pg_restore_test_days": "14"}
+    assert pg_posture.validate_policy(good) == {k: int(v) for k, v in good.items()}
+    for key, bad in (("pg_backup_cadence_hours", "0"), ("pg_backup_cadence_hours", "25"),
+                     ("pg_object_cadence_days", "8"), ("pg_retention_generations", "1"),
+                     ("pg_retention_generations", "31"), ("pg_restore_test_days", "6"),
+                     ("pg_restore_test_days", "x"), ("pg_restore_test_days", "")):
+        with pytest.raises(pg_posture.PolicyError) as caught:
+            pg_posture.validate_policy(dict(good, **{key: bad}))
+        assert "Valor inválido para" in str(caught.value), (key, bad)
+    with pytest.raises(pg_posture.PolicyError) as caught:
+        pg_posture.validate_policy(good, ceiling_hours=6)
+    assert "não pode passar de 6 h" in str(caught.value)
+    assert pg_posture.validate_policy(dict(good, pg_backup_cadence_hours="6"), ceiling_hours=6)
+
+
+def test_stored_policy_values_out_of_bounds_fall_back_to_their_defaults():
+    policy = pg_posture.policy_from_rows([("pg_retention_generations", "7", "2026-10-12 10:00:00"),
+                                          ("pg_restore_test_days", "999", "2026-10-12 11:00:00"),
+                                          ("pg_backup_cadence_hours", "abc", None)])
+    assert policy["pg_retention_generations"] == 7 and policy["pg_restore_test_days"] == 30
+    assert policy["pg_backup_cadence_hours"] == 24 and policy["configured"] is True
+    assert policy["updated_at"] == "2026-10-12 10:00:00"  # only accepted values date the policy
+    assert pg_posture.policy_from_rows([]) == dict(pg_posture.default_policy(), configured=False, updated_at=None)
+
+
+def test_the_posture_is_judged_against_the_administrators_policy():
+    rows = _rows(_generation(10), _generation(24 * 4))
+    assert _summary(rows)["database_status"] == "CURRENT"
+    assert _summary(rows, cadence=6)["database_status"] == "LATE"  # 10 h > 1.5 x 6 h
+    assert _summary(rows, pg_object_cadence_days=1)["objects_status"] == "CURRENT"  # 10 h <= 1.5 x 1 day
+    assert _summary(_rows(_generation(10, objects=False), _generation(24 * 4)),
+                    pg_object_cadence_days=2)["objects_status"] == "LATE"  # 4 days > 1.5 x 2 days
+    posture = _summary(rows, cadence=12)
+    assert posture["next_generation_due"] == NOW - timedelta(hours=10) + timedelta(hours=12)
+    assert posture["rpo_hours"] == 12 and posture["retention_generations"] == 2
+    # an open cutover's recorded cadence is a ceiling the posture applies
+    assert _summary(rows, cadence=24, ceiling=6)["cadence_hours"] == 6
+
+
+def test_a_restore_validation_older_than_the_policy_interval_is_late():
+    old = _generation(24 * 40, manifest="1" * 64)
+    rows = _rows(_generation(2), old, _restore(old, 24 * 35))
+    assert _summary(rows)["validation_status"] == "LATE"  # 35 days > 30 by default
+    assert _summary(rows, pg_restore_test_days=60)["validation_status"] == "CURRENT"
+    assert _summary(_rows(_generation(2)))["validation_status"] == "NONE"
+    posture = _summary(rows, pg_restore_test_days=60)
+    assert posture["next_restore_test_due"] == NOW - timedelta(hours=24 * 35) + timedelta(days=60)
+
+
 def test_publishing_refuses_a_record_that_is_not_intact_before_touching_the_database():
     class Refusing:
         def transaction(self):
@@ -220,7 +275,7 @@ def test_real_pg_published_records_are_read_back_outside_public_and_without_chan
     posture = pg_posture.read(conn, now=datetime.now(timezone.utc))
     assert posture["state"] == "RECORDED" and posture["generations_recorded"] == 2
     assert posture["retention"] == note and posture["validation"]["tables_verified"] == 39
-    assert posture["cadence_source"] == "POLICY" and posture["cadence_hours"] == pg_posture.DEFAULT_CADENCE_HOURS
+    assert posture["ceiling_hours"] is None and posture["cadence_hours"] == pg_posture.DEFAULT_CADENCE_HOURS
 
 
 @real_pg
@@ -232,7 +287,7 @@ def test_real_pg_the_cadence_is_the_one_the_opening_recorded(pg_database):
     for statement in hosting.OPENING_DDL:
         conn.execute(statement)
     conn.execute(hosting.OPENING_INSERT_SQL, (reference["hash"], "7" * 64, json.dumps(reference, sort_keys=True)))
-    assert pg_posture.read(conn)["cadence_source"] == "POLICY"  # another database's opening decides nothing
+    assert pg_posture.read(conn)["ceiling_hours"] is None  # another database's opening decides nothing
     conn.execute("DELETE FROM sgaa_cutover.opening")
     reference = dict({k: v for k, v in reference.items() if k != "hash"}, database_identity_sha256=_identity(conn))
     reference["hash"] = hosting.ledger_entry_hash(reference)
@@ -240,10 +295,11 @@ def test_real_pg_the_cadence_is_the_one_the_opening_recorded(pg_database):
         conn.execute(statement)
     conn.execute(hosting.OPENING_INSERT_SQL, (reference["hash"], "7" * 64, json.dumps(reference, sort_keys=True)))
     posture = pg_posture.read(conn)
-    assert (posture["cadence_hours"], posture["cadence_source"], posture["rpo_hours"]) == (6, "OPENING", 6)
+    assert (posture["cadence_hours"], posture["ceiling_hours"], posture["rpo_hours"]) == (6, 6, 6)
+    assert pg_posture.opening_ceiling(conn) == 6
     forged = dict(reference, backup_cadence_hours=1)  # a row that is not the ledger's entry decides nothing
     conn.execute("UPDATE sgaa_cutover.opening SET entry = %s", (json.dumps(forged, sort_keys=True),))
-    assert pg_posture.read(conn)["cadence_source"] == "POLICY"
+    assert pg_posture.read(conn)["ceiling_hours"] is None and pg_posture.opening_ceiling(conn) is None
 
 
 @real_pg

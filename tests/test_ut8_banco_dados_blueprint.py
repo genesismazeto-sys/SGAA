@@ -116,6 +116,7 @@ POST_UT8_HELPER_NAMES = (
     "_refuse_unsupported_sqlite_maintenance",
     # MP-3 A19: the PostgreSQL backup posture card (delegates to app.backup.pg_posture).
     "_database_protection_context",
+    "_policy_fields",
 )
 
 CONSTANT_NAMES = (

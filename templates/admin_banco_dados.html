@@ -614,49 +614,19 @@
       </div>
     </article>
     {% else %}
-    {# MP-3 A19: the posture comes from the records the operator's governed backup runs publish
-       (app.backup.pg_posture); the provider's plan includes no backup of its own. #}
+    {# MP-3 A19: a summary card like "Backup local"; the posture, the policy and the generations
+       are the full-width sections below (app.backup.pg_posture). #}
     {% set protection = database_protection or {'state': 'UNREADABLE'} %}
     <article class="db-card" data-database-protection="postgresql" data-protection-state="{{ protection.state }}">
       <h2>Proteção do banco</h2>
-      <p>O banco de dados é PostgreSQL e o plano do provedor não inclui backup próprio. A proteção são as gerações de backup feitas pelo operador na máquina de operação: cópia lógica do banco, conjunto de arquivos do armazenamento, cópia verificada fora da plataforma e restauração de teste periódica.</p>
+      <p>Backups do PostgreSQL feitos pelo operador, com cópia fora da plataforma e restauração de teste. O plano do provedor não inclui backup próprio.</p>
       {% if protection.state == 'UNREADABLE' %}
         <p class="db-cloud-store-warning" role="status">Não foi possível ler os registros de backup deste banco.</p>
       {% else %}
       <div class="db-meta">
-        <div><strong>Frequência do banco:</strong> a cada {{ protection.cadence_hours }} h{% if protection.cadence_recorded_at_opening %} (registrada na abertura){% endif %} · <strong>perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h</div>
-        <div><strong>Arquivos do armazenamento:</strong> a cada {{ protection.object_cadence_days }} dias</div>
-        <div><strong>Retenção:</strong> as {{ protection.retention.generations_policy if protection.retention else protection.min_generations }} gerações mais recentes, no diretório principal e na cópia fora da plataforma{% if protection.retention %} (após a última rotação: {{ protection.retention.kept.primary.database }} no principal, {{ protection.retention.kept.off_platform.database }} fora da plataforma){% endif %}</div>
-        <div data-protection-database-status="{{ protection.database_status.code }}"><strong>Último backup do banco:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span> {{ protection.latest_generation_label or 'nenhuma geração registrada' }}</div>
-        <div data-protection-objects-status="{{ protection.objects_status.code }}"><strong>Último conjunto de arquivos:</strong> <span class="badge status-pill {{ protection.objects_status.css }}">{{ protection.objects_status.label }}</span> {{ protection.latest_object_set_label or 'nenhum conjunto registrado' }}</div>
-        <div data-protection-validation="{{ 'RECORDED' if protection.validation else 'NONE' }}"><strong>Restauração de teste:</strong>
-          {% if protection.validation %}
-            <span class="badge status-pill status-positive">Validada</span> em {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados)
-          {% else %}
-            <span class="badge status-pill status-negative">Sem registro</span>
-          {% endif %}
-        </div>
+        <div data-protection-database-status="{{ protection.database_status.code }}"><strong>Último backup:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span></div>
+        <div data-protection-validation="{{ protection.validation_status.code }}"><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span></div>
       </div>
-      {% if protection.recent %}
-      <div class="db-table-wrap"><table class="db-table" data-protection-recent>
-        <thead><tr><th>Geração</th><th>Tipo</th><th>Arquivos</th><th>Fora da plataforma</th><th>Identificador</th></tr></thead>
-        <tbody>
-        {% for item in protection.recent %}
-          <tr>
-            <td>{{ item.generation_label }}</td>
-            <td>{{ 'Linha de base' if item.baseline else 'Geração' }}</td>
-            <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
-            <td>{{ 'Verificada' if item.off_platform else '—' }}</td>
-            <td><code>{{ item.manifest_short }}</code></td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
-      {% endif %}
-      {% if protection.ignored %}
-        <p class="db-cloud-store-warning" role="status">{{ protection.ignored }} registro(s) de backup ignorado(s): não pertencem a este banco ou foram alterados.</p>
-      {% endif %}
-      <p class="db-note">Novas gerações e restaurações de teste são feitas pelo operador com <code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>; esta tela apenas mostra o que foi registrado.</p>
       {% endif %}
     </article>
     {% endif %}
@@ -1604,6 +1574,120 @@
       </div>
     {% else %}
       <p class="db-note">Nenhum snapshot foi gerado ainda.</p>
+    {% endif %}
+  </article>
+  {% elif database_protection and database_protection.state != 'UNREADABLE' %}
+  {% set protection = database_protection %}
+  {# ────────── Operações (PostgreSQL, MP-3 A19) ────────── #}
+  <article class="db-card" data-protection-operations>
+    <div class="db-card-head">
+      <span class="db-section-label">Operações</span>
+    </div>
+    <p>Os backups do banco e dos arquivos do armazenamento e as restaurações de teste rodam na máquina de operação, que guarda a cópia fora da plataforma (<code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>). Os prazos abaixo seguem a política de retenção.</p>
+    <div class="db-meta">
+      <div><strong>Backup do banco:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span> {{ protection.latest_generation_label or 'nenhuma geração registrada' }}{% if protection.next_generation_due_label %} · próximo até {{ protection.next_generation_due_label }}{% endif %}</div>
+      <div data-protection-objects-status="{{ protection.objects_status.code }}"><strong>Arquivos do armazenamento:</strong> <span class="badge status-pill {{ protection.objects_status.css }}">{{ protection.objects_status.label }}</span> {{ protection.latest_object_set_label or 'nenhum conjunto registrado' }}{% if protection.next_object_set_due_label %} · próximo até {{ protection.next_object_set_due_label }}{% endif %}</div>
+      <div><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span>{% if protection.validation %} {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados) · próxima até {{ protection.next_restore_test_due_label }}{% endif %}</div>
+      <div><strong>Perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h{% if protection.ceiling_hours %} · teto registrado na abertura: {{ protection.ceiling_hours }} h{% endif %}</div>
+    </div>
+  </article>
+
+  {# ────────── Política de retenção (PostgreSQL, MP-3 A19) ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Política de retenção</span>
+      <div class="db-chips">
+        <span class="db-chip">PostgreSQL · {{ protection.retention_generations }} gerações</span>
+      </div>
+    </div>
+    <p>Define com que frequência o banco e os arquivos são copiados, quantas gerações ficam guardadas no diretório principal e na cópia fora da plataforma, e de quanto em quanto tempo uma restauração de teste é exigida. A linha de base da virada nunca é removida pela rotação.</p>
+    {% if auth_can('banco_dados', 'edit') %}
+      <form method="post" action="{{ url_for('admin_banco_dados_retencao') }}" id="pg-retention-form" data-protection-policy-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="db-table-wrap" style="margin-top:10px;">
+          <table class="db-table db-retention-table">
+            <colgroup>
+              <col>
+              <col>
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Valor</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for key, field in protection.policy_fields.items() %}
+                <tr>
+                  <td><label for="{{ key }}">{{ field.label }}</label></td>
+                  <td>
+                    <input id="{{ key }}" type="number" name="{{ key }}" value="{{ protection.policy[key] }}" min="{{ field.min }}" max="{{ field.max }}" step="1" class="db-select" data-default="{{ field.default }}" required>
+                  </td>
+                  <td><small class="db-retention-helper">{{ field.helper }}</small></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="db-note">{% if protection.policy_configured %}Última alteração: {{ protection.policy_updated_label or '—' }}.{% else %}Valores padrão (nenhuma alteração salva).{% endif %}</p>
+        <div class="db-actions">
+          <button type="button" class="btn" onclick="var f=document.getElementById('pg-retention-form');f.querySelectorAll('[data-default]').forEach(function(el){el.value=el.getAttribute('data-default');});">
+            <i class="lucide" data-lucide="rotate-ccw"></i>Restaurar padrões
+          </button>
+          <button type="submit" class="btn primary">
+            <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar política
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="db-meta">
+        {% for key, field in protection.policy_fields.items() %}
+          <div><strong>{{ field.label }}:</strong> {{ protection.policy[key] }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </article>
+
+  {# ────────── Gerações registradas (PostgreSQL, MP-3 A19) ────────── #}
+  <article class="db-card">
+    <div class="db-card-head">
+      <span class="db-section-label">Gerações registradas</span>
+      {% if protection.generations_recorded %}
+        <span class="db-chip is-active">{{ protection.generations_recorded }} {{ 'gerações' if protection.generations_recorded != 1 else 'geração' }}</span>
+      {% endif %}
+    </div>
+    {% if protection.recent %}
+      <div class="db-table-wrap">
+        <table class="db-table" data-protection-recent>
+          <thead>
+            <tr>
+              <th>Criada em</th>
+              <th>Tipo</th>
+              <th>Arquivos do armazenamento</th>
+              <th>Cópia fora da plataforma</th>
+              <th>Identificador</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in protection.recent %}
+              <tr>
+                <td>{{ item.generation_label }}</td>
+                <td>{{ 'Linha de base' if item.baseline else 'Geração' }}</td>
+                <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
+                <td>{{ 'Verificada' if item.off_platform else '—' }}</td>
+                <td><code>{{ item.manifest_short }}</code></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="db-note">Nenhuma geração foi registrada ainda.</p>
+    {% endif %}
+    {% if protection.ignored %}
+      <p class="db-cloud-store-warning" role="status">{{ protection.ignored }} registro(s) de backup ignorado(s): não pertencem a este banco ou foram alterados.</p>
     {% endif %}
   </article>
   {% endif %}

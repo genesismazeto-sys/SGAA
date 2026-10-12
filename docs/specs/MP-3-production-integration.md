@@ -1009,7 +1009,23 @@ Executor amendments (consequences of the above; not material beyond what the use
   (`GENERATION_NOT_THIS_RUNS`) whenever an object set is registered -- a pre-existing A17 check comparing the
   newest registered object set with the run's; it fails closed (nothing recorded or published). Every
   governed run therefore takes the object set (runbook C12); a database-only governed run is deferred.
-  Evidence: section 17.
+  (8) The administrable policy (user message "DO NOT REQUEST OR RECORD GC2 YET": observability is not the
+  administrable capability the product had). Under PostgreSQL the Banco de dados page's existing protected
+  retention route (`/admin/banco-dados/retencao`, `banco_dados` edit) saves the PostgreSQL backup and
+  retention policy instead of refusing: the database backup frequency (1-24 h; it is the RPO; while an
+  opening of this database exists, never above the cadence the opening recorded), the object-set frequency
+  (1-7 days), the generations kept in each directory (2-30) and the restore-test interval (7-90 days). It
+  is stored in the product's own backup settings (`configuracoes_backup`, keys `pg_*`; target-side
+  configuration, outside the business fingerprint, inside the Layer-2 dump); `app.backup.pg_posture` owns
+  its bounds, validation and reading. The runs apply it: `ops_backup` reads it from the database it backs
+  up and rotates by it (`--generations` may keep more, never fewer: `GENERATIONS_BELOW_POLICY`); the page
+  judges every status and due date against it (database, object set, restore test, each with its next due
+  date). The page keeps its layout: the top row gets back a summary card the size of "Backup local", and
+  the PostgreSQL content takes the places of the SQLite sections -- "Operações" (status and due dates),
+  "Política de retenção" (the editable grid, "Restaurar padrões", "Salvar política") and "Gerações
+  registradas" (the recent generations). No hosted "back up now": a generation needs the PROD password on
+  the operator's machine and makes the off-platform copy there. GC1 is consumed by one amendment, so this
+  change is recorded under its own GC1 grant. Evidence: section 17.
 
 ## 17. Closure
 

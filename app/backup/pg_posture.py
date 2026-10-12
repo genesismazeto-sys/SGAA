@@ -10,6 +10,15 @@ WHY THIS EXISTS
     posture: the policy (cadence, RPO, retention), the projection the governed runs publish
     into the database they back up, and the reading the Banco de dados page renders.
 
+THE POLICY THE ADMINISTRATOR SETS
+    The backup and retention policy is a product setting the administrator edits on the Banco de
+    dados page (``validate_policy`` / ``save_policy``), stored in the product's backup settings
+    (``configuracoes_backup``, keys ``pg_*``): how often the database is backed up (its RPO), how
+    often the object set is taken, how many generations each directory keeps, how often a restore
+    is tested.  ``ops_backup`` reads it from the database it backs up and rotates by it; the posture
+    judges every status and due date against it.  While a cutover opening exists the database
+    cadence may not exceed the one the opening recorded (the ledger's C14 cadence).
+
 ONE SOURCE OF TRUTH
     Nothing here decides or records a backup.  The record stays where it is made: the cutover
     ledger's ``backup`` and ``restore`` entries (hash-chained, written only from the receipts of
@@ -28,7 +37,7 @@ VALUES
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app import hosting
 
@@ -39,6 +48,18 @@ MIN_GENERATIONS = 2
 #: A generation older than this multiple of the cadence is late (the cutover ledger's tolerance).
 CADENCE_TOLERANCE = 1.5
 RECENT_LIMIT = 5
+
+#: The administrable policy: setting key -> (minimum, maximum, default, label).
+POLICY_FIELDS = {
+    "pg_backup_cadence_hours": (1, 24, DEFAULT_CADENCE_HOURS, "a frequência do backup do banco (horas)"),
+    "pg_object_cadence_days": (1, 7, OBJECT_CADENCE_HOURS // 24, "a frequência dos arquivos do armazenamento (dias)"),
+    "pg_retention_generations": (MIN_GENERATIONS, 30, MIN_GENERATIONS, "as gerações mantidas"),
+    "pg_restore_test_days": (7, 90, 30, "o intervalo da restauração de teste (dias)"),
+}
+POLICY_SELECT_SQL = (
+    "SELECT chave, valor, atualizado_em FROM configuracoes_backup WHERE chave IN ("
+    + ", ".join(f"'{key}'" for key in POLICY_FIELDS) + ")"
+)
 
 SCHEMA = "sgaa_ops"
 DDL = (
@@ -65,12 +86,103 @@ _TYPES = frozenset({BACKUP_TYPE, RESTORE_TYPE})
 RUN_PROVENANCE = "OPERATOR_RUN"
 
 
+class PolicyError(ValueError):
+    """A policy value the administrator typed is refused (the message is shown as is)."""
+
+
 class PostureError(Exception):
     """A record cannot be published (a fixed code; never a value)."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+# ---------------------------------------------------------------------------
+# the policy (set by the administrator, read by the runs and the page)
+# ---------------------------------------------------------------------------
+
+
+def default_policy() -> dict:
+    return {key: spec[2] for key, spec in POLICY_FIELDS.items()}
+
+
+def _bounded(key, raw):
+    minimum, maximum, _default, _label = POLICY_FIELDS[key]
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if minimum <= value <= maximum else None
+
+
+def policy_from_rows(rows) -> dict:
+    """The policy from stored ``(chave, valor, atualizado_em)`` rows: any value missing or out of bounds
+    is its default; ``configured`` and ``updated_at`` (the newest change, as stored) are added."""
+    policy, updated, configured = default_policy(), None, False
+    for row in rows:
+        key, raw, changed = row[0], row[1], row[2]
+        value = _bounded(key, raw) if key in POLICY_FIELDS else None
+        if value is not None:
+            policy[key], configured = value, True
+            if changed and (updated is None or str(changed) > updated):
+                updated = str(changed)
+    return dict(policy, configured=configured, updated_at=updated)
+
+
+def read_policy(raw) -> dict:
+    """The stored policy of the database behind ``raw`` (a psycopg connection), read in a savepoint:
+    a database without the settings table, or any refusal, yields the defaults and never disturbs the
+    caller's transaction."""
+    from psycopg.rows import tuple_row
+
+    try:
+        with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
+            rows = cursor.execute(POLICY_SELECT_SQL).fetchall()
+    except Exception:
+        rows = []
+    return policy_from_rows(rows)
+
+
+def validate_policy(form, *, ceiling_hours: int | None = None) -> dict:
+    """The administrator's form, validated: every field an integer within its bounds, and the database
+    cadence not above the ceiling an open cutover recorded.  Raises ``PolicyError`` (shown as is)."""
+    policy = {}
+    for key, (minimum, maximum, _default, label) in POLICY_FIELDS.items():
+        value = _bounded(key, form.get(key))
+        if value is None:
+            raise PolicyError(f"Valor inválido para {label}: informe um número inteiro de {minimum} a {maximum}.")
+        policy[key] = value
+    if ceiling_hours is not None and policy["pg_backup_cadence_hours"] > ceiling_hours:
+        raise PolicyError(
+            f"A frequência do backup do banco não pode passar de {ceiling_hours} h enquanto a janela da virada estiver aberta."
+        )
+    return policy
+
+
+def save_policy(conn, policy: dict) -> None:
+    """Store a validated policy in the product's backup settings (the caller commits)."""
+    from app.sql_dialect import current_utc_text
+
+    for key in POLICY_FIELDS:
+        conn.execute(
+            f"INSERT INTO configuracoes_backup (chave, valor, atualizado_em) VALUES (?, ?, {current_utc_text(conn)})"
+            f" ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = {current_utc_text(conn)}",
+            (key, str(int(policy[key]))),
+        )
+
+
+def opening_ceiling(raw) -> int | None:
+    """The database cadence an open cutover recorded for THIS database, else ``None`` (a psycopg connection)."""
+    from psycopg.rows import tuple_row
+
+    try:
+        with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
+            identity = hosting.source_identity_sha256(hosting.database_source(raw))
+            hours, source = _cadence(cursor, identity)
+    except Exception:
+        return None
+    return hours if source == "OPENING" else None
 
 
 # ---------------------------------------------------------------------------
@@ -187,9 +299,11 @@ def read(raw, *, now: datetime | None = None) -> dict:
     try:
         with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
             identity = hosting.source_identity_sha256(hosting.database_source(raw))
-            cadence, cadence_source = _cadence(cursor, identity)
+            ceiling, ceiling_source = _cadence(cursor, identity)
             stored = cursor.execute(SELECT_SQL).fetchall() if cursor.execute(EXISTS_SQL).fetchone()[0] else []
-        return summarize(stored, identity=identity, cadence_hours=cadence, cadence_source=cadence_source, now=now)
+        policy = read_policy(raw)
+        return summarize(stored, identity=identity, policy=policy,
+                         ceiling_hours=ceiling if ceiling_source == "OPENING" else None, now=now)
     except Exception:
         return {"state": "UNREADABLE"}
 
@@ -224,8 +338,20 @@ def _well_formed(entry) -> bool:
         and _count(entry.get("objects_verified"))
 
 
-def summarize(stored, *, identity, cadence_hours: int, cadence_source: str, now: datetime) -> dict:
-    """The posture from the stored ``(entry, annotation)`` rows (pure; the page's reading)."""
+def _due(moment, hours):
+    return moment + timedelta(hours=hours) if moment is not None else None
+
+
+def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: int | None = None,
+              now: datetime) -> dict:
+    """The posture from the stored ``(entry, annotation)`` rows, judged against the administrator's
+    policy (pure; the page's reading).  An open cutover's recorded cadence is a ceiling."""
+    policy = dict(default_policy(), **(policy or {}))
+    cadence_hours = policy["pg_backup_cadence_hours"]
+    if ceiling_hours is not None and ceiling_hours < cadence_hours:
+        cadence_hours = ceiling_hours
+    object_hours = policy["pg_object_cadence_days"] * 24
+    restore_hours = policy["pg_restore_test_days"] * 24
     generations, validations, ignored = [], [], 0
     for text, note in stored:
         try:
@@ -259,15 +385,23 @@ def summarize(stored, *, identity, cadence_hours: int, cadence_source: str, now:
         }
     return {
         "state": "RECORDED" if generations else "EMPTY",
+        "policy": policy,
+        "ceiling_hours": ceiling_hours,
         "cadence_hours": cadence_hours,
-        "cadence_source": cadence_source,
         "rpo_hours": cadence_hours,
-        "object_cadence_hours": OBJECT_CADENCE_HOURS,
+        "object_cadence_hours": object_hours,
+        "restore_test_days": policy["pg_restore_test_days"],
+        "retention_generations": policy["pg_retention_generations"],
         "min_generations": MIN_GENERATIONS,
         "database_status": _status(latest, now, cadence_hours),
-        "objects_status": _status(latest_objects, now, OBJECT_CADENCE_HOURS),
+        "objects_status": _status(latest_objects, now, object_hours),
+        "validation_status": "NONE" if validation is None else (
+            "CURRENT" if (now - validation["at"]).total_seconds() <= restore_hours * 3600 else "LATE"),
         "latest_generation_at": latest,
         "latest_object_set_at": latest_objects,
+        "next_generation_due": _due(latest, cadence_hours),
+        "next_object_set_due": _due(latest_objects, object_hours),
+        "next_restore_test_due": _due(validation["at"] if validation else None, restore_hours),
         "validation": validation,
         "retention": retention,
         "recent": [
@@ -284,6 +418,8 @@ def summarize(stored, *, identity, cadence_hours: int, cadence_source: str, now:
 
 
 __all__ = [
-    "CADENCE_TOLERANCE", "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "PostureError",
-    "publish", "read", "run_record", "summarize",
+    "CADENCE_TOLERANCE", "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "POLICY_FIELDS",
+    "PolicyError", "PostureError", "default_policy", "opening_ceiling", "policy_from_rows", "publish", "read",
+    "read_policy",
+    "run_record", "save_policy", "summarize", "validate_policy",
 ]

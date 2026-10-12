@@ -472,7 +472,13 @@ recorded generation into a new scratch database (`SGAA_RESTORE_TARGET_URL`, with
 and records its receipt. Run a restore drill on a calendar (section F-H), in the drill terminal.
 The achievable RPO is the interval between runs.
 
-### R.1 The posture the product shows (MP-3 A19)
+### R.1 The policy and the posture the product shows (MP-3 A19)
+
+The administrator sets the policy on Banco de dados > Política de retenção: database backup
+frequency (the RPO), object-set frequency, generations kept, restore-test interval. `ops_backup`
+reads it from the database it backs up and keeps that many generations in each directory
+(`--generations` may keep more, never fewer); the operator runs generations and drills on that
+cadence.
 
 The Banco de dados page shows the protection posture from records published into the
 database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).

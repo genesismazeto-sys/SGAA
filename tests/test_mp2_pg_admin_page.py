@@ -95,7 +95,9 @@ FILE_BACKUP_MARKERS = (
     "admin/banco-dados/backup",
     'id="retention-form"',
     "Snapshots disponíveis",
-    "Política de retenção",
+    # MP-3 A19: "Política de retenção" is also the PostgreSQL policy section; the GFS window
+    # chip is what only the SQLite file retention renders.
+    "GFS · ",
     "gdrive-backup-now",
     "data-google-picker-button",
     "data-automatic-backup-status",
@@ -114,13 +116,15 @@ ROUTES = (
         "cloud_backup_dir": str(tmp / "must-not-be-created" / "cloud"),
         "cloud_sync_interval_seconds": "600",
     }),
-    ("post", "/admin/banco-dados/retencao", lambda tmp: {"retention_w0_slots": "3"}),
     ("get", "/admin/banco-dados/download?manifest_path=nao-existe.json", lambda tmp: None),
     ("post", "/admin/banco-dados/excluir", lambda tmp: {"manifest_path": "nao-existe.json"}),
 )
 
 
-@pytest.mark.parametrize("method, url, payload", ROUTES, ids=["configuracoes", "retencao", "download", "excluir"])
+# MP-3 A19: ``retencao`` is no longer refused under PostgreSQL -- it administers the PostgreSQL backup
+# policy (``app.backup.pg_posture``; the real-PostgreSQL lane is
+# ``test_pg_readiness_route_smoke_real_pg.py::test_r8_the_administrator_sets_the_postgresql_backup_policy``).
+@pytest.mark.parametrize("method, url, payload", ROUTES, ids=["configuracoes", "download", "excluir"])
 def test_pg_file_backup_routes_refuse_and_write_nothing(
     backup_env, admin_client, pg_backend, tmp_path, monkeypatch, method, url, payload
 ):

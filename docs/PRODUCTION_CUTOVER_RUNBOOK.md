@@ -462,7 +462,9 @@ authorization that only the reference writes.
 
 - The cadence recorded at the opening is in force until C14: **(user terminal)**
   `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> --objects
-  --ledger-dir <ledger>` every `h` hours. Every governed run takes the object set: once one is registered,
+  --ledger-dir <ledger>` every `h` hours (or more often if the administrator's policy on Banco de dados
+  says so; the policy can never exceed `h` while the opening exists, and the run keeps the generations
+  it sets). Every governed run takes the object set: once one is registered,
   a database-only governed run is refused (`GENERATION_NOT_THIS_RUNS`: the run's own check compares the
   newest registered object set with the one it took; found live at A19, nothing is recorded or published
   by the refused run, its verified database set stays registered and uncounted). A Layer-2 gap longer

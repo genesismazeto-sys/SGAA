@@ -381,6 +381,8 @@ def _format_drive_timestamp(ts_iso: str) -> str:
     except Exception:
         return ts_iso
 
+from app.backup import pg_posture  # noqa: E402  (MP-3 A19: the PostgreSQL backup policy and posture)
+
 _POSTURE_STATUS_LABELS = {
     "CURRENT": ("Em dia", "status-positive"),
     "LATE": ("Atrasado", "status-negative"),
@@ -388,10 +390,28 @@ _POSTURE_STATUS_LABELS = {
 }
 
 
+_POLICY_FIELD_TEXT = {
+    "pg_backup_cadence_hours": ("Backup do banco a cada (horas)", "Define o RPO."),
+    "pg_object_cadence_days": ("Arquivos do armazenamento a cada (dias)", ""),
+    "pg_retention_generations": ("Gerações mantidas", "Em cada diretório."),
+    "pg_restore_test_days": ("Restauração de teste a cada (dias)", ""),
+}
+
+
+def _policy_fields(ceiling_hours) -> dict:
+    """The policy table's rows: label, bounds (an open cutover's ceiling caps the database cadence), default."""
+    fields = {}
+    for key, (minimum, maximum, default, _label) in pg_posture.POLICY_FIELDS.items():
+        if key == "pg_backup_cadence_hours" and ceiling_hours:
+            maximum = min(maximum, ceiling_hours)
+        label, helper = _POLICY_FIELD_TEXT[key]
+        fields[key] = {"label": label, "min": minimum, "max": maximum, "default": min(default, maximum),
+                       "helper": f"De {minimum} a {maximum}. {helper}".strip()}
+    return fields
+
+
 def _database_protection_context(conn) -> dict:
     """The PostgreSQL backup posture as the page shows it (owner: ``app.backup.pg_posture``)."""
-    from app.backup import pg_posture
-
     raw = getattr(conn, "raw_connection", None)
     posture = pg_posture.read(raw) if raw is not None else {"state": "UNREADABLE"}
     if posture["state"] == "UNREADABLE":
@@ -405,15 +425,29 @@ def _database_protection_context(conn) -> dict:
         return {"code": code, "label": label, "css": css}
 
     validation = posture["validation"]
+    policy = posture["policy"]
     return {
         "state": posture["state"],
+        # The administrator's policy (MP-3 A19) and the ceiling an open cutover recorded.
+        "policy": {key: policy[key] for key in pg_posture.POLICY_FIELDS},
+        "policy_fields": _policy_fields(posture["ceiling_hours"]),
+        "policy_configured": policy["configured"],
+        # stored as UTC text (``current_utc_text``): shown in the same local time as every other date here
+        "policy_updated_label": _format_drive_timestamp(
+            str(policy["updated_at"]).replace(" ", "T") + "+00:00" if policy["updated_at"] else ""),
+        "ceiling_hours": posture["ceiling_hours"],
         "cadence_hours": posture["cadence_hours"],
-        "cadence_recorded_at_opening": posture["cadence_source"] == "OPENING",
         "rpo_hours": posture["rpo_hours"],
         "object_cadence_days": posture["object_cadence_hours"] // 24,
+        "restore_test_days": posture["restore_test_days"],
+        "retention_generations": posture["retention_generations"],
         "min_generations": posture["min_generations"],
         "database_status": status(posture["database_status"]),
         "objects_status": status(posture["objects_status"]),
+        "validation_status": status(posture["validation_status"]),
+        "next_generation_due_label": when(posture["next_generation_due"]),
+        "next_object_set_due_label": when(posture["next_object_set_due"]),
+        "next_restore_test_due_label": when(posture["next_restore_test_due"]),
         "latest_generation_label": when(posture["latest_generation_at"]),
         "latest_object_set_label": when(posture["latest_object_set_at"]),
         "validation": None if validation is None else {
@@ -1596,9 +1630,21 @@ def admin_banco_dados_configuracoes():
 
 @admin_required
 def admin_banco_dados_retencao():
-    refused = _refuse_unsupported_sqlite_maintenance()
-    if refused is not None:
-        return refused
+    if not sqlite_maintenance_supported():
+        # MP-3 A19: under PostgreSQL the retention policy is the governed backup policy (frequency,
+        # generations kept, restore-test interval) the operator's runs apply; never a SQLite window.
+        conn = get_db_connection()
+        raw = getattr(conn, "raw_connection", None)
+        ceiling = pg_posture.opening_ceiling(raw) if raw is not None else None
+        try:
+            pg_posture.save_policy(conn, pg_posture.validate_policy(request.form, ceiling_hours=ceiling))
+            conn.commit()
+        except pg_posture.PolicyError as exc:
+            conn.rollback()
+            flash(str(exc), "error")
+            return redirect(url_for("admin_banco_dados"))
+        flash("Política de retenção atualizada com sucesso.", "success")
+        return redirect(url_for("admin_banco_dados"))
     conn = get_db_connection()
     try:
         save_retention_policy(conn, request.form.to_dict())

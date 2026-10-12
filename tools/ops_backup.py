@@ -15,8 +15,9 @@ SEQUENCE (any failure stops the run; nothing is rotated unless every step passed
        (``--objects``; objects are personal data too)
     3. copy the new generation to the off-platform directory and compare every
        file's SHA-256 with the original
-    4. rotate: keep the newest ``--generations`` (at least 2) generations THIS
-       TOOL registered, in both places.
+    4. rotate: keep the newest generations THIS TOOL registered, in both places: as many as
+       the administrator's policy says (Banco de dados, ``app.backup.pg_posture``; at least
+       2), read from the database being backed up; ``--generations`` may keep more, never fewer.
 
 THE GOVERNED RUN (``--ledger-dir``; MP-3 SPEC amendments A15, A16, A17)
     The cutover counts only generations whose provenance was established WHILE they were
@@ -442,8 +443,29 @@ def _ledger_call(call, *args, attempts: int = 5, **kwargs):
     raise Refused("LEDGER_LEDGER_BUSY")  # pragma: no cover - the loop returns or raises
 
 
+def _policy_generations(connect, requested: int | None) -> int:
+    """The generations to keep: the administrator's policy, read from the database this run backs up
+    (its defaults when it cannot be read); an explicit request may keep more, never fewer."""
+    from app.backup import pg_posture
+
+    try:
+        conn = connect()
+        try:
+            policy = pg_posture.read_policy(conn)
+        finally:
+            conn.close()
+    except Exception:
+        policy = pg_posture.default_policy()
+    configured = int(policy["pg_retention_generations"])
+    if requested is None:
+        return configured
+    if requested < configured:
+        raise Refused("GENERATIONS_BELOW_POLICY", f"the administrator's policy keeps {configured} generations")
+    return requested
+
+
 def run_governed(ledger_dir: Path, root: Path, off_platform: Path, *, label: str = "scheduled",
-                 generations: int = MIN_GENERATIONS, objects: bool, baseline: bool = False, runner=_run,
+                 generations: int | None = None, objects: bool, baseline: bool = False, runner=_run,
                  source=None, environ=None, clock=None, python: str | None = None, observer=None) -> dict:
     """Take a generation from the verified PROD source and record it with the provenance of THIS run.
 
@@ -473,6 +495,7 @@ def run_governed(ledger_dir: Path, root: Path, off_platform: Path, *, label: str
     if objects and store_project != expected["prod_project_sha256"]:
         raise Refused("STORE_NOT_THE_PROD_PROJECT", "SUPABASE_URL is not the PROD project's store")
     child_env = dict(env, DATABASE_URL=source.child_url)
+    generations = _policy_generations(source.connect, generations)
     started = now()
     result = run_generation(Path(root), label=label, generations=generations, objects=objects,
                             off_platform=Path(off_platform), runner=runner, python=python, clock=clock,
@@ -588,6 +611,17 @@ def publish(ledger_dir: Path, *, environ=None, source=None, observer=None) -> di
             raise Refused(error.code) from None
         raise Refused("PUBLISH_REFUSED", type(error).__name__) from None
     return dict(published, result="PUBLISHED")
+
+
+def _plain_generations(requested: int | None, environ=None) -> int:
+    """A run outside the ledger reads the policy from ``DATABASE_URL`` (the database it backs up)."""
+    from tools import pg_backup
+
+    env = os.environ if environ is None else environ
+    url = str(env.get(pg_backup.SOURCE_URL_ENV) or "").strip()
+    if not url.startswith(("postgres://", "postgresql://")):
+        return requested if requested is not None else MIN_GENERATIONS
+    return _policy_generations(lambda: pg_backup.connect(url), requested)
 
 
 def _publish_run(root: Path, off_platform: Path, generations: int, started: datetime, finished: datetime,
@@ -761,7 +795,8 @@ def main(argv=None, *, out=None, err=None, runner=_run, source=None) -> int:
         parser.add_argument("--generation", required=True, help="the recorded generation's manifest SHA-256")
     else:
         parser.add_argument("--label", default="scheduled", help="[a-z0-9-], at most 32; never the baseline label")
-        parser.add_argument("--generations", type=int, default=MIN_GENERATIONS)
+        parser.add_argument("--generations", type=int, default=None,
+                            help="keep more generations than the administrator's policy (never fewer)")
         parser.add_argument("--objects", action="store_true", help="also take the object-byte set")
         parser.add_argument("--baseline", action="store_true",
                             help="the cutover baseline (C7, GB1): its own directories, objects, never rotated")
@@ -782,13 +817,14 @@ def main(argv=None, *, out=None, err=None, runner=_run, source=None) -> int:
         elif args.baseline:
             raise Refused("BASELINE_NEEDS_THE_LEDGER", "the cutover baseline is recorded by the governed run")
         else:
+            generations = _plain_generations(args.generations)
             started = datetime.now(timezone.utc)
             result = run_generation(
-                Path(args.root), label=args.label, generations=args.generations, objects=args.objects,
+                Path(args.root), label=args.label, generations=generations, objects=args.objects,
                 off_platform=Path(args.off_platform), runner=runner,
             )
             result["posture"] = _publish_quietly(lambda: _publish_run(
-                Path(args.root), Path(args.off_platform), args.generations, started, datetime.now(timezone.utc),
+                Path(args.root), Path(args.off_platform), generations, started, datetime.now(timezone.utc),
                 result))
     except Refused as refusal:
         detail = f" ({refusal.detail})" if refusal.detail else ""
