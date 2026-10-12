@@ -141,6 +141,48 @@ def test_a_run_outside_the_ledger_window_publishes_its_own_receipt_into_the_data
     assert posture["recent"][0]["governed"] is False
 
 
+def test_a_database_only_run_never_claims_an_object_set_an_earlier_run_registered(database, tmp_path, monkeypatch):
+    """Review finding (A19): the weekly object run stopping must show the object set as late, not current."""
+    from app.backup import pg_posture
+    from tests.mp2_pg_support import adapter
+
+    name, url = database
+    monkeypatch.setenv("DATABASE_URL", url)
+    root, off = tmp_path / "primary", tmp_path / "off"
+    for directory in (root, off):  # an earlier run registered an object set (its bytes are not needed here)
+        directory.mkdir()
+        (directory / ob.REGISTRY_FILE).write_text(json.dumps({"database": [], "objects": ["20261001T000000Z-auto-w"]}),
+                                                  encoding="utf-8")
+    real = ob.verify_generation
+    out, err = io.StringIO(), io.StringIO()
+    monkeypatch.setattr(ob, "verify_generation", lambda r, o, conn=None: _with_old_set(real, r, o))
+    assert ob.main(["--root", str(root), "--off-platform", str(off)], out=out, err=err) == 0, err.getvalue()
+    report = json.loads(out.getvalue())
+    assert report["object_set"] is None and report["posture"]["result"] == "PUBLISHED", report["posture"]
+    conn = adapter(url)
+    try:
+        posture = pg_posture.read(conn.raw_connection)
+    finally:
+        conn.close()
+    assert posture["database_status"] == "CURRENT"
+    assert posture["objects_status"] == "NONE" and posture["recent"][0]["objects"] is False
+
+
+def _with_old_set(real, root, off):
+    """The real verification of the database set, plus the earlier run's registered object set."""
+    registry = json.loads((root / ob.REGISTRY_FILE).read_text(encoding="utf-8"))
+    objects = registry.pop("objects")
+    for directory in (root, off):
+        (directory / ob.REGISTRY_FILE).write_text(json.dumps(dict(registry, objects=[])), encoding="utf-8")
+    try:
+        found = real(root, off)
+    finally:
+        for directory in (root, off):
+            current = json.loads((directory / ob.REGISTRY_FILE).read_text(encoding="utf-8"))
+            (directory / ob.REGISTRY_FILE).write_text(json.dumps(dict(current, objects=objects)), encoding="utf-8")
+    return dict(found, object_set=objects[-1], object_set_digest="e" * 64, object_manifest_sha256="f" * 64)
+
+
 def test_a_refused_publication_never_undoes_the_generation(database, tmp_path, monkeypatch):
     name, url = database
     monkeypatch.setenv("DATABASE_URL", url)

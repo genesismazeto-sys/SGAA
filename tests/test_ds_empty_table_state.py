@@ -38,7 +38,9 @@ NON_COLLECTION_THEADS = {
     # Retention: a configuration grid over the fixed GFS windows (always shown).
     # Provider logs and snapshot history: already rendered only when rows exist
     # ({% if google_backup_logs %} / {% if backups %} with its own .db-note).
-    "admin_banco_dados.html": 4,
+    # MP-3 A19: the PostgreSQL protection card's recent generations, rendered only
+    # when a generation is recorded ({% if protection.recent %}).
+    "admin_banco_dados.html": 5,
     # Per-eixo diagnostic table: already rendered only when the eixo has items,
     # otherwise its own .diag-empty paragraph.
     "admin_diagnostico_atividades_versionadas_view.html": 1,

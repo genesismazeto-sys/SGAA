@@ -591,8 +591,12 @@ def publish(ledger_dir: Path, *, environ=None, source=None, observer=None) -> di
 
 
 def _publish_run(root: Path, off_platform: Path, generations: int, started: datetime, finished: datetime,
-                 environ=None) -> dict:
-    """A run outside the ledger's window publishes its own receipt into the database it backed up."""
+                 result: dict, environ=None) -> dict:
+    """A run outside the ledger's window publishes its own receipt into the database it backed up.
+
+    The receipt names only what THIS run produced (``result``): a database-only run never claims the
+    newest object set an earlier run registered.
+    """
     from app import hosting
     from app.backup import pg_posture
     from tools import pg_backup
@@ -602,13 +606,20 @@ def _publish_run(root: Path, off_platform: Path, generations: int, started: date
     if not url.startswith(("postgres://", "postgresql://")):
         raise pg_posture.PostureError("NO_DATABASE_URL")
     on_disk = verify_generation(root, off_platform)
+    if on_disk["database_set"] != result["database_set"]:
+        raise pg_posture.PostureError("GENERATION_NOT_THIS_RUNS")
     identity = hosting.source_identity_sha256(on_disk["database_source"])
     if identity is None:
         raise pg_posture.PostureError("DATABASE_IDENTITY_UNPROVEN")
+    took_objects = result["object_set"] is not None and on_disk["object_set"] == result["object_set"]
+    if result["object_set"] is not None and not took_objects:
+        raise pg_posture.PostureError("GENERATION_NOT_THIS_RUNS")
     record = pg_posture.run_record(
         generation_at=on_disk["created_at"], manifest_sha256=on_disk["manifest_sha256"],
-        dump_sha256=on_disk["dump_sha256"], source_identity_sha256=identity, object_set_name=on_disk["object_set"],
-        object_set_digest=on_disk["object_set_digest"], object_manifest_sha256=on_disk["object_manifest_sha256"],
+        dump_sha256=on_disk["dump_sha256"], source_identity_sha256=identity,
+        object_set_name=on_disk["object_set"] if took_objects else None,
+        object_set_digest=on_disk["object_set_digest"] if took_objects else None,
+        object_manifest_sha256=on_disk["object_manifest_sha256"] if took_objects else None,
         run_seconds=int((finished - started).total_seconds()), at=_stamp(finished))
 
     conn = pg_backup.connect(url)
@@ -777,7 +788,8 @@ def main(argv=None, *, out=None, err=None, runner=_run, source=None) -> int:
                 off_platform=Path(args.off_platform), runner=runner,
             )
             result["posture"] = _publish_quietly(lambda: _publish_run(
-                Path(args.root), Path(args.off_platform), args.generations, started, datetime.now(timezone.utc)))
+                Path(args.root), Path(args.off_platform), args.generations, started, datetime.now(timezone.utc),
+                result))
     except Refused as refusal:
         detail = f" ({refusal.detail})" if refusal.detail else ""
         err.write(f"ops-backup: refused: {refusal.code}{detail}\n")

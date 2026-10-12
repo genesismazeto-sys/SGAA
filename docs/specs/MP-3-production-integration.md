@@ -431,7 +431,7 @@ PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" de
 | GG2 | first live mirror passes against the institution's Drive (additive; the mirror never deletes) | files removed by hand |
 | GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed everywhere (it writes the opening authorization), then the lift (the governed open deployment carrying `SGAA_OPENING_REFERENCE` = the reference entry's hash, promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | `close` (authorization revoked, write barrier), remove the open deployments and roll back on the ledger's proof while pending (§3.4); after a refused rollback `resume` |
 | GX1 | empty the PROD database or remove unreferenced PROD bucket objects this phase created, before PONR | irreversible by design |
-| GC1 | after the reference and before the PONR: ONE product-contract amendment of the candidate (A19), recorded by `amend --contract-ref`; one grant per amendment | the amendment admits no one by itself; rollback as at C12 |
+| GC1 | at C12 (after the opening), before the PONR: ONE product-contract amendment of the candidate (A19), recorded by `amend --contract-ref`; one grant per amendment | the amendment admits no one by itself; rollback as at C12 |
 | GC2 | at C12, before the PONR: ONE re-opening of the amended candidate under the same opening reference (`authorize-code --contract-ref`); one grant per re-opening | `close` (revokes every authorization of the reference) and the C12 rollback |
 
 User-only acts, never gates the executor holds: creating and revoking credentials (including the DEV
@@ -984,7 +984,7 @@ Executor amendments (consequences of the above; not material beyond what the use
   Microsoft values as required. The guards that encoded the deferral were updated with negative
   controls (`test_cloud_oauth_recovery.py`, `test_ut8_banco_dados_blueprint.py`,
   `test_cloud_provider_card_symmetry_ui_b07.py`). (4) Governed path. Two gates, both before the PONR:
-  GC1, after the reference, records ONE product-contract amendment (`amend --contract-ref`: it descends
+  GC1, at C12, records ONE product-contract amendment (`amend --contract-ref`: it descends
   from the effective commit and changes at least one deployed file; the A18 path without GC1 keeps its
   "added compliance pages only" guard); GC2, at C12, re-opens the amended candidate under the SAME
   opening reference (`authorize-code --contract-ref`: a recorded open deployment of the amended code,
@@ -996,7 +996,16 @@ Executor amendments (consequences of the above; not material beyond what the use
   rollback; the PONR is checked by the fingerprint; the amendment is deployed closed and each capability
   is proven there on the product path (the published posture on the page; Microsoft connected, tested,
   and one real e-mail through the password-recovery path, which writes only the ephemeral token table);
-  the fingerprint is compared again; then GC2. Evidence: section 17.
+  the fingerprint is compared again; then GC2. (6) Review: a fresh-context same-family review of the first
+  candidate returned FAIL on one material finding -- a database-only run outside the window claimed an
+  object set an earlier run registered, so a stopped weekly object run would still read "current" --
+  fixed (a run publishes only what it produced) with a test; its non-material findings were fixed too:
+  the reading never raises on a self-hashed row of another shape, the retention shown is the newest
+  generation's own observation in its exact shape, the cadence comes only from an opening that names
+  this database, GC1 exists only at C12 (at C11 an amended candidate could be neither opened nor
+  re-opened), and the re-opening observes a writable database as `open` does. `MS_*` stay a product
+  requirement proven by the runbook, not a startup blocker. The R3 cross-family review is the user's.
+  Evidence: section 17.
 
 ## 17. Closure
 

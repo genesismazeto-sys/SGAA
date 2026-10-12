@@ -148,9 +148,9 @@ def _parse(moment) -> datetime | None:
         return None
 
 
-def _cadence(cursor) -> tuple[int, str]:
-    """The cadence recorded at the opening (the ledger's reference entry in ``sgaa_cutover.opening``),
-    else the policy default."""
+def _cadence(cursor, identity) -> tuple[int, str]:
+    """The cadence recorded at the opening (the ledger's reference entry in ``sgaa_cutover.opening``,
+    naming this database), else the policy default."""
     try:
         if not cursor.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
             return DEFAULT_CADENCE_HOURS, "POLICY"
@@ -158,7 +158,8 @@ def _cadence(cursor) -> tuple[int, str]:
             entry = json.loads(text)
             body = dict(entry)
             claimed = body.pop("hash", None)
-            if entry.get("type") == "reference" and hosting.ledger_entry_hash(body) == claimed:
+            if entry.get("type") == "reference" and hosting.ledger_entry_hash(body) == claimed \
+                    and identity and entry.get("database_identity_sha256") == identity:
                 hours = entry.get("backup_cadence_hours")
                 if isinstance(hours, int) and 1 <= hours <= 24:
                     return hours, "OPENING"
@@ -186,11 +187,41 @@ def read(raw, *, now: datetime | None = None) -> dict:
     try:
         with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
             identity = hosting.source_identity_sha256(hosting.database_source(raw))
-            cadence, cadence_source = _cadence(cursor)
+            cadence, cadence_source = _cadence(cursor, identity)
             stored = cursor.execute(SELECT_SQL).fetchall() if cursor.execute(EXISTS_SQL).fetchone()[0] else []
+        return summarize(stored, identity=identity, cadence_hours=cadence, cadence_source=cadence_source, now=now)
     except Exception:
         return {"state": "UNREADABLE"}
-    return summarize(stored, identity=identity, cadence_hours=cadence, cadence_source=cadence_source, now=now)
+
+
+def _count(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 10_000
+
+
+def _retention(note):
+    """The retention a run observed, only in its exact shape (else nothing is claimed)."""
+    try:
+        value = json.loads(note) if note else None
+        kept = value["kept"]
+        if set(value) == {"generations_policy", "kept"} and _count(value["generations_policy"]) \
+                and set(kept) == {"primary", "off_platform"} \
+                and all(set(kept[d]) == {"database", "objects"} and _count(kept[d]["database"])
+                        and _count(kept[d]["objects"]) for d in kept):
+            return value
+    except (TypeError, ValueError, KeyError, AttributeError):
+        pass
+    return None
+
+
+def _well_formed(entry) -> bool:
+    """The fields the posture reads, in the shapes the tools write (a hand-made row is never shown)."""
+    digest = entry.get("manifest_sha256")
+    if not (isinstance(digest, str) and len(digest) == 64):
+        return False
+    if entry["type"] == BACKUP_TYPE:
+        return _parse(entry.get("generation_at")) is not None and isinstance(entry.get("object_set_name"), str)
+    return _parse(entry.get("at")) is not None and _count(entry.get("tables_verified")) \
+        and _count(entry.get("objects_verified"))
 
 
 def summarize(stored, *, identity, cadence_hours: int, cadence_source: str, now: datetime) -> dict:
@@ -202,32 +233,22 @@ def summarize(stored, *, identity, cadence_hours: int, cadence_source: str, now:
         except (TypeError, ValueError):
             ignored += 1
             continue
-        if not _intact(entry) or not identity or entry.get("source_identity_sha256") != identity:
+        if not _intact(entry) or not identity or entry.get("source_identity_sha256") != identity \
+                or not _well_formed(entry):
             ignored += 1
             continue
         if entry["type"] == BACKUP_TYPE:
-            moment = _parse(entry.get("generation_at"))
-            if moment is None:
-                ignored += 1
-                continue
-            try:
-                annotation = json.loads(note) if note else None
-            except (TypeError, ValueError):
-                annotation = None
-            generations.append((moment, entry, annotation))
+            generations.append((_parse(entry["generation_at"]), entry, note))
         else:
-            moment = _parse(entry.get("at"))
-            if moment is None:
-                ignored += 1
-                continue
-            validations.append((moment, entry))
+            validations.append((_parse(entry["at"]), entry))
     generations.sort(key=lambda item: item[0], reverse=True)
     validations.sort(key=lambda item: item[0], reverse=True)
     with_objects = [g for g in generations if g[1].get("object_set_name") not in (None, "NONE")]
     by_manifest = {g[1]["manifest_sha256"]: g[0] for g in generations}
     latest = generations[0][0] if generations else None
     latest_objects = with_objects[0][0] if with_objects else None
-    retention = next((g[2] for g in generations if isinstance(g[2], dict)), None)
+    # Only the newest generation's own observation: an older run's counts are never shown as current.
+    retention = _retention(generations[0][2]) if generations else None
     validation = None
     if validations:
         moment, entry = validations[0]

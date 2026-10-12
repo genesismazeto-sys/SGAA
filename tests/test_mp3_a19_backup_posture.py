@@ -107,12 +107,34 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     assert len(recent[0]["manifest_short"]) == 12
 
 
-def test_retention_comes_from_the_newest_run_that_observed_it():
+def test_retention_is_only_the_newest_generations_own_observation_in_its_exact_shape():
     note = {"generations_policy": 2, "kept": {"primary": {"database": 2, "objects": 1},
                                               "off_platform": {"database": 2, "objects": 1}}}
-    posture = _summary(_rows(_generation(1), note=note) + _rows(_generation(30)))
-    assert posture["retention"] == note
-    assert _summary(_rows(_generation(1)))["retention"] is None
+    assert _summary(_rows(_generation(1), note=note) + _rows(_generation(30)))["retention"] == note
+    # an older run's counts are never shown as the current rotation
+    assert _summary(_rows(_generation(1)) + _rows(_generation(30), note=note))["retention"] is None
+    for bad in ({"generations_policy": 2}, dict(note, extra=1), {"generations_policy": "2", "kept": note["kept"]},
+                {"generations_policy": 2, "kept": {"primary": {"database": -1, "objects": 0},
+                                                   "off_platform": {"database": 2, "objects": 0}}}):
+        assert _summary(_rows(_generation(1), note=bad))["retention"] is None, bad
+    assert _summary([(_rows(_generation(1))[0][0], "not json")])["retention"] is None
+
+
+def test_a_self_hashed_row_in_another_shape_is_ignored_never_an_error():
+    def hashed(body):
+        return dict(body, hash=hosting.ledger_entry_hash(body))
+
+    rows = _rows(
+        hashed({"type": "backup", "source_identity_sha256": IDENTITY, "generation_at": _stamp(NOW)}),  # no manifest
+        hashed({"type": "backup", "source_identity_sha256": IDENTITY, "manifest_sha256": "1" * 64,
+                "generation_at": _stamp(NOW), "object_set_name": 7}),
+        hashed({"type": "restore", "source_identity_sha256": IDENTITY, "manifest_sha256": "1" * 64,
+                "at": _stamp(NOW), "tables_verified": "many", "objects_verified": 1}),
+        hashed({"type": "restore", "source_identity_sha256": IDENTITY, "manifest_sha256": "1" * 64,
+                "at": "yesterday", "tables_verified": 1, "objects_verified": 1}),
+    )
+    posture = _summary(rows)
+    assert posture["state"] == "EMPTY" and posture["validation"] is None and posture["ignored"] == 4
 
 
 def test_an_operator_run_outside_the_window_is_a_self_hashed_receipt_of_the_same_shape():
@@ -204,7 +226,15 @@ def test_real_pg_published_records_are_read_back_outside_public_and_without_chan
 @real_pg
 def test_real_pg_the_cadence_is_the_one_the_opening_recorded(pg_database):
     conn = pg_database
-    reference = {"type": "reference", "backup_cadence_hours": 6, "rpo_hours": 6, "seq": 45, "prev": "0" * 64}
+    reference = {"type": "reference", "backup_cadence_hours": 6, "rpo_hours": 6, "seq": 45, "prev": "0" * 64,
+                 "database_identity_sha256": OTHER_IDENTITY}
+    reference["hash"] = hosting.ledger_entry_hash(reference)
+    for statement in hosting.OPENING_DDL:
+        conn.execute(statement)
+    conn.execute(hosting.OPENING_INSERT_SQL, (reference["hash"], "7" * 64, json.dumps(reference, sort_keys=True)))
+    assert pg_posture.read(conn)["cadence_source"] == "POLICY"  # another database's opening decides nothing
+    conn.execute("DELETE FROM sgaa_cutover.opening")
+    reference = dict({k: v for k, v in reference.items() if k != "hash"}, database_identity_sha256=_identity(conn))
     reference["hash"] = hosting.ledger_entry_hash(reference)
     for statement in hosting.OPENING_DDL:
         conn.execute(statement)

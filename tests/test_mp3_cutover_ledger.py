@@ -586,11 +586,13 @@ def test_the_amended_candidate_reopens_only_under_its_own_gc2_and_its_own_author
     assert ledger.status(directory)["state"] == "C12"  # the PONR is still the first business write
 
 
-def test_a_reopening_needs_a_contract_amendment_no_barrier_and_the_opening(directory, observer):
+def test_contract_gates_follow_the_opening_not_only_the_reference(directory, observer):
+    # At C11 a reference exists but no lift: an amended candidate could not be opened by `open` (it
+    # requires the reference's code) nor re-opened (GC2 needs C12), so neither gate is granted there.
     _at_c11_with_generation(directory, observer)
     ls.take(directory, observer)
-    ledger.grant(directory, "GC1", "U-GC1-c11")  # an amendment may follow the reference at C11
-    assert _code(ledger.grant, directory, "GC2", "U-GC2-c11") == "OUT_OF_ORDER"  # a re-opening follows C12
+    assert _code(ledger.grant, directory, "GC1", "U-GC1-c11") == "OUT_OF_ORDER"
+    assert _code(ledger.grant, directory, "GC2", "U-GC2-c11") == "OUT_OF_ORDER"
 
 
 def test_a_reopening_refuses_without_an_amendment_and_under_the_barrier(directory, observer):
@@ -602,6 +604,22 @@ def test_a_reopening_refuses_without_an_amendment_and_under_the_barrier(director
     observer.admission_state, observer.scheduler = "closed", "disabled"
     ledger.close(directory, observer=observer)
     assert _code(ledger.authorize_code, directory, LIFT, observer=observer, contract_ref="U-GC2") == "BARRIER_APPLIED"
+
+
+def test_a_reopening_refuses_under_a_barrier_close_applied_but_could_not_record(
+        directory, observer, amendment_repo):
+    repo, base, changes = amendment_repo["repo"], amendment_repo["base"], amendment_repo["changes_css"]
+    taken = _to_c12_with_the_repo_commit(directory, observer, base)
+    ledger.grant(directory, "GC1", "U-GC1")
+    code = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1")["code_sha256"]
+    reopened = "dpl_" + "R" * 24
+    ls.deploy(directory, observer, reopened, admission="OPEN", opening_reference=taken["hash"], commit=changes,
+              code=code, observed_admission="CLOSED")
+    ledger.grant(directory, "GC2", "U-GC2")
+    observer.barrier = {"setting": True}  # the role default is read-only, but no barrier entry exists
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer,
+                 contract_ref="U-GC2") == "BARRIER_IN_FORCE"
+    assert not observer.authorization_valid(taken["hash"], code, PLATFORM_PROJECT)
 
 
 def test_contract_gates_never_exist_after_the_ponr(directory):
