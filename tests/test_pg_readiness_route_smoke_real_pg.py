@@ -799,6 +799,17 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
         assert posture["recent"][0]["destinations"] == ["google"]
         page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
         assert "Backup agora" in page and "Gerar backup agora" in page
+        # "Baixar snapshot": the original download button, sent to the drive's own download address
+        manifest = posture["recent"][0]["manifest"]
+        assert posture["recent"][0]["files"] == {"google": "new"}
+        assert f'generation={manifest}' in page and 'data-lucide="download"' in page
+        monkeypatch.setattr(cloud_drives, "google_download_link",
+                            lambda token, file_id: f"https://drive.example.invalid/{file_id}")
+        response = admin_client.get(f"/admin/banco-dados/download?generation={manifest}")
+        assert response.status_code == 302 and response.headers["Location"] == "https://drive.example.invalid/new"
+        response = admin_client.get("/admin/banco-dados/download?generation=" + "0" * 64)
+        flashes = _pop_flashes(admin_client)
+        assert response.status_code == 302 and ("error", "Snapshot solicitado não está disponível para download.") in flashes
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
 

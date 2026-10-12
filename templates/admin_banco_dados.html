@@ -1288,7 +1288,7 @@
       </p>
     {% endif %}
     {% if cloud_credentials_environment_managed %}
-      <p class="db-note" role="status">As credenciais do aplicativo e o endereço público são definidos pelo ambiente de hospedagem; esta tela apenas conecta e desconecta contas.</p>
+      <p class="db-note" role="status" style="margin-top:14px;">As credenciais do aplicativo e o endereço público são definidos pelo ambiente de hospedagem; esta tela apenas conecta e desconecta contas.</p>
     {% elif cloud_store_unavailable %}
       <p class="db-cloud-store-warning">O armazenamento seguro desta máquina não pôde ser aberto. Nada foi apagado: as credenciais existentes continuam guardadas e a configuração fica indisponível até que esta instalação seja aberta pela conta Windows usada na instalação.</p>
     {% endif %}
@@ -1673,6 +1673,7 @@
               <th>Arquivos do armazenamento</th>
               <th>Cópia fora da plataforma</th>
               <th>Identificador</th>
+              <th class="db-col-actions">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -1683,6 +1684,19 @@
                 <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
                 <td>{% if item.snapshot %}{{ item.destinations|map('replace', 'google', 'Google Drive')|map('replace', 'onedrive', 'OneDrive')|join(', ') or '—' }}{% else %}{{ 'Verificada' if item.off_platform else '—' }}{% endif %}</td>
                 <td><code>{{ item.manifest_short }}</code></td>
+                <td class="db-col-actions">
+                  <div class="db-actions-cell">
+                    {% if item.files %}
+                    <a class="btn db-icon-btn" href="{{ url_for('admin_banco_dados_download', generation=item.manifest) }}" title="Baixar snapshot" aria-label="Baixar snapshot">
+                      <i class="lucide" data-lucide="download"></i>
+                    </a>
+                    {% else %}
+                    <span class="btn db-icon-btn" aria-disabled="true" title="Cópia guardada na máquina de operação (diretório de backups do operador)" style="opacity:.45;cursor:not-allowed;">
+                      <i class="lucide" data-lucide="download"></i>
+                    </span>
+                    {% endif %}
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

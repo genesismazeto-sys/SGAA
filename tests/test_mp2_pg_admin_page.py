@@ -116,7 +116,6 @@ ROUTES = (
         "cloud_backup_dir": str(tmp / "must-not-be-created" / "cloud"),
         "cloud_sync_interval_seconds": "600",
     }),
-    ("get", "/admin/banco-dados/download?manifest_path=nao-existe.json", lambda tmp: None),
     ("post", "/admin/banco-dados/excluir", lambda tmp: {"manifest_path": "nao-existe.json"}),
 )
 
@@ -124,7 +123,9 @@ ROUTES = (
 # MP-3 A19: ``retencao`` is no longer refused under PostgreSQL -- it administers the PostgreSQL backup
 # policy (``app.backup.pg_posture``; the real-PostgreSQL lane is
 # ``test_pg_readiness_route_smoke_real_pg.py::test_r8_the_administrator_sets_the_postgresql_backup_policy``).
-@pytest.mark.parametrize("method, url, payload", ROUTES, ids=["configuracoes", "download", "excluir"])
+# MP-3 A19: ``download`` serves the cloud copy of a "Gerar backup agora" snapshot under PostgreSQL
+# (real-PostgreSQL lane: ``test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder``).
+@pytest.mark.parametrize("method, url, payload", ROUTES, ids=["configuracoes", "excluir"])
 def test_pg_file_backup_routes_refuse_and_write_nothing(
     backup_env, admin_client, pg_backend, tmp_path, monkeypatch, method, url, payload
 ):

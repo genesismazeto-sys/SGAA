@@ -12,6 +12,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import tempfile
@@ -1857,7 +1858,7 @@ def _postgres_backup_now():
         flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
         return redirect(url_for("admin_banco_dados"))
     started = time.monotonic()
-    sent, failed = [], []
+    sent, failed, uploaded = [], [], {}
     with tempfile.TemporaryDirectory(prefix="sgaa-pg-snapshot-") as scratch:
         try:
             snapshot = pg_snapshot.create(scratch)
@@ -1876,6 +1877,8 @@ def _postgres_backup_now():
                     conn, provider, zip_path=snapshot["path"], file_name=snapshot["file_name"],
                     folder_name=_PG_SNAPSHOT_DEFAULT_FOLDER, folder_id=folder_id, drive_id=drive_id,
                 )
+                if result.get("file_id"):
+                    uploaded[provider] = str(result["file_id"])
             except Exception as exc:
                 logger.warning("event=pg_snapshot_upload_failed provider=%s error=%s", provider, type(exc).__name__)
                 failed.append(label)
@@ -1908,6 +1911,7 @@ def _postgres_backup_now():
             object_set_name=None, object_set_digest=None, object_manifest_sha256=None,
             run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
             kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
+            files=uploaded,
         )
         try:
             pg_posture.publish(raw, [record])
@@ -1993,11 +1997,44 @@ def admin_banco_dados_backup():
         flash("Backup local criado. Nenhum destino em nuvem está configurado para receber backups.", "info")
     return redirect(url_for("admin_banco_dados"))
 
+def _postgres_download():
+    """MP-3 A19: "Baixar" under PostgreSQL -- the cloud copy of a "Gerar backup agora" snapshot.
+
+    The browser is sent to the drive's own download address (Graph's pre-authorized URL; Google's
+    download link for the signed-in account), so the file never passes through the web function.
+    """
+    from app import cloud_drives as _cd
+
+    manifest = str(request.args.get("generation") or "").strip().lower()
+    conn = get_db_connection()
+    raw = getattr(conn, "raw_connection", None)
+    posture = pg_posture.read(raw) if raw is not None and re.fullmatch(r"[0-9a-f]{64}", manifest) else {}
+    files = next((item["files"] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
+    if not files:
+        flash("Snapshot solicitado não está disponível para download.", "error")
+        return redirect(url_for("admin_banco_dados"))
+    for provider in ("google", "onedrive"):
+        if provider not in files:
+            continue
+        try:
+            token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
+            if provider == "google":
+                address = _cd.google_download_link(token, files[provider])
+            else:
+                address = _cd.onedrive_download_url(token, files[provider])
+        except Exception as exc:
+            logger.warning("event=pg_snapshot_download_failed provider=%s error=%s", provider, type(exc).__name__)
+            continue
+        if address:
+            return redirect(address)
+    flash("Arquivo do banco para download não foi encontrado.", "error")
+    return redirect(url_for("admin_banco_dados"))
+
+
 @admin_required
 def admin_banco_dados_download():
-    refused = _refuse_unsupported_sqlite_maintenance()
-    if refused is not None:
-        return refused
+    if not sqlite_maintenance_supported():
+        return _postgres_download()
     manifest_path = _resolve_allowed_backup_manifest_path(request.args.get("manifest_path") or "")
     if not manifest_path or not os.path.exists(manifest_path):
         flash("Snapshot solicitado não está disponível para download.", "error")

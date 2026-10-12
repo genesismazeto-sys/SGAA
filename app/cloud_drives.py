@@ -228,6 +228,13 @@ def google_delete_file(token: str, file_id: str) -> None:
     _api(f"{_GOOGLE_FILES}/{file_id}", method="DELETE", token=token)
 
 
+def google_download_link(token: str, file_id: str) -> str:
+    """The file's download link (served to the Google account signed in on the browser)."""
+    url = f"{_GOOGLE_FILES}/{urllib.parse.quote(file_id, safe='')}?fields=webContentLink"
+    result = _api(url, token=token) or {}
+    return str(result.get("webContentLink") or "")
+
+
 def google_list_folder_files(token: str, folder_id: str, name_prefix: str) -> list[dict]:
     """Files directly in the folder ``folder_id`` whose name starts with ``name_prefix``: {id, name}."""
     # Filtered here, not by Drive's word-based ``contains``: only exact name prefixes ever qualify.
@@ -325,6 +332,13 @@ def onedrive_list_db_files(token: str, dest_folder: str) -> list[dict]:
 
 def onedrive_delete_file(token: str, item_id: str) -> None:
     _api(f"{_GRAPH}/me/drive/items/{item_id}", method="DELETE", token=token)
+
+
+def onedrive_download_url(token: str, item_id: str) -> str:
+    """Graph's short-lived, pre-authorized download address of a file (no token in the browser)."""
+    url = f"{_GRAPH}/me/drive/items/{urllib.parse.quote(item_id, safe='')}?$select=id,@microsoft.graph.downloadUrl"
+    result = _api(url, token=token) or {}
+    return str(result.get("@microsoft.graph.downloadUrl") or "")
 
 
 def _onedrive_drive_base(drive_id: str | None) -> str:

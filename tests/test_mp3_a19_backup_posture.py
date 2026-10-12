@@ -104,8 +104,8 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "destinations", "objects", "off_platform",
-                              "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "destinations", "objects",
+                              "off_platform", "governed", "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 

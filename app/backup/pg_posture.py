@@ -37,6 +37,7 @@ VALUES
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from app import hosting
@@ -198,7 +199,8 @@ def opening_ceiling(raw) -> int | None:
 def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, source_identity_sha256: str,
                object_set_name: str | None, object_set_digest: str | None, object_manifest_sha256: str | None,
                run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
-               off_platform: str = "VERIFIED", destinations: tuple[str, ...] = ()) -> dict:
+               off_platform: str = "VERIFIED", destinations: tuple[str, ...] = (),
+               files: dict | None = None) -> dict:
     """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
     no chain): an ``ops_backup`` run (``OPERATOR_RUN``) or "Gerar backup agora" (``SNAPSHOT``,
     ``HOSTED_RUN``, the cloud drives that received it)."""
@@ -212,7 +214,21 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
     }
     if destinations:
         body["destinations"] = sorted(destinations)
+    if files:
+        body["files"] = {provider: str(file_id) for provider, file_id in sorted(files.items())}
     return dict(body, hash=hosting.ledger_entry_hash(body))
+
+
+_FILE_ID = re.compile(r"[A-Za-z0-9_.!-]{1,200}")
+
+
+def _files(entry) -> dict:
+    """The cloud file of a snapshot per drive, only in the shape the run wrote."""
+    files = entry.get("files")
+    if not isinstance(files, dict):
+        return {}
+    return {provider: file_id for provider, file_id in files.items()
+            if provider in ("google", "onedrive") and isinstance(file_id, str) and _FILE_ID.fullmatch(file_id)}
 
 
 def _intact(entry) -> bool:
@@ -416,6 +432,8 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
         "recent": [
             {"generation_at": moment, "baseline": entry.get("kind") == "BASELINE",
              "snapshot": entry.get("kind") == SNAPSHOT_KIND,
+             "manifest": str(entry.get("manifest_sha256") or ""),
+             "files": _files(entry),
              "destinations": [d for d in (entry.get("destinations") or []) if d in ("google", "onedrive")],
              "objects": entry.get("object_set_name") not in (None, "NONE"),
              "off_platform": entry.get("off_platform") == "VERIFIED",
