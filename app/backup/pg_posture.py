@@ -200,7 +200,7 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
                object_set_name: str | None, object_set_digest: str | None, object_manifest_sha256: str | None,
                run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
                off_platform: str = "VERIFIED", destinations: tuple[str, ...] = (),
-               files: dict | None = None) -> dict:
+               files: dict | None = None, exports: dict | None = None) -> dict:
     """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
     no chain): an ``ops_backup`` run (``OPERATOR_RUN``) or "Gerar backup agora" (``SNAPSHOT``,
     ``HOSTED_RUN``, the cloud drives that received it)."""
@@ -216,15 +216,17 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
         body["destinations"] = sorted(destinations)
     if files:
         body["files"] = {provider: str(file_id) for provider, file_id in sorted(files.items())}
+    if exports:
+        body["exports"] = {provider: str(file_id) for provider, file_id in sorted(exports.items())}
     return dict(body, hash=hosting.ledger_entry_hash(body))
 
 
 _FILE_ID = re.compile(r"[A-Za-z0-9_.!-]{1,200}")
 
 
-def _files(entry) -> dict:
-    """The cloud file of a snapshot per drive, only in the shape the run wrote."""
-    files = entry.get("files")
+def _files(entry, key="files") -> dict:
+    """The cloud file of a snapshot (or of its registers) per drive, only in the shape the run wrote."""
+    files = entry.get(key)
     if not isinstance(files, dict):
         return {}
     return {provider: file_id for provider, file_id in files.items()
@@ -434,6 +436,7 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
              "snapshot": entry.get("kind") == SNAPSHOT_KIND,
              "manifest": str(entry.get("manifest_sha256") or ""),
              "files": _files(entry),
+             "exports": _files(entry, "exports"),
              "destinations": [d for d in (entry.get("destinations") or []) if d in ("google", "onedrive")],
              "objects": entry.get("object_set_name") not in (None, "NONE"),
              "off_platform": entry.get("off_platform") == "VERIFIED",

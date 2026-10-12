@@ -1858,7 +1858,7 @@ def _postgres_backup_now():
         flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
         return redirect(url_for("admin_banco_dados"))
     started = time.monotonic()
-    sent, failed, uploaded = [], [], {}
+    sent, failed, uploaded, exported = [], [], {}, {}
     with tempfile.TemporaryDirectory(prefix="sgaa-pg-snapshot-") as scratch:
         try:
             snapshot = pg_snapshot.create(scratch)
@@ -1879,6 +1879,16 @@ def _postgres_backup_now():
                 )
                 if result.get("file_id"):
                     uploaded[provider] = str(result["file_id"])
+                try:  # the readable registers travel beside the database copy, into the same folder
+                    registers = _cloud_connections.upload_backup_zip(
+                        conn, provider, zip_path=snapshot["registers_path"],
+                        file_name=snapshot["registers_file_name"], folder_name=_PG_SNAPSHOT_DEFAULT_FOLDER,
+                        folder_id=folder_id, drive_id=drive_id,
+                    )
+                    if registers.get("file_id"):
+                        exported[provider] = str(registers["file_id"])
+                except Exception as exc:
+                    logger.warning("event=pg_registers_upload_failed provider=%s error=%s", provider, type(exc).__name__)
             except Exception as exc:
                 logger.warning("event=pg_snapshot_upload_failed provider=%s error=%s", provider, type(exc).__name__)
                 failed.append(label)
@@ -1895,13 +1905,18 @@ def _postgres_backup_now():
                 token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
                 if provider == "google":
                     landed = str(result.get("folder_id") or folder_id or "")
-                    listed = _cd.google_list_folder_files(token, landed, pg_snapshot.SNAPSHOT_PREFIX) if landed else []
-                    pg_snapshot.prune(listed, keep, lambda file_id: _cd.google_delete_file(token, file_id))
+                    for prefix_name, pattern in ((pg_snapshot.SNAPSHOT_PREFIX, pg_snapshot.SNAPSHOT_NAME),
+                                                 (pg_snapshot.REGISTERS_PREFIX, pg_snapshot.REGISTERS_NAME)):
+                        listed = _cd.google_list_folder_files(token, landed, prefix_name) if landed else []
+                        pg_snapshot.prune(listed, keep, lambda file_id: _cd.google_delete_file(token, file_id),
+                                          pattern=pattern)
                 else:
                     listed = _cd.onedrive_list_folder_children(token, folder_id=folder_id, drive_id=drive_id,
                                                                folder_path=_PG_SNAPSHOT_DEFAULT_FOLDER)
-                    pg_snapshot.prune(listed, keep,
-                                      lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id))
+                    for pattern in (pg_snapshot.SNAPSHOT_NAME, pg_snapshot.REGISTERS_NAME):
+                        pg_snapshot.prune(listed, keep,
+                                          lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id),
+                                          pattern=pattern)
             except Exception as exc:
                 logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
     if sent and raw is not None:
@@ -1911,7 +1926,7 @@ def _postgres_backup_now():
             object_set_name=None, object_set_digest=None, object_manifest_sha256=None,
             run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
             kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
-            files=uploaded,
+            files=uploaded, exports=exported,
         )
         try:
             pg_posture.publish(raw, [record])
@@ -2006,10 +2021,11 @@ def _postgres_download():
     from app import cloud_drives as _cd
 
     manifest = str(request.args.get("generation") or "").strip().lower()
+    key = "exports" if request.args.get("kind") == "registros" else "files"
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
     posture = pg_posture.read(raw) if raw is not None and re.fullmatch(r"[0-9a-f]{64}", manifest) else {}
-    files = next((item["files"] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
+    files = next((item[key] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
     if not files:
         flash("Snapshot solicitado não está disponível para download.", "error")
         return redirect(url_for("admin_banco_dados"))

@@ -22,10 +22,13 @@ SAFETY
 """
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import os
 import re
 import sqlite3
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +40,17 @@ SNAPSHOT_PREFIX = "sgaa-pg-snapshot-"
 SNAPSHOT_SUFFIX = ".db"
 #: Exactly the names ``create`` writes: a renamed or hand-made copy is never pruned.
 SNAPSHOT_NAME = re.compile(r"sgaa-pg-snapshot-\d{8}T\d{6}Z\.db")
+#: The readable copy of the registers written beside each snapshot (CSV files in a ZIP).
+REGISTERS_PREFIX = "sgaa-registros-"
+REGISTERS_NAME = re.compile(r"sgaa-registros-\d{8}T\d{6}Z\.zip")
+#: Never in the readable copy: credentials, single-use links, OAuth tokens, machine and transient state,
+#: and the image bytes (a register keeps its row; a picture is not a register).
+_NOT_REGISTERS = frozenset({
+    "schema_migrations", "usuario_credenciais", "senha_tokens", "configuracoes_backup", "cloud_accounts",
+    "backup_logs", "cloud_drive_settings", "storage_upload_intents", "storage_worker_status",
+    "auth_throttle_events", "admin_import_previews", "usuarios_foto", "alunos_foto", "reportes_captura",
+})
+_NOT_REGISTER_COLUMNS = {"usuarios": frozenset({"senha"})}
 
 
 class SnapshotError(Exception):
@@ -142,21 +156,60 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
     if identity is None:
         path.unlink(missing_ok=True)
         raise SnapshotError("DATABASE_IDENTITY_UNPROVEN")
+    registers = _write_registers(Path(directory) / f"{REGISTERS_PREFIX}{stamp}.zip", copied, now)
     return {
+        "registers_path": str(registers), "registers_file_name": registers.name,
         "path": str(path), "file_name": path.name, "sha256": _sha256(path), "size": os.path.getsize(path),
         "generation_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tables": len(copied),
         "rows": sum(len(rows) for rows in copied.values()), "source_identity_sha256": identity,
     }
 
 
-def prune(listed: list[dict], keep: int, delete) -> list[str]:
+def _cell(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return ""
+    return str(value)
+
+
+def _write_registers(path: Path, copied: dict, now: datetime) -> Path:
+    """The registers as CSV files (``;``, UTF-8 with BOM: they open in Excel) in one ZIP, from the
+    same snapshot as the database file.  Secrets and machine state are never written."""
+    summary = []
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for table, rows in copied.items():
+            if table in _NOT_REGISTERS:
+                continue
+            columns = pathb._columns(table)
+            hidden = _NOT_REGISTER_COLUMNS.get(table, frozenset())
+            keep = [i for i, name in enumerate(columns) if name not in hidden]
+            buffer = io.StringIO()
+            writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+            writer.writerow([columns[i] for i in keep])
+            for row in rows:
+                writer.writerow([_cell(row[i]) for i in keep])
+            archive.writestr(f"{table}.csv", "\ufeff" + buffer.getvalue())
+            summary.append(f"{table}: {len(rows)} registro(s)")
+        archive.writestr("LEIA-ME.txt", "\ufeff" + "\r\n".join([
+            "SGAA - registros exportados",
+            f"Gerado em {now.strftime('%Y-%m-%d %H:%M:%S')} UTC, da mesma cópia do banco do arquivo "
+            f"sgaa-pg-snapshot-{now.strftime('%Y%m%dT%H%M%SZ')}.db.",
+            "Um arquivo CSV por cadastro (separador ';', UTF-8). Senhas, credenciais, tokens e imagens não são incluídos.",
+            "",
+            *summary,
+        ]))
+    return path
+
+
+def prune(listed: list[dict], keep: int, delete, *, pattern=SNAPSHOT_NAME) -> list[str]:
     """Delete all but the newest ``keep`` snapshots among ``listed`` (``{"id", "name", "_ts"}``).
 
     Only names carrying ``SNAPSHOT_PREFIX`` are candidates; anything else in the folder is never
     deleted.  The newest is decided by the stamp in the name (the provider's dates are ignored).
     """
     ours = sorted((item for item in listed
-                   if SNAPSHOT_NAME.fullmatch(str(item.get("name") or "")) and item.get("id")),
+                   if pattern.fullmatch(str(item.get("name") or "")) and item.get("id")),
                   key=lambda item: item["name"], reverse=True)
     removed = []
     for item in ours[max(int(keep), 1):]:
@@ -165,4 +218,5 @@ def prune(listed: list[dict], keep: int, delete) -> list[str]:
     return removed
 
 
-__all__ = ["SNAPSHOT_NAME", "SNAPSHOT_PREFIX", "SnapshotError", "create", "prune"]
+__all__ = ["REGISTERS_NAME", "REGISTERS_PREFIX", "SNAPSHOT_NAME", "SNAPSHOT_PREFIX", "SnapshotError", "create",
+           "prune"]

@@ -744,11 +744,22 @@ def test_r8_an_open_cutover_caps_the_database_cadence_at_the_one_it_recorded(env
 
 
 
-def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, *, folder_id="chosen-folder"):
+def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, *, folder_id="chosen-folder",
+                      registers=None):
     import sqlite3
     from pathlib import Path
 
+    registers = [] if registers is None else registers
+
     def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None):
+        import zipfile
+
+        if file_name.endswith(".zip"):
+            with zipfile.ZipFile(zip_path) as archive:
+                assert "alunos.csv" in archive.namelist() and "usuario_credenciais.csv" not in archive.namelist()
+            registers.append((provider, file_name, folder_id))
+            remote.append({"id": "new-csv", "name": file_name})
+            return {"file_id": "new-csv", "file_name": file_name, "folder_id": folder_id or "default-folder"}
         lite = sqlite3.connect(zip_path)
         try:
             assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
@@ -781,7 +792,9 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
     uploads, deleted = [], []
     remote = [{"id": f"old-{i}", "name": f"sgaa-pg-snapshot-2026100{i}T000000Z.db"} for i in range(1, 5)]
     remote += [{"id": "legacy", "name": "sgaa_backup_legacy.db"}, {"id": "copy", "name": "sgaa-pg-snapshot-copia.db"}]
-    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted)
+    remote += [{"id": f"csv-{i}", "name": f"sgaa-registros-2026100{i}T000000Z.zip"} for i in range(1, 4)]
+    registers = []
+    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, registers=registers)
     before = _public_table_counts(env.observer)
     try:
         response = admin_client.post("/admin/banco-dados/backup")
@@ -789,7 +802,9 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
         assert response.status_code == 302, response.status_code
         assert ("success", "Backup do banco gerado e enviado para Google Drive.") in flashes, flashes
         assert len(uploads) == 1 and uploads[0][1].startswith("sgaa-pg-snapshot-") and uploads[0][2] == "chosen-folder"
-        assert sorted(deleted) == ["old-1", "old-2", "old-3"]  # policy keeps 2: the new one and the newest old
+        assert len(registers) == 1 and registers[0][1].startswith("sgaa-registros-") and registers[0][2] == "chosen-folder"
+        # policy keeps 2 of each kind: the new one and the newest old
+        assert sorted(deleted) == ["csv-1", "csv-2", "old-1", "old-2", "old-3"]
         assert "legacy" not in deleted and "copy" not in deleted
         after = _public_table_counts(env.observer)
         assert {t: n for t, n in after.items() if t != "configuracoes_backup"} == \
@@ -807,6 +822,10 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
                             lambda token, file_id: f"https://drive.example.invalid/{file_id}")
         response = admin_client.get(f"/admin/banco-dados/download?generation={manifest}")
         assert response.status_code == 302 and response.headers["Location"] == "https://drive.example.invalid/new"
+        assert posture["recent"][0]["exports"] == {"google": "new-csv"} and "kind=registros" in page
+        assert 'data-lucide="file-spreadsheet"' in page
+        response = admin_client.get(f"/admin/banco-dados/download?generation={manifest}&kind=registros")
+        assert response.status_code == 302 and response.headers["Location"] == "https://drive.example.invalid/new-csv"
         response = admin_client.get("/admin/banco-dados/download?generation=" + "0" * 64)
         flashes = _pop_flashes(admin_client)
         assert response.status_code == 302 and ("error", "Snapshot solicitado não está disponível para download.") in flashes

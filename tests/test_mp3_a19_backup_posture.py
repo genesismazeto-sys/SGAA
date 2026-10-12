@@ -104,8 +104,8 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "destinations", "objects",
-                              "off_platform", "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "destinations",
+                              "objects", "off_platform", "governed", "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 
@@ -372,6 +372,12 @@ def test_pruning_only_ever_deletes_sgaa_snapshots_and_keeps_the_newest():
     deleted = []
     assert pg_snapshot.prune(listed, 2, deleted.append) == ["sgaa-pg-snapshot-20261010T000000Z.db"]
     assert deleted == ["a"]  # the new snapshot and the newest older one stay; nothing else is touched
+    registers = [{"id": "r1", "name": "sgaa-registros-20261010T000000Z.zip"},
+                 {"id": "r2", "name": "sgaa-registros-20261012T000000Z.zip"},
+                 {"id": "r3", "name": "sgaa-pg-snapshot-20261009T000000Z.db"}]
+    removed = []
+    assert pg_snapshot.prune(registers, 1, removed.append, pattern=pg_snapshot.REGISTERS_NAME) == \
+        ["sgaa-registros-20261010T000000Z.zip"] and removed == ["r1"]  # each kind prunes only its own
     deleted.clear()
     assert pg_snapshot.prune(listed, 0, deleted.append) == ["sgaa-pg-snapshot-20261011T000000Z.db",
                                                            "sgaa-pg-snapshot-20261010T000000Z.db"]  # never below one
@@ -410,6 +416,28 @@ def test_real_pg_a_snapshot_is_proven_equal_and_restores_through_path_b(business
         seeded.close()
     snap = pg_snapshot.create(tmp_path, connect=lambda: raw_connection(source_url))
     assert snap["file_name"].startswith(pg_snapshot.SNAPSHOT_PREFIX) and snap["rows"] > 0
+    # the readable registers: one CSV per register, from the same snapshot, never a secret
+    import csv
+    import io
+    import zipfile
+
+    assert pg_snapshot.REGISTERS_NAME.fullmatch(snap["registers_file_name"])
+    with zipfile.ZipFile(snap["registers_path"]) as archive:
+        names = set(archive.namelist())
+        assert {"alunos.csv", "turmas.csv", "matrizes_atividades.csv", "requisicoes.csv", "LEIA-ME.txt"} <= names
+        assert not names & {"usuario_credenciais.csv", "cloud_accounts.csv", "senha_tokens.csv", "usuarios_foto.csv"}
+        text = archive.read("usuarios.csv").decode("utf-8")
+        assert text.startswith("\ufeff")
+        header = next(csv.reader(io.StringIO(text.lstrip("\ufeff")), delimiter=";"))
+        assert "senha" not in header and "email" in header
+        counted = raw_connection(source_url, autocommit=True)
+        try:
+            for table in ("alunos", "requisicoes", "turmas"):
+                body = archive.read(f"{table}.csv").decode("utf-8").lstrip("\ufeff")
+                rows = list(csv.reader(io.StringIO(body), delimiter=";"))
+                assert len(rows) - 1 == counted.execute(f"SELECT count(*) FROM {table}").fetchone()[0], table
+        finally:
+            counted.close()
     lite = sqlite3.connect(snap["path"])
     try:
         assert lite.execute("PRAGMA user_version").fetchone()[0] == 16

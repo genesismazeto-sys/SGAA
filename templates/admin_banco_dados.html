@@ -1690,6 +1690,11 @@
                     <a class="btn db-icon-btn" href="{{ url_for('admin_banco_dados_download', generation=item.manifest) }}" title="Baixar snapshot" aria-label="Baixar snapshot">
                       <i class="lucide" data-lucide="download"></i>
                     </a>
+                    {% if item.exports %}
+                    <a class="btn db-icon-btn" href="{{ url_for('admin_banco_dados_download', generation=item.manifest, kind='registros') }}" title="Baixar registros (CSV)" aria-label="Baixar registros (CSV)">
+                      <i class="lucide" data-lucide="file-spreadsheet"></i>
+                    </a>
+                    {% endif %}
                     {% else %}
                     <span class="btn db-icon-btn" aria-disabled="true" title="Cópia guardada na máquina de operação (diretório de backups do operador)" style="opacity:.45;cursor:not-allowed;">
                       <i class="lucide" data-lucide="download"></i>
