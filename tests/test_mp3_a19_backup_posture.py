@@ -466,3 +466,16 @@ def test_real_pg_a_snapshot_that_does_not_equal_its_source_is_refused_and_remove
         pg_snapshot.create(tmp_path, connect=lambda: raw_connection(source_url))
     assert caught.value.code == "SNAPSHOT_TABLE_DIFFERS"
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_google_listing_filters_names_itself_and_builds_a_valid_url(monkeypatch):
+    """Review (A19 (9)): Drive's word-based ``contains`` is not trusted to select snapshot names."""
+    from app import cloud_drives
+
+    calls = []
+    monkeypatch.setattr(cloud_drives, "_api", lambda url, token=None, **_k: calls.append(url) or {"files": [
+        {"id": "1", "name": "sgaa-pg-snapshot-20261012T000000Z.db"}, {"id": "2", "name": "sgaa_backup_old.db"},
+        {"id": "3", "name": "copia sgaa-pg-snapshot-20261011T000000Z.db"}]})
+    listed = cloud_drives.google_list_folder_files("tok", "FOLDER", "sgaa-pg-snapshot-")
+    assert [f["id"] for f in listed] == ["1"]
+    assert " " not in calls[0] and "contains" not in calls[0] and "FOLDER" in calls[0]

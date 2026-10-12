@@ -230,9 +230,9 @@ def google_delete_file(token: str, file_id: str) -> None:
 
 def google_list_folder_files(token: str, folder_id: str, name_prefix: str) -> list[dict]:
     """Files directly in the folder ``folder_id`` whose name starts with ``name_prefix``: {id, name}."""
-    safe_prefix = name_prefix.replace("\\", "").replace("'", "")
-    q = f"'{folder_id}' in parents and trashed=false and name contains '{safe_prefix}'"
-    url = f"{_GOOGLE_FILES}?q={urllib.parse.quote(q)}&fields=files(id,name)&pageSize=200"
+    # Filtered here, not by Drive's word-based ``contains``: only exact name prefixes ever qualify.
+    q = f"'{folder_id}' in parents and trashed=false"
+    url = f"{_GOOGLE_FILES}?q={urllib.parse.quote(q)}&fields=files(id,name)&orderBy=name%20desc&pageSize=200"
     result = _api(url, token=token) or {}
     return [f for f in (result.get("files") or []) if str(f.get("name") or "").startswith(name_prefix)]
 
