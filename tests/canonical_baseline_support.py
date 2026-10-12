@@ -232,8 +232,13 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "banco de dados' under PostgreSQL with its one new outcome 'Banco "
         "restaurado com sucesso. Uma cópia de segurança da base anterior foi "
         "enviada para {value_1}.' (msg_06330e89f2cbdcde) -- its refusals reuse "
-        "the original restore messages. 6 additions, 0 retirements",
-        6,
+        "the original restore messages; and, from the R3 review, the warning "
+        "'Backup do banco gerado e enviado para {value_1}, mas os registros "
+        "(CSV) não foram enviados para {value_2}.' (msg_5fe22f69fc84f9cc) and "
+        "the policy refusal 'Não foi possível verificar a cadência registrada "
+        "na abertura da virada; a política não foi alterada.' "
+        "(msg_9a4d8ca005110b0e). 8 additions, 0 retirements",
+        8,
     ),
 )
 
@@ -281,9 +286,9 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # the SQLite-maintenance-unsupported refusal, to 581; STORAGE S3-A retires the
 # request-flow Google Drive flash, to 580; MP-3 A19 restores "Gerar backup agora"
 # under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
-# with its one success message, to 586.
+# with its one success message, and the R3 review's CSV warning and policy refusal, to 588.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "b96020922727648e6e15acebd9d0faf0ef6a6fcd4e0e2259645a726054b46c9e"
+    "f728b020a09a58055e0f7d1869daccc58aa9b8ae3b61f489a5e68c2f61a1840e"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -827,6 +832,8 @@ A19_BACKUP_NOW_KEYS = frozenset(
         "msg_9cbd187e1295c62a",  # Nenhuma conta em nuvem está conectada para receber o backup do banco.
         "msg_6d7b2ffb8df4ca6e",  # Não foi possível gerar o backup do banco. Nada foi enviado.
         "msg_06330e89f2cbdcde",  # Banco restaurado com sucesso. Uma cópia de segurança ... enviada para {value_1}.
+        "msg_5fe22f69fc84f9cc",  # ... mas os registros (CSV) não foram enviados para {value_2}.
+        "msg_9a4d8ca005110b0e",  # Não foi possível verificar a cadência registrada na abertura da virada; ...
     }
 )
 

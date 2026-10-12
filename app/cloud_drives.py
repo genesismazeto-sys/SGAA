@@ -241,9 +241,9 @@ def google_download_to(token: str, file_id: str, path: str) -> None:
               {"Authorization": f"Bearer {token}"})
 
 
-def onedrive_download_to(token: str, item_id: str, path: str) -> None:
+def onedrive_download_to(token: str, item_id: str, path: str, *, drive_id: str | None = None) -> None:
     """Write the bytes of a OneDrive file to ``path`` through Graph's pre-authorized address."""
-    address = onedrive_download_url(token, item_id)
+    address = onedrive_download_url(token, item_id, drive_id=drive_id)
     if not address:
         raise RuntimeError("Graph returned no download address")
     _download(address, path)
@@ -256,13 +256,25 @@ def google_download_link(token: str, file_id: str) -> str:
     return str(result.get("webContentLink") or "")
 
 
+#: A folder listing follows the provider's continuation up to this many pages.  A shorter listing only
+#: ever lets retention delete less: every file it would delete is older than the ones it keeps.
+LISTING_MAX_PAGES = 50
+
+
 def google_list_folder_files(token: str, folder_id: str, name_prefix: str) -> list[dict]:
     """Files directly in the folder ``folder_id`` whose name starts with ``name_prefix``: {id, name}."""
     # Filtered here, not by Drive's word-based ``contains``: only exact name prefixes ever qualify.
     q = f"'{folder_id}' in parents and trashed=false"
-    url = f"{_GOOGLE_FILES}?q={urllib.parse.quote(q)}&fields=files(id,name)&orderBy=name%20desc&pageSize=200"
-    result = _api(url, token=token) or {}
-    return [f for f in (result.get("files") or []) if str(f.get("name") or "").startswith(name_prefix)]
+    base = f"{_GOOGLE_FILES}?q={urllib.parse.quote(q)}&fields=nextPageToken,files(id,name)&orderBy=name%20desc&pageSize=1000"
+    found, token_page = [], None
+    for _page in range(LISTING_MAX_PAGES):  # every page (A19 R3 N3); bounded
+        url = base + (f"&pageToken={urllib.parse.quote(token_page, safe='')}" if token_page else "")
+        result = _api(url, token=token) or {}
+        found += [f for f in (result.get("files") or []) if str(f.get("name") or "").startswith(name_prefix)]
+        token_page = result.get("nextPageToken")
+        if not token_page:
+            break
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -355,9 +367,11 @@ def onedrive_delete_file(token: str, item_id: str) -> None:
     _api(f"{_GRAPH}/me/drive/items/{item_id}", method="DELETE", token=token)
 
 
-def onedrive_download_url(token: str, item_id: str) -> str:
-    """Graph's short-lived, pre-authorized download address of a file (no token in the browser)."""
-    url = f"{_GRAPH}/me/drive/items/{urllib.parse.quote(item_id, safe='')}?$select=id,@microsoft.graph.downloadUrl"
+def onedrive_download_url(token: str, item_id: str, *, drive_id: str | None = None) -> str:
+    """Graph's short-lived, pre-authorized download address of a file (no token in the browser), in the
+    drive the receipt names (A19 R3 M5; the signed-in user's own drive when it names none)."""
+    url = (f"{_onedrive_drive_base(drive_id)}/items/{urllib.parse.quote(item_id, safe='')}"
+           "?$select=id,@microsoft.graph.downloadUrl")
     result = _api(url, token=token) or {}
     return str(result.get("@microsoft.graph.downloadUrl") or "")
 
@@ -376,8 +390,15 @@ def onedrive_list_folder_children(token: str, *, folder_id: str | None, drive_id
         url = f"{base}/root/children"
     else:
         url = f"{base}/root:/{urllib.parse.quote(folder_path.strip('/'))}:/children"
-    result = _api(f"{url}?$select=id,name&$top=200", token=token) or {}
-    return result.get("value") or []
+    found, url = [], f"{url}?$select=id,name&$top=200"
+    for _page in range(LISTING_MAX_PAGES):  # every page (A19 R3 N3); bounded
+        result = _api(url, token=token) or {}
+        found += result.get("value") or []
+        following = str(result.get("@odata.nextLink") or "")
+        if not following.startswith(_GRAPH + "/"):  # only Graph's own continuation address
+            break
+        url = following
+    return found
 
 
 def onedrive_delete_item(token: str, item_id: str, *, drive_id: str | None = None) -> None:

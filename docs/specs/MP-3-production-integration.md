@@ -1059,7 +1059,39 @@ Executor amendments (consequences of the above; not material beyond what the use
   checks clean, or the transaction rolls back. The installation's configuration (cloud accounts, backup
   settings, folders, schema record) is kept, the short-lived state is cleared, and identity counters
   never move back. Permission: `banco_dados` full, as before. A restore is a business write: used before
-  the PONR, it is the PONR. Evidence: section 17.
+  the PONR, it is the PONR. (13) R3 cross-family review of `3b7c3b3` (FAIL, 7 material findings) and
+  its remediation. M1 -- the PONR: at 2026-10-12T19:07:37Z the administrator restored, through
+  "Recuperar banco de dados" in an operator session, an uploaded copy of the snapshot "Gerar backup
+  agora" had made 53 s earlier (production log `event=pg_restore_done tables=28 rows=463`); the
+  fingerprint after it equals the opening reference (pre-PONR check 19:20:19Z). By (12) that restore
+  IS the point of no return, whatever the fingerprint shows: the ledger's C12 state no longer reflects
+  the contract. The ledger recorded a PONR only on a fingerprint delta, so it gains one fixed declared
+  write class, `ADMIN_RESTORE`, recordable as C13 with an unchanged fingerprint
+  (`DECLARED_PONR_WRITE_CLASSES`); every other class still needs a delta. The governed transition is
+  C12 -> C13 (`advance --state C13`, `write_class ADMIN_RESTORE`, `detected_at 2026-10-12T19:07:37Z`),
+  recorded on the user's explicit instruction; from it the cutover is forward-fix only (no C12
+  rollback, GC1/GC2 no longer exist; each deployment needs its GF1 and its code is authorized by
+  `authorize-code`). M2 -- only the code the ledger currently authorizes admits: a later
+  authorization, a product-contract amendment and the new `supersede` command revoke every other code
+  of the reference in the same PROD transaction as their entry; an amendment never returns to an
+  authorized code; `resume` restores only the current code; an open deployment is promoted only while
+  its code is the authorized one. M3 -- the restore locks the register tables against writes
+  (EXCLUSIVE: reads go on) before its safety copy is made, and raises the lock to replace them only
+  if the copy reached a drive: no write can fall between copy and replacement. M4 -- retention deletes
+  only files this database's own receipts name (all receipts, after this run's receipt is published),
+  never a same-named file of another installation, and nothing when the receipts cannot be read. M5 --
+  a receipt names the OneDrive drive of its files; download and restore address that drive. M6 -- a
+  re-opening (GC2, and a forward-fix authorization) re-proves the newest generation: within the
+  recorded cadence (and the object set within its own), intact on disk and off-platform, made from
+  PROD, and -- before the PONR -- holding the current business state; it refuses while any unrecorded
+  deployment exists. M7 -- the policy fails closed: an invalid or partly stored value refuses every
+  run that deletes by it (they keep every generation; the page says so), only ASCII digits are
+  values, and an opening cadence that exists but cannot be verified refuses a policy save and is
+  never shown as "em dia". N2 -- a registers copy that did not reach a drive is a warning that names
+  it, never a success. N3 -- folder listings follow every page (bounded; a shorter listing only ever
+  deletes less). N1 (receipts prove integrity, not provenance) is deferred: forging one needs write
+  access to the database, which already allows changing every register; gate evidence comes only from
+  the operator's ledger, never from the page. Evidence: section 17.
 
 ## 17. Closure
 

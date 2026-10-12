@@ -669,9 +669,12 @@ def upload_zip_backup_with_access_token(
 
     if response.status_code in {200, 201}:
         response_payload = response.json() if response.content else {}
+        parent = response_payload.get("parentReference") if isinstance(response_payload, dict) else None
         return {
             "file_id": str(response_payload.get("id") or ""),
             "file_name": str(response_payload.get("name") or clean_name),
+            # the drive the file lives in: OneDrive item ids are scoped to their drive (A19 R3 M5)
+            "drive_id": str((parent or {}).get("driveId") or drive_id or ""),
         }
 
     payload: dict[str, Any]

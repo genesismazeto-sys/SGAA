@@ -1681,7 +1681,7 @@
             </tbody>
           </table>
         </div>
-        <p class="db-note">{% if protection.policy_configured %}Última alteração: {{ protection.policy_updated_label or '—' }}.{% else %}Valores padrão (nenhuma alteração salva).{% endif %}</p>
+        <p class="db-note">{% if protection.policy_invalid %}Há valores armazenados inválidos: a rotação não apaga nenhuma geração até a política ser salva novamente.{% elif protection.policy_configured %}Última alteração: {{ protection.policy_updated_label or '—' }}.{% else %}Valores padrão (nenhuma alteração salva).{% endif %}</p>
         <div class="db-actions">
           <button type="button" class="btn" onclick="var f=document.getElementById('pg-retention-form');f.querySelectorAll('[data-default]').forEach(function(el){el.value=el.getAttribute('data-default');});">
             <i class="lucide" data-lucide="rotate-ccw"></i>Restaurar padrões

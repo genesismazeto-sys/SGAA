@@ -388,6 +388,8 @@ _POSTURE_STATUS_LABELS = {
     "CURRENT": ("Em dia", "status-positive"),
     "LATE": ("Atrasado", "status-negative"),
     "NONE": ("Sem registro", "status-negative"),
+    # the opening's recorded cadence could not be verified: never shown as "em dia" (A19 R3 M7)
+    "UNVERIFIED": ("Não verificado", "status-negative"),
 }
 
 
@@ -420,9 +422,12 @@ def _database_protection_context(conn) -> dict:
         if raw is None:
             return {"state": "UNREADABLE"}
         policy = pg_posture.read_policy(raw)
-        ceiling = pg_posture.opening_ceiling(raw)
+        try:
+            ceiling = pg_posture.opening_ceiling(raw)
+        except pg_posture.CeilingUnverifiable:
+            ceiling = None
         return {"state": "UNREADABLE", "policy": {key: policy[key] for key in pg_posture.POLICY_FIELDS},
-                "policy_fields": _policy_fields(ceiling), "policy_configured": policy["configured"],
+                "policy_fields": _policy_fields(ceiling), "policy_configured": policy["configured"], "policy_invalid": bool(policy.get("invalid")),
                 "policy_updated_label": _format_drive_timestamp(
                     str(policy["updated_at"]).replace(" ", "T") + "+00:00" if policy["updated_at"] else ""),
                 "retention_generations": policy["pg_retention_generations"]}
@@ -441,7 +446,7 @@ def _database_protection_context(conn) -> dict:
         # The administrator's policy (MP-3 A19) and the ceiling an open cutover recorded.
         "policy": {key: policy[key] for key in pg_posture.POLICY_FIELDS},
         "policy_fields": _policy_fields(posture["ceiling_hours"]),
-        "policy_configured": policy["configured"],
+        "policy_configured": policy["configured"], "policy_invalid": bool(policy.get("invalid")),
         # stored as UTC text (``current_utc_text``): shown in the same local time as every other date here
         "policy_updated_label": _format_drive_timestamp(
             str(policy["updated_at"]).replace(" ", "T") + "+00:00" if policy["updated_at"] else ""),
@@ -1645,7 +1650,16 @@ def admin_banco_dados_retencao():
         # generations kept, restore-test interval) the operator's runs apply; never a SQLite window.
         conn = get_db_connection()
         raw = getattr(conn, "raw_connection", None)
-        ceiling = pg_posture.opening_ceiling(raw) if raw is not None else None
+        try:
+            # an opening's recorded cadence that cannot be verified refuses the save (A19 R3 M7)
+            if raw is None:
+                raise pg_posture.CeilingUnverifiable()
+            ceiling = pg_posture.opening_ceiling(raw)
+        except pg_posture.CeilingUnverifiable:
+            conn.rollback()
+            flash("Não foi possível verificar a cadência registrada na abertura da virada; a política não foi alterada.",
+                  "error")
+            return redirect(url_for("admin_banco_dados"))
         try:
             pg_posture.save_policy(conn, pg_posture.validate_policy(request.form, ceiling_hours=ceiling))
             conn.commit()
@@ -1835,7 +1849,7 @@ _PG_SNAPSHOT_DEFAULT_FOLDER = "SGAA - Backups"
 
 def _postgres_backup_now():
     """MP-3 A19: "Gerar backup agora" under PostgreSQL; the outcome flashed as the SQLite route did."""
-    targets, sent, failed = _send_postgres_snapshot()
+    targets, sent, failed, registers_failed = _send_postgres_snapshot()
     if not targets:
         flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
         return redirect(url_for("admin_banco_dados"))
@@ -1843,7 +1857,10 @@ def _postgres_backup_now():
         flash("Não foi possível gerar o backup do banco. Nada foi enviado.", "error")
         return redirect(url_for("admin_banco_dados"))
     labels = ["Google Drive" if provider == "google" else "OneDrive" for provider in sent]
-    if labels and not failed:
+    if labels and not failed and registers_failed:
+        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}, mas os registros (CSV) não foram "
+              f"enviados para {' e '.join(registers_failed)}.", "warning")
+    elif labels and not failed:
         flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}.", "success")
     elif labels:
         flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}, mas o envio falhou para {' e '.join(failed)}.", "warning")
@@ -1855,9 +1872,11 @@ def _postgres_backup_now():
 def _send_postgres_snapshot(*, prune: bool = True):
     """The snapshot sent to the connected drives (owner: ``app.backup.pg_snapshot``).
 
-    Returns ``(targets, sent, failed)``: the connected drives, the ones that received it (``None``
-    when the snapshot could not be made) and the labels of the ones that failed.  ``prune=False``
-    (the safety copy before a restore) deletes nothing.
+    Returns ``(targets, sent, failed, registers_failed)``: the connected drives, the ones that received
+    it (``None`` when the snapshot could not be made), the labels of the ones that failed and the labels
+    of the ones that did not receive the registers (CSV).  ``prune=False`` (the safety copy before a
+    restore) deletes nothing.  Retention deletes only files this database's own receipts name (A19 R3
+    M4), after this run's receipt is published, and never by a policy or receipts it could not read.
 
     A verified snapshot of the live database goes to every connected cloud drive, into the folder
     "Selecionar pasta" chose (by its id; SGAA's default backup folder when none was chosen); each
@@ -1878,15 +1897,15 @@ def _send_postgres_snapshot(*, prune: bool = True):
         keep = None  # a deletion is never decided by a policy that could not be read
     targets = [provider for provider in ("google", "onedrive") if _get_active_cloud_account(conn, provider)]
     if not targets:
-        return targets, [], []
+        return targets, [], [], []
     started = time.monotonic()
-    sent, failed, uploaded, exported = [], [], {}, {}
+    sent, failed, uploaded, exported, drives, registers_failed, folders = [], [], {}, {}, {}, [], {}
     with tempfile.TemporaryDirectory(prefix="sgaa-pg-snapshot-") as scratch:
         try:
             snapshot = pg_snapshot.create(scratch)
         except Exception as exc:
             logger.warning("event=pg_snapshot_failed code=%s", getattr(exc, "code", type(exc).__name__))
-            return targets, None, []
+            return targets, None, [], []
         for provider in targets:
             prefix = "gdrive" if provider == "google" else "onedrive"
             label = "Google Drive" if provider == "google" else "OneDrive"
@@ -1900,6 +1919,9 @@ def _send_postgres_snapshot(*, prune: bool = True):
                 )
                 if result.get("file_id"):
                     uploaded[provider] = str(result["file_id"])
+                if provider == "onedrive" and (result.get("drive_id") or drive_id):
+                    drives[provider] = str(result.get("drive_id") or drive_id)
+                folders[provider] = (str(result.get("folder_id") or folder_id or ""), folder_id, drive_id)
                 try:  # the readable registers travel beside the database copy, into the same folder
                     registers = _cloud_connections.upload_backup_zip(
                         conn, provider, zip_path=snapshot["registers_path"],
@@ -1910,6 +1932,8 @@ def _send_postgres_snapshot(*, prune: bool = True):
                         exported[provider] = str(registers["file_id"])
                 except Exception as exc:
                     logger.warning("event=pg_registers_upload_failed provider=%s error=%s", provider, type(exc).__name__)
+                if provider not in exported:
+                    registers_failed.append(label)
             except Exception as exc:
                 logger.warning("event=pg_snapshot_upload_failed provider=%s error=%s", provider, type(exc).__name__)
                 failed.append(label)
@@ -1917,29 +1941,12 @@ def _send_postgres_snapshot(*, prune: bool = True):
                 conn.commit()
                 continue
             sent.append(provider)
-            _save_drive_config(conn, {f"{prefix}_last_upload_at": snapshot["generation_at"],
-                                      f"{prefix}_last_upload_error": ""})
+            _save_drive_config(conn, {
+                f"{prefix}_last_upload_at": snapshot["generation_at"],
+                f"{prefix}_last_upload_error": "" if provider in exported else "Falha no envio dos registros (CSV).",
+            })
             conn.commit()
-            if keep is None or not prune:
-                continue
-            try:
-                token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
-                if provider == "google":
-                    landed = str(result.get("folder_id") or folder_id or "")
-                    for prefix_name, pattern in ((pg_snapshot.SNAPSHOT_PREFIX, pg_snapshot.SNAPSHOT_NAME),
-                                                 (pg_snapshot.REGISTERS_PREFIX, pg_snapshot.REGISTERS_NAME)):
-                        listed = _cd.google_list_folder_files(token, landed, prefix_name) if landed else []
-                        pg_snapshot.prune(listed, keep, lambda file_id: _cd.google_delete_file(token, file_id),
-                                          pattern=pattern)
-                else:
-                    listed = _cd.onedrive_list_folder_children(token, folder_id=folder_id, drive_id=drive_id,
-                                                               folder_path=_PG_SNAPSHOT_DEFAULT_FOLDER)
-                    for pattern in (pg_snapshot.SNAPSHOT_NAME, pg_snapshot.REGISTERS_NAME):
-                        pg_snapshot.prune(listed, keep,
-                                          lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id),
-                                          pattern=pattern)
-            except Exception as exc:
-                logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
+    published = False
     if sent and raw is not None:
         record = pg_posture.run_record(
             generation_at=snapshot["generation_at"], manifest_sha256=snapshot["sha256"],
@@ -1947,22 +1954,61 @@ def _send_postgres_snapshot(*, prune: bool = True):
             object_set_name=None, object_set_digest=None, object_manifest_sha256=None,
             run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
             kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
-            files=uploaded, exports=exported,
+            files=uploaded, exports=exported, drives=drives,
         )
         try:
             pg_posture.publish(raw, [record])
+            published = True
         except Exception as exc:
             logger.warning("event=pg_snapshot_record_failed error=%s", type(exc).__name__)
-    return targets, sent, failed
+    if prune and published and keep is not None:
+        _prune_owned_snapshots(conn, raw, sent, folders, keep, registers_skip=registers_failed)
+    return targets, sent, failed, registers_failed
+
+
+def _prune_owned_snapshots(conn, raw, sent, folders, keep, *, registers_skip):
+    """Retention in each drive: the newest ``keep`` of SGAA's own files, deleting only files this
+    database's receipts name -- never a same-named file of another installation (A19 R3 M4)."""
+    from app.backup import pg_snapshot
+    from app import cloud_drives as _cd
+
+    try:
+        owned = pg_posture.owned_files(raw)
+    except Exception as exc:
+        logger.warning("event=pg_snapshot_retention_skipped error=%s", type(exc).__name__)
+        return  # receipts that cannot be read prove nothing: delete nothing
+    for provider in sent:
+        label = "Google Drive" if provider == "google" else "OneDrive"
+        mine = {file_id for (kind, _drive, file_id) in owned if kind == provider}
+        landed, folder_id, drive_id = folders[provider]
+        kinds = [(pg_snapshot.SNAPSHOT_PREFIX, pg_snapshot.SNAPSHOT_NAME)]
+        if label not in registers_skip:
+            kinds.append((pg_snapshot.REGISTERS_PREFIX, pg_snapshot.REGISTERS_NAME))
+        try:
+            token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
+            if provider == "google":
+                for prefix_name, pattern in kinds:
+                    listed = _cd.google_list_folder_files(token, landed, prefix_name) if landed else []
+                    pg_snapshot.prune([f for f in listed if f.get("id") in mine], keep,
+                                      lambda file_id: _cd.google_delete_file(token, file_id), pattern=pattern)
+            else:
+                listed = _cd.onedrive_list_folder_children(token, folder_id=folder_id, drive_id=drive_id,
+                                                           folder_path=_PG_SNAPSHOT_DEFAULT_FOLDER)
+                for _prefix_name, pattern in kinds:
+                    pg_snapshot.prune([f for f in listed if f.get("id") in mine], keep,
+                                      lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id),
+                                      pattern=pattern)
+        except Exception as exc:
+            logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
 
 
 def _postgres_restore(path, *, uploaded: bool, expected_sha256: str | None = None):
     """MP-3 A19: "Recuperar banco de dados" under PostgreSQL (owner: ``app.backup.pg_restore``).
 
     The file is verified first; then a safety copy of the current database must reach at least one
-    connected drive (it deletes nothing); only then are the registers replaced, in one proven
-    transaction.  A write made between the safety copy and the restore's lock is in neither: the
-    window is the few seconds between them.
+    connected drive (it deletes nothing), made while the registers are locked against writes so it
+    holds every write before the replacement; only then are the registers replaced, in the same
+    proven transaction.
     """
     from app.backup import pg_restore
 
@@ -1977,14 +2023,19 @@ def _postgres_restore(path, *, uploaded: bool, expected_sha256: str | None = Non
         snapshot = pg_restore.read(path, expected_sha256=expected_sha256)
     except pg_restore.RestoreError as exc:
         return refuse(exc)
-    _targets, sent, _failed = _send_postgres_snapshot(prune=False)
-    if not sent:
-        return refuse("a cópia de segurança da base atual não pôde ser enviada para nenhuma conta em nuvem; "
-                      "nada foi alterado.")
     conn = get_db_connection()
-    conn.commit()  # the request holds no lock the restore waits for
+    sent = []
+
+    def safety_copy():
+        # runs with the registers locked against writes: the copy holds every write before the replacement
+        _targets, delivered, _failed, _registers_failed = _send_postgres_snapshot(prune=False)
+        conn.commit()  # the request holds no lock the replacement waits for
+        sent.extend(delivered or [])
+        return bool(delivered)
+
+    conn.commit()  # the request holds no lock the restore's write lock waits for
     try:
-        result = pg_restore.restore(snapshot)
+        result = pg_restore.restore(snapshot, before=safety_copy)
     except pg_restore.RestoreError as exc:
         logger.warning("event=pg_restore_refused code=%s", exc.code)
         return refuse(exc)
@@ -2005,7 +2056,9 @@ def _postgres_restore_from_drive():
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
     posture = pg_posture.read(raw) if raw is not None and re.fullmatch(r"[0-9a-f]{64}", manifest) else {}
-    files = next((item["files"] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
+    chosen = next((item for item in posture.get("recent") or [] if item["manifest"] == manifest), None)
+    files = chosen["files"] if chosen else {}
+    drives = chosen.get("drives", {}) if chosen else {}
     if not files:
         flash("Backup selecionado é inválido ou não está mais disponível.", "error")
         return redirect(url_for("admin_banco_dados"))
@@ -2019,7 +2072,7 @@ def _postgres_restore_from_drive():
                 if provider == "google":
                     _cd.google_download_to(token, files[provider], path)
                 else:
-                    _cd.onedrive_download_to(token, files[provider], path)
+                    _cd.onedrive_download_to(token, files[provider], path, drive_id=drives.get(provider))
                 break
             except Exception as exc:
                 logger.warning("event=pg_restore_fetch_failed provider=%s error=%s", provider, type(exc).__name__)
@@ -2128,7 +2181,9 @@ def _postgres_download():
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
     posture = pg_posture.read(raw) if raw is not None and re.fullmatch(r"[0-9a-f]{64}", manifest) else {}
-    files = next((item[key] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
+    chosen = next((item for item in posture.get("recent") or [] if item["manifest"] == manifest), None)
+    files = chosen[key] if chosen else {}
+    drives = chosen.get("drives", {}) if chosen else {}
     if not files:
         flash("Snapshot solicitado não está disponível para download.", "error")
         return redirect(url_for("admin_banco_dados"))
@@ -2140,7 +2195,7 @@ def _postgres_download():
             if provider == "google":
                 address = _cd.google_download_link(token, files[provider])
             else:
-                address = _cd.onedrive_download_url(token, files[provider])
+                address = _cd.onedrive_download_url(token, files[provider], drive_id=drives.get(provider))
         except Exception as exc:
             logger.warning("event=pg_snapshot_download_failed provider=%s error=%s", provider, type(exc).__name__)
             continue

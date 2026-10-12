@@ -21,8 +21,11 @@ WHAT IT REPLACES
     snapshot.  Identity counters never move back: an id issued after the snapshot is never issued
     again.
 
-The caller makes the safety copy first (``app.views.admin.banco_dados``); this module never runs
-without one being sent.
+The safety copy is made INSIDE the restore's window (``before``): the register tables are first
+locked against every write (EXCLUSIVE: reads go on), then the caller's ``before`` makes and sends the
+copy of the current database -- which therefore holds every write that will ever precede the
+replacement -- and only if it reached a drive is the lock raised to ACCESS EXCLUSIVE and the registers
+replaced.  No write can fall between the copy and the replacement (A19 R3 M3).
 """
 from __future__ import annotations
 
@@ -78,21 +81,35 @@ def read(path, *, expected_sha256: str | None = None):
         raise RestoreError("SNAPSHOT_UNREADABLE", "o arquivo não pôde ser lido como backup do banco.") from None
 
 
-def restore(snapshot, *, connect=None) -> dict:
-    """Replace the registers with ``snapshot`` (from ``read``) in one transaction, proven, or change nothing."""
+def restore(snapshot, *, before, connect=None) -> dict:
+    """Replace the registers with ``snapshot`` (from ``read``) in one transaction, proven, or change nothing.
+
+    ``before()`` runs once the registers are locked against writes and must return truthy when the
+    safety copy of the current database reached at least one drive; otherwise nothing is changed.
+    """
     from app.backup import pg_snapshot
 
     registers, cleared = _tables()
-    conn = (connect or pg_snapshot._application_connection)()
-    conn.autocommit = True
+    try:
+        conn = (connect or pg_snapshot._application_connection)()
+        conn.autocommit = True
+    except Exception:
+        raise RestoreError("DATABASE_UNREACHABLE", "o banco não pôde ser aberto para a recuperação; nada foi alterado.") from None
     report = SimpleNamespace(self_references_restored={})
     try:
         with conn.transaction():
-            # bounded: a request the platform stops never leaves the registers locked for long
+            # bounded: a request the platform stops never leaves the registers locked for long (the
+            # idle bound covers the safety copy's upload, inside the function's own time limit)
             conn.execute("SET LOCAL lock_timeout = '10s'")
             conn.execute("SET LOCAL statement_timeout = '30s'")
-            conn.execute("SET LOCAL idle_in_transaction_session_timeout = '30s'")
-            # one statement: nothing else reads or writes them until the commit
+            conn.execute("SET LOCAL idle_in_transaction_session_timeout = '55s'")
+            # 1. no write from here on (reads go on: the safety copy reads them)
+            conn.execute(f"LOCK TABLE {', '.join(cleared)} IN EXCLUSIVE MODE")
+            if not before():
+                raise RestoreError("SAFETY_COPY_NOT_SENT",
+                                   "a cópia de segurança da base atual não pôde ser enviada para nenhuma conta em "
+                                   "nuvem; nada foi alterado.")
+            # 2. nothing else reads or writes them until the commit
             conn.execute(f"LOCK TABLE {', '.join(cleared)} IN ACCESS EXCLUSIVE MODE")
             next_ids = {table: pathb.next_identity_value(conn, table)
                         for table in registers if pathb._identity_column(table)}

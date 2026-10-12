@@ -37,7 +37,7 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
     assert governance.PARENT_CATALOG_COUNT == 548, (
         "UT-MX3's exact parent state is the ledger up to the UT-MX3 term"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 586
+    assert governance.CANONICAL_CATALOG_COUNT == 588
     assert governance.CATALOG_LEDGER[governance.MX3_LEDGER_INDEX][1] == 6, (
         "the UT-MX3 StudentMatrixError ownership delta is exactly +6"
     )
@@ -148,9 +148,9 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "the STORAGE S3-A direct-documents delta is exactly -1: the request "
         "create / edit flows no longer reach Google Drive"
     )
-    assert governance.CATALOG_LEDGER[-1][1] == len(governance.A19_BACKUP_NOW_KEYS) == 6, (
-        "the MP-3 A19 delta is exactly +6: the outcomes of 'Gerar backup agora' and the restore "
-        "success under PostgreSQL"
+    assert governance.CATALOG_LEDGER[-1][1] == len(governance.A19_BACKUP_NOW_KEYS) == 8, (
+        "the MP-3 A19 delta is exactly +8: the outcomes of 'Gerar backup agora', the restore "
+        "success, the CSV warning and the unverifiable-cadence refusal under PostgreSQL"
     )
     # Parent + every term from UT-MX3 onward reconstructs the canonical total.
     assert (

@@ -120,6 +120,8 @@ POST_UT8_HELPER_NAMES = (
     # MP-3 A19: "Gerar backup agora" under PostgreSQL (delegates to app.backup.pg_snapshot).
     "_postgres_backup_now",
     "_send_postgres_snapshot",
+    # MP-3 A19 R3 M4: retention deletes only the files this database's own receipts name.
+    "_prune_owned_snapshots",
     "_postgres_download",
     # MP-3 A19: "Recuperar banco de dados" under PostgreSQL (delegates to app.backup.pg_restore).
     "_postgres_restore",

@@ -399,6 +399,15 @@ OPENING_SELECT_SQL = (
 )
 OPENING_REVOKE_SQL = "UPDATE sgaa_cutover.opening SET revoked_at = now() WHERE revoked_at IS NULL"
 OPENING_RESTORE_SQL = "UPDATE sgaa_cutover.opening SET revoked_at = NULL WHERE reference_sha256 = %s"
+#: MP-3 A19 R3 M2: only the code the ledger currently authorizes may admit.  A new authorization (or a
+#: product-contract amendment) revokes every other code of the reference; a resume restores only it.
+OPENING_SUPERSEDE_SQL = (
+    "UPDATE sgaa_cutover.opening SET revoked_at = now()"
+    " WHERE reference_sha256 = %s AND code_sha256 <> %s AND revoked_at IS NULL"
+)
+OPENING_RESTORE_CODE_SQL = (
+    "UPDATE sgaa_cutover.opening SET revoked_at = NULL WHERE reference_sha256 = %s AND code_sha256 = %s"
+)
 VERCEL_PROJECT_ENV = "VERCEL_PROJECT_ID"
 
 

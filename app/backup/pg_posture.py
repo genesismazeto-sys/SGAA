@@ -94,6 +94,15 @@ class PolicyError(ValueError):
     """A policy value the administrator typed is refused (the message is shown as is)."""
 
 
+class CeilingUnverifiable(Exception):
+    """The opening's recorded cadence exists but cannot be verified: nothing may be judged against a
+    ceiling that might be lower (a fixed code; never a value)."""
+
+    def __init__(self, code: str = "OPENING_CEILING_UNVERIFIABLE") -> None:
+        super().__init__(code)
+        self.code = code
+
+
 class PostureError(Exception):
     """A record cannot be published (a fixed code; never a value)."""
 
@@ -111,27 +120,43 @@ def default_policy() -> dict:
     return {key: spec[2] for key, spec in POLICY_FIELDS.items()}
 
 
+_DIGITS = re.compile(r"[0-9]{1,3}")
+
+
 def _bounded(key, raw):
     minimum, maximum, _default, _label = POLICY_FIELDS[key]
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
+    text = "" if raw is None else str(raw).strip()
+    if not _DIGITS.fullmatch(text):  # ASCII digits only
         return None
+    value = int(text)
     return value if minimum <= value <= maximum else None
 
 
-def policy_from_rows(rows) -> dict:
-    """The policy from stored ``(chave, valor, atualizado_em)`` rows: any value missing or out of bounds
-    is its default; ``configured`` and ``updated_at`` (the newest change, as stored) are added."""
-    policy, updated, configured = default_policy(), None, False
+def policy_from_rows(rows, *, strict: bool = False) -> dict:
+    """The policy from stored ``(chave, valor, atualizado_em)`` rows; ``configured``, ``updated_at`` (the
+    newest change, as stored) and ``invalid`` (the stored keys whose value is not valid) are added.
+
+    For display a missing or invalid value shows its default.  ``strict`` (a run that deletes by it)
+    refuses instead (``PolicyError("POLICY_VALUE_INVALID")``) when any stored value is invalid or the
+    policy is only partly stored -- ``save_policy`` always writes all of it -- so an unreadable value
+    can never become a smaller retention than the administrator set (A19 R3 M7).
+    """
+    policy, updated, configured, invalid, present = default_policy(), None, False, [], set()
     for row in rows:
         key, raw, changed = row[0], row[1], row[2]
-        value = _bounded(key, raw) if key in POLICY_FIELDS else None
-        if value is not None:
-            policy[key], configured = value, True
-            if changed and (updated is None or str(changed) > updated):
-                updated = str(changed)
-    return dict(policy, configured=configured, updated_at=updated)
+        if key not in POLICY_FIELDS:
+            continue
+        present.add(key)
+        value = _bounded(key, raw)
+        if value is None:
+            invalid.append(key)
+            continue
+        policy[key], configured = value, True
+        if changed and (updated is None or str(changed) > updated):
+            updated = str(changed)
+    if strict and (invalid or (present and present != set(POLICY_FIELDS))):
+        raise PolicyError("POLICY_VALUE_INVALID")
+    return dict(policy, configured=configured and not invalid, updated_at=updated, invalid=sorted(invalid))
 
 
 def read_policy(raw, *, strict: bool = False) -> dict:
@@ -147,7 +172,7 @@ def read_policy(raw, *, strict: bool = False) -> dict:
         if strict:
             raise
         rows = []
-    return policy_from_rows(rows)
+    return policy_from_rows(rows, strict=strict)
 
 
 def validate_policy(form, *, ceiling_hours: int | None = None) -> dict:
@@ -179,16 +204,45 @@ def save_policy(conn, policy: dict) -> None:
 
 
 def opening_ceiling(raw) -> int | None:
-    """The database cadence an open cutover recorded for THIS database, else ``None`` (a psycopg connection)."""
+    """The database cadence an open cutover recorded for THIS database (a psycopg connection).
+
+    ``None`` only when provably there is none: no opening record, or only openings of another
+    database.  Anything that cannot be verified -- the read fails, this database's identity is
+    unproven while openings exist, a row that is not an intact ledger entry, a reference for this
+    database without a valid cadence -- raises ``CeilingUnverifiable`` (A19 R3 M7).
+    """
     from psycopg.rows import tuple_row
 
     try:
         with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
-            identity = hosting.source_identity_sha256(hosting.database_source(raw))
-            hours, source = _cadence(cursor, identity)
+            if not cursor.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
+                return None
+            rows = [row[0] for row in cursor.execute("SELECT entry FROM sgaa_cutover.opening").fetchall()]
+            identity = hosting.source_identity_sha256(hosting.database_source(raw)) if rows else None
     except Exception:
-        return None
-    return hours if source == "OPENING" else None
+        raise CeilingUnverifiable() from None
+    return _ceiling_from_rows(rows, identity)
+
+
+def _ceiling_from_rows(rows, identity) -> int | None:
+    if rows and not identity:
+        raise CeilingUnverifiable()
+    for text in rows:
+        try:
+            entry = json.loads(text)
+            body = dict(entry)
+            claimed = body.pop("hash", None)
+            intact = isinstance(claimed, str) and hosting.ledger_entry_hash(body) == claimed
+        except (TypeError, ValueError, AttributeError):
+            raise CeilingUnverifiable() from None
+        if not intact:
+            raise CeilingUnverifiable()
+        if entry.get("type") == "reference" and entry.get("database_identity_sha256") == identity:
+            hours = entry.get("backup_cadence_hours")
+            if isinstance(hours, int) and not isinstance(hours, bool) and 1 <= hours <= 24:
+                return hours
+            raise CeilingUnverifiable()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +254,7 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
                object_set_name: str | None, object_set_digest: str | None, object_manifest_sha256: str | None,
                run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
                off_platform: str = "VERIFIED", destinations: tuple[str, ...] = (),
-               files: dict | None = None, exports: dict | None = None) -> dict:
+               files: dict | None = None, exports: dict | None = None, drives: dict | None = None) -> dict:
     """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
     no chain): an ``ops_backup`` run (``OPERATOR_RUN``) or "Gerar backup agora" (``SNAPSHOT``,
     ``HOSTED_RUN``, the cloud drives that received it)."""
@@ -218,6 +272,8 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
         body["files"] = {provider: str(file_id) for provider, file_id in sorted(files.items())}
     if exports:
         body["exports"] = {provider: str(file_id) for provider, file_id in sorted(exports.items())}
+    if drives:  # the drive each file lives in (OneDrive item ids are scoped to their drive)
+        body["drives"] = {provider: str(drive_id) for provider, drive_id in sorted(drives.items())}
     return dict(body, hash=hosting.ledger_entry_hash(body))
 
 
@@ -326,11 +382,17 @@ def read(raw, *, now: datetime | None = None) -> dict:
     try:
         with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
             identity = hosting.source_identity_sha256(hosting.database_source(raw))
-            ceiling, ceiling_source = _cadence(cursor, identity)
             stored = cursor.execute(SELECT_SQL).fetchall() if cursor.execute(EXISTS_SQL).fetchone()[0] else []
         policy = read_policy(raw)
-        return summarize(stored, identity=identity, policy=policy,
-                         ceiling_hours=ceiling if ceiling_source == "OPENING" else None, now=now)
+        try:
+            ceiling, unverified = opening_ceiling(raw), False
+        except CeilingUnverifiable:
+            ceiling, unverified = None, True
+        posture = summarize(stored, identity=identity, policy=policy, ceiling_hours=ceiling, now=now)
+        if unverified and posture["database_status"] == "CURRENT":
+            posture["database_status"] = "UNVERIFIED"
+        posture["ceiling_unverified"] = unverified
+        return posture
     except Exception:
         return {"state": "UNREADABLE"}
 
@@ -355,7 +417,9 @@ def _retention(note):
 
 
 def _well_formed(entry) -> bool:
-    """The fields the posture reads, in the shapes the tools write (a hand-made row is never shown)."""
+    """The fields the posture reads, in the shapes the tools write.  A row must also re-derive its own
+    hash and name this database; that proves integrity, not who wrote it (A19 R3 N1: anyone able to
+    write ``sgaa_ops`` could write a self-consistent row)."""
     digest = entry.get("manifest_sha256")
     if not (isinstance(digest, str) and len(digest) == 64):
         return False
@@ -437,6 +501,7 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
              "manifest": str(entry.get("manifest_sha256") or ""),
              "files": _files(entry),
              "exports": _files(entry, "exports"),
+             "drives": _files(entry, "drives"),
              "destinations": [d for d in (entry.get("destinations") or []) if d in ("google", "onedrive")],
              "objects": entry.get("object_set_name") not in (None, "NONE"),
              "off_platform": entry.get("off_platform") == "VERIFIED",
@@ -449,9 +514,41 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
     }
 
 
+def owned_files(raw) -> set:
+    """Every cloud file this database's own "Gerar backup agora" receipts name, as
+    ``(provider, drive_id, file_id)`` (``drive_id`` is ``""`` when the receipt names none).
+
+    All receipts, not the page's window: retention deletes only what this installation provably wrote,
+    never a file of the same name another installation (or a person) put in a shared folder
+    (A19 R3 M4).  Raises when the receipts cannot be read: the caller then deletes nothing.
+    """
+    from psycopg.rows import tuple_row
+
+    with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
+        identity = hosting.source_identity_sha256(hosting.database_source(raw))
+        stored = cursor.execute(SELECT_SQL).fetchall() if cursor.execute(EXISTS_SQL).fetchone()[0] else []
+    if not identity:
+        raise PostureError("IDENTITY_UNPROVEN")
+    owned = set()
+    for text, _note in stored:
+        try:
+            entry = json.loads(text)
+        except (TypeError, ValueError):
+            continue
+        if not _intact(entry) or entry.get("source_identity_sha256") != identity \
+                or entry.get("kind") != SNAPSHOT_KIND:
+            continue
+        drives = _files(entry, "drives")
+        for key in ("files", "exports"):
+            for provider, file_id in _files(entry, key).items():
+                owned.add((provider, drives.get(provider, ""), file_id))
+    return owned
+
+
 __all__ = [
     "CADENCE_TOLERANCE", "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "POLICY_FIELDS",
-    "PolicyError", "PostureError", "default_policy", "opening_ceiling", "policy_from_rows", "publish", "read",
+    "CeilingUnverifiable", "PolicyError", "PostureError", "default_policy", "opening_ceiling", "owned_files",
+    "policy_from_rows", "publish", "read",
     "read_policy",
     "run_record", "save_policy", "summarize", "validate_policy",
 ]

@@ -566,8 +566,13 @@ one deployment action that remains: each one needs its own user message, recorde
 `grant --gate GF1 --ref <code>` (valid only after C13; the gates that act on the source or on
 the first deployment are refused), then `deploy_audit deploy --commit <fix commit> … --admission open
 --opening-reference <status opening_reference> --forward-fix-ref <code>` (it admits no one yet: its
-code is not authorized), `cutover_ledger authorize-code --deployment <id>` (**user terminal**, adds
-the authorization for that code under the same reference) and `promote`.
+code is not authorized), `cutover_ledger authorize-code --deployment <id> --backup-root <primary dir>
+--off-platform <second dir>` (**user terminal**: it re-verifies the newest generation on disk and its
+cadence, refuses while any unrecorded deployment exists, and writes the authorization for that code
+under the same reference, revoking every other code of it) and `promote` (an open deployment is
+promoted only while its code is the one the ledger authorizes). `cutover_ledger supersede` (**user
+terminal**) revokes, at any time from C12 on, every authorization whose code the ledger no longer
+authorizes.
 
 ## 4. Routine after cutover
 
@@ -602,9 +607,12 @@ reference, the cadence and every rollback guard stay as they are. In this order:
    snapshot` and `compare` against the custody reference (section 2, C13). Identical: go on. A
    difference: stop; it is adjudicated as at C13.
 3. **GC1** (one user message naming the amendment): `cutover_ledger grant --gate GC1 --ref <code>`,
-   then `cutover_ledger amend --commit <amendment commit> --ref <code> --contract-ref <GC1 code>`.
-   The commit descends from the effective commit and changes at least one deployed file; each GC1
-   grant is consumed by one amendment. From here only the amended commit and code are deployable.
+   then **(user terminal**, `PGPASSWORD`**)** `cutover_ledger amend --commit <amendment commit> --ref
+   <code> --contract-ref <GC1 code>`. The commit descends from the effective commit and changes at
+   least one deployed file, never back to a code that was authorized; each GC1 grant is consumed by
+   one amendment. In the same transaction it revokes every authorization of the reference: the
+   superseded code admits no one from then on (A19 R3 M2). From here only the amended commit and
+   code are deployable.
 4. **Provider values the amendment needs** (user only): registered at the provider and placed in
    the platform by the dashboard or the interactive prompt; for Microsoft, the app registration's
    Web redirect URI `<public address>/onedrive/callback`, delegated `User.Read`, `Files.ReadWrite`
@@ -622,10 +630,14 @@ reference, the cadence and every rollback guard stay as they are. In this order:
 6. **GC2: re-open** (one user message naming the re-opening, after the proof):
    `cutover_ledger grant --gate GC2 --ref <code>`; `deploy_audit deploy --commit <amendment commit>
    … --admission open --opening-reference <status opening_reference>` (it admits no one: its code is
-   not authorized yet); **(user terminal**, `PGPASSWORD`**)** `cutover_ledger authorize-code
-   --deployment <its id> --contract-ref <GC2 code>` (it writes the authorization for the amended
-   code under the same reference, in one transaction with its entry); `promote`. The ledger stays
-   at C12 and C13 is recorded on the first non-operator business write, as before.
+   not authorized yet); a new governed generation with `--objects`; **(user terminal**,
+   `PGPASSWORD`**)** `cutover_ledger authorize-code --deployment <its id> --contract-ref <GC2 code>
+   --backup-root <primary dir> --off-platform <second dir>` (it re-proves what the opening proved --
+   the newest generation within the cadence, intact on disk and off-platform, from PROD, holding the
+   current business state -- refuses while any unrecorded deployment exists, and writes the
+   authorization for the amended code, revoking every other one, in one transaction with its entry);
+   `promote`. The ledger stays at C12 and C13 is recorded on the first business write, as before
+   (a restore from "Recuperar banco de dados" is one: A19 (12), (13)).
 
 The rollback from C12 (section 3) is unchanged: `close` revokes every authorization of the
 reference, the amended one included.

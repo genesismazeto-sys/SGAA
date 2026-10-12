@@ -746,7 +746,7 @@ def test_r8_an_open_cutover_caps_the_database_cadence_at_the_one_it_recorded(env
 
 
 def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, *, folder_id="chosen-folder",
-                      registers=None):
+                      registers=None, registers_fail=False):
     import sqlite3
     from pathlib import Path
 
@@ -756,19 +756,24 @@ def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted,
         import zipfile
 
         if file_name.endswith(".zip"):
+            if registers_fail:
+                raise RuntimeError("upload refused")
             with zipfile.ZipFile(zip_path) as archive:
                 assert "alunos.csv" in archive.namelist() and "usuario_credenciais.csv" not in archive.namelist()
             registers.append((provider, file_name, folder_id))
-            remote.append({"id": "new-csv", "name": file_name})
-            return {"file_id": "new-csv", "file_name": file_name, "folder_id": folder_id or "default-folder"}
+            file_id = "new-csv" if len(registers) == 1 else f"new-csv-{len(registers)}"
+            # each run a later stamp (several runs fall in the same second here)
+            remote.append({"id": file_id, "name": f"sgaa-registros-202611{len(registers):02d}T000000Z.zip"})
+            return {"file_id": file_id, "file_name": file_name, "folder_id": folder_id or "default-folder"}
         lite = sqlite3.connect(zip_path)
         try:
             assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
         finally:
             lite.close()
         uploads.append((provider, Path(zip_path).name, folder_id))
-        remote.append({"id": "new", "name": file_name})
-        return {"file_id": "new", "file_name": file_name, "folder_id": folder_id or "default-folder"}
+        file_id = "new" if len(uploads) == 1 else f"new-{len(uploads)}"
+        remote.append({"id": file_id, "name": f"sgaa-pg-snapshot-202611{len(uploads):02d}T000000Z.db"})
+        return {"file_id": file_id, "file_name": file_name, "folder_id": folder_id or "default-folder"}
 
     def listed(token, folder, prefix):
         assert folder == folder_id  # the folder the snapshot was sent to, by its id
@@ -804,9 +809,9 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
         assert ("success", "Backup do banco gerado e enviado para Google Drive.") in flashes, flashes
         assert len(uploads) == 1 and uploads[0][1].startswith("sgaa-pg-snapshot-") and uploads[0][2] == "chosen-folder"
         assert len(registers) == 1 and registers[0][1].startswith("sgaa-registros-") and registers[0][2] == "chosen-folder"
-        # policy keeps 2 of each kind: the new one and the newest old
-        assert sorted(deleted) == ["csv-1", "csv-2", "old-1", "old-2", "old-3"]
-        assert "legacy" not in deleted and "copy" not in deleted
+        # same-named files this installation never recorded -- another installation's, a person's copy --
+        # are never deleted (A19 R3 M4)
+        assert deleted == []
         after = _public_table_counts(env.observer)
         assert {t: n for t, n in after.items() if t != "configuracoes_backup"} == \
             {t: n for t, n in before.items() if t != "configuracoes_backup"}
@@ -830,6 +835,30 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
         response = admin_client.get("/admin/banco-dados/download?generation=" + "0" * 64)
         flashes = _pop_flashes(admin_client)
         assert response.status_code == 302 and ("error", "Snapshot solicitado não está disponível para download.") in flashes
+        # retention keeps the policy's 2 of this installation's own files of each kind
+        admin_client.post("/admin/banco-dados/backup")
+        assert deleted == []
+        admin_client.post("/admin/banco-dados/backup")
+        _pop_flashes(admin_client)
+        assert sorted(deleted) == ["new", "new-csv"]  # this installation's oldest; nobody else's
+    finally:
+        env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
+
+
+def test_r8_a_registers_copy_that_did_not_reach_a_drive_is_never_reported_as_success(env, admin_client, monkeypatch):
+    """A19 R3 N2: the database copy arrived, the CSV did not: a warning that says so."""
+    from app import cloud_drives
+    from app.backup import pg_posture
+    from app.views.admin import banco_dados as view
+
+    uploads, deleted, remote = [], [], []
+    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, registers_fail=True)
+    try:
+        admin_client.post("/admin/banco-dados/backup")
+        flashes = _pop_flashes(admin_client)
+        assert ("warning", "Backup do banco gerado e enviado para Google Drive, mas os registros (CSV) não foram "
+                           "enviados para Google Drive.") in flashes, flashes
+        assert pg_posture.read(env.observer)["recent"][0]["exports"] == {}
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
 

@@ -243,8 +243,20 @@ class FakeObserver:
         if first and self.rows:
             raise ledger.Refused("OPENING_AUTHORIZATION_EXISTS")
         write()
+        if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
+            for row in self.rows:
+                if row["reference"] == reference_sha256 and row["code"] != code_sha256:
+                    row["revoked"] = True
         self.rows.append({"reference": reference_sha256, "code": code_sha256, "revoked": False,
                           "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))})
+
+    def supersede(self, reference_sha256, keep_code, write):
+        write()
+        revoked = 0
+        for row in self.rows:
+            if row["reference"] == reference_sha256 and row["code"] != keep_code and not row["revoked"]:
+                row["revoked"], revoked = True, revoked + 1
+        return revoked
 
     def authorization_valid(self, reference_sha256, code_sha256, project_sha256):
         identity = hosting.source_identity_sha256(self.facts)
@@ -269,12 +281,12 @@ class FakeObserver:
                     "authorizations_in_force": sum(not row["revoked"] for row in self.rows)}
         return dict(self.barrier)
 
-    def lift_barrier(self, reference_sha256):
+    def lift_barrier(self, reference_sha256, code_sha256):
         if not self.lift_works:
             return False
         self.barrier = None
         for row in self.rows:
-            if row["reference"] == reference_sha256:
+            if row["reference"] == reference_sha256 and code_sha256 and row["code"] == code_sha256:
                 row["revoked"] = False
         return True
 

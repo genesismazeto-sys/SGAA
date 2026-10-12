@@ -527,22 +527,22 @@ def test_a_product_contract_amendment_needs_its_own_gc1_after_the_reference_and_
     ledger.open_admission(directory, observer=observer)
     # the A18 path keeps its guard: without GC1 a changed deployed file is refused
     assert _code(ledger.amend, directory, changes, "U-A19", repo=repo) == "AMENDMENT_CHANGES_DEPLOYED_FILES"
-    assert _code(ledger.amend, directory, changes, "U-A19", repo=repo, contract_ref="U-GC1") == "GATE_NOT_GRANTED"
+    assert _code(ledger.amend, directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer) == "GATE_NOT_GRANTED"
     ledger.grant(directory, "GC1", "U-GC1")
     assert _code(ledger.grant, directory, "GC1", "U-GC1") == "GATE_ALREADY_GRANTED"  # one message, one use
     assert _code(ledger.amend, directory, amendment_repo["docs_only"], "U-A19", repo=repo,
-                 contract_ref="U-GC1") == "AMENDMENT_EMPTY"
+                 contract_ref="U-GC1", observer=observer) == "AMENDMENT_EMPTY"
     assert _code(ledger.amend, directory, amendment_repo["fork"], "U-A19", repo=repo,
-                 contract_ref="U-GC1") == "AMENDMENT_NOT_DESCENDANT"
-    assert _code(ledger.amend, directory, base, "U-A19", repo=repo, contract_ref="U-GC1") == "AMENDMENT_NOT_NEW"
-    entry = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1")
+                 contract_ref="U-GC1", observer=observer) == "AMENDMENT_NOT_DESCENDANT"
+    assert _code(ledger.amend, directory, base, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer) == "AMENDMENT_NOT_NEW"
+    entry = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer)
     assert entry["contract_ref"] == "U-GC1" and entry["amends"] == base and entry["commit"] == changes
     status = ledger.status(directory)
     assert status["state"] == "C12" and status["opening_reference"] == taken["hash"]  # nothing else moves
     second = _commit_on_top(repo, changes, "static/css/app.css", "body{color:blue}\n")
-    assert _code(ledger.amend, directory, second, "U-A19b", repo=repo, contract_ref="U-GC1") == "GATE_ALREADY_USED"
+    assert _code(ledger.amend, directory, second, "U-A19b", repo=repo, contract_ref="U-GC1", observer=observer) == "GATE_ALREADY_USED"
     ledger.grant(directory, "GC1", "U-GC1b")
-    assert ledger.amend(directory, second, "U-A19b", repo=repo, contract_ref="U-GC1b")["amends"] == changes
+    assert ledger.amend(directory, second, "U-A19b", repo=repo, contract_ref="U-GC1b", observer=observer)["amends"] == changes
 
 
 def test_the_amended_candidate_reopens_only_under_its_own_gc2_and_its_own_authorization(
@@ -551,7 +551,7 @@ def test_the_amended_candidate_reopens_only_under_its_own_gc2_and_its_own_author
     taken = _to_c12_with_the_repo_commit(directory, observer, base)
     reference = taken["hash"]
     ledger.grant(directory, "GC1", "U-GC1")
-    amended = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1")
+    amended = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer)
     code = amended["code_sha256"]
     # the old candidate is no longer deployable, the new one only with its own code
     assert _code(ls.deploy, directory, observer, "dpl_" + "J" * 24, commit=base) == "COMMIT_NOT_THE_REHEARSED_ONE"
@@ -563,27 +563,99 @@ def test_the_amended_candidate_reopens_only_under_its_own_gc2_and_its_own_author
     ls.deploy(directory, observer, reopened, admission="OPEN", opening_reference=reference, commit=changes,
               code=code, observed_admission="CLOSED")
     assert not observer.authorization_valid(reference, code, PLATFORM_PROJECT)  # admits no one yet
-    assert _code(ledger.authorize_code, directory, reopened, observer=observer) == "GATE_ONLY_AFTER_PONR"
-    assert _code(ledger.authorize_code, directory, reopened, observer=observer,
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent) == "GATE_ONLY_AFTER_PONR"
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "GATE_NOT_GRANTED"
     ledger.grant(directory, "GC2", "U-GC2")
-    assert _code(ledger.authorize_code, directory, LIFT, observer=observer,
+    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "NOT_A_RECORDED_REOPENING"  # the old open deployment
-    assert _code(ledger.authorize_code, directory, paused, observer=observer,
+    assert _code(ledger.authorize_code, directory, paused, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "NOT_A_RECORDED_REOPENING"  # an operator deployment
-    entry = ledger.authorize_code(directory, reopened, observer=observer, contract_ref="U-GC2")
+    entry = ledger.authorize_code(directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent, contract_ref="U-GC2")
     assert entry["type"] == "authorization" and entry["opening_reference"] == reference
     assert entry["contract_ref"] == "U-GC2" and entry["forward_fix_ref"] == "NONE" and entry["code_sha256"] == code
     assert observer.authorization_valid(reference, code, PLATFORM_PROJECT)
     # the application accepts it exactly as it accepts the reference's own authorization
     assert hosting.opening_entry_authorizes(json.dumps(entry), reference=reference, database_identity=IDENTITY,
                                             code=code, project=PLATFORM_PROJECT)
-    assert _code(ledger.authorize_code, directory, reopened, observer=observer,
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "GATE_ALREADY_USED"
     ledger.grant(directory, "GC2", "U-GC2b")
-    assert _code(ledger.authorize_code, directory, reopened, observer=observer,
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2b") == "CODE_ALREADY_AUTHORIZED"
     assert ledger.status(directory)["state"] == "C12"  # the PONR is still the first business write
+
+
+def test_an_amendment_supersedes_the_earlier_code_at_once_and_never_brings_it_back(
+        directory, observer, amendment_repo, monkeypatch):
+    """A19 R3 M2: after a GC1 amendment the superseded code admits no one, in PROD and at promotion."""
+    repo, base, changes = amendment_repo["repo"], amendment_repo["base"], amendment_repo["changes_css"]
+    taken = _to_c12_with_the_repo_commit(directory, observer, base)
+    reference, old_code = taken["hash"], taken["code_sha256"]
+    assert observer.authorization_valid(reference, old_code, PLATFORM_PROJECT)
+    ledger.grant(directory, "GC1", "U-GC1")
+    amended = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer)
+    assert amended["authorizations"] == "SUPERSEDED"
+    assert not observer.authorization_valid(reference, old_code, PLATFORM_PROJECT)  # in the same transaction
+    # the old open deployment can no longer be promoted back to the public address
+    assert _code(ledger.recorded_deployment, directory, LIFT) == "OPEN_DEPLOYMENT_NOT_AUTHORIZED"
+    # a revert to an authorized code is refused (it would re-open without GC2)
+    ledger.grant(directory, "GC1", "U-GC1-revert")
+    revert = _commit_on_top(repo, changes, "static/css/app.css", "body{}\n")
+    monkeypatch.setattr(ledger.hosting, "code_sha256", lambda files: old_code)
+    assert _code(ledger.amend, directory, revert, "U-A19r", repo=repo, contract_ref="U-GC1-revert",
+                 observer=observer) == "AMENDMENT_CODE_ALREADY_AUTHORIZED"
+
+
+def test_a_reopening_reproves_a_fresh_verified_backup_and_supersedes_every_other_code(
+        directory, observer, amendment_repo):
+    """A19 R3 M6: GC2 re-proves what the opening proved; its authorization is then the only one."""
+    repo, base, changes = amendment_repo["repo"], amendment_repo["base"], amendment_repo["changes_css"]
+    taken = _to_c12_with_the_repo_commit(directory, observer, base)
+    reference = taken["hash"]
+    ledger.grant(directory, "GC1", "U-GC1")
+    code = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer)["code_sha256"]
+    reopened = "dpl_" + "R" * 24
+    ls.deploy(directory, observer, reopened, admission="OPEN", opening_reference=reference, commit=changes,
+              code=code, observed_admission="CLOSED")
+    ledger.grant(directory, "GC2", "U-GC2")
+    roots = {"backup_root": directory.parent, "off_platform": directory.parent}
+
+    def gc2(**overrides):
+        return ledger.authorize_code(directory, reopened, observer=observer, contract_ref="U-GC2",
+                                     **dict(roots, **overrides))
+
+    assert _code(gc2, backup_root=None) == "BACKUP_ROOTS_REQUIRED"
+    observer.matches = False
+    assert _code(gc2) == "BACKUP_NOT_CURRENT"  # the backup does not hold the current business state
+    observer.matches = True
+    on_disk = observer.generation
+    observer.generation = dict(on_disk, dump_sha256="0" * 64)
+    assert _code(gc2) == "BACKUP_NOT_THE_RECORDED_ONE"
+    observer.generation = on_disk
+    observer.platform["dpl_" + "Z" * 24] = {"url": "https://stray.example.invalid", "state": "READY", "files": "x"}
+    assert _code(gc2) == "UNRECORDED_DEPLOYMENT"  # a deployment made outside the governed deploy
+    del observer.platform["dpl_" + "Z" * 24]
+    later = ledger._CLOCK()
+    ls.set_clock(later + timedelta(days=20))
+    assert _code(gc2) == "BACKUP_TOO_OLD_TO_OPEN"
+    ls.set_clock(later)
+    entry = gc2()
+    assert entry["reopening_backup_manifest_sha256"] == observer.generation["manifest_sha256"]
+    assert observer.authorization_valid(reference, code, PLATFORM_PROJECT)
+    assert not observer.authorization_valid(reference, taken["code_sha256"], PLATFORM_PROJECT)
+    assert ledger.recorded_deployment(directory, reopened)["code_sha256"] == code  # promotable now
+
+
+def test_supersede_revokes_every_code_the_ledger_does_not_authorize(directory, observer):
+    """A19 R3 M2: a narrowing act at C12 or after the PONR; it never admits anyone."""
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    taken = ledger._summary(ledger.read_ledger(directory))["opening_reference"]
+    observer.rows.append({"reference": taken["hash"], "code": OTHER_CODE, "revoked": False, "entry": "{}"})
+    entry = ledger.supersede(directory, observer=observer)
+    assert entry["type"] == "supersession" and entry["kept_code_sha256"] == taken["code_sha256"]
+    assert [row["code"] for row in observer.rows if not row["revoked"]] == [taken["code_sha256"]]
 
 
 def test_contract_gates_follow_the_opening_not_only_the_reference(directory, observer):
@@ -599,11 +671,11 @@ def test_a_reopening_refuses_without_an_amendment_and_under_the_barrier(director
     _grant_all(directory)
     _drive(directory, "C12", observer=observer)
     ledger.grant(directory, "GC2", "U-GC2")
-    assert _code(ledger.authorize_code, directory, LIFT, observer=observer,
+    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "NO_CONTRACT_AMENDMENT"
     observer.admission_state, observer.scheduler = "closed", "disabled"
     ledger.close(directory, observer=observer)
-    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, contract_ref="U-GC2") == "BARRIER_APPLIED"
+    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, backup_root=directory.parent, off_platform=directory.parent, contract_ref="U-GC2") == "BARRIER_APPLIED"
 
 
 def test_a_reopening_refuses_under_a_barrier_close_applied_but_could_not_record(
@@ -611,13 +683,13 @@ def test_a_reopening_refuses_under_a_barrier_close_applied_but_could_not_record(
     repo, base, changes = amendment_repo["repo"], amendment_repo["base"], amendment_repo["changes_css"]
     taken = _to_c12_with_the_repo_commit(directory, observer, base)
     ledger.grant(directory, "GC1", "U-GC1")
-    code = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1")["code_sha256"]
+    code = ledger.amend(directory, changes, "U-A19", repo=repo, contract_ref="U-GC1", observer=observer)["code_sha256"]
     reopened = "dpl_" + "R" * 24
     ls.deploy(directory, observer, reopened, admission="OPEN", opening_reference=taken["hash"], commit=changes,
               code=code, observed_admission="CLOSED")
     ledger.grant(directory, "GC2", "U-GC2")
     observer.barrier = {"setting": True}  # the role default is read-only, but no barrier entry exists
-    assert _code(ledger.authorize_code, directory, reopened, observer=observer,
+    assert _code(ledger.authorize_code, directory, reopened, observer=observer, backup_root=directory.parent, off_platform=directory.parent,
                  contract_ref="U-GC2") == "BARRIER_IN_FORCE"
     assert not observer.authorization_valid(taken["hash"], code, PLATFORM_PROJECT)
 
@@ -1507,6 +1579,17 @@ def test_the_ponr_needs_a_fingerprint_that_differs_from_the_opening_and_a_write_
     assert _code(ledger.advance, directory, "C13", {**GOOD["C13"], "write_class": "request"}) == "EVIDENCE_INVALID"
 
 
+def test_a_declared_restore_is_the_ponr_even_when_it_restores_the_opening_content(directory):
+    """SPEC A19 (13): the administrator's restore is the PONR; restoring the opening's own content moves no digest."""
+    _grant_all(directory)
+    _drive(directory, "C12")
+    same = {**GOOD["C13"], "current_fingerprint_sha256": REFERENCE["fingerprint_sha256"]}
+    assert _code(ledger.advance, directory, "C13", {**same, "write_class": "REQUISICOES"}) == "NO_FINGERPRINT_DELTA"
+    entry = ledger.advance(directory, "C13", {**same, "write_class": "ADMIN_RESTORE"})
+    assert entry["state"] == "C13" and ledger.status(directory)["ponr_recorded"] is True
+    assert _code(ledger.rollback, directory, "SMOKE_FAILED") == "PONR_RECORDED"  # forward-fix only from here
+
+
 @pytest.mark.parametrize("gate", sorted(ledger.PRE_PONR_ONLY_GATES - set(ALL_GATES)))
 def test_gates_that_act_on_prod_or_the_source_cannot_be_granted_after_the_ponr(directory, gate):
     _grant_all(directory)
@@ -1546,17 +1629,17 @@ def test_a_forward_fix_runs_new_code_only_under_its_own_gate_and_its_own_authori
     assert _code(ls.deploy, directory, observer, "dpl_" + "G" * 24, admission="OPEN", opening_reference=reference,
                  commit=OTHER_COMMIT, code=OTHER_CODE, forward_fix_ref="m-fix-1") == "FORWARD_FIX_GATE_REQUIRED"
     assert not observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)  # not open until authorized
-    assert _code(ledger.authorize_code, directory, LIFT, observer=observer) == "NOT_A_RECORDED_FORWARD_FIX"
-    entry = ledger.authorize_code(directory, fix, observer=observer)
+    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, backup_root=directory.parent, off_platform=directory.parent) == "NOT_A_RECORDED_FORWARD_FIX"
+    entry = ledger.authorize_code(directory, fix, observer=observer, backup_root=directory.parent, off_platform=directory.parent)
     assert entry["type"] == "authorization" and entry["opening_reference"] == reference
     assert observer.authorization_valid(reference, OTHER_CODE, PLATFORM_PROJECT)
-    assert _code(ledger.authorize_code, directory, fix, observer=observer) == "CODE_ALREADY_AUTHORIZED"
+    assert _code(ledger.authorize_code, directory, fix, observer=observer, backup_root=directory.parent, off_platform=directory.parent) == "CODE_ALREADY_AUTHORIZED"
 
 
 def test_no_code_is_authorized_after_the_reference_before_the_ponr(directory, observer):
     _grant_all(directory)
     _drive(directory, "C12", observer=observer)
-    assert _code(ledger.authorize_code, directory, LIFT, observer=observer) == "GATE_ONLY_AFTER_PONR"
+    assert _code(ledger.authorize_code, directory, LIFT, observer=observer, backup_root=directory.parent, off_platform=directory.parent) == "GATE_ONLY_AFTER_PONR"
 
 
 # ---- the chain and the head --------------------------------------------------------------------------

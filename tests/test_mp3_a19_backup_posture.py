@@ -104,8 +104,8 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "destinations",
-                              "objects", "off_platform", "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "drives",
+                              "destinations", "objects", "off_platform", "governed", "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 
@@ -175,9 +175,56 @@ def test_stored_policy_values_out_of_bounds_fall_back_to_their_defaults():
                                           ("pg_restore_test_days", "999", "2026-10-12 11:00:00"),
                                           ("pg_database_cadence_hours", "abc", None)])
     assert policy["pg_retention_generations"] == 7 and policy["pg_restore_test_days"] == 30
-    assert policy["pg_database_cadence_hours"] == 24 and policy["configured"] is True
+    assert policy["pg_database_cadence_hours"] == 24 and policy["configured"] is False  # for display only
+    assert policy["invalid"] == ["pg_database_cadence_hours", "pg_restore_test_days"]
     assert policy["updated_at"] == "2026-10-12 10:00:00"  # only accepted values date the policy
-    assert pg_posture.policy_from_rows([]) == dict(pg_posture.default_policy(), configured=False, updated_at=None)
+    assert pg_posture.policy_from_rows([]) == dict(pg_posture.default_policy(), configured=False, updated_at=None,
+                                                   invalid=[])
+
+
+@pytest.mark.parametrize("stored", ["1", "0", "-5", "abc", "999", "31", "", None, "2.5", "\u0667", " 7x"])
+def test_a_run_never_deletes_by_an_invalid_stored_retention(stored):
+    """A19 R3 M7: an invalid stored value refuses in strict mode, so the runs keep every generation."""
+    from tools import ops_backup
+
+    rows = [(key, str(value), None) for key, value in pg_posture.default_policy().items()]
+    rows = [(key, stored if key == "pg_retention_generations" else value, None) for key, value, _ in rows]
+    with pytest.raises(pg_posture.PolicyError):
+        pg_posture.policy_from_rows(rows, strict=True)
+
+    class Conn:
+        def transaction(self):
+            import contextlib
+            return contextlib.nullcontext()
+
+        def cursor(self, **_kwargs):
+            outer = self
+
+            class Cursor:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *exc):
+                    return False
+
+                def execute(self, _sql):
+                    return self
+
+                def fetchall(self):
+                    return rows
+            return Cursor()
+
+        def close(self):
+            pass
+
+    assert ops_backup._policy_generations(lambda: Conn(), None) == ops_backup.KEEP_EVERY_GENERATION
+
+
+def test_a_partly_stored_policy_is_refused_in_strict_mode():
+    with pytest.raises(pg_posture.PolicyError):
+        pg_posture.policy_from_rows([("pg_retention_generations", "5", None)], strict=True)
+    full = [(key, str(value), None) for key, value in pg_posture.default_policy().items()]
+    assert pg_posture.policy_from_rows(full, strict=True)["pg_retention_generations"] == 2
 
 
 def test_the_posture_is_judged_against_the_administrators_policy():
@@ -298,9 +345,15 @@ def test_real_pg_the_cadence_is_the_one_the_opening_recorded(pg_database):
     posture = pg_posture.read(conn)
     assert (posture["cadence_hours"], posture["ceiling_hours"], posture["rpo_hours"]) == (6, 6, 6)
     assert pg_posture.opening_ceiling(conn) == 6
-    forged = dict(reference, backup_cadence_hours=1)  # a row that is not the ledger's entry decides nothing
+    forged = dict(reference, backup_cadence_hours=1)  # a row that is not the ledger's entry: unverifiable
     conn.execute("UPDATE sgaa_cutover.opening SET entry = %s", (json.dumps(forged, sort_keys=True),))
-    assert pg_posture.read(conn)["ceiling_hours"] is None and pg_posture.opening_ceiling(conn) is None
+    with pytest.raises(pg_posture.CeilingUnverifiable):
+        pg_posture.opening_ceiling(conn)
+    posture = pg_posture.read(conn)
+    assert posture["ceiling_unverified"] is True and posture["database_status"] != "CURRENT"
+    conn.execute("UPDATE sgaa_cutover.opening SET entry = %s", ("not json",))
+    with pytest.raises(pg_posture.CeilingUnverifiable):
+        pg_posture.opening_ceiling(conn)
 
 
 @real_pg
@@ -496,6 +549,47 @@ def test_real_pg_a_snapshot_that_does_not_equal_its_source_is_refused_and_remove
     assert list(tmp_path.iterdir()) == []
 
 
+def test_listings_follow_every_page_and_onedrive_addresses_the_receipts_drive(monkeypatch):
+    """A19 R3 N3 and M5."""
+    from app import cloud_drives
+
+    calls = []
+
+    def api(url, token=None, **_kwargs):
+        calls.append(url)
+        if "googleapis" in url:
+            if "pageToken=" not in url:
+                return {"files": [{"id": "g1", "name": "sgaa-pg-snapshot-20261002T000000Z.db"}], "nextPageToken": "p2"}
+            return {"files": [{"id": "g2", "name": "sgaa-pg-snapshot-20261001T000000Z.db"}]}
+        if url.endswith("&page=2"):
+            return {"value": [{"id": "o2", "name": "b"}], "@odata.nextLink": "https://evil.example.invalid/next"}
+        if "children" in url:
+            return {"value": [{"id": "o1", "name": "a"}],
+                    "@odata.nextLink": cloud_drives._GRAPH + "/me/drive/root/children?$top=200&page=2"}
+        return {"@microsoft.graph.downloadUrl": "https://download.example.invalid/x"}
+
+    monkeypatch.setattr(cloud_drives, "_api", api)
+    assert [f["id"] for f in cloud_drives.google_list_folder_files("t", "folder", "sgaa-pg-snapshot-")] == ["g1", "g2"]
+    listed = cloud_drives.onedrive_list_folder_children("t", folder_id=None, drive_id=None, folder_path="SGAA")
+    assert [f["id"] for f in listed] == ["o1", "o2"]  # a continuation outside Graph is never followed
+    assert not any("evil" in url for url in calls)
+    cloud_drives.onedrive_download_url("t", "ITEM", drive_id="b!DRIVE")
+    assert "/drives/b%21DRIVE/items/ITEM" in calls[-1]
+    cloud_drives.onedrive_download_url("t", "ITEM")
+    assert "/me/drive/items/ITEM" in calls[-1]
+
+
+def test_a_receipt_names_the_drive_and_ownership_reads_every_receipt():
+    record = pg_posture.run_record(
+        generation_at="2026-10-12T10:00:00Z", manifest_sha256="a" * 64, dump_sha256="a" * 64,
+        source_identity_sha256=IDENTITY, object_set_name=None, object_set_digest=None,
+        object_manifest_sha256=None, run_seconds=3, at="2026-10-12T10:00:00Z", kind=pg_posture.SNAPSHOT_KIND,
+        provenance=pg_posture.HOSTED_PROVENANCE, destinations=("onedrive",), files={"onedrive": "ITEM1"},
+        exports={"onedrive": "ITEM2"}, drives={"onedrive": "b!DRIVE"})
+    posture = pg_posture.summarize([(json.dumps(record), None)], identity=IDENTITY, now=NOW)
+    assert posture["recent"][0]["drives"] == {"onedrive": "b!DRIVE"}
+
+
 def test_the_google_listing_filters_names_itself_and_builds_a_valid_url(monkeypatch):
     """Review (A19 (9)): Drive's word-based ``contains`` is not trusted to select snapshot names."""
     from app import cloud_drives
@@ -561,13 +655,54 @@ def test_real_pg_a_restore_brings_the_registers_back_exactly_and_never_reuses_an
         conn.execute("INSERT INTO cursos (codigo, nome, duracao_periodos) VALUES ('DEPOIS-1', 'Curso depois do backup', 8)")
         issued = pathb.next_identity_value(conn, "cursos") - 1
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] != expected
-        result = pg_restore.restore(pg_restore.read(snap["path"]), connect=connect)
+        result = pg_restore.restore(pg_restore.read(snap["path"]), connect=connect, before=lambda: True)
         assert result["rows"] > 0
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == expected  # exactly the backup's registers
         assert pathb.next_identity_value(conn, "cursos") > issued  # the id issued after the backup is never reused
         assert conn.execute("SELECT count(*) FROM storage_upload_intents").fetchone()[0] == 0
     finally:
         conn.close()
+
+
+@real_pg
+def test_real_pg_no_write_falls_between_the_safety_copy_and_the_replacement(business_database, tmp_path):
+    """A19 R3 M3: the registers are locked against writes before the safety copy is made."""
+    import threading
+
+    import psycopg
+
+    from app.backup import pg_restore, pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+
+    url, _target = business_database
+    _with_credentials(url)
+    connect = lambda: raw_connection(url)  # noqa: E731
+    snap = pg_snapshot.create(tmp_path, connect=connect)
+    snapshot = pg_restore.read(snap["path"])
+    outcome = {}
+
+    def writer():
+        other = raw_connection(url, autocommit=True)
+        try:
+            other.execute("SET lock_timeout = '1s'")
+            other.execute("UPDATE turmas SET nome = nome || ' (durante)'")
+            outcome["written"] = True
+        except psycopg.errors.LockNotAvailable:
+            outcome["written"] = False
+        finally:
+            other.close()
+
+    def safety_copy():
+        thread = threading.Thread(target=writer)
+        thread.start()
+        thread.join()
+        safety = pg_snapshot.create(tmp_path / "safety", connect=connect)  # reads go on under the lock
+        outcome["copied"] = bool(safety["rows"])
+        return True
+
+    (tmp_path / "safety").mkdir()
+    pg_restore.restore(snapshot, connect=connect, before=safety_copy)
+    assert outcome == {"written": False, "copied": True}  # the write could not slip in between
 
 
 @real_pg
@@ -591,8 +726,13 @@ def test_real_pg_a_restore_that_cannot_be_proven_changes_nothing(business_databa
         monkeypatch.setattr(pg_restore.pathb, "read_target_rows",  # the proof sees a lost row
                             lambda c, table: real_read(c, table)[1:] if table == "turmas" else real_read(c, table))
         with pytest.raises(pg_restore.RestoreError) as caught:
-            pg_restore.restore(snapshot, connect=connect)
+            pg_restore.restore(snapshot, connect=connect, before=lambda: True)
         assert caught.value.code == "RESTORE_TABLE_DIFFERS"
+        monkeypatch.undo()
+        with pytest.raises(pg_restore.RestoreError) as caught:  # no safety copy: nothing changes
+            pg_restore.restore(snapshot, connect=connect, before=lambda: False)
+        assert caught.value.code == "SAFETY_COPY_NOT_SENT"
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == before
         monkeypatch.undo()
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == before  # rolled back: nothing changed
         broken = tmp_path / "broken.db"
