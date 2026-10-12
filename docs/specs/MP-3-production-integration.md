@@ -1099,7 +1099,16 @@ Executor amendments (consequences of the above; not material beyond what the use
   it, never a success. N3 -- folder listings follow every page (bounded; a shorter listing only ever
   deletes less). N1 (receipts prove integrity, not provenance) is deferred: forging one needs write
   access to the database, which already allows changing every register; gate evidence comes only from
-  the operator's ledger, never from the page. Evidence: section 17.
+  the operator's ledger, never from the page. Recorded on the user's instruction (2026-10-12, user
+  terminal, `D:/SGAA_CUTOVER/a19/c13_supersede.py`): C13 at ledger seq 83 (`ADMIN_RESTORE`, `detected_at`
+  19:07:37Z, fingerprint equal to the reference, `safety_copy_manifest_sha256` = the 19:06:44Z
+  snapshot's -- the file the administrator downloaded and restored; no write request ran between it and
+  the restore, so it holds the pre-restore state; the restore's own safety copy was made seconds after
+  19:07:37Z, the log's time being the request's start, and so lies outside the window), then the
+  supersession at seq 84 (kept code NONE: the original code's authorization revoked in PROD). The
+  first `status` read after it refused `LEDGER_CHAIN_BROKEN` because the reader did not know the new
+  entry type; the reader was fixed, the chain itself was intact (re-read OK, 84 entries). Evidence:
+  section 17.
 
 ## 17. Closure
 

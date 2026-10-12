@@ -656,6 +656,8 @@ def test_supersede_revokes_every_code_the_ledger_does_not_authorize(directory, o
     entry = ledger.supersede(directory, observer=observer)
     assert entry["type"] == "supersession" and entry["kept_code_sha256"] == taken["code_sha256"]
     assert [row["code"] for row in observer.rows if not row["revoked"]] == [taken["code_sha256"]]
+    status = ledger.status(directory)  # the ledger reads its own supersession entry back
+    assert status["chain"] == "OK" and status["head"] == entry["hash"]
 
 
 def test_contract_gates_follow_the_opening_not_only_the_reference(directory, observer):

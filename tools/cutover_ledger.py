@@ -116,7 +116,7 @@ STATES = (
 )
 ENTRY_TYPES = frozenset({
     "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
-    "promotion", "barrier", "restore", "authorization",
+    "promotion", "barrier", "restore", "authorization", "supersession",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
