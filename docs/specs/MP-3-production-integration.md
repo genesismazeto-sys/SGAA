@@ -913,6 +913,22 @@ Executor amendments (consequences of the above; not material beyond what the use
   fail closed); `VERCEL_DEPLOYMENT_ID` and `VERCEL_PROJECT_ID` are present at run time. On Windows the CLI
   runs through node, never a `.cmd` shim (cmd.exe split an API path at `&`). Evidence: section 17.
 
+- A18 2026-10-11 -- GG1 compliance pages (user message "GG1 COMPLIANCE AMENDMENT AUTHORIZED": the GG1
+  blocker — Google requires, for an external production OAuth client, a public application home page,
+  Privacy Policy and Terms of Service on the application domain — is accepted, and the smallest
+  amendment is authorized). The candidate is amended by ONE reviewed commit on top of the rehearsed
+  one that only ADDS three static pages under `static/compliance/` (home page, Privacy Policy, Terms of
+  Service; Portuguese; no personal, student, operational or credential content). They are anonymous by
+  construction: the admission gate already serves `/static/*` without a credential, so the pages are
+  reachable while admission stays `operator` and nothing else opens or changes. `cutover_ledger amend`
+  records the amendment before the PONR — it must descend from the effective commit and the only
+  deployed-file difference may be added files under `static/compliance/` (`AMENDMENT_NOT_DESCENDANT`,
+  `AMENDMENT_CHANGES_DEPLOYED_FILES`, `AMENDMENT_FILE_OUTSIDE_COMPLIANCE`, `AMENDMENT_EMPTY`,
+  `AMENDMENT_NOT_NEW`, `AMENDMENT_AFTER_PONR`) — and the amended code identity becomes the candidate
+  every later pre-PONR step must run: deployments (`_deployment_rules`, `DEPLOYMENT_CODE_CHANGED`), the
+  C10/C11 promotion binding, the reference and the opening authorization. No admission, authentication,
+  OAuth, storage or mirror behaviour changes; no guard is lifted. Evidence: section 17.
+
 ## 17. Closure
 
 Level reached: **PREPARED, PENDING R3** -- every executor-side deliverable is landed and evidenced

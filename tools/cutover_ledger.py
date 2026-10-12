@@ -47,6 +47,9 @@ COMMANDS
                    and that the project's storage API lists exactly the buckets that database holds;
                    record that identity -- every later observation must be this database
     advance        enter the next state with its evidence (never C12: see ``open``)
+    amend          before the PONR: record a reviewed amendment whose commit only ADDS the public
+                   compliance pages (``static/compliance/``); its code becomes the candidate every
+                   later deployment and the public address must run
     reference      at C11, with GO granted, once: observe that every deployment of the production
                    project is recorded and CLOSED and that no opening was ever authorized, prove the
                    pre-opening generation current, take the reference fingerprint live, and write the
@@ -103,7 +106,7 @@ STATES = (
     "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14",
 )
 ENTRY_TYPES = frozenset({
-    "init", "advance", "grant", "rollback", "reference", "backup", "qualification", "deployment",
+    "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
     "promotion", "barrier", "restore", "authorization",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
@@ -142,6 +145,8 @@ STATE_GATES = {
 PONR_STATE = "C13"
 OPENING_STATE = "C12"
 PRE_PONR_ONLY_GATES = frozenset({"GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3", "GX1", "GD1"})
+#: The only files a pre-PONR amendment may add: the public compliance pages (SPEC A18).
+COMPLIANCE_PREFIX = "static/compliance/"
 # Deployments the platform will never serve again; every other one must be one the ledger recorded.
 TERMINAL_DEPLOYMENT_STATES = frozenset({"ERROR", "CANCELED", "DELETED"})
 
@@ -427,7 +432,7 @@ def _summary(entries: list[dict]) -> dict:
     opening_reference = None  # the reference entry C12 was opened from
     backups: list[dict] = []
     collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
-                 "authorizations": [], "grants": []}
+                 "authorizations": [], "grants": [], "amendments": []}
     for entry in entries:
         kind = entry["type"]
         if kind == "advance":
@@ -459,6 +464,8 @@ def _summary(entries: list[dict]) -> dict:
             collected["restores"].append(entry)
         elif kind == "authorization":
             collected["authorizations"].append(entry)
+        elif kind == "amendment":
+            collected["amendments"].append(entry)
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
             "entered": entered, "reference": reference, "backups": backups,
             "opening_reference": opening_reference, "any_reference": reference or opening_reference, **collected}
@@ -562,8 +569,20 @@ def _check_dark_deployment(summary: dict, evidence: dict) -> None:
         raise Refused("DEPLOYMENT_NOT_CLOSED")
 
 
+def _effective_commit(summary: dict) -> str | None:
+    """The commit a pre-PONR deployment must run: the latest recorded amendment's, else C0's."""
+    amendments = summary["amendments"]
+    if amendments:
+        return amendments[-1]["commit"]
+    return _evidence_of(summary, "C0").get("commit")
+
+
 def _candidate_code(summary: dict):
-    """The code of the deployment C9 recorded: the candidate every pre-PONR deployment must run."""
+    """The code every pre-PONR deployment and the public address must run: the latest recorded
+    amendment's (A18), else the deployment C9 recorded."""
+    amendments = summary["amendments"]
+    if amendments:
+        return amendments[-1]["code_sha256"]
     deployment_id = _evidence_of(summary, "C9").get("deployment_id")
     deployment = _deployment(summary, deployment_id) if deployment_id else None
     return deployment["code_sha256"] if deployment else None
@@ -668,6 +687,62 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
         if gate in summary["granted"]:
             raise Refused("GATE_ALREADY_GRANTED")
         return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
+
+
+def amend(directory: Path, commit: str, ref: str, *, expect_head: str | None = None,
+          repo: Path | None = None) -> dict:
+    """Record a reviewed amendment before the PONR: a commit that only ADDS the public compliance pages.
+
+    The amendment supersedes the candidate for every later pre-PONR step (deployment, promotion,
+    reference, opening): its runtime code identity becomes the one every deployment must run.  The
+    guards are not lifted -- the amendment must descend from the effective commit, and the deployed
+    files it changes are exactly the added pages under ``COMPLIANCE_PREFIX`` and nothing else.
+    """
+    from tools import deploy_audit
+
+    repo = Path(repo) if repo is not None else _repository_root()
+    try:
+        resolved = deploy_audit._resolve_commit(commit, repo)
+    except deploy_audit.Refused:
+        raise Refused("COMMIT_NOT_FOUND") from None
+    if not _REF.fullmatch(ref or ""):
+        raise Refused("REFERENCE_NOT_OPAQUE", "the reference is a short code, never a quotation")
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        state = summary["state"]
+        if state is None or STATES.index(state) < STATES.index("C8"):
+            raise Refused("OUT_OF_ORDER", "an amendment follows C8")
+        if STATES.index(state) >= STATES.index(PONR_STATE):
+            raise Refused("AMENDMENT_AFTER_PONR", "an amendment exists only before the point of no return")
+        previous = _effective_commit(summary)
+        if not previous or resolved == previous:
+            raise Refused("AMENDMENT_NOT_NEW", "the amendment is a new commit on top of the effective one")
+        ancestry = deploy_audit._git(repo, "merge-base", "--is-ancestor", previous, resolved)
+        if ancestry.returncode != 0:
+            raise Refused("AMENDMENT_NOT_DESCENDANT", "the amendment descends from the effective commit")
+        try:
+            old_files = {path: blob for path, blob in deploy_audit._committed_blobs(previous, repo).items()
+                         if deploy_audit._allowed(path)}
+            new_files = {path: blob for path, blob in deploy_audit._committed_blobs(resolved, repo).items()
+                         if deploy_audit._allowed(path)}
+        except deploy_audit.Refused as refusal:
+            raise Refused(refusal.code) from None
+        changed = sorted(path for path in old_files if old_files[path] != new_files.get(path))
+        if changed:
+            raise Refused("AMENDMENT_CHANGES_DEPLOYED_FILES",
+                          "the amendment only adds files; it never changes or removes one")
+        added = sorted(set(new_files) - set(old_files))
+        if not added:
+            raise Refused("AMENDMENT_EMPTY", "the amendment adds the public compliance pages")
+        if any(not path.startswith(COMPLIANCE_PREFIX) for path in added):
+            raise Refused("AMENDMENT_FILE_OUTSIDE_COMPLIANCE", f"only {COMPLIANCE_PREFIX} may be added")
+        code = hosting.code_sha256(new_files)
+        return _append(directory, entries, {"type": "amendment", "amends": previous, "commit": resolved,
+                                            "code_sha256": code, "ref": ref})
 
 
 # ---------------------------------------------------------------------------
@@ -1362,8 +1437,9 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
         used = {d["forward_fix_ref"] for d in summary["deployments"]}
         if not after_ponr or forward_fix_ref not in grants or forward_fix_ref in used:
             raise Refused("FORWARD_FIX_GATE_REQUIRED", "a forward fix needs its own GF1 grant, after the PONR")
-    elif commit != _evidence_of(summary, "C0").get("commit"):
-        raise Refused("COMMIT_NOT_THE_REHEARSED_ONE", "before a forward fix only the reviewed commit is deployed")
+    elif commit != _effective_commit(summary):
+        raise Refused("COMMIT_NOT_THE_REHEARSED_ONE",
+                      "before a forward fix only the reviewed commit, or its recorded amendment, is deployed")
     if admission not in ("OPERATOR", "OPEN"):
         raise Refused("ADMISSION_INVALID")
     if admission == "OPEN":
@@ -1780,7 +1856,8 @@ def main(argv=None, *, out=None, err=None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
-    bound = ("grant", "advance", "qualify", "rollback", "reference", "open", "close", "resume", "authorize-code")
+    bound = ("grant", "advance", "amend", "qualify", "rollback", "reference", "open", "close", "resume",
+             "authorize-code")
     for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
@@ -1801,6 +1878,9 @@ def main(argv=None, *, out=None, err=None) -> int:
         elif name == "advance":
             sub.add_argument("--state", required=True)
             sub.add_argument("--evidence", required=True, help="a JSON file of value-free evidence")
+        elif name == "amend":
+            sub.add_argument("--commit", required=True, help="the amendment commit (the pages on top)")
+            sub.add_argument("--ref", required=True, help="an opaque code of the user's message")
         elif name == "reference":
             sub.add_argument("--out", required=True, help="a new file in the custody directory")
             sub.add_argument("--backup-cadence-hours", required=True, type=int)
@@ -1827,6 +1907,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = init(directory)
         elif args.command == "grant":
             result = grant(directory, args.gate, args.ref, expect_head=args.expect_head)
+        elif args.command == "amend":
+            result = amend(directory, args.commit, args.ref, expect_head=args.expect_head)
         elif args.command == "advance":
             result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head)
         elif args.command == "qualify":

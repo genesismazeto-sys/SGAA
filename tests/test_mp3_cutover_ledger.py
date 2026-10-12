@@ -363,6 +363,116 @@ def test_the_same_commit_must_run_the_same_code_in_every_later_deployment(direct
     assert _code(ls.deploy, directory, observer, "dpl_" + "C" * 24, code=OTHER_CODE) == "DEPLOYMENT_CODE_CHANGED"
 
 
+# ---- the compliance amendment (A18): one reviewed commit on top, only public pages added -------------
+
+_COMPLIANCE_PAGES = ("index.html", "privacidade.html", "termos.html")
+
+
+@pytest.fixture
+def amendment_repo(tmp_path):
+    """A real repository: the candidate commit, then well-formed and malformed amendments on top."""
+    import subprocess
+
+    repo = tmp_path / "amendment-repo"
+    repo.mkdir()
+
+    def run(*arguments):
+        return subprocess.run(["git", "-C", str(repo), *arguments], capture_output=True, text=True, check=True)
+
+    def commit(message):
+        run("commit", "-qm", message)
+        return run("rev-parse", "HEAD").stdout.strip()
+
+    run("init", "-q")
+    run("config", "user.name", "test")
+    run("config", "user.email", "test@example.invalid")
+    (repo / "static" / "css").mkdir(parents=True)
+    (repo / "main.py").write_text("app = None\n", encoding="utf-8")
+    (repo / "static" / "css" / "app.css").write_text("body{}\n", encoding="utf-8")
+    run("add", ".")
+    base = commit("base")
+    # the well-formed amendment: the three compliance pages, added
+    (repo / "static" / "compliance").mkdir()
+    for name in _COMPLIANCE_PAGES:
+        (repo / "static" / "compliance" / name).write_text("<html></html>\n", encoding="utf-8")
+    run("add", ".")
+    amended = commit("pages")
+    # it changes a deployed file
+    run("checkout", "-q", "-b", "changes", base)
+    (repo / "static" / "css" / "app.css").write_text("body{color:red}\n", encoding="utf-8")
+    run("add", ".")
+    changes_css = commit("changes-css")
+    # it adds a deployed file outside the compliance prefix
+    run("checkout", "-q", "-b", "outside", base)
+    (repo / "static" / "other.html").write_text("<html></html>\n", encoding="utf-8")
+    run("add", ".")
+    outside = commit("outside")
+    # it only touches files the deployment does not carry
+    run("checkout", "-q", "-b", "docs-only", base)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "note.md").write_text("note\n", encoding="utf-8")
+    run("add", ".")
+    docs_only = commit("docs-only")
+    # it does not descend from the effective commit (an unrelated root commit in the same repository)
+    tree = subprocess.run(["git", "-C", str(repo), "mktree"], input=b"", capture_output=True, check=True)
+    fork = subprocess.run(["git", "-C", str(repo), "commit-tree", tree.stdout.decode().strip(), "-m", "fork"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    return {"repo": repo, "base": base, "amended": amended, "changes_css": changes_css,
+            "outside": outside, "docs_only": docs_only, "fork": fork}
+
+
+def _to_c9_with_the_repo_commit(directory, observer, base):
+    """C0..C9 where C0's commit is a real commit of the injected repository."""
+    _grant_all(directory)
+    _drive(directory, "C8", overrides={"C0": {"commit": base}}, observer=observer)
+    ls.deploy(directory, observer, commit=base)
+    ledger.advance(directory, "C9", {**GOOD["C9"], "commit": base})
+
+
+def test_an_amendment_that_only_adds_compliance_pages_supersedes_the_candidate(directory, observer,
+                                                                               amendment_repo):
+    from tools import deploy_audit as da
+
+    base, amended, repo = amendment_repo["base"], amendment_repo["amended"], amendment_repo["repo"]
+    _to_c9_with_the_repo_commit(directory, observer, base)
+    amended_dpl = "dpl_" + "W" * 24
+    assert _code(ls.deploy, directory, observer, amended_dpl, commit=amended) == "COMMIT_NOT_THE_REHEARSED_ONE"
+    entry = ledger.amend(directory, amended, "U-AMEND-1", repo=repo)
+    assert entry["type"] == "amendment" and entry["amends"] == base and entry["commit"] == amended
+    files = {path: blob for path, blob in da._committed_blobs(amended, repo).items() if da._allowed(path)}
+    assert entry["code_sha256"] == hosting.code_sha256(files)
+    assert ledger.status(directory)["state"] == "C9"  # the amendment does not advance a state
+    assert _code(ls.deploy, directory, observer, amended_dpl, commit=base) == "COMMIT_NOT_THE_REHEARSED_ONE"
+    assert _code(ls.deploy, directory, observer, amended_dpl, commit=amended,
+                 code=OTHER_CODE) == "DEPLOYMENT_CODE_CHANGED"
+    ls.deploy(directory, observer, amended_dpl, commit=amended, code=entry["code_sha256"])
+    ls.promote(directory, observer, amended_dpl)
+    assert ledger.advance(directory, "C10", GOOD["C10"])["state"] == "C10"
+
+
+def test_amendments_refuse_anything_but_appended_compliance_pages(directory, observer, amendment_repo):
+    repo = amendment_repo["repo"]
+    _to_c9_with_the_repo_commit(directory, observer, amendment_repo["base"])
+    amended = amendment_repo["amended"]
+    assert _code(ledger.amend, directory, amended, "not a reference!", repo=repo) == "REFERENCE_NOT_OPAQUE"
+    assert _code(ledger.amend, directory, amendment_repo["base"], "U-2", repo=repo) == "AMENDMENT_NOT_NEW"
+    assert _code(ledger.amend, directory, amendment_repo["changes_css"], "U-3",
+                 repo=repo) == "AMENDMENT_CHANGES_DEPLOYED_FILES"
+    assert _code(ledger.amend, directory, amendment_repo["outside"], "U-4",
+                 repo=repo) == "AMENDMENT_FILE_OUTSIDE_COMPLIANCE"
+    assert _code(ledger.amend, directory, amendment_repo["docs_only"], "U-5", repo=repo) == "AMENDMENT_EMPTY"
+    assert _code(ledger.amend, directory, amendment_repo["fork"], "U-6", repo=repo) == "AMENDMENT_NOT_DESCENDANT"
+    ledger.amend(directory, amended, "U-AMEND-2", repo=repo)  # the well-formed one is accepted once
+    assert _code(ledger.amend, directory, amended, "U-7", repo=repo) == "AMENDMENT_NOT_NEW"
+
+
+def test_an_amendment_is_refused_after_the_point_of_no_return(directory, amendment_repo):
+    _grant_all(directory)
+    _drive(directory, "C13")
+    assert _code(ledger.amend, directory, amendment_repo["amended"], "U-late",
+                 repo=amendment_repo["repo"]) == "AMENDMENT_AFTER_PONR"
+
+
 def test_the_smoked_address_must_be_the_one_promoted_to_the_candidate(directory, observer):
     _grant_all(directory)
     _drive(directory, "C9", observer=observer)

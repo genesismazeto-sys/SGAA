@@ -371,7 +371,10 @@ promoted one, `PUBLIC_ADDRESS_NOT_PROMOTED`).
    The administrator opens `<public address>/operator-admission`, presents the operator
    credential once (an HttpOnly cookie admits that browser for eight hours), signs in and
    connects Google through the hosted page. The consent screen is in production status.
-   Compare the logical account key with the source's (census).
+   Google's required public fields are the A18 compliance pages, served anonymously while
+   admission stays closed: `/static/compliance/index.html` (application home page),
+   `/static/compliance/privacidade.html` (Privacy Policy) and `/static/compliance/termos.html`
+   (Terms of Service). Compare the logical account key with the source's (census).
 2. GG2: **(user terminal)** `python -m app.storage.cli mirror-run --limit 1 --passes 1`, then
    raise the batch; `verify --drive`. Anything `reconciliation_required` is understood before
    going on (`mirror-requeue` only after the cause is fixed).
