@@ -391,7 +391,7 @@ _POSTURE_STATUS_LABELS = {
 
 
 _POLICY_FIELD_TEXT = {
-    "pg_backup_cadence_hours": ("Backup do banco a cada (horas)", "Define o RPO."),
+    "pg_database_cadence_hours": ("Backup do banco a cada (horas)", "Define o RPO."),
     "pg_object_cadence_days": ("Arquivos do armazenamento a cada (dias)", ""),
     "pg_retention_generations": ("Gerações mantidas", "Em cada diretório."),
     "pg_restore_test_days": ("Restauração de teste a cada (dias)", ""),
@@ -402,7 +402,7 @@ def _policy_fields(ceiling_hours) -> dict:
     """The policy table's rows: label, bounds (an open cutover's ceiling caps the database cadence), default."""
     fields = {}
     for key, (minimum, maximum, default, _label) in pg_posture.POLICY_FIELDS.items():
-        if key == "pg_backup_cadence_hours" and ceiling_hours:
+        if key == "pg_database_cadence_hours" and ceiling_hours:
             maximum = min(maximum, ceiling_hours)
         label, helper = _POLICY_FIELD_TEXT[key]
         fields[key] = {"label": label, "min": minimum, "max": maximum, "default": min(default, maximum),

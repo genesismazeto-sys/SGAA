@@ -51,7 +51,7 @@ def _rows(*entries, note=None):
 
 
 def _summary(rows, *, identity=IDENTITY, cadence=24, ceiling=None, **policy):
-    return pg_posture.summarize(rows, identity=identity, policy=dict(pg_backup_cadence_hours=cadence, **policy),
+    return pg_posture.summarize(rows, identity=identity, policy=dict(pg_database_cadence_hours=cadence, **policy),
                                 ceiling_hours=ceiling, now=NOW)
 
 
@@ -153,10 +153,10 @@ def test_an_operator_run_outside_the_window_is_a_self_hashed_receipt_of_the_same
 
 
 def test_the_policy_is_validated_field_by_field_and_capped_by_an_open_cutover():
-    good = {"pg_backup_cadence_hours": "12", "pg_object_cadence_days": "3", "pg_retention_generations": "5",
+    good = {"pg_database_cadence_hours": "12", "pg_object_cadence_days": "3", "pg_retention_generations": "5",
             "pg_restore_test_days": "14"}
     assert pg_posture.validate_policy(good) == {k: int(v) for k, v in good.items()}
-    for key, bad in (("pg_backup_cadence_hours", "0"), ("pg_backup_cadence_hours", "25"),
+    for key, bad in (("pg_database_cadence_hours", "0"), ("pg_database_cadence_hours", "25"),
                      ("pg_object_cadence_days", "8"), ("pg_retention_generations", "1"),
                      ("pg_retention_generations", "31"), ("pg_restore_test_days", "6"),
                      ("pg_restore_test_days", "x"), ("pg_restore_test_days", "")):
@@ -166,15 +166,15 @@ def test_the_policy_is_validated_field_by_field_and_capped_by_an_open_cutover():
     with pytest.raises(pg_posture.PolicyError) as caught:
         pg_posture.validate_policy(good, ceiling_hours=6)
     assert "não pode passar de 6 h" in str(caught.value)
-    assert pg_posture.validate_policy(dict(good, pg_backup_cadence_hours="6"), ceiling_hours=6)
+    assert pg_posture.validate_policy(dict(good, pg_database_cadence_hours="6"), ceiling_hours=6)
 
 
 def test_stored_policy_values_out_of_bounds_fall_back_to_their_defaults():
     policy = pg_posture.policy_from_rows([("pg_retention_generations", "7", "2026-10-12 10:00:00"),
                                           ("pg_restore_test_days", "999", "2026-10-12 11:00:00"),
-                                          ("pg_backup_cadence_hours", "abc", None)])
+                                          ("pg_database_cadence_hours", "abc", None)])
     assert policy["pg_retention_generations"] == 7 and policy["pg_restore_test_days"] == 30
-    assert policy["pg_backup_cadence_hours"] == 24 and policy["configured"] is True
+    assert policy["pg_database_cadence_hours"] == 24 and policy["configured"] is True
     assert policy["updated_at"] == "2026-10-12 10:00:00"  # only accepted values date the policy
     assert pg_posture.policy_from_rows([]) == dict(pg_posture.default_policy(), configured=False, updated_at=None)
 

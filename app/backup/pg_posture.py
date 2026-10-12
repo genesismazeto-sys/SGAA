@@ -51,7 +51,7 @@ RECENT_LIMIT = 5
 
 #: The administrable policy: setting key -> (minimum, maximum, default, label).
 POLICY_FIELDS = {
-    "pg_backup_cadence_hours": (1, 24, DEFAULT_CADENCE_HOURS, "a frequência do backup do banco (horas)"),
+    "pg_database_cadence_hours": (1, 24, DEFAULT_CADENCE_HOURS, "a frequência do backup do banco (horas)"),
     "pg_object_cadence_days": (1, 7, OBJECT_CADENCE_HOURS // 24, "a frequência dos arquivos do armazenamento (dias)"),
     "pg_retention_generations": (MIN_GENERATIONS, 30, MIN_GENERATIONS, "as gerações mantidas"),
     "pg_restore_test_days": (7, 90, 30, "o intervalo da restauração de teste (dias)"),
@@ -155,7 +155,7 @@ def validate_policy(form, *, ceiling_hours: int | None = None) -> dict:
         if value is None:
             raise PolicyError(f"Valor inválido para {label}: informe um número inteiro de {minimum} a {maximum}.")
         policy[key] = value
-    if ceiling_hours is not None and policy["pg_backup_cadence_hours"] > ceiling_hours:
+    if ceiling_hours is not None and policy["pg_database_cadence_hours"] > ceiling_hours:
         raise PolicyError(
             f"A frequência do backup do banco não pode passar de {ceiling_hours} h, a cadência registrada na abertura da virada."
         )
@@ -349,7 +349,7 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
     """The posture from the stored ``(entry, annotation)`` rows, judged against the administrator's
     policy (pure; the page's reading).  An open cutover's recorded cadence is a ceiling."""
     policy = dict(default_policy(), **(policy or {}))
-    cadence_hours = policy["pg_backup_cadence_hours"]
+    cadence_hours = policy["pg_database_cadence_hours"]
     if ceiling_hours is not None and ceiling_hours < cadence_hours:
         cadence_hours = ceiling_hours
     object_hours = policy["pg_object_cadence_days"] * 24

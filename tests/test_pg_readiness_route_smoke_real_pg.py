@@ -668,7 +668,7 @@ def test_r8_backup_post_is_refused_without_mutation(env, admin_client):
 def _policy_rows(observer) -> dict:
     return dict(observer.execute(
         "SELECT chave, valor FROM configuracoes_backup WHERE chave IN"
-        " ('pg_backup_cadence_hours', 'pg_object_cadence_days', 'pg_retention_generations', 'pg_restore_test_days')"
+        " ('pg_database_cadence_hours', 'pg_object_cadence_days', 'pg_retention_generations', 'pg_restore_test_days')"
     ).fetchall())
 
 
@@ -676,7 +676,7 @@ def test_r8_the_administrator_sets_the_postgresql_backup_policy(env, admin_clien
     """MP-3 A19: under PostgreSQL the retention route administers the backup policy the runs apply."""
     from app.backup import pg_posture
 
-    policy = {"pg_backup_cadence_hours": "12", "pg_object_cadence_days": "3",
+    policy = {"pg_database_cadence_hours": "12", "pg_object_cadence_days": "3",
               "pg_retention_generations": "5", "pg_restore_test_days": "14"}
     try:
         before = _public_table_counts(env.observer)
@@ -704,7 +704,7 @@ def test_r8_the_administrator_sets_the_postgresql_backup_policy(env, admin_clien
         assert any(c == "error" and "Valor inválido para as gerações mantidas" in m for c, m in flashes), flashes
         assert _policy_rows(env.observer) == policy
     finally:
-        env.observer.execute("DELETE FROM configuracoes_backup WHERE chave IN ('pg_backup_cadence_hours', 'pg_object_cadence_days',"
+        env.observer.execute("DELETE FROM configuracoes_backup WHERE chave IN ('pg_database_cadence_hours', 'pg_object_cadence_days',"
                              " 'pg_retention_generations', 'pg_restore_test_days')")
 
 
@@ -721,17 +721,17 @@ def test_r8_an_open_cutover_caps_the_database_cadence_at_the_one_it_recorded(env
         for statement in hosting.OPENING_DDL:
             env.observer.execute(statement)
         env.observer.execute(hosting.OPENING_INSERT_SQL, (reference["hash"], "7" * 64, json.dumps(reference)))
-        policy = {"pg_backup_cadence_hours": "12", "pg_object_cadence_days": "7",
+        policy = {"pg_database_cadence_hours": "12", "pg_object_cadence_days": "7",
                   "pg_retention_generations": "2", "pg_restore_test_days": "30"}
         admin_client.post("/admin/banco-dados/retencao", data=policy)
         flashes = _pop_flashes(admin_client)
         assert any(c == "error" and "não pode passar de 6 h" in m for c, m in flashes), flashes
         assert _policy_rows(env.observer) == {}
-        admin_client.post("/admin/banco-dados/retencao", data=dict(policy, pg_backup_cadence_hours="6"))
-        assert _policy_rows(env.observer)["pg_backup_cadence_hours"] == "6"
+        admin_client.post("/admin/banco-dados/retencao", data=dict(policy, pg_database_cadence_hours="6"))
+        assert _policy_rows(env.observer)["pg_database_cadence_hours"] == "6"
         page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
         assert "teto registrado na abertura: 6 h" in page and 'max="6"' in page
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_cutover CASCADE")
-        env.observer.execute("DELETE FROM configuracoes_backup WHERE chave IN ('pg_backup_cadence_hours', 'pg_object_cadence_days',"
+        env.observer.execute("DELETE FROM configuracoes_backup WHERE chave IN ('pg_database_cadence_hours', 'pg_object_cadence_days',"
                              " 'pg_retention_generations', 'pg_restore_test_days')")
