@@ -565,8 +565,13 @@ def _check_source_file(path, expected_sha256):
     return size, actual, stat.st_mtime_ns
 
 
-def read_source(path, expected_sha256) -> SourceSnapshot:
-    """Verify and read the whole frozen source through SELECT/read-only pragmas."""
+def read_source(path, expected_sha256, *, storage_preconditions: bool = True) -> SourceSnapshot:
+    """Verify and read the whole frozen source through SELECT/read-only pragmas.
+
+    ``storage_preconditions=False`` is for a restore of the product's own snapshot
+    (``app.backup.pg_restore``): it clears the upload intents and a restored mirror lease
+    expires and is reclaimed, so the cutover freeze checks do not apply.
+    """
     size, actual, mtime_ns = _check_source_file(path, expected_sha256)
     conn = open_source_readonly(path)
     try:
@@ -633,7 +638,7 @@ def read_source(path, expected_sha256) -> SourceSnapshot:
                 raise MigrationRefused(
                     "UNSUPPORTED_LOCAL_ASSET", f"{table} references local files without a copy contract"
                 )
-        for code, sql, detail in CUTOVER_STORAGE_PRECONDITIONS:
+        for code, sql, detail in CUTOVER_STORAGE_PRECONDITIONS if storage_preconditions else ():
             count = int(conn.execute(sql).fetchone()[0])
             if count:
                 raise MigrationRefused(code, f"{count} {detail}")

@@ -534,6 +534,25 @@ def test_real_pg_a_restore_brings_the_registers_back_exactly_and_never_reuses_an
     _with_credentials(url)
     connect = lambda: raw_connection(url)  # noqa: E731
     snap = pg_snapshot.create(tmp_path, connect=connect)
+    # an upload abandoned before the backup (still 'issued', long expired) does not make the file
+    # unrestorable: the cutover freeze check is not a restore's, and the restore clears intents
+    import sqlite3
+
+    lite = sqlite3.connect(snap["path"])
+    try:
+        actor = lite.execute("SELECT min(id) FROM usuarios").fetchone()[0]
+        lite.execute(
+            "INSERT INTO storage_upload_intents (id, actor_user_id, purpose, operation_id, storage_bucket, "
+            "storage_key, declared_mime_type, declared_size_bytes, declared_sha256, state, issued_at, expires_at, "
+            "sweep_after) VALUES (?, ?, 'comprovante', 'op-abandoned', 'sgaa-documentos', ?, 'application/pdf', 5, ?, "
+            "'issued', '2020-01-02 03:04:05', '2020-01-02 03:19:05', '2020-01-03 00:00:00')",
+            ("3" * 32, actor, "comprovantes/2020/01/" + "9" * 32, "a" * 64))
+        lite.commit()
+    finally:
+        lite.close()
+    with pytest.raises(pg_restore.RestoreError) as caught:  # not the chosen generation: refused
+        pg_restore.read(snap["path"], expected_sha256="0" * 64)
+    assert caught.value.code == "SNAPSHOT_NOT_THE_GENERATION"
     conn = raw_connection(url, autocommit=True)
     try:
         expected = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
@@ -546,6 +565,7 @@ def test_real_pg_a_restore_brings_the_registers_back_exactly_and_never_reuses_an
         assert result["rows"] > 0
         assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == expected  # exactly the backup's registers
         assert pathb.next_identity_value(conn, "cursos") > issued  # the id issued after the backup is never reused
+        assert conn.execute("SELECT count(*) FROM storage_upload_intents").fetchone()[0] == 0
     finally:
         conn.close()
 

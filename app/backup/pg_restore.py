@@ -14,7 +14,8 @@ WHY THIS EXISTS
 
 WHAT IT REPLACES
     The registers (Path-B's ``MIGRATE_EXACT`` tables) and the short-lived state that points at them
-    (single-use links, upload intents, throttle windows, import previews), which is cleared.  The
+    (single-use links, upload intents, throttle windows, import previews, the legacy backup log), which
+    is cleared.  The
     installation's own configuration -- the connected cloud accounts, the backup settings, the
     destination folders, the schema record -- is kept: it belongs to this installation, not to the
     snapshot.  Identity counters never move back: an id issued after the snapshot is never issued
@@ -55,10 +56,21 @@ def _tables():
     return registers, cleared
 
 
-def read(path):
-    """The verified snapshot (Path-B's reader), or ``RestoreError``."""
+def read(path, *, expected_sha256: str | None = None):
+    """The verified snapshot (Path-B's reader), or ``RestoreError``.
+
+    ``expected_sha256`` is the generation the administrator chose: a file that is not exactly it
+    (a partial download, a file revised on the drive) is refused.
+    """
     try:
-        return pathb.read_source(str(path), _sha256(path))
+        actual = _sha256(path)
+    except OSError:
+        raise RestoreError("SNAPSHOT_UNREADABLE", "o arquivo não pôde ser lido como backup do banco.") from None
+    if expected_sha256 is not None and actual != expected_sha256:
+        raise RestoreError("SNAPSHOT_NOT_THE_GENERATION",
+                           "o arquivo obtido não corresponde ao backup selecionado; nada foi alterado.")
+    try:
+        return pathb.read_source(str(path), actual, storage_preconditions=False)
     except pathb.MigrationRefused as refusal:
         raise RestoreError(refusal.code, "o arquivo não é um backup do banco do SGAA válido "
                                          f"({refusal.code}).") from None
@@ -76,9 +88,12 @@ def restore(snapshot, *, connect=None) -> dict:
     report = SimpleNamespace(self_references_restored={})
     try:
         with conn.transaction():
-            conn.execute("SET LOCAL lock_timeout = '15s'")
-            for table in cleared:  # nothing else reads or writes them until the commit
-                conn.execute(f"LOCK TABLE {table} IN ACCESS EXCLUSIVE MODE")
+            # bounded: a request the platform stops never leaves the registers locked for long
+            conn.execute("SET LOCAL lock_timeout = '10s'")
+            conn.execute("SET LOCAL statement_timeout = '30s'")
+            conn.execute("SET LOCAL idle_in_transaction_session_timeout = '30s'")
+            # one statement: nothing else reads or writes them until the commit
+            conn.execute(f"LOCK TABLE {', '.join(cleared)} IN ACCESS EXCLUSIVE MODE")
             next_ids = {table: pathb.next_identity_value(conn, table)
                         for table in registers if pathb._identity_column(table)}
             for table in reversed(cleared):

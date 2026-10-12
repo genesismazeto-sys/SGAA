@@ -1570,21 +1570,22 @@
   </article>
   {% elif database_protection and database_protection.policy_fields %}
   {% set protection = database_protection %}
-  {% if protection.state != 'UNREADABLE' %}
   {# ────────── Operações (PostgreSQL, MP-3 A19) ────────── #}
   <article class="db-card" data-protection-operations>
     <div class="db-card-head">
       <span class="db-section-label">Operações</span>
     </div>
     <p>Use "Gerar backup agora" para criar uma cópia imediata e verificada do banco e enviá-la às contas em nuvem conectadas, na pasta de destino de cada uma; cada pasta guarda as gerações definidas na política de retenção. As gerações completas (banco e arquivos do armazenamento, com cópia fora da plataforma) e as restaurações de teste são feitas na máquina de operação (<code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>).</p>
+    {% if protection.state != 'UNREADABLE' %}
     <div class="db-meta">
       <div><strong>Backup do banco:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span> {{ protection.latest_generation_label or 'nenhuma geração registrada' }}{% if protection.next_generation_due_label %} · próximo até {{ protection.next_generation_due_label }}{% endif %}</div>
       <div data-protection-objects-status="{{ protection.objects_status.code }}"><strong>Arquivos do armazenamento:</strong> <span class="badge status-pill {{ protection.objects_status.css }}">{{ protection.objects_status.label }}</span> {{ protection.latest_object_set_label or 'nenhum conjunto registrado' }}{% if protection.next_object_set_due_label %} · próximo até {{ protection.next_object_set_due_label }}{% endif %}</div>
       <div><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span>{% if protection.validation %} {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados) · próxima até {{ protection.next_restore_test_due_label }}{% endif %}</div>
       <div><strong>Perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h{% if protection.ceiling_hours %} · teto registrado na abertura: {{ protection.ceiling_hours }} h{% endif %}</div>
     </div>
+    {% endif %}
 
-    {% set restorable = protection.recent|selectattr('files')|list %}
+    {% set restorable = (protection.recent or [])|selectattr('files')|list %}
     <div class="db-subsection" data-pg-restore>
       <h3 class="db-subsection-title">Recuperar banco de dados</h3>
       <p>Restaura um backup do banco de dados. Os documentos enviados ficam no armazenamento de objetos, fora do banco. Antes da recuperação, o sistema envia automaticamente uma cópia de segurança da base atual para as contas em nuvem conectadas.</p>
@@ -1640,7 +1641,6 @@
       </form>
     {% endif %}
   </article>
-  {% endif %}
 
   {# ────────── Política de retenção (PostgreSQL, MP-3 A19) ────────── #}
   <article class="db-card">

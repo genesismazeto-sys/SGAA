@@ -871,9 +871,12 @@ def test_r8_recuperar_banco_restores_a_snapshot_after_sending_a_safety_copy(env,
         later_id, _ = _seed_activity_base(env.observer, "RSMK Depois do backup", [40])
         assert "RSMK Depois do backup" in bases()
 
+        remote += [{"id": f"older-{i}", "name": f"sgaa-pg-snapshot-2026100{i}T000000Z.db"} for i in range(1, 4)]
+        deleted.clear()
         response = admin_client.post("/admin/banco-dados/restaurar", data={"generation": manifest})
         flashes = _pop_flashes(admin_client)
         assert response.status_code == 302, response.status_code
+        assert deleted == []  # the safety copy prunes nothing: the generation being restored survives
         assert ("success", "Banco restaurado com sucesso. Uma cópia de segurança da base anterior foi enviada "
                            "para Google Drive.") in flashes, flashes
         assert len(uploads) == 2  # the safety copy went out before anything changed

@@ -1852,11 +1852,12 @@ def _postgres_backup_now():
     return redirect(url_for("admin_banco_dados"))
 
 
-def _send_postgres_snapshot():
+def _send_postgres_snapshot(*, prune: bool = True):
     """The snapshot sent to the connected drives (owner: ``app.backup.pg_snapshot``).
 
     Returns ``(targets, sent, failed)``: the connected drives, the ones that received it (``None``
-    when the snapshot could not be made) and the labels of the ones that failed.
+    when the snapshot could not be made) and the labels of the ones that failed.  ``prune=False``
+    (the safety copy before a restore) deletes nothing.
 
     A verified snapshot of the live database goes to every connected cloud drive, into the folder
     "Selecionar pasta" chose (by its id; SGAA's default backup folder when none was chosen); each
@@ -1919,7 +1920,7 @@ def _send_postgres_snapshot():
             _save_drive_config(conn, {f"{prefix}_last_upload_at": snapshot["generation_at"],
                                       f"{prefix}_last_upload_error": ""})
             conn.commit()
-            if keep is None:
+            if keep is None or not prune:
                 continue
             try:
                 token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
@@ -1955,11 +1956,13 @@ def _send_postgres_snapshot():
     return targets, sent, failed
 
 
-def _postgres_restore(path, *, uploaded: bool):
+def _postgres_restore(path, *, uploaded: bool, expected_sha256: str | None = None):
     """MP-3 A19: "Recuperar banco de dados" under PostgreSQL (owner: ``app.backup.pg_restore``).
 
     The file is verified first; then a safety copy of the current database must reach at least one
-    connected drive; only then are the registers replaced, in one proven transaction.
+    connected drive (it deletes nothing); only then are the registers replaced, in one proven
+    transaction.  A write made between the safety copy and the restore's lock is in neither: the
+    window is the few seconds between them.
     """
     from app.backup import pg_restore
 
@@ -1971,10 +1974,10 @@ def _postgres_restore(path, *, uploaded: bool):
         return redirect(url_for("admin_banco_dados"))
 
     try:
-        snapshot = pg_restore.read(path)
+        snapshot = pg_restore.read(path, expected_sha256=expected_sha256)
     except pg_restore.RestoreError as exc:
         return refuse(exc)
-    _targets, sent, _failed = _send_postgres_snapshot()
+    _targets, sent, _failed = _send_postgres_snapshot(prune=False)
     if not sent:
         return refuse("a cópia de segurança da base atual não pôde ser enviada para nenhuma conta em nuvem; "
                       "nada foi alterado.")
@@ -2020,10 +2023,12 @@ def _postgres_restore_from_drive():
                 break
             except Exception as exc:
                 logger.warning("event=pg_restore_fetch_failed provider=%s error=%s", provider, type(exc).__name__)
+                if os.path.exists(path):
+                    os.remove(path)
         if not os.path.exists(path):
             flash("Arquivo do backup não foi encontrado.", "error")
             return redirect(url_for("admin_banco_dados"))
-        return _postgres_restore(path, uploaded=False)
+        return _postgres_restore(path, uploaded=False, expected_sha256=manifest)
 
 
 def _postgres_restore_from_upload():
