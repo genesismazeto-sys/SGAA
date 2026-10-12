@@ -1122,6 +1122,16 @@ first candidate commit (8 chunks, clean worktree, PostgreSQL 17 lanes on): 5,908
 baseline only (6 `xlwt` errors, `TestSentinelSurvival`, the MX3 delta 549 vs 548, the backup-package test) plus the
 thead-count guard the review fix updated, re-run green on the final commit with the touched modules.
 
+A19 production proof (2026-10-12, admission closed throughout, the operator's session only). The PONR fingerprint
+equalled the C12 reference three times (before the backup step, before the governed generation, after the
+browser proof). A governed generation with its object set was recorded and published the ledger's four records
+(baseline, its restore validation, the pre-opening generation, this one) into PROD; a first database-only
+attempt was refused (A19 (7)) and recorded nothing. Microsoft: the three values checked with Entra and placed
+by the user; the amended candidate redeployed closed so they bind; the administrator connected the Microsoft
+account on the hosted Banco de dados page (callback with code), tested it, and requested a password recovery
+for the administrator's own address: the application logged `password_mail_sent` (written only after Microsoft
+Graph confirmed the send) and the user confirmed the message arrived. Re-opening waits for the user's GC2.
+
 Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
 (A14); DEV `public` was left empty and its Data API off.
