@@ -461,8 +461,11 @@ authorization that only the reference writes.
 ### C12 OPEN_PONR_PENDING
 
 - The cadence recorded at the opening is in force until C14: **(user terminal)**
-  `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> [--objects]
-  --ledger-dir <ledger>` every `h` hours, with `--objects` at least weekly. A Layer-2 gap longer
+  `python tools/ops_backup.py --root <primary dir> --off-platform <second dir> --objects
+  --ledger-dir <ledger>` every `h` hours. Every governed run takes the object set: once one is registered,
+  a database-only governed run is refused (`GENERATION_NOT_THIS_RUNS`: the run's own check compares the
+  newest registered object set with the one it took; found live at A19, nothing is recorded or published
+  by the refused run, its verified database set stays registered and uncounted). A Layer-2 gap longer
   than 1.5 × `h`, or an object-set gap longer than 1.5 weeks, anywhere from the opening to C14
   refuses C14 (`BACKUP_CADENCE_BROKEN`, `OBJECT_CADENCE_BROKEN`). Only governed runs count: each
   generation is recorded once, dated inside its own run, never older than one already recorded,

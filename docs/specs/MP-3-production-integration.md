@@ -1005,6 +1005,10 @@ Executor amendments (consequences of the above; not material beyond what the use
   this database, GC1 exists only at C12 (at C11 an amended candidate could be neither opened nor
   re-opened), and the re-opening observes a writable database as `open` does. `MS_*` stay a product
   requirement proven by the runbook, not a startup blocker. The R3 cross-family review is the user's.
+  (7) Found live on PROD (step 5's first governed generation): a database-only governed run is refused
+  (`GENERATION_NOT_THIS_RUNS`) whenever an object set is registered -- a pre-existing A17 check comparing the
+  newest registered object set with the run's; it fails closed (nothing recorded or published). Every
+  governed run therefore takes the object set (runbook C12); a database-only governed run is deferred.
   Evidence: section 17.
 
 ## 17. Closure
