@@ -83,6 +83,8 @@ DIRECT_SQLITE_CONNECT_OWNERS = frozenset(
         "app/db.py",
         "app/backup/automatic.py",
         "app/backup/orchestrator.py",
+        # MP-3 A19: writes the "Gerar backup agora" snapshot file in scratch (never the application database).
+        "app/backup/pg_snapshot.py",
         "app/db_maintenance.py",
         "app/image_import.py",
         "app/pg_migrate_from_sqlite.py",
