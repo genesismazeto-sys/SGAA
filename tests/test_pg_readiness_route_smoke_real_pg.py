@@ -282,9 +282,10 @@ def env():
         real_sqlite_connect = sqlite3.connect
 
         def _sqlite_tripwire(*args, **kwargs):
-            # MP-3 A19: the one SQLite file a PostgreSQL request writes is the "Gerar backup agora"
-            # snapshot it creates in scratch (app.backup.pg_snapshot); never the application database.
-            if args and os.path.basename(str(args[0])).startswith("sgaa-pg-snapshot-"):
+            # MP-3 A19: the only SQLite files a PostgreSQL request opens are the "Gerar backup agora"
+            # snapshot it creates in scratch (app.backup.pg_snapshot) and the snapshot it restores from
+            # scratch (app.backup.pg_restore); never the application database.
+            if args and os.path.basename(str(args[0])).startswith(("sgaa-pg-snapshot-", "sgaa-pg-restore")):
                 return real_sqlite_connect(*args, **kwargs)
             if flask.has_request_context():
                 e.sqlite_calls.append(
@@ -829,6 +830,94 @@ def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(en
         response = admin_client.get("/admin/banco-dados/download?generation=" + "0" * 64)
         flashes = _pop_flashes(admin_client)
         assert response.status_code == 302 and ("error", "Snapshot solicitado não está disponível para download.") in flashes
+    finally:
+        env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
+
+
+def test_r8_recuperar_banco_restores_a_snapshot_after_sending_a_safety_copy(env, admin_client, monkeypatch, tmp_path):
+    """MP-3 A19: "Recuperar banco de dados" -- from the drive and from an uploaded file; a bad file changes nothing."""
+    import shutil
+
+    from app import cloud_drives
+    from app.backup import pg_posture
+    from app.views.admin import banco_dados as view
+
+    uploads, deleted, stash = [], [], {}
+    remote = []
+    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted)
+    wrapped = view._cloud_connections.upload_backup_zip
+
+    def keep(conn, provider, **kwargs):
+        result = wrapped(conn, provider, **kwargs)
+        if kwargs["file_name"].endswith(".db"):
+            stash[len(stash)] = shutil.copy(kwargs["zip_path"], tmp_path / f"copy-{len(stash)}.db")
+        return result
+
+    monkeypatch.setattr(view._cloud_connections, "upload_backup_zip", keep)
+    monkeypatch.setattr(cloud_drives, "google_download_to",
+                        lambda token, file_id, path: shutil.copy(stash[0], path))
+    try:
+        admin_client.post("/admin/banco-dados/backup")
+        assert ("success", "Backup do banco gerado e enviado para Google Drive.") in _pop_flashes(admin_client)
+        manifest = pg_posture.read(env.observer)["recent"][0]["manifest"]
+        page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
+        assert 'id="restore-snapshot-form"' in page and 'id="restore-upload-form"' in page
+        assert f'value="{manifest}"' in page and "Recuperar banco de dados" in page
+
+        def bases():
+            return {row[0] for row in env.observer.execute("SELECT nome_conceito FROM atividade_base").fetchall()}
+
+        snapshot_bases = bases()
+        later_id, _ = _seed_activity_base(env.observer, "RSMK Depois do backup", [40])
+        assert "RSMK Depois do backup" in bases()
+
+        response = admin_client.post("/admin/banco-dados/restaurar", data={"generation": manifest})
+        flashes = _pop_flashes(admin_client)
+        assert response.status_code == 302, response.status_code
+        assert ("success", "Banco restaurado com sucesso. Uma cópia de segurança da base anterior foi enviada "
+                           "para Google Drive.") in flashes, flashes
+        assert len(uploads) == 2  # the safety copy went out before anything changed
+        assert bases() == snapshot_bases
+        # an id issued after the snapshot is never issued again
+        reissued = _seed_activity_base(env.observer, "RSMK Depois da recuperacao", [40])[0]
+        assert reissued > later_id
+        # the session survived: the administrator is still signed in
+        assert admin_client.get("/admin/banco-dados").status_code == 200
+
+        # a file that is not an SGAA snapshot is refused and nothing changes
+        import io
+
+        before = bases()
+        response = admin_client.post("/admin/banco-dados/restaurar/upload", content_type="multipart/form-data",
+                                     data={"backup_file": (io.BytesIO(b"not a database"), "x.db")})
+        flashes = _pop_flashes(admin_client)
+        assert any(category == "error" and message.startswith("Não foi possível restaurar o arquivo enviado: ")
+                   for category, message in flashes), flashes
+        assert bases() == before and len(uploads) == 2
+
+        # "Carregar arquivo": the downloaded snapshot file, uploaded back
+        with open(stash[0], "rb") as handle:
+            body = handle.read()
+        response = admin_client.post("/admin/banco-dados/restaurar/upload", content_type="multipart/form-data",
+                                     data={"backup_file": (io.BytesIO(body), "sgaa-pg-snapshot-x.db")})
+        flashes = _pop_flashes(admin_client)
+        assert ("success", "Banco restaurado com sucesso. Uma cópia de segurança da base anterior foi enviada "
+                           "para Google Drive.") in flashes, flashes
+        assert bases() == snapshot_bases and len(uploads) == 3
+
+        # an unknown generation is refused
+        response = admin_client.post("/admin/banco-dados/restaurar", data={"generation": "0" * 64})
+        assert ("error", "Backup selecionado é inválido ou não está mais disponível.") in _pop_flashes(admin_client)
+
+        # no connected drive: no safety copy possible, so nothing is restored
+        _seed_activity_base(env.observer, "RSMK Sem nuvem", [40])
+        before = bases()
+        monkeypatch.setattr(view, "_get_active_cloud_account", lambda conn, provider: None)
+        response = admin_client.post("/admin/banco-dados/restaurar/upload", content_type="multipart/form-data",
+                                     data={"backup_file": (io.BytesIO(body), "sgaa-pg-snapshot-x.db")})
+        flashes = _pop_flashes(admin_client)
+        assert any(category == "error" and "nada foi alterado" in message for category, message in flashes), flashes
+        assert bases() == before
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
 

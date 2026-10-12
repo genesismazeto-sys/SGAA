@@ -391,7 +391,9 @@ def test_pg_restore_from_snapshot_refuses_before_replacing_database(
     _assert_handled_redirect(response, exc)
     flashes = _flashes(admin_client)
     assert not any(RESTORE_SUCCESS_FLASH in str(message) for _c, message in flashes), flashes
-    _assert_unsupported_flash(flashes)
+    # MP-3 A19: "Recuperar banco de dados" exists under PostgreSQL, but only for the generations the
+    # PostgreSQL posture records; a SQLite manifest path is not one, refused before any I/O.
+    assert ("error", "Backup selecionado é inválido ou não está mais disponível.") in flashes, flashes
 
 
 def test_pg_uploaded_restore_refuses_before_extraction_or_replacement(
@@ -413,7 +415,11 @@ def test_pg_uploaded_restore_refuses_before_extraction_or_replacement(
         )
     )
 
-    pg_backend.assert_no_sqlite_io()
+    # MP-3 A19: under PostgreSQL the upload goes to app.backup.pg_restore: the only SQLite file it
+    # opens is its own scratch copy of the upload (never the stale application file), and with no
+    # verified safety copy nothing is replaced.
+    assert all(Path(str(call)).name.startswith(("sgaa-pg-restore", "sgaa-pg-snapshot-"))
+               for call in pg_backend.spy.calls), pg_backend.spy.calls
     pg_backend.assert_stale_untouched()
     pg_backend.assert_no_new_artifacts()
     assert init_db_spy == []
@@ -421,7 +427,9 @@ def test_pg_uploaded_restore_refuses_before_extraction_or_replacement(
     _assert_handled_redirect(response, exc)
     flashes = _flashes(admin_client)
     assert not any(RESTORE_SUCCESS_FLASH in str(message) for _c, message in flashes), flashes
-    _assert_unsupported_flash(flashes)
+    assert all(category != "success" for category, _message in flashes), flashes
+    assert any(category == "error" and str(message).startswith("Não foi possível restaurar o arquivo enviado: ")
+               for category, message in flashes), flashes
 
 
 # ===========================================================================

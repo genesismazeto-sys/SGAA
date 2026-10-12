@@ -119,7 +119,12 @@ POST_UT8_HELPER_NAMES = (
     "_policy_fields",
     # MP-3 A19: "Gerar backup agora" under PostgreSQL (delegates to app.backup.pg_snapshot).
     "_postgres_backup_now",
+    "_send_postgres_snapshot",
     "_postgres_download",
+    # MP-3 A19: "Recuperar banco de dados" under PostgreSQL (delegates to app.backup.pg_restore).
+    "_postgres_restore",
+    "_postgres_restore_from_drive",
+    "_postgres_restore_from_upload",
 )
 
 CONSTANT_NAMES = (

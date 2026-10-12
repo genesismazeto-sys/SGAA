@@ -223,15 +223,19 @@ status and due date is judged against it.
 one repeatable-read read-only transaction into a schema-v16 SQLite snapshot in scratch, proves it table
 by table with the Path-B row digests, sends it to every connected Google Drive / OneDrive account into
 the folder "Selecionar pasta" chose, and prunes there only `sgaa-pg-snapshot-*.db` files beyond the
-policy's generations kept. The snapshot restores on the workstation runtime, or into an empty PostgreSQL
-through the Path-B tool. It runs inside the web function's time limit: the database must stay small
+policy's generations kept. Beside it goes `sgaa-registros-*.zip`, the registers as CSV files (no
+secrets), pruned by the same rule. "Baixar" sends the browser to the drive's own download address.
+"Recuperar banco de dados" (the existing restore routes, `app.backup.pg_restore`) takes a snapshot from
+the drives or an uploaded file (within the 4.5 MB request limit), sends a safety copy of the current
+database first, and replaces the registers in one proven transaction or changes nothing. The snapshot
+also restores on the workstation runtime, or into an empty PostgreSQL through the Path-B tool. It runs inside the web function's time limit: the database must stay small
 enough to copy and upload within it (the operator's governed generations have no such limit). The records live in the control schema
 `sgaa_ops` (outside `public`: no Layer-2 set, business fingerprint or schema contract
 includes it). Each is a cutover-ledger `backup` or `restore` entry, or the self-hashed
 receipt of an `ops_backup` run, published verbatim by the run that made it into the
 database it backed up; the page shows only entries whose own hash re-derives and that name
 this database's live identity, and counts the others as ignored. The plan includes no
-provider backup, so "no record" is shown as unprotected. The page never runs a backup:
+provider backup, so "no record" is shown as unprotected. The page never runs a governed generation:
 generations and restore drills are operator runs (`docs/PG_BACKUP_RESTORE_RUNBOOK.md` §R).
 
 ## 9. Scheduled jobs

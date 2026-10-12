@@ -228,6 +228,27 @@ def google_delete_file(token: str, file_id: str) -> None:
     _api(f"{_GOOGLE_FILES}/{file_id}", method="DELETE", token=token)
 
 
+def _download(url: str, path: str, headers: dict | None = None) -> None:
+    request = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(request, timeout=120) as response, open(path, "wb") as handle:
+        for chunk in iter(lambda: response.read(1024 * 1024), b""):
+            handle.write(chunk)
+
+
+def google_download_to(token: str, file_id: str, path: str) -> None:
+    """Write the bytes of a Drive file to ``path`` (server side, with the account's token)."""
+    _download(f"{_GOOGLE_FILES}/{urllib.parse.quote(file_id, safe='')}?alt=media", path,
+              {"Authorization": f"Bearer {token}"})
+
+
+def onedrive_download_to(token: str, item_id: str, path: str) -> None:
+    """Write the bytes of a OneDrive file to ``path`` through Graph's pre-authorized address."""
+    address = onedrive_download_url(token, item_id)
+    if not address:
+        raise RuntimeError("Graph returned no download address")
+    _download(address, path)
+
+
 def google_download_link(token: str, file_id: str) -> str:
     """The file's download link (served to the Google account signed in on the browser)."""
     url = f"{_GOOGLE_FILES}/{urllib.parse.quote(file_id, safe='')}?fields=webContentLink"

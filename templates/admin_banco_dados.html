@@ -1583,6 +1583,52 @@
       <div><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span>{% if protection.validation %} {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados) · próxima até {{ protection.next_restore_test_due_label }}{% endif %}</div>
       <div><strong>Perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h{% if protection.ceiling_hours %} · teto registrado na abertura: {{ protection.ceiling_hours }} h{% endif %}</div>
     </div>
+
+    {% set restorable = protection.recent|selectattr('files')|list %}
+    <div class="db-subsection" data-pg-restore>
+      <h3 class="db-subsection-title">Recuperar banco de dados</h3>
+      <p>Restaura um backup do banco de dados. Os documentos enviados ficam no armazenamento de objetos, fora do banco. Antes da recuperação, o sistema envia automaticamente uma cópia de segurança da base atual para as contas em nuvem conectadas.</p>
+      {% if auth_can('banco_dados', 'full') %}
+        {% if restorable %}
+        <form id="restore-snapshot-form" method="post" action="{{ url_for('admin_banco_dados_restaurar') }}" onsubmit="return confirm('Confirmar recuperação do banco de dados a partir do snapshot selecionado');" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="db-recovery-row">
+            <div class="db-field">
+              <label for="generation">Snapshot interno</label>
+              <select id="generation" class="db-select" name="generation" required>
+                {% for item in restorable %}
+                  <option value="{{ item.manifest }}">{{ item.generation_label }} • Nuvem • manual</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn primary">
+              <i class="lucide" data-lucide="rotate-ccw"></i>Recuperar banco
+            </button>
+          </div>
+        </form>
+        {% endif %}
+        <form id="restore-upload-form" method="post" action="{{ url_for('admin_banco_dados_restaurar_upload') }}" enctype="multipart/form-data" onsubmit="return confirm('Confirmar recuperação do banco de dados a partir do arquivo enviado');" style="margin-top:10px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="db-recovery-row">
+            <div class="db-field">
+              <label for="backup_file">Carregar arquivo</label>
+              <div class="field-card file-card" data-db-upload-card>
+                <div class="field-chip"><i class="lucide" data-lucide="file-up"></i></div>
+                <input class="file-input" id="backup_file" type="file" name="backup_file" accept=".db,.sqlite,.sqlite3" required>
+                <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+                <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
+              </div>
+            </div>
+            <button type="submit" class="btn">
+              <i class="lucide" data-lucide="upload"></i>Carregar arquivo
+            </button>
+          </div>
+          <p class="db-note" style="margin-top:8px;">Formato aceito: o arquivo .db de "Gerar backup agora" (sgaa-pg-snapshot-…). {% if not restorable %}Nenhum snapshot interno disponível no momento.{% endif %}</p>
+        </form>
+      {% else %}
+        <p class="db-note" style="margin-top:8px;">Seu perfil não possui permissão total para recuperar o banco.</p>
+      {% endif %}
+    </div>
     {% if auth_can('banco_dados', 'edit') %}
       <form method="post" action="{{ url_for('admin_banco_dados_backup') }}" data-pg-backup-now>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -1043,7 +1043,23 @@ Executor amendments (consequences of the above; not material beyond what the use
   database (real-PostgreSQL lane: the restored business fingerprint equals the source's). It is the
   administrator's on-demand copy; the operator's governed generations stay the cutover's counted backups.
   Writes: none to a business table (the drive settings' last-upload keys and the receipt only).
-  Evidence: section 17.
+  (10) "Baixar snapshot" restored (user correction): the original download button, same icon, in the
+  "Ações" column of "Gerações registradas"; under PostgreSQL the existing download route sends the
+  browser to the drive's own download address of the snapshot the receipt names (the file never passes
+  through the function). (11) Readable registers (user request: a second, simpler way not to lose the
+  registers): from the same snapshot transaction, a ZIP of one CSV per register (`;`, UTF-8 with BOM),
+  without passwords, credentials, tokens, single-use links, machine state or image bytes, travels with
+  every "Gerar backup agora" into the same folder (`sgaa-registros-*.zip`, same retention, each kind
+  prunes only its own names), with a second icon beside the download button. (12) "Recuperar banco de
+  dados" restored (user correction): the original subsection and its two forms (the snapshot chosen from
+  the drives, or an uploaded file) restore under PostgreSQL through `app.backup.pg_restore`: the file is
+  verified by the qualified Path-B reader; a safety copy of the current database is sent to the connected
+  drives first (no drive reached: nothing is changed); then, in ONE transaction holding every register
+  table exclusively, the registers are replaced, proven equal to the file row by row with the domain
+  checks clean, or the transaction rolls back. The installation's configuration (cloud accounts, backup
+  settings, folders, schema record) is kept, the short-lived state is cleared, and identity counters
+  never move back. Permission: `banco_dados` full, as before. A restore is a business write: used before
+  the PONR, it is the PONR. Evidence: section 17.
 
 ## 17. Closure
 

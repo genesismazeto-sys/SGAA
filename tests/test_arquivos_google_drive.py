@@ -941,7 +941,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # maintenance-unsupported refusal under PostgreSQL, for +1.  STORAGE S3-A is
     # the twenty-second: the request flows stop reaching Google Drive and their
     # Drive flash retires, for -1.  MP-3 A19 is the twenty-third: "Gerar backup
-    # agora" under PostgreSQL and its five outcomes, for +5.
+    # agora" under PostgreSQL and its five outcomes, with the restore success
+    # under PostgreSQL, for +6.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -965,7 +966,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         -1,
         1,
         -1,
-        5,
+        6,
     ], "the named catalog delta ledger must stay exactly these twenty-three terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
@@ -975,7 +976,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 585
+    assert governance.CANONICAL_CATALOG_COUNT == 586
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (

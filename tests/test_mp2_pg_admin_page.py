@@ -90,8 +90,8 @@ FILE_BACKUP_MARKERS = (
     'name="local_backup_dir"',
     'name="cloud_backup_dir"',
     "admin/banco-dados/configuracoes",
-    "restore-snapshot-form",
-    "restore-upload-form",
+    # MP-3 A19: "Recuperar banco de dados" is restored under PostgreSQL (the snapshot of "Gerar
+    # backup agora"), so its two forms are no longer file-backup-only markers.
     'id="retention-form"',
     "Snapshots disponíveis",
     # MP-3 A19: "Política de retenção" is also the PostgreSQL policy section; the GFS window

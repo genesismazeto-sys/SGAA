@@ -507,3 +507,86 @@ def test_the_google_listing_filters_names_itself_and_builds_a_valid_url(monkeypa
     listed = cloud_drives.google_list_folder_files("tok", "FOLDER", "sgaa-pg-snapshot-")
     assert [f["id"] for f in listed] == ["1"]
     assert " " not in calls[0] and "contains" not in calls[0] and "FOLDER" in calls[0]
+
+
+# ---- "Recuperar banco de dados" under PostgreSQL (app.backup.pg_restore) -------------------------------
+
+
+def _with_credentials(url):
+    from tests.mp2_pg_support import raw_connection
+
+    conn = raw_connection(url, autocommit=True)
+    try:  # a production account always carries its credential row (Path-B's domain check)
+        conn.execute("INSERT INTO usuario_credenciais(usuario_id, estado) SELECT id, 'personal' FROM usuarios"
+                     " ON CONFLICT DO NOTHING")
+    finally:
+        conn.close()
+
+
+@real_pg
+def test_real_pg_a_restore_brings_the_registers_back_exactly_and_never_reuses_an_id(business_database, tmp_path):
+    from app.backup import pg_restore, pg_snapshot
+    from app import pg_migrate_from_sqlite as pathb
+    from tests.mp2_pg_support import raw_connection
+    from tools import pg_fingerprint
+
+    url, _target = business_database
+    _with_credentials(url)
+    connect = lambda: raw_connection(url)  # noqa: E731
+    snap = pg_snapshot.create(tmp_path, connect=connect)
+    conn = raw_connection(url, autocommit=True)
+    try:
+        expected = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
+        # life goes on after the backup: a register changes, a new one appears (it takes an id)
+        conn.execute("UPDATE turmas SET nome = nome || ' (alterada)'")
+        conn.execute("INSERT INTO cursos (codigo, nome, duracao_periodos) VALUES ('DEPOIS-1', 'Curso depois do backup', 8)")
+        issued = pathb.next_identity_value(conn, "cursos") - 1
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] != expected
+        result = pg_restore.restore(pg_restore.read(snap["path"]), connect=connect)
+        assert result["rows"] > 0
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == expected  # exactly the backup's registers
+        assert pathb.next_identity_value(conn, "cursos") > issued  # the id issued after the backup is never reused
+    finally:
+        conn.close()
+
+
+@real_pg
+def test_real_pg_a_restore_that_cannot_be_proven_changes_nothing(business_database, tmp_path, monkeypatch):
+    import sqlite3
+
+    from app.backup import pg_restore, pg_snapshot
+    from tests.mp2_pg_support import raw_connection
+    from tools import pg_fingerprint
+
+    url, _target = business_database
+    _with_credentials(url)
+    connect = lambda: raw_connection(url)  # noqa: E731
+    snap = pg_snapshot.create(tmp_path, connect=connect)
+    conn = raw_connection(url, autocommit=True)
+    try:
+        conn.execute("UPDATE turmas SET nome = nome || ' (depois)'")
+        before = pg_fingerprint.snapshot(conn)["fingerprint_sha256"]
+        snapshot = pg_restore.read(snap["path"])
+        real_read = pg_restore.pathb.read_target_rows
+        monkeypatch.setattr(pg_restore.pathb, "read_target_rows",  # the proof sees a lost row
+                            lambda c, table: real_read(c, table)[1:] if table == "turmas" else real_read(c, table))
+        with pytest.raises(pg_restore.RestoreError) as caught:
+            pg_restore.restore(snapshot, connect=connect)
+        assert caught.value.code == "RESTORE_TABLE_DIFFERS"
+        monkeypatch.undo()
+        assert pg_fingerprint.snapshot(conn)["fingerprint_sha256"] == before  # rolled back: nothing changed
+        broken = tmp_path / "broken.db"
+        broken.write_bytes(b"not a database")
+        with pytest.raises(pg_restore.RestoreError):
+            pg_restore.read(broken)
+        lite = sqlite3.connect(snap["path"])
+        try:
+            lite.execute("PRAGMA user_version = 15")
+            lite.commit()
+        finally:
+            lite.close()
+        with pytest.raises(pg_restore.RestoreError) as caught:
+            pg_restore.read(snap["path"])
+        assert caught.value.code == "SOURCE_SCHEMA_UNSUPPORTED"
+    finally:
+        conn.close()

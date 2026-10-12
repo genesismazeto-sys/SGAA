@@ -1834,7 +1834,29 @@ _PG_SNAPSHOT_DEFAULT_FOLDER = "SGAA - Backups"
 
 
 def _postgres_backup_now():
-    """MP-3 A19: "Gerar backup agora" under PostgreSQL (owner: ``app.backup.pg_snapshot``).
+    """MP-3 A19: "Gerar backup agora" under PostgreSQL; the outcome flashed as the SQLite route did."""
+    targets, sent, failed = _send_postgres_snapshot()
+    if not targets:
+        flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
+        return redirect(url_for("admin_banco_dados"))
+    if sent is None:
+        flash("Não foi possível gerar o backup do banco. Nada foi enviado.", "error")
+        return redirect(url_for("admin_banco_dados"))
+    labels = ["Google Drive" if provider == "google" else "OneDrive" for provider in sent]
+    if labels and not failed:
+        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}.", "success")
+    elif labels:
+        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}, mas o envio falhou para {' e '.join(failed)}.", "warning")
+    else:
+        flash(f"Backup do banco gerado, mas o envio falhou para {' e '.join(failed)}.", "error")
+    return redirect(url_for("admin_banco_dados"))
+
+
+def _send_postgres_snapshot():
+    """The snapshot sent to the connected drives (owner: ``app.backup.pg_snapshot``).
+
+    Returns ``(targets, sent, failed)``: the connected drives, the ones that received it (``None``
+    when the snapshot could not be made) and the labels of the ones that failed.
 
     A verified snapshot of the live database goes to every connected cloud drive, into the folder
     "Selecionar pasta" chose (by its id; SGAA's default backup folder when none was chosen); each
@@ -1855,8 +1877,7 @@ def _postgres_backup_now():
         keep = None  # a deletion is never decided by a policy that could not be read
     targets = [provider for provider in ("google", "onedrive") if _get_active_cloud_account(conn, provider)]
     if not targets:
-        flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
-        return redirect(url_for("admin_banco_dados"))
+        return targets, [], []
     started = time.monotonic()
     sent, failed, uploaded, exported = [], [], {}, {}
     with tempfile.TemporaryDirectory(prefix="sgaa-pg-snapshot-") as scratch:
@@ -1864,8 +1885,7 @@ def _postgres_backup_now():
             snapshot = pg_snapshot.create(scratch)
         except Exception as exc:
             logger.warning("event=pg_snapshot_failed code=%s", getattr(exc, "code", type(exc).__name__))
-            flash("Não foi possível gerar o backup do banco. Nada foi enviado.", "error")
-            return redirect(url_for("admin_banco_dados"))
+            return targets, None, []
         for provider in targets:
             prefix = "gdrive" if provider == "google" else "onedrive"
             label = "Google Drive" if provider == "google" else "OneDrive"
@@ -1932,14 +1952,92 @@ def _postgres_backup_now():
             pg_posture.publish(raw, [record])
         except Exception as exc:
             logger.warning("event=pg_snapshot_record_failed error=%s", type(exc).__name__)
-    labels = ["Google Drive" if provider == "google" else "OneDrive" for provider in sent]
-    if labels and not failed:
-        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}.", "success")
-    elif labels:
-        flash(f"Backup do banco gerado e enviado para {' e '.join(labels)}, mas o envio falhou para {' e '.join(failed)}.", "warning")
-    else:
-        flash(f"Backup do banco gerado, mas o envio falhou para {' e '.join(failed)}.", "error")
+    return targets, sent, failed
+
+
+def _postgres_restore(path, *, uploaded: bool):
+    """MP-3 A19: "Recuperar banco de dados" under PostgreSQL (owner: ``app.backup.pg_restore``).
+
+    The file is verified first; then a safety copy of the current database must reach at least one
+    connected drive; only then are the registers replaced, in one proven transaction.
+    """
+    from app.backup import pg_restore
+
+    def refuse(reason):
+        if uploaded:
+            flash(f"Não foi possível restaurar o arquivo enviado: {reason}", "error")
+        else:
+            flash(f"Não foi possível restaurar o backup selecionado: {reason}", "error")
+        return redirect(url_for("admin_banco_dados"))
+
+    try:
+        snapshot = pg_restore.read(path)
+    except pg_restore.RestoreError as exc:
+        return refuse(exc)
+    _targets, sent, _failed = _send_postgres_snapshot()
+    if not sent:
+        return refuse("a cópia de segurança da base atual não pôde ser enviada para nenhuma conta em nuvem; "
+                      "nada foi alterado.")
+    conn = get_db_connection()
+    conn.commit()  # the request holds no lock the restore waits for
+    try:
+        result = pg_restore.restore(snapshot)
+    except pg_restore.RestoreError as exc:
+        logger.warning("event=pg_restore_refused code=%s", exc.code)
+        return refuse(exc)
+    logger.info("event=pg_restore_done tables=%s rows=%s by=%s", result["tables"], result["rows"],
+                session.get("user_id"))
+    labels = " e ".join("Google Drive" if provider == "google" else "OneDrive" for provider in sent)
+    flash(f"Banco restaurado com sucesso. Uma cópia de segurança da base anterior foi enviada para {labels}.",
+          "success")
     return redirect(url_for("admin_banco_dados"))
+
+
+def _postgres_restore_from_drive():
+    import tempfile
+
+    from app import cloud_drives as _cd
+
+    manifest = str(request.form.get("generation") or "").strip().lower()
+    conn = get_db_connection()
+    raw = getattr(conn, "raw_connection", None)
+    posture = pg_posture.read(raw) if raw is not None and re.fullmatch(r"[0-9a-f]{64}", manifest) else {}
+    files = next((item["files"] for item in posture.get("recent") or [] if item["manifest"] == manifest), {})
+    if not files:
+        flash("Backup selecionado é inválido ou não está mais disponível.", "error")
+        return redirect(url_for("admin_banco_dados"))
+    with tempfile.TemporaryDirectory(prefix="sgaa-pg-restore-") as scratch:
+        path = os.path.join(scratch, "sgaa-pg-restore.db")
+        for provider in ("google", "onedrive"):
+            if provider not in files:
+                continue
+            try:
+                token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
+                if provider == "google":
+                    _cd.google_download_to(token, files[provider], path)
+                else:
+                    _cd.onedrive_download_to(token, files[provider], path)
+                break
+            except Exception as exc:
+                logger.warning("event=pg_restore_fetch_failed provider=%s error=%s", provider, type(exc).__name__)
+        if not os.path.exists(path):
+            flash("Arquivo do backup não foi encontrado.", "error")
+            return redirect(url_for("admin_banco_dados"))
+        return _postgres_restore(path, uploaded=False)
+
+
+def _postgres_restore_from_upload():
+    import tempfile
+
+    request.max_content_length = current_app.config.get("BACKUP_RESTORE_MAX_CONTENT_LENGTH")
+    backup_file = request.files.get("backup_file")
+    if not backup_file or not getattr(backup_file, "filename", ""):
+        flash("Selecione um arquivo de backup do banco para restaurar.", "error")
+        return redirect(url_for("admin_banco_dados"))
+    with tempfile.TemporaryDirectory(prefix="sgaa-pg-restore-") as scratch:
+        path = os.path.join(scratch, "sgaa-pg-restore.db")
+        backup_file.save(path)
+        return _postgres_restore(path, uploaded=True)
 
 
 @admin_required
@@ -2173,9 +2271,8 @@ def _restore_database_from_source(
 
 @admin_required
 def admin_banco_dados_restaurar():
-    refused = _refuse_unsupported_sqlite_maintenance()
-    if refused is not None:
-        return refused
+    if not sqlite_maintenance_supported():
+        return _postgres_restore_from_drive()
     manifest_path = _resolve_allowed_backup_manifest_path(request.form.get("manifest_path") or "")
     if not manifest_path or not os.path.exists(manifest_path):
         flash("Backup selecionado é inválido ou não está mais disponível.", "error")
@@ -2216,9 +2313,8 @@ def admin_banco_dados_restaurar():
 
 @admin_required
 def admin_banco_dados_restaurar_upload():
-    refused = _refuse_unsupported_sqlite_maintenance()
-    if refused is not None:
-        return refused
+    if not sqlite_maintenance_supported():
+        return _postgres_restore_from_upload()
     request.max_content_length = current_app.config.get("BACKUP_RESTORE_MAX_CONTENT_LENGTH")
     backup_file = request.files.get("backup_file")
     if not backup_file or not getattr(backup_file, "filename", ""):

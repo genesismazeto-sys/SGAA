@@ -228,9 +228,12 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "gerado, mas o envio falhou para {value_1}.' (msg_2e248a5226c2b973), "
         "'Nenhuma conta em nuvem está conectada para receber o backup do "
         "banco.' (msg_9cbd187e1295c62a) and 'Não foi possível gerar o backup "
-        "do banco. Nada foi enviado.' (msg_6d7b2ffb8df4ca6e). 5 additions, "
-        "0 retirements",
-        5,
+        "do banco. Nada foi enviado.' (msg_6d7b2ffb8df4ca6e); and 'Recuperar "
+        "banco de dados' under PostgreSQL with its one new outcome 'Banco "
+        "restaurado com sucesso. Uma cópia de segurança da base anterior foi "
+        "enviada para {value_1}.' (msg_06330e89f2cbdcde) -- its refusals reuse "
+        "the original restore messages. 6 additions, 0 retirements",
+        6,
     ),
 )
 
@@ -277,9 +280,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # the unreachable atividade_versao.grupo classifier message, to 580; U5-E adds
 # the SQLite-maintenance-unsupported refusal, to 581; STORAGE S3-A retires the
 # request-flow Google Drive flash, to 580; MP-3 A19 restores "Gerar backup agora"
-# under PostgreSQL with its five outcome messages, to 585.
+# under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
+# with its one success message, to 586.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "7dc151fcec55e00ff044d9b928e031f848d7d47bd16a943ed97f5853ee9c0386"
+    "b96020922727648e6e15acebd9d0faf0ef6a6fcd4e0e2259645a726054b46c9e"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -822,12 +826,13 @@ A19_BACKUP_NOW_KEYS = frozenset(
         "msg_2e248a5226c2b973",  # Backup do banco gerado, mas o envio falhou para {value_1}.
         "msg_9cbd187e1295c62a",  # Nenhuma conta em nuvem está conectada para receber o backup do banco.
         "msg_6d7b2ffb8df4ca6e",  # Não foi possível gerar o backup do banco. Nada foi enviado.
+        "msg_06330e89f2cbdcde",  # Banco restaurado com sucesso. Uma cópia de segurança ... enviada para {value_1}.
     }
 )
 
 
 def catalog_keys_before_a19_backup_now(keys) -> set[str]:
-    """Undo the MP-3 A19 term: drop the PostgreSQL "Gerar backup agora" outcomes.
+    """Undo the MP-3 A19 term: drop the PostgreSQL "Gerar backup agora" and restore outcomes.
 
     A19 is the newest term, so a reconstruction walks back through this first,
     then S3-A, U5-E, U5-B and every older term.
