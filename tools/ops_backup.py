@@ -443,19 +443,23 @@ def _ledger_call(call, *args, attempts: int = 5, **kwargs):
     raise Refused("LEDGER_LEDGER_BUSY")  # pragma: no cover - the loop returns or raises
 
 
+#: When the policy cannot be read, the run rotates nothing: a deletion is never decided by a guess.
+KEEP_EVERY_GENERATION = 1_000_000
+
+
 def _policy_generations(connect, requested: int | None) -> int:
-    """The generations to keep: the administrator's policy, read from the database this run backs up
-    (its defaults when it cannot be read); an explicit request may keep more, never fewer."""
+    """The generations to keep: the administrator's policy, read from the database this run backs up;
+    an explicit request may keep more, never fewer.  An unreadable policy keeps every generation."""
     from app.backup import pg_posture
 
     try:
         conn = connect()
         try:
-            policy = pg_posture.read_policy(conn)
+            policy = pg_posture.read_policy(conn, strict=True)
         finally:
             conn.close()
     except Exception:
-        policy = pg_posture.default_policy()
+        return KEEP_EVERY_GENERATION if requested is None else max(requested, KEEP_EVERY_GENERATION)
     configured = int(policy["pg_retention_generations"])
     if requested is None:
         return configured
@@ -495,7 +499,10 @@ def run_governed(ledger_dir: Path, root: Path, off_platform: Path, *, label: str
     if objects and store_project != expected["prod_project_sha256"]:
         raise Refused("STORE_NOT_THE_PROD_PROJECT", "SUPABASE_URL is not the PROD project's store")
     child_env = dict(env, DATABASE_URL=source.child_url)
-    generations = _policy_generations(source.connect, generations)
+    if baseline:  # the baseline is never rotated
+        generations = generations or MIN_GENERATIONS
+    else:
+        generations = _policy_generations(source.connect, generations)
     started = now()
     result = run_generation(Path(root), label=label, generations=generations, objects=objects,
                             off_platform=Path(off_platform), runner=runner, python=python, clock=clock,

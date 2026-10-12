@@ -1576,8 +1576,9 @@
       <p class="db-note">Nenhum snapshot foi gerado ainda.</p>
     {% endif %}
   </article>
-  {% elif database_protection and database_protection.state != 'UNREADABLE' %}
+  {% elif database_protection and database_protection.policy_fields %}
   {% set protection = database_protection %}
+  {% if protection.state != 'UNREADABLE' %}
   {# ────────── Operações (PostgreSQL, MP-3 A19) ────────── #}
   <article class="db-card" data-protection-operations>
     <div class="db-card-head">
@@ -1591,6 +1592,7 @@
       <div><strong>Perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h{% if protection.ceiling_hours %} · teto registrado na abertura: {{ protection.ceiling_hours }} h{% endif %}</div>
     </div>
   </article>
+  {% endif %}
 
   {# ────────── Política de retenção (PostgreSQL, MP-3 A19) ────────── #}
   <article class="db-card">
@@ -1650,6 +1652,7 @@
     {% endif %}
   </article>
 
+  {% if protection.state != 'UNREADABLE' %}
   {# ────────── Gerações registradas (PostgreSQL, MP-3 A19) ────────── #}
   <article class="db-card">
     <div class="db-card-head">
@@ -1690,6 +1693,7 @@
       <p class="db-cloud-store-warning" role="status">{{ protection.ignored }} registro(s) de backup ignorado(s): não pertencem a este banco ou foram alterados.</p>
     {% endif %}
   </article>
+  {% endif %}
   {% endif %}
 
   <div id="cloud-folder-modal" class="db-folder-modal" hidden>

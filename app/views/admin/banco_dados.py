@@ -415,7 +415,16 @@ def _database_protection_context(conn) -> dict:
     raw = getattr(conn, "raw_connection", None)
     posture = pg_posture.read(raw) if raw is not None else {"state": "UNREADABLE"}
     if posture["state"] == "UNREADABLE":
-        return {"state": "UNREADABLE"}
+        # The records could not be read; the policy stays visible and editable on its own.
+        if raw is None:
+            return {"state": "UNREADABLE"}
+        policy = pg_posture.read_policy(raw)
+        ceiling = pg_posture.opening_ceiling(raw)
+        return {"state": "UNREADABLE", "policy": {key: policy[key] for key in pg_posture.POLICY_FIELDS},
+                "policy_fields": _policy_fields(ceiling), "policy_configured": policy["configured"],
+                "policy_updated_label": _format_drive_timestamp(
+                    str(policy["updated_at"]).replace(" ", "T") + "+00:00" if policy["updated_at"] else ""),
+                "retention_generations": policy["pg_retention_generations"]}
 
     def when(moment):
         return _format_drive_timestamp(moment.isoformat()) if moment else ""

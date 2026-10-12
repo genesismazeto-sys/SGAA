@@ -130,16 +130,18 @@ def policy_from_rows(rows) -> dict:
     return dict(policy, configured=configured, updated_at=updated)
 
 
-def read_policy(raw) -> dict:
-    """The stored policy of the database behind ``raw`` (a psycopg connection), read in a savepoint:
-    a database without the settings table, or any refusal, yields the defaults and never disturbs the
-    caller's transaction."""
+def read_policy(raw, *, strict: bool = False) -> dict:
+    """The stored policy of the database behind ``raw`` (a psycopg connection), read in a savepoint that
+    never disturbs the caller's transaction.  A refusal yields the defaults, or raises when ``strict``
+    (a run that rotates must never delete by a policy it could not read)."""
     from psycopg.rows import tuple_row
 
     try:
         with raw.transaction(), raw.cursor(row_factory=tuple_row) as cursor:
             rows = cursor.execute(POLICY_SELECT_SQL).fetchall()
     except Exception:
+        if strict:
+            raise
         rows = []
     return policy_from_rows(rows)
 
@@ -155,7 +157,7 @@ def validate_policy(form, *, ceiling_hours: int | None = None) -> dict:
         policy[key] = value
     if ceiling_hours is not None and policy["pg_backup_cadence_hours"] > ceiling_hours:
         raise PolicyError(
-            f"A frequência do backup do banco não pode passar de {ceiling_hours} h enquanto a janela da virada estiver aberta."
+            f"A frequência do backup do banco não pode passar de {ceiling_hours} h, a cadência registrada na abertura da virada."
         )
     return policy
 

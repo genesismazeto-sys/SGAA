@@ -329,3 +329,26 @@ def test_real_pg_a_read_only_database_refuses_the_publication(pg_database):
     conn.execute("SET default_transaction_read_only = on")  # what the C12 write barrier sets for the role
     with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
         pg_posture.publish(conn, [_generation(1, identity=_identity(conn))])
+
+
+def test_a_run_that_cannot_read_the_policy_keeps_every_generation():
+    """Review (A19 (8)): a deletion is never decided by a policy the run could not read."""
+    from tools import ops_backup
+
+    def broken():
+        raise RuntimeError("unreachable")
+
+    assert ops_backup._policy_generations(broken, None) == ops_backup.KEEP_EVERY_GENERATION
+    assert ops_backup._policy_generations(broken, 3) == ops_backup.KEEP_EVERY_GENERATION
+
+    class Refusing:
+        def transaction(self):
+            raise RuntimeError("refused")
+
+        def close(self):
+            pass
+
+    assert ops_backup._policy_generations(Refusing, None) == ops_backup.KEEP_EVERY_GENERATION
+    with pytest.raises(RuntimeError):
+        pg_posture.read_policy(Refusing(), strict=True)
+    assert pg_posture.read_policy(Refusing())["pg_retention_generations"] == pg_posture.MIN_GENERATIONS
