@@ -1105,6 +1105,19 @@ from DEV (15 lanes); the DEV dress rehearsal C0..C13 on the new flow with real D
 facts from the GA1 probe (A17). Targeted mutation of every new refusal boundary of findings 1-6: see the
 evidence index. T5 on the candidate: see the evidence index. No same-family recheck (user instruction).
 
+A19 evidence (pre-PONR product-contract remediation, 2026-10-12). Production was paused first by the governed
+operator deployment of the effective candidate (no `close`, no barrier); the platform's request log showed no
+non-operator request after the opening. Unit and real-PostgreSQL 17 lanes: the posture reading and publication
+(`test_mp3_a19_backup_posture.py`: foreign, altered and hand-made rows ignored, the business fingerprint unchanged
+by a publication, the caller's transaction undisturbed, a read-only database refusing it), the ops_backup
+publication (plain and governed runs; a database-only run never claiming an earlier object set, killed as a
+mutant), the served open application showing the governed posture and the baseline drill
+(`test_mp3_opening_real_app.py`), the ledger's GC1/GC2 boundaries (`test_mp3_cutover_ledger.py`), the
+updated guards. Fresh-context same-family review: FAIL (one material), fixed, targeted recheck PASS. T5 on the
+first candidate commit (8 chunks, clean worktree, PostgreSQL 17 lanes on): 5,908 passed, 165 skipped, the recorded
+baseline only (6 `xlwt` errors, `TestSentinelSurvival`, the MX3 delta 549 vs 548, the backup-package test) plus the
+thead-count guard the review fix updated, re-run green on the final commit with the touched modules.
+
 Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
 (A14); DEV `public` was left empty and its Data API off.
