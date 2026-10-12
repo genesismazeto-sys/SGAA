@@ -744,50 +744,84 @@ def test_r8_an_open_cutover_caps_the_database_cadence_at_the_one_it_recorded(env
 
 
 
-def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_connected_drive(env, admin_client, monkeypatch):
-    """MP-3 A19: the snapshot is proven, sent to the destination folder, pruned to the policy, recorded."""
+def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted, *, folder_id="chosen-folder"):
     import sqlite3
     from pathlib import Path
 
+    def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None):
+        lite = sqlite3.connect(zip_path)
+        try:
+            assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
+        finally:
+            lite.close()
+        uploads.append((provider, Path(zip_path).name, folder_id))
+        remote.append({"id": "new", "name": file_name})
+        return {"file_id": "new", "file_name": file_name, "folder_id": folder_id or "default-folder"}
+
+    def listed(token, folder, prefix):
+        assert folder == folder_id  # the folder the snapshot was sent to, by its id
+        return [f for f in remote if f["name"].startswith(prefix)]
+
+    monkeypatch.setattr(view, "_get_active_cloud_account",
+                        lambda conn, provider: {"account_email": "x@example.invalid"} if provider == "google" else None)
+    monkeypatch.setattr(view, "_get_cloud_drive_folder_setting",
+                        lambda conn, provider: {"folder_id": folder_id, "drive_id": ""})
+    monkeypatch.setattr(view._cloud_connections, "upload_backup_zip", upload)
+    monkeypatch.setattr(view._cloud_connections, "get_authenticated_access_token", lambda conn, provider: ("tok", "x"))
+    monkeypatch.setattr(cloud_drives, "google_list_folder_files", listed)
+    monkeypatch.setattr(cloud_drives, "google_delete_file", lambda token, file_id: deleted.append(file_id))
+
+
+def test_r8_gerar_backup_agora_sends_a_verified_snapshot_to_the_chosen_folder(env, admin_client, monkeypatch):
+    """MP-3 A19: the snapshot is proven, sent to the folder "Selecionar pasta" chose, pruned there, recorded."""
     from app import cloud_drives
     from app.backup import pg_posture
     from app.views.admin import banco_dados as view
 
     uploads, deleted = [], []
     remote = [{"id": f"old-{i}", "name": f"sgaa-pg-snapshot-2026100{i}T000000Z.db"} for i in range(1, 5)]
-    remote.append({"id": "legacy", "name": "sgaa_backup_legacy.db"})
-
-    def upload(token, path, folder):
-        lite = sqlite3.connect(path)
-        try:
-            assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
-        finally:
-            lite.close()
-        uploads.append((token, Path(path).name, folder))
-        remote.append({"id": "new", "name": Path(path).name})
-        return {"id": "new"}
-
-    monkeypatch.setattr(view, "_get_active_cloud_account",
-                        lambda conn, provider: {"account_email": "x@example.invalid"} if provider == "google" else None)
-    monkeypatch.setattr(view._cloud_connections, "get_authenticated_access_token", lambda conn, provider: ("tok", "x"))
-    monkeypatch.setattr(cloud_drives, "google_upload", upload)
-    monkeypatch.setattr(cloud_drives, "google_list_db_files", lambda token, folder: list(remote))
-    monkeypatch.setattr(cloud_drives, "google_delete_file", lambda token, file_id: deleted.append(file_id))
+    remote += [{"id": "legacy", "name": "sgaa_backup_legacy.db"}, {"id": "copy", "name": "sgaa-pg-snapshot-copia.db"}]
+    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted)
     before = _public_table_counts(env.observer)
     try:
         response = admin_client.post("/admin/banco-dados/backup")
         flashes = _pop_flashes(admin_client)
         assert response.status_code == 302, response.status_code
         assert ("success", "Backup do banco gerado e enviado para Google Drive.") in flashes, flashes
-        assert len(uploads) == 1 and uploads[0][1].startswith("sgaa-pg-snapshot-")
+        assert len(uploads) == 1 and uploads[0][1].startswith("sgaa-pg-snapshot-") and uploads[0][2] == "chosen-folder"
         assert sorted(deleted) == ["old-1", "old-2", "old-3"]  # policy keeps 2: the new one and the newest old
-        assert "legacy" not in deleted
+        assert "legacy" not in deleted and "copy" not in deleted
         after = _public_table_counts(env.observer)
-        assert {t: n for t, n in after.items() if t != "configuracoes_backup"} ==             {t: n for t, n in before.items() if t != "configuracoes_backup"}
+        assert {t: n for t, n in after.items() if t != "configuracoes_backup"} == \
+            {t: n for t, n in before.items() if t != "configuracoes_backup"}
         posture = pg_posture.read(env.observer)
         assert posture["database_status"] == "CURRENT" and posture["recent"][0]["snapshot"] is True
         assert posture["recent"][0]["destinations"] == ["google"]
         page = admin_client.get("/admin/banco-dados").get_data(as_text=True)
         assert "Backup agora" in page and "Gerar backup agora" in page
+    finally:
+        env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
+
+
+def test_r8_gerar_backup_agora_never_prunes_by_a_policy_it_could_not_read(env, admin_client, monkeypatch):
+    from app import cloud_drives
+    from app.backup import pg_posture
+    from app.views.admin import banco_dados as view
+
+    uploads, deleted = [], []
+    remote = [{"id": f"old-{i}", "name": f"sgaa-pg-snapshot-2026100{i}T000000Z.db"} for i in range(1, 5)]
+    _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted)
+
+    def unreadable(raw, *, strict=False):
+        if strict:
+            raise RuntimeError("statement timeout")
+        return pg_posture.policy_from_rows([])
+
+    monkeypatch.setattr(pg_posture, "read_policy", unreadable)
+    try:
+        admin_client.post("/admin/banco-dados/backup")
+        flashes = _pop_flashes(admin_client)
+        assert ("success", "Backup do banco gerado e enviado para Google Drive.") in flashes, flashes
+        assert len(uploads) == 1 and deleted == []  # sent, and nothing deleted
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")

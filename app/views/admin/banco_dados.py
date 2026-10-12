@@ -1835,9 +1835,10 @@ _PG_SNAPSHOT_DEFAULT_FOLDER = "SGAA - Backups"
 def _postgres_backup_now():
     """MP-3 A19: "Gerar backup agora" under PostgreSQL (owner: ``app.backup.pg_snapshot``).
 
-    A verified snapshot of the live database is sent to every connected cloud drive, into its
-    destination folder ("Selecionar pasta"); each drive keeps the newest snapshots the retention
-    policy sets (only SGAA's own snapshot files are ever pruned); the receipt joins the posture.
+    A verified snapshot of the live database goes to every connected cloud drive, into the folder
+    "Selecionar pasta" chose (by its id; SGAA's default backup folder when none was chosen); each
+    folder keeps the newest snapshots the retention policy sets, pruning only SGAA's own snapshot
+    files and only by a policy actually read; the receipt joins the posture.
     """
     import tempfile
     import time
@@ -1847,8 +1848,10 @@ def _postgres_backup_now():
 
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
-    drive_settings = get_drive_settings(conn)
-    keep = pg_posture.read_policy(raw)["pg_retention_generations"] if raw is not None else pg_posture.MIN_GENERATIONS
+    try:
+        keep = pg_posture.read_policy(raw, strict=True)["pg_retention_generations"] if raw is not None else None
+    except Exception:
+        keep = None  # a deletion is never decided by a policy that could not be read
     targets = [provider for provider in ("google", "onedrive") if _get_active_cloud_account(conn, provider)]
     if not targets:
         flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
@@ -1864,14 +1867,15 @@ def _postgres_backup_now():
             return redirect(url_for("admin_banco_dados"))
         for provider in targets:
             prefix = "gdrive" if provider == "google" else "onedrive"
-            folder = str(drive_settings.get(f"{prefix}_dest_folder") or "").strip() or _PG_SNAPSHOT_DEFAULT_FOLDER
             label = "Google Drive" if provider == "google" else "OneDrive"
+            chosen = _get_cloud_drive_folder_setting(conn, provider)
+            folder_id = str(chosen.get("folder_id") or "").strip() or None
+            drive_id = str(chosen.get("drive_id") or "").strip() or None
             try:
-                token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
-                if provider == "google":
-                    _cd.google_upload(token, snapshot["path"], folder)
-                else:
-                    _cd.onedrive_upload(token, snapshot["path"], folder)
+                result = _cloud_connections.upload_backup_zip(
+                    conn, provider, zip_path=snapshot["path"], file_name=snapshot["file_name"],
+                    folder_name=_PG_SNAPSHOT_DEFAULT_FOLDER, folder_id=folder_id, drive_id=drive_id,
+                )
             except Exception as exc:
                 logger.warning("event=pg_snapshot_upload_failed provider=%s error=%s", provider, type(exc).__name__)
                 failed.append(label)
@@ -1882,13 +1886,19 @@ def _postgres_backup_now():
             _save_drive_config(conn, {f"{prefix}_last_upload_at": snapshot["generation_at"],
                                       f"{prefix}_last_upload_error": ""})
             conn.commit()
+            if keep is None:
+                continue
             try:
+                token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
                 if provider == "google":
-                    listed = [{"id": f.get("id"), "name": f.get("name")} for f in _cd.google_list_db_files(token, folder)]
+                    landed = str(result.get("folder_id") or folder_id or "")
+                    listed = _cd.google_list_folder_files(token, landed, pg_snapshot.SNAPSHOT_PREFIX) if landed else []
                     pg_snapshot.prune(listed, keep, lambda file_id: _cd.google_delete_file(token, file_id))
                 else:
-                    listed = [{"id": f.get("id"), "name": f.get("name")} for f in _cd.onedrive_list_db_files(token, folder)]
-                    pg_snapshot.prune(listed, keep, lambda item_id: _cd.onedrive_delete_file(token, item_id))
+                    listed = _cd.onedrive_list_folder_children(token, folder_id=folder_id, drive_id=drive_id,
+                                                               folder_path=_PG_SNAPSHOT_DEFAULT_FOLDER)
+                    pg_snapshot.prune(listed, keep,
+                                      lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id))
             except Exception as exc:
                 logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
     if sent and raw is not None:

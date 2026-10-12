@@ -228,6 +228,15 @@ def google_delete_file(token: str, file_id: str) -> None:
     _api(f"{_GOOGLE_FILES}/{file_id}", method="DELETE", token=token)
 
 
+def google_list_folder_files(token: str, folder_id: str, name_prefix: str) -> list[dict]:
+    """Files directly in the folder ``folder_id`` whose name starts with ``name_prefix``: {id, name}."""
+    safe_prefix = name_prefix.replace("\\", "").replace("'", "")
+    q = f"'{folder_id}' in parents and trashed=false and name contains '{safe_prefix}'"
+    url = f"{_GOOGLE_FILES}?q={urllib.parse.quote(q)}&fields=files(id,name)&pageSize=200"
+    result = _api(url, token=token) or {}
+    return [f for f in (result.get("files") or []) if str(f.get("name") or "").startswith(name_prefix)]
+
+
 # ---------------------------------------------------------------------------
 # OneDrive (Microsoft Graph)
 # ---------------------------------------------------------------------------
@@ -316,6 +325,29 @@ def onedrive_list_db_files(token: str, dest_folder: str) -> list[dict]:
 
 def onedrive_delete_file(token: str, item_id: str) -> None:
     _api(f"{_GRAPH}/me/drive/items/{item_id}", method="DELETE", token=token)
+
+
+def _onedrive_drive_base(drive_id: str | None) -> str:
+    return f"{_GRAPH}/drives/{urllib.parse.quote(drive_id, safe='')}" if drive_id else f"{_GRAPH}/me/drive"
+
+
+def onedrive_list_folder_children(token: str, *, folder_id: str | None, drive_id: str | None,
+                                  folder_path: str) -> list[dict]:
+    """Children of the chosen folder (by id; ``root``), else of ``folder_path`` from the root: {id, name}."""
+    base = _onedrive_drive_base(drive_id)
+    if folder_id and folder_id.lower() != "root":
+        url = f"{base}/items/{urllib.parse.quote(folder_id, safe='')}/children"
+    elif folder_id:
+        url = f"{base}/root/children"
+    else:
+        url = f"{base}/root:/{urllib.parse.quote(folder_path.strip('/'))}:/children"
+    result = _api(f"{url}?$select=id,name&$top=200", token=token) or {}
+    return result.get("value") or []
+
+
+def onedrive_delete_item(token: str, item_id: str, *, drive_id: str | None = None) -> None:
+    _api(f"{_onedrive_drive_base(drive_id)}/items/{urllib.parse.quote(item_id, safe='')}", method="DELETE",
+         token=token)
 
 
 # ---------------------------------------------------------------------------

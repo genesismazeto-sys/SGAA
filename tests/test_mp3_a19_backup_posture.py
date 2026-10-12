@@ -366,10 +366,12 @@ def test_pruning_only_ever_deletes_sgaa_snapshots_and_keeps_the_newest():
               {"id": "c", "name": "sgaa-pg-snapshot-20261011T000000Z.db"},
               {"id": "d", "name": "sgaa_backup_20240101.db"},  # a legacy SQLite backup in the same folder
               {"id": "e", "name": "sgaa-pg-snapshot-20261009T000000Z.db.part"},
+              {"id": "f", "name": "sgaa-pg-snapshot-manual.db"},  # a renamed copy: never a candidate
+              {"id": "g", "name": "sgaa-pg-snapshot-zzzz.db"},  # would sort above every stamp
               {"id": None, "name": "sgaa-pg-snapshot-20261008T000000Z.db"}]
     deleted = []
     assert pg_snapshot.prune(listed, 2, deleted.append) == ["sgaa-pg-snapshot-20261010T000000Z.db"]
-    assert deleted == ["a"]
+    assert deleted == ["a"]  # the new snapshot and the newest older one stay; nothing else is touched
     deleted.clear()
     assert pg_snapshot.prune(listed, 0, deleted.append) == ["sgaa-pg-snapshot-20261011T000000Z.db",
                                                            "sgaa-pg-snapshot-20261010T000000Z.db"]  # never below one
@@ -411,8 +413,21 @@ def test_real_pg_a_snapshot_is_proven_equal_and_restores_through_path_b(business
     lite = sqlite3.connect(snap["path"])
     try:
         assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
+        counters = dict(lite.execute("SELECT name, seq FROM sqlite_sequence").fetchall())
     finally:
         lite.close()
+    # the next-id counters travel with the snapshot: never below what the source has issued
+    check = raw_connection(source_url, autocommit=True)
+    try:
+        for table, seq in counters.items():
+            column = pathb._identity_column(table)
+            if column is None:
+                continue
+            sequence = check.execute("SELECT pg_get_serial_sequence(%s, %s)", (table, column)).fetchone()[0]
+            last, called = check.execute(f"SELECT last_value, is_called FROM {sequence}").fetchone()
+            assert seq >= (last if called else last - 1), table
+    finally:
+        check.close()
     source = raw_connection(source_url, autocommit=True)
     assert snap["source_identity_sha256"] == hosting.source_identity_sha256(hosting.database_source(source))
     # restore: the qualified Path-B tool loads the snapshot into an empty provisioned database

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,8 @@ from app import prod1_schema
 
 SNAPSHOT_PREFIX = "sgaa-pg-snapshot-"
 SNAPSHOT_SUFFIX = ".db"
+#: Exactly the names ``create`` writes: a renamed or hand-made copy is never pruned.
+SNAPSHOT_NAME = re.compile(r"sgaa-pg-snapshot-\d{8}T\d{6}Z\.db")
 
 
 class SnapshotError(Exception):
@@ -61,6 +64,11 @@ def _application_connection():
     from app import db as app_db
 
     return app_db._connect_postgres().raw_connection
+
+
+def _autoincrement(lite, table) -> bool:
+    row = lite.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
+    return bool(row and "AUTOINCREMENT" in str(row[0]).upper())
 
 
 def create(directory, *, now: datetime | None = None, connect=None) -> dict:
@@ -95,6 +103,20 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
                     marks = ", ".join("?" for _ in columns)
                     lite.executemany(f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({marks})", rows)
                 copied[table] = rows
+            # The next-id counters travel too: a restore never re-issues the id of a deleted row.
+            for table in tables:
+                column = pathb._identity_column(table)
+                if column is None:
+                    continue
+                sequence = source.execute("SELECT pg_get_serial_sequence(%s, %s)", (table, column)).fetchone()[0]
+                if not sequence:
+                    continue
+                last, called = source.execute(f"SELECT last_value, is_called FROM {sequence}").fetchone()
+                issued = int(last) if called else int(last) - 1
+                if lite.execute("SELECT 1 FROM sqlite_sequence WHERE name = ?", (table,)).fetchone():
+                    lite.execute("UPDATE sqlite_sequence SET seq = max(seq, ?) WHERE name = ?", (issued, table))
+                elif issued > 0 and _autoincrement(lite, table):
+                    lite.execute("INSERT INTO sqlite_sequence(name, seq) VALUES (?, ?)", (table, issued))
         finally:
             source.execute("ROLLBACK")
         lite.commit()
@@ -134,8 +156,7 @@ def prune(listed: list[dict], keep: int, delete) -> list[str]:
     deleted.  The newest is decided by the stamp in the name (the provider's dates are ignored).
     """
     ours = sorted((item for item in listed
-                   if str(item.get("name") or "").startswith(SNAPSHOT_PREFIX)
-                   and str(item.get("name") or "").endswith(SNAPSHOT_SUFFIX) and item.get("id")),
+                   if SNAPSHOT_NAME.fullmatch(str(item.get("name") or "")) and item.get("id")),
                   key=lambda item: item["name"], reverse=True)
     removed = []
     for item in ours[max(int(keep), 1):]:
@@ -144,4 +165,4 @@ def prune(listed: list[dict], keep: int, delete) -> list[str]:
     return removed
 
 
-__all__ = ["SNAPSHOT_PREFIX", "SnapshotError", "create", "prune"]
+__all__ = ["SNAPSHOT_NAME", "SNAPSHOT_PREFIX", "SnapshotError", "create", "prune"]
