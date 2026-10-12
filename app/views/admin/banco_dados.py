@@ -381,6 +381,54 @@ def _format_drive_timestamp(ts_iso: str) -> str:
     except Exception:
         return ts_iso
 
+_POSTURE_STATUS_LABELS = {
+    "CURRENT": ("Em dia", "status-positive"),
+    "LATE": ("Atrasado", "status-negative"),
+    "NONE": ("Sem registro", "status-negative"),
+}
+
+
+def _database_protection_context(conn) -> dict:
+    """The PostgreSQL backup posture as the page shows it (owner: ``app.backup.pg_posture``)."""
+    from app.backup import pg_posture
+
+    raw = getattr(conn, "raw_connection", None)
+    posture = pg_posture.read(raw) if raw is not None else {"state": "UNREADABLE"}
+    if posture["state"] == "UNREADABLE":
+        return {"state": "UNREADABLE"}
+
+    def when(moment):
+        return _format_drive_timestamp(moment.isoformat()) if moment else ""
+
+    def status(code):
+        label, css = _POSTURE_STATUS_LABELS[code]
+        return {"code": code, "label": label, "css": css}
+
+    validation = posture["validation"]
+    return {
+        "state": posture["state"],
+        "cadence_hours": posture["cadence_hours"],
+        "cadence_recorded_at_opening": posture["cadence_source"] == "OPENING",
+        "rpo_hours": posture["rpo_hours"],
+        "object_cadence_days": posture["object_cadence_hours"] // 24,
+        "min_generations": posture["min_generations"],
+        "database_status": status(posture["database_status"]),
+        "objects_status": status(posture["objects_status"]),
+        "latest_generation_label": when(posture["latest_generation_at"]),
+        "latest_object_set_label": when(posture["latest_object_set_at"]),
+        "validation": None if validation is None else {
+            "at_label": when(validation["at"]),
+            "generation_label": when(validation["generation_at"]),
+            "tables_verified": validation["tables_verified"],
+            "objects_verified": validation["objects_verified"],
+        },
+        "retention": posture["retention"],
+        "recent": [dict(item, generation_label=when(item["generation_at"])) for item in posture["recent"]],
+        "generations_recorded": posture["generations_recorded"],
+        "ignored": posture["ignored"],
+    }
+
+
 def _onedrive_mail_capability(conn) -> dict:
     """Mail.Send capability of the connected Microsoft account (read-only).
 
@@ -630,6 +678,9 @@ def _build_database_admin_context(conn):
         # UI-C13: effective, not merely configured -- the scheduled task must
         # exist, be enabled, point at this installation and cover this database.
         "automatic_backup_status": automatic_backup_status,
+        # MP-3 A19: the PostgreSQL protection posture (governed generations, retention,
+        # restore validation), read from the records the backup runs publish.
+        "database_protection": None if file_backup else _database_protection_context(conn),
     }
 
 @admin_required

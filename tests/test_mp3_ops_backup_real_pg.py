@@ -111,3 +111,43 @@ def test_the_verified_generation_holds_exactly_the_live_business_state_until_a_w
     with pytest.raises(ob.Refused) as caught:
         ob.verify_generation(root, off)
     assert caught.value.code == "DATABASE_SET_INVALID"
+
+
+def test_a_run_outside_the_ledger_window_publishes_its_own_receipt_into_the_database_it_backed_up(
+        database, tmp_path, monkeypatch):
+    """SPEC A19: after the cutover window the product still shows the posture; the receipt is the run's own."""
+    from app.backup import pg_posture
+    from tests.mp2_pg_support import adapter
+
+    name, url = database
+    monkeypatch.setenv("DATABASE_URL", url)
+    root, off = tmp_path / "primary", tmp_path / "off"
+    reports = []
+    for _ in range(3):
+        out, err = io.StringIO(), io.StringIO()
+        assert ob.main(["--root", str(root), "--off-platform", str(off)], out=out, err=err) == 0, err.getvalue()
+        reports.append(json.loads(out.getvalue()))
+    assert [r["posture"]["result"] for r in reports] == ["PUBLISHED"] * 3
+    assert all(r["posture"]["published"] == 1 for r in reports)
+    conn = adapter(url)
+    try:
+        posture = pg_posture.read(conn.raw_connection)
+    finally:
+        conn.close()
+    assert posture["generations_recorded"] == 3 and posture["ignored"] == 0
+    assert posture["database_status"] == "CURRENT" and posture["objects_status"] == "NONE"
+    assert posture["retention"] == {"generations_policy": 2, "kept": {"primary": {"database": 2, "objects": 0},
+                                                                      "off_platform": {"database": 2, "objects": 0}}}
+    assert posture["recent"][0]["governed"] is False
+
+
+def test_a_refused_publication_never_undoes_the_generation(database, tmp_path, monkeypatch):
+    name, url = database
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setattr("app.backup.pg_posture.publish",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("read-only")))
+    out, err = io.StringIO(), io.StringIO()
+    assert ob.main(["--root", str(tmp_path / "p"), "--off-platform", str(tmp_path / "o")], out=out, err=err) == 0
+    report = json.loads(out.getvalue())
+    assert report["result"] == "GENERATION_COMPLETE"
+    assert report["posture"] == {"result": "NOT_PUBLISHED", "code": "RUNTIMEERROR"}

@@ -108,6 +108,7 @@ authorization gate, RBAC and the route inventories are unchanged.
 | `APP_PUBLIC_BASE_URL` | https origin, OAuth callbacks derive from it | no |
 | `TOKEN_ENCRYPTION_KEY` | Fernet key for `cloud_accounts.token_json` | yes |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth application (also the Picker values `GOOGLE_PICKER_API_KEY`, `GOOGLE_APP_ID`) | secret / no |
+| `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID` | the Microsoft application the connected Microsoft account authorizes (delegated `User.Read`, `Files.ReadWrite`, `Mail.Send`; MSAL adds `offline_access`); the callback is `APP_PUBLIC_BASE_URL` + `/onedrive/callback`. Required in production: every SGAA e-mail (password recovery, access links, request decisions) is sent through Microsoft Graph by that account (SPEC MP-3 A19). `MS_GRAPH_BASE_URL` only when the default is wrong | secret / no / no |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY` | canonical document storage | secret key only |
 | `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
 | `SGAA_ADMISSION` | `operator` (only the operator is admitted, section 2a) or `open`; required in production | no |
@@ -202,11 +203,24 @@ settings, retention, snapshot download and delete) and the page drops the surfac
 that only work on a file: the local-backup and destination-folder cards, the
 operations, retention and snapshot cards, the automatic-backup chip, the folder
 picker with its Google scripts, and each provider's destination and "send backup"
-controls. What remains is the schema state, a card stating that the database is
-protected by its provider and the documented operational procedure
-(`docs/PG_BACKUP_RESTORE_RUNBOOK.md`), and the Google Drive and OneDrive account
-cards (connect, test, disconnect), because the Drive mirror uses the connected
-account. Nothing is listed from the local disk and the Windows task is not queried.
+controls. What remains is the schema state, the protection card, and the Google
+Drive and OneDrive account cards (connect, test, disconnect): the Drive mirror uses the
+connected Google account and every SGAA e-mail is sent by the connected Microsoft account.
+Nothing is listed from the local disk and the Windows task is not queried.
+
+The protection card (SPEC MP-3 A19, owner `app.backup.pg_posture`) states the posture of
+the PostgreSQL database from the records the operator's backup runs publish into it: the
+Layer-2 cadence and RPO (the cadence recorded at the opening, else 24 h), the weekly object
+set, the retention (generations kept in the primary and off-platform directories), the
+newest generation and object set with their status (current, late, none), the newest
+restore validation and the most recent generations. The records live in the control schema
+`sgaa_ops` (outside `public`: no Layer-2 set, business fingerprint or schema contract
+includes it). Each is a cutover-ledger `backup` or `restore` entry, or the self-hashed
+receipt of an `ops_backup` run, published verbatim by the run that made it into the
+database it backed up; the page shows only entries whose own hash re-derives and that name
+this database's live identity, and counts the others as ignored. The plan includes no
+provider backup, so "no record" is shown as unprotected. The page never runs a backup:
+generations and restore drills are operator runs (`docs/PG_BACKUP_RESTORE_RUNBOOK.md` §R).
 
 ## 9. Scheduled jobs
 
@@ -386,12 +400,13 @@ or prints a production value.
 | Variable | Set by | Rotation effect |
 |---|---|---|
 | `APP_SECRET_KEY` | user, platform | sessions end, throttle windows clear |
-| `TOKEN_ENCRYPTION_KEY` | user, platform | stored Google tokens become unreadable: reconnect Google |
+| `TOKEN_ENCRYPTION_KEY` | user, platform | stored Google and Microsoft tokens become unreadable: reconnect both |
 | `DATABASE_URL` (transaction pooler) | user, platform | rotate the database password at the provider, update, redeploy |
 | `SUPABASE_SECRET_KEY` | user, platform only | rotate at the provider, update, redeploy; never on a workstation file |
 | `CRON_SECRET` | user, platform (and Supabase Vault when a database trigger calls the front) | redeploy and update the Vault entry; the old value stops working at once |
 | `SGAA_OPERATOR_TOKEN` | user, platform | redeploy; operator cookies issued under the old value stop working |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | user, platform | the legacy OAuth client; a new client cannot see the legacy Drive files (`drive.file`) |
+| `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID` | user, platform (the secret value is created in the Microsoft Entra app registration) | a new client secret: update and redeploy; the stored Microsoft token keeps working until the old secret expires, then reconnect Microsoft |
 | `SUPABASE_URL`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY`, `APP_PUBLIC_BASE_URL` | user, platform | configuration, not secrets (the publishable key is public by design) |
 
 A one-off operator credential for a gated run on the operator machine (the production
@@ -403,7 +418,9 @@ the libpq password file, which serves DEV only.
 **OAuth.** `APP_PUBLIC_BASE_URL` is https; the legacy `GOOGLE_REDIRECT_URI` /
 `MS_REDIRECT_URI` variables are unset; the exact callback is registered on the legacy
 OAuth client; the consent screen is published to production (a client left in testing
-status expires refresh tokens within days).
+status expires refresh tokens within days). The Microsoft application registers
+`APP_PUBLIC_BASE_URL` + `/onedrive/callback` as a Web redirect URI and grants the delegated
+`User.Read`, `Files.ReadWrite` and `Mail.Send` permissions.
 
 **Administrator bootstrap.** Only when no login-capable full administrator exists; the
 password is read at a hidden prompt and the tool prints the account e-mail on success, so

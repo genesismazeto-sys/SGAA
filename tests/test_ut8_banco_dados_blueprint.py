@@ -114,6 +114,8 @@ POST_UT8_HELPER_NAMES = (
     # U5-E: refuse SQLite file backup/restore when the configured backend is
     # not SQLite (delegates to app.backup.capability).
     "_refuse_unsupported_sqlite_maintenance",
+    # MP-3 A19: the PostgreSQL backup posture card (delegates to app.backup.pg_posture).
+    "_database_protection_context",
 )
 
 CONSTANT_NAMES = (

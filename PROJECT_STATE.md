@@ -52,75 +52,36 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- MP-3 production integration / cutover: PREPARED, PENDING R3
-  (`docs/specs/MP-3-production-integration.md` §17): zero recurring cost, Vercel Hobby, Supabase
-  Free, no paid backup. Executor scope landed (descriptors and deployment audit, fail-closed
-  authorization, restore profile and scheduled backups, cutover ledger, smoke, PONR detector,
-  runbook, DEV rehearsal). GA1 was granted and the Vercel Hobby rehearsal qualification is done
-  (SPEC A12); GA4 was granted and the DEV Data API is off (A13); cryptography 50.0.2 and msal 1.37.0
-  are applied; the database lanes ran on Supabase DEV (A14: pooler and session lanes, DR1, DR3, RTO).
-  The first R3 review returned FAIL (five material findings); the remediation is A15: an
-  operator-only admission switch until GO (`SGAA_ADMISSION`, HOSTED_RUNTIME §2a), the opening and
-  the C12 rollback observed by the ledger itself (reference while closed, quiescence, fixed
-  derived-write allowlist), P6 secret custody with the deploy tree re-verified before the upload,
-  a verified pre-opening backup with the cadence held to C14, and the Data API proof accepting only
-  the answer proven on DEV. Three fresh-context rechecks (FAIL, then PASS twice) hardened it: one
-  reference per opening bound to the lift (`SGAA_OPENING_REFERENCE`), every observation bound to the
-  public address, each backup counted once by its own time. The re-review then returned FAIL on one
-  material finding, remediated as A16: every generation the ledger counts is bound, from its own
-  manifests, to the PROD database and the PROD project's store (`app.hosting` source identity; the
-  project from the pooler's authenticated tenant), and C1 proves the session connection is the PROD
-  project's. The cross-family review of that candidate returned FAIL on six material findings,
-  remediated as A17 (the final enforcement round): an open production deployment admits users only
-  under the authorization the ledger's reference writes into PROD (`sgaa_cutover.opening`, bound to the
-  reference entry, the database, the code and the platform project; fail closed otherwise); `close`
-  applies a database write barrier the C12 rollback re-verifies before each fingerprint and the record;
-  the PROD database is reached only through `tools/prod_source` (verified TLS against the pinned Supabase
-  root CA, no libpq routing input) and qualified by the ledger against the project's storage API;
-  backups are recorded only from the receipts of governed `ops_backup` runs; deployments only through
-  `deploy_audit deploy`/`promote`, bound to the platform's own file list and the running code; restore
-  validation only from `ops_backup drill` receipts. Live on DEV (15 lanes and the dress rehearsal) and
-  on the GA1 probe. Pending: the cross-family R3 review (packet in `D:\SGAA_REVIEW\mp3_r3_packet`) and,
-  optionally, GA2 for the Google OAuth rehearsal; the user turns DEV's Data API toggle off before GP1.
-  GP0 is not authorized; no PROD gate granted.
+- MP-3 production integration / cutover: IN PRODUCTION, C12 OPEN_PONR_PENDING
+  (`docs/specs/MP-3-production-integration.md`; cutover ledger outside the repository). The
+  opening was recorded on 2026-10-12; admission is PAUSED (the governed operator-only deployment
+  promoted; the opening authorization stands, no write barrier) for the pre-PONR product-contract
+  remediation A19: the operator-visible PostgreSQL backup posture and the Microsoft integration
+  the mail transport depends on, both removed or deferred during the hosted transition without
+  the user's authorization. C13 (PONR) is not recorded; re-opening needs the user's GC2.
 
-## Production readiness: NOT_READY_FOR_PRODUCTION_INTEGRATION
+## Production
 
-- Operational runtime: the local Windows workstation on SQLite `database.db`
-  (canonical, real student data — never in prompts); SQLite file backups
-  scheduled by Windows Task Scheduler; Google is the active cloud connection,
-  OneDrive deferred.
-- Production web runtime: DEFERRED. The application is hosting-ready in code and
-  rehearsed on DEV; nothing is deployed.
-- Open before production, assigned in the roadmap (MP-3 unless stated):
-  - Vercel Hobby project and descriptor files, environment wiring, region and
-    `maxDuration`, the daily cron entry, the one Hobby rate-limit rule in front of
-    the login (a flood of distinct keys still writes a throttle row per request);
-  - Supabase PostgreSQL 17 and empty-target qualification, cross-environment
-    backup/restore proof (Layer-1 backup / PITR is paid and out), the PROD Data API off by the
-    user's toggle and the override named in GP1;
-  - real-data census and legacy convergence, including decisions on terminal
-    legacy rows and unsupported legacy content;
-  - a first supervised live Drive mirror run (no DEV Google environment exists);
-  - scheduled object backup and an independent off-platform object copy (the
-    operator set is the only copy beyond the provider's);
-  - public HTTPS URL, `APP_SECRET_KEY`, `TOKEN_ENCRYPTION_KEY`, production
-    preflight and smoke, administrator bootstrap;
-  - pre-go-live security review.
-- Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches
-  a file handler when its directory is writable; the scratch path is predictable
-  on a shared POSIX temp directory; a report `descricao` is bounded only by the
-  request size (a cap needs a catalogued message and a baseline ledger term).
-- Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the
-  official deferred-hours spreadsheet.
+- Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
+  `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
+  Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
+- Backups: operator-run governed generations (`tools/ops_backup.py --ledger-dir`) on the cadence
+  recorded at the opening, restore drills, an off-platform copy; their records are published into
+  PROD for the Banco de dados page (A19).
+- The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
+  closes (C14); its contraction is MP-4.
+- Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler
+  when its directory is writable; the scratch path is predictable on a shared POSIX temp
+  directory; a report `descricao` is bounded only by the request size.
+- Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
+  deferred-hours spreadsheet.
 
 ## Environment facts
 
 - Supabase DEV `sgaa-dev` (`pkwtgqsiulzeqkqlsdou`): rehearsals use run-owned
   resources only, and there is no persistent bucket. Its bucket `/empty` is
   asynchronous: delete objects before the bucket.
-- Supabase PROD `sgaa-prod` (`uckadhcwfknklmdktuyi`) is untouched; every action on
-  it is a user gate.
+- Supabase PROD `sgaa-prod` (`uckadhcwfknklmdktuyi`): every action on it is a user gate.
 - The DEV rehearsal credential is still active outside the repository; the user
   revokes it when rehearsals end.
 - Real-PG lanes need `SGAA_PG_TEST_URL` (local PostgreSQL 15 or 17; the PROD major is 17);
@@ -146,5 +107,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | PREPARED, PENDING R3 — R3 FAILs remediated (SPEC A15, A16, A17); cross-family R3 review pending; no PROD gate granted |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C12 OPEN_PONR_PENDING; admission paused for the pre-PONR remediation A19; C13 and C14 pending |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |

@@ -720,7 +720,8 @@ def test_health_action_reuses_existing_csrf_and_rbac_protected_post_route():
     source = open("app/views/admin/banco_dados.py", encoding="utf-8-sig").read()
     template = open("templates/admin_banco_dados.html", encoding="utf-8-sig").read()
     assert 'request.form.get("action")' in source
-    assert template.count('value="test_connection"') == 1
+    # MP-3 A19: both providers test their connection through the same protected POST.
+    assert template.count('value="test_connection"') == 2
     assert template.count("Testar conexão") >= 2
     assert "csrf_token" in template
     assert 'f"Conexão com {label} validada"' in source
@@ -840,10 +841,12 @@ def test_provider_cards_render_four_action_contract_for_google_and_onedrive(
     ]
     assert len(onedrive_actions) == 4
     assert all(" disabled" in markup for _, markup in onedrive_actions)
-    assert "Configuração Microsoft adiada" in onedrive_card
+    # MP-3 A19: Microsoft is a required integration, never "deferred".
+    assert "Credenciais Microsoft não configuradas" in onedrive_card
+    assert "adiad" not in onedrive_card
 
 
-def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
+def test_admin_cloud_ui_keeps_google_active_and_onedrive_restored():
     template = open("templates/admin_banco_dados.html", encoding="utf-8-sig").read()
     view_source = open("app/views/admin/banco_dados.py", encoding="utf-8-sig").read()
     assert "<h3>Google Drive</h3>" in template
@@ -853,14 +856,19 @@ def test_admin_cloud_ui_keeps_google_active_and_onedrive_visible_but_deferred():
     assert template.count("onedrive_connection_status == 'not_configured'") >= 2
     assert "Não configurado" in template
     assert "<strong>OneDrive:</strong>" in template
-    assert "Configuração Microsoft adiada" in template
-    assert "Disponível após configurar as credenciais Microsoft desta máquina" in template
+    # MP-3 A19: the Microsoft integration is restored, not deferred; the card names the missing
+    # credentials by variable and tests a connected account through the protected POST.
+    assert "Configuração Microsoft adiada" not in template
+    assert "Credenciais Microsoft não configuradas" in template
+    assert "Disponível após configurar as credenciais Microsoft (MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID)" in template
+    assert '<input type="hidden" name="provider" value="onedrive">\n                  <input type="hidden" name="action" value="test_connection">' in template
     assert template.count('<div class="db-provider-secondary">') == 2
     assert ".db-provider-secondary.is-balanced" not in template
     assert "grid-template-columns:repeat(2, minmax(0, 1fr));" in template
     assert "align-content:start;" in template
     assert template.count(".db-provider-secondary{ grid-template-columns:1fr; }") == 2
-    assert 'title="OneDrive não está configurado"' in template
+    assert 'title="OneDrive não está configurado"' not in template
+    assert 'title="OneDrive não está conectado"' in template
     assert "url_for('static', filename='img/google-drive.svg')" in template
     assert "url_for('static', filename='img/onedrive.svg')" in template
     assert "url_for('uploaded_file', filename='Google_Drive_icon_(2020).svg')" not in template

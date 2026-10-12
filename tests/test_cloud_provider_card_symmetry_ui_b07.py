@@ -251,6 +251,7 @@ def test_each_metadata_row_names_the_state_it_renders(
         assert _text(credentials).split(":", 1)[1].strip() in {
             "configuração segura desta máquina",
             "ambiente legado",
+            "ambiente de hospedagem",  # MP-3 A19: environment-managed (hosted) credentials
             "ausentes",
         }
 

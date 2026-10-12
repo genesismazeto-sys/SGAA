@@ -472,6 +472,19 @@ recorded generation into a new scratch database (`SGAA_RESTORE_TARGET_URL`, with
 and records its receipt. Run a restore drill on a calendar (section F-H), in the drill terminal.
 The achievable RPO is the interval between runs.
 
+### R.1 The posture the product shows (MP-3 A19)
+
+The Banco de dados page shows the protection posture from records published into the
+database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).
+`ops_backup` publishes them: a governed run (`--ledger-dir`) publishes the cutover ledger's
+`backup` and `restore` entries verbatim, the drills' included, with the retention it
+observed; a run without the ledger publishes its own self-hashed receipt into the database
+it backed up. A refused publication (the C12 write barrier, an unreachable database) never
+undoes the generation: the output names it under `posture`. A restore drill runs without
+`DATABASE_URL`, so its entry is published by the next governed run or by
+`python tools/ops_backup.py publish --ledger-dir <ledger>` (session address, `PGPASSWORD`
+at a hidden prompt; it publishes only into the database the ledger qualified).
+
 ## Exit codes
 
 | Code | Meaning |

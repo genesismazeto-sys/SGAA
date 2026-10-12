@@ -1,7 +1,8 @@
 # SPEC MP-3 — Production integration and cutover
 
 Status: FROZEN 2026-10-10; amended by the user's acknowledgement of the same day (§16);
-executor preparation complete, R3 review and the user's gates pending (§17)
+executor preparation complete, R3 review and the user's gates pending (§17); production at C12,
+admission paused for the pre-PONR product-contract remediation (A19)
 Charter: "Take the hosting-ready SGAA from qualified DEV architecture to a fully rehearsed,
 recoverable and production-ready Vercel + Supabase deployment, including the real-data
 cutover plan and the first live Drive mirror operation. MP-1 and MP-2 contracts and
@@ -290,7 +291,8 @@ remains possible. W ends only on the C14 criteria; purge and legacy contraction 
   external trigger raises the cadence only when the backlog needs it.
 - D11 — Backup automation is an operator-side wrapper with an off-platform copy; scheduling the
   operator's machine task remains an operator action (the Windows scheduler is MP-4's). No paid
-  provider backup is an acceptance requirement.
+  provider backup is an acceptance requirement. The posture those runs establish is part of the
+  product: the administrator sees it on the Banco de dados page (A19).
 - D12 — Authorization gate fail-closed in production (UD7).
 - D13 — No schema change and no new runtime dependency; advisory bumps within the same major allowed.
 - D14 — Rehearsals use synthetic production-shaped data only; real data is never loaded to DEV.
@@ -336,8 +338,10 @@ recommended defaults and are batched with the gates in §10.
   MP-1 outbox, mirror and convergence semantics; MP-2 throttle, preview and scheduler contracts;
   `main.py`; the Windows runtime scripts; the workstation database and document roots.
 - Planned local refactors (§8): none expected; the gate change is a few lines in its owner.
-- Out of scope: MP-4; any schema change; reverse migration; CSP; OneDrive; scheduled mirror of
-  retired objects; the deferred-hours spreadsheet import.
+- Out of scope: MP-4; any schema change; reverse migration; CSP; scheduled mirror of
+  retired objects; the deferred-hours spreadsheet import. (OneDrive was listed here without the
+  user's authorization; the Microsoft integration and the operator-visible backup posture are
+  restored in scope by A19.)
 
 ## 7. Data & schema
 
@@ -427,6 +431,8 @@ PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" de
 | GG2 | first live mirror passes against the institution's Drive (additive; the mirror never deletes) | files removed by hand |
 | GO | open to users: the pre-opening generation recorded, the one reference taken by the ledger while admission is closed everywhere (it writes the opening authorization), then the lift (the governed open deployment carrying `SGAA_OPENING_REFERENCE` = the reference entry's hash, promoted) and `open`; starts PONR_PENDING (C12); PONR itself is recorded at C13 | `close` (authorization revoked, write barrier), remove the open deployments and roll back on the ledger's proof while pending (§3.4); after a refused rollback `resume` |
 | GX1 | empty the PROD database or remove unreferenced PROD bucket objects this phase created, before PONR | irreversible by design |
+| GC1 | after the reference and before the PONR: ONE product-contract amendment of the candidate (A19), recorded by `amend --contract-ref`; one grant per amendment | the amendment admits no one by itself; rollback as at C12 |
+| GC2 | at C12, before the PONR: ONE re-opening of the amended candidate under the same opening reference (`authorize-code --contract-ref`); one grant per re-opening | `close` (revokes every authorization of the reference) and the C12 rollback |
 
 User-only acts, never gates the executor holds: creating and revoking credentials (including the DEV
 database password placed in the libpq password file, which the executor never reads back, and
@@ -530,7 +536,7 @@ that exception stated). *Cutover done*: AC6 as well.
   7-day inactivity pause, 500 MB / 1 GB / 5 GB limits.
 - `main.py` still attaches a file handler when its directory is writable; the scratch path is
   predictable on a shared POSIX temp directory; a report description is bounded only by request size.
-- No CSP (inline script); no reverse migration; OneDrive; mirror copy of retired objects; cross-account
+- No CSP (inline script); no reverse migration; mirror copy of retired objects; cross-account
   re-mirroring; widening the legacy content domain; the deferred-hours spreadsheet import.
 - Purge of legacy bytes, retired objects and bucket orphans, contraction, and retiring SQLite,
   Windows scheduling and DPAPI paths: MP-4.
@@ -928,6 +934,69 @@ Executor amendments (consequences of the above; not material beyond what the use
   every later pre-PONR step must run: deployments (`_deployment_rules`, `DEPLOYMENT_CODE_CHANGED`), the
   C10/C11 promotion binding, the reference and the opening authorization. No admission, authentication,
   OAuth, storage or mirror behaviour changes; no guard is lifted. Evidence: section 17.
+
+- A19 2026-10-12 -- Pre-PONR product-contract remediation (user message "SGAA-EJ MP-3 — PRE-PONR PRODUCT-CONTRACT
+  REMEDIATION": two existing product capabilities were removed or deferred during the PostgreSQL/hosted
+  transition without the user's authorization -- the database backup/retention administration and the
+  Microsoft integration the mail transport depends on; production is at C12, C13 is not to be recorded
+  while they are unresolved, and admission is not to reopen until both are proven and the user
+  authorizes it). Neither capability was ever a user decision of this SPEC; this amendment restores them
+  without redesigning mail, OAuth or the backup machinery. (1) Where they entered. Microsoft: the
+  "Configuração Microsoft adiada" card, the always-disabled OneDrive test and the `.env.example` note
+  "OneDrive … opcional e adiado" came in `7aa327f` (2026-09-06, a Google OAuth hardening change);
+  `PROJECT_STATE.md` recorded "OneDrive deferred" at MP-0 (`27a4fc0`); this SPEC's §6 and §15 listed
+  "OneDrive" as out of scope and deferred at the freeze (`555463b`) with no decision behind it; the
+  hosted contract never listed `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID` (HOSTED_RUNTIME §3,
+  `8690994`; the secrets matrix §12, `b22a7b9`) and the GP2 inventory of the runbook (`646a6d0`,
+  `c04f163`) named only the Google client values, so production was provisioned without them and shows
+  the card as deferred; Path-B recreates `cloud_accounts` and `cloud_drive_settings` target-side by
+  design (a reconnect), but GG1 reconnected Google only. Backup/retention: under PostgreSQL the page
+  dropped every SQLite file-backup surface (MP-2 S2, `b3905b3`) and MP-2 A5 replaced the planned posture
+  card by fixed text crediting "a proteção do próprio provedor", which the Free plan does not have; D11
+  (`555463b`, `690d0cb`), A15 (3) (`b4c6f3e`) and the C12 cadence text (`78b5f0e`, `c04f163`) made the
+  PostgreSQL backups operator runs whose record exists only on the operator's disk and in the ledger, so
+  the product could show nothing of the cadence, the generations or the restore validation. Path-B's
+  recreation of `configuracoes_backup` is correct (those keys configure SQLite file backups); what was
+  missing was the PostgreSQL equivalent of the capability. (2) Backup posture, product side
+  (`app/backup/pg_posture.py`, the single owner). The record stays where it is made -- the ledger's
+  `backup` and `restore` entries, or, outside the ledger's window, the self-hashed receipt of an
+  `ops_backup` run -- and the run that made it publishes the same entry verbatim into
+  `sgaa_ops.backup_records` of the database it backed up (a control schema outside `public`, like
+  `sgaa_cutover`: no Layer-2 set, business fingerprint or schema contract includes it; `REVOKE ALL FROM
+  PUBLIC`; not a schema-v16 change). The Banco de dados page re-derives each entry's hash, keeps only
+  entries naming this database's live identity (`app.hosting`), and shows the cadence and RPO (the
+  cadence the opening recorded in `sgaa_cutover.opening`, else 24 h), the weekly object set, the
+  retention the newest run observed (generations kept in both directories), the newest generation and
+  object set as current / late / none (tolerance 1.5, as the ledger), the newest restore validation and
+  the five newest generations; "no record" is shown as unprotected, never as protected. The page runs
+  no backup: a hosted "back up now" would need the PROD password stored on the platform (P6) and could
+  not make the off-platform copy. `ops_backup`: a governed run publishes the ledger's records with its
+  retention after recording its generation; a plain run publishes its own receipt; `ops_backup publish
+  --ledger-dir` publishes into the qualified PROD database only (for drills, which run without
+  `DATABASE_URL`, and for the records made before A19). A refused publication (the C12 write barrier
+  included) never undoes a generation; the output names it. (3) Microsoft, product side. No code path
+  changes: the hosted runtime already reads `MS_*` from the environment, the callback is
+  `APP_PUBLIC_BASE_URL` + `/onedrive/callback`, the scopes stay `User.Read Files.ReadWrite Mail.Send`.
+  The card no longer says "adiada" (it names the missing variables), names environment-managed
+  credentials "ambiente de hospedagem" when hosted, and its "Testar conexão" posts to the existing
+  protected `test_connection` action when the account is connected (it was hard-disabled since
+  `7aa327f`). HOSTED_RUNTIME §3/§8/§12, the runbook's GP2 inventory and `.env.example` name the
+  Microsoft values as required. The guards that encoded the deferral were updated with negative
+  controls (`test_cloud_oauth_recovery.py`, `test_ut8_banco_dados_blueprint.py`,
+  `test_cloud_provider_card_symmetry_ui_b07.py`). (4) Governed path. Two gates, both before the PONR:
+  GC1, after the reference, records ONE product-contract amendment (`amend --contract-ref`: it descends
+  from the effective commit and changes at least one deployed file; the A18 path without GC1 keeps its
+  "added compliance pages only" guard); GC2, at C12, re-opens the amended candidate under the SAME
+  opening reference (`authorize-code --contract-ref`: a recorded open deployment of the amended code,
+  made after the amendment, no barrier in force; the authorization entry is the one the application
+  already accepts). Each grant is consumed by one act. Nothing else changes: one reference per opening,
+  the cadence from the opening, `close` revoking every authorization of the reference, the C12 rollback
+  proof, C13 on the first non-operator business write. (5) Procedure (runbook section 5): the pause is
+  the governed operator deployment of the current candidate, promoted -- no `close`, no barrier, no
+  rollback; the PONR is checked by the fingerprint; the amendment is deployed closed and each capability
+  is proven there on the product path (the published posture on the page; Microsoft connected, tested,
+  and one real e-mail through the password-recovery path, which writes only the ephemeral token table);
+  the fingerprint is compared again; then GC2. Evidence: section 17.
 
 ## 17. Closure
 

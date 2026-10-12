@@ -49,7 +49,8 @@ COMMANDS
     advance        enter the next state with its evidence (never C12: see ``open``)
     amend          before the PONR: record a reviewed amendment whose commit only ADDS the public
                    compliance pages (``static/compliance/``); its code becomes the candidate every
-                   later deployment and the public address must run
+                   later deployment and the public address must run.  With ``--contract-ref`` (A19),
+                   after the reference: a product-contract amendment under its GC1 grant
     reference      at C11, with GO granted, once: observe that every deployment of the production
                    project is recorded and CLOSED and that no opening was ever authorized, prove the
                    pre-opening generation current, take the reference fingerprint live, and write the
@@ -67,7 +68,8 @@ COMMANDS
                    derived-write classes, acknowledged exactly
     resume         after a refused rollback: lift the barrier and restore the authorization
     authorize-code after the point of no return, for a recorded forward-fix deployment (GF1):
-                   authorize its code under the same opening reference
+                   authorize its code under the same opening reference.  With ``--contract-ref`` (A19),
+                   at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
     status         current state, granted gates, head, chain verdict
     verify         chain verdict and head only
 
@@ -128,11 +130,18 @@ STATE_NAMES = {
 }
 GATES = frozenset({
     "GA1", "GA2", "GA4", "GP0", "GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3", "GB1",
-    "GD1", "GD2", "GG1", "GG2", "GO", "GX1", "GF1",
+    "GD1", "GD2", "GG1", "GG2", "GO", "GX1", "GF1", "GC1", "GC2",
 })
 # A forward-fix deployment after the point of no return: the one deployment action that remains.  It is
 # granted once per deployment (a distinct reference each time) and only after the PONR is recorded.
 FORWARD_FIX_GATE = "GF1"
+# Before the point of no return, once the reference exists (SPEC A19): GC1 grants ONE product-contract
+# amendment of the candidate (any deployed file may change; the user's message names what it restores);
+# GC2 grants ONE re-opening of that amended code under the same opening reference.  Each grant is
+# consumed by one act and a distinct reference is needed for the next; neither exists after the PONR.
+CONTRACT_AMENDMENT_GATE = "GC1"
+CONTRACT_REOPEN_GATE = "GC2"
+CONTRACT_GATES = frozenset({CONTRACT_AMENDMENT_GATE, CONTRACT_REOPEN_GATE})
 # The gates that must have been granted before a state is entered.  A gate is valid
 # for the states listed here and for nothing else (SPEC invariant P4).
 STATE_GATES = {
@@ -684,19 +693,37 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
             if any(e["type"] == "grant" and e["gate"] == gate and e["ref"] == ref for e in entries):
                 raise Refused("GATE_ALREADY_GRANTED")
             return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
+        if gate in CONTRACT_GATES:
+            if current is None or STATES.index(current) >= STATES.index(PONR_STATE):
+                raise Refused("GATE_ONLY_BEFORE_PONR", "a product-contract amendment exists only before the PONR")
+            if summary["rolled_back"]:
+                raise Refused("ROLLED_BACK")
+            if summary["any_reference"] is None:
+                raise Refused("CONTRACT_GATE_BEFORE_THE_REFERENCE",
+                              "before the reference the candidate is amended by `amend` alone (A18)")
+            if gate == CONTRACT_REOPEN_GATE and current != OPENING_STATE:
+                raise Refused("OUT_OF_ORDER", "a re-opening follows the opening (C12)")
+            if any(e["type"] == "grant" and e["gate"] == gate and e["ref"] == ref for e in entries):
+                raise Refused("GATE_ALREADY_GRANTED")
+            return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
         if gate in summary["granted"]:
             raise Refused("GATE_ALREADY_GRANTED")
         return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
 
 
 def amend(directory: Path, commit: str, ref: str, *, expect_head: str | None = None,
-          repo: Path | None = None) -> dict:
+          repo: Path | None = None, contract_ref: str | None = None) -> dict:
     """Record a reviewed amendment before the PONR: a commit that only ADDS the public compliance pages.
 
     The amendment supersedes the candidate for every later pre-PONR step (deployment, promotion,
     reference, opening): its runtime code identity becomes the one every deployment must run.  The
     guards are not lifted -- the amendment must descend from the effective commit, and the deployed
     files it changes are exactly the added pages under ``COMPLIANCE_PREFIX`` and nothing else.
+
+    With ``contract_ref`` (SPEC A19) it is a product-contract amendment: after the reference and
+    before the PONR, under the unused GC1 grant of that reference, the commit may change any deployed
+    file (it must change at least one).  It still descends from the effective commit, and its code
+    admits no one until a GC2 re-opening authorizes it under the same opening reference.
     """
     from tools import deploy_audit
 
@@ -732,6 +759,16 @@ def amend(directory: Path, commit: str, ref: str, *, expect_head: str | None = N
         except deploy_audit.Refused as refusal:
             raise Refused(refusal.code) from None
         changed = sorted(path for path in old_files if old_files[path] != new_files.get(path))
+        if contract_ref is not None:
+            if summary["any_reference"] is None:
+                raise Refused("CONTRACT_GATE_BEFORE_THE_REFERENCE",
+                              "before the reference the candidate is amended by `amend` alone (A18)")
+            _unused_contract_grant(summary, CONTRACT_AMENDMENT_GATE, contract_ref, "amendments")
+            if not changed and not (set(new_files) - set(old_files)):
+                raise Refused("AMENDMENT_EMPTY", "the amendment changes at least one deployed file")
+            code = hosting.code_sha256(new_files)
+            return _append(directory, entries, {"type": "amendment", "amends": previous, "commit": resolved,
+                                                "code_sha256": code, "ref": ref, "contract_ref": contract_ref})
         if changed:
             raise Refused("AMENDMENT_CHANGES_DEPLOYED_FILES",
                           "the amendment only adds files; it never changes or removes one")
@@ -743,6 +780,14 @@ def amend(directory: Path, commit: str, ref: str, *, expect_head: str | None = N
         code = hosting.code_sha256(new_files)
         return _append(directory, entries, {"type": "amendment", "amends": previous, "commit": resolved,
                                             "code_sha256": code, "ref": ref})
+
+
+def _unused_contract_grant(summary: dict, gate: str, ref, consumers: str) -> None:
+    """A GC1/GC2 grant with this reference exists and no amendment / authorization consumed it yet."""
+    if not any(g["gate"] == gate and g["ref"] == ref for g in summary["grants"]):
+        raise Refused("GATE_NOT_GRANTED", gate)
+    if any(item.get("contract_ref") == ref for item in summary[consumers]):
+        raise Refused("GATE_ALREADY_USED", f"{gate} {ref} was consumed; each act needs its own grant")
 
 
 # ---------------------------------------------------------------------------
@@ -1758,9 +1803,16 @@ def rollback(directory: Path, reason: str, *, expect_head: str | None = None, ob
 
 
 def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | None = None,
-                   observer: Observer | None = None) -> dict:
-    """After the PONR: authorize a recorded forward-fix deployment's code under the opening reference."""
+                   observer: Observer | None = None, contract_ref: str | None = None) -> dict:
+    """After the PONR: authorize a recorded forward-fix deployment's code under the opening reference.
+
+    With ``contract_ref`` (SPEC A19), before the PONR: the GC2 re-opening of a product-contract
+    amendment -- its recorded open deployment's code authorized under the same opening reference.
+    """
     observer = observer or Observer()
+    if contract_ref is not None:
+        return _authorize_contract_code(directory, deployment_id, contract_ref, expect_head=expect_head,
+                                        observer=observer)
     with _locked(directory):
         entries = read_ledger(directory)
         _check_head(entries, expect_head)
@@ -1781,6 +1833,43 @@ def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | No
             "type": "authorization", "opening_reference": reference["hash"], "code_sha256": deployment["code_sha256"],
             "database_identity_sha256": identity, "vercel_project_sha256": deployment["vercel_project_sha256"],
             "deployment_id": deployment_id, "forward_fix_ref": deployment["forward_fix_ref"],
+        })
+        observer.authorize(reference["hash"], deployment["code_sha256"], entry, lambda: _write(directory, entry),
+                           first=False)
+        return entry
+
+
+def _authorize_contract_code(directory: Path, deployment_id: str, contract_ref: str, *, expect_head,
+                             observer) -> dict:
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        if summary["state"] != OPENING_STATE:
+            raise Refused("OUT_OF_ORDER", "a re-opening of an amended candidate happens at C12, before the PONR")
+        if _barrier_applied(summary) is not None:
+            raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
+        _unused_contract_grant(summary, CONTRACT_REOPEN_GATE, contract_ref, "authorizations")
+        reference = summary["opening_reference"]
+        amendments = summary["amendments"]
+        if not amendments or "contract_ref" not in amendments[-1] or amendments[-1]["seq"] < reference["seq"]:
+            raise Refused("NO_CONTRACT_AMENDMENT", "the candidate is not a product-contract amendment (GC1)")
+        deployment = _deployment(summary, deployment_id)
+        if deployment is None or deployment["forward_fix_ref"] != "NONE" or deployment["admission"] != "OPEN" \
+                or deployment["opening_reference"] != reference["hash"] \
+                or deployment["seq"] < amendments[-1]["seq"]:
+            raise Refused("NOT_A_RECORDED_REOPENING", "deploy the amended candidate open under the reference first")
+        if deployment["code_sha256"] != _candidate_code(summary) or deployment["commit"] != _effective_commit(summary):
+            raise Refused("DEPLOYMENT_CODE_CHANGED", "only the amended candidate's code is re-opened")
+        if deployment["code_sha256"] in {reference["code_sha256"], *(a["code_sha256"] for a in summary["authorizations"])}:
+            raise Refused("CODE_ALREADY_AUTHORIZED")
+        identity = _production_database(summary, observer)
+        entry = _prepare(entries, {
+            "type": "authorization", "opening_reference": reference["hash"], "code_sha256": deployment["code_sha256"],
+            "database_identity_sha256": identity, "vercel_project_sha256": deployment["vercel_project_sha256"],
+            "deployment_id": deployment_id, "forward_fix_ref": "NONE", "contract_ref": contract_ref,
         })
         observer.authorize(reference["hash"], deployment["code_sha256"], entry, lambda: _write(directory, entry),
                            first=False)
@@ -1881,6 +1970,8 @@ def main(argv=None, *, out=None, err=None) -> int:
         elif name == "amend":
             sub.add_argument("--commit", required=True, help="the amendment commit (the pages on top)")
             sub.add_argument("--ref", required=True, help="an opaque code of the user's message")
+            sub.add_argument("--contract-ref", default=None,
+                             help="A19: the GC1 grant's reference (a product-contract amendment after the reference)")
         elif name == "reference":
             sub.add_argument("--out", required=True, help="a new file in the custody directory")
             sub.add_argument("--backup-cadence-hours", required=True, type=int)
@@ -1891,6 +1982,8 @@ def main(argv=None, *, out=None, err=None) -> int:
                              help="from the opening: each derived-write class the ledger observed, named exactly")
         elif name == "authorize-code":
             sub.add_argument("--deployment", required=True, help="the recorded forward-fix deployment id")
+            sub.add_argument("--contract-ref", default=None,
+                             help="A19, before the PONR: the GC2 grant's reference (re-open the amended candidate)")
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -1908,7 +2001,8 @@ def main(argv=None, *, out=None, err=None) -> int:
         elif args.command == "grant":
             result = grant(directory, args.gate, args.ref, expect_head=args.expect_head)
         elif args.command == "amend":
-            result = amend(directory, args.commit, args.ref, expect_head=args.expect_head)
+            result = amend(directory, args.commit, args.ref, expect_head=args.expect_head,
+                           contract_ref=args.contract_ref)
         elif args.command == "advance":
             result = advance(directory, args.state, _load_evidence(args.evidence), expect_head=args.expect_head)
         elif args.command == "qualify":
@@ -1927,7 +2021,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = rollback(directory, args.reason, expect_head=args.expect_head, observer=observer,
                               reference_path=args.reference, derived_classes=args.derived_class)
         elif args.command == "authorize-code":
-            result = authorize_code(directory, args.deployment, expect_head=args.expect_head, observer=observer)
+            result = authorize_code(directory, args.deployment, expect_head=args.expect_head, observer=observer,
+                                    contract_ref=args.contract_ref)
         elif args.command == "status":
             result = status(directory)
         else:

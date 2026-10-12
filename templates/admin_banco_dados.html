@@ -614,9 +614,50 @@
       </div>
     </article>
     {% else %}
-    <article class="db-card" data-database-protection="postgresql">
+    {# MP-3 A19: the posture comes from the records the operator's governed backup runs publish
+       (app.backup.pg_posture); the provider's plan includes no backup of its own. #}
+    {% set protection = database_protection or {'state': 'UNREADABLE'} %}
+    <article class="db-card" data-database-protection="postgresql" data-protection-state="{{ protection.state }}">
       <h2>Proteção do banco</h2>
-      <p>O banco de dados é PostgreSQL. A cópia e a recuperação do banco são feitas fora desta tela, pela proteção do próprio provedor do banco e pelo procedimento operacional documentado.</p>
+      <p>O banco de dados é PostgreSQL e o plano do provedor não inclui backup próprio. A proteção são as gerações de backup feitas pelo operador na máquina de operação: cópia lógica do banco, conjunto de arquivos do armazenamento, cópia verificada fora da plataforma e restauração de teste periódica.</p>
+      {% if protection.state == 'UNREADABLE' %}
+        <p class="db-cloud-store-warning" role="status">Não foi possível ler os registros de backup deste banco.</p>
+      {% else %}
+      <div class="db-meta">
+        <div><strong>Frequência do banco:</strong> a cada {{ protection.cadence_hours }} h{% if protection.cadence_recorded_at_opening %} (registrada na abertura){% endif %} · <strong>perda máxima tolerada (RPO):</strong> {{ protection.rpo_hours }} h</div>
+        <div><strong>Arquivos do armazenamento:</strong> a cada {{ protection.object_cadence_days }} dias</div>
+        <div><strong>Retenção:</strong> as {{ protection.retention.generations_policy if protection.retention else protection.min_generations }} gerações mais recentes, no diretório principal e na cópia fora da plataforma{% if protection.retention %} (após a última rotação: {{ protection.retention.kept.primary.database }} no principal, {{ protection.retention.kept.off_platform.database }} fora da plataforma){% endif %}</div>
+        <div data-protection-database-status="{{ protection.database_status.code }}"><strong>Último backup do banco:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span> {{ protection.latest_generation_label or 'nenhuma geração registrada' }}</div>
+        <div data-protection-objects-status="{{ protection.objects_status.code }}"><strong>Último conjunto de arquivos:</strong> <span class="badge status-pill {{ protection.objects_status.css }}">{{ protection.objects_status.label }}</span> {{ protection.latest_object_set_label or 'nenhum conjunto registrado' }}</div>
+        <div data-protection-validation="{{ 'RECORDED' if protection.validation else 'NONE' }}"><strong>Restauração de teste:</strong>
+          {% if protection.validation %}
+            <span class="badge status-pill status-positive">Validada</span> em {{ protection.validation.at_label }}{% if protection.validation.generation_label %}, geração de {{ protection.validation.generation_label }}{% endif %} ({{ protection.validation.tables_verified }} tabelas e {{ protection.validation.objects_verified }} arquivos verificados)
+          {% else %}
+            <span class="badge status-pill status-negative">Sem registro</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if protection.recent %}
+      <div class="db-table-wrap"><table class="db-table" data-protection-recent>
+        <thead><tr><th>Geração</th><th>Tipo</th><th>Arquivos</th><th>Fora da plataforma</th><th>Identificador</th></tr></thead>
+        <tbody>
+        {% for item in protection.recent %}
+          <tr>
+            <td>{{ item.generation_label }}</td>
+            <td>{{ 'Linha de base' if item.baseline else 'Geração' }}</td>
+            <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
+            <td>{{ 'Verificada' if item.off_platform else '—' }}</td>
+            <td><code>{{ item.manifest_short }}</code></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% endif %}
+      {% if protection.ignored %}
+        <p class="db-cloud-store-warning" role="status">{{ protection.ignored }} registro(s) de backup ignorado(s): não pertencem a este banco ou foram alterados.</p>
+      {% endif %}
+      <p class="db-note">Novas gerações e restaurações de teste são feitas pelo operador com <code>tools/ops_backup.py</code>, conforme <code>docs/PG_BACKUP_RESTORE_RUNBOOK.md</code>; esta tela apenas mostra o que foi registrado.</p>
+      {% endif %}
     </article>
     {% endif %}
 
@@ -860,7 +901,7 @@
           </div>
           {% endif %}
           <div class="db-provider-line is-muted">
-            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
+            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if gdrive_config_source == 'MACHINE_LOCAL_DPAPI' else ('ambiente de hospedagem' if cloud_credentials_environment_managed else 'ambiente legado') if gdrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
         </div>
         {#
@@ -1087,7 +1128,7 @@
             </div>
           {% elif onedrive_connection_status == 'not_configured' %}
             <div class="db-provider-line is-muted">
-              <span>Configuração Microsoft adiada</span>
+              <span>Credenciais Microsoft não configuradas</span>
             </div>
           {% elif onedrive_connection_status == 'needs_reconnection' %}
             <div class="db-provider-line is-muted">
@@ -1105,7 +1146,7 @@
           </div>
           {% endif %}
           <div class="db-provider-line is-muted">
-            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else 'ambiente legado' if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
+            <span>Credenciais do aplicativo: {{ 'configuração segura desta máquina' if onedrive_config_source == 'MACHINE_LOCAL_DPAPI' else ('ambiente de hospedagem' if cloud_credentials_environment_managed else 'ambiente legado') if onedrive_config_source == 'ENVIRONMENT' else 'ausentes' }}</span>
           </div>
         </div>
 
@@ -1119,9 +1160,20 @@
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
             <div class="db-provider-secondary">
-              <button type="button" class="btn" disabled aria-disabled="true" title="OneDrive não está configurado">
-                <i class="lucide" data-lucide="circle-check"></i>Testar conexão
-              </button>
+              {% if onedrive_connected %}
+                <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="provider" value="onedrive">
+                  <input type="hidden" name="action" value="test_connection">
+                  <button type="submit" class="btn" title="Testar conexão com OneDrive">
+                    <i class="lucide" data-lucide="circle-check"></i>Testar conexão
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn" disabled aria-disabled="true" title="OneDrive não está conectado">
+                  <i class="lucide" data-lucide="circle-check"></i>Testar conexão
+                </button>
+              {% endif %}
 
               {% if file_backup %}
               <button
@@ -1143,7 +1195,7 @@
               {% endif %}
 
               {% if onedrive_connection_status == 'not_configured' %}
-                <button type="button" class="btn" disabled aria-disabled="true" title="Disponível após configurar as credenciais Microsoft desta máquina">
+                <button type="button" class="btn" disabled aria-disabled="true" title="Disponível após configurar as credenciais Microsoft (MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID)">
                   <i class="lucide" data-lucide="plug"></i>Conectar
                 </button>
               {% else %}

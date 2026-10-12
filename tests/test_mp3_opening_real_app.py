@@ -159,7 +159,7 @@ def _open_cutover(lane):
     return opened_app, reference
 
 
-def _sign_in_and_view_the_dashboard(base):
+def _sign_in_and_view_the_dashboard(base, path="/admin/dashboard"):
     """A non-operator administrator uses the OPEN deployment the ordinary way (a browser's requests)."""
     import http.client
     from urllib.parse import urlsplit
@@ -186,8 +186,34 @@ def _sign_in_and_view_the_dashboard(base):
     status, _ = request("POST", "/login", urlencode({"csrf_token": csrf, "email": ADMIN_EMAIL,
                                                      "senha": ADMIN_PASSWORD}).encode(), _FORM)
     assert status in {302, 303}
-    status, _ = request("GET", "/admin/dashboard")
+    status, page = request("GET", path)
     assert status == 200
+    return page.decode("utf-8")
+
+
+def test_the_opened_product_shows_the_governed_backup_posture_and_its_restore_validation(lane):
+    """SPEC A19: a governed run at C12 publishes the ledger's own records into the database it backed up,
+    and the Banco de dados page of the open deployment shows the posture: cadence recorded at the opening,
+    the generation current, the baseline's restore drill as the validation."""
+    from app.backup import pg_posture
+
+    opened_app, _reference_path = _open_cutover(lane)
+    result = _governed(lane, "backups")
+    assert result["posture"]["result"] == "PUBLISHED", result["posture"]
+    records = [e for e in ledger.read_ledger(lane["ledger"]) if e["type"] in ("backup", "restore")]
+    conn = adapter(lane["url"])
+    try:
+        posture = pg_posture.read(conn.raw_connection)
+    finally:
+        conn.close()
+    assert posture["generations_recorded"] == len([e for e in records if e["type"] == "backup"]) == 3
+    assert posture["ignored"] == 0 and posture["cadence_source"] == "OPENING"
+    assert posture["database_status"] == "CURRENT" and posture["validation"]["tables_verified"] > 0
+    page = _sign_in_and_view_the_dashboard(opened_app.url, "/admin/banco-dados")
+    assert 'data-protection-state="RECORDED"' in page
+    assert 'data-protection-database-status="CURRENT"' in page and 'data-protection-objects-status="CURRENT"' in page
+    assert 'data-protection-validation="RECORDED"' in page and "(registrada na abertura)" in page
+    assert "Linha de base" in page and "proteção do próprio provedor" not in page
 
 
 def _close_and_quiesce(lane, opened_app):

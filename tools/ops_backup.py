@@ -41,6 +41,15 @@ THE RESTORE DRILL (``drill``)
     (``cutover_ledger.record_restore``) naming the generation, its source and the target.
     C8 (the baseline) and C14 (a generation of the window) accept nothing else.
 
+THE POSTURE THE PRODUCT SHOWS (``publish``; MP-3 SPEC A19)
+    The Banco de dados page shows the protection posture from records it can read
+    (``app.backup.pg_posture``).  A governed run publishes the ledger's ``backup`` and ``restore``
+    entries -- the drills' included -- verbatim into the database it backed up, with the retention
+    it observed; a run outside the ledger's window publishes its own self-hashed receipt.  A
+    refused publication never undoes a generation (``posture`` in the output names the code).
+    ``publish --ledger-dir`` re-publishes the ledger's records into the qualified PROD database
+    (for a drill, which runs without ``DATABASE_URL``, and for records made before A19).
+
 WHAT IT MAY DELETE
     Only sets listed in the registry file the tool itself writes
     (``ops_backup_registry.json`` in each directory).  A set made by hand, a
@@ -489,7 +498,125 @@ def run_governed(ledger_dir: Path, root: Path, off_platform: Path, *, label: str
     # The digests C8 (the baseline) and the restore drill name; value-free.
     result["ledger"] = {"recorded": True, "kind": kind, "head": entry["hash"],
                         "manifest_sha256": entry["manifest_sha256"], "object_set_digest": entry["object_set_digest"]}
+    # The product's view of the posture (SPEC A19): the ledger's own entries, published verbatim into the
+    # database this run backed up.  The generation is recorded whatever happens here; a refusal is reported.
+    result["posture"] = _publish_quietly(lambda: publish_ledger(
+        Path(ledger_dir), source.connect, annotations={entry["hash"]: _retention(Path(root), Path(off_platform),
+                                                                                  generations)}))
     return result
+
+
+# ---------------------------------------------------------------------------
+# the posture the product shows (MP-3 SPEC A19)
+# ---------------------------------------------------------------------------
+
+
+def _retention(root: Path, off_platform: Path, generations: int) -> dict:
+    """Value-free: the generations each directory keeps after this run's rotation, and the policy."""
+    kept = {}
+    for name, directory in (("primary", root), ("off_platform", off_platform)):
+        registry = _read_registry(directory)
+        kept[name] = {"database": len(registry["database"]), "objects": len(registry["objects"])}
+    return {"generations_policy": generations, "kept": kept}
+
+
+def _publish_quietly(call) -> dict:
+    """Run a publication; its refusal never undoes the generation, it is reported with a fixed code."""
+    from app.backup import pg_posture
+
+    try:
+        return dict(call(), result="PUBLISHED")
+    except pg_posture.PostureError as error:
+        return {"result": "NOT_PUBLISHED", "code": error.code}
+    except Refused as refusal:
+        return {"result": "NOT_PUBLISHED", "code": refusal.code}
+    except Exception as error:  # a database refusal (the write barrier included) or an unreachable source
+        return {"result": "NOT_PUBLISHED", "code": type(error).__name__.upper()}
+
+
+def publish_ledger(ledger_dir: Path, connect, *, annotations: dict | None = None) -> dict:
+    """Publish every ``backup`` and ``restore`` entry of the ledger (the drills' included) into the
+    database ``connect()`` opens; entries published before are left as they are."""
+    from app.backup import pg_posture
+    from tools import cutover_ledger
+
+    try:
+        entries = cutover_ledger.read_ledger(Path(ledger_dir))
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
+    records = [entry for entry in entries if entry.get("type") in ("backup", "restore")]
+    conn = connect()
+    try:
+        return pg_posture.publish(conn, records, annotations=annotations)
+    finally:
+        conn.close()
+
+
+def publish(ledger_dir: Path, *, environ=None, source=None, observer=None) -> dict:
+    """``ops_backup publish``: project the ledger's records into the qualified PROD database only.
+
+    For the records made before A19 and for drills (which run without ``DATABASE_URL``).  The
+    connection is the verified one; the database must be the one the ledger qualified.
+    """
+    from tools import cutover_ledger, prod_source
+
+    env = dict(os.environ if environ is None else environ)
+    try:
+        prod_source.refuse_routing_environment(env)
+        summary = cutover_ledger._summary(cutover_ledger.read_ledger(Path(ledger_dir)))
+    except prod_source.Refused as refusal:
+        raise Refused(refusal.code) from None
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
+    if summary["qualification"] is None:
+        raise Refused("LEDGER_QUALIFICATION_REQUIRED")
+    source = source or VerifiedSource(env.get("DATABASE_URL") or "")
+    observer = observer or cutover_ledger.Observer(database_url=source.url, environ=env,
+                                                   source_connector=lambda _url: source.connect())
+    try:
+        observed = observer.source()
+    except cutover_ledger.Refused as refusal:
+        raise Refused(refusal.code) from None
+    if observed.identity != summary["qualification"]["database_identity_sha256"]:
+        raise Refused("SOURCE_NOT_THE_QUALIFIED_DATABASE", "DATABASE_URL is not the database the ledger qualified")
+    try:
+        published = publish_ledger(Path(ledger_dir), source.connect)
+    except Exception as error:
+        from app.backup import pg_posture
+
+        if isinstance(error, (Refused, pg_posture.PostureError)):
+            raise Refused(error.code) from None
+        raise Refused("PUBLISH_REFUSED", type(error).__name__) from None
+    return dict(published, result="PUBLISHED")
+
+
+def _publish_run(root: Path, off_platform: Path, generations: int, started: datetime, finished: datetime,
+                 environ=None) -> dict:
+    """A run outside the ledger's window publishes its own receipt into the database it backed up."""
+    from app import hosting
+    from app.backup import pg_posture
+    from tools import pg_backup
+
+    env = os.environ if environ is None else environ
+    url = str(env.get(pg_backup.SOURCE_URL_ENV) or "").strip()
+    if not url.startswith(("postgres://", "postgresql://")):
+        raise pg_posture.PostureError("NO_DATABASE_URL")
+    on_disk = verify_generation(root, off_platform)
+    identity = hosting.source_identity_sha256(on_disk["database_source"])
+    if identity is None:
+        raise pg_posture.PostureError("DATABASE_IDENTITY_UNPROVEN")
+    record = pg_posture.run_record(
+        generation_at=on_disk["created_at"], manifest_sha256=on_disk["manifest_sha256"],
+        dump_sha256=on_disk["dump_sha256"], source_identity_sha256=identity, object_set_name=on_disk["object_set"],
+        object_set_digest=on_disk["object_set_digest"], object_manifest_sha256=on_disk["object_manifest_sha256"],
+        run_seconds=int((finished - started).total_seconds()), at=_stamp(finished))
+
+    conn = pg_backup.connect(url)
+    try:
+        return pg_posture.publish(conn, [record], annotations={
+            record["hash"]: _retention(root, off_platform, generations)})
+    finally:
+        conn.close()
 
 
 def _find_generation_files(root: Path, off_platform: Path, entry: dict) -> tuple[Path, Path]:
@@ -597,6 +724,23 @@ def main(argv=None, *, out=None, err=None, runner=_run, source=None) -> int:
     err = err or sys.stderr
     argv = list(sys.argv[1:] if argv is None else argv)
     drilling = bool(argv) and argv[0] == "drill"
+    publishing = bool(argv) and argv[0] == "publish"
+    if publishing:
+        parser = argparse.ArgumentParser(prog="ops_backup publish", allow_abbrev=False)
+        parser.add_argument("--ledger-dir", required=True, help="the cutover ledger whose records are published")
+        try:
+            args = parser.parse_args(argv[1:])
+        except SystemExit as exc:
+            return 0 if exc.code == 0 else 2
+        try:
+            result = publish(Path(args.ledger_dir), source=source)
+        except Refused as refusal:
+            detail = f" ({refusal.detail})" if refusal.detail else ""
+            err.write(f"ops-backup: refused: {refusal.code}{detail}\n")
+            return 1
+        json.dump(result, out, sort_keys=True)
+        out.write("\n")
+        return 0
     parser = argparse.ArgumentParser(prog="ops_backup drill" if drilling else "ops_backup", allow_abbrev=False)
     parser.add_argument("--root", required=True, help="primary backup directory (encrypted, outside the repository)")
     parser.add_argument("--off-platform", dest="off_platform", required=True,
@@ -627,10 +771,13 @@ def main(argv=None, *, out=None, err=None, runner=_run, source=None) -> int:
         elif args.baseline:
             raise Refused("BASELINE_NEEDS_THE_LEDGER", "the cutover baseline is recorded by the governed run")
         else:
+            started = datetime.now(timezone.utc)
             result = run_generation(
                 Path(args.root), label=args.label, generations=args.generations, objects=args.objects,
                 off_platform=Path(args.off_platform), runner=runner,
             )
+            result["posture"] = _publish_quietly(lambda: _publish_run(
+                Path(args.root), Path(args.off_platform), args.generations, started, datetime.now(timezone.utc)))
     except Refused as refusal:
         detail = f" ({refusal.detail})" if refusal.detail else ""
         err.write(f"ops-backup: refused: {refusal.code}{detail}\n")
