@@ -1246,6 +1246,19 @@ Executor amendments (consequences of the above; not material beyond what the use
   then `resume`); in a fresh ledger an aborted first attempt fixes the recorded project, and a first
   promotion to an address with no alias yet is refused by the provider read (liveness only, fail
   closed; the production ledger has both). Evidence: section 17.
+  (18) The cross-family rereview of `d0fbba7` (FAIL, 1 material; M1-M4 and the other invariants PASS):
+  `reconcile` recorded an upload ABORTED when the platform's list showed nothing unrecorded, and later acts
+  proceeded -- an empty list is no proof that an upload with no identity failed (deployment binding kept a
+  late copy closed; the outcome accounting was still wrong). Reproduced first by a failing test. An
+  upload's outcome is now ABORTED only on proof (its own named deployment removed: `abort_attempt`,
+  REMOVED). Otherwise `reconcile` refuses `UPLOAD_OUTCOME_UNPROVEN` and every act stays blocked, until the
+  operator explicitly abandons it (`reconcile --abandon-upload`, refused for any other pending act and
+  while the recorded project holds an unrecorded deployment): outcome ABANDONED, resolved by OPERATOR --
+  distinct from ABORTED, never a claim that nothing was uploaded. Abandonment is safe because a late copy
+  is never recordable, hence never admitted (17); its GF1 stays used and an open upload's code stays
+  marked (16); every later sweep (`resume`, `authorize-code`) still refuses a copy that appears. Proof of
+  absence for an upload with no identity does not exist, so waiting for it would block the ledger forever.
+  Evidence: section 17.
 
 ## 17. Closure
 

@@ -946,8 +946,11 @@ def test_m2_a_lost_upload_answer_blocks_everything_until_the_platform_is_reconci
         cutover_ledger.reconcile(directory, observer=observer)
     assert caught.value.code == "UNRECORDED_DEPLOYMENT"
     del observer.platform["dpl_" + "X" * 24]  # removed by hand (`vercel remove`)
-    outcome = cutover_ledger.reconcile(directory, observer=observer)
-    assert outcome["of"] == pending and outcome["result"] == "ABORTED"
+    with pytest.raises(cutover_ledger.Refused) as caught:  # gone from the list proves nothing (rereview of d0fbba7)
+        cutover_ledger.reconcile(directory, observer=observer)
+    assert caught.value.code == "UPLOAD_OUTCOME_UNPROVEN"
+    outcome = cutover_ledger.reconcile(directory, observer=observer, abandon_upload=True)  # the operator's decision
+    assert outcome["of"] == pending and outcome["result"] == "ABANDONED"
     with pytest.raises(da.Refused) as caught:  # the attempt consumed its GF1, whatever its outcome
         da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
                   opening_reference=reference, forward_fix_ref="REVIEW-GF1-LOST")

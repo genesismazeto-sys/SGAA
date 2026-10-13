@@ -125,9 +125,13 @@ that would cost money is not performed; stop and say so.
   they run (it answers `LEDGER_BUSY`). A deploy reserves its attempt -- consuming its GF1 -- before
   anything is uploaded. If the upload's answer is lost, or a refused upload could not be removed, the
   attempt stays unresolved: list the project's deployments, `vercel remove` the one the ledger never
-  recorded, then **(user terminal)** `python tools/cutover_ledger.py reconcile --ledger-dir <ledger>
-  --expect-head <head> --vercel-team <team> --vercel-project <project>` (`UNRECORDED_DEPLOYMENT` while
-  it remains); the GF1 stays used and the next deploy needs a new one. An open upload closed this way
+  recorded. Nothing proves an upload that never named its deployment failed, so `reconcile` refuses
+  `UPLOAD_OUTCOME_UNPROVEN` and every act stays blocked until the operator decides to abandon it:
+  **(user terminal)** `python tools/cutover_ledger.py reconcile --ledger-dir <ledger> --expect-head <head>
+  --vercel-team <team> --vercel-project <project> --abandon-upload` (`UNRECORDED_DEPLOYMENT` while one
+  remains) records ABANDONED -- never ABORTED (SPEC A19 (18)); a copy that appears later is never
+  recordable, so never admitted: `vercel remove` it when a sweep reports it. The GF1 stays used and the
+  next deploy needs a new one. An open upload closed this way
   marks its code: it is never deployed open again nor authorized (`CODE_OF_AN_UNPROVEN_UPLOAD`; a late
   copy of that upload must never inherit an authorization): the forward fix needs another commit (SPEC
   A19 (16)). A promotion whose outcome is unknown is resolved the same way with `--base-url <public

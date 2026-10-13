@@ -80,14 +80,15 @@ def _gate(observer, monkeypatch, *, reference, code, deployment):
 
 
 def test_m1_a_late_upload_of_the_authorized_code_is_never_admitted(position, monkeypatch):
-    """The reviewer's probe: at C12 an open upload of the authorized code loses its answer, is reconciled
-    ABORTED while nothing is visible, and appears later.  The code is authorized, the late deployment is
+    """The reviewer's probe: at C12 an open upload of the authorized code loses its answer, is abandoned
+    while nothing is visible, and appears later.  The code is authorized, the late deployment is
     not admitted: closed.  Positive control: the admitted lift deployment, same code, same rows."""
     directory, observer = position
     reference = ledger.status(directory)["opening_reference"]
     ledger.begin_deployment(directory, commit=ls.COMMIT, admission="OPEN", opening_reference=reference,
                             forward_fix_ref=None, code=ls.CODE, vercel_project_sha256=ls.PLATFORM_PROJECT)
-    assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"  # nothing visible yet
+    assert _code(ledger.reconcile, directory, observer=observer) == "UPLOAD_OUTCOME_UNPROVEN"  # nothing visible proves nothing
+    assert ledger.reconcile(directory, observer=observer, abandon_upload=True)["result"] == "ABANDONED"  # the operator abandons it
     late = "dpl_" + "U" * 24
     observer.platform[late] = {"url": "https://late.invalid", "state": "READY", "files": ls.FILES,
                                "admission": "open", "code": ls.CODE}  # it appears now
@@ -400,3 +401,61 @@ def test_m4_resume_names_the_head_it_moved_to_when_its_last_check_cannot_read(po
         ledger.resume(directory, observer=observer, backup_root=directory.parent, off_platform=directory.parent)
     assert caught.value.code == "DATABASE_UNREACHABLE"
     assert caught.value.head == ledger.status(directory)["head"] and ledger.status(directory)["barrier"] == "LIFTED"
+
+
+# ---- the rereview of d0fbba7 (invariant 3): an unseen upload is never recorded ABORTED -----------------------
+
+
+def test_inv3_an_upload_whose_outcome_is_unknown_is_never_recorded_aborted_and_blocks_until_abandoned(
+        position, monkeypatch):
+    """The reviewer's scenario: an open upload's accepted answer is lost and the platform lists only recorded
+    deployments.  `reconcile` must not record ABORTED (nothing proves the upload failed) and every act stays
+    blocked; only the operator's explicit abandonment closes it -- ABANDONED, not ABORTED: its GF1 and its
+    code stay spent, and a late copy, never recordable, is never admitted."""
+    directory, observer = position
+    reference = ledger.status(directory)["opening_reference"]
+    attempt = ledger.begin_deployment(directory, commit=ls.COMMIT, admission="OPEN", opening_reference=reference,
+                                      forward_fix_ref=None, code=ls.CODE, vercel_project_sha256=ls.PLATFORM_PROJECT)
+    assert _code(ledger.reconcile, directory, observer=observer) == "UPLOAD_OUTCOME_UNPROVEN"
+    assert ledger.status(directory)["unresolved_operation"] == attempt["hash"]
+    observer.alias = ls.DEPLOYMENT
+    assert _code(ledger.begin_promotion, directory, ls.LIFT, ls.PUBLIC_HOST, serving=observer.alias) == \
+        "OPERATION_UNRESOLVED"
+    late = "dpl_" + "U" * 24
+    observer.platform[late] = {"url": "https://late.invalid", "state": "READY", "files": ls.FILES,
+                               "admission": "open", "code": ls.CODE}  # it appears: remove it before abandoning
+    assert _code(ledger.reconcile, directory, observer=observer, abandon_upload=True) == "UNRECORDED_DEPLOYMENT"
+    del observer.platform[late]
+    outcome = ledger.reconcile(directory, observer=observer, abandon_upload=True)
+    assert (outcome["of"], outcome["result"], outcome["resolved_by"]) == (attempt["hash"], "ABANDONED", "OPERATOR")
+    assert ledger.status(directory)["unresolved_operation"] is None
+    assert ls.CODE in ledger._summary(ledger.read_ledger(directory))["unproven_codes"]
+    observer.platform[late] = {"url": "https://late.invalid", "state": "READY", "files": ls.FILES,
+                               "admission": "open", "code": ls.CODE}  # another copy appears even later
+    assert _gate(observer, monkeypatch, reference=reference, code=ls.CODE, deployment=late) == 503
+    assert _code(ledger.admit_deployment, directory, late, observer=observer) == "NOT_AN_OPEN_DEPLOYMENT_OF_THE_REFERENCE"
+
+
+def test_inv3_abandonment_is_only_for_an_upload(position):
+    directory, observer = position
+    observer.commit_fault = "lost_ack"
+    assert _code(ledger.supersede, directory, observer=observer) == "OPERATION_UNRESOLVED"
+    observer.commit_fault = None
+    assert _code(ledger.reconcile, directory, observer=observer, abandon_upload=True) == "NOT_AN_UPLOAD"
+    assert ledger.reconcile(directory, observer=observer)["result"] == "COMMITTED"  # read from its marker
+    assert _code(ledger.reconcile, directory, observer=observer, abandon_upload=True) == "NOTHING_TO_RECONCILE"
+
+
+def test_inv3_the_command_line_abandons_only_on_the_explicit_flag(position):
+    import io
+
+    directory, _observer = position
+    reference = ledger.status(directory)["opening_reference"]
+    ledger.begin_deployment(directory, commit=ls.COMMIT, admission="OPEN", opening_reference=reference,
+                            forward_fix_ref=None, code=ls.CODE, vercel_project_sha256=ls.PLATFORM_PROJECT)
+    head = ledger.status(directory)["head"]
+    err = io.StringIO()  # parsed, then refused on the provider it must sweep first (none named here)
+    assert ledger.main(["reconcile", "--ledger-dir", str(directory), "--expect-head", head, "--abandon-upload"],
+                       out=io.StringIO(), err=err) == 1
+    assert err.getvalue().strip() == "cutover-ledger: refused: PROVIDER_REQUIRED"
+    assert ledger.status(directory)["unresolved_operation"] is not None

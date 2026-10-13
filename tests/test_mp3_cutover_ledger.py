@@ -2324,7 +2324,8 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
                observed_admission="CLOSED")
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPEN", opening_reference=reference,
                             forward_fix_ref=_gf1(directory, "m-lost"), code=OTHER_CODE, vercel_project_sha256=PLATFORM_PROJECT)  # its answer was lost
-    assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"  # nothing visible yet
+    assert _code(ledger.reconcile, directory, observer=observer) == "UPLOAD_OUTCOME_UNPROVEN"  # nothing proves it failed (rereview of d0fbba7)
+    assert ledger.reconcile(directory, observer=observer, abandon_upload=True)["result"] == "ABANDONED"
     assert _code(ls.deploy, directory, observer, "dpl_" + "F" * 24, forward_fix_ref=_gf1(directory, "m-next"),
                  **fix) == "CODE_OF_AN_UNPROVEN_UPLOAD"
     assert ledger.status(directory)["unresolved_operation"] is None  # refused before any reservation
@@ -2334,7 +2335,8 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
               **dict(fix, code=other))
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPEN", opening_reference=reference,
                             forward_fix_ref=_gf1(directory, "m-g2"), code=other, vercel_project_sha256=PLATFORM_PROJECT)
-    assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
+    assert _code(ledger.reconcile, directory, observer=observer) == "UPLOAD_OUTCOME_UNPROVEN"  # nothing proves it failed (rereview of d0fbba7)
+    assert ledger.reconcile(directory, observer=observer, abandon_upload=True)["result"] == "ABANDONED"
     assert _code(ledger.authorize_code, directory, "dpl_" + "G" * 24, observer=observer,
                  **_ROOTS(directory)) == "CODE_OF_AN_UNPROVEN_UPLOAD"
     assert not observer.authorization_valid(reference, other, PLATFORM_PROJECT)
@@ -2342,7 +2344,8 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
     third = "6" * 64
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPERATOR", opening_reference=None,
                             forward_fix_ref=_gf1(directory, "m-op"), code=third, vercel_project_sha256=PLATFORM_PROJECT)
-    assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
+    assert _code(ledger.reconcile, directory, observer=observer) == "UPLOAD_OUTCOME_UNPROVEN"  # nothing proves it failed (rereview of d0fbba7)
+    assert ledger.reconcile(directory, observer=observer, abandon_upload=True)["result"] == "ABANDONED"
     ls.deploy(directory, observer, "dpl_" + "H" * 24, forward_fix_ref=_gf1(directory, "m-h"), **dict(fix, code=third))
     assert ledger.authorize_code(directory, "dpl_" + "H" * 24, observer=observer,
                                  **_ROOTS(directory))["code_sha256"] == third

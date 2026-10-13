@@ -108,8 +108,9 @@ COMMANDS
                    at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
     admit-deployment before the point of no return: admit users at one recorded open deployment of the
                    authorized code (its own platform identity), in a PROD transaction (A19 (17))
-    reconcile      resolve an act whose outcome is unknown: for a PROD transaction read its marker in PROD; for
-                   an upload require that no unrecorded deployment exists; for a promotion observe the alias
+    reconcile      resolve an act whose outcome is unknown: for a PROD transaction read its marker in PROD; an
+                   upload stays unresolved until ``--abandon-upload`` (ABANDONED; no unrecorded deployment may
+                   exist); for a promotion observe the alias
                    (ABORTED only once its deployment is removed or failed) -- then record COMMITTED or
                    ABORTED (A19 R3 rereview R2; rereview of 1245bf2 M1/M2; rereview of 2fdeee6 M1/M2)
     attest-ponr    once, for a declared C13 recorded before restores left a commit marker: bind it forward
@@ -627,9 +628,10 @@ def _summary(entries: list[dict]) -> dict:
             collected["attestations"].append(entry)
         elif kind == "admission":
             collected["admissions"].append(entry)
-    # An open upload whose answer was lost and that `reconcile` closed while the platform showed nothing may
-    # still appear: its code is never authorized, so it never admits anyone (rereview of 2fdeee6, M2).
-    unproven = {e["of"] for e in entries if e["type"] == "outcome" and e["resolved_by"] == "RECONCILED"}
+    # An open upload whose answer was lost and that was closed without its deployment (ABANDONED; before
+    # d0fbba7's rereview, reconciled) may still appear: its code is never authorized (rereview of 2fdeee6, M2).
+    unproven = {e["of"] for e in entries if e["type"] == "outcome"
+                and (e["resolved_by"] == "RECONCILED" or e["result"] == "ABANDONED")}
     collected["unproven_codes"] = {a["code_sha256"] for a in collected["attempts"]
                                    if a["admission"] == "OPEN" and a["hash"] in unproven}
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
@@ -2581,9 +2583,16 @@ def _authorize_contract_code(directory: Path, deployment_id: str, contract_ref: 
         }, lambda entry: observer.authorize(reference["hash"], deployment["code_sha256"], entry, first=False))
 
 
-def reconcile(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
+def reconcile(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None,
+              abandon_upload: bool = False) -> dict:
     """Resolve the act whose PROD outcome is unknown (A19 R3 rereview R2): read in PROD whether its
-    transaction committed (its marker), after waiting for any act still running, and record the outcome."""
+    transaction committed (its marker), after waiting for any act still running, and record the outcome.
+
+    ABORTED is recorded only on proof.  An upload that never returned its deployment's identity has none:
+    an empty listing proves nothing (rereview of d0fbba7).  It stays unresolved -- every act refused --
+    until the operator explicitly abandons it (``abandon_upload``): ABANDONED, not ABORTED.  That is safe
+    because a late copy of it is never recordable, so never admitted (A19 (17)); its GF1 and its code
+    stay spent (16).  It is refused while the platform holds any deployment the ledger never recorded."""
     observer = observer or Observer()
     with _locked(directory):
         entries = read_ledger(directory)
@@ -2593,11 +2602,17 @@ def reconcile(directory: Path, *, expect_head: str | None = None, observer: Obse
         if pending is None:
             raise Refused("NOTHING_TO_RECONCILE")
         summary = _summary(entries)
+        if abandon_upload and pending["type"] != "deployment_attempt":
+            raise Refused("NOT_AN_UPLOAD", "only an upload whose outcome is unknown is abandoned")
         if pending["type"] == "deployment_attempt":
-            # Its upload, if the platform made it, is the one deployment the ledger never recorded: it must be
-            # removed (it is never recorded late) before the attempt is closed.  Its GF1 stays used.
+            # Its upload, if the platform made it, is a deployment the ledger never recorded: it must be removed
+            # (it is never recorded late) before the attempt is closed.  Not seeing it proves nothing.
             _require_every_deployment_recorded(summary, observer)
-            committed = False
+            if not abandon_upload:
+                raise Refused("UPLOAD_OUTCOME_UNPROVEN", "nothing proves the upload failed: wait and `reconcile`, "
+                              "or abandon it explicitly (`reconcile --abandon-upload`)")
+            return _append(directory, entries, {"type": "outcome", "of": pending["hash"], "result": "ABANDONED",
+                                                "resolved_by": "OPERATOR"})
         elif pending["type"] == "promotion":
             # Observed in the recorded project at the recorded address only (rereview of b83b5fc, M3).  A
             # promotion is sent only when it changes what the address serves (M2): the address serving its
@@ -2695,6 +2710,9 @@ def main(argv=None, *, out=None, err=None) -> int:
         sub.add_argument("--ledger-dir", required=True)
         sub.add_argument("--expect-head", default=None,
                          help="the head printed by the previous command; refuses a truncated ledger")
+        if name == "reconcile":
+            sub.add_argument("--abandon-upload", action="store_true",
+                             help="close an upload whose outcome is unknown as ABANDONED (never ABORTED)")
         if name in {"rollback", "reference", "open", "reconcile"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
@@ -2770,7 +2788,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = resume(directory, expect_head=args.expect_head, observer=observer, backup_root=args.backup_root,
                             off_platform=args.off_platform)
         elif args.command == "reconcile":
-            result = reconcile(directory, expect_head=args.expect_head, observer=observer)
+            result = reconcile(directory, expect_head=args.expect_head, observer=observer,
+                               abandon_upload=args.abandon_upload)
         elif args.command == "attest-ponr":
             result = attest_ponr(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "supersede":
