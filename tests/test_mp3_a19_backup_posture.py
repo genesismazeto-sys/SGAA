@@ -1068,3 +1068,30 @@ def test_r3_an_uncertain_restore_is_a_warning_naming_no_failure(monkeypatch, tmp
     assert [category for category, _m in flashed] == ["warning"]
     assert "Não foi possível restaurar" not in flashed[0][1] and "Não repita a recuperação" in flashed[0][1]
     assert "event=pg_restore_uncertain operation=" + "ab" * 16 in caplog.text
+
+
+def test_n2_a_name_collision_never_deletes_the_file_that_was_already_there(tmp_path, monkeypatch):
+    """Rereview of 1245bf2 N2 (the reviewer's reproduction): a refused collision removes only what this run
+    created -- here nothing."""
+    from app.backup import pg_snapshot
+    from tests import mp3_ledger_support as ls
+
+    now = datetime(2026, 11, 1, 8, tzinfo=timezone.utc)
+    monkeypatch.setattr(hosting, "database_source", lambda source: ls.SOURCE)
+    monkeypatch.setattr(pg_snapshot.secrets, "token_hex", lambda count: "0" * (2 * count - 1) + "1")
+    target = tmp_path / f"sgaa-pg-snapshot-20261101T080000Z-{ls.IDENTITY[:12]}-{'0' * 15}1.db"
+    target.write_bytes(b"preexisting snapshot")
+
+    class Connection:
+        autocommit = True
+
+        def execute(self, statement):
+            pass
+
+        def close(self):
+            pass
+
+    with pytest.raises(pg_snapshot.SnapshotError) as caught:
+        pg_snapshot.create(tmp_path, now=now, connect=Connection)
+    assert caught.value.code == "SNAPSHOT_EXISTS"
+    assert target.read_bytes() == b"preexisting snapshot"

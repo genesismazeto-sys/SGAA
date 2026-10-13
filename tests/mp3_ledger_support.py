@@ -423,8 +423,8 @@ def deploy(directory, observer, deployment_id=DEPLOYMENT, **receipt_overrides):
     """A governed deployment: on the platform (as the observer sees it) and recorded in the ledger."""
     from tools import cutover_ledger as ledger
 
-    receipt = deployment_receipt(deployment_id, **receipt_overrides)
-    entry = ledger.record_deployment(directory, receipt)
+    receipt = reserve_and_receipt(directory, deployment_id, **receipt_overrides)
+    entry = record_or_abort(directory, receipt)
     observer.platform[deployment_id] = {
         "url": f"https://{deployment_id.lower()}.example.test", "state": "READY", "files": receipt["files_sha256"],
         "admission": "closed" if receipt["admission"] == "OPERATOR" else "open", "code": receipt["code_sha256"]}
@@ -434,11 +434,36 @@ def deploy(directory, observer, deployment_id=DEPLOYMENT, **receipt_overrides):
 def promote(directory, observer, deployment_id=DEPLOYMENT, *, host=PUBLIC_HOST):
     from tools import cutover_ledger as ledger
 
+    intent = ledger.begin_promotion(directory, deployment_id, host)  # written before the address moves
     observer.alias = deployment_id
     observer.code_seen = observer.platform[deployment_id]["code"]
-    return ledger.record_promotion(directory, {
+    return ledger.complete_promotion(directory, intent["hash"], {
         "deployment_id": deployment_id, "public_host_sha256": host, "alias_deployment_id": deployment_id,
         "files_sha256": observer.platform[deployment_id]["files"], "observed_code": observer.platform[deployment_id]["code"]})
+
+
+def record_or_abort(directory, receipt) -> dict:
+    """Record the attempt's upload; a refused record closes the attempt, as the governed deploy does once
+    it removed the upload."""
+    from tools import cutover_ledger as ledger
+
+    try:
+        return ledger.record_deployment(directory, receipt)
+    except ledger.Refused:
+        ledger.abort_attempt(directory, receipt["attempt"])
+        raise
+
+
+def reserve_and_receipt(directory, deployment_id=DEPLOYMENT, **receipt_overrides) -> dict:
+    """What ``deploy_audit deploy`` does before and after its upload: the attempt reserved (its GF1 consumed),
+    then the receipt naming it."""
+    from tools import cutover_ledger as ledger
+
+    receipt = deployment_receipt(deployment_id, **receipt_overrides)
+    attempt = ledger.begin_deployment(directory, commit=receipt["commit"], admission=receipt["admission"],
+                                      opening_reference=receipt["opening_reference"],
+                                      forward_fix_ref=receipt["forward_fix_ref"], code=receipt["code_sha256"])
+    return dict(receipt, attempt=attempt["hash"])
 
 
 def baseline(directory, observer):
@@ -626,9 +651,9 @@ def record_served(directory, platform, deployment_id, url, *, code, admission="O
     """A governed deployment of a served application: on the scripted platform and recorded in the ledger."""
     from tools import cutover_ledger as ledger
 
-    receipt = deployment_receipt(deployment_id, admission=admission, opening_reference=opening_reference, code=code,
-                                 commit=commit)
-    entry = ledger.record_deployment(directory, receipt)
+    receipt = reserve_and_receipt(directory, deployment_id, admission=admission, opening_reference=opening_reference,
+                                  code=code, commit=commit)
+    entry = record_or_abort(directory, receipt)
     platform.deployments[deployment_id] = {"url": url, "state": "READY", "files": receipt["files_sha256"]}
     return entry
 
@@ -636,8 +661,9 @@ def record_served(directory, platform, deployment_id, url, *, code, admission="O
 def promote_served(directory, platform, deployment_id, *, code, host):
     from tools import cutover_ledger as ledger
 
+    intent = ledger.begin_promotion(directory, deployment_id, host)  # written before the address moves
     platform.alias = deployment_id
-    return ledger.record_promotion(directory, {
+    return ledger.complete_promotion(directory, intent["hash"], {
         "deployment_id": deployment_id, "public_host_sha256": host, "alias_deployment_id": deployment_id,
         "files_sha256": platform.deployments[deployment_id]["files"], "observed_code": code})
 

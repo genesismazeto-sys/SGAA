@@ -117,6 +117,16 @@ that would cost money is not performed; stop and say so.
   open, reads the marker and records COMMITTED or ABORTED (`RECONCILE_UNDECIDED`: PROD could not be
   read; run it again). After ABORTED, repeat the act; it is a new entry. A command refused after it
   wrote its entry prints `cutover-ledger: head: <hash>`: the next `--expect-head` is that head.
+- **Deployments and promotions follow the same rule (SPEC A19 (15)).** `deploy_audit deploy` and
+  `promote` hold the ledger from their check to their record: run nothing else against the ledger while
+  they run (it answers `LEDGER_BUSY`). A deploy reserves its attempt -- consuming its GF1 -- before
+  anything is uploaded. If the upload's answer is lost, or a refused upload could not be removed, the
+  attempt stays unresolved: list the project's deployments, `vercel remove` the one the ledger never
+  recorded, then **(user terminal)** `python tools/cutover_ledger.py reconcile --ledger-dir <ledger>
+  --expect-head <head> --vercel-team <team> --vercel-project <project>` (`UNRECORDED_DEPLOYMENT` while
+  it remains); the GF1 stays used and the next deploy needs a new one. A promotion whose outcome is
+  unknown is resolved the same way with `--base-url <public address>`: `reconcile` observes which
+  deployment the address serves.
 - **Two terminals: production commands and restore drills never share one.** The PROD terminal
   has `DATABASE_URL` = the PROD session address; a restore drill runs in a separate terminal where
   `DATABASE_URL` is unset (`DRILL_SOURCE_URL_SET` otherwise) and the scratch database is named
@@ -604,8 +614,8 @@ each needs its own user message, recorded with `grant --gate GF1 --ref <code>` (
 C13; the gates that act on the source or on the first deployment are refused; one grant, one
 deployment), then `deploy_audit deploy --commit <fix commit> … --admission open --opening-reference
 <status opening_reference> --forward-fix-ref <code>` (a new code admits no one yet: it is not
-authorized; a redeployment of the authorized code admits at once, so it is refused unless the
-backup is within its cadence), `cutover_ledger authorize-code --deployment <id> --backup-root
+authorized; an open redeployment of the code already authorized is refused,
+`AUTHORIZED_CODE_NOT_REDEPLOYED_OPEN` -- redeploy it operator-only), `cutover_ledger authorize-code --deployment <id> --backup-root
 <primary dir> --off-platform <second dir> --vercel-team <team> --vercel-project <project>` (**user
 terminal**: it re-verifies the newest generation on disk (after C14, when the ledger records none,
 the newest on disk -- its Layer-2 set and its object set, each by its own creation time -- must

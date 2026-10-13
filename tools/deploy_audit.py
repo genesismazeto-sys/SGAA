@@ -468,7 +468,13 @@ def _observed(url: str, *, allow_insecure: bool) -> tuple[str, str]:
 def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_reference: str | None = None,
            forward_fix_ref: str | None = None, sentinels: list[bytes] | None = None, repo: Path = REPO_ROOT,
            allow_insecure: bool = False) -> dict:
-    """Export, audit, verify, upload, prove what the platform received and what it runs, record it."""
+    """Export, audit, verify, upload, prove what the platform received and what it runs, record it.
+
+    The ledger is held from the reservation to the record (A19 rereview of 1245bf2, M1/M2): the attempt is
+    written -- consuming its GF1 -- before anything is uploaded; an upload whose outcome is unknown, or one
+    that failed its checks and could not be removed, leaves the attempt unresolved (every later act refused
+    until ``cutover_ledger reconcile``).
+    """
     import tempfile
 
     from app import hosting
@@ -494,56 +500,26 @@ def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_r
         if tree_digest(blobs) != proof["deploy_tree_sha256"]:
             raise Refused("DEPLOY_TREE_DIFFERS")
         code = hosting.code_sha256(blobs)
-        try:  # what depends on the code (an open deployment of the authorized code admits users at once)
-            cutover_ledger.deployment_preconditions(Path(ledger_dir), commit=resolved, admission=mode,
-                                                    opening_reference=opening_reference,
-                                                    forward_fix_ref=forward_fix_ref, code=code)
-        except cutover_ledger.Refused as refusal:
-            raise Refused(f"LEDGER_{refusal.code}") from None
         expected_files = vercel_provider.files_sha256(sha1s)
         env = {hosting.ADMISSION_ENV: admission}
         if mode == "OPEN":
             env[hosting.OPENING_REFERENCE_ENV] = opening_reference
-        try:
-            deployment = provider.deploy(str(upload), env)
-        except vercel_provider.Refused as refusal:
-            raise Refused(refusal.code) from None
-        recorded = False
-        try:
-            if deployment["state"] != "READY" or deployment["target"] != "production":
-                raise Refused("DEPLOYMENT_NOT_READY")
-            try:
-                received = vercel_provider.files_sha256(provider.files(deployment["id"]))
-            except vercel_provider.Refused as refusal:
-                raise Refused(refusal.code) from None
-            if received != expected_files:
-                # Whatever changed between the verification and the upload is never served.
-                raise Refused("DEPLOYED_FILES_DIFFER", "the platform received other files than the verified export")
-            address = "https://" + deployment["url"] if not deployment["url"].startswith("http") else deployment["url"]
-            observed_admission, observed_code = _observed(address, allow_insecure=allow_insecure)
-            if observed_code != code:
-                raise Refused("DEPLOYMENT_CODE_NOT_OBSERVED", "the deployment does not announce the export's code")
-            from tools import hosted_smoke
-
-            receipt = {
-                "deployment_id": deployment["id"], "url_sha256": hosted_smoke.host_digest(address),
-                "vercel_project_sha256": hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest(),
-                "commit": resolved, "deploy_tree_sha256": proof["deploy_tree_sha256"], "code_sha256": code,
-                "files_sha256": received, "admission": mode, "opening_reference": opening_reference or "NONE",
-                "forward_fix_ref": forward_fix_ref or "NONE", "observed_admission": observed_admission.upper(),
-                "aliased": bool(deployment.get("aliased")),
-            }
-            try:
-                entry = cutover_ledger.record_deployment(Path(ledger_dir), receipt)
+        with cutover_ledger.holding(Path(ledger_dir)):
+            try:  # the reservation, with every rule that depends on the code; the GF1 is consumed here
+                attempt = cutover_ledger.begin_deployment(Path(ledger_dir), commit=resolved, admission=mode,
+                                                          opening_reference=opening_reference,
+                                                          forward_fix_ref=forward_fix_ref, code=code, held=True)
             except cutover_ledger.Refused as refusal:
                 raise Refused(f"LEDGER_{refusal.code}") from None
-            recorded = True
-        finally:
-            if not recorded:
-                try:
-                    provider.remove(deployment["id"])  # an unrecorded deployment must not stay to be served
-                except Exception:
-                    pass
+            try:
+                deployment = provider.deploy(str(upload), env)
+            except vercel_provider.Refused as refusal:
+                # the platform may have made it: the attempt stays unresolved until `reconcile`
+                raise Refused(refusal.code, "the upload's outcome is unknown: run `cutover_ledger reconcile`") from None
+            entry, receipt = _record_upload(deployment, attempt, ledger_dir=ledger_dir, provider=provider,
+                                            resolved=resolved, proof=proof, code=code, expected_files=expected_files,
+                                            mode=mode, opening_reference=opening_reference,
+                                            forward_fix_ref=forward_fix_ref, allow_insecure=allow_insecure)
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
     return {"result": "DEPLOYED", "deployment_id": deployment["id"], "commit": resolved, "files": proof["files"],
@@ -551,8 +527,70 @@ def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_r
             "aliased": receipt["aliased"], "head": entry["hash"]}
 
 
+def _record_upload(deployment, attempt, *, ledger_dir, provider, resolved, proof, code, expected_files, mode,
+                   opening_reference, forward_fix_ref, allow_insecure):
+    """Prove what the platform received and runs, and record it as the attempt's deployment; otherwise
+    remove it and close the attempt (ABORTED) -- or, when it cannot be removed, leave it unresolved."""
+    from tools import cutover_ledger, hosted_smoke, vercel_provider
+
+    recorded = False
+    try:
+        if deployment["state"] != "READY" or deployment["target"] != "production":
+            raise Refused("DEPLOYMENT_NOT_READY")
+        try:
+            received = vercel_provider.files_sha256(provider.files(deployment["id"]))
+        except vercel_provider.Refused as refusal:
+            raise Refused(refusal.code) from None
+        if received != expected_files:
+            # Whatever changed between the verification and the upload is never served.
+            raise Refused("DEPLOYED_FILES_DIFFER", "the platform received other files than the verified export")
+        address = "https://" + deployment["url"] if not deployment["url"].startswith("http") else deployment["url"]
+        observed_admission, observed_code = _observed(address, allow_insecure=allow_insecure)
+        if observed_code != code:
+            raise Refused("DEPLOYMENT_CODE_NOT_OBSERVED", "the deployment does not announce the export's code")
+        receipt = {
+            "deployment_id": deployment["id"], "url_sha256": hosted_smoke.host_digest(address),
+            "vercel_project_sha256": hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest(),
+            "commit": resolved, "deploy_tree_sha256": proof["deploy_tree_sha256"], "code_sha256": code,
+            "files_sha256": received, "admission": mode, "opening_reference": opening_reference or "NONE",
+            "forward_fix_ref": forward_fix_ref or "NONE", "observed_admission": observed_admission.upper(),
+            "aliased": bool(deployment.get("aliased")), "attempt": attempt["hash"],
+        }
+        try:
+            entry = cutover_ledger.record_deployment(Path(ledger_dir), receipt, held=True)
+        except cutover_ledger.Refused as refusal:
+            raise Refused(f"LEDGER_{refusal.code}") from None
+        recorded = True
+    finally:
+        if not recorded:
+            try:
+                provider.remove(deployment["id"])  # an unrecorded deployment must not stay to be served
+            except Exception:  # noqa: BLE001 -- the refusal below goes on; the deployment stays, and so does
+                pass  # the unresolved attempt: `cutover_ledger reconcile` refuses until it is removed by hand
+            else:
+                try:
+                    cutover_ledger.abort_attempt(Path(ledger_dir), attempt["hash"], held=True)
+                except cutover_ledger.Refused:  # left unresolved: `reconcile` closes it (nothing unrecorded remains)
+                    pass
+    return entry, receipt
+
+
 def promote(deployment_id: str, *, ledger_dir: Path, provider, public_url: str, allow_insecure: bool = False) -> dict:
     """Point the public address at a recorded deployment and record it once the platform and the address agree."""
+    from urllib.parse import urlsplit
+
+    from tools import cutover_ledger
+
+    host = (urlsplit(public_url).hostname or "").lower()
+    if not host:
+        raise Refused("PUBLIC_URL_INVALID")
+    # Held from the precheck to the record (A19 rereview of 1245bf2, M1): no other ledger act interleaves.
+    with cutover_ledger.holding(Path(ledger_dir)):
+        return _promote_held(deployment_id, ledger_dir=ledger_dir, provider=provider, public_url=public_url,
+                             host=host, allow_insecure=allow_insecure)
+
+
+def _promote_held(deployment_id, *, ledger_dir, provider, public_url, host, allow_insecure):
     import time
 
     from tools import cutover_ledger, hosted_smoke, vercel_provider
@@ -568,11 +606,11 @@ def promote(deployment_id: str, *, ledger_dir: Path, provider, public_url: str, 
         raise Refused(refusal.code) from None
     if current["state"] != "READY" or files != recorded["files_sha256"]:
         raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
-    from urllib.parse import urlsplit
-
-    host = (urlsplit(public_url).hostname or "").lower()
-    if not host:
-        raise Refused("PUBLIC_URL_INVALID")
+    try:  # written before the address moves; it takes effect once observed
+        intent = cutover_ledger.begin_promotion(Path(ledger_dir), deployment_id, hosted_smoke.host_digest(public_url),
+                                                held=True)
+    except cutover_ledger.Refused as refusal:
+        raise Refused(f"LEDGER_{refusal.code}") from None
     try:
         provider.promote(deployment_id)
         target = ""
@@ -581,8 +619,8 @@ def promote(deployment_id: str, *, ledger_dir: Path, provider, public_url: str, 
             if target == deployment_id:
                 break
             time.sleep(PROBE_PAUSE_SECONDS)
-    except vercel_provider.Refused as refusal:
-        raise Refused(refusal.code) from None
+    except vercel_provider.Refused as refusal:  # the address may have moved: unresolved until `reconcile`
+        raise Refused(refusal.code, "the promotion's outcome is unknown: run `cutover_ledger reconcile`") from None
     observed_code = ""
     for _attempt in range(PROBE_ATTEMPTS):
         try:
@@ -595,11 +633,11 @@ def promote(deployment_id: str, *, ledger_dir: Path, provider, public_url: str, 
     receipt = {"deployment_id": deployment_id, "public_host_sha256": hosted_smoke.host_digest(public_url),
                "alias_deployment_id": target, "files_sha256": files, "observed_code": observed_code}
     try:
-        entry = cutover_ledger.record_promotion(Path(ledger_dir), receipt)
+        cutover_ledger.complete_promotion(Path(ledger_dir), intent["hash"], receipt, held=True)
     except cutover_ledger.Refused as refusal:
         raise Refused(f"LEDGER_{refusal.code}") from None
     return {"result": "PROMOTED", "deployment_id": deployment_id, "public_host_sha256": receipt["public_host_sha256"],
-            "head": entry["hash"]}
+            "head": cutover_ledger.status(Path(ledger_dir))["head"]}
 
 
 # ---------------------------------------------------------------------------

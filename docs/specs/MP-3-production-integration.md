@@ -1161,6 +1161,27 @@ Executor amendments (consequences of the above; not material beyond what the use
   redeployment of an already authorized code is admitted only while the last generation a re-opening
   verified is within the cadence; past it a forward fix is a new commit (as a superseded code already
   is). Evidence: section 17.
+  (15) The cross-family rereview of `1245bf2` (FAIL, 2 material, 2 non-material), each reproduced by the
+  reviewer's own failing tests (re-run by the executor on `1245bf2`, then kept as tests with the intended
+  behaviour). M1 -- a promotion could move the public address after another act's outcome became unknown:
+  the ledger's checks ran before the provider call and nothing held the ledger in between. `deploy_audit`
+  now holds the ledger (`cutover_ledger.holding`) from its precheck through the provider call to the record,
+  so no other act interleaves (another command is refused LEDGER_BUSY); the promotion is written before the
+  address moves and takes effect only once the platform and the address are observed serving it; a provider
+  error or a failed observation leaves it unresolved and `reconcile` resolves it from the alias. M2 -- a GF1
+  was consumed only when the upload was recorded, so two overlapping deploys, or a retry after a lost upload
+  answer, made two deployments under one grant: `deploy_audit` now reserves every deployment first (a
+  `deployment_attempt`, written with every rule that depends on the code, which consumes its GF1 whatever its
+  outcome); the upload is recorded as that attempt's deployment; a failed upload that was removed closes it
+  ABORTED; an upload whose answer was lost, or one that could not be removed, leaves it unresolved, every act
+  is refused, and `reconcile` closes it only once the platform holds no deployment the ledger never recorded
+  (the operator removes it). After the PONR an open deployment of the code the ledger already authorizes is
+  refused (`AUTHORIZED_CODE_NOT_REDEPLOYED_OPEN`): it would admit users at its own address before being
+  recorded; the authorized code is redeployed operator-only, and every open upload carries a code that admits
+  no one until `authorize-code` (which sweeps the platform first). This supersedes the accepted residual of
+  (14). N1 -- the evidence index cited files the packet did not hold; corrected. N2 -- a refused local
+  name collision deleted the file that was already there: the snapshot file is created exclusively and only a
+  file this run created is ever removed; the generation token is 64 bits. Evidence: section 17.
 
 ## 17. Closure
 

@@ -720,16 +720,27 @@ def test_promotion_points_the_public_address_at_a_recorded_deployment_and_record
         da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
     assert caught.value.code == "DEPLOYMENT_NOT_THE_RECORDED_ONE" and platform.promoted == []
     platform.received[identifier] = original
+    from tools import cutover_ledger
+
+    def reconciled(provider):  # the promotion stayed unresolved: `reconcile` observes the alias
+        observer = type("Alias", (), {"alias_deployment": lambda self: provider.alias_target("sgaa.example.test")})()
+        return cutover_ledger.reconcile(at_c8["directory"], observer=observer)["result"]
+
     served["code"] = "9" * 64  # the address serves something else
     with pytest.raises(da.Refused) as caught:
         da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
     assert caught.value.code == "LEDGER_DEPLOYMENT_NOT_THE_RECORDED_ONE"
+    with pytest.raises(da.Refused) as caught:  # nothing proceeds while its outcome is unknown
+        da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert caught.value.code == "LEDGER_OPERATION_UNRESOLVED"
+    assert reconciled(platform) == "COMMITTED"  # the alias did move
     served["code"] = _code_of_head()
     stuck = _Platform(alias_follows=False)
     stuck.received = platform.received
     with pytest.raises(da.Refused) as caught:
         da.promote(identifier, ledger_dir=at_c8["directory"], provider=stuck, public_url=public)
     assert caught.value.code == "LEDGER_ALIAS_NOT_THE_DEPLOYMENT"
+    assert reconciled(stuck) == "ABORTED"
     result = da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
     assert result["result"] == "PROMOTED" and result["public_host_sha256"] == hosted_smoke.host_digest(public)
 
@@ -743,3 +754,203 @@ def test_the_command_line_deploys_and_promotes_only_through_the_named_project(tm
         assert da.main(args, out=io.StringIO(), err=err) == 1
         assert "PROVIDER_PROJECT_INVALID" in err.getvalue()
     assert da.main(["deploy", "--ledger-dir", str(tmp_path)], out=io.StringIO(), err=io.StringIO()) == 2
+
+
+# ---- the rereview of 1245bf2: platform acts serialized with the ledger and reserved before they happen --------
+# Adapted from the independent reviewer's reproductions (each failed on 1245bf2): the ledger and the deploy /
+# promote control flow are real; the Git export, the provider and the HTTP observations are scripted.
+
+
+@pytest.fixture
+def at_ponr(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger
+
+    ls.install_clock(monkeypatch, datetime(2026, 11, 1, 8, tzinfo=timezone.utc))
+    directory = tmp_path / "ledger"
+    cutover_ledger.init(directory)
+    for index, gate in enumerate(ls.ALL_GATES):
+        cutover_ledger.grant(directory, gate, f"REVIEW-{index}")
+    observer = ls.FakeObserver()
+    ls.drive(directory, "C13", observer)
+    return directory, observer
+
+
+def _scripted_export(monkeypatch, code):
+    from app import hosting
+    from tests import mp3_ledger_support as ls
+    from tools import hosted_smoke, vercel_provider as vp
+
+    blobs = {"app/synthetic.py": hosting.git_blob_id(b"synthetic")}
+    files = {"app/synthetic.py": vp.content_sha1(b"synthetic")}
+    monkeypatch.setattr(da, "_resolve_commit", lambda *args: ls.OTHER_COMMIT)
+    monkeypatch.setattr(da, "export", lambda *args, **kwargs: None)
+    monkeypatch.setattr(da, "audit", lambda *args, **kwargs: {"findings": []})
+    monkeypatch.setattr(da, "verify", lambda *args, **kwargs: {"deploy_tree_sha256": da.tree_digest(blobs), "files": 1})
+    monkeypatch.setattr(da, "_exported_files", lambda *args: (blobs, files))
+    monkeypatch.setattr(hosting, "code_sha256", lambda found: code)
+    monkeypatch.setattr(hosted_smoke, "probe_code", lambda *args, **kwargs: code)
+    monkeypatch.setattr(hosted_smoke, "probe_admission", lambda *args, **kwargs: "open")
+    monkeypatch.setattr(hosted_smoke, "host_digest", lambda address: ls.PUBLIC_HOST)
+    return files
+
+
+def test_m1_no_other_ledger_act_interleaves_a_promotion_between_its_precheck_and_the_alias_move(at_ponr, monkeypatch):
+    """Rereview of 1245bf2 M1: while `promote` holds the ledger, another act (a supersession here) is refused
+    LEDGER_BUSY; the only act open when the alias moves is the promotion itself, written before it."""
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger, hosted_smoke, vercel_provider as vp
+
+    directory, observer = at_ponr
+    observer.alias = ls.DEPLOYMENT
+    seen = {}
+
+    class Provider:
+        alias = ls.DEPLOYMENT
+
+        def deployment(self, identity):
+            with pytest.raises(cutover_ledger.Refused) as caught:  # another command, started meanwhile
+                cutover_ledger.supersede(directory, observer=observer)
+            seen["interleaved"] = caught.value.code
+            return {"state": "READY"}
+
+        def files(self, identity):
+            return {"app/synthetic.py": "a" * 40}
+
+        def promote(self, identity):
+            pending = cutover_ledger._unresolved(cutover_ledger.read_ledger(directory))
+            seen["open_when_promoted"] = pending["type"] if pending else None
+            self.alias = identity
+
+        def alias_target(self, host):
+            return self.alias
+
+    monkeypatch.setattr(vp, "files_sha256", lambda files: ls.FILES)
+    monkeypatch.setattr(hosted_smoke, "probe_code", lambda *args, **kwargs: ls.CODE)
+    monkeypatch.setattr(hosted_smoke, "host_digest", lambda address: ls.PUBLIC_HOST)
+    supersessions = len(cutover_ledger._summary(cutover_ledger.read_ledger(directory))["supersessions"])
+    result = da.promote(ls.LIFT, ledger_dir=directory, provider=Provider(), public_url="https://synthetic.invalid")
+    assert seen == {"interleaved": "LEDGER_BUSY", "open_when_promoted": "promotion"}
+    assert result["result"] == "PROMOTED" and cutover_ledger.status(directory)["unresolved_operation"] is None
+    assert len(cutover_ledger._summary(cutover_ledger.read_ledger(directory))["supersessions"]) == supersessions
+
+
+def test_m2_a_gf1_is_reserved_before_the_upload_so_an_overlapping_deploy_never_reaches_the_platform(
+        at_ponr, monkeypatch):
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger
+
+    directory, observer = at_ponr
+    reference = cutover_ledger.status(directory)["opening_reference"]
+    cutover_ledger.grant(directory, "GF1", "REVIEW-GF1-ONE")
+    files = _scripted_export(monkeypatch, ls.OTHER_CODE)  # a forward fix: a code not yet authorized
+    ready, nested = [], {}
+
+    class Provider:
+        project_id = ls.PROJECT_ID
+
+        def deploy(self, upload, env):
+            if not nested:  # a second command overlapping at the upload
+                with pytest.raises(da.Refused) as caught:
+                    da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=self, admission="open",
+                              opening_reference=reference, forward_fix_ref="REVIEW-GF1-ONE")
+                nested["code"] = caught.value.code
+            identity = "dpl_" + "X" * 24
+            ready.append(identity)
+            return {"id": identity, "state": "READY", "target": "production", "url": "synthetic.invalid",
+                    "aliased": False}
+
+        def files(self, identity):
+            return files
+
+        def remove(self, identity):
+            raise AssertionError("nothing to remove")
+
+    da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=Provider(), admission="open",
+              opening_reference=reference, forward_fix_ref="REVIEW-GF1-ONE")
+    assert nested["code"] in {"LEDGER_BUSY", "LEDGER_OPERATION_UNRESOLVED"} and ready == ["dpl_" + "X" * 24]
+    with pytest.raises(da.Refused) as caught:  # the grant is spent: refused before any upload
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=Provider(), admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-ONE")
+    assert caught.value.code == "LEDGER_FORWARD_FIX_GATE_REQUIRED" and len(ready) == 1
+
+
+def test_m2_a_lost_upload_answer_blocks_everything_until_the_platform_is_reconciled(at_ponr, monkeypatch):
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger, vercel_provider as vp
+
+    directory, observer = at_ponr
+    reference = cutover_ledger.status(directory)["opening_reference"]
+    cutover_ledger.grant(directory, "GF1", "REVIEW-GF1-LOST")
+    files = _scripted_export(monkeypatch, ls.OTHER_CODE)
+
+    class Provider:
+        project_id = ls.PROJECT_ID
+        ready = []
+
+        def deploy(self, upload, env):
+            identity = "dpl_" + ("X" if not self.ready else "Y") * 24
+            self.ready.append(identity)
+            observer.platform[identity] = {"url": "https://x.invalid", "state": "READY", "files": ls.FILES,
+                                           "admission": "open", "code": ls.OTHER_CODE}
+            if len(self.ready) == 1:  # the platform made it; its answer was lost
+                raise vp.Refused("PROVIDER_UNAVAILABLE")
+            return {"id": identity, "state": "READY", "target": "production", "url": "synthetic.invalid",
+                    "aliased": False}
+
+        def files(self, identity):
+            return files
+
+        def remove(self, identity):
+            raise AssertionError("no identity was returned")
+
+    provider = Provider()
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-LOST")
+    assert caught.value.code == "PROVIDER_UNAVAILABLE"
+    pending = cutover_ledger.status(directory)["unresolved_operation"]
+    assert pending is not None  # the attempt stays open
+    with pytest.raises(da.Refused) as caught:  # no retry, no other act, until reconciled
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-LOST")
+    assert caught.value.code == "LEDGER_OPERATION_UNRESOLVED" and len(provider.ready) == 1
+    with pytest.raises(cutover_ledger.Refused) as caught:  # the platform holds what the ledger never recorded
+        cutover_ledger.reconcile(directory, observer=observer)
+    assert caught.value.code == "UNRECORDED_DEPLOYMENT"
+    del observer.platform["dpl_" + "X" * 24]  # removed by hand (`vercel remove`)
+    outcome = cutover_ledger.reconcile(directory, observer=observer)
+    assert outcome["of"] == pending and outcome["result"] == "ABORTED"
+    with pytest.raises(da.Refused) as caught:  # the attempt consumed its GF1, whatever its outcome
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-LOST")
+    assert caught.value.code == "LEDGER_FORWARD_FIX_GATE_REQUIRED" and len(provider.ready) == 1
+    cutover_ledger.grant(directory, "GF1", "REVIEW-GF1-NEXT")
+    done = da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
+                     opening_reference=reference, forward_fix_ref="REVIEW-GF1-NEXT")
+    assert done["deployment_id"] == "dpl_" + "Y" * 24 and cutover_ledger.status(directory)["unresolved_operation"] is None
+
+
+def test_m2_after_the_ponr_an_authorized_code_is_never_redeployed_open(at_ponr, monkeypatch):
+    """An open upload of the authorized code would admit users at its own address before it is recorded."""
+    from tests import mp3_ledger_support as ls
+    from tools import cutover_ledger
+
+    directory, observer = at_ponr
+    reference = cutover_ledger.status(directory)["opening_reference"]
+    cutover_ledger.grant(directory, "GF1", "REVIEW-GF1-SAME")
+    _scripted_export(monkeypatch, ls.CODE)  # the code the ledger authorizes now
+
+    class Provider:
+        project_id = ls.PROJECT_ID
+
+        def deploy(self, upload, env):
+            raise AssertionError("nothing may be uploaded")
+
+    with pytest.raises(da.Refused) as caught:
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=Provider(), admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-SAME")
+    assert caught.value.code == "LEDGER_AUTHORIZED_CODE_NOT_REDEPLOYED_OPEN"
+    assert cutover_ledger.status(directory)["unresolved_operation"] is None  # refused before the reservation

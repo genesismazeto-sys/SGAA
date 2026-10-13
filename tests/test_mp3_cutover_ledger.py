@@ -720,19 +720,30 @@ def test_the_smoked_address_must_be_the_one_promoted_to_the_candidate(directory,
 
 
 def test_a_promotion_is_recorded_only_for_the_recorded_deployment_the_platform_resolves(directory, observer):
+    """Rereview of 1245bf2 M1: the promotion is written BEFORE the address moves and takes effect only once
+    the platform and the address are observed serving it; otherwise it stays unresolved for `reconcile`."""
     _grant_all(directory)
     _drive(directory, "C9", observer=observer)
+    assert _code(ledger.begin_promotion, directory, "dpl_" + "Z" * 24, H["m"]) == "DEPLOYMENT_NOT_RECORDED"
     base = {"deployment_id": DEPLOYMENT, "public_host_sha256": H["m"], "alias_deployment_id": DEPLOYMENT,
             "files_sha256": ls.FILES, "observed_code": CODE}
-    assert _code(ledger.record_promotion, directory, {**base, "deployment_id": "dpl_" + "Z" * 24}) == \
-        "DEPLOYMENT_NOT_RECORDED"
-    assert _code(ledger.record_promotion, directory, {**base, "files_sha256": H["a"]}) == \
-        "DEPLOYMENT_NOT_THE_RECORDED_ONE"
-    assert _code(ledger.record_promotion, directory, {**base, "observed_code": OTHER_CODE}) == \
-        "DEPLOYMENT_NOT_THE_RECORDED_ONE"
-    assert _code(ledger.record_promotion, directory, {**base, "alias_deployment_id": "dpl_" + "Z" * 24}) == \
-        "ALIAS_NOT_THE_DEPLOYMENT"
-    assert ledger.record_promotion(directory, base)["type"] == "promotion"
+    for wrong, code in (({"files_sha256": H["a"]}, "DEPLOYMENT_NOT_THE_RECORDED_ONE"),
+                        ({"observed_code": OTHER_CODE}, "DEPLOYMENT_NOT_THE_RECORDED_ONE"),
+                        ({"alias_deployment_id": "dpl_" + "Z" * 24}, "ALIAS_NOT_THE_DEPLOYMENT")):
+        intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+        assert _code(ledger.complete_promotion, directory, intent["hash"], {**base, **wrong}) == code
+        assert ledger.status(directory)["unresolved_operation"] == intent["hash"]  # nothing proceeds meanwhile
+        assert _code(ledger.begin_promotion, directory, DEPLOYMENT, H["m"]) == "OPERATION_UNRESOLVED"
+        observer.alias = "dpl_" + "Z" * 24  # the address does not serve it: the promotion had no effect
+        assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
+        assert ledger._summary(ledger.read_ledger(directory))["promotions"] == []
+    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+    observer.alias = DEPLOYMENT  # the platform moved it, then the answer was lost: observed, it counts
+    assert ledger.reconcile(directory, observer=observer)["result"] == "COMMITTED"
+    assert [p["hash"] for p in ledger._summary(ledger.read_ledger(directory))["promotions"]] == [intent["hash"]]
+    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+    assert ledger.complete_promotion(directory, intent["hash"], base)["type"] == "promotion"
+    assert ledger.status(directory)["unresolved_operation"] is None
 
 
 # ---- the opening: the reference, the authorization, the lift (A15, A17 finding 1) ------------------------
@@ -1811,10 +1822,12 @@ def test_evidence_limits_have_their_own_codes_and_nothing_is_written(directory):
 def test_a_receipt_carrying_free_text_is_refused_before_anything_is_written(directory, observer):
     _grant_all(directory)
     _drive(directory, "C8", observer=observer)
-    before = _ledger_bytes(directory)
+    before = len(ledger.read_ledger(directory))
     assert _code(ls.deploy, directory, observer, forward_fix_ref="NONE", aliased="the alias was moved") == \
         "EVIDENCE_NOT_VALUE_FREE"
-    assert _ledger_bytes(directory) == before
+    # only the reservation (written before any upload) and its closing: the receipt itself is never written
+    assert [e["type"] for e in ledger.read_ledger(directory)[before:]] == ["deployment_attempt", "outcome"]
+    assert ledger._summary(ledger.read_ledger(directory))["deployments"] == []
 
 
 def test_a_directory_without_a_ledger_is_missing_not_empty(tmp_path):
@@ -2216,9 +2229,12 @@ def test_r7_every_deployment_after_the_ponr_needs_its_own_unused_gf1(directory, 
     assert _code(ledger.deployment_preconditions, directory, commit=ls.COMMIT, admission="OPEN",
                  opening_reference=reference, forward_fix_ref=None) == "FORWARD_FIX_GATE_REQUIRED"
     ledger.grant(directory, "GF1", "m-redeploy")
-    ls.deploy(directory, observer, "dpl_" + "S" * 24, admission="OPEN", opening_reference=reference,
-              forward_fix_ref="m-redeploy")
-    assert _code(ls.deploy, directory, observer, "dpl_" + "U" * 24, admission="OPEN", opening_reference=reference,
+    # an open redeployment of the authorized code would admit users before it is recorded (rereview of
+    # 1245bf2, M2): after the PONR the authorized code is redeployed operator-only
+    assert _code(ls.deploy, directory, observer, "dpl_" + "S" * 24, admission="OPEN", opening_reference=reference,
+                 forward_fix_ref="m-redeploy") == "AUTHORIZED_CODE_NOT_REDEPLOYED_OPEN"
+    ls.deploy(directory, observer, "dpl_" + "S" * 24, forward_fix_ref="m-redeploy")
+    assert _code(ls.deploy, directory, observer, "dpl_" + "U" * 24,
                  forward_fix_ref="m-redeploy") == "FORWARD_FIX_GATE_REQUIRED"  # one grant, one deployment
 
 

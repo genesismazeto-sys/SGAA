@@ -41,6 +41,12 @@ WHY THIS EXISTS
     therefore never names a code PROD does not authorize, and nothing that lets users in happens
     while it cannot know.
 
+    The platform acts follow the same rule (A19 rereview of 1245bf2, M1/M2): ``deploy_audit`` holds the
+    ledger (``holding``) from its precheck through the provider call to the record, so no other act can
+    interleave; a deployment is reserved first (a ``deployment_attempt``, which consumes its GF1 before
+    anything is uploaded) and a promotion is written before the alias moves; an upload or a promotion
+    whose outcome is unknown stays unresolved until ``reconcile`` has observed the platform.
+
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
     the repository.  Every entry carries the SHA-256 of the previous entry, so
@@ -89,8 +95,9 @@ COMMANDS
     authorize-code after the point of no return, for a recorded forward-fix deployment (GF1):
                    authorize its code under the same opening reference.  With ``--contract-ref`` (A19),
                    at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
-    reconcile      resolve an act whose PROD outcome is unknown: read its marker in PROD, record COMMITTED
-                   or ABORTED (A19 R3 rereview R2)
+    reconcile      resolve an act whose outcome is unknown: for a PROD transaction read its marker in PROD; for
+                   an upload require that no unrecorded deployment exists; for a promotion observe the alias --
+                   then record COMMITTED or ABORTED (A19 R3 rereview R2; rereview of 1245bf2 M1/M2)
     attest-ponr    once, for a declared C13 recorded before restores left a commit marker: bind it forward
                    to the safety copy that restore left in PROD (A19 R3 rereview R1); nothing is rewritten
     status         current state, granted gates, head, chain verdict
@@ -112,7 +119,7 @@ import os
 import re
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -133,6 +140,7 @@ STATES = (
 ENTRY_TYPES = frozenset({
     "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
     "promotion", "barrier", "restore", "authorization", "supersession", "outcome", "attestation",
+    "deployment_attempt",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
@@ -460,6 +468,19 @@ def _locked(directory: Path):
             pass
 
 
+@contextmanager
+def holding(directory: Path):
+    """Hold the ledger across an act a tool performs outside it (``deploy_audit``: precheck, provider call,
+    record): no other ledger act can interleave (rereview of 1245bf2, M1).  The ledger functions the tool
+    calls inside take ``held=True``."""
+    with _locked(directory):
+        yield
+
+
+def _lock(directory: Path, held: bool):
+    return nullcontext() if held else _locked(directory)
+
+
 def _check_head(entries: list[dict], expected: str | None) -> None:
     if expected is not None and expected != _head(entries):
         raise Refused("HEAD_MISMATCH", "the ledger does not end where the operator last saw it")
@@ -470,6 +491,7 @@ def _unresolved(entries: list[dict]) -> dict | None:
     """The act whose PROD outcome the ledger does not know yet (an ``outcome_required`` entry no
     ``outcome`` resolves), else ``None``."""
     resolved = {e["of"] for e in entries if e["type"] == "outcome"}
+    resolved |= {e["attempt"] for e in entries if e["type"] == "deployment" and e.get("attempt")}
     return next((e for e in entries if e.get("outcome_required") is True and e["hash"] not in resolved), None)
 
 
@@ -479,9 +501,12 @@ def _require_resolved(entries: list[dict]) -> None:
 
 
 def _prepare(entries: list[dict], body: dict) -> dict:
-    """The next entry, hashed, not yet written.  Nothing but an outcome follows an unresolved act."""
-    if body.get("type") != "outcome":
-        _require_resolved(entries)
+    """The next entry, hashed, not yet written.  Nothing follows an unresolved act but its outcome (or, for
+    a deployment attempt, the deployment that resolves it)."""
+    pending = _unresolved(entries)
+    if pending is not None and body.get("type") != "outcome" \
+            and not (body.get("type") == "deployment" and body.get("attempt") == pending["hash"]):
+        raise Refused("OPERATION_UNRESOLVED", "an act's outcome is unknown: run `reconcile` first")
     entry = {"seq": len(entries) + 1, "prev": _head(entries), "at": _now(), **body}
     _check_value_free({key: value for key, value in entry.items() if key != "evidence"})
     entry["hash"] = _entry_hash(entry)
@@ -539,10 +564,15 @@ def _summary(entries: list[dict]) -> dict:
     opening_reference = None  # the reference entry C12 was opened from
     backups: list[dict] = []
     collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
-                 "authorizations": [], "grants": [], "amendments": [], "supersessions": [], "attestations": []}
+                 "authorizations": [], "grants": [], "amendments": [], "supersessions": [], "attestations": [],
+                 "attempts": []}
     # An act whose PROD transaction did not commit, or whose outcome is still unknown, has no effect.
     committed = {e["of"] for e in entries if e["type"] == "outcome" and e["result"] == "COMMITTED"}
+    committed |= {e["attempt"] for e in entries if e["type"] == "deployment" and e.get("attempt")}
     for entry in entries:
+        if entry["type"] == "deployment_attempt":
+            collected["attempts"].append(entry)  # every attempt consumed its GF1, whatever its outcome
+            continue
         if entry.get("outcome_required") is True and entry["hash"] not in committed:
             continue
         kind = entry["type"]
@@ -1774,7 +1804,8 @@ def record_restore(directory: Path, receipt: dict) -> dict:
 
 _DEPLOYMENT_KEYS = ("deployment_id", "url_sha256", "vercel_project_sha256", "commit", "deploy_tree_sha256",
                     "code_sha256", "files_sha256", "admission", "opening_reference", "forward_fix_ref",
-                    "observed_admission", "aliased")
+                    "observed_admission", "aliased", "attempt")
+_ATTEMPT_KEYS = ("commit", "code_sha256", "admission", "opening_reference", "forward_fix_ref")
 
 
 def deployment_preconditions(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
@@ -1787,7 +1818,8 @@ def deployment_preconditions(directory: Path, *, commit: str, admission: str, op
                       forward_fix_ref=forward_fix_ref, code=code)
 
 
-def _deployment_rules(summary: dict, *, commit, admission, opening_reference, forward_fix_ref, code=None) -> None:
+def _deployment_rules(summary: dict, *, commit, admission, opening_reference, forward_fix_ref, code=None,
+                      attempt: str | None = None) -> None:
     state = summary["state"]
     if summary["rolled_back"]:
         raise Refused("ROLLED_BACK")
@@ -1801,7 +1833,9 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
         raise Refused("FORWARD_FIX_GATE_REQUIRED", "after the PONR every deployment needs its own GF1 grant")
     if forward_fix_ref not in (None, "NONE"):
         grants = [g["ref"] for g in summary["grants"] if g["gate"] == FORWARD_FIX_GATE]
+        # consumed by a recorded deployment or by any attempt -- whatever its outcome -- but the one resolving
         used = {d["forward_fix_ref"] for d in summary["deployments"]}
+        used |= {a["forward_fix_ref"] for a in summary["attempts"] if a["hash"] != attempt}
         if not after_ponr or forward_fix_ref not in grants or forward_fix_ref in used:
             raise Refused("FORWARD_FIX_GATE_REQUIRED", "a forward fix needs its own GF1 grant, after the PONR")
     elif commit != _effective_commit(summary):
@@ -1816,6 +1850,12 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
         if _barrier_applied(summary) is not None:
             raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
         if code is not None and code == _authorized_code(summary):
+            if after_ponr:
+                # It would admit users at its own address the moment it is up, before the ledger has recorded
+                # it: after the PONR an open deployment always carries a code still to be authorized
+                # (`authorize-code` sweeps the platform first).  Rereview of 1245bf2, M2.
+                raise Refused("AUTHORIZED_CODE_NOT_REDEPLOYED_OPEN",
+                              "after the PONR a code that is already authorized is redeployed operator-only")
             # an open deployment of the authorized code admits users at its own address once it is up
             _require_fresh(summary, reference)
     elif opening_reference not in (None, "NONE"):
@@ -1868,16 +1908,52 @@ def _promotion_rules(summary: dict, deployment: dict) -> None:
         _require_fresh(summary, summary["any_reference"])
 
 
-def record_deployment(directory: Path, receipt: dict) -> dict:
-    """Record a deployment ``deploy_audit deploy`` just made and verified against the platform's record."""
-    with _locked(directory):
+def begin_deployment(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
+                     forward_fix_ref: str | None, code: str, held: bool = False) -> dict:
+    """Reserve a deployment before anything is uploaded (rereview of 1245bf2, M2): every rule is checked
+    with its code and a ``deployment_attempt`` is written, which consumes its GF1 at once.  The attempt is
+    resolved by the ``deployment`` entry that records its upload, by ABORTED once the upload is removed, or
+    by ``reconcile``; until then every other act is refused."""
+    if not _hex64(code):
+        raise Refused("DEPLOYMENT_RECEIPT_INVALID", "code_sha256")
+    with _lock(directory, held):
+        entries = read_ledger(directory)
+        _require_resolved(entries)
+        _deployment_rules(_summary(entries), commit=commit, admission=admission, opening_reference=opening_reference,
+                          forward_fix_ref=forward_fix_ref, code=code)
+        return _append(directory, entries, {
+            "type": "deployment_attempt", "commit": commit, "code_sha256": code, "admission": admission,
+            "opening_reference": opening_reference or "NONE", "forward_fix_ref": forward_fix_ref or "NONE",
+            "outcome_required": True,
+        })
+
+
+def abort_attempt(directory: Path, attempt_sha256: str, *, held: bool = False) -> dict:
+    """The attempt's upload was removed from the platform (or never made): ABORTED; its GF1 stays used."""
+    with _lock(directory, held):
+        entries = read_ledger(directory)
+        pending = _unresolved(entries)
+        if pending is None or pending["hash"] != attempt_sha256 or pending["type"] != "deployment_attempt":
+            raise Refused("NOT_THE_UNRESOLVED_ATTEMPT")
+        return _append(directory, entries, {"type": "outcome", "of": attempt_sha256, "result": "ABORTED",
+                                            "resolved_by": "REMOVED"})
+
+
+def record_deployment(directory: Path, receipt: dict, *, held: bool = False) -> dict:
+    """Record a deployment ``deploy_audit deploy`` just made and verified against the platform's record: the
+    upload of the unresolved attempt it names (``begin_deployment``), which it resolves."""
+    with _lock(directory, held):
         entries = read_ledger(directory)
         summary = _summary(entries)
         if set(receipt) != set(_DEPLOYMENT_KEYS):
             raise Refused("DEPLOYMENT_RECEIPT_INVALID")
+        pending = _unresolved(entries)
+        if pending is None or pending["hash"] != receipt["attempt"] or pending["type"] != "deployment_attempt" \
+                or any(pending[key] != receipt[key] for key in _ATTEMPT_KEYS):
+            raise Refused("DEPLOYMENT_NOT_THE_ATTEMPT", "a deployment is recorded only as its reserved attempt")
         _deployment_rules(summary, commit=receipt["commit"], admission=receipt["admission"],
                           opening_reference=receipt["opening_reference"], forward_fix_ref=receipt["forward_fix_ref"],
-                          code=receipt["code_sha256"])
+                          code=receipt["code_sha256"], attempt=receipt["attempt"])
         if not _deployment_id(receipt["deployment_id"]) or _deployment(summary, receipt["deployment_id"]):
             raise Refused("DEPLOYMENT_RECEIPT_INVALID", "a deployment is recorded once")
         if summary["deployments"] and receipt["vercel_project_sha256"] != summary["deployments"][0]["vercel_project_sha256"]:
@@ -1893,24 +1969,44 @@ def record_deployment(directory: Path, receipt: dict) -> dict:
         return _append(directory, entries, {"type": "deployment", **receipt})
 
 
-def record_promotion(directory: Path, receipt: dict) -> dict:
-    """Record that the public address serves a recorded deployment (``deploy_audit promote``)."""
-    with _locked(directory):
+def begin_promotion(directory: Path, deployment_id: str, public_host_sha256: str, *, held: bool = False) -> dict:
+    """Write the promotion BEFORE the public address is moved (rereview of 1245bf2, M1): every rule is
+    checked now, and the entry takes effect only once ``complete_promotion`` (or ``reconcile``) has observed
+    the address serving it; until then every other act is refused."""
+    with _lock(directory, held):
         entries = read_ledger(directory)
+        _require_resolved(entries)
         summary = _summary(entries)
         if summary["rolled_back"]:
             raise Refused("ROLLED_BACK")
-        deployment = _deployment(summary, receipt.get("deployment_id") or "")
+        deployment = _deployment(summary, deployment_id or "")
         if deployment is None:
             raise Refused("DEPLOYMENT_NOT_RECORDED")
         _promotion_rules(summary, deployment)
+        if not _hex64(public_host_sha256):
+            raise Refused("ALIAS_NOT_THE_DEPLOYMENT")
+        return _append(directory, entries, {"type": "promotion", "deployment_id": deployment_id,
+                                            "public_host_sha256": public_host_sha256, "outcome_required": True})
+
+
+def complete_promotion(directory: Path, promotion_sha256: str, receipt: dict, *, held: bool = False) -> dict:
+    """The address now serves the promoted deployment, as the platform and the address itself report it:
+    COMMITTED.  Anything else leaves the promotion unresolved for ``reconcile``."""
+    with _lock(directory, held):
+        entries = read_ledger(directory)
+        pending = _unresolved(entries)
+        if pending is None or pending["hash"] != promotion_sha256 or pending["type"] != "promotion":
+            raise Refused("NOT_THE_UNRESOLVED_PROMOTION")
+        deployment = _deployment(_summary(entries), pending["deployment_id"])
         if receipt.get("files_sha256") != deployment["files_sha256"] or \
                 receipt.get("observed_code") != deployment["code_sha256"]:
-            raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
-        if receipt.get("alias_deployment_id") != deployment["deployment_id"] or not _hex64(receipt.get("public_host_sha256")):
-            raise Refused("ALIAS_NOT_THE_DEPLOYMENT")
-        return _append(directory, entries, {"type": "promotion", "deployment_id": deployment["deployment_id"],
-                                            "public_host_sha256": receipt["public_host_sha256"]})
+            raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE", "the promotion stays unresolved: run `reconcile`")
+        if receipt.get("alias_deployment_id") != deployment["deployment_id"] or \
+                receipt.get("public_host_sha256") != pending["public_host_sha256"]:
+            raise Refused("ALIAS_NOT_THE_DEPLOYMENT", "the promotion stays unresolved: run `reconcile`")
+        _append(directory, entries, {"type": "outcome", "of": promotion_sha256, "result": "COMMITTED",
+                                     "resolved_by": "OBSERVED"})
+        return pending
 
 
 # ---------------------------------------------------------------------------
@@ -2349,8 +2445,16 @@ def reconcile(directory: Path, *, expect_head: str | None = None, observer: Obse
         if pending is None:
             raise Refused("NOTHING_TO_RECONCILE")
         summary = _summary(entries)
-        _production_database(summary, observer)
-        committed = observer.operation_committed(pending["hash"])
+        if pending["type"] == "deployment_attempt":
+            # Its upload, if the platform made it, is the one deployment the ledger never recorded: it must be
+            # removed (it is never recorded late) before the attempt is closed.  Its GF1 stays used.
+            _require_every_deployment_recorded(summary, observer)
+            committed = False
+        elif pending["type"] == "promotion":
+            committed = observer.alias_deployment() == pending["deployment_id"]
+        else:
+            _production_database(summary, observer)
+            committed = observer.operation_committed(pending["hash"])
         return _append(directory, entries, {"type": "outcome", "of": pending["hash"],
                                             "result": "COMMITTED" if committed else "ABORTED",
                                             "resolved_by": "RECONCILED"})
@@ -2433,10 +2537,10 @@ def main(argv=None, *, out=None, err=None) -> int:
         sub.add_argument("--ledger-dir", required=True)
         sub.add_argument("--expect-head", default=None,
                          help="the head printed by the previous command; refuses a truncated ledger")
-        if name in {"rollback", "reference", "open"}:
+        if name in {"rollback", "reference", "open", "reconcile"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
-        if name in {"reference", "open", "authorize-code", "resume"}:
+        if name in {"reference", "open", "authorize-code", "resume", "reconcile"}:
             sub.add_argument("--vercel-team", default=None, help="the team id of the production project")
             sub.add_argument("--vercel-project", default=None, help="the production project's id")
         if name == "resume":

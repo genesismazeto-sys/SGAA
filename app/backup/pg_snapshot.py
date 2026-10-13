@@ -19,7 +19,7 @@ SAFETY
     Read-only on the database.  In the cloud folder it only ever deletes files whose name starts
     with ``SNAPSHOT_PREFIX`` (the legacy SQLite backups that may share the folder are never touched),
     keeping the newest ``keep`` of them.  Every name carries the installation (the first twelve hex
-    digits of the database's identity) and a random generation token after its second: two backups in
+    digits of the database's identity) and a random 64-bit generation token after its second: two backups in
     the same second, or two installations sharing a folder, never name the same file (A19 R3 rereview
     R8), and the upload refuses to replace an existing file.
 """
@@ -44,10 +44,10 @@ SNAPSHOT_PREFIX = "sgaa-pg-snapshot-"
 SNAPSHOT_SUFFIX = ".db"
 #: Exactly the names ``create`` writes (and, without the installation and the token, the ones it wrote
 #: before them): a renamed or hand-made copy is never pruned.
-SNAPSHOT_NAME = re.compile(r"sgaa-pg-snapshot-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-[0-9a-f]{8})?\.db")
+SNAPSHOT_NAME = re.compile(r"sgaa-pg-snapshot-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-(?:[0-9a-f]{8}|[0-9a-f]{16}))?\.db")
 #: The readable copy of the registers written beside each snapshot (CSV files in a ZIP).
 REGISTERS_PREFIX = "sgaa-registros-"
-REGISTERS_NAME = re.compile(r"sgaa-registros-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-[0-9a-f]{8})?\.zip")
+REGISTERS_NAME = re.compile(r"sgaa-registros-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-(?:[0-9a-f]{8}|[0-9a-f]{16}))?\.zip")
 #: Never in the readable copy: credentials, single-use links, OAuth tokens, machine and transient state,
 #: and the image bytes (a register keeps its row; a picture is not a register).
 _NOT_REGISTERS = frozenset({
@@ -110,10 +110,13 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
             if identity is None:
                 raise SnapshotError("DATABASE_IDENTITY_UNPROVEN")
             # the installation and a token unique to this generation: no other run ever writes this name
-            stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{identity[:12]}-{secrets.token_hex(4)}"
-            path = Path(directory) / f"{SNAPSHOT_PREFIX}{stem}{SNAPSHOT_SUFFIX}"
-            if path.exists():
-                raise SnapshotError("SNAPSHOT_EXISTS")
+            stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{identity[:12]}-{secrets.token_hex(8)}"
+            candidate = Path(directory) / f"{SNAPSHOT_PREFIX}{stem}{SNAPSHOT_SUFFIX}"
+            try:  # created exclusively: an existing file is never opened, overwritten or removed by this run
+                os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            except FileExistsError:
+                raise SnapshotError("SNAPSHOT_EXISTS") from None
+            path = candidate  # from here on the file is this run's own
             lite = sqlite3.connect(str(path))
             lite.executescript(prod1_schema.PROD1_SCHEMA_SQL)
             lite.execute("PRAGMA foreign_keys = OFF")
